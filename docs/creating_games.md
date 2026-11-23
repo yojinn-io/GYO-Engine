@@ -1,13 +1,13 @@
 # Creating and copying games
 
-Games are source projects inside the engine repository. Build them through the repository root; no external SDK or separate engine installation is required. `apps/<name>` owns game code, `assets/<name>` owns its prepared runtime content, and `config/projects.csv` controls integration. Tests and release support live outside both directories.
+Games are source projects inside the engine repository. Build them through the repository root; no external SDK or separate engine installation is required. `games/<name>` owns game code, `assets/<name>` owns its prepared runtime content, and `config/games.csv` controls integration. Tests and release support live outside both directories.
 
 ## Minimal game project
 
 Use a lowercase name matching `[a-z][a-z0-9_]*`. The names `common` and `toolchain` are reserved for shared test/product ownership. Registered game and tool owners must not collide; concrete tool names are read from the tool registry rather than hardcoded in the game parser. A small game needs:
 
 ```text
-apps/my_game/
+games/my_game/
   CMakeLists.txt
   project.json
   main.cpp
@@ -31,19 +31,19 @@ For an SDL renderer game, `project.json` declares the optional engine components
 The root reads metadata before composing the engine. Keep the game CMake file limited to targets and links:
 
 ```cmake
-gyo_app_project()
-gyo_app_add_executable(main MAIN OUT_TARGET app
+gyo_game_project()
+gyo_game_add_executable(main MAIN OUT_TARGET game
     SOURCES main.cpp
     LIBRARIES GYO::Engine
     COMPONENTS SDL_RENDERER SDL_PLATFORM)
 ```
 
-Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `SDL_AUDIO` provides `GYO::AudioBackendSDL`, the SDL output of the audio mixer; it needs SDL but no window, so it does not imply the SDL platform. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::EntityStore`, `GYO::Time`, `GYO::Threads`, `GYO::Audio`, `GYO::Net`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
+Larger games can use `gyo_game_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `SDL_AUDIO` provides `GYO::AudioBackendSDL`, the SDL output of the audio mixer; it needs SDL but no window, so it does not imply the SDL platform. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::EntityStore`, `GYO::Time`, `GYO::Threads`, `GYO::Audio`, `GYO::Net`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
 
-A game that ships its own Go service keeps a `go.mod` in `apps/<game>/` and declares each service in the game CMake file. The game must be enabled on Linux, and `PLATFORMS` must be a subset of the game's enabled platforms; configuration fails otherwise. Normal native builds never need Go; CI checks the module and cross-builds the declared platforms. Reusable Go mechanisms belong to the engine-owned `services/gyo_gateway` module, not to a game.
+A game that ships its own Go service keeps a `go.mod` in `games/<game>/` and declares each service in the game CMake file. The game must be enabled on Linux, and `PLATFORMS` must be a subset of the game's enabled platforms; configuration fails otherwise. Normal native builds never need Go; CI checks the module and cross-builds the declared platforms. Reusable Go mechanisms belong to the engine-owned `services/gyo_gateway` module, not to a game.
 
 ```cmake
-gyo_app_add_go_service(gateway PACKAGE ./gateway/cmd PLATFORMS linux-x64 windows-x64)
+gyo_game_add_go_service(gateway PACKAGE ./gateway/cmd PLATFORMS linux-x64 windows-x64)
 ```
 
 Service archives and release handling are described in the release procedure, section 10.7 ([日本語](releasing.ja.md), [繁體中文](releasing.zh-Hant.md)).
@@ -52,7 +52,7 @@ Do not add asset copy commands, install recipes, CI callbacks, tests, diagnostic
 
 ## Select and build
 
-Add the game to `config/projects.csv`:
+Add the game to `config/games.csv`:
 
 ```csv
 name,description,version,enabled,windows,linux,macos
@@ -62,7 +62,7 @@ my_game,My game,,1,1,1,1
 `description` and `version` are notes. Only `enabled` and the target platform flag select a game. `AUTO` selects all enabled games for the target; a supplied list selects a permitted subset. Unknown, disabled or platform-disabled names are errors. A directory alone never opts a game into CI.
 
 ```sh
-cmake --preset dev -DGYO_APPS=my_game -DGYO_TOOLS=
+cmake --preset dev -DGYO_GAMES=my_game -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_my_game
 ```
 
@@ -130,24 +130,24 @@ Copy the catalog-listed files only. If shader bundles are declared, also copy ea
 The equivalent content operation is already scripted:
 
 ```sh
-python build/assemble_runtime.py --kind app --product my_game --stage build/target/manual/my_game --assets assets/my_game --executable build/target/my_game/bin/gyo_my_game.exe
+python build/assemble_runtime.py --kind game --product my_game --stage build/target/manual/my_game --assets assets/my_game --executable build/target/my_game/bin/gyo_my_game.exe
 ```
 
-For shader-enabled content, supply the declared compiled bundles, for example `--shader builtin=build/target/_build/dev/apps/my_game/shaders/builtin --shader game=build/target/_build/dev/apps/my_game/shaders/game`. The helper validates sources, synchronizes catalog files and compiled objects, removes stale managed content and emits the runtime descriptor. Native-library scheduling and synchronization remain in the shared build helper. Ordinary builds and `cmake --install` already invoke these steps; games do not repeat this recipe in their own CMake files. A future editor should edit these same descriptors instead of generating a second assembly policy.
+For shader-enabled content, supply the declared compiled bundles, for example `--shader builtin=build/target/_build/dev/games/my_game/shaders/builtin --shader game=build/target/_build/dev/games/my_game/shaders/game`. The helper validates sources, synchronizes catalog files and compiled objects, removes stale managed content and emits the runtime descriptor. Native-library scheduling and synchronization remain in the shared build helper. Ordinary builds and `cmake --install` already invoke these steps; games do not repeat this recipe in their own CMake files. A future editor should edit these same descriptors instead of generating a second assembly policy.
 
 ## Manual copy
 
 <a id="manual-copy"></a>
 
-1. Copy an enabled game, currently `apps/object_fps_pvp`, to `apps/my_variant`. The former disabled games `object_fps` and `object_fps_v2` were removed on 2026-11-12 (`v8-arch-remove-object-fps`).
+1. Copy an enabled game, currently `games/object_fps_pvp`, to `games/my_variant`. The former disabled games `object_fps` and `object_fps_v2` were removed on 2026-11-12 (`v8-arch-remove-object-fps`).
 2. Copy `assets/object_fps_pvp` to `assets/my_variant` so content changes are independent. If the game has a Go module, review the copied `go.mod` module path (`gyo.local/<game>`) and its imports.
 3. Change `display_name` in the new `project.json` if desired. Review copied component requirements and relative shader sources.
-4. Add and enable `my_variant` in `config/projects.csv` for the intended platforms.
-5. Build with `-DGYO_APPS=my_variant`; the product identity and runtime asset root derive from the new directory name.
+4. Add and enable `my_variant` in `config/games.csv` for the intended platforms.
+5. Build with `-DGYO_GAMES=my_variant`; the product identity and runtime asset root derive from the new directory name.
 
 Do not globally rename C++ namespaces, AssetIds, shader IDs, clip names or definition references merely to change deployment identity. They can remain the same until the variant's gameplay/content actually needs different values. The copied game does not carry tests, CI, acceptance scripts, source-art archives or editor tools.
 
-To integrate variant-specific validation later, copy or add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Use `GYO_CURRENT_APP` and `gyo_use_app_config(target app)` to obtain that app's generated configuration privately, and `@CHECK_ROOT@` in acceptance commands to resolve the declaring owner's script directory. Python tests derive their acceptance owner from their own location. These support copies must keep working after the original support is removed. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
+To integrate variant-specific validation later, copy or add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Use `GYO_CURRENT_GAME` and `gyo_use_game_config(target game)` to obtain that game's generated configuration privately, and `@CHECK_ROOT@` in acceptance commands to resolve the declaring owner's script directory. Python tests derive their acceptance owner from their own location. These support copies must keep working after the original support is removed. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
 
 ## Validation boundaries
 

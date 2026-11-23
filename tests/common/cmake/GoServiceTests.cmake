@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
-# A synthetic app declares a Go service: the helper registers the role, the
+# A synthetic game declares a Go service: the helper registers the role, the
 # explicit host target, label-only Go tests and the gyo-build.json record.
 # Pass -DGO_EXECUTABLE=<go> to also build the host target with a real Go.
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
@@ -7,7 +7,7 @@ string(RANDOM LENGTH 8 ALPHABET abcdef0123456789 run_id)
 set(work "${CMAKE_CURRENT_BINARY_DIR}/go-service-${run_id}")
 set(source "${work}/source")
 set(binary "${work}/binary")
-file(MAKE_DIRECTORY "${source}/apps/sample/cmd/service" "${source}/apps/plain" "${source}/shared")
+file(MAKE_DIRECTORY "${source}/games/sample/cmd/service" "${source}/games/plain" "${source}/shared")
 file(WRITE "${source}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.30)
 project(GoServiceFixture NONE)
@@ -15,31 +15,31 @@ set(GYO_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(GYO_OUTPUT_ROOT "${CMAKE_CURRENT_BINARY_DIR}/products")
 set(BUILD_TESTING ON)
 enable_testing()
-include("${GYO_TEST_REPOSITORY}/build/cmake/GyoAppProject.cmake")
+include("${GYO_TEST_REPOSITORY}/build/cmake/GyoGameProject.cmake")
 # Registry columns windows,linux,macos; a Go service owner must support Linux.
 set(sample_platforms 1,1,0)
 if(TEST_CASE STREQUAL "linux_disabled")
     set(sample_platforms 1,0,1)
 endif()
-set(registry "${CMAKE_CURRENT_BINARY_DIR}/projects.csv")
+set(registry "${CMAKE_CURRENT_BINARY_DIR}/games.csv")
 file(WRITE "${registry}" "name,description,version,enabled,windows,linux,macos\nsample,,,1,${sample_platforms}\nplain,,,1,1,1,1\n")
-gyo_read_app_registry("${registry}" GYO_APP_REGISTRY_DATA)
+gyo_read_game_registry("${registry}" GYO_GAME_REGISTRY_DATA)
 gyo_register_go_module(OWNER engine DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/shared")
 if(TEST_CASE STREQUAL "outside_app")
-    gyo_app_add_go_service(gateway PACKAGE ./cmd/service PLATFORMS linux-x64)
+    gyo_game_add_go_service(gateway PACKAGE ./cmd/service PLATFORMS linux-x64)
 endif()
-foreach(GYO_CURRENT_APP sample plain)
-    add_subdirectory("apps/${GYO_CURRENT_APP}")
+foreach(GYO_CURRENT_GAME sample plain)
+    add_subdirectory("games/${GYO_CURRENT_GAME}")
 endforeach()
 gyo_go_build_record(modules services)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/record.json" "{\"go_modules\":${modules},\"go_services\":${services}}\n")
 ]=])
 set(project_json "{\"version\":1,\"display_name\":\"Fixture\",\"components\":[]}\n")
-foreach(app sample plain)
-    file(WRITE "${source}/apps/${app}/project.json" "${project_json}")
+foreach(game sample plain)
+    file(WRITE "${source}/games/${game}/project.json" "${project_json}")
 endforeach()
-file(WRITE "${source}/apps/sample/CMakeLists.txt" [=[
-gyo_app_project()
+file(WRITE "${source}/games/sample/CMakeLists.txt" [=[
+gyo_game_project()
 set(platforms linux-x64 windows-x64)
 set(package ./cmd/service)
 if(TEST_CASE STREQUAL "unknown_platform")
@@ -53,27 +53,27 @@ elseif(TEST_CASE STREQUAL "escaping_package")
 elseif(TEST_CASE STREQUAL "absolute_package")
     set(package /cmd/service)
 endif()
-gyo_app_add_go_service(gateway PACKAGE ${package} PLATFORMS ${platforms} OUT_TARGET gateway)
+gyo_game_add_go_service(gateway PACKAGE ${package} PLATFORMS ${platforms} OUT_TARGET gateway)
 if(NOT gateway STREQUAL "gyo_sample-gateway" OR NOT TARGET gyo_sample-gateway)
     message(FATAL_ERROR "Unexpected Go service target: ${gateway}")
 endif()
-gyo_get_app_target(sample gateway lookup)
+gyo_get_game_target(sample gateway lookup)
 if(NOT lookup STREQUAL gateway)
     message(FATAL_ERROR "Go service role was not registered")
 endif()
 if(TEST_CASE STREQUAL "duplicate_role")
-    gyo_app_add_go_service(gateway PACKAGE ./cmd/service PLATFORMS linux-x64)
+    gyo_game_add_go_service(gateway PACKAGE ./cmd/service PLATFORMS linux-x64)
 endif()
 ]=])
-# An app without a go.mod cannot declare a Go service; a plain app records nothing.
-file(WRITE "${source}/apps/plain/CMakeLists.txt" [=[
-gyo_app_project()
+# A game without a go.mod cannot declare a Go service; a plain game records nothing.
+file(WRITE "${source}/games/plain/CMakeLists.txt" [=[
+gyo_game_project()
 if(TEST_CASE STREQUAL "missing_module")
-    gyo_app_add_go_service(gateway PACKAGE ./cmd PLATFORMS linux-x64)
+    gyo_game_add_go_service(gateway PACKAGE ./cmd PLATFORMS linux-x64)
 endif()
 ]=])
-file(WRITE "${source}/apps/sample/go.mod" "module example.invalid/sample\n\ngo 1.21\n")
-file(WRITE "${source}/apps/sample/cmd/service/main.go" "package main\n\nfunc main() {}\n")
+file(WRITE "${source}/games/sample/go.mod" "module example.invalid/sample\n\ngo 1.21\n")
+file(WRITE "${source}/games/sample/cmd/service/main.go" "package main\n\nfunc main() {}\n")
 file(WRITE "${source}/shared/go.mod" "module example.invalid/shared\n\ngo 1.21\n")
 
 set(configure_args "-DGYO_TEST_REPOSITORY=${repository}")
@@ -110,10 +110,10 @@ file(READ "${binary}/record.json" record)
 string(JSON module_count LENGTH "${record}" go_modules)
 string(JSON engine_owner GET "${record}" go_modules 0 owner)
 string(JSON engine_path GET "${record}" go_modules 0 path)
-string(JSON app_owner GET "${record}" go_modules 1 owner)
-string(JSON app_path GET "${record}" go_modules 1 path)
+string(JSON game_owner GET "${record}" go_modules 1 owner)
+string(JSON game_path GET "${record}" go_modules 1 path)
 if(NOT module_count EQUAL 2 OR NOT engine_owner STREQUAL engine OR NOT engine_path STREQUAL shared
-    OR NOT app_owner STREQUAL sample OR NOT app_path STREQUAL apps/sample)
+    OR NOT game_owner STREQUAL sample OR NOT game_path STREQUAL games/sample)
     message(FATAL_ERROR "Unexpected Go module record: ${record}")
 endif()
 string(JSON service_count LENGTH "${record}" go_services)
@@ -126,7 +126,7 @@ string(JSON platform_count LENGTH "${service}" platforms)
 string(JSON first_platform GET "${service}" platforms 0)
 string(JSON second_platform GET "${service}" platforms 1)
 if(NOT service_count EQUAL 1 OR NOT service_owner STREQUAL sample OR NOT service_role STREQUAL gateway
-    OR NOT service_module STREQUAL apps/sample OR NOT service_package STREQUAL ./cmd/service
+    OR NOT service_module STREQUAL games/sample OR NOT service_package STREQUAL ./cmd/service
     OR NOT platform_count EQUAL 2 OR NOT first_platform STREQUAL linux-x64 OR NOT second_platform STREQUAL windows-x64)
     message(FATAL_ERROR "Unexpected Go service record: ${record}")
 endif()
@@ -154,20 +154,20 @@ if(GO_EXECUTABLE)
         set(suffix .exe)
     endif()
     if(NOT EXISTS "${binary}/products/_services/sample/bin/gyo_sample-gateway${suffix}")
-        message(FATAL_ERROR "The host Go service build was not staged under _services/<app>/bin")
+        message(FATAL_ERROR "The host Go service build was not staged under _services/<game>/bin")
     endif()
     run(TRUE "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" -L go --output-on-failure)
 endif()
 
 foreach(case "unknown_platform|Unknown or duplicate Go service platform"
              "duplicate_platform|Unknown or duplicate Go service platform"
-             "unregistered_platform|platform 'macos-arm64' is not enabled for the app in the registry"
-             "linux_disabled|requires its app to be Linux-enabled in the registry"
+             "unregistered_platform|platform 'macos-arm64' is not enabled for the game in the registry"
+             "linux_disabled|requires its game to be Linux-enabled in the registry"
              "escaping_package|module-relative ./ path"
              "absolute_package|module-relative ./ path"
-             "duplicate_role|Duplicate app target role"
+             "duplicate_role|Duplicate game target role"
              "missing_module|has no go.mod"
-             "outside_app|Call gyo_app_project()")
+             "outside_app|Call gyo_game_project()")
     string(REPLACE "|" ";" fields "${case}")
     list(GET fields 0 name)
     list(GET fields 1 fragment)

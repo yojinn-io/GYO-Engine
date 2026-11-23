@@ -51,7 +51,7 @@ class GuardTree(unittest.TestCase):
     def setUp(self):
         self._directory = tempfile.TemporaryDirectory()
         self.root = Path(self._directory.name)
-        self.write("config/projects.csv", PROJECTS)
+        self.write("config/games.csv", PROJECTS)
         self.write("config/tools.csv", TOOLS)
         self.write("engine/ecs/kernel/include/engine/kernel/Clean.hpp", CLEAN_HEADER)
         self.write("engine/ecs/kernel/CMakeLists.txt", "add_library(gyo_kernel INTERFACE)\n")
@@ -96,20 +96,20 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K1", "VoxelMapEditor")
 
     def test_k1_a_newly_registered_product_is_reported_without_changing_the_guard(self):
-        self.write("config/projects.csv", PROJECTS + "space_race,new,v1,1,1,1,1\n")
+        self.write("config/games.csv", PROJECTS + "space_race,new,v1,1,1,1,1\n")
         self.header("struct SpaceRaceState {};")
         self.assertReported("K1", "SpaceRace")
 
     def test_k1_registered_id_matches_as_a_word_not_inside_other_words(self):
         # Architect 2026-11-13 (review A8): an id like arena must not turn every word containing it red.
-        self.write("config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        self.write("config/games.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
         for text in ("struct Marenal {};", "constexpr int parenage = 0;"):
             with self.subTest(text=text):
                 self.header(text)
                 self.assertClean()
 
     def test_k1_registered_id_as_a_camel_case_word_is_reported(self):
-        self.write("config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        self.write("config/games.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
         for text, needle in (("struct FrameArena {};", "Arena (registered id arena"),
                              ("struct ArenaHost {};", "Arena (registered id arena")):
             with self.subTest(text=text):
@@ -215,7 +215,7 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K1", "registry missing")
 
     def test_k1_registry_without_name_column_is_reported(self):
-        self.write("config/projects.csv", "id,description\nx,y\n")
+        self.write("config/games.csv", "id,description\nx,y\n")
         self.assertReported("K1", "no name column")
 
     # K2 ---------------------------------------------------------------------------------------------------------

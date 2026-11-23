@@ -1,4 +1,7 @@
-"""Export the CMake-owned project registry; Python never interprets CSV rows."""
+"""CI's product register entry: the release platform table, the game and tool exports.
+
+CMake owns the registers (ExportGameRegistry.cmake, ExportToolRegistry.cmake); Python never
+interprets CSV rows."""
 
 import argparse
 import json
@@ -45,8 +48,8 @@ def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tupl
         output = Path(work) / "matrix.json"
         command = [cmake, f"-DGYO_OUTPUT={output}"]
         if registry is not None:
-            command.append(f"-DGYO_REGISTRY_FILE={registry.resolve()}")
-        command.extend(["-P", str(ROOT / "build/cmake/ExportAppRegistry.cmake")])
+            command.append(f"-DGYO_GAME_REGISTRY_FILE={registry.resolve()}")
+        command.extend(["-P", str(ROOT / "build/cmake/ExportGameRegistry.cmake")])
         result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=30)
         if result.returncode:
             raise ValueError(f"CMake project registry export failed:\n{result.stdout}\n{result.stderr}")
@@ -57,7 +60,7 @@ def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tupl
     for row in document["include"]:
         if not isinstance(row, dict) or row.get("platform") not in PLATFORMS:
             raise ValueError("CMake registry exporter returned an invalid product/platform tuple")
-        pair = (validate_product(row.get("app")), row["platform"])
+        pair = (validate_product(row.get("game")), row["platform"])
         if pair in tuples:
             raise ValueError(f"Duplicate product/platform tuple from registry: {pair}")
         tuples.append(pair)
@@ -106,7 +109,7 @@ def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root
 
 
 def release_products(registry=None):
-    """Fixed toolchain products plus explicitly enabled games; never discover apps."""
+    """Fixed toolchain products plus explicitly enabled games; never discover games."""
     return [("toolchain", platform) for platform in RELEASE_PLATFORMS] + export_registry(registry)
 
 
@@ -127,7 +130,7 @@ def main():
             raise SystemExit(f"Product {args.product!r} is neither the toolchain nor a registry-enabled game")
         pairs = [pair for pair in pairs if pair[0] == args.product]
     tools = export_tools(args.tool_registry, repository_root=args.repository_root)
-    matrix = {"include": [dict(product=product, kind="app", platform=platform, tools=[], **TOOLCHAINS[platform]) for product, platform in pairs]}
+    matrix = {"include": [dict(product=product, kind="game", platform=platform, tools=[], **TOOLCHAINS[platform]) for product, platform in pairs]}
     baseline = {"include": [dict(product="toolchain", kind="toolchain", platform=platform, tools=tools[platform], **TOOLCHAINS[platform]) for platform in RELEASE_PLATFORMS]}
     if args.output:
         with args.output.open("a", encoding="utf-8") as stream:
@@ -135,7 +138,7 @@ def main():
             stream.write(f"baseline={json.dumps(baseline, separators=(',', ':'))}\n")
             builds = {"include": baseline["include"] + matrix["include"]}
             stream.write(f"build_matrix={json.dumps(builds, separators=(',', ':'))}\n")
-            stream.write(f"has_apps={str(bool(pairs)).lower()}\n")
+            stream.write(f"has_games={str(bool(pairs)).lower()}\n")
     print(json.dumps(matrix))
 
 
