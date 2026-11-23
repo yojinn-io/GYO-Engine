@@ -1,132 +1,88 @@
-# 2026-11-23 「loses no signal」測試的退避（`v8-arch-gyo2-os-wake-test-backoff`）
+# 2026-11-23 「loses no signal」測試的退避：調查與撤回（`v8-arch-gyo2-os-wake-test-backoff`）
 
-件數の突き合わせ：一致（驗收的第一次量測 Mac 48／48、Linux 208／208；第 5.4 節 Mac 6／6、Linux 104／104；Mac 環境負載的參考 12／12；上限中斷只有 Mac 參考裡改前的 4 次，照宣告記為 timeout）
+件數の突き合わせ：一致。各次量測送出與留下的行數都相同：
 
-Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡（PR #289 的 (e)）。分支 `claude/friendly-borg-8cbc08`（開向 `gyo2`）。作者 Opus 5.5。
-宣告：[`os-wake-test-backoff-declaration.zh-Hant.md`](../architecture/target/v2/os-wake-test-backoff-declaration.zh-Hant.md)（修訂 3）。
+- Mac：48／48、6／6、12／12。
+- Linux：208／208、104／104、160／160。
+- 上限中斷只有 Mac 參考裡改前的 4 次，照宣告記為 timeout。
 
-## 為什麼
+Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡（PR #289 的 (e)）。分支 `claude/friendly-borg-8cbc08`（開向 `gyo2`，PR #293）。作者 Opus 5.5。
+宣告：[`os-wake-test-backoff-declaration.zh-Hant.md`](../architecture/target/v2/os-wake-test-backoff-declaration.zh-Hant.md)（修訂 4，撤回）。
 
-`WakeSignalTests.cpp`「loses no signal」是 os.md Design Invariant 8 的守衛測試。它在本機機器忙的時候，會拖到幾十秒甚至逾時。#289 查出原因在測試自己的退避：signaller 自旋 4096 次後 `yield`，macOS 負載下每次 `yield` 讓出 CPU 最多約 10 ms。使用者選「(d)＋另開 (e)」，這一批就是 (e)。
+## 結論
+
+**退避的修改撤回。** 這一批最後只拿掉 #289 在「loses no signal」案例裡加的進度 `Note`。測試檔和 #289 之前（`2212637b`）完全相同，退避（4096）與判定都沒有改。
+
+撤回的理由（使用者的決定）：要解決的「機器忙時拖到幾十秒」，在 CI 上基本沒有（L1 三個平台一直通過，唯一慢過的一次 35.8 s 仍在 60 s 內），在 Linux 上沒有（`yes` 32 最長 0.6 s），只出現在這台 Intel Mac 本機滿載時。
 
 ## 做了什麼
 
-- `SpinsBeforeYield` 4096 → 65536，改寫案例前的註解（自旋要比對方的喚醒久；單核仍靠 `yield` 前進）。
-- 拿掉 #289 加在這個案例裡的進度 `Note` 與相關變數、`#include "CaseTiming.hpp"`。`CaseTiming.{hpp,cpp}` 與 listener 留著，`Note()` 暫時沒有呼叫者，`CaseTiming.hpp` 的說明照改。
-- 判定不改（2 萬回合、湊滿 3 次遺失就停、1500 ms 的遺失線、2 s 的逾時、`lost == 0`、案例名）。
-- 案例現在和 #289 之前的 gyo2 只差常數與註解。
+- `tests/common/os/WakeSignalTests.cpp`：拿掉 `Note()` 的呼叫、`note` lambda、`blockedRounds`、`slowRounds`、`longestRound`、`caseStart`、`NoteEvery`、`#include "CaseTiming.hpp"`。
+- `tests/common/os/CaseTiming.hpp`：說明改成 `Note` 已拿掉、暫時沒有呼叫者，和 listener 一起由主會話拿掉。
+- 驗證（Mac）：
+  - `gyo_os_tests` 80 案、`gyo_os_wake_fallback_tests` 9 案通過。
+  - ow-x1、ow-x19 用 `run_mutations.py` 重跑 3 輪，6/6 抓到（殺它們的測試改了，照 `mutation-rerun-scope` 只跑相關的）。
+- 突變：沒有加、沒有拿掉。find 落在改動檔案的突變：掃過全部 26 份突變目錄，0 個；正例 `engine/core/os/src/sys/linux/WakeSignal.cpp` 命中 10 個。
 
 ## 經過
 
-1. **探索**（宣告第 2 節）：
-   - 在 Linux 實機（Ryzen 7 6800H，16 執行緒，Ubuntu 24.04）比了五種退避；在這台 Mac 上沒加負載，只比了突變。
-   - 新發現：
-     - Linux 負載下現狀不慢，但兩條執行緒會在同一顆 CPU 上輪流跑，掃不到縫。
-     - 遺失只落在掃描 64 格的頭 0～3 格。
-     - 綁 1 顆 CPU 時，任何做法都測不到這個競爭。
-2. **敵對式檢查**（Fable 5.2／high，唯讀）：must 5、should 5、nit 3。
-   - 修訂 0 用的「進 `Block` 的比例」「近縫回合」不是檢出力，宣告的量測手段也讀不到數字（`Note` 在通過時刪檔）。
-   - 改用「突變下每 1000 回合抓到第一次遺失的比率」重量，修訂 1。
-3. **核准**：使用者「開始」（照建議：B）。
-4. **驗收的第一次量測**：第 5.2 節第 2 條在 Mac 閒置 ow-x19 不成立（比 0.40）。照 §14 停下回報，沒有重跑、沒有改做法。
-5. **使用者的決定**：「用linux的標準來設計。」判定以 Linux 為標準，Mac 改為參考（宣告修訂 2、第 11 節）。這是看到結果之後改的判定，宣告與本頁都照實寫。
-6. 拿掉觀測，跟上 gyo2（#289、#275 已合併），照第 5.4 節對最終 commit 重跑。
-7. **第 5.4 節不成立**：Linux 閒置兩格，最終版的比率只有 5.2 改後的 0.37、0.15 倍。照 §14 停下回報。本卡推斷是指標對長尾太敏感：一次 18944 回合的執行，就占全部回合數約 86%；中位數三個版本相近。
-8. **使用者的決定**：「選 1」。檢出力改看「2 萬回合內抓到的比例」，也就是 `CHECK(lost == 0)` 判的東西（宣告修訂 3、第 12 節）。這是第二次看到結果之後改的判定。
-9. **改模型**：使用者在主會話說「現在fable用量不夠了，暫時用Opus」。§14.4 的驗證者與合併前審查改用 Opus 5.5／high，和作者是同一個模型（宣告第 7 節）。
+1. 探索：
+   - 在 Linux 實機（Ryzen 7 6800H，16 執行緒，Ubuntu 24.04）比了五種退避；這台 Mac 沒加負載，只比了突變。
+   - 宣告修訂 0 建議自旋 65536 次（B）。
+2. 敵對式檢查（Fable 5.2／high）：must 5。
+   - 修訂 0 用的檢出力指標不對，宣告的量測手段也讀不到數字。
+   - 修訂 1 改用「突變下第一次遺失的比率」。
+3. 使用者「開始」。
+4. 驗收：
+   - Mac 閒置 ow-x19 的比 0.40，不成立 → 停。
+   - 使用者「用linux的標準來設計。」（修訂 2）。
+5. 拿掉 Note 後重跑：
+   - Linux 閒置兩格的比率只有改後的 0.37、0.15 倍 → 停。
+   - 使用者「選 1」，檢出力改看「2 萬回合內抓到的比例」（修訂 3）。
+6. 使用者「現在fable用量不夠了，暫時用Opus」（主會話轉來），之後的檢查改 Opus 5.5／high，和作者同一個模型。
+7. 驗證者（Opus 5.5／high，唯讀）：
+   - 第 4 節「緩める面」不成立：閒置時每回合的比率下降、長尾變重、Mac 每輪下降、只量了套 patch 的版本。
+   - 三處數字錯誤（已改正）。
+8. 補量真實二進位：最終版閒置 ow-x19 19/20（base 20/20）→ 停（§14，可能的回歸）。
+9. 使用者問「你在解決什麼問題？」「這個問題在CI上有嗎？」「那這個問題在linux上有嗎？」，然後決定「那就撤回，只拿掉 Note，記錄下來就好」（修訂 4）。
 
-## 驗收
+本卡的偏差：
 
-### 檢出力的判定（修訂 3）：2 萬回合內抓到的次數
+- 原本要解決的是「拖到幾十秒」，後來偏到「證明每回合掃到縫的機率完全沒變」。這個量本身極不穩定，判定因此改了兩次、停了三次。
+- 沒有先查「這個問題在 CI、Linux 上有沒有」，就把它當成要用 §14.4 完整驗收對付的問題。
+- 第 13 節停下時，本卡把時間盒子列為停止的理由，把等待時間也算了進去。使用者指出後已撤回，真正的理由只有 §14 的兩條。
 
-| Linux 格子（各 20 次） | 5.2 改前 | 5.2 改後 | 5.4 最終版 |
-|---|---|---|---|
-| 閒置 ow-x1 | 20 | 20 | 20 |
-| 閒置 ow-x19 | 20 | 20 | 20 |
-| `yes` 24 ow-x1 | 7 | 14 | 14 |
-| `yes` 24 ow-x19 | 11 | 15 | 12 |
+## 留下的紀錄
 
-改後與最終版每格都 ≥ 改前，成立。閒置時三個版本都是 20/20，這一層比不出強弱。
-
-### 參考：第一次遺失的比率（修訂 1、2 的判定，修訂 3 起只作參考）
-
-第 5.2 節（修訂 2 只看 Linux 四格）：
-
-| 格子 | 改前（/1000 回合） | 改後 | 比 |
-|---|---|---|---|
-| Linux 閒置 ow-x1（各 20 次） | 1.26 | 1.65 | 1.31 |
-| Linux 閒置 ow-x19 | 4.03 | 6.08 | 1.51 |
-| Linux `yes` 24 ow-x1 | 0.025（抓到 7/20） | 0.083（14/20） | 3.31 |
-| Linux `yes` 24 ow-x19 | 0.044（11/20） | 0.076（15/20） | 1.74 |
-| Mac 閒置 ow-x1（參考，各 12 次） | 0.81 | 1.61 | 2.00 |
-| Mac 閒置 ow-x19（參考） | 25.6 | 10.3 | 0.40 |
-
-修訂 1 的六格判定：Mac ow-x19 0.40 < 0.5，不成立。修訂 2 的 Linux 四格判定：幾何平均 1.84，最低 1.31，成立。
-
-### 第 5.3 節（Linux 的時間）
-
-改後最長 0.33 s（`yes` 32），每次 < 5 s，成立。過半進 `Block` 的次數（只報告）：改前 `yes` 24 是 9/12、`yes` 32 是 11/12；改後是 0/12 和 2/12。
-
-### 第 5.4 節（最終 commit）
-
-| Linux 格子（各 20 次） | 最終版的比率 | ÷ 5.2 改後 | 抓到 |
-|---|---|---|---|
-| 閒置 ow-x1 | 0.62 | **0.37** | 20/20 |
-| 閒置 ow-x19 | 0.91 | **0.15** | 20/20 |
-| `yes` 24 ow-x1 | 0.081 | 0.97 | 14/20 |
-| `yes` 24 ow-x19 | 0.059 | 0.77 | 12/20 |
-
-- 修訂 2 的門檻（÷ 5.2 改後 ≥ 0.5）在閒置兩格不成立。
-- 第一次遺失回合的中位數：ow-x19 改前 97、改後 64、最終版 65；ow-x1 改前 257、改後 481、最終版 416。
-- 時間：最終版在 `yes` 24／32 下最長 0.34 s，每次 < 5 s，成立。
-- Mac 最終版不加 `yes`（環境負載 `load1` 53～62，不是閒置）：ow-x1、ow-x19 各 3 次，6/6 抓到。
-
-### Mac 的時間（參考，不判定）
-
-宣告第 5.1 節的 `yes` 量測沒有跑。拿掉觀測之後，這台 Mac 正好有其他卡在建置（`load1` 33～49），本卡沒有加 `yes`，只交錯跑改前、改後各 3 次 × 兩支執行檔：
-
-| 版本 | 6 次的案例時間 |
-|---|---|
-| 改前 | 4 次碰到 40 s 上限被中斷，其餘 3.9 s、0.15 s |
-| 改後 | 0.065～1.36 s |
-
-這是本卡目標 1「負載下不再拖到幾十秒」在 Mac 上的直接資料。條件沒有事前宣告、次數少，只作參考。
-
-## 突變（§14.2、§14.5）
-
-- 沒有加、沒有拿掉。
-- ow-x1、ow-x19：閒置與負載都重驗（上表）。Mac 最終版不加 `yes`（`load1` 53～62）各 3 次，6/6 抓到。
-- find 落在改動檔案的突變：掃過全部 26 份突變目錄，`WakeSignalTests.cpp`、`CaseTiming.hpp`、`CaseTiming.cpp` 都是 0 個。正例：`engine/core/os/src/sys/linux/WakeSignal.cpp` 命中 10 個。
-- §14.2 的突變清單敵對式檢查與 §14.4 的驗證：待補（Opus 5.5／high，和作者同一個模型）。
+| 項目 | 內容 | 證據 |
+|---|---|---|
+| 65536 次自旋對本機逾時的效果 | Mac 環境負載（`load1` 33～49）下，改前 6 次有 4 次碰到 40 s 上限，改後 0.07～1.36 s | `accept/m-t-ambient.txt` |
+| 65536 次自旋的代價 | 閒置時每回合的檢出力可能變弱：Linux 比率 0.49、0.23 倍；真實二進位閒置 ow-x19 19/20 | 宣告第 12、13 節 |
+| Linux 負載下現狀的檢出力 | 兩條執行緒在同一顆 CPU 輪流跑；`yes` 24 下 ow-x19 只抓到 8/20（真實二進位） | `accept/linux/p-x.txt` |
+| 掃描 | 遺失只落在 `round % 64` 的頭 0～3 格 | 宣告第 2.4 節 |
+| 檢出力對小改動敏感 | 量測 patch 不同，第一次遺失的比率差好幾倍 | 宣告第 2.1、11、12 節 |
+| 條文守不到的一處 | Invariant 8 寫明後備實作的 pending「cleared under its mutex」，但把 `pending = false` 移到鎖外，任何案例都抓不到（照文件的呼叫方式行為相同，只剩 data race）。交 review，不加突變 | 宣告第 13.1 節 |
+| 單核 | Linux 綁 1 顆 CPU：任何退避都測不到這個競爭，都能前進 | 宣告第 2.5 節 |
 
 ## 檢驗
 
-- Mac：跟上 gyo2 之後，`gyo_os_tests` 80 案、`gyo_os_wake_fallback_tests` 9 案通過。
-- L1：待補。
+- Mac：見上。
+- L1：PR #293 推上去後再看，結果記在 PR。
 
 ## 範圍の限界
 
-- 判定以 Linux 為標準（使用者的決定）。Mac 負載下的檢出力沒有比較；Mac 的時間只有參考資料。
-- 檢出力的判定改過兩次，都在看到結果之後，都由使用者決定（宣告修訂 2、3）。
-- 閒置時「2 萬回合內抓到」是飽和的（每個版本 20/20），比不出強弱。每回合的檢出力只有比率與中位數的參考資料，次數不夠下結論。
-- 這個案例掃到縫的機會，對迴圈旁邊的小改動很敏感：量測用的 patch 不同，比率就差好幾倍（探索、5.2、5.4 之間）。
-- 60 s 的逾時本身沒有重現，以 5 s 代替。
-- Windows、macos-arm64 只有 L1；Debug 建置沒有量。
-- 網路卡那一次 `os.wake_fallback` 的失敗，分不出是失敗還是逾時（#289）。
-
-## 留給之後
-
-- 宣告第 9 節 Q3：遺失只落在掃描的頭幾格，要不要研究掃描範圍。使用者沒有回答，暫照 (a)「先記下來」，轉主會話。
-- listener（`CaseTiming.cpp`）與沒有呼叫者的 `Note()`：照 #289 的條件，由主會話在批次表沒有未結的 os 本機逾時時拿掉。
+- 60 s 的逾時本身沒有重現。
+- Windows、macos-arm64 沒有在本機量。
 
 ## 證據
 
 主 checkout 的 `build/evidence/gyo2-os-wake-test-backoff/`（git 不追蹤，這台 macOS Intel 機器）：
 
-- 探索：`run_variants.py`、`mutant_variants.py`、`summarize_mutants.py`、`experiment-backoff-variants.diff`、`experiment-backoff-variants-v2.diff`、`explore-*.txt`、`mac-mutants-v2.txt`、`spin_cost.cpp`、`spin-cost-mac.txt`、`linux/`。
-- 審查：`declaration-review-fable.md`。
+- 探索：`run_variants.py`、`mutant_variants.py`、`summarize_mutants.py`、`experiment-backoff-variants*.diff`、`explore-*.txt`、`mac-mutants-v2.txt`、`spin_cost.cpp`、`spin-cost-mac.txt`、`linux/`。
+- 審查：`declaration-review-fable.md`。驗證者的報告沒有另存檔案，要點在宣告第 13.1 節。
 - 驗收：`measure.diff`、`measure-final.diff`、`accept/`（`build_bins.py`、`accept.py`、`judge_mutants.py`、`src/`、Mac 的輸出、`linux/`）。
+- 撤回後的突變：`final-revert-mutants.log`。
 
-Linux 實機上另有副本：`~/Workspace/Remote/gyo2-os-wake-test-backoff/`（`out/`、`accept/out/`）。
+Linux 實機上另有副本：`~/Workspace/Remote/gyo2-os-wake-test-backoff/`。
 
-花的時間：約 2.5 小時（含兩次停止與使用者的決定）。
+花的時間：牆鐘約 11:00～14:15。其中等待（使用者的回覆、Linux 的背景量測合計 1 小時以上、審查與驗證 agent）占大半。
