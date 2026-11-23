@@ -614,11 +614,16 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
 
     // The change itself, with the handle's stamp: one phase of the sync point's steps 2 to 7.
     const std::uint64_t rejectedBefore = world.rejectedSpawns_;
+    // DI-KS 31: an insert of a ChildOf that does not hold reports false, like an entity that is not alive.
+    const bool insertsChildOf = record.kind == Detail::RecordKind::Insert && record.id == world.data_->childOf;
+    const std::uint64_t relationshipsBefore = world.rejectedRelationships_;
     std::vector<Detail::Record> change;
     change.push_back(std::move(record));
     Engine::Base::Result<void, KernelError> applied =
-        ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(change), stamp, who, where);
+        ApplyImmediateRecords(Detail::Derive::InitialValues, Detail::Relationships::Change, call, std::move(change), stamp,
+                              who, where);
     if (!applied) return Engine::Base::Err(std::move(applied).error());
+    if (insertsChildOf && world.rejectedRelationships_ > relationshipsBefore) outcome.changed = false;
     if (world.rejectedSpawns_ > rejectedBefore) {
         // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
         const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
@@ -635,7 +640,7 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
 // derives nothing (no InitialValue; DI-KS 12). What its hooks record is a change.
 Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::SystemContext& call,
                                                                    std::vector<Detail::Record> records, ChangeStamp stamp,
-                                                                   bool closureOpen) {
+                                                                   bool closureOpen, bool targetsGiven) {
     GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
     const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
     const std::string where = who + " (schedule '" + std::string(call.schedule) + "', step " + std::to_string(call.planPos) + ")";
@@ -649,7 +654,10 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RestoreFrom(Detail::Syste
         record.emitterHook = false;
         record.emitterKey = call.access;
     }
-    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);
+    // DI-KS 33: a restore that names Children puts it back as given; otherwise the kernel keeps it.
+    return ApplyImmediateRecords(Detail::Derive::Nothing,
+                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,
+                                 std::move(records), stamp, who, where);
 }
 
 Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
@@ -712,7 +720,9 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RefuseImmediate(Detail::S
     return {};
 }
 
-Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Detail::Derive derive, Detail::SystemContext& call,
+Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Detail::Derive derive,
+                                                                             Detail::Relationships relationships,
+                                                                             Detail::SystemContext& call,
                                                                              std::vector<Detail::Record> change,
                                                                              ChangeStamp stamp, const std::string& who,
                                                                              const std::string& where) {
@@ -772,7 +782,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Det
     };
 
     // The records themselves; the hook rounds below are changes (they derive).
-    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive);
+    Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive, relationships);
     if (!applied) return failed(std::move(applied), "Executor: immediate change by " + where);
 
     // Spec F-12 for this change only (declaration section 12 item 2, (a)): round
@@ -1081,9 +1091,9 @@ Engine::Base::Result<ImmediateOutcome, KernelError> ApplyImmediate(SystemContext
 }
 
 Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records, ChangeStamp stamp,
-                                                    bool inClosure) {
+                                                    bool inClosure, bool targetsGiven) {
     GYO_ASSERT(call.executor != nullptr);
-    return call.executor->RestoreFrom(call, std::move(records), stamp, inClosure);
+    return call.executor->RestoreFrom(call, std::move(records), stamp, inClosure, targetsGiven);
 }
 
 Engine::Base::Result<void, KernelError> TriggerNow(SystemContext& call, EventTypeId id, std::unique_ptr<ValueBox> payload,

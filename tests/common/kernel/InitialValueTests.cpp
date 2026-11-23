@@ -653,7 +653,7 @@ TEST_CASE("initial value: golden fingerprints of a Registry with two declaration
     REQUIRE_MESSAGE(static_cast<bool>(both.result), Describe(both));
     MESSAGE("two declarations: registry " << both.registry->Frozen().RegistryFingerprint().Text());
     CHECK(both.registry->Frozen().RegistryFingerprint().Text() ==
-          std::string("9:d38e323a85074d24806f1b55f1e8806380edd9365f60a63002ad702f5a1fdddd"));
+          std::string("9:d00200b23f0efd500e77f47a6d5ae4d67953f3d659af5055702f4406b2ca76ee"));
 }
 
 

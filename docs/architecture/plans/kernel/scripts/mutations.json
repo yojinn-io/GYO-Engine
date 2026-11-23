@@ -7102,7 +7102,7 @@
       "replace": "constexpr std::uint32_t kSummaryVersion = 3;",
       "target": "gyo_kernel_tests",
       "cases": "J-32: the sync point's result depends only on the records*",
-      "expect": "3:[0-9a-f]{64} == 4:5f5fc699"
+      "expect": "3:[0-9a-f]{64} == 4:31a810e4"
     },
     {
       "id": "obs-host-direct-write-observed",

@@ -3,6 +3,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Access.hpp"
+#include "engine/kernel/Relationship.hpp"
 #include "engine/kernel/TypeList.hpp"
 #include "engine/kernel/detail/Context.hpp"
 
@@ -65,6 +66,9 @@ struct QueryTerm<Read<T>> {
 };
 template <class T>
 struct QueryTerm<Write<T>> {
+    static_assert(!kNoInPlaceWrite<T>,
+                  "GYO_KERNEL_REJECT_RELATIONSHIP_WRITE_TERM: ChildOf and Children are not written in place; insert or "
+                  "remove ChildOf (DI-KS 29)");
     static constexpr bool valid = true;
     static constexpr bool readOnly = false;
     using Contribution = TypeList<Access::ComponentWrite<T>>;
@@ -539,6 +543,8 @@ class Commands final : Detail::Handle {
 public:
     template <class T>
     void Insert(EntityId entity, T value) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_INSERT: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("Commands");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
@@ -548,6 +554,8 @@ public:
 
     template <class T>
     void Remove(EntityId entity) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_REMOVE: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("Commands");
         Detail::Push(Detail::RequireCall(*world_),
                      Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
@@ -595,6 +603,10 @@ template <class InsertList, class RemoveList>
 class CommandsFor;
 template <class... I, class... R>
 class CommandsFor<Inserts<I...>, Removes<R...>> final : Detail::Handle {
+    static_assert((!kKeptByKernel<I> && ...),
+                  "GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_FOR_INSERT: Children is kept by the kernel from ChildOf (DI-KS 29)");
+    static_assert((!kKeptByKernel<R> && ...),
+                  "GYO_KERNEL_REJECT_RELATIONSHIP_COMMANDS_FOR_REMOVE: Children is kept by the kernel from ChildOf (DI-KS 29)");
     GYO_KERNEL_HANDLE(CommandsFor) : Handle(call) {}
 
 public:
@@ -628,6 +640,8 @@ class Spawn;
 template <class... C>
 class Spawn<Bundle<C...>> final : Detail::Handle {
     static_assert(sizeof...(C) > 0, "a Bundle names at least one component");
+    static_assert((!kKeptByKernel<C> && ...),
+                  "GYO_KERNEL_REJECT_RELATIONSHIP_SPAWN: Children is kept by the kernel from ChildOf (DI-KS 29)");
     GYO_KERNEL_HANDLE(Spawn) : Handle(call) {}
 
 public:
@@ -660,6 +674,8 @@ class SpawnWithId;
 template <class... C>
 class SpawnWithId<Bundle<C...>> final : Detail::Handle {
     static_assert(sizeof...(C) > 0, "a Bundle names at least one component");
+    static_assert((!kKeptByKernel<C> && ...),
+                  "GYO_KERNEL_REJECT_RELATIONSHIP_SPAWN_WITH_ID: Children is kept by the kernel from ChildOf (DI-KS 29)");
     GYO_KERNEL_HANDLE(SpawnWithId) : Handle(call) {}
 
 public:
@@ -735,6 +751,8 @@ class DiagnosticsWriter final : Detail::Handle {
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)");
     static_assert(!std::is_same_v<Record, DroppedMessages>,
                   "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: DroppedMessages is the kernel's own diagnostics record");
+    static_assert(!std::is_same_v<Record, RejectedRelationship>,
+                  "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedRelationship is the kernel's own diagnostics record (DI-KS 31)");
     GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call) {}
 
 public:
@@ -904,6 +922,7 @@ public:
     // World's is not written; a cell the World has and this does not is removed.
     template <class T, class Eq = std::equal_to<T>>
     void Column(std::vector<std::pair<EntityId, T>> cells, Eq eq = {}) {
+        if constexpr (std::is_same_v<T, Children>) namesChildren_ = true;
         diffs_.push_back([cells = std::move(cells), eq](World& world, std::span<const EntityId> before,
                                                         std::span<const EntityId> after,
                                                         std::vector<Detail::Record>& out) mutable {
@@ -959,6 +978,8 @@ private:
 
     std::vector<EntityId> alive_;
     bool hasAlive_ = false;
+    // DI-KS 33: Column<Children> was given (put back as given, not kept by the kernel).
+    bool namesChildren_ = false;
     std::vector<Diff> diffs_;
 };
 
@@ -996,6 +1017,8 @@ public:
     template <class T, class F>
         requires Detail::ExclusiveClosure<F, T&>
     [[nodiscard]] VisitResult<std::invoke_result_t<F&, T&>> Modify(EntityId entity, F&& f) {
+        static_assert(!kNoInPlaceWrite<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_MODIFY: ChildOf and Children are not written in place (DI-KS 29)");
         Check("ExclusiveWorld");
         auto* cell = Column<T>().Find(entity);
         if (cell == nullptr) return Absent<std::invoke_result_t<F&, T&>>();
@@ -1058,6 +1081,8 @@ public:
     template <class... C>
     [[nodiscard]] Engine::Base::Result<EntityId, KernelError> Spawn(C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::Spawn names at least one component");
+        static_assert((!kKeptByKernel<C> && ...),
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_SPAWN: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, 0);
         (record.bundle.push_back(Detail::BundleValue{Detail::ComponentIdOf(*world_, KeyOf<C>()),
@@ -1080,6 +1105,8 @@ public:
     [[nodiscard]] Engine::Base::Result<std::optional<SpawnRejectReason>, KernelError> SpawnWithId(EntityId id,
                                                                                                   C... values) {
         static_assert(sizeof...(C) > 0, "ExclusiveWorld::SpawnWithId names at least one component");
+        static_assert((!kKeptByKernel<C> && ...),
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_SPAWN_WITH_ID: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Spawn, id);
         record.withId = true;
@@ -1095,6 +1122,8 @@ public:
     // entity is not alive (counted in DroppedMissingEntity, spec F.2 step 5).
     template <class T>
     [[nodiscard]] Engine::Base::Result<bool, KernelError> Insert(EntityId entity, T value) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_INSERT: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("ExclusiveWorld");
         Detail::Record record = Detail::Record::Of(Detail::RecordKind::Insert, entity, Detail::ComponentIdOf(*world_, KeyOf<T>()));
         record.value = std::make_unique<Detail::TypedBox<T>>(std::move(value));
@@ -1106,6 +1135,8 @@ public:
     // Removes entity's T after its OnRemove hooks; false when it had none.
     template <class T>
     [[nodiscard]] Engine::Base::Result<bool, KernelError> Remove(EntityId entity) {
+        static_assert(!kKeptByKernel<T>,
+                      "GYO_KERNEL_REJECT_RELATIONSHIP_EXCLUSIVE_REMOVE: Children is kept by the kernel from ChildOf (DI-KS 29)");
         Check("ExclusiveWorld");
         auto done = Change(Detail::Record::Of(Detail::RecordKind::Remove, entity, Detail::ComponentIdOf(*world_, KeyOf<T>())));
         if (!done) return Engine::Base::Err(std::move(done).error());
@@ -1260,7 +1291,7 @@ public:
             records.push_back(std::move(record));
         }
         for (RestoreSet::Diff& diff : set.diffs_) diff(*world_, before, after, records);
-        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0);
+        return Detail::ApplyRestore(call, std::move(records), stamp_, closures_ > 0, set.namesChildren_);
     }
 
 private:
