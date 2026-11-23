@@ -1,6 +1,8 @@
 # 事前宣告：`text` Module（SDL 線子批 T，`v8-arch-gyo2-sdl-t`）
 
-更新：2026-11-23（修訂 1）。Owner：架構（GYO2 主會話開的任務卡，SDL 線子批 T）。**狀態：待動工前核准；核准前不動程式。**
+更新：2026-11-23（修訂 1）。Owner：架構（GYO2 主會話開的任務卡，SDL 線子批 T）。**狀態：動工前核准（2026-11-23）；照第 10 節實作，合併前做合併前核准。**
+
+> **核准**：使用者 2026-11-23 在卡片對第 13 節三題回「照建議，1 選丁，2 同意下載，3 門檻照建議」。即：第 1 題 (丁)——換行（UAX #14）與字素（UAX #29）用 libunibreak 8.0.1，放 `src/adapters/libunibreak/`（第三個外部組件）；第 2 題同意第 12 節的下載（FreeType 2.15.0、HarfBuzz 15.2.0、libunibreak 8.0.1 的官方 release tarball，Unicode 的資料檔與 fontTools 開發時一次）；第 3 題判定 6、7 的門檻照第 9 節。以下凡寫「選 (丁) 時」的都適用，寫「(甲)」的不適用。已照四樣格式轉主會話。
 
 經過：修訂 0（8bc5c17d）送 Opus／high 敵對式檢查（general-purpose、只讀；**作者與檢查者同為 Opus**：Fable 用量不足，照主會話的指示）：blocker 1、should 13、nit 9（`declaration-r0-adversarial-check.md`），全部採用，處理對照在第 17 節。修訂 1 沒有再送檢查。
 
