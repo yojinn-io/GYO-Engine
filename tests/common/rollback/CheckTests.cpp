@@ -135,12 +135,12 @@ TEST_CASE("rollback checks: a message does not cross between the resimulated sch
 }
 
 TEST_CASE("rollback checks: the entries not made return NotImplemented") {
-    // Entered and Exited are made since the net Module's step 4 (gate 1 A, G): rollback strategy: R-8 A cases.
+    // Entered and Exited are made since the net Module's step 4 (gate 1 A, G), NotSent since its step 5 (gate 1 C):
+    // rollback strategy: R-8 A and R-8 third state cases.
     R::RollbackInbox inbox;
     const auto partial = inbox.PartialValue<Health>(1, 3, Health{1});
-    const auto notSent = inbox.NotSent(1, 3);
     const auto fromEvent = inbox.FromEvent<Health>(1, 3, Health{1});
-    for (const auto* result : {&partial, &notSent, &fromEvent}) {
+    for (const auto* result : {&partial, &fromEvent}) {
         REQUIRE_MESSAGE(!*result, "[rb-not-implemented] an entry that is not made returned Ok");
         CHECK_MESSAGE(result->error().code == R::RollbackFailureCode::NotImplemented, "[rb-not-implemented] code");
     }

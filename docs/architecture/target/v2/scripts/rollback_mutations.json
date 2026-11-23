@@ -262,8 +262,8 @@
     "authority-rollback-declaration 5.5"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                column->AddTo(set, target, alive, values);",
-   "replace": "                column->AddTo(set, target, alive, nullptr);",
+   "find": "                column->AddTo(set, target, alive, values, notCarried);",
+   "replace": "                column->AddTo(set, target, alive, nullptr, notCarried);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: an authoritative value that differs*",
    "expect": "\\[rb\\-authority\\-adopted\\]"
@@ -794,7 +794,7 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                if (values != nullptr) column->Adopt(target, *values, alive);",
+   "find": "                if (values != nullptr) column->Adopt(target, *values, carried);",
    "replace": "                static_cast<void>(values);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: the authoritative value is laid over*",
@@ -1181,6 +1181,45 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy:*",
    "expect": "\\[rb\\-resource\\-adopted\\]"
+  },
+  {
+   "id": "rb-not-sent-compared",
+   "what": "An entity the snapshot of C does not carry is compared at C (its older value taken as unchanged). Only it catches R-8's third state in the decision",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            const std::vector<Kernel::EntityId> compared = Without(alive, inbox.NotCarriedAt(point));\n",
+   "replace": "            const std::vector<Kernel::EntityId> compared = alive;\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-not\\-sent\\-not\\-compared\\]"
+  },
+  {
+   "id": "rb-not-sent-restored-from-inbox",
+   "what": "A restore puts back an older authoritative value of an entity the snapshot of C does not carry. Only it catches R-8's third state in the restore",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "            if (inbox != nullptr && !std::binary_search(notCarried.begin(), notCarried.end(), entity)) {\n",
+   "replace": "            if (inbox != nullptr) {\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-not\\-sent\\-history\\-kept\\]"
+  },
+  {
+   "id": "rb-not-sent-at-any-later-tick",
+   "what": "NotSent of one tick counts at every later C too. Only it catches \"only the snapshot of that tick\"",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "            if (ticks.count(tick) != 0) out.push_back(entity);\n",
+   "replace": "            if (!ticks.empty() && *ticks.begin() <= tick) out.push_back(entity);\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-not\\-sent\\-only\\-at\\-its\\-tick\\]"
   }
  ]
 }

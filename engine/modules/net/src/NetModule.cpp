@@ -164,6 +164,8 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<Peer>({.name = "Peer"});
     r.Component<PeerLedger>({.name = "PeerLedger"});
     r.Component<PeerControls>({.name = "PeerControls"});
+    r.Component<PeerVisibility>({.name = "PeerVisibility"});
+    r.Component<NetPriority>({.name = "NetPriority"});
     table.role = role->role;
     r.Resource<NetWorldLink>({.name = "NetWorldLink"});
     r.Resource<NetWorldRole>({.name = "NetWorldRole"});
@@ -229,6 +231,7 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         link.role = worldRole;
         link.idRange = givenRange;
         link.registry = std::make_shared<const NetRegistry>(table.registry);
+        link.valueBytesPerTick = table.valueBytesPerTick;
         if (rollbackStrategy) {
             link.rollsBack = true;
             link.rollbackDepth = rollbackStrategy->DefaultInputLength();

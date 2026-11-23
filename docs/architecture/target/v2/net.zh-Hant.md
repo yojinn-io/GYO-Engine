@@ -370,12 +370,32 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - 遠端玩家的輸入本線不送（宣告 Q7），Client 上它們的輸入元件是預設值。
 - **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；突變 `nt-k3-*`。
 
+## 14. 相關性與優先度（宣告 C-VIS1、C-VIS2、F4、F7、F19，第 5 步）
+
+〔實作，合併前核准定稿〕
+
+- **每個 Peer 一份可見性**：Peer 實體上的 `PeerVisibility`（伺服器）。規則由作者給：作者的 System 每 tick 照自己的規則填它，形狀照 replicon 的 `ClientVisibility`（伺服器每個 client 一份、由產品填）。
+  - `everything`（預設 true＝看得到全部）、`entities`（看得到的實體，遞增）、`Show`／`Hide`、`Sees`。
+  - 沒有 `PeerVisibility` 的 Peer 看得到全部（第 4 步以前的行為）。
+- **元件範圍（私人資料，C-VIS2）**：`Replicate<T>(名字, codec, {.privateComponent = true})` 的元件只送給 `PeerVisibility::ShowPrivate<T>(entity)` 的 Peer（replicon 的可見性範圍到元件）。其他 Peer 看得到實體也收不到這個元件。
+- **失去可見＝對那個 Peer 刪除**（只用 `WhileVisible`，replicon 的 `ScopeLifetime::WhileVisible`）：結構更新送刪除；再看到時是生成，用同一個編號整份送。Client 端：K1、K2 生成、刪除；K3 寫 `Entered`／`Exited`（第 13 節）。
+  - K3 不用 `NotSent` 表示看不到：看不到的實體在 Client 上不該存在（宣告選的 `WhileVisible`），`NotSent` 只表示「這份沒帶」、實體還在。
+- **優先度**：`NetEntry::ValueBytesPerTick(bytes)`（預設 0＝不限）給每個 Peer 每 tick 值的位元組上限。放不下時照 lightyear 的 priority accumulator（`crates/transport/transport/src/packet/priority_manager.rs`）：
+  - 每個有值要送的實體，分數＝累積的優先度＋權重（實體上的 `NetPriority::weight`，沒有時 1），由高到低放進上限；第一個一定放。
+  - 放不下的累積起來（`PeerLedger::waiting`），送出後歸零。
+  - 值訊息照舊分則（一則約 1100 bytes）。
+  - 退掉的：replicon 的 `priority × (tick − 上次確認的 tick) ≥ 1`。它限的是送的頻率，不是「一個 tick 放不下時分到後面」。
+- **延後的實體告訴 Client**：值訊息的第 0 則在 Resource 之後多一段（`u16` 個數＋實體編號），其他則的個數是 0（每則多 2 bytes）。K3 對它們寫 `RollbackInbox::NotSent(entity, tick)`：在這個 C 不比對、不推成「沒變」（回滾 R-8 的第三態）；K1、K2 只是晚點收到。
+- **計數**：`PeerLedger::valuesDeferred`、`waitedTicks`、`longestWait`；`NetReplicaState::inboxNotSent`。
+- **頻寬判定**（閘口 2 的 2.3，事前宣告；使用者選 (b) ≤ 512 kbps）：`net.bandwidth`（ctest 的 `cpu` 標籤，算位元組、不計時）。數字見 dev_log 2026-11-23 step5。
+- **守衛**：G-11（`net.visibility`；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-priority-not-accumulated`、`nt-deferred-not-notsent`。
+
 ## Design Invariants
 
 **草稿**（宣告第 12 節）。最終文字在合併前核准定稿。守衛欄寫 1a 已有的；綁實作方式的守衛（`gyo_expect_links` 等）在 scenario「伺服器＋兩個 Client」通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 8 節）。
 
 <a id="nt-1"></a>
-**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）；Q8 (b) 在 (3) 加 Resource 的複製（第 12 節；實作，合併前核准定稿）；第 4 步在 (3) 加 K3 的寫法（第 13 節；實作，合併前核准定稿）。守衛（第 4 步）：`net.k3` 三案；突變 `nt-k3-*`。守衛（Q8）：`net.resource`、`net.statesync`；突變 `nt-resource-*`。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`（`nt-k3-as-k2` 隨 NT-E5 拿掉在第 4 步退役，由 `nt-k3-as-k1` 接手）。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
+**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）；Q8 (b) 在 (3) 加 Resource 的複製（第 12 節；實作，合併前核准定稿）；第 4 步在 (3) 加 K3 的寫法（第 13 節；實作，合併前核准定稿）；第 5 步在 (3) 加可見性、元件範圍、優先度（第 14 節；實作，合併前核准定稿）。守衛（第 5 步）：`net.visibility`、`net.bandwidth`、`net.k3` 的 NotSent 一案。守衛（第 4 步）：`net.k3` 三案；突變 `nt-k3-*`。守衛（Q8）：`net.resource`、`net.statesync`；突變 `nt-resource-*`。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`（`nt-k3-as-k2` 隨 NT-E5 拿掉在第 4 步退役，由 `nt-k3-as-k1` 接手）。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
 
 <a id="nt-2"></a>
 **NT-2 一套內部協議。** Link 之上只有一種協議；Link 只有 bytes 與連線狀態。1a：`Link` 只有 `Send`、`Receive`；`UdpLink`、`MemoryLink` 換了上層不改（`net.transport` 用 `MemoryLink`、`net.link` 用 `UdpLink`，`Connection` 同一份）。
@@ -402,7 +422,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 **NT-9 編號。** 伺服器配的實體在 Client 上用同一個編號；範圍由產品分開，握手時檢查不重疊（Q1 核准：兩端同號，照 LIM-7）。第 2 步：Client 用 `SpawnWithId` 生成伺服器配的編號；元件裡的 `EntityId` 原樣上 wire、不用對照表。守衛：G-5（實體編號集合與互指的元件逐項相同、`SpawnRejected` 為 0）。
 
 <a id="nt-10"></a>
-**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。1b：每條連線一個 `Peer` 實體（伺服器每個 Client 一個、Client 一個），連上時 spawn、斷了 despawn，帶連線識別、使用者 id、丟棄計數；第 2 步加帳本 `PeerLedger`（Client 有的實體與元件遮罩、確認過的戳記、未確認的值訊息；Q8 加每個複製的 Resource 確認過的戳記）；3a 加輸入緩衝 `PeerInput<T>` 與控制的實體 `PeerControls`；可見性在第 5 步加。守衛：`net.module`「a client connects, both Worlds get a Peer, and closing ends the server's with ClosedByRemote」；突變 `nt-peer-not-despawned`。
+**NT-10 每收件者的狀態在 Peer 實體。** 帳本、可見性、輸入緩衝；不進判定、可重建。第 5 步加 `PeerVisibility`（作者填的可見性）與帳本的優先度累積。1b：每條連線一個 `Peer` 實體（伺服器每個 Client 一個、Client 一個），連上時 spawn、斷了 despawn，帶連線識別、使用者 id、丟棄計數；第 2 步加帳本 `PeerLedger`（Client 有的實體與元件遮罩、確認過的戳記、未確認的值訊息；Q8 加每個複製的 Resource 確認過的戳記）；3a 加輸入緩衝 `PeerInput<T>` 與控制的實體 `PeerControls`；可見性在第 5 步加。守衛：`net.module`「a client connects, both Worlds get a Peer, and closing ends the server's with ClosedByRemote」；突變 `nt-peer-not-despawned`。
 
 ### Replacement Criteria
 

@@ -248,13 +248,20 @@ SystemResult ReplicateOut(ReplicaWorld world) {
     NetService* service = nullptr;
     std::shared_ptr<const NetRegistry> registry;
     std::map<std::uint32_t, Kernel::EntityId> peers;
+    std::uint32_t valueBudget = 0;
     (void)world.Read<NetWorldLink>([&](const NetWorldLink& link) {
         service = link.service;
         registry = link.registry;
         peers = link.peers;
+        valueBudget = link.valueBytesPerTick;
     });
     ServerHost* server = service != nullptr ? service->Server() : nullptr;
     if (server == nullptr || !registry) return {};
+    // The private components' bits (C-VIS2).
+    std::uint64_t privateMask = 0;
+    for (const auto& entry : registry->components) {
+        if (entry->privateComponent) privateMask |= std::uint64_t{1} << entry->wire;
+    }
     const auto tick = static_cast<std::uint32_t>(
         world.Read<WorldTime::Tick>([](const WorldTime::Tick& t) { return t.value; })->value_or(0));
     const std::uint32_t generation = service->Generation();
@@ -295,6 +302,17 @@ SystemResult ReplicateOut(ReplicaWorld world) {
     }
     std::vector<std::byte> resourceBytes;
     std::vector<std::uint16_t> firstPartResources;
+    // Step 5: one Peer's entities with changed values (their bytes in candidateBytes) and the ones that wait.
+    struct Candidate {
+        Kernel::EntityId entity;
+        std::size_t offset;
+        std::size_t size;
+        std::uint64_t score;
+        bool sent;
+    };
+    std::vector<Candidate> candidates;
+    std::vector<std::byte> candidateBytes;
+    std::vector<Kernel::EntityId> deferred;
 
     for (const auto& [connectionId, peerEntity] : peers) {
         Connection* connection = server->Find(connectionId);
@@ -307,6 +325,21 @@ SystemResult ReplicateOut(ReplicaWorld world) {
         });
         if (!hasLedger) continue;
         ReadClient(ledger, *connection, generation, *server, connectionId);
+        // What this Peer sees (C-VIS1, C-VIS2): an entity it does not see has no components for it, and a private
+        // component only when its PeerVisibility shows it.
+        std::optional<PeerVisibility> visibility;
+        (void)world.Read<PeerVisibility>(peerEntity, [&](const PeerVisibility& kept) { visibility = kept; });
+        const auto peerMask = [&](const Snapshot::Entity& taken) -> std::uint64_t {
+            if (visibility && !visibility->Sees(taken.id)) return 0;
+            std::uint64_t mask = taken.mask;
+            const std::uint64_t hidden = mask & privateMask;
+            if (hidden == 0) return mask;
+            for (const auto& entry : registry->components) {
+                if (((hidden >> entry->wire) & 1u) == 0) continue;
+                if (!visibility || !visibility->SeesPrivate(taken.id, entry->key)) mask &= ~(std::uint64_t{1} << entry->wire);
+            }
+            return mask;
+        };
 
         if (ledger.lastSentTick != tick) {
             // The structure update: what this client has against what the World has.
@@ -323,7 +356,9 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             despawned.clear();
             restructuredAs.clear();
             for (auto it = ledger.entities.begin(); it != ledger.entities.end(); ++it) {
-                if (snapshot.Find(it->first) != nullptr) continue;
+                // Gone from the World, or no longer seen by this Peer (only WhileVisible): removed at that client.
+                const Snapshot::Entity* still = snapshot.Find(it->first);
+                if (still != nullptr && peerMask(*still) != 0) continue;
                 opWriter.Value(it->first);
                 opWriter.Value(std::uint8_t{2}); // despawn
                 opWriter.Value(std::uint8_t{0});
@@ -333,7 +368,8 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             }
             for (const Snapshot::Entity& taken : snapshot.entities) {
                 const Kernel::EntityId entity = taken.id;
-                const std::uint64_t mask = taken.mask;
+                const std::uint64_t mask = peerMask(taken);
+                if (mask == 0) continue;
                 auto known = ledger.entities.find(entity);
                 const bool spawn = known == ledger.entities.end();
                 if (!spawn && known->second.mask == mask) continue;
@@ -418,6 +454,14 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 } else {
                     partWriter.Value(std::uint8_t{0});
                 }
+                // Then the entities whose changed values wait for a later tick (only the first part has any; step 5:
+                // a simulating client writes NotSent for them).
+                if (partIndex == 0) {
+                    partWriter.Value(static_cast<std::uint16_t>(deferred.size()));
+                    for (const Kernel::EntityId waits : deferred) partWriter.Value(waits);
+                } else {
+                    partWriter.Value(std::uint16_t{0});
+                }
                 partWriter.Value(currentCount);
                 partWriter.Bytes(current);
                 partEntities.push_back(std::move(currentEntities));
@@ -425,6 +469,9 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 current.clear();
                 currentCount = 0;
             };
+            // The entities with values changed since the client confirmed them, each encoded once into candidates.
+            candidates.clear();
+            candidateBytes.clear();
             for (const auto& [entity, known] : ledger.entities) {
                 if (std::binary_search(restructured.begin(), restructured.end(), entity)) continue;
                 const Snapshot::Entity* taken = snapshot.Find(entity);
@@ -437,15 +484,58 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                     }
                 }
                 if (changedMask == 0) continue;
-                one.clear();
-                NetWriter oneWriter(one);
+                const std::size_t start = candidateBytes.size();
+                NetWriter oneWriter(candidateBytes);
                 oneWriter.Value(entity);
                 Components(world, *registry, snapshot, *taken, changedMask, oneWriter);
+                candidates.push_back(Candidate{entity, start, candidateBytes.size() - start, 0, true});
+            }
+            // Over the Peer's budget (step 5): the highest accumulated priority first (lightyear's accumulator: each
+            // tick an entity waits, its weight is added); the others wait, their accumulated priority grows.
+            deferred.clear();
+            if (valueBudget > 0 && candidateBytes.size() > valueBudget) {
+                for (Candidate& candidate : candidates) {
+                    std::uint32_t weight = 1;
+                    (void)world.Read<NetPriority>(candidate.entity, [&](const NetPriority& p) { weight = p.weight; });
+                    const auto waited = ledger.waiting.find(candidate.entity);
+                    candidate.score = (waited != ledger.waiting.end() ? waited->second : 0) + weight;
+                }
+                std::vector<std::size_t> order(candidates.size());
+                for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+                std::stable_sort(order.begin(), order.end(),
+                                 [&](std::size_t a, std::size_t b) { return candidates[a].score > candidates[b].score; });
+                std::size_t used = 0;
+                for (const std::size_t i : order) {
+                    Candidate& candidate = candidates[i];
+                    candidate.sent = used + candidate.size <= valueBudget || used == 0;
+                    if (candidate.sent) used += candidate.size;
+                }
+                for (Candidate& candidate : candidates) {
+                    if (candidate.sent) {
+                        ledger.waiting.erase(candidate.entity);
+                        ledger.waitedTicks.erase(candidate.entity);
+                    } else {
+                        ledger.waiting[candidate.entity] = candidate.score;
+                        deferred.push_back(candidate.entity);
+                        ++ledger.valuesDeferred;
+                        const std::uint32_t waited = ++ledger.waitedTicks[candidate.entity];
+                        ledger.longestWait = std::max(ledger.longestWait, waited);
+                    }
+                }
+            } else {
+                for (const Candidate& candidate : candidates) {
+                    ledger.waiting.erase(candidate.entity);
+                    ledger.waitedTicks.erase(candidate.entity);
+                }
+            }
+            for (const Candidate& candidate : candidates) {
+                if (!candidate.sent) continue;
+                const std::span<const std::byte> one(candidateBytes.data() + candidate.offset, candidate.size);
                 // An entity's data is never split: a part closes before an entity that would not fit.
-                const std::size_t resourcesHere = partCountSoFar == 0 ? resourceBytes.size() : 0;
+                const std::size_t resourcesHere = partCountSoFar == 0 ? resourceBytes.size() + 2 + 8 * deferred.size() : 0;
                 if ((currentCount > 0 || resourcesHere > 0) && current.size() + resourcesHere + one.size() > kValuePartBudget) close();
                 current.insert(current.end(), one.begin(), one.end());
-                currentEntities.push_back(entity);
+                currentEntities.push_back(candidate.entity);
                 ++currentCount;
             }
             // A tick with nothing changed still sends one empty part (C-RP4).
@@ -662,6 +752,24 @@ SystemResult ApplyValues(ReplicaWorld& world, const NetRegistry& registry, NetRe
         ++state.resourceValuesApplied;
         if (*outcome == ApplyOutcome::Unchanged) ++state.resourceValuesUnchanged;
         state.resourcesWritten[wire] = part.tick;
+    }
+    // The entities whose changed values wait for a later tick (step 5): the snapshot of this tick does not carry them.
+    // K3 writes NotSent (R-8's third state: not compared at that C, not inferred unchanged); K1 and K2 wait.
+    std::uint16_t deferredCount = 0;
+    if (!reader.Value(deferredCount)) {
+        Drop(state, ReplicaDrop::Malformed);
+        return {};
+    }
+    for (std::uint16_t d = 0; d < deferredCount; ++d) {
+        Kernel::EntityId waits = 0;
+        if (!reader.Value(waits)) {
+            Drop(state, ReplicaDrop::Malformed);
+            return {};
+        }
+        if (rolling != nullptr) {
+            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.NotSent(waits, part.tick); });
+            ++state.inboxNotSent;
+        }
     }
     std::uint32_t count = 0;
     if (!reader.Value(count)) {

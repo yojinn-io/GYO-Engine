@@ -7,6 +7,7 @@
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
@@ -19,6 +20,14 @@ namespace GYO::Engine::Rollback {
 namespace {
 
 using Ok = Base::Result<void, Kernel::KernelError>;
+
+// alive (ascending) without the entities of drop (ascending).
+std::vector<Kernel::EntityId> Without(const std::vector<Kernel::EntityId>& alive, const std::vector<Kernel::EntityId>& drop) {
+    if (drop.empty()) return alive;
+    std::vector<Kernel::EntityId> out;
+    std::set_difference(alive.begin(), alive.end(), drop.begin(), drop.end(), std::back_inserter(out));
+    return out;
+}
 
 // The inbox's authoritative values for one history column: a component's by entity, a resource's (R-8 F).
 const InboxColumnBase* AuthoritativeOf(const RollbackInbox& inbox, const ColumnHistoryBase& column) {
@@ -197,9 +206,11 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
             // recorded set is a reason to go back by itself.
             const std::vector<Kernel::EntityId> alive = inbox.AliveWith(recorded, point);
             differs = alive != recorded;
+            // R-8's third state: an entity the snapshot of C does not carry is not compared (not inferred unchanged).
+            const std::vector<Kernel::EntityId> compared = Without(alive, inbox.NotCarriedAt(point));
             for (const auto& column : history.columns) {
                 if (const InboxColumnBase* values = AuthoritativeOf(inbox, *column)) {
-                    differs = differs || column->Differs(point, *values, alive);
+                    differs = differs || column->Differs(point, *values, compared);
                 }
             }
         }));
@@ -235,11 +246,14 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
             // with its id when it is not there, its values from the inbox); one said to have exited is removed.
             const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);
             set.Alive(alive);
+            // An entity the snapshot of target does not carry keeps the World's own history (R-8's third state).
+            const std::vector<Kernel::EntityId> notCarried = inbox.NotCarriedAt(target);
+            const std::vector<Kernel::EntityId> carried = Without(alive, notCarried);
             for (const auto& column : history.columns) {
                 const InboxColumnBase* values = AuthoritativeOf(inbox, *column);
-                column->AddTo(set, target, alive, values);
+                column->AddTo(set, target, alive, values, notCarried);
                 // The history at target agrees with the authority afterwards.
-                if (values != nullptr) column->Adopt(target, *values, alive);
+                if (values != nullptr) column->Adopt(target, *values, carried);
             }
             history.SetAliveAt(target, alive);
         }));

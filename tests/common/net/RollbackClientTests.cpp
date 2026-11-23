@@ -133,7 +133,7 @@ K::SystemOptions FixedAt(std::string name, std::string stage, std::vector<std::s
     return options;
 }
 
-void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep) {
+void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const std::uint32_t valueBudget = 0) {
     auto& r = s.Registrar();
     A::AuthorityEntry authority(s);
     authority.Component<Body>("Body");
@@ -149,6 +149,7 @@ void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep) {
     N::NetEntry::ResourceOptions<Wave> waveOptions;
     waveOptions.codec = {[](N::NetWriter& w, const Wave& v) { w.Value(v.count); }, [](N::NetReader& r, Wave& v) { return r.Value(v.count); }, 1};
     net.ReplicateResource<Wave>("Wave", std::move(waveOptions));
+    net.ValueBytesPerTick(valueBudget);
     net.Input<Push>("Push", PushOptions());
     R::RollbackEntry(s).StepSchedule();
     r.AddSystem<&Steer>(FixedAt("Steer", "Update", {}, false));
@@ -170,11 +171,12 @@ struct Sample {
     std::pair<N::MemoryLink, N::MemoryLink> links;
     std::unique_ptr<O::Product> server, client;
 
-    Sample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame) : links(N::MemoryLink::Pair(link)) {
+    Sample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const std::uint32_t valueBudget = 0)
+        : links(N::MemoryLink::Pair(link)) {
         auto reader = [now = clock] { return *now; };
         End s = GameEnd(N::NetRole::Server, {});
         s.authority = std::make_shared<A::ServerAuthorityStrategy>();
-        s.build = [serverStepsPerFrame](O::WorldSetup& setup) { RegisterSample(setup, serverStepsPerFrame); };
+        s.build = [serverStepsPerFrame, valueBudget](O::WorldSetup& setup) { RegisterSample(setup, serverStepsPerFrame, valueBudget); };
         s.net.link = std::make_shared<N::MemoryLink>(links.first);
         s.net.clock = reader;
         s.net.seed = 31;
@@ -241,12 +243,15 @@ struct Run {
     std::uint64_t serverEntered = 0;        // entities the server spawned and sent (the crates and the player)
     std::uint64_t tintsWrong = 0;           // client crates whose Tint is not the server's
     std::int32_t serverWave = 0, clientWave = 0;
+    std::uint64_t serverDeferred = 0;       // values the server deferred to a later tick for the client's Peer
+    std::uint32_t longestWait = 0;          // the most ticks in a row an entity's values waited at the server
+    std::optional<std::uint64_t> rollbackConfirmed;  // the confirmed point the rollback Module's inbox has
 };
 
 // G-10's run: connect, give the player, push for a while, then the default input for the last segment; at the end
 // the client's step P and its digest; the server runs on until it records step P.
-Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const int frames) {
-    Sample sample(link, serverStepsPerFrame);
+Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsPerFrame, const int frames, const std::uint32_t valueBudget = 0) {
+    Sample sample(link, serverStepsPerFrame, valueBudget);
     for (int i = 0; i < 60 && (sample.Peer(sample.ServerWorld()) == 0 || sample.Peer(sample.ClientWorld()) == 0); ++i) {
         REQUIRE(static_cast<bool>(sample.server->RunFrame()));
         REQUIRE(static_cast<bool>(sample.client->RunFrame()));
@@ -286,9 +291,21 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
         if (replica.inboxConfirmed && lastConfirmed && *replica.inboxConfirmed > *lastConfirmed + 1) ++run.confirmedJumps;
         lastConfirmed = replica.inboxConfirmed;
     }
+    // What the server has sent so far reaches the client: the client runs alone a few frames (the server is stopped),
+    // so the counts of what was sent and what arrived can be put side by side.
+    if (const auto* ledger = sample.ServerWorld().Get<N::PeerLedger>(sample.Peer(sample.ServerWorld()))) {
+        run.serverDeferred = ledger->valuesDeferred;
+        run.longestWait = ledger->longestWait;
+    }
+    for (int i = 0; i < 6; ++i) {
+        REQUIRE(static_cast<bool>(sample.client->RunFrame()));
+        sample.links.first.Advance();
+        *sample.clock += Ms(16);
+    }
     run.clientTick = sample.ClientTick();
     run.clientDigest = DigestOf(sample.ClientWorld());
     run.replica = sample.Replica();
+    run.rollbackConfirmed = sample.ClientWorld().Resource<R::RollbackInbox>()->Confirmed();
     // The server runs on alone, one step a frame, until it has run step P.
     sample.ServerWorld().SetResource(W::TimeSampling{15'625'000, W::SamplingMode::ManualDelta});
     for (int i = 0; i < 200 && sample.ServerTick() < run.clientTick; ++i) {
@@ -345,7 +362,10 @@ TEST_CASE("k3: G-10 the client that rolls back ends with the Match's digest at i
     REQUIRE_MESSAGE(run.serverDigest.has_value(), "G-10: the Match recorded the client's step P");
     CHECK_MESSAGE(run.clientDigest == *run.serverDigest, "G-10: at its step P the client's Digest equals the Match's");
     CHECK_MESSAGE(run.crateLost == 0, "G-10: an entity the network spawned is not removed by a rollback (Entered)");
-    CHECK(run.clientCrates == run.serverCrates);
+    CHECK_MESSAGE(run.clientCrates == run.serverCrates, "K3: the server's spawns reach the client (Entered)");
+    CHECK_MESSAGE(run.rollbackConfirmed.has_value(), "K3: the confirmed point reaches the rollback Module");
+    CHECK_MESSAGE(run.replica.unchangedNotWritten == 0, "K3: no rolling-back value is written directly in First");
+    CHECK_MESSAGE(run.replica.resourceValuesApplied == 0, "K3: a rolling-back Resource goes into the inbox, not through its apply");
     CHECK_MESSAGE(run.tintsWrong == 0, "K3: a replicated component that does not roll back is written directly, once the entity is there");
     CHECK_MESSAGE(run.clientWave == run.serverWave, "K3: a replicated Resource that rolls back reaches the client through the inbox");
     // The counts: every spawn and the one removal reached the inbox; nothing unreadable or dropped beyond the depth.
@@ -369,4 +389,17 @@ TEST_CASE("k3: an entity the authority removes (Exited) is removed at the client
     const Run run = RunSample(Slow(), 1, 300);
     REQUIRE_MESSAGE(run.exitedAtServer.size() == 1, "the server removed one crate the client had");
     CHECK_MESSAGE(run.stillAtClient.empty(), "an entity the authority removed is gone at the client");
+}
+
+TEST_CASE("k3: G-11 values the server defers over its budget are NotSent at the client, not taken as unchanged") {
+    // 90 value bytes a tick for the Peer: two or three of the moving bodies a tick, the others wait (step 5).
+    const Run run = RunSample(Slow(), 1, 300, 90);
+    MESSAGE("G-11 NotSent: " << Counts(run) << " | deferred at the server=" << run.serverDeferred << " NotSent at the client="
+                             << run.replica.inboxNotSent);
+    REQUIRE_MESSAGE(run.serverDeferred > 0, "step 5: values over the budget wait for a later tick");
+    CHECK_MESSAGE(run.longestWait <= 8, "step 5: the accumulated priority lets no entity wait long (longest " << run.longestWait << " ticks)");
+    CHECK_MESSAGE(run.replica.inboxNotSent == run.serverDeferred, "G-11: every deferred value is NotSent at the simulating client");
+    REQUIRE(run.serverDigest.has_value());
+    CHECK_MESSAGE(run.clientDigest == *run.serverDigest,
+                  "G-11: the simulating client does not take NotSent as unchanged (its Digest at P is the Match's)");
 }

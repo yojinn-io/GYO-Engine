@@ -44,9 +44,10 @@ public:
     // Drops what is older than oldest, keeping per entity the newest entry at or before oldest.
     virtual void Prune(std::uint64_t oldest) = 0;
     // Puts the state at tick into set: for each entity of alive, the authoritative value at or before tick when the
-    // inbox has one, else the history's.
+    // inbox has one, else the history's; an entity of notCarried (ascending: the snapshot of tick does not carry it,
+    // R-8's third state) always the history's.
     virtual void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
-                       const InboxColumnBase* authoritative) const = 0;
+                       const InboxColumnBase* authoritative, std::span<const Kernel::EntityId> notCarried) const = 0;
     // Whether an authoritative value at or before tick differs from the history at tick. Only the entities the
     // inbox has a value for and that are alive at tick are compared: alive is the World's own alive set with the
     // caller's explicit entries and exits applied (R-8 A); an entity not said follows the game's spawns and
@@ -95,11 +96,11 @@ public:
     }
 
     void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
-               const InboxColumnBase* authoritative) const override {
+               const InboxColumnBase* authoritative, std::span<const Kernel::EntityId> notCarried) const override {
         const auto* inbox = static_cast<const InboxColumn<T>*>(authoritative);
         std::vector<std::pair<Kernel::EntityId, T>> cells;
         for (Kernel::EntityId entity : alive) {
-            if (inbox != nullptr) {
+            if (inbox != nullptr && !std::binary_search(notCarried.begin(), notCarried.end(), entity)) {
                 if (const auto value = inbox->At(entity, tick)) {
                     if (*value) cells.emplace_back(entity, **value);
                     continue;
@@ -198,7 +199,7 @@ public:
     }
     // The authoritative value at or before tick when the inbox has one (R-8 F), else the history's.
     void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId>,
-               const InboxColumnBase* authoritative) const override {
+               const InboxColumnBase* authoritative, std::span<const Kernel::EntityId>) const override {
         std::optional<T> value = At(tick);
         if (authoritative != nullptr) {
             if (const auto wanted = static_cast<const InboxColumn<T>*>(authoritative)->At(RollbackInbox::kResourceEntity, tick)) {

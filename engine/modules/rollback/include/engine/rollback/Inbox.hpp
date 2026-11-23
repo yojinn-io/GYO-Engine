@@ -13,15 +13,19 @@
 //     when it entered at or before C and did not exit at or before C, whatever
 //     the World's own spawns and despawns did; one not said follows them;
 //   - ResourceValue<T>(tick, value): resource T had value at tick (the rules
-//     of a component's value, without an entity; gate 1 F).
+//     of a component's value, without an entity; gate 1 F);
+//   - NotSent(entity, tick): the snapshot of tick does not carry entity (R-8's
+//     third state, the net Module's step 5): at C = tick it is not compared and
+//     not inferred unchanged, and a restore takes the World's own history for
+//     it; at another C it counts again (that tick's snapshot carried it, or said
+//     NotSent again).
 // A value of a tick later than C stays and is compared when C reaches it; a
 // late value of a tick before C counts as "the last value at or before C" (MC-1:
 // an event is never dropped silently).
 //
-// Not made yet (RollbackFailure NotImplemented, an E2 the caller decides on):
-// part of an entity's components and a value from an event written into the
-// history (MC-2; the net Module's declaration section 13: not used), and "this
-// snapshot does not carry it" (interest management; the net Module's step 5).
+// Not made (RollbackFailure NotImplemented, an E2 the caller decides on): part
+// of an entity's components and a value from an event written into the history
+// (MC-2; the net Module's declaration section 13: not used).
 
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Hash.hpp"
@@ -34,6 +38,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -180,13 +185,21 @@ public:
     // The entity a resource's values are kept under.
     static constexpr Kernel::EntityId kResourceEntity = 0;
 
+    // The snapshot of tick does not carry entity (R-8's third state).
+    void NotSent(Kernel::EntityId entity, std::uint64_t tick) { notSent_[entity].insert(tick); }
+    // The entities the snapshot of tick does not carry, ascending.
+    [[nodiscard]] std::vector<Kernel::EntityId> NotCarriedAt(std::uint64_t tick) const {
+        std::vector<Kernel::EntityId> out;
+        for (const auto& [entity, ticks] : notSent_) {
+            if (ticks.count(tick) != 0) out.push_back(entity);
+        }
+        return out;
+    }
+
     // Not made (rollback.zh-Hant.md section 2): each returns NotImplemented.
     template <class T>
     Base::Result<void, RollbackFailure> PartialValue(Kernel::EntityId, std::uint64_t, T) {
         return NotImplemented("a value of part of an entity's components");
-    }
-    Base::Result<void, RollbackFailure> NotSent(Kernel::EntityId, std::uint64_t) {
-        return NotImplemented("\"this snapshot does not carry it\" (interest management)");
     }
     template <class T>
     Base::Result<void, RollbackFailure> FromEvent(Kernel::EntityId, std::uint64_t, T) {
@@ -211,6 +224,10 @@ public:
         for (auto& [key, column] : resources_) column->Prune(oldest);
         for (auto& [entity, entries] : lifecycle_) {
             while (entries.size() >= 2 && std::next(entries.begin())->first <= oldest) entries.erase(entries.begin());
+        }
+        for (auto it = notSent_.begin(); it != notSent_.end();) {
+            while (!it->second.empty() && *it->second.begin() < oldest) it->second.erase(it->second.begin());
+            it = it->second.empty() ? notSent_.erase(it) : std::next(it);
         }
     }
 
@@ -241,6 +258,7 @@ private:
     std::vector<std::pair<Kernel::TypeKey, std::unique_ptr<InboxColumnBase>>> columns_;
     std::vector<std::pair<Kernel::TypeKey, std::unique_ptr<InboxColumnBase>>> resources_;
     std::map<Kernel::EntityId, std::map<std::uint64_t, bool>> lifecycle_;
+    std::map<Kernel::EntityId, std::set<std::uint64_t>> notSent_;
     std::optional<std::uint64_t> confirmed_;
 };
 

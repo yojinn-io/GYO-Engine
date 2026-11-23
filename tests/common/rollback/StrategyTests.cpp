@@ -826,7 +826,7 @@ K::SystemResult RunProbe(K::ExclusiveWorld<> world) {
         CommandHistory().Record(world, probe.tick);
     } else if (probe.phase == 2) {
         K::RestoreSet set;
-        ScoreHistory().AddTo(set, probe.tick, {}, nullptr);
+        ScoreHistory().AddTo(set, probe.tick, {}, nullptr, {});
         return world.Restore(std::move(set));
     } else if (probe.phase == 3) {
         CommandHistory().WriteBack(world, probe.tick);
@@ -1236,5 +1236,44 @@ TEST_CASE("rollback strategy: R-8 F: a resource's authoritative value that diffe
         const auto* values = Inbox(*p).ResourceValues<Tally>();
         REQUIRE(values != nullptr);
         CHECK_MESSAGE(values->At(R::RollbackInbox::kResourceEntity, 6).has_value(), "[rb-resource-pruned-keeps-c]");
+    }
+}
+
+TEST_CASE("rollback strategy: R-8 third state: an entity the snapshot of C does not carry is not compared and keeps its history") {
+    SUBCASE("not compared: an older authoritative value is not inferred unchanged at C") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        // The authority's last value of entity 1 is of step 3; the snapshot of step 6 does not carry entity 1.
+        std::int32_t at3 = 100;
+        for (std::uint64_t t = 1; t <= 3; ++t) at3 += kScript[t];
+        Inbox(*p).Value<Health>(1, 3, Health{at3});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).ConfirmedThrough(6);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() == 1, "[rb-not-sent-not-compared] steps run in the frame: " << StepsRun());
+    }
+    SUBCASE("a restore at C keeps the history of an entity C's snapshot does not carry") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        const std::int32_t predicted1 = WorldOf(*p).Get<Health>(1)->hp;
+        // Entity 2's authoritative value differs at 6 (a rollback to 6); entity 1 has an old value and is not carried.
+        Inbox(*p).Value<Health>(1, 3, Health{-5});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).Value<Health>(2, 6, Health{1});
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        CHECK_MESSAGE(WorldOf(*p).Get<Health>(1)->hp == predicted1 + kScript[10],
+                      "[rb-not-sent-history-kept] " << WorldOf(*p).Get<Health>(1)->hp << " vs " << predicted1 + kScript[10]);
+    }
+    SUBCASE("at a later C the entity counts again") {
+        auto p = Make(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).Value<Health>(1, 3, Health{-5});
+        Inbox(*p).NotSent(1, 6);
+        Inbox(*p).ConfirmedThrough(7);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() > 1, "[rb-not-sent-only-at-its-tick] the value of step 3 was not compared at 7");
     }
 }

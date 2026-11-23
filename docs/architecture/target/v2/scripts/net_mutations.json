@@ -1023,7 +1023,7 @@
    "replace": "",
    "target": "gyo_net_tests",
    "cases": "k3:*",
-   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+   "expect": "K3:\\ the\\ server's\\ spawns\\ reach\\ the\\ client\\ \\(Entered\\)"
   },
   {
    "id": "nt-k3-exit-missing",
@@ -1051,7 +1051,7 @@
    "replace": "",
    "target": "gyo_net_tests",
    "cases": "k3:*",
-   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+   "expect": "K3:\\ the\\ confirmed\\ point\\ reaches\\ the\\ rollback\\ Module"
   },
   {
    "id": "nt-k3-as-k1",
@@ -1065,7 +1065,7 @@
    "replace": "    const RollingBack* rolling = nullptr;\n",
    "target": "gyo_net_tests",
    "cases": "k3:*",
-   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+   "expect": "G\\-10:\\ entries\\ in\\ the\\ inbox\\ ==\\ entities\\ the\\ server\\ spawned"
   },
   {
    "id": "nt-k3-waiting-not-written",
@@ -1093,7 +1093,7 @@
    "replace": "            if (false) {\n                // K3: into the inbox at the part's tick",
    "target": "gyo_net_tests",
    "cases": "k3:*",
-   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+   "expect": "K3:\\ no\\ rolling\\-back\\ value\\ is\\ written\\ directly\\ in\\ First"
   },
   {
    "id": "nt-k3-resource-direct",
@@ -1107,7 +1107,106 @@
    "replace": "        if (false) {\n",
    "target": "gyo_net_tests",
    "cases": "k3:*",
-   "expect": "G\\-10\\ three\\ steps\\ a\\ frame:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+   "expect": "K3:\\ a\\ rolling\\-back\\ Resource\\ goes\\ into\\ the\\ inbox"
+  },
+  {
+   "id": "nt-vis-ignored",
+   "what": "An entity a Peer does not see is sent to it. Only it catches C-VIS1's entity scope",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (visibility && !visibility->Sees(taken.id)) return 0;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ an\\ entity\\ a\\ Peer\\ does\\ not\\ see\\ is\\ not\\ sent\\ to\\ it"
+  },
+  {
+   "id": "nt-vis-loss-not-removed",
+   "what": "An entity a Peer stops seeing stays at that client (no despawn on losing sight). Only it catches WhileVisible",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (still != nullptr && peerMask(*still) != 0) continue;\n",
+   "replace": "                if (still != nullptr) continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ an\\ entity\\ a\\ Peer\\ stops\\ seeing\\ is\\ removed"
+  },
+  {
+   "id": "nt-private-to-all",
+   "what": "A private component goes to every Peer that sees the entity. Only it catches C-VIS2's scope",
+   "guards": [
+    "net-module-declaration C-VIS2",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (entry->privateComponent) privateMask |= std::uint64_t{1} << entry->wire;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ the\\ private\\ component\\ reaches\\ no\\ other\\ Peer"
+  },
+  {
+   "id": "nt-private-to-none",
+   "what": "A private component goes to no Peer, also one shown it. Only it catches ShowPrivate",
+   "guards": [
+    "net-module-declaration C-VIS2",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (!visibility || !visibility->SeesPrivate(taken.id, entry->key)) mask &= ~(std::uint64_t{1} << entry->wire);\n",
+   "replace": "                mask &= ~(std::uint64_t{1} << entry->wire);\n",
+   "target": "gyo_net_tests",
+   "cases": "visibility:*",
+   "expect": "G\\-11:\\ the\\ private\\ component\\ reaches\\ the\\ Peer\\ that\\ is\\ shown\\ it"
+  },
+  {
+   "id": "nt-budget-ignored",
+   "what": "The values over the Peer's budget are sent anyway. Only it catches the budget",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (valueBudget > 0 && candidateBytes.size() > valueBudget) {\n",
+   "replace": "            if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "step\\ 5:\\ values\\ over\\ the\\ budget\\ wait\\ for\\ a\\ later\\ tick"
+  },
+  {
+   "id": "nt-priority-not-accumulated",
+   "what": "A waiting entity's priority does not grow, so the lowest ids are always sent first and the others starve. Only it catches the accumulator",
+   "guards": [
+    "net-module-declaration C-VIS1",
+    "net 14"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                        ledger.waiting[candidate.entity] = candidate.score;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "step\\ 5:\\ the\\ accumulated\\ priority\\ lets\\ no\\ entity\\ wait\\ long"
+  },
+  {
+   "id": "nt-deferred-not-notsent",
+   "what": "A simulating client writes no NotSent for the values the server deferred. Only it catches D-7's NotSent at K3",
+   "guards": [
+    "net-module-declaration D-7",
+    "rollback R-8",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.NotSent(waits, part.tick); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-11:\\ the\\ simulating\\ client\\ does\\ not\\ take\\ NotSent\\ as\\ unchanged"
   }
  ]
 }
