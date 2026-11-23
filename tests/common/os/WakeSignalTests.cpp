@@ -275,6 +275,8 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
     int rounds = 0;
     // Observation only (v8-arch-gyo2-os-test-timeout): how the case's time is
     // spent, noted every NoteEvery rounds and at the end. No check reads it.
+    // A round's time is from the waiter's check to its flag (the clock read the
+    // lost check already takes), so it leaves out a round's trailing take.
     constexpr int NoteEvery = 2000;
     const auto caseStart = Clock::now();
     int blockedRounds = 0;
@@ -295,17 +297,19 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
             wake.Block(std::chrono::seconds(2));
             blocked = true;
         }
-        if (Clock::now() - start >= std::chrono::milliseconds(1500)) ++lost;
+        // The observation below reuses this clock read, so it adds no work
+        // between the rounds' phases.
+        const auto waited = Clock::now() - start;
+        if (waited >= std::chrono::milliseconds(1500)) ++lost;
         if (!blocked) {
             for (int spins = 0; signalled.load(std::memory_order_acquire) != rounds; ++spins)
                 if (spins > SpinsBeforeYield) std::this_thread::yield();
             wake.Block(std::chrono::seconds(2));
         }
         consumed.store(rounds, std::memory_order_release);
-        const auto round = Clock::now() - start;
         if (blocked) ++blockedRounds;
-        if (round >= std::chrono::milliseconds(10)) ++slowRounds;
-        longestRound = std::max(longestRound, round);
+        if (waited >= std::chrono::milliseconds(10)) ++slowRounds;
+        longestRound = std::max(longestRound, waited);
     }
     note("end");
     stop.store(true, std::memory_order_release);

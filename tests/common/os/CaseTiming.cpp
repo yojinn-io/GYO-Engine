@@ -81,8 +81,12 @@ public:
         const char* fromEnvironment = std::getenv("GYO_OS_CASE_TIMING_DIR");
         const std::filesystem::path directory =
             (fromEnvironment != nullptr && fromEnvironment[0] != '\0') ? fromEnvironment : GYO_OS_CASE_TIMING_DIR;
+        // A directory named at run time is made with its parents; the build
+        // directory given at compile time only gets its last level, so a copy
+        // of the executable on another machine does not rebuild that path.
         std::error_code error;
-        std::filesystem::create_directories(directory, error);
+        if (fromEnvironment != nullptr && fromEnvironment[0] != '\0') std::filesystem::create_directories(directory, error);
+        else std::filesystem::create_directory(directory, error);
         const std::time_t now = std::time(nullptr);
         std::tm local{};
 #if defined(_WIN32)
@@ -98,6 +102,7 @@ public:
         path_ = directory / (program + "-" + stamp + "-" + std::to_string(pid) + ".log");
         file_ = std::fopen(path_.string().c_str(), "w");
         if (file_ == nullptr) std::fprintf(stderr, "[case-timing] cannot write %s\n", path_.string().c_str());
+        else std::fprintf(stderr, "[case-timing] writing %s\n", path_.string().c_str());
     }
 
     // Removes the file when the run passed quickly, and says where it is otherwise.
@@ -120,8 +125,6 @@ public:
         const std::lock_guard lock(mutex_);
         char line[1200]{};
         std::snprintf(line, sizeof line, "[case-timing] +%.3fs %s\n", Seconds(Clock::now() - runStart_), body);
-        std::fputs(line, stderr);
-        std::fflush(stderr);
         if (file_ != nullptr) {
             std::fputs(line, file_);
             std::fflush(file_);
@@ -147,7 +150,7 @@ void Line(const char* format, ...) {
     va_end(arguments);
 }
 
-// "cpu=0.012s vcsw=3 ivcsw=1 load=2.51" for the span from `from` to `to`,
+// "wall=0.015s cpu=0.012s vcsw=3 ivcsw=1 load=2.51" for the span from `from` to `to`,
 // with n/a where the platform gives no counter.
 std::string Span(const Sample& from, const Sample& to) {
     char text[160]{};
