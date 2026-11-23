@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-23（新第 19 節「父子與關係」、第 17 節補讀檔裡的父子：`v8-arch-gyo2-kernel-relationship`——Kernel DI-KS 29～33）；2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-23（第 3 節表的 Extract 列、新第 20 節：`v8-arch-gyo2-sdl-extract`——Extract 的讀法；Kernel DI-KS 35～37、編排層 O-12）；2026-11-23（新第 19 節「父子與關係」、第 17 節補讀檔裡的父子：`v8-arch-gyo2-kernel-relationship`——Kernel DI-KS 29～33）；2026-11-23（第 3、15 節、新第 18 節：`v8-arch-gyo2-kernel-res-changed`——Resource 的 `Changed()`；Kernel DI-KS 28）；2026-11-22（新第 17 節「讀檔」、第 13、14 節的讀檔改成指過去：`v8-arch-gyo2-restore-impl`）；2026-11-22（第 5 節「訊息」、第 14 節、新第 15 節：`v8-arch-gyo2-event-cursor-reeval`——帶條件或不常跑的讀者的寫法；Kernel 的規則不變）；2026-11-20（第 1、3、4、5、7、9、10 節、第 11.1、11.4、11.6 節：`v8-arch-gyo2-time-events`——Kernel 沒有時鐘與 tick，事件分保留式 `Message` 與推送式 `Event`；只改被拿掉的東西）；2026-11-18（第 11.5 節、第 12 節、新第 13 節：`v8-arch-gyo2-orchestration-skeleton`——開局與登記單位搬到編排層，加編排層一節）；2026-11-18（第 11.6 節：同一批修正——配發器的 id 還活著時 `Spawn` 不回 id、例外離開當場改讓 World 中斷）；2026-11-18（第 3 節、第 5 節、第 6 節、第 9 節、第 11.2、11.4、11.6 節：`v8-arch-gyo2-kernel-subtract-structure` 第 3 段——`ExclusiveWorld` 當場改成員與增刪 Resource、`Commands` 增刪 Resource）；2026-11-18（第 3～6 節、第 9～11 節：同一批第 1 段——歧義不報錯、執行期不攔 untyped 寫入、`ExclusiveWorld` 讀寫任何值、`KernelSettings` 可讀寫、綁執行緒的 Resource）；2026-11-18（第 6 節末、第 12 節：同一批第 2 段——兩步登記、之後再登記、動態插入的宣告）；2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -59,7 +59,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | `Commands` | 延後加減任何元件，型別在函式體裡才決定（`Insert`、`Remove` 不回傳東西）；延後放進或拿掉 Resource（`SetResource`、`RemoveResource`，在同步點的 resource 那一步套用） | 無：不進衝突、不算寫者，執行期也不檢查 |
 | `Local<T>` | 這個 System 自己的狀態，跨次保留 | 無 |
 | `ExclusiveWorld<>`、`ExclusiveWorld<Writes<R…>>` | 在閉包裡讀寫整個 World（`Read<T>`、`Modify<T>`）、當場生成／插入／拿掉／刪除實體與增刪 Resource（第 11.6 節）、跑別的 schedule（`RunSchedule`）；必須是唯一的參數；只能是 (b) 區（第 11 節） | 讀寫所有元件與 Resource 的值（`Message` 不在內；可以當場 `Trigger` 推送式事件）；`Writes<R…>` 是選填的標註，不算寫者 |
-| `Extract<Read<T>>`、`ExtractRes<T>` | 在 extract 的 schedule 裡讀來源 World；沒有寫的版本 | 讀來源 |
+| `Extract<Read<T>>`、`ExtractRes<T>` | 在 extract 的 schedule 裡（System 或它的 run 條件）讀來源 World；沒有寫的版本（第 20 節） | 讀來源 |
 | `SetRead<Tag>`、`DiagnosticsWriter<R>` | 讀一組具名的元件；寫診斷紀錄 | 讀；無 |
 
 ## 4. 登記時另外寫的
@@ -440,7 +440,7 @@ SystemResult LoadSave(ExclusiveWorld<> world) {
 
 （`v8-arch-gyo2-orchestration-skeleton`；規則全文在 [orchestration](orchestration.zh-Hant.md) 的 Design Invariants O-1～O-10。程式 `engine/orchestration`，`GYO::Engine::Orchestration`。）Kernel 決定一張 schedule 裡 System 的先後；編排層決定哪幾張、什麼時候、在哪個 World 跑，並把登記單位與產品自己的登記接進每個 World。
 
-- **產品自己的登記**：`ProductDescription` 每個 World 一份 `WorldDescription`，`build` 是產品的登記回呼（拿到 `WorldSetup`：`Registrar()`、每幀清單 `Frame()`、`Prepare(fn)`、`CarryOver<T>()`、選項包）。它在所有登記單位的 `Build` 之後、一定經過一次 `Register`。`Product::Build(description, MakeRegisteredUnits())` 建出整個產品；啟動錯誤（Kernel 的、編排層的 O-E1～O-E7、登記單位回報的）一次收在 `ProductStartupReport`，有任何錯誤就不建任何 World。
+- **產品自己的登記**：`ProductDescription` 每個 World 一份 `WorldDescription`，`build` 是產品的登記回呼（拿到 `WorldSetup`：`Registrar()`、每幀清單 `Frame()`、`Prepare(fn)`、`CarryOver<T>()`、選項包）。它在所有登記單位的 `Build` 之後、一定經過一次 `Register`。`Product::Build(description, MakeRegisteredUnits())` 建出整個產品；啟動錯誤（Kernel 的、編排層的 O-E1～O-E7、O-E9、登記單位回報的）一次收在 `ProductStartupReport`，有任何錯誤就不建任何 World。
 - **登記單位**：`Module`（自己維護）與 `Plugin`（第三方），生命週期是產品一次 `Configure`，每個 World `Build` → Kernel `BuildPlans` → `Finish` → `Check`。產品帶哪些寫在 `config/modules.csv`、`plugins.csv` 與產品自己的 `gyo_product_units(...)`；依賴只寫在登記檔（缺、排在後面、Module 依賴 Plugin 是 O-E3）。單位沒有 `Name()`，名字是登記檔那一列的。
 - **遊戲初始化**：`ProductDescription::gameInit`（schedule 名的清單；登記單位可以 `Append`／`InsertBefore`／`InsertAfter`），整個行程一次、在第一個 World、在任何一幀與任何 `RunSchedule` 之前。`RunFrame`、`RunSchedule` 在它還沒跑時先跑它；直接呼叫 `WorldExecutor::Run` 是繞過編排層，不會先跑。某一張回錯誤就停下回傳、記為已跑。
 - **每一幀**：`RunFrame()` 照 World 的順序跑各 World 的每幀清單；某一張回錯誤就停下回傳（排在後面的 World 那一次不跑）。**一個 World 壞了（中斷，或替換失敗後位置是空的），`Product` 就結束**：之後每個入口都先檢查、什麼都不跑，回 `WorldInterrupted`／`WorldMissing`，錯誤上掛著 `WorldFailure`（哪個 World、怎麼壞的、壞在哪裡、之前最後跑的 schedule）；runner 決定關掉程式或另建一個 `Product`（回主選單）。編排層不寫日誌，要記就由你（或之後的日誌機制）拿 `WorldFailure` 去記（O-11）。runner（預設只跑一次 `RunFrame`）擁有迴圈；runner 與持有 `Product` 的人只呼叫 `RunGameInit`、`RunFrame`、`RunSchedule`、`ReplaceWorld`、`InsertSystems`。只跑某一張（例：放玩家、讀檔）用 `RunSchedule(world, schedule)`。
@@ -668,3 +668,20 @@ K::SystemResult DropOnDeath(K::Query<K::Read<Health>, K::Read<K::Children>> hero
 - **回滾**：兩個都登記（`rollback.Component<ChildOf>()`、`rollback.Component<Children>()`）——`Children` 的先後是歷史，只登記 `ChildOf` 時放回後順序可能和直跑不同（回滾頁 R-2 前提 8）。
 - **準備函式裡直接放**（`World::Insert`）也維護兩邊、連帶刪除；先放父再放子。
 
+## 20. 從別的 World 讀（Extract）
+
+例子：渲染 World 每幀從模擬 World 抄出要畫的東西。模擬 World 不知道有人讀它，渲染 World 也改不了它。
+
+```cpp
+// 渲染 World 的 extract schedule 裡
+SystemResult CopySprites(Extract<Read<Sprite>> sprites, ExtractRes<Camera> camera, Commands commands) {
+    sprites.ForEach([&](EntityId id, const Sprite& sprite) { /* 寫進渲染 World 自己的資料 */ });
+    return Ok();
+}
+```
+
+- **怎麼接**：渲染 World 的描述寫 `extractFrom = "模擬 World 的名字"`（那個 World 要排在它前面，O-E9）；System 掛在 `extract = true` 的 schedule，那張 schedule 放進渲染 World 的每幀清單。編排層會給來源（Kernel DI-KS 35、編排層 O-12）。
+- **讀法**：`Extract<Read<T>>` 有 `Entities()`（EntityId 升冪）、`Count()`、`Contains(id)`、`Get(id)`（沒有時 `nullptr`）、`ForEach`；`ExtractRes<R>` 有 `Present()` 與取值。要同時讀兩種元件，用兩個參數、同一個 id 各 `Get`。run 條件也可以帶 Extract 參數，但只能掛在 extract schedule（別處是 D-E7）。
+- **讀到什麼時候的**：呼叫當下的來源——每幀裡是來源這一輪跑完、它的交換函式「出」也跑過之後。渲染 World 裡排在 extract 之前的 schedule，讀到的是上一輪抽的資料。
+- **讀不到的**：沒有 `Changed`／`Added`（不知道「上次抽之後改了什麼」）、不讀來源的 `Message`（來源在自己這一輪結束時已經修剪）、不知道被拿掉的元件。要給渲染 World 的東西放成元件或 Resource；要知道增刪，在渲染 World 自己記（以來源的實體為鍵）。之後的批次會補（Kernel DI-KS 36、RC 28）。
+- **不要寫來源**：型別上只有 const 的讀法；經自己留著的指標去改來源是誤用，Engine 不擋，由審查抓（DI-KS 13）。

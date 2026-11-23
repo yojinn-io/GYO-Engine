@@ -30,6 +30,7 @@ set(GYO_KERNEL_TEST_SOURCES
     RestoreTests.cpp
     ResourceChangedTests.cpp
     RelationshipTests.cpp
+    ExtractTests.cpp
 )
 function(gyo_kernel_test_executable name)
     add_executable(${name} ${ARGN})

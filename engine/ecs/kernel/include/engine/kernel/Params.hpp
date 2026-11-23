@@ -38,8 +38,8 @@
 // dependence on the order arguments are evaluated in (spec B.4 point 7). A
 // handle keeps the World and the call's serial and sync epoch, never the call
 // itself; with verification on, using a handle outside its call or after a sync
-// point is a violation (spec W-4). Extract parameters run with
-// rollback-extract.
+// point is a violation (spec W-4). Extract parameters run in a step of
+// WorldExecutor::RunExtract (DI-KS 35).
 
 namespace GYO::Kernel {
 
@@ -1346,14 +1346,69 @@ struct ParamTraits<ExclusiveWorld<Writes<Listed...>>>
     static constexpr bool sole = true;
 };
 
-// Read-only access to the source World of an extract schedule (spec H.6).
-// Extract<Write<T>> has no ParamTraits: it does not compile (DI-KS 13).
+// Read-only access to the source World of an extract schedule (spec H.6;
+// DI-KS 35, 36, v8-arch-gyo2-sdl-extract). The values are the source's state
+// when RunExtract was called; nothing of the source is written (const access
+// only; attaching the source to its Registry's newer version is the World's own
+// bookkeeping, as for any const read). No Changed or Added and no Message of the
+// source (DI-KS 36). Extract<Write<T>> has no ParamTraits: it does not compile
+// (DI-KS 13).
+namespace Detail {
+// The source of the RunExtract step fetching an Extract parameter. A Plan step
+// of RunExtract always has one; an Extract parameter elsewhere is a D-E7 at
+// startup, so reaching here without one is a broken invariant.
+[[nodiscard]] inline const World& ExtractSourceOf(const SystemContext& call) {
+    GYO_ASSERT(call.extractSource != nullptr && "Extract parameters run only in a step of WorldExecutor::RunExtract");
+    return *call.extractSource;
+}
+} // namespace Detail
+
 template <class Term>
 class Extract;
 template <class T>
 class Extract<Read<T>> final : Detail::Handle {
-    // Extract runs with rollback-extract (spec H.6); a Plan never reaches one before that.
-    GYO_KERNEL_HANDLE(Extract) : Handle(call) { GYO_ASSERT(call.world == nullptr && "Extract parameters run with rollback-extract"); }
+    GYO_KERNEL_HANDLE(Extract)
+        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ComponentIdOf(*source_, KeyOf<T>())) {}
+
+public:
+    // The source's entities that have T, in ascending EntityId order (W-2).
+    [[nodiscard]] std::vector<EntityId> Entities() const {
+        Check("Extract");
+        const Detail::ColumnBase& column = Column();
+        std::vector<EntityId> out;
+        out.reserve(column.Size());
+        for (std::size_t i = 0; i < column.Size(); ++i) out.push_back(column.KeyAt(i));
+        return out;
+    }
+    [[nodiscard]] std::size_t Count() const {
+        Check("Extract");
+        return Column().Size();
+    }
+    [[nodiscard]] bool Contains(EntityId id) const {
+        Check("Extract");
+        return Column().Contains(id);
+    }
+    // The source's value of T for id, or nullptr.
+    [[nodiscard]] const T* Get(EntityId id) const {
+        Check("Extract");
+        const auto* cell = static_cast<const Detail::Column<T>&>(Column()).Find(id);
+        return cell != nullptr ? &cell->value : nullptr;
+    }
+    // Calls fn(EntityId, const T&) for every source entity that has T, in ascending order.
+    template <class F>
+    void ForEach(F&& fn) const {
+        Check("Extract");
+        const auto& column = static_cast<const Detail::Column<T>&>(Column());
+        for (std::size_t i = 0; i < column.Size(); ++i) {
+            const EntityId id = column.KeyAt(i);
+            fn(id, column.Find(id)->value);
+        }
+    }
+
+private:
+    [[nodiscard]] const Detail::ColumnBase& Column() const { return Detail::SourceColumnAt(*source_, id_); }
+    const World* source_;
+    ComponentId id_;
 };
 template <class T>
 struct ParamTraits<Extract<Read<T>>>
@@ -1363,7 +1418,28 @@ struct ParamTraits<Extract<Read<T>>>
 
 template <class R>
 class ExtractRes final : Detail::Handle {
-    GYO_KERNEL_HANDLE(ExtractRes) : Handle(call) { GYO_ASSERT(call.world == nullptr && "Extract parameters run with rollback-extract"); }
+    GYO_KERNEL_HANDLE(ExtractRes)
+        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ResourceIdOf(*source_, KeyOf<R>())) {}
+
+public:
+    [[nodiscard]] bool Present() const {
+        Check("ExtractRes");
+        return Slot().value.has_value();
+    }
+    // GYO_ASSERT: the source has no value (as Res).
+    [[nodiscard]] const R& operator*() const {
+        Check("ExtractRes");
+        GYO_ASSERT(Slot().value.has_value());
+        return *Slot().value;
+    }
+    const R* operator->() const { return &**this; }
+
+private:
+    [[nodiscard]] const Detail::ResourceSlot<R>& Slot() const {
+        return static_cast<const Detail::ResourceSlot<R>&>(Detail::SourceResourceAt(*source_, id_));
+    }
+    const World* source_;
+    ResourceId id_;
 };
 template <class R>
 struct ParamTraits<ExtractRes<R>> : Detail::HandleTraits<ExtractRes<R>, TypeList<Access::ExtractResourceRead<R>>, true> {

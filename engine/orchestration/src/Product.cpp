@@ -31,6 +31,14 @@ bool HasSchedule(const Kernel::FrozenRegistry& registry, std::string_view name) 
     return false;
 }
 
+// Whether name is an extract schedule of the Registry (DI-KS 35); false when there is none of that name.
+bool IsExtractSchedule(const Kernel::FrozenRegistry& registry, std::string_view name) {
+    for (const Kernel::ScheduleInfo& schedule : registry.Schedules()) {
+        if (schedule.options.name == name) return schedule.options.extract;
+    }
+    return false;
+}
+
 std::string Quoted(std::string_view text) {
     return "'" + std::string(text) + "'";
 }
@@ -148,7 +156,37 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
     // Step 1: the World descriptions (O-E6) and every World's dependencies (O-E3).
     if (description.worlds.empty()) errors.push_back({OrchestrationCode::OE6, "the Product describes no World", {self.name_}});
     std::set<std::string> worldNames;
-    for (WorldDescription& world : description.worlds) {
+    // The described names in order, taken before the loop moves each description into its slot.
+    std::vector<std::string> describedNames;
+    for (const WorldDescription& world : description.worlds) describedNames.push_back(world.name);
+    for (std::size_t index = 0; index < description.worlds.size(); ++index) {
+        WorldDescription& world = description.worlds[index];
+        // O-E9 (a) (O-12; v8-arch-gyo2-sdl-extract): extractFrom names a World described before this
+        // one. Checked against the description itself, so a source that O-E6 drops below is not
+        // reported again here (the reader is then left unchecked at registration: its source is not
+        // before it among the slots).
+        if (!world.extractFrom.empty()) {
+            std::size_t at = describedNames.size();
+            for (std::size_t other = 0; other < describedNames.size(); ++other) {
+                if (describedNames[other] == world.extractFrom) {
+                    at = other;
+                    break;
+                }
+            }
+            std::string problem;
+            if (at == describedNames.size()) {
+                problem = "names no World of the description";
+            } else if (at == index) {
+                problem = "names the World itself";
+            } else if (at > index) {
+                problem = "names a World described after it (the source runs first)";
+            }
+            if (!problem.empty()) {
+                errors.push_back({OrchestrationCode::OE9,
+                                  "World " + Quoted(world.name) + ": extractFrom " + Quoted(world.extractFrom) + " " + problem,
+                                  {world.name, world.extractFrom}});
+            }
+        }
         if (!worldNames.insert(world.name).second) {
             errors.push_back({OrchestrationCode::OE6, "two Worlds are named " + Quoted(world.name), {world.name}});
             continue;
@@ -238,20 +276,47 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
 
     // Step 3 and 4: every World's registration and list checks.
     std::vector<Registration> registrations;
+    // A reader's Registry goes before its extract source's on every way out (DI-KS 37, O-15; an
+    // exception from a unit's Build included): in reverse order, not left to the vector's destructor.
+    struct ReverseDrop {
+        std::vector<Registration>& registrations;
+        ~ReverseDrop() {
+            while (!registrations.empty()) registrations.pop_back();
+        }
+    } reverseDrop{registrations};
     for (std::size_t i = 0; i < self.worlds_.size(); ++i) {
         if (configureReported) {
             results.push_back(WorldStartupResult{self.worlds_[i].description.name, std::nullopt, true});
             continue;
         }
-        WorldStartupResult result{self.worlds_[i].description.name, std::nullopt, false};
-        registrations.push_back(self.Register(self.worlds_[i], i == 0, result, errors, unitErrors));
+        // O-12: a World that extracts from another registers after it, with its Registry as the extract
+        // source. Not registered (unchecked; the error that stops it is reported once, declaration Q1):
+        // its extractFrom names no World before it among the slots (refused by O-E9, or dropped by O-E6),
+        // or one that did not register.
+        const WorldSlot& slot = self.worlds_[i];
+        const Kernel::Registry* source = nullptr;
+        if (!slot.description.extractFrom.empty()) {
+            const std::size_t at = self.ExtractSourceIndex(slot);
+            if (at < i) source = registrations[at].registry.get();
+            if (source == nullptr) {
+                results.push_back(WorldStartupResult{slot.description.name, std::nullopt, true});
+                registrations.emplace_back();
+                continue;
+            }
+        }
+        WorldStartupResult result{slot.description.name, std::nullopt, false};
+        registrations.push_back(self.Register(slot, i == 0, source, result, errors, unitErrors));
         results.push_back(std::move(result));
     }
 
     // Step 5: any error so far, and no World is built.
     const bool kernelFailed =
         std::any_of(results.begin(), results.end(), [](const WorldStartupResult& r) { return r.kernel.has_value(); });
-    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {
+    // A World left unchecked has no registration (a reader whose source did not register, O-12): it
+    // always comes with the error that stopped it, and is never built on its own.
+    const bool unchecked =
+        std::any_of(results.begin(), results.end(), [](const WorldStartupResult& r) { return r.notChecked; });
+    if (!errors.empty() || !unitErrors.empty() || kernelFailed || unchecked) {
         return Base::Err(ProductStartupReport(std::move(results), std::move(errors), std::move(unitErrors)));
     }
 
@@ -282,12 +347,14 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
     return product;
 }
 
-Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, WorldStartupResult& result,
-                                        std::vector<OrchestrationStartupError>& errors,
+Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, const Kernel::Registry* extractSource,
+                                        WorldStartupResult& result, std::vector<OrchestrationStartupError>& errors,
                                         std::vector<UnitReportedError>& unitErrors) {
     const WorldDescription& world = slot.description;
     Registration registration;
     auto registry = std::make_unique<Kernel::Registry>();
+    // O-12: the extract source is set before the first BuildPlans (Kernel::Registry::SetExtractSource).
+    if (extractSource != nullptr) registry->SetExtractSource(*extractSource);
     ScheduleList frame(InitialFrame(world));
     std::vector<PrepareFn> prepares;
     std::vector<Detail::CarryEntry> carries;
@@ -348,6 +415,12 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
             errors.push_back({OrchestrationCode::OE5,
                               "frame list of World " + Quoted(world.name) + ": " + Quoted(name) + " is not a schedule of that World",
                               {world.name, name}});
+        } else if (world.extractFrom.empty() && IsExtractSchedule(frozen, name)) {
+            // O-E9 (b): an extract schedule needs a source to run.
+            errors.push_back({OrchestrationCode::OE9,
+                              "frame list of World " + Quoted(world.name) + ": " + Quoted(name) +
+                                  " is an extract schedule, and the World has no extractFrom",
+                              {world.name, name}});
         }
     }
     if (firstWorld) {
@@ -356,6 +429,12 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
                 errors.push_back({OrchestrationCode::OE5,
                                   "game initialization list: " + Quoted(name) + " is not a schedule of the first World " +
                                       Quoted(world.name),
+                                  {world.name, name}});
+            } else if (IsExtractSchedule(frozen, name)) {
+                // O-E9 (b): the first World has no World before it to extract from.
+                errors.push_back({OrchestrationCode::OE9,
+                                  "game initialization list: " + Quoted(name) + " is an extract schedule; the first World " +
+                                      Quoted(world.name) + " has no World before it to extract from",
                                   {world.name, name}});
             }
         }
@@ -368,6 +447,25 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     registration.exchangeOut = std::move(exchanges.out);
     registration.buffer = std::move(buffer);
     return registration;
+}
+
+std::size_t Product::ExtractSourceIndex(const WorldSlot& slot) const noexcept {
+    if (slot.description.extractFrom.empty()) return worlds_.size();
+    for (std::size_t i = 0; i < worlds_.size(); ++i) {
+        if (worlds_[i].description.name == slot.description.extractFrom) return i;
+    }
+    return worlds_.size();
+}
+
+Base::Result<void, Kernel::KernelError> Product::RunWith(Kernel::WorldExecutor& executor, const WorldSlot& slot,
+                                                         std::string_view schedule) {
+    if (!IsExtractSchedule(executor.GetWorld().Types(), schedule)) return executor.Run(schedule);
+    // DI-KS 35: an extract schedule runs through RunExtract with the World this one extracts from.
+    // Every World is healthy here (each entry point checks first, O-11), so the source is Ready.
+    const std::size_t at = ExtractSourceIndex(slot);
+    GYO_ASSERT(at < worlds_.size() && worlds_[at].executor != nullptr &&
+               "an extract schedule runs on a World that has no extractFrom");
+    return executor.RunExtract(schedule, worlds_[at].executor->GetWorld());
 }
 
 std::unique_ptr<Kernel::WorldExecutor> Product::MakeExecutor(WorldSlot& slot, const Kernel::Registry& registry) {
@@ -473,6 +571,10 @@ std::optional<OrchestrationError> Product::Ended() {
 
 Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule,
                                                               std::string_view entry) {
+    // DI-KS 35: an extract schedule needs the World it extracts from. Checked before the run, so the
+    // Programmer Error is not taken for an exception that left the schedule (which ends the Product).
+    GYO_ASSERT((!IsExtractSchedule(slot.executor->GetWorld().Types(), schedule) || ExtractSourceIndex(slot) < worlds_.size()) &&
+               "an extract schedule runs on a World that has no extractFrom");
     // Read before the schedule runs, from the World while it is healthy.
     WorldFailure failure;
     failure.world = slot.description.name;
@@ -487,7 +589,7 @@ Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::stri
     failure.where = "an exception left the schedule";
     auto ran = [&] {
         try {
-            return slot.executor->Run(schedule);
+            return RunWith(*slot.executor, slot, schedule);
         } catch (const std::bad_alloc&) {
             failure.kind = WorldFailureKind::ResourceExhausted;
             try {
@@ -694,6 +796,13 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
     }
     WorldSlot& slot = *found;
+    // O-8 (v8-arch-gyo2-sdl-extract): until R1b decides how, replacing a World another one extracts
+    // from is a Programmer Error: the reader's Registry keeps a pointer to this World's Registry,
+    // which the swap destroys. Checked before anything is dropped.
+    for (const WorldSlot& other : worlds_) {
+        GYO_ASSERT(other.description.extractFrom != slot.description.name &&
+                   "ReplaceWorld: another World extracts from this one (source replacement comes with R1b)");
+    }
     const bool firstWorld = &slot == &worlds_.front();
     const bool dropOldFirst = request.order == ReplaceOrder::DropOldFirst;
     // The schedule running when a step failed (WorldFailure::schedule of a DropOldFirst failure).
@@ -778,7 +887,11 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         std::vector<OrchestrationStartupError> errors;
         std::vector<UnitReportedError> unitErrors;
         WorldStartupResult result{slot.description.name, std::nullopt, false};
-        registration = Register(slot, firstWorld, result, errors, unitErrors);
+        // O-12: a reader registers again with the current Registry of the World it extracts from
+        // (healthy: checked by Ended above; not this World, which no World extracts from).
+        const Kernel::Registry* source = nullptr;
+        if (!slot.description.extractFrom.empty()) source = worlds_[ExtractSourceIndex(slot)].registry.get();
+        registration = Register(slot, firstWorld, source, result, errors, unitErrors);
         if (!registration.registry || !errors.empty() || !unitErrors.empty()) {
             std::vector<WorldStartupResult> results;
             results.push_back(std::move(result));
@@ -840,7 +953,7 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         }
         for (const std::string& schedule : request.beforeSwap) {
             failedSchedule = schedule;
-            auto ran = fresh->Run(schedule);
+            auto ran = RunWith(*fresh, slot, schedule);
             if (!ran) {
                 giveBack(moved);
                 return fail(FromKernel(OrchestrationErrorCode::ReplaceScheduleFailed,

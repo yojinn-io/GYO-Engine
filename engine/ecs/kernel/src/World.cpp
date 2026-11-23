@@ -451,6 +451,16 @@ ResourceBase& ResourceAt(World& world, ResourceId id) {
     return *world.resources_[id];
 }
 
+// DI-KS 36: an extract source, read through const access while it is Ready.
+const ColumnBase& SourceColumnAt(const World& source, ComponentId id) {
+    return *source.columns_[id];
+}
+
+const ResourceBase& SourceResourceAt(const World& source, ResourceId id) {
+    source.CheckThread(id);
+    return *source.resources_[id];
+}
+
 MessageBufferBase& MessagesAt(World& world, MessageTypeId id) {
     RequireRunningCall(world);
     return *world.messages_[id];

@@ -48,6 +48,12 @@ struct WorldDescription {
     ScheduleSkeleton skeleton = ScheduleSkeleton::Default;
     // The product's prepare functions, after the units' ones.
     std::vector<PrepareFn> prepare;
+    // The World this one extracts from (O-12, DI-KS 35; v8-arch-gyo2-sdl-extract): a World described
+    // before this one; empty: none. Its Registry is this World's extract source, and every extract
+    // schedule this World runs (frame list, RunSchedule, beforeSwap) runs through
+    // Kernel::WorldExecutor::RunExtract with that World. A name that is not described before this
+    // World, or an extract schedule in the frame list of a World without one, is O-E9.
+    std::string extractFrom;
 };
 
 struct ProductDescription {
@@ -192,8 +198,17 @@ private:
     Product() = default;
     // Builds one World's registration (Build, BuildPlans, Finish, Check, list checks).
     // Returns nullopt-equivalent (registry null) when something failed; errors go to the sinks.
-    Registration Register(const WorldSlot& slot, bool firstWorld, WorldStartupResult& result,
-                          std::vector<OrchestrationStartupError>& errors, std::vector<UnitReportedError>& unitErrors);
+    // extractSource: the Registry of the World it extracts from, set before BuildPlans (O-12).
+    Registration Register(const WorldSlot& slot, bool firstWorld, const Kernel::Registry* extractSource,
+                          WorldStartupResult& result, std::vector<OrchestrationStartupError>& errors,
+                          std::vector<UnitReportedError>& unitErrors);
+    // The slot index of the World that slot extracts from, or worlds_.size() when it names none
+    // (or the World it names was not taken in, O-E6).
+    std::size_t ExtractSourceIndex(const WorldSlot& slot) const noexcept;
+    // Runs one schedule on executor: through RunExtract with the slot's extract source when the
+    // schedule is an extract schedule (DI-KS 35), else Run. GYO_ASSERT: an extract schedule and no source.
+    Base::Result<void, Kernel::KernelError> RunWith(Kernel::WorldExecutor& executor, const WorldSlot& slot,
+                                                    std::string_view schedule);
     Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
                                                              const std::vector<PrepareFn>& unitPrepares,
                                                              const PrepareFn* extra);

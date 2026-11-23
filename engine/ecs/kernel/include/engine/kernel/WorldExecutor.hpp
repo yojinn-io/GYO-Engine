@@ -94,8 +94,20 @@ public:
     // Runs one schedule's Plan once (spec E.2); first attaches the World and
     // the Systems' state to a new Registry version (declaration 3.2 rule 5).
     // GYO_ASSERT: the World is Ready (so not from inside a System) and the
-    // schedule exists.
+    // schedule exists and is not an extract schedule (that one runs through RunExtract).
     Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
+    // Runs an extract schedule's Plan once (DI-KS 35, v8-arch-gyo2-sdl-extract):
+    // an outermost Run of this World like Run (the running count, the attach,
+    // KernelSettings, its own DroppedMessages records, the Ready window, steps,
+    // sync points, hook rounds, the trim of this World's messages), except that
+    // the Extract parameters of the Plan's Systems and of their run conditions
+    // read source, through const access only (DI-KS 36). A schedule a System
+    // runs nested from it sees no source. The kernel keeps no pointer to source
+    // (DI-KS 37): the caller gives it every time. GYO_ASSERT: this World is
+    // Ready; the schedule exists and is an extract schedule; source was made
+    // from the Registry this World's Registry set as its extract source, and is
+    // not this World; source is Ready.
+    Engine::Base::Result<void, KernelError> RunExtract(std::string_view schedule, const World& source);
 
     // The Host's trigger of event E while the World is Ready (event cursor
     // declaration 3.3, "outside the World, Ready"): its observers run now, each
@@ -182,6 +194,9 @@ private:
                                                          std::optional<EntityId> target, std::uint32_t planPos,
                                                          std::string_view schedule, std::uint32_t limit,
                                                          const std::string& limitSource, const std::string& where);
+    // The outermost Run that Run and RunExtract share (DI-KS 35); source is the
+    // extract source of this Run (nullptr for Run).
+    Engine::Base::Result<void, KernelError> RunOutermost(std::string_view schedule, const World* source);
     // J-50 (DI-KS 24): reads KernelSettings, once per Run call.
     void ReadSettings();
     // Declaration 3.2 rule 5: attaches the World, then makes every System's
@@ -206,6 +221,9 @@ private:
     std::vector<SystemState> systems_;
     // The Registry version systems_ matches (0: none yet).
     std::uint64_t version_ = 0;
+    // The source World of the RunExtract under way (DI-KS 35), nullptr otherwise;
+    // set and cleared by RunOutermost on every way out. Never kept past a call (DI-KS 37).
+    const World* extractSource_ = nullptr;
 };
 
 } // namespace GYO::Kernel
