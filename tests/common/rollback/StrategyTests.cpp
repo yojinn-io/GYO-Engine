@@ -217,17 +217,19 @@ void BuildChurn(O::WorldSetup& s) {
 }
 
 // A family that changes inside the step (kernel DI-KS 29 to 33; declaration v8-arch-gyo2-kernel-relationship 12.1):
-// children attached to 1, one moved to 2, one detached and attached again (the order of 2's Children changes), then 2
-// despawned with its children (linked) and a new child of 1. ChildOf and Children both roll back (R-2 premise 8).
+// children attached to 1 in an order the ids do not give (restored as given at the rollback point), moved to 2, one taken off 2 and put back (2's Children becomes [51, 52, 50]: an order
+// the ids do not give), then, in the phase 1 dies, 53 handed from 1 to 2 (the user's Q3: it stays) while 1's other
+// child goes with it. ChildOf and Children both roll back (R-2 premise 8).
 K::SystemResult Family(K::SpawnWithId<K::Bundle<K::ChildOf>> spawn, K::CommandsFor<K::Inserts<K::ChildOf>, K::Removes<K::ChildOf>> wire,
                        K::Despawn despawn, K::Res<W::Tick> tick) {
     switch (tick->value) {
-    case 3: spawn.New(50, K::ChildOf{1}); spawn.New(51, K::ChildOf{1}); break;
-    case 5: wire.Insert(50, K::ChildOf{2}); break;
-    case 6: wire.Remove<K::ChildOf>(51); break;
-    case 7: wire.Insert(51, K::ChildOf{2}); spawn.New(52, K::ChildOf{2}); break;
-    case 8: wire.Remove<K::ChildOf>(50); break;
-    case 9: wire.Insert(50, K::ChildOf{2}); despawn.Entity(2); spawn.New(53, K::ChildOf{1}); break;
+    case 1: spawn.New(51, K::ChildOf{1}); break;
+    case 2: spawn.New(50, K::ChildOf{1}); break;  // 1's Children is [51, 50] at the rollback point
+    case 5: wire.Insert(50, K::ChildOf{2}); wire.Insert(51, K::ChildOf{2}); break;
+    case 6: spawn.New(52, K::ChildOf{2}); spawn.New(53, K::ChildOf{1}); spawn.New(54, K::ChildOf{1}); break;
+    case 7: wire.Remove<K::ChildOf>(50); break;
+    case 8: wire.Insert(50, K::ChildOf{2}); break;
+    case 9: despawn.Entity(1); wire.Insert(53, K::ChildOf{2}); break;
     default: break;
     }
     return {};
@@ -470,19 +472,15 @@ TEST_CASE("rollback strategy: R-2 with ChildOf and Children: moves, a detach, a 
     Frames(*straight, 12);
     auto rolled = Make(WithStrategy({.depth = 20, .mode = R::RollbackMode::Always}), &BuildFamily);
     Frames(*rolled, 10);
-    REQUIRE_FALSE(WorldOf(*rolled).Alive(2));
+    REQUIRE_FALSE(WorldOf(*rolled).Alive(1));
     Inbox(*rolled).ConfirmedThrough(4);
     Frames(*rolled, 2);
     CHECK_MESSAGE(SummaryText(*rolled) == SummaryText(*straight), "[rb-r2-family] the World summaries differ");
-    const K::Children* kids = WorldOf(*rolled).Get<K::Children>(1);
+    const K::Children* kids = WorldOf(*rolled).Get<K::Children>(2);
     REQUIRE(kids != nullptr);
-    CHECK_MESSAGE((std::vector<K::EntityId>(kids->begin(), kids->end()) == std::vector<K::EntityId>{53}),
-                  "[rb-r2-family] 1's Children after the linked despawn of 2 and its children");
-    // 50 was given 2 as its parent in the phase 2 died (the user's Q3): it stays, without a parent.
-    CHECK(WorldOf(*rolled).Alive(50));
-    CHECK(WorldOf(*rolled).Get<K::ChildOf>(50) == nullptr);
-    CHECK_FALSE(WorldOf(*rolled).Alive(51));
-    CHECK_FALSE(WorldOf(*rolled).Alive(52));
+    CHECK_MESSAGE((std::vector<K::EntityId>(kids->begin(), kids->end()) == std::vector<K::EntityId>{51, 52, 50, 53}),
+                  "[rb-r2-family] 2's Children: the attach order, kept through the rollback");
+    CHECK_FALSE(WorldOf(*rolled).Alive(54));
 }
 
 // ---- R-1: an interface implemented from scratch (no code of the official strategy) goes through the same socket.

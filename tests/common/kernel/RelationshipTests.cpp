@@ -23,6 +23,7 @@
 using namespace GYO::Kernel;
 using GYO::Test::TestRangeAllotter;
 using GYO::Test::Kernel::At;
+using GYO::Test::Kernel::Describe;
 using GYO::Test::Kernel::Finish;
 using GYO::Test::Kernel::Log;
 using GYO::Test::Kernel::MakeRig;
@@ -210,6 +211,12 @@ SystemResult AttachTo10(HookCtx ctx, Commands commands) {
 SystemResult ReadKidsOf10(Query<Read<Children>> children) {
     const Children* list = children.Get<Children>(10);
     Log().push_back("C-sees:" + std::to_string(list == nullptr ? 0U : list->size()));
+    return Ok();
+}
+
+// A hook that attaches entity 21 to a parent that is not alive (S-1: an immediate insert's hook round).
+SystemResult AttachTwentyOneToNothing(HookCtx, Commands commands) {
+    commands.Insert(21, ChildOf{99});
     return Ok();
 }
 
@@ -724,6 +731,59 @@ TEST_CASE("relationship: the Host putting a child before its parent leaves the r
     CHECK(rejected[0].step == 0U);
 }
 
+
+TEST_CASE("relationship: a Children that ends a phase as it began keeps its changed stamp [kr-children-unchanged-net]") {
+    auto rig = Start([](Registrar& r) { r.AddSystem<&WatchChanges>(In("WatchChanges", "C")); });
+    Early()[1] = [](Act& a) {
+        Items(a, {10});
+        a.spawnChild.New(20, ChildOf{10});
+    };
+    // The same child taken off and put back on the same parent in one phase: Children is [20] before and after.
+    Early()[2] = [](Act& a) {
+        a.commands.Remove<ChildOf>(20);
+        a.commands.Insert(20, ChildOf{10});
+    };
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(Kids(rig->world(), 10) == std::vector<EntityId>{20});
+    CHECK_MESSAGE(!Logged("children~:10"), Joined());
+}
+
+TEST_CASE("relationship: a weapon handed over in the phase its owner dies is an overwrite, with no hook [kr-handover-while-owner-dies]") {
+    auto rig = Start([](Registrar& r) {
+        r.Hook<ChildOf, &ChildOfAdded>(HookTrigger::OnAdd, {.name = "ChildOfAdded"});
+        r.Observer<Remove<ChildOf>, &ObserveChildRemoved>({.name = "obs-ChildOf"});
+    });
+    Early()[1] = [](Act& a) {
+        Items(a, {10, 11});
+        a.spawnChild.New(20, ChildOf{10});
+    };
+    Early()[2] = [](Act& a) {
+        a.despawn.Entity(10);
+        a.commands.Insert(20, ChildOf{11});
+    };
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(Kids(rig->world(), 11) == std::vector<EntityId>{20});
+    CHECK_MESSAGE(Joined().empty(), "the same as handing it over while the owner lives: " << Joined());
+}
+
+TEST_CASE("relationship: an immediate insert reports its own result, not one its hook round records [kr-immediate-hook-reject]") {
+    auto rig = Start([](Registrar& r) { r.Hook<ChildOf, &AttachTwentyOneToNothing>(HookTrigger::OnAdd, {.name = "AttachTwentyOneToNothing"}); });
+    Early()[1] = [](Act& a) { Items(a, {10, 20, 21}); };
+    Exclusive()[1] = [](ExclusiveWorld<>& world) -> SystemResult {
+        auto held = world.Insert(20, ChildOf{10});
+        REQUIRE(static_cast<bool>(held));
+        CHECK(*held);
+        return Ok();
+    };
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(Kids(rig->world(), 10) == std::vector<EntityId>{20});
+    CHECK(rig->world().RejectedRelationships() == 1U);
+}
+
 // ---- Restore (DI-KS 12, 32, 33)
 
 TEST_CASE("relationship: a restore that names ChildOf and Children puts both back; the summary equals running straight [kr-restore-reparent]") {
@@ -978,4 +1038,5 @@ TEST_CASE("relationship: an owner cannot declare the initial value of the kernel
                           }}});
     REQUIRE_FALSE(static_cast<bool>(built.result));
     CHECK(built.result.error().Has(StartupCode::RE4));
+    CHECK_MESSAGE(Describe(built).find("which kernel owns") != std::string::npos, Describe(built));
 }

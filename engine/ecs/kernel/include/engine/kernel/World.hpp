@@ -462,6 +462,19 @@ private:
     // The Host's World::Insert<ChildOf> and Remove<ChildOf> (DI-KS 30, 31; no hook runs).
     void HostInsertChildOf(EntityId child, ChildOf value);
     bool HostRemoveChildOf(EntityId child);
+    // The relationship primitives every path shares (DI-KS 30): take child out of parent's Children (the
+    // cell stays: an apply phase removes an empty one at step 5b, the Host's path at once), and append
+    // child, making the cell when there is none (true then). No hook runs here.
+    enum class Detached : std::uint8_t { No, Yes, Emptied };
+    Detached DetachChild(EntityId child, EntityId parent, ChangeStamp stamp);
+    bool AttachChild(EntityId child, EntityId parent, ChangeStamp stamp);
+    // The Host's path: detach, mark Children written through the World API, drop an empty cell.
+    void HostDetach(EntityId child, EntityId parent);
+    // The fields of a RejectedRelationship every path fills (DI-KS 31).
+    [[nodiscard]] RejectedRelationship RejectedOf(EntityId entity, EntityId target, RelationshipPath path) const;
+    // Appends one record of the kernel's own diagnostics (RejectedSpawn, RejectedRelationship).
+    template <class R>
+    void RecordKernelDiagnostics(R record);
     // DI-KS 30 with verification on: ChildOf and Children agree (StructureProblem).
     [[nodiscard]] std::optional<std::string> RelationshipProblem() const;
     // Spec E.5: discards every record not yet applied (hook queue included).

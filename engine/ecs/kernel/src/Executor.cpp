@@ -617,13 +617,14 @@ Engine::Base::Result<Detail::ImmediateOutcome, KernelError> WorldExecutor::Immed
     // DI-KS 31: an insert of a ChildOf that does not hold reports false, like an entity that is not alive.
     const bool insertsChildOf = record.kind == Detail::RecordKind::Insert && record.id == world.data_->childOf;
     const std::uint64_t relationshipsBefore = world.rejectedRelationships_;
+    std::uint64_t relationshipsAfter = relationshipsBefore;
     std::vector<Detail::Record> change;
     change.push_back(std::move(record));
     Engine::Base::Result<void, KernelError> applied =
         ApplyImmediateRecords(Detail::Derive::InitialValues, Detail::Relationships::Change, call, std::move(change), stamp,
-                              who, where);
+                              who, where, &relationshipsAfter);
     if (!applied) return Engine::Base::Err(std::move(applied).error());
-    if (insertsChildOf && world.rejectedRelationships_ > relationshipsBefore) outcome.changed = false;
+    if (insertsChildOf && relationshipsAfter > relationshipsBefore) outcome.changed = false;
     if (world.rejectedSpawns_ > rejectedBefore) {
         // Spec F-13: recorded in one place (World::RecordRejectedSpawn); read back from there.
         const auto* buffer = static_cast<const Detail::DiagnosticsBuffer<RejectedSpawn>*>(
@@ -725,7 +726,8 @@ Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Det
                                                                              Detail::SystemContext& call,
                                                                              std::vector<Detail::Record> change,
                                                                              ChangeStamp stamp, const std::string& who,
-                                                                             const std::string& where) {
+                                                                             const std::string& where,
+                                                                             std::uint64_t* relationshipsAfterChange) {
     using Outcome = Engine::Base::Result<void, KernelError>;
     World& world = world_;
     const Detail::RegistryData& data = *world.data_;
@@ -784,6 +786,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::ApplyImmediateRecords(Det
     // The records themselves; the hook rounds below are changes (they derive).
     Engine::Base::Result<void, KernelError> applied = world.ApplySync(call.planPos, call.schedule, stamp, &change, derive, relationships);
     if (!applied) return failed(std::move(applied), "Executor: immediate change by " + where);
+    if (relationshipsAfterChange != nullptr) *relationshipsAfterChange = world.rejectedRelationships_;
 
     // Spec F-12 for this change only (declaration section 12 item 2, (a)): round
     // after round, each a whole application with its own stamp and sync epoch

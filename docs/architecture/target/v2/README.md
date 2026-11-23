@@ -68,6 +68,7 @@
 - [kernel-res-changed-declaration.zh-Hant.md](kernel-res-changed-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-res-changed` 的事前宣告（`Res`／`ResMut` 的 `Changed()`：比掛載的上次跑、寫入就算；同值不寫的規則登記 CCR-8）。使用者 2026-11-23 核准（3.1 選 (a)）。
 - [kernel-summary-messages-declaration.zh-Hant.md](kernel-summary-messages-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-summary-messages` 的事前宣告（World 摘要與訊息：序號與游標是歷史的計數，回滾重跑或外部事件會讓同樣的狀態得到不同摘要）。使用者 2026-11-23 選 (b)。
 - [kernel-relationship-declaration.zh-Hant.md](kernel-relationship-declaration.zh-Hant.md)：`v8-arch-gyo2-kernel-relationship`（子批 KR）的事前宣告（照 Bevy 把父子關係放進 Kernel：`ChildOf`／`Children`、兩邊一致的維護在套用步驟、連帶刪除、回滾與讀檔裡的父子）。使用者 2026-11-23 動工前核准（Q1～Q4 照建議）。
+- [kernel-relationship-merge-approval.zh-Hant.md](kernel-relationship-merge-approval.zh-Hant.md)：KR 的合併前核准頁（R-1 同值再插入算不算拆開、條文的最終文字、和宣告的偏差、判定的變更、審查）。
 - [restore-entry-declaration.zh-Hant.md](restore-entry-declaration.zh-Hant.md)：`v8-arch-gyo2-restore-entry` 的事前宣告（讀檔一律在新的 World、編號兩種寫法、hook 照常觸發；讀檔放編排層的生成世界）；修訂 11，使用者 2026-11-17 核准（ec31e863）。
 - [threads-io-review-declaration.zh-Hant.md](threads-io-review-declaration.zh-Hant.md)：`v8-arch-gyo2-threads-io-review` 的重審報告兼事前宣告（threads 加 `WorkerPool`、`RoleThread` 不改名；io 拿掉沒有使用者的部分與 `Vfs`、補 `TooLarge` 與多執行緒讀的契約）；修訂 1，使用者 2026-11-22 動工前核准（74d38577）。
 - [orchestration-skeleton-declaration.zh-Hant.md](orchestration-skeleton-declaration.zh-Hant.md)：`v8-arch-gyo2-orchestration-skeleton` 的事前宣告（編排層的骨架：登記單位、`Product`、遊戲初始化與每幀清單、runner、準備、替換與帶過去、動態插入的警告、Module／Plugin 登記檔、Kernel 拿掉開局與登記單位、scenario test 第一段）；修訂 7，使用者 2026-11-18 動工前核准。

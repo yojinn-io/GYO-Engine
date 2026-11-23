@@ -160,10 +160,13 @@ private:
     Engine::Base::Result<void, KernelError> RefuseImmediate(Detail::SystemContext& call, bool closureOpen,
                                                             const std::string& who, const std::string& where);
     // The change itself and its hook rounds, as one immediate change with stamp.
+    // relationshipsAfterChange: when given, World::RejectedRelationships() right after the change itself,
+    // before its hook rounds (an immediate insert of ChildOf reports only its own result, DI-KS 31).
     Engine::Base::Result<void, KernelError> ApplyImmediateRecords(Detail::Derive derive, Detail::Relationships relationships,
                                                                   Detail::SystemContext& call,
                                                                   std::vector<Detail::Record> change, ChangeStamp stamp,
-                                                                  const std::string& who, const std::string& where);
+                                                                  const std::string& who, const std::string& where,
+                                                                  std::uint64_t* relationshipsAfterChange = nullptr);
     // Detail::TriggerNow: ExclusiveWorld::Trigger of the running exclusive System call.
     Engine::Base::Result<void, KernelError> TriggerFrom(Detail::SystemContext& call, EventTypeId id,
                                                         std::unique_ptr<Detail::ValueBox> payload,

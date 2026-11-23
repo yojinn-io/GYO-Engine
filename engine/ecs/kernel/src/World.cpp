@@ -197,7 +197,12 @@ bool World::Despawn(EntityId id) {
         pending.pop_back();
         if (!std::binary_search(entities_.begin(), entities_.end(), one)) continue;
         std::vector<EntityId> kids;
-        if (const Detail::Cell<Children>* cell = children.Find(one)) kids.assign(cell->value.begin(), cell->value.end());
+        if (const Detail::Cell<Children>* cell = children.Find(one)) {
+            for (EntityId kid : cell->value) {
+                const Detail::Cell<ChildOf>* of = childOf.Find(kid);
+                if (of != nullptr && of->value.parent == one) kids.push_back(kid);
+            }
+        }
         std::optional<EntityId> parent;
         if (const Detail::Cell<ChildOf>* cell = childOf.Find(one)) parent = cell->value.parent;
         for (std::size_t c = 0; c < columns_.size(); ++c) {
@@ -209,47 +214,61 @@ bool World::Despawn(EntityId id) {
         entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), one));
         ++entitiesEpoch_;
         // DI-KS 30: the parent forgets it (no hook on the Host's path).
-        if (parent) {
-            if (Detail::Cell<Children>* cell = children.Find(*parent);
-                cell != nullptr && Detail::RelationshipStore::Erase(cell->value, one)) {
-                MarkApiWritten(Detail::EntryKind::Component, data_->children);
-                cell->changed = WriteStamp();
-                if (cell->value.empty()) children.Erase(*parent);
-            }
-        }
+        if (parent) HostDetach(one, *parent);
         for (auto it = kids.rbegin(); it != kids.rend(); ++it) pending.push_back(*it);
     }
     return true;
 }
 
+World::Detached World::DetachChild(EntityId child, EntityId parent, ChangeStamp stamp) {
+    Detail::Cell<Children>* cell = TypedColumn<Children>(data_->children).Find(parent);
+    if (cell == nullptr || !Detail::RelationshipStore::Erase(cell->value, child)) return Detached::No;
+    cell->changed = stamp;
+    return cell->value.empty() ? Detached::Emptied : Detached::Yes;
+}
+
+bool World::AttachChild(EntityId child, EntityId parent, ChangeStamp stamp) {
+    auto& children = TypedColumn<Children>(data_->children);
+    if (Detail::Cell<Children>* cell = children.Find(parent)) {
+        Detail::RelationshipStore::Append(cell->value, child);
+        cell->changed = stamp;
+        return false;
+    }
+    children.Put(parent, Detail::RelationshipStore::Of(child), stamp);
+    return true;
+}
+
+void World::HostDetach(EntityId child, EntityId parent) {
+    const Detached detached = DetachChild(child, parent, WriteStamp());
+    if (detached == Detached::No) return;
+    MarkApiWritten(Detail::EntryKind::Component, data_->children);
+    if (detached == Detached::Emptied) TypedColumn<Children>(data_->children).Erase(parent);
+}
+
+RejectedRelationship World::RejectedOf(EntityId entity, EntityId target, RelationshipPath path) const {
+    RejectedRelationship rejected;
+    rejected.entity = entity;
+    rejected.target = target;
+    rejected.reason = target == entity ? RelationshipRejectReason::SelfReference : RelationshipRejectReason::TargetNotAlive;
+    rejected.relationship = data_->components[data_->childOf].name;
+    rejected.syncEpoch = syncEpoch_;
+    rejected.path = path;
+    return rejected;
+}
+
 void World::HostInsertChildOf(EntityId child, ChildOf value) {
     auto& childOf = TypedColumn<ChildOf>(data_->childOf);
-    auto& children = TypedColumn<Children>(data_->children);
     const ChangeStamp stamp = WriteStamp();
-    auto forget = [&](EntityId parent) {
-        Detail::Cell<Children>* cell = children.Find(parent);
-        if (cell == nullptr || !Detail::RelationshipStore::Erase(cell->value, child)) return;
-        cell->changed = stamp;
-        if (cell->value.empty()) children.Erase(parent);
-    };
-    MarkApiWritten(Detail::EntryKind::Component, data_->children);
     Detail::Cell<ChildOf>* existing = childOf.Find(child);
     if (value.parent == child || !std::binary_search(entities_.begin(), entities_.end(), value.parent)) {
         // DI-KS 31: the relationship does not hold; one that held before goes (no hook on this path).
-        RejectedRelationship rejected;
-        rejected.entity = child;
-        rejected.target = value.parent;
-        rejected.reason =
-            value.parent == child ? RelationshipRejectReason::SelfReference : RelationshipRejectReason::TargetNotAlive;
-        rejected.relationship = data_->components[data_->childOf].name;
+        RejectedRelationship rejected = RejectedOf(child, value.parent, RelationshipPath::Host);
         rejected.emitter = "Host";
-        rejected.syncEpoch = syncEpoch_;
-        rejected.path = RelationshipPath::Host;
         RecordRejectedRelationship(std::move(rejected));
         if (existing != nullptr) {
             const EntityId old = existing->value.parent;
             childOf.Erase(child);
-            forget(old);
+            HostDetach(child, old);
         }
         return;
     }
@@ -258,16 +277,12 @@ void World::HostInsertChildOf(EntityId child, ChildOf value) {
             existing->changed = stamp;
             return;
         }
-        forget(existing->value.parent);
+        HostDetach(child, existing->value.parent);
     }
+    const EntityId parent = value.parent;
     childOf.Put(child, std::move(value), stamp);
-    const EntityId parent = childOf.Find(child)->value.parent;
-    if (Detail::Cell<Children>* cell = children.Find(parent)) {
-        Detail::RelationshipStore::Append(cell->value, child);
-        cell->changed = stamp;
-    } else {
-        children.Put(parent, Detail::RelationshipStore::Of(child), stamp);
-    }
+    AttachChild(child, parent, stamp);
+    MarkApiWritten(Detail::EntryKind::Component, data_->children);
 }
 
 bool World::HostRemoveChildOf(EntityId child) {
@@ -276,13 +291,7 @@ bool World::HostRemoveChildOf(EntityId child) {
     if (existing == nullptr) return false;
     const EntityId parent = existing->value.parent;
     childOf.Erase(child);
-    auto& children = TypedColumn<Children>(data_->children);
-    if (Detail::Cell<Children>* cell = children.Find(parent);
-        cell != nullptr && Detail::RelationshipStore::Erase(cell->value, child)) {
-        MarkApiWritten(Detail::EntryKind::Component, data_->children);
-        cell->changed = WriteStamp();
-        if (cell->value.empty()) children.Erase(parent);
-    }
+    HostDetach(child, parent);
     return true;
 }
 
@@ -798,46 +807,45 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         auto& children = TypedColumn<Children>(data_->children);
         const bool keep = relationships != Detail::Relationships::RestoreGiven;
         std::vector<EntityId> emptied;
+        // Each Children this phase touches, as it was when first touched, with its changed stamp: one that
+        // ends the phase as it began keeps its stamp (DI-KS 30: the stamp moves only when the list changes).
+        std::map<EntityId, std::pair<ChangeStamp, Children>> before;
+        auto touch = [&](EntityId parent) {
+            if (before.contains(parent)) return;
+            if (const Detail::Cell<Children>* cell = children.Find(parent)) {
+                before.emplace(parent, std::make_pair(cell->changed, cell->value));
+            }
+        };
         struct Attach {
             std::uint32_t planPos;
             std::uint32_t recSeq;
-            // Put by a spawn bundle: its parent is checked at step 5b (it may be spawned later in step 4).
-            bool fromSpawn;
             const Record* record;
         };
         std::map<EntityId, Attach> attaches;
         auto detach = [&](EntityId child, EntityId parent) {
             if (!keep) return;
-            Detail::Cell<Children>* cell = children.Find(parent);
-            if (cell == nullptr || !Detail::RelationshipStore::Erase(cell->value, child)) return;
-            cell->changed = stamp;
-            if (cell->value.empty()) emptied.push_back(parent);
+            touch(parent);
+            if (DetachChild(child, parent, stamp) == Detached::Emptied) emptied.push_back(parent);
         };
         auto alive = [&](EntityId id) { return std::binary_search(entities_.begin(), entities_.end(), id); };
         const RelationshipPath path = immediate == nullptr ? RelationshipPath::SyncPoint
                                       : derive == Detail::Derive::Nothing ? RelationshipPath::Restore
                                                                           : RelationshipPath::ImmediateChange;
         auto rejectRelationship = [&](const Record& record, EntityId entity, EntityId target) {
-            RejectedRelationship rejected;
-            rejected.entity = entity;
-            rejected.target = target;
-            rejected.reason = target == entity ? RelationshipRejectReason::SelfReference
-                                               : RelationshipRejectReason::TargetNotAlive;
-            rejected.relationship = data_->components[data_->childOf].name;
+            RejectedRelationship rejected = RejectedOf(entity, target, path);
             rejected.emitter = std::string(record.emitter);
             rejected.emitterIsHook = record.emitterHook;
             rejected.schedule = std::string(schedule);
             rejected.step = record.planPos;
             rejected.appliedAt = planPos;
-            rejected.syncEpoch = syncEpoch_;
-            rejected.path = path;
             RecordRejectedRelationship(std::move(rejected));
         };
         auto holds = [&](EntityId entity, EntityId target) { return target != entity && alive(target); };
 
         // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.
         std::vector<EntityId> despawns;
-        // The user's Q3: a child whose ChildOf this phase removes or replaces is not despawned with its parent.
+        // The user's Q3: a child whose ChildOf this phase removes or replaces is not despawned with its
+        // parent; its ChildOf stays until that record is applied (a replacement is then an overwrite).
         std::vector<EntityId> rewired;
         for (const Record& r : records) {
             if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);
@@ -876,13 +884,17 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                 if (parent) detach(id, *parent);
                 std::vector<EntityId> linked;
                 for (EntityId kid : kids) {
-                    if (expandLinked && !std::binary_search(rewired.begin(), rewired.end(), kid)) {
+                    // Only a child whose ChildOf names this entity (a Children a restore gives may say otherwise).
+                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);
+                    if (cell == nullptr || cell->value.parent != id) continue;
+                    if (std::binary_search(rewired.begin(), rewired.end(), kid)) continue;  // Q3: its record decides
+                    if (expandLinked) {
                         linked.push_back(kid);
                         continue;
                     }
-                    // A child left behind (a restore, or Q3): its ChildOf goes now, after its OnRemove.
-                    const Detail::Cell<ChildOf>* cell = childOf.Find(kid);
-                    if (cell == nullptr || cell->value.parent != id) continue;
+                    // A restore leaves it behind: its ChildOf goes now, after its OnRemove; one the restore
+                    // despawns later in this step keeps it for its own despawn.
+                    if (std::binary_search(despawns.begin(), despawns.end(), kid)) continue;
                     auto hooked = RunHooks(HookTrigger::OnRemove, kid, data_->childOf, planPos, schedule, stamp);
                     if (!hooked) return hooked;
                     childOf.Erase(kid);
@@ -905,8 +917,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             std::optional<EntityId> parent;
             if (component == data_->childOf) parent = childOf.Find(id)->value.parent;
             columns_[component]->Erase(id);
-            if (parent) {
-                detach(id, *parent);                }
+            if (parent) detach(id, *parent);
         }
 
         std::vector<NewCell> added;
@@ -1007,7 +1018,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                 if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {
                     added.push_back(NewCell{spawn.entity, part.component});
                 }
-                if (part.component == data_->childOf) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, true, &spawn};
+                if (part.component == data_->childOf) attaches[spawn.entity] = Attach{spawn.planPos, spawn.recSeq, &spawn};
             }
         }
 
@@ -1038,11 +1049,11 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                 // DI-KS 31: checked before it is written, so an OnRemove of a replaced ChildOf reads its old value.
                 const EntityId target = static_cast<Detail::TypedBox<ChildOf>&>(*winner.value).value.parent;
                 Detail::Cell<ChildOf>* existing = childOf.Find(winner.entity);
-                const bool unattached = attaches.contains(winner.entity);
+                // Put by this phase's spawn: never notified, not yet attached.
+                const bool spawned = attaches.contains(winner.entity);
                 if (!holds(winner.entity, target)) {
                     rejectRelationship(winner, winner.entity, target);
-                    if (existing != nullptr && unattached && attaches.at(winner.entity).fromSpawn) {
-                        // Put by this phase's spawn and never notified: it goes without a hook.
+                    if (existing != nullptr && spawned) {
                         childOf.Erase(winner.entity);
                         std::erase_if(added, [&](const NewCell& c) {
                             return c.entity == winner.entity && c.component == data_->childOf;
@@ -1054,13 +1065,12 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                         auto hooked = RunHooks(HookTrigger::OnRemove, winner.entity, data_->childOf, planPos, schedule, stamp);
                         if (!hooked) return hooked;
                         childOf.Erase(winner.entity);
-                        if (!unattached) detach(winner.entity, old);
-                        attaches.erase(winner.entity);
+                        detach(winner.entity, old);
                     }
                     i = end;
                     continue;
                 }
-                if (existing != nullptr && !unattached) {
+                if (existing != nullptr && !spawned) {
                     if (existing->value.parent == target) {
                         // The same parent again: written (Changed<ChildOf>), Children unchanged.
                         existing->changed = stamp;
@@ -1069,7 +1079,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                     }
                     detach(winner.entity, existing->value.parent);
                 }
-                attaches[winner.entity] = Attach{winner.planPos, winner.recSeq, false, &winner};
+                attaches[winner.entity] = Attach{winner.planPos, winner.recSeq, &winner};
             }
             if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp)) {
                 added.push_back(NewCell{winner.entity, winner.id});
@@ -1083,13 +1093,15 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
         // Step 5b: relationships (DI-KS 30, 31), after insert and before the initial values, so an
         // initial value from ChildOf never rests on a ChildOf that does not hold, and one from Children
-        // sees the Children cells made here. A spawned ChildOf whose parent does not hold goes without a
-        // hook (nothing saw it); the others are attached in (planPos, recSeq) order (Q1 (A')).
+        // sees the Children cells made here. A spawned ChildOf is checked here (its parent may be spawned
+        // later in step 4; one that does not hold goes without a hook: nothing saw it); an inserted one was
+        // checked before it was written, and nothing since changed who is alive. Attached in (planPos,
+        // recSeq) order (Q1 (A')).
         std::vector<std::tuple<std::uint32_t, std::uint32_t, EntityId>> order;
         for (const auto& [child, attach] : attaches) {
             const Detail::Cell<ChildOf>* cell = childOf.Find(child);
             GYO_ASSERT(cell != nullptr);
-            if (attach.fromSpawn && !holds(child, cell->value.parent)) {
+            if (!holds(child, cell->value.parent)) {
                 rejectRelationship(*attach.record, child, cell->value.parent);
                 childOf.Erase(child);
                 std::erase_if(added, [&](const NewCell& c) { return c.entity == child && c.component == data_->childOf; });
@@ -1101,13 +1113,8 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             std::sort(order.begin(), order.end());
             for (const auto& [pos, seq, child] : order) {
                 const EntityId parent = childOf.Find(child)->value.parent;
-                if (Detail::Cell<Children>* cell = children.Find(parent)) {
-                    Detail::RelationshipStore::Append(cell->value, child);
-                    cell->changed = stamp;
-                } else {
-                    children.Put(parent, Detail::RelationshipStore::Of(child), stamp);
-                    added.push_back(NewCell{parent, data_->children});
-                }
+                touch(parent);
+                if (AttachChild(child, parent, stamp)) added.push_back(NewCell{parent, data_->children});
             }
             // The net change: a parent that lost its last child and got none back loses its Children cell.
             std::sort(emptied.begin(), emptied.end());
@@ -1118,6 +1125,11 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
                 auto hooked = RunHooks(HookTrigger::OnRemove, parent, data_->children, planPos, schedule, stamp);
                 if (!hooked) return hooked;
                 children.Erase(parent);
+            }
+            // A Children that ends the phase as it began keeps its changed stamp.
+            for (const auto& [parent, was] : before) {
+                Detail::Cell<Children>* cell = children.Find(parent);
+                if (cell != nullptr && cell->value == was.second) cell->changed = was.first;
             }
         }
 
@@ -1219,30 +1231,27 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     return {};
 }
 
+template <class R>
+void World::RecordKernelDiagnostics(R record) {
+    Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*this, KeyOf<R>());
+    if (found == nullptr) {
+        auto made = std::make_unique<Detail::DiagnosticsBuffer<R>>();
+        found = made.get();
+        Detail::AddDiagnostics(*this, KeyOf<R>(), std::move(made));
+    }
+    const std::uint64_t epoch = record.syncEpoch;
+    static_cast<Detail::DiagnosticsBuffer<R>*>(found)->entries.push_back(
+        typename Detail::DiagnosticsBuffer<R>::Entry{epoch, std::move(record)});
+}
+
 void World::RecordRejectedSpawn(RejectedSpawn rejected) {
     ++rejectedSpawns_;
-    Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*this, KeyOf<RejectedSpawn>());
-    if (found == nullptr) {
-        auto made = std::make_unique<Detail::DiagnosticsBuffer<RejectedSpawn>>();
-        found = made.get();
-        Detail::AddDiagnostics(*this, KeyOf<RejectedSpawn>(), std::move(made));
-    }
-    const std::uint64_t epoch = rejected.syncEpoch;
-    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{epoch, std::move(rejected)});
+    RecordKernelDiagnostics(std::move(rejected));
 }
 
 void World::RecordRejectedRelationship(RejectedRelationship rejected) {
     ++rejectedRelationships_;
-    Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*this, KeyOf<RejectedRelationship>());
-    if (found == nullptr) {
-        auto made = std::make_unique<Detail::DiagnosticsBuffer<RejectedRelationship>>();
-        found = made.get();
-        Detail::AddDiagnostics(*this, KeyOf<RejectedRelationship>(), std::move(made));
-    }
-    const std::uint64_t epoch = rejected.syncEpoch;
-    static_cast<Detail::DiagnosticsBuffer<RejectedRelationship>*>(found)->entries.push_back(
-        Detail::DiagnosticsBuffer<RejectedRelationship>::Entry{epoch, std::move(rejected)});
+    RecordKernelDiagnostics(std::move(rejected));
 }
 
 std::optional<std::string> World::RelationshipProblem() const {
@@ -1252,25 +1261,24 @@ std::optional<std::string> World::RelationshipProblem() const {
     std::size_t listed = 0;
     for (const auto& cell : children.cells) {
         if (cell.value.empty()) return "entity " + std::to_string(cell.id) + " has an empty Children";
-        for (std::size_t i = 0; i < cell.value.size(); ++i) {
-            const EntityId child = cell.value[i];
+        std::vector<EntityId> sorted(cell.value.begin(), cell.value.end());
+        std::sort(sorted.begin(), sorted.end());
+        if (const auto twice = std::adjacent_find(sorted.begin(), sorted.end()); twice != sorted.end()) {
+            return "entity " + std::to_string(cell.id) + "'s Children lists " + std::to_string(*twice) + " twice";
+        }
+        for (const EntityId child : sorted) {
             const Detail::Cell<ChildOf>* source = childOf.Find(child);
             if (!alive(child) || source == nullptr || source->value.parent != cell.id) {
                 return "entity " + std::to_string(cell.id) + "'s Children lists " + std::to_string(child) +
                        ", whose ChildOf does not name it";
             }
-            for (std::size_t j = 0; j < i; ++j) {
-                if (cell.value[j] == child) {
-                    return "entity " + std::to_string(cell.id) + "'s Children lists " + std::to_string(child) + " twice";
-                }
-            }
         }
         listed += cell.value.size();
     }
+    // Every ChildOf names a live parent other than itself; with the checks above (each listed child's
+    // ChildOf names that parent, no child twice) the counts being equal means each is listed exactly once.
     for (const auto& cell : childOf.cells) {
-        const Detail::Cell<Children>* target = children.Find(cell.value.parent);
-        if (cell.value.parent == cell.id || !alive(cell.value.parent) || target == nullptr ||
-            !target->value.Contains(cell.id)) {
+        if (cell.value.parent == cell.id || !alive(cell.value.parent) || children.Find(cell.value.parent) == nullptr) {
             return "entity " + std::to_string(cell.id) + "'s ChildOf names " + std::to_string(cell.value.parent) +
                    ", which does not list it in Children";
         }

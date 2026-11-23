@@ -662,7 +662,8 @@ K::SystemResult DropOnDeath(K::Query<K::Read<Health>, K::Read<K::Children>> hero
 - **換父**：再插入一次 `ChildOf{新的父}`，它排到新父的最後；舊父沒有子了，`Children` 那一格拿掉。同一個父再插入一次只寫 `ChildOf`（`Changed<ChildOf>` 為 true），`Children` 不變。**換父沒有 hook**（hook 只有 OnAdd、OnRemove）：要知道換父，看 `Changed<ChildOf>` 或兩個父的 `Changed<Children>`。
 - **不能就地改**：`Write<ChildOf>`、`Write<Children>`、對 `Children` 的插入、拿掉、生成，在編譯時就失敗。脫離父＝拿掉 `ChildOf`。
 - **什麼時候一致**：同步點套用完（每個階段、清空輪的每一輪、`ExclusiveWorld` 的當場改、`Restore`）兩邊就一致；OnAdd hook 與 observer 看到的已經一致。例外：OnRemove 的時候，連帶刪除中的子看不到父（父先刪），最後一個子離開時父的 `Children` 已經是空的。跨實體的讀用 observer（hook 只讀自己的實體）。
-- **刪父連帶刪子**：子、孫……同一個同步點全刪，父先、再依序每個子的整棵子樹（深度優先），沒有層數上限。**同一個階段裡拿掉或換掉 `ChildOf` 的子不連帶**（上面的掉落武器）；同一個階段刪了父、又把子掛到它，子留下、沒有父。
+- **刪父連帶刪子**：子、孫……同一個同步點全刪，父先、再依序每個子的整棵子樹（深度優先），沒有層數上限。**同一個階段裡拿掉或換掉 `ChildOf` 的子不連帶**（上面的掉落武器）；換給活著的新主人時是覆寫、不跑 hook，和舊主人沒死時一樣。同一個階段刪了父、又把子掛到它，子留下、沒有父。
+- **從 Bevy 搬來的寫法**：Bevy 的 `add_child` 對已經是子的實體會把它移到最後；GYO 再插入同一個父不動順序，要移到最後就在同一個階段先拿掉 `ChildOf`、再插入。同一個階段裡一個子離開、另一個子掛上的父，`Children` 不發 Add／Remove 通知（看淨差），只有 `Changed<Children>`。
 - **不成立的關係**：父不活著、或指向自己時，那一筆不成立（原本有的 `ChildOf` 也拿掉），留一筆 `RejectedRelationship`（`World::Diagnostics<RejectedRelationship>()`、`World::RejectedRelationships()`），不是錯誤。網路複製時父比子晚到，等父到了再插入（網路複製那一批處理，照 lightyear 的 `PendingChildOf`）。Kernel 不查環。
 - **回滾**：兩個都登記（`rollback.Component<ChildOf>()`、`rollback.Component<Children>()`）——`Children` 的先後是歷史，只登記 `ChildOf` 時放回後順序可能和直跑不同（回滾頁 R-2 前提 8）。
 - **準備函式裡直接放**（`World::Insert`）也維護兩邊、連帶刪除；先放父再放子。

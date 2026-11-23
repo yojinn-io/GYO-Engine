@@ -53,7 +53,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 5. 可回滾的資料在兩個步之間，不被步的 schedule 與巢狀 schedule 以外的 System 寫（還原與權威值的入口除外）。
 6. 步的 schedule 上有生成時，配發器登記成可回滾。
 7. 輸入的入口登記成「重跑時不跑」。
-8. 〔`v8-arch-gyo2-kernel-relationship`；草稿，合併前核准定稿〕回滾父子時，`ChildOf` 與 `Children` 都登記成可回滾（`rollback.Component<ChildOf>()`、`rollback.Component<Children>()`）：`Children` 的順序是附掛的歷史（Kernel DI-KS 30），只登記 `ChildOf` 時，`Restore` 由 Kernel 維護 `Children`、順序依 EntityId，和直跑可能不同。不用 `Derived<Children>()`：`Children` 的寫者是 Kernel、不是 System（R-7）。
+8. 〔`v8-arch-gyo2-kernel-relationship`；草稿，合併前核准定稿〕回滾父子時，`ChildOf` 與 `Children` 都登記成可回滾（`rollback.Component<ChildOf>()`、`rollback.Component<Children>()`）：`Children` 的順序是附掛的歷史（Kernel DI-KS 30），只登記 `ChildOf` 時，`Restore` 由 Kernel 維護 `Children`、順序依 EntityId，和直跑可能不同。不用 `Derived<Children>()`：`Children` 的寫者是 Kernel、不是 System（R-7）。前提是作者的責任、回滾 Module 不檢查；Kernel 的存取驗證打開時，兩者放回後不一致會報 W-1（Kernel DI-KS 33）。
 
 Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；第 8 步審查 A3 發現它原本會補、等價破掉，使用者選 (a2) 從源頭修），所以「請求在、目標當時不在」也照樣等價，不必當成前提。守衛：`rollback strategy: R-2: a restore puts back a request…`、`…an entity a predicted death took comes back…`。
 

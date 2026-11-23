@@ -16,6 +16,7 @@
 // The general entry (Registrar::Relationship<R>, one-to-one, allowSelf, custom
 // collections, reordering) is a shape only: kernel RC 27.
 
+#include "engine/base/Assert.hpp"
 #include "engine/entity_store/EntityId.hpp"
 #include "engine/kernel/Hash.hpp"
 
@@ -52,7 +53,7 @@ struct RelationshipStore;
 // them, (planPos, recSeq). Present exactly when at least one alive entity has a
 // ChildOf naming this entity. Read only: kept by the kernel.
 //
-// Its size is the same on every platform and build type (it is in every
+// Its size is the same on every 64-bit platform and build type (it is in every
 // Registry fingerprint): a pointer and two 32-bit counts, not a std::vector.
 class Children {
 public:
@@ -73,6 +74,7 @@ public:
         other.capacity_ = 0;
     }
     Children& operator=(Children&& other) noexcept {
+        if (this == &other) return *this;
         data_ = std::move(other.data_);
         size_ = other.size_;
         capacity_ = other.capacity_;
@@ -109,7 +111,10 @@ private:
         capacity_ = capacity;
     }
     void Append(EntityId child) {
-        if (size_ == capacity_) Reserve(capacity_ == 0 ? 4U : capacity_ * 2U);
+        if (size_ == capacity_) {
+            GYO_ASSERT(capacity_ < 0x80000000U);  // 2^31 children: the count would overflow
+            Reserve(capacity_ == 0 ? 4U : capacity_ * 2U);
+        }
         data_[size_++] = child;
     }
     // Keeps the order of the others; false when child is not in it.
