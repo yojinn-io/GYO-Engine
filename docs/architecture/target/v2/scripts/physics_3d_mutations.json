@@ -141,6 +141,76 @@
    "target": "gyo_physics_3d_tests",
    "cases": "move_and_slide: a nearly parallel*",
    "expect": "\\[p3\\-mas\\-similar\\-planes\\]"
+  },
+  {
+   "id": "p3-ie-flag-ignored",
+   "what": "BoxSetFlags::FixInternalEdges has no effect: the seam of two coplanar boxes lifts and slows a capsule again (section 12 cases 1, 2)",
+   "guards": [
+    "physics-3d 3",
+    "physics-3d-declaration 12"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "    return Outline{HasFlag(data.flags, BoxSetFlags::FixInternalEdges) ? &data : nullptr, box};",
+   "replace": "    (void)data;\n    return Outline{nullptr, box};",
+   "target": "gyo_physics_3d_tests",
+   "cases": "move_and_slide: with FixInternalEdges*",
+   "expect": "\\[p3\\-ie\\-seam\\-(?:lift|speed)\\]"
+  },
+  {
+   "id": "p3-ie-coverage-ignored",
+   "what": "a flush neighbour continues a face whether or not its extent covers the contact point: the top edge of a step down is clamped as if the lower box continued the top",
+   "guards": [
+    "physics-3d 3",
+    "physics-3d-declaration 12"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "            if (Component(other.minimum, b) <= Component(point, b) && Component(point, b) <= Component(other.maximum, b) &&",
+   "replace": "            if (true || Component(other.minimum, b) <= Component(point, b) && Component(point, b) <= Component(other.maximum, b) &&",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: FixInternalEdges keeps*",
+   "expect": "\\[p3\\-ie\\-step\\-edge\\]"
+  },
+  {
+   "id": "p3-ie-outer-edge-clamped",
+   "what": "a face with no neighbour at all counts as continued: a real outer face is treated as interior and its normal component dropped",
+   "guards": [
+    "physics-3d 3",
+    "physics-3d-declaration 12"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "        for (std::uint32_t k = data->faceStart[face]; k < data->faceStart[face + 1]; ++k) {",
+   "replace": "        if (data->faceStart[face] == data->faceStart[face + 1]) return true;\n        for (std::uint32_t k = data->faceStart[face]; k < data->faceStart[face + 1]; ++k) {",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: FixInternalEdges keeps*",
+   "expect": "\\[p3\\-ie\\-step\\-edge\\]"
+  },
+  {
+   "id": "p3-ie-face-exit-ignored",
+   "what": "a shape inside a box still leaves through a face a neighbour continues (into the neighbour) instead of the smallest open face",
+   "guards": [
+    "physics-3d 3",
+    "physics-3d-declaration 12"
+   ],
+   "file": "engine/modules/physics_3d/src/Queries.cpp",
+   "find": "    if (!continued(best / 2, best % 2 == 0, exit.onBox)) return exit;",
+   "replace": "    if (true) return exit;",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: FixInternalEdges leaves*",
+   "expect": "\\[p3\\-ie\\-face\\-exit\\]"
+  },
+  {
+   "id": "p3-ie-digest-no-flags",
+   "what": "the digest leaves the flags out: two BoxSets of the same boxes with different flags hash equal while == says they differ (CCR-13)",
+   "guards": [
+    "physics-3d 3",
+    "physics-3d-declaration 4.5"
+   ],
+   "file": "engine/modules/physics_3d/src/Shapes.cpp",
+   "find": "    if (flags != BoxSetFlags::None) {\n        digest ^= static_cast<std::uint64_t>(flags);\n        digest *= kFnvPrime;\n    }\n",
+   "replace": "",
+   "target": "gyo_physics_3d_tests",
+   "cases": "queries: the flags are part*",
+   "expect": "\\[p3\\-ie\\-digest\\]"
   }
  ]
 }

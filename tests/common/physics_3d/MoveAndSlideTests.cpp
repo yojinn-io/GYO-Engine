@@ -418,9 +418,11 @@ TEST_CASE("move_and_slide: a nearly parallel contact plane replaces the less blo
 TEST_CASE("move_and_slide: a capsule on a turned BoxSet: the same inputs give the same bits (a resimulation repeats it)") {
     const auto once = []() {
         auto p = Make();
+        // Pinned to the flag-off behaviour (section 12, case 5): the golden's bits predate the flag.
         auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{-20.0F, -1.0F, -20.0F}, {20.0F, 0.0F, 20.0F}},
                                                             {{3.0F, 0.0F, -20.0F}, {4.0F, 3.0F, 20.0F}},
-                                                            {{-20.0F, 0.0F, 5.0F}, {20.0F, 3.0F, 6.0F}}});
+                                                            {{-20.0F, 0.0F, 5.0F}, {20.0F, 3.0F, 6.0F}}},
+                                       P3::BoxSetFlags::None);
         REQUIRE(static_cast<bool>(boxes));
         Put(*p, 7, *boxes, 0.0F, 0.0F, 0.0F, {0.0F, 0.25881905F, 0.0F, 0.96592583F});  // 30 degrees about Y
         P3::MoveAndSlideConfig config;
@@ -456,13 +458,27 @@ struct SeamRun final {
     float maxY = -1.0e9F;
     float minSpeed = 1.0e9F;
     std::vector<M::Vec3> normals;  // every plane onHit saw, in order
+    // FNV-1a 64 over every step's position and projected velocity bits (x, y, z each, little-endian), and the last.
+    std::uint64_t stepDigest = 14695981039346656037ULL;
+    M::Vec3 finalPosition{};
+    M::Vec3 finalVelocity{};
 };
 
-// A capsule walking across the seam of two boxes with coplanar tops, from startX at speedX, 60 steps of 1/60 s.
-SeamRun WalkSeam(const float startX, const float speedX) {
+void DigestBits(std::uint64_t& hash, const float value) {
+    const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
+    for (int shift = 0; shift < 32; shift += 8) {
+        hash ^= (bits >> shift) & 0xFFU;
+        hash *= 1099511628211ULL;
+    }
+}
+
+// The scene of declaration section 12: a capsule walking across the seam of two boxes with coplanar tops, from
+// startX at speedX (and -1 downward), 60 steps of 1/60 s, the ground plane handed in.
+SeamRun WalkSeam(const float startX, const float speedX, const P3::BoxSetFlags flags) {
     auto p = Make();
     auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{-2.0F, -1.0F, -1.0F}, {0.0F, 0.0F, 1.0F}},
-                                                        {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}});
+                                                        {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}},
+                                   flags);
     REQUIRE(static_cast<bool>(boxes));
     Put(*p, 1, *boxes, 0.0F, 0.0F, 0.0F);
     P3::MoveAndSlideConfig config;
@@ -482,15 +498,28 @@ SeamRun WalkSeam(const float startX, const float speedX) {
             out = *moved;
         });
         position = out.position;
+        for (const float v : {position.x, position.y, position.z, out.projectedVelocity.x, out.projectedVelocity.y,
+                              out.projectedVelocity.z}) {
+            DigestBits(run.stepDigest, v);
+        }
+        run.finalPosition = position;
+        run.finalVelocity = out.projectedVelocity;
         run.maxY = std::max(run.maxY, position.y);
         run.minSpeed = std::min(run.minSpeed, std::abs(out.projectedVelocity.x));
     }
     return run;
 }
 
+std::string Digits(const double v) {
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%.9g", v);
+    return buffer;
+}
+
 std::string Describe(const SeamRun& run, const float rest) {
-    std::string text = "max y " + std::to_string(run.maxY) + " (rest " + std::to_string(rest) + ", over by " +
-                       std::to_string(run.maxY - rest) + "), min |vx| " + std::to_string(run.minSpeed) + ", planes:";
+    std::string text = "max y " + Digits(run.maxY) + " (rest " + Digits(rest) + ", over by " +
+                       Digits(static_cast<double>(run.maxY) - static_cast<double>(rest)) + "), min |vx| " +
+                       Digits(run.minSpeed) + ", planes:";
     for (const M::Vec3& n : run.normals) {
         if (n.x == 0.0F && n.y == 1.0F && n.z == 0.0F) continue;  // the ground plane: not listed
         text += " (" + std::to_string(n.x) + "," + std::to_string(n.y) + "," + std::to_string(n.z) + ")";
@@ -498,17 +527,97 @@ std::string Describe(const SeamRun& run, const float rest) {
     return text;
 }
 
+constexpr float kRest = 1.01F;  // declaration section 12: rest height 1.01 (skin height)
+
 } // namespace
 
-// S1 measured, decision pending: whether crossing a seam of coplanar boxes lifts the capsule or slows it (the
-// edge of the next box can give a contact plane that is not the top face).
-TEST_CASE("move_and_slide: crossing the seam of two coplanar boxes neither lifts nor slows the capsule" *
-          doctest::skip(true)) {
-    const float rest = 1.0F + P3::MoveAndSlideConfig{}.depenetration.skinWidth;
+// Declaration section 12, cases 1 and 2 (fixed before the results): with FixInternalEdges, every step stays within
+// 1e-5 m of the rest height and keeps |vx| >= 2.997, in both directions.
+TEST_CASE("move_and_slide: with FixInternalEdges, crossing the seam of two coplanar boxes neither lifts nor slows") {
     for (const float direction : {-1.0F, 1.0F}) {
-        const SeamRun run = WalkSeam(-1.5F * direction, 3.0F * direction);
-        MESSAGE("from " << (direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, rest));
-        CHECK_MESSAGE(run.maxY <= rest + 1.0e-5F, "[p3-mas-seam] lifted: " << Describe(run, rest));
-        CHECK_MESSAGE(run.minSpeed >= 3.0F - 1.0e-5F, "[p3-mas-seam] slowed: " << Describe(run, rest));
+        const SeamRun run = WalkSeam(-1.5F * direction, 3.0F * direction, P3::BoxSetFlags::FixInternalEdges);
+        MESSAGE("flag on, from " << (direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, kRest));
+        CHECK_MESSAGE(run.maxY <= kRest + 1.0e-5F, "[p3-ie-seam-lift] " << Describe(run, kRest));
+        CHECK_MESSAGE(run.minSpeed >= 2.997F, "[p3-ie-seam-speed] " << Describe(run, kRest));
+    }
+}
+
+// Section 12, case 3: without the flag the behaviour is #311's bit for bit. The literals were printed by the
+// skipped measurement case of commit 80ff74e3 (#311) built in a separate worktree on macOS x64 (AppleClang),
+// 2026-11-24: every step's position and velocity (digested here), the maximum y, the minimum |vx| and the last step.
+// The lift and the slowdown are still there: the flag is a switch, not a change of what None does.
+TEST_CASE("move_and_slide: without the flag, the seam run is #311's bit for bit, lift and slowdown included") {
+    struct Expected {
+        float direction;
+        std::uint64_t steps;
+        std::uint32_t final[6];
+    };
+    const Expected expected[] = {
+        {-1.0F, 0x2EF6FA438776B7BDULL, {0xBFBF49D3U, 0x3F8147AEU, 0x00000000U, 0xC0400000U, 0x00000000U, 0x00000000U}},
+        {1.0F, 0x644C113749D385BDULL, {0x3FBF49D3U, 0x3F8147AEU, 0x00000000U, 0x40400000U, 0x00000000U, 0x00000000U}},
+    };
+    for (const Expected& e : expected) {
+        const SeamRun run = WalkSeam(-1.5F * e.direction, 3.0F * e.direction, P3::BoxSetFlags::None);
+        MESSAGE("flag off, from " << (e.direction < 0.0F ? "+X" : "-X") << ": " << Describe(run, kRest));
+        CHECK_MESSAGE(std::bit_cast<std::uint32_t>(run.maxY) == 0x3F8268D2U, "[p3-ie-flag-off] max y " << Describe(run, kRest));
+        CHECK_MESSAGE(std::bit_cast<std::uint32_t>(run.minSpeed) == 0x402CCE9AU, "[p3-ie-flag-off] min |vx|");
+        CHECK_MESSAGE(run.stepDigest == e.steps, "[p3-ie-flag-off] the steps differ from #311");
+        const float last[6] = {run.finalPosition.x, run.finalPosition.y, run.finalPosition.z,
+                               run.finalVelocity.x, run.finalVelocity.y, run.finalVelocity.z};
+        for (int i = 0; i < 6; ++i) {
+            CHECK_MESSAGE(std::bit_cast<std::uint32_t>(last[i]) == e.final[i], "[p3-ie-flag-off] last step value " << i);
+        }
+        CHECK(run.maxY > kRest + 1.0e-5F);  // the lift is still there without the flag
+    }
+}
+
+namespace {
+
+struct WallRun final {
+    float minX = 1.0e9F;  // the farthest the capsule was pushed away from the wall (the wall face is x = 0)
+    float minSpeed = 1.0e9F;
+};
+
+// An upright capsule sliding along a wall of two boxes side by side (the vertical seam at z = 0) at 3 m/s while
+// pressing into it at 2 m/s (so every step hits it), 60 steps of 1/60 s. The segment is parallel to the seam edge.
+// Measured 2026-11-24: without the flag it is pushed 8.2 mm off the wall and slowed to 2.511 m/s at the seam.
+WallRun SlideWall(const float startZ, const float speedZ, const P3::BoxSetFlags flags) {
+    auto p = Make();
+    auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{0.0F, 0.0F, -3.0F}, {1.0F, 3.0F, 0.0F}},
+                                                        {{0.0F, 0.0F, 0.0F}, {1.0F, 3.0F, 3.0F}}},
+                                   flags);
+    REQUIRE(static_cast<bool>(boxes));
+    Put(*p, 1, *boxes, 0.0F, 0.0F, 0.0F);
+    const P3::MoveAndSlideConfig config;
+    M::Vec3 position{-0.5F - config.depenetration.skinWidth, 1.5F, startZ};
+    WallRun run;
+    for (int step = 0; step < 60; ++step) {
+        P3::MoveAndSlideOutput out{};
+        Run(*p, [&](const Colliders& c) {
+            auto moved = P3::MoveAndSlide(c, P3::CapsuleY(0.5F, 0.5F), P3::Pose{position, {}}, {2.0F, 0.0F, speedZ},
+                                          1.0F / 60.0F, config);
+            REQUIRE(static_cast<bool>(moved));
+            out = *moved;
+        });
+        position = out.position;
+        run.minX = std::min(run.minX, position.x);
+        run.minSpeed = std::min(run.minSpeed, std::abs(out.projectedVelocity.z));
+    }
+    return run;
+}
+
+} // namespace
+
+TEST_CASE("move_and_slide: sliding along a wall of two boxes across the vertical seam (segment parallel to the edge)") {
+    const float rest = -0.51F;
+    for (const float direction : {-1.0F, 1.0F}) {
+        const WallRun on = SlideWall(-1.5F * direction, 3.0F * direction, P3::BoxSetFlags::FixInternalEdges);
+        const WallRun off = SlideWall(-1.5F * direction, 3.0F * direction, P3::BoxSetFlags::None);
+        MESSAGE("wall seam, from " << (direction < 0.0F ? "+Z" : "-Z") << ": flag on: min x " << Digits(on.minX)
+                                   << " (pushed out " << Digits(static_cast<double>(rest) - on.minX) << "), min |vz| "
+                                   << Digits(on.minSpeed) << "; flag off: min x " << Digits(off.minX) << " (pushed out "
+                                   << Digits(static_cast<double>(rest) - off.minX) << "), min |vz| " << Digits(off.minSpeed));
+        CHECK_MESSAGE(on.minX >= rest - 1.0e-5F, "[p3-ie-wall-seam] pushed out " << Digits(on.minX));
+        CHECK_MESSAGE(on.minSpeed >= 2.997F, "[p3-ie-wall-seam] slowed " << Digits(on.minSpeed));
     }
 }

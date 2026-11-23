@@ -383,46 +383,106 @@ struct FaceExit final {
     Vec3d onBox{};
 };
 
-FaceExit LeaveThroughFace(const Vec3d& a, const Vec3d& b, const Aabbd& box) {
-    FaceExit best;
-    bool found = false;
-    int bestAxis = 0;
-    bool bestMinus = true;
-    for (int axis = 0; axis < 3; ++axis) {
-        const double lo = Component(box.minimum, axis);
-        const double hi = Component(box.maximum, axis);
-        const double low = Math::Min(Component(a, axis), Component(b, axis));
-        const double high = Math::Max(Component(a, axis), Component(b, axis));
-        for (const bool minus : {true, false}) {
-            const double push = Math::Max(minus ? high - lo : hi - low, 0.0);
-            if (!found || push < best.push) {
-                found = true;
-                best.push = push;
-                bestAxis = axis;
-                bestMinus = minus;
+// The faces of one BoxSet box that neighbouring boxes continue flush (BoxSetFlags::FixInternalEdges; the rule is
+// on BoxSetFlags in Shapes.hpp). No data (the flag off, or not a BoxSet): no face is continued, and every function
+// below does exactly what it does without the flag.
+struct Outline final {
+    const Detail::BoxSetData* data = nullptr;
+    std::uint32_t box = 0;
+
+    // Whether face (axis, minimum or maximum) of the box is continued at point, a point of that face.
+    [[nodiscard]] bool Continued(const int axis, const bool minimumFace, const Vec3d& point) const {
+        if (data == nullptr) return false;
+        const std::uint32_t face = box * 6U + static_cast<std::uint32_t>(axis) * 2U + (minimumFace ? 0U : 1U);
+        const int b = (axis + 1) % 3;
+        const int c = (axis + 2) % 3;
+        for (std::uint32_t k = data->faceStart[face]; k < data->faceStart[face + 1]; ++k) {
+            const Aabbd other = Math::ToAabbd(data->boxes[data->faceNeighbours[k]]);
+            if (Component(other.minimum, b) <= Component(point, b) && Component(point, b) <= Component(other.maximum, b) &&
+                Component(other.minimum, c) <= Component(point, c) && Component(point, c) <= Component(other.maximum, c)) {
+                return true;
             }
         }
+        return false;
     }
+};
+
+Outline OutlineOf(const Detail::BoxSetData& data, const std::uint32_t box) {
+    return Outline{HasFlag(data.flags, BoxSetFlags::FixInternalEdges) ? &data : nullptr, box};
+}
+
+// parry's normal constraint, for an axis-aligned box: the box's outward normal at point, with the component along
+// each continued face dropped and renormalized (kept as it was when every component would be dropped).
+Vec3d ClampToOutline(const Outline& outline, const Vec3d& outward, const Vec3d& point) {
+    if (outline.data == nullptr) return outward;
+    Vec3d clamped = outward;
+    bool changed = false;
+    for (int axis = 0; axis < 3; ++axis) {
+        const double component = Component(outward, axis);
+        if (component == 0.0) continue;
+        if (outline.Continued(axis, component < 0.0, point)) {
+            SetComponent(clamped, axis, 0.0);
+            changed = true;
+        }
+    }
+    if (!changed || IsZero(clamped)) return outward;
+    return Normalized(clamped);
+}
+
+// The exit through one face ("minus": the minimum face, the core moving toward -axis) with its push.
+FaceExit ExitThrough(const Vec3d& a, const Vec3d& b, const Aabbd& box, const int axis, const bool minus,
+                     const double push) {
+    FaceExit exit;
+    exit.push = push;
     // The deepest core point in the push direction; a segment parallel to the face gives its point nearest the
     // box's centre.
-    const double ca = Component(a, bestAxis);
-    const double cb = Component(b, bestAxis);
+    const double ca = Component(a, axis);
+    const double cb = Component(b, axis);
     Vec3d deepest;
     if (ca == cb) {
         const Vec3d centre = (box.minimum + box.maximum) * 0.5;
         const Vec3d ab = b - a;
         const double dd = Math::Dot(ab, ab);
         deepest = a + ab * (dd > 0.0 ? ClampD(Math::Dot(centre - a, ab) / dd, 0.0, 1.0) : 0.0);
-    } else if (bestMinus) {
+    } else if (minus) {
         deepest = ca > cb ? a : b;
     } else {
         deepest = ca < cb ? a : b;
     }
-    best.normal = UnitAxis(bestAxis, bestMinus ? 1.0 : -1.0);
-    best.core = deepest;
-    best.onBox = ClampToBox(deepest, box);
-    SetComponent(best.onBox, bestAxis, bestMinus ? Component(box.minimum, bestAxis) : Component(box.maximum, bestAxis));
-    return best;
+    exit.normal = UnitAxis(axis, minus ? 1.0 : -1.0);
+    exit.core = deepest;
+    exit.onBox = ClampToBox(deepest, box);
+    SetComponent(exit.onBox, axis, minus ? Component(box.minimum, axis) : Component(box.maximum, axis));
+    return exit;
+}
+
+// The face a core touching or inside a box leaves through (FaceExit). continued(axis, minus, onBox) says whether
+// that face is interior to a BoxSet (FixInternalEdges): such faces are passed over (all of them continued: the
+// smallest push regardless). Without the flag continued is always false and this is the plain choice.
+template <class Continued>
+FaceExit LeaveThroughFace(const Vec3d& a, const Vec3d& b, const Aabbd& box, Continued&& continued) {
+    double pushes[6];
+    int best = 0;
+    for (int axis = 0; axis < 3; ++axis) {
+        const double lo = Component(box.minimum, axis);
+        const double hi = Component(box.maximum, axis);
+        const double low = Math::Min(Component(a, axis), Component(b, axis));
+        const double high = Math::Max(Component(a, axis), Component(b, axis));
+        for (const bool minus : {true, false}) {
+            const int index = axis * 2 + (minus ? 0 : 1);
+            pushes[index] = Math::Max(minus ? high - lo : hi - low, 0.0);
+            if (pushes[index] < pushes[best]) best = index;
+        }
+    }
+    FaceExit exit = ExitThrough(a, b, box, best / 2, best % 2 == 0, pushes[best]);
+    if (!continued(best / 2, best % 2 == 0, exit.onBox)) return exit;
+    std::optional<FaceExit> open;
+    for (int index = 0; index < 6; ++index) {
+        if (open && !(pushes[index] < open->push)) continue;
+        const FaceExit candidate = ExitThrough(a, b, box, index / 2, index % 2 == 0, pushes[index]);
+        if (!continued(index / 2, index % 2 == 0, candidate.onBox)) open = candidate;
+    }
+    return open ? *open : exit;
 }
 
 double BoxDistanceSquared(const Vec3d& p, const Aabbd& box) {
@@ -481,7 +541,8 @@ Vec3d ClosestSegmentPointToBox(const Vec3d& a, const Vec3d& b, const Aabbd& box)
 }
 
 // A core (local to the box's frame) against one box: the single-box contact query.
-std::optional<ContactD> CoreBox(const Core& core, const Aabbd& box, const double prediction) {
+std::optional<ContactD> CoreBox(const Core& core, const Aabbd& box, const double prediction,
+                                const Outline& outline = {}) {
     const Vec3d p = ClosestSegmentPointToBox(core.a, core.b, box);
     const Vec3d q = ClampToBox(p, box);
     const Vec3d delta = q - p;
@@ -491,9 +552,11 @@ std::optional<ContactD> CoreBox(const Core& core, const Aabbd& box, const double
         const double distance = length - core.radius;
         if (distance > prediction) return std::nullopt;
         const Vec3d normal = delta / length;
-        return ContactD{p + normal * core.radius, q, normal, distance};
+        return ContactD{p + normal * core.radius, q, -ClampToOutline(outline, -normal, q), distance};
     }
-    const FaceExit exit = LeaveThroughFace(core.a, core.b, box);
+    const FaceExit exit = LeaveThroughFace(core.a, core.b, box, [&outline](int axis, bool minus, const Vec3d& onBox) {
+        return outline.Continued(axis, minus, onBox);
+    });
     return ContactD{exit.core + exit.normal * core.radius, exit.onBox, exit.normal, -(exit.push + core.radius)};
 }
 
@@ -511,7 +574,8 @@ std::vector<BoxContactD> CoreBoxSet(const Detail::BoxSetData* data, const Core& 
     std::vector<BoxContactD> out;
     if (data == nullptr) return out;
     for (const std::uint32_t index : Candidates(*data, ReachBox(local.a, local.b, local.radius + prediction))) {
-        const std::optional<ContactD> contact = CoreBox(local, BoxOf(data->boxes[index]), prediction);
+        const std::optional<ContactD> contact =
+            CoreBox(local, BoxOf(data->boxes[index]), prediction, OutlineOf(*data, index));
         if (!contact) continue;
         const auto distance = static_cast<float>(contact->distance);
         if (!deepestOnly) {
@@ -563,22 +627,40 @@ struct SweepHit final {
 
 // Carries a point of the extended box and the ball centre there back to the real box point and core point: shift
 // both along the axis by o in [-extend, extend] so that the box point lies in the real box, o closest to 0.
+double WitnessShift(const Sweep& s, const Aabbd& box, const Vec3d& onExtended) {
+    if (s.axis < 0) return 0.0;
+    const double coordinate = Component(onExtended, s.axis);
+    const double lower = Math::Max(-s.extend, Component(box.minimum, s.axis) - coordinate);
+    const double upper = Math::Min(s.extend, Component(box.maximum, s.axis) - coordinate);
+    return lower > 0.0 ? lower : (upper < 0.0 ? upper : 0.0);
+}
+
+// The real box point of a point of the extended box.
+Vec3d OnRealBox(const Sweep& s, const Aabbd& box, const Vec3d& onExtended) {
+    Vec3d onBox = onExtended;
+    if (s.axis >= 0) SetComponent(onBox, s.axis, Component(onExtended, s.axis) + WitnessShift(s, box, onExtended));
+    return onBox;
+}
+
 SweepHit Witnesses(const Sweep& s, const Aabbd& box, const Vec3d& centre, const Vec3d& onExtended, const Vec3d& normal,
                    const double time, const bool penetrating) {
     Vec3d core = centre;
     Vec3d onBox = onExtended;
     if (s.axis >= 0) {
         const double coordinate = Component(onExtended, s.axis);
-        const double lower = Math::Max(-s.extend, Component(box.minimum, s.axis) - coordinate);
-        const double upper = Math::Min(s.extend, Component(box.maximum, s.axis) - coordinate);
-        const double shift = lower > 0.0 ? lower : (upper < 0.0 ? upper : 0.0);
+        const double shift = WitnessShift(s, box, onExtended);
         SetComponent(core, s.axis, Component(core, s.axis) + shift);
         SetComponent(onBox, s.axis, coordinate + shift);
     }
     return SweepHit{time, core + normal * s.radius, onBox, normal, penetrating};
 }
 
-std::optional<SweepHit> SweepBox(const Sweep& s, const Aabbd& box, const ShapeCastOptions& options) {
+std::optional<SweepHit> SweepBox(const Sweep& s, const Aabbd& box, const ShapeCastOptions& options,
+                                 const Outline& outline = {}) {
+    // The face of the extended box is the real box's face (the extension only lengthens it along the axis).
+    const auto continued = [&](int axis, bool minus, const Vec3d& onExtended) {
+        return outline.Continued(axis, minus, OnRealBox(s, box, onExtended));
+    };
     Aabbd grown = box;
     if (s.axis >= 0) {
         SetComponent(grown.minimum, s.axis, Component(box.minimum, s.axis) - s.extend);
@@ -592,10 +674,10 @@ std::optional<SweepHit> SweepBox(const Sweep& s, const Aabbd& box, const ShapeCa
         Vec3d normal;
         Vec3d onExtended;
         if (gapSquared > 0.0) {
-            normal = gap / std::sqrt(gapSquared);
             onExtended = nearest;
+            normal = -ClampToOutline(outline, -(gap / std::sqrt(gapSquared)), OnRealBox(s, box, onExtended));
         } else {
-            const FaceExit exit = LeaveThroughFace(s.centre, s.centre, grown);
+            const FaceExit exit = LeaveThroughFace(s.centre, s.centre, grown, continued);
             normal = exit.normal;
             onExtended = exit.onBox;
         }
@@ -647,11 +729,13 @@ std::optional<SweepHit> SweepBox(const Sweep& s, const Aabbd& box, const ShapeCa
     if (length > 0.0) {
         normal = toBox / length;
     } else {
-        const FaceExit exit = LeaveThroughFace(centre, centre, grown);
+        const FaceExit exit = LeaveThroughFace(centre, centre, grown, continued);
         normal = exit.normal;
         onFace = exit.onBox;
     }
-    return Witnesses(s, box, centre, onFace, normal, time, false);
+    SweepHit hit = Witnesses(s, box, centre, onFace, normal, time, false);
+    hit.normal1 = -ClampToOutline(outline, -hit.normal1, hit.witness2);
+    return hit;
 }
 
 ShapeHit ToShapeHit(const Frame& f, const SweepHit& hit) {
@@ -779,9 +863,13 @@ Base::Result<std::vector<BoxContact>, Physics3dError> FindBoxContacts(const Shap
     return out;
 }
 
-Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& shape1, const Pose& pose1,
-                                                                const Math::Vec3& motion, const Shape& shape2,
-                                                                const Pose& pose2, const ShapeCastOptions& options) {
+namespace {
+
+// The checks and the set-up every cast does: shape 1 as a ball against a box grown along an axis (Sweep), in shape
+// 2's frame.
+Base::Result<Sweep, Physics3dError> PrepareSweep(const Shape& shape1, const Pose& pose1, const Math::Vec3& motion,
+                                                 const Shape& shape2, const Pose& pose2,
+                                                 const ShapeCastOptions& options) {
     GYO_ASSERT(IsValid(shape1));
     GYO_ASSERT(IsValid(pose1));
     GYO_ASSERT(Math::IsFinite(motion));
@@ -827,6 +915,18 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
         }
     }
     s.inflated = s.radius + static_cast<double>(options.targetDistance);
+    return s;
+}
+
+} // namespace
+
+Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& shape1, const Pose& pose1,
+                                                                const Math::Vec3& motion, const Shape& shape2,
+                                                                const Pose& pose2, const ShapeCastOptions& options) {
+    auto prepared = PrepareSweep(shape1, pose1, motion, shape2, pose2, options);
+    if (!prepared) return Base::Err(std::move(prepared).error());
+    const Sweep& s = *prepared;
+    const Frame f2 = FrameOf(pose2);
     if (const auto* cuboid = std::get_if<Cuboid>(&shape2)) {
         const std::optional<SweepHit> hit = SweepBox(s, CuboidBox(*cuboid), options);
         if (!hit) return std::optional<ShapeHit>{};
@@ -845,7 +945,7 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
     std::optional<SweepHit> best;
     float bestTime = 0.0F;
     for (const std::uint32_t index : Candidates(*data, ReachBox(path.minimum, path.maximum, s.inflated))) {
-        const std::optional<SweepHit> hit = SweepBox(s, BoxOf(data->boxes[index]), options);
+        const std::optional<SweepHit> hit = SweepBox(s, BoxOf(data->boxes[index]), options, OutlineOf(*data, index));
         if (!hit) continue;
         const auto time = static_cast<float>(hit->time);
         if (!best || time < bestTime) {  // increasing index: a tie keeps the lower one
@@ -855,6 +955,19 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
     }
     if (!best) return std::optional<ShapeHit>{};
     return std::optional<ShapeHit>(ToShapeHit(f2, *best));
+}
+
+Base::Result<std::optional<ShapeHit>, Physics3dError> CastShapeOnBox(const Shape& shape1, const Pose& pose1,
+                                                                     const Math::Vec3& motion, const BoxSet& boxes,
+                                                                     const std::uint32_t box, const Pose& pose2,
+                                                                     const ShapeCastOptions& options) {
+    GYO_ASSERT(box < boxes.Size());
+    auto prepared = PrepareSweep(shape1, pose1, motion, Shape(boxes), pose2, options);
+    if (!prepared) return Base::Err(std::move(prepared).error());
+    const Detail::BoxSetData& data = *Detail::BoxSetAccess::Data(boxes);
+    const std::optional<SweepHit> hit = SweepBox(*prepared, BoxOf(data.boxes[box]), options, OutlineOf(data, box));
+    if (!hit) return std::optional<ShapeHit>{};
+    return std::optional<ShapeHit>(ToShapeHit(FrameOf(pose2), *hit));
 }
 
 } // namespace GYO::Engine::Physics3d
