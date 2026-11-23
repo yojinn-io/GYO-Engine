@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 19）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 20）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 20**：(1) 使用者定「寫輸入、視窗 `Message` 的 System 放 `PreUpdate`、`before` 擁有者的公開 set」（HANDOFF `v8-arch-gyo2-sdl-input-writer-preupdate`）：第 6.2 節照寫；O-12 的改前改後列進核准清單第 4 件（Design Invariant 條文，隨動工前核准交使用者）。(2) 修訂 18～19 送 Opus／high 窄複查（**作者與檢查者同為 Opus**：Fable 用量不足，使用者「暫時用Opus」）：blocker 0、should 8、nit 6（`build/evidence/gyo2-sdl-declaration/declaration-r18-narrow-check.md`），卡片能改的全部採用（對照在第 33 節）：SDL-1 改成「標頭一律不 include SDL、只有 adapter 的 `.cpp`」、拿掉例外、視窗登錄表改成不透明把手；SDL-7 改照 W 定的對應表判、寫明兩個例外；修飾鍵卡住、關窗與結束迴圈進 W；子批 P 補第五處、釘死根的測試與突變；os.md DI 1、2 的根要改，列進核准清單第 5 件。
 - **修訂 19**：apps→games 卡在它的宣告第 6 節發現 `plugins/` 不在 code page 的根、也不在 os 守衛的根（主會話轉來）；卡片照 gyo2 的程式確認後排進子批 P（第 9.1 節「`plugins/` 加進共通的根」、P 列、第 16 節）。
 - **修訂 18**：修訂 17 送 Fable／high 窄複查：blocker 0、should 11、nit 8（`build/evidence/gyo2-sdl-declaration/declaration-r17-narrow-check.md`），卡片能改的全部採用（對照在第 32 節）：殘留的「System 呼叫 SDL」改掉；佇列的元素直接是 `input`、`window` 的 `Message` 內容（不另立事件型別）；SDL-1 寫明 `sdl` 函式庫的公開標頭是交接面的例外、補 Plugin 內的掃描；adapter 的數法；SDL-7 主語改成整個 `sdl_window`、守衛改比 `Message` 序列；`sdl_gpu` 也有把手 Resource；第 6.6 節補兩處偏離；W 列與樹補 `window`；時間取樣改成「W 的宣告列選項、動工前交使用者定」。`PreUpdate` 還是 `First` 的取捨回報主會話。
 - **修訂 17**：(1) 使用者定「System 不直接呼叫 SDL」照讀法 2（HANDOFF `v8-arch-gyo2-sdl-system-calls-via-adapter`）：Plugin 的 System 呼叫 Plugin 自己的 adapter 函式（例：`sdl_gpu` 的 `Submit(commands)`），SDL 的型別與呼叫只在 adapter（`plugins/<名>/src/adapters/sdl/`），System 的程式裡沒有 SDL；runner 泵事件也經 adapter（卡片照讀法 2 的原則判）。(2) 修訂 16 送 Fable／high 窄複查：blocker 0、should 10、nit 7（`build/evidence/gyo2-sdl-declaration/declaration-r16-narrow-check.md`），卡片能改的全部採用（對照在第 31 節）：`input` 定公開的 set、寫 `Message` 的一方排在它之前；`window` 也有自己的狀態 System；`sdl_window` 的佇列與把手 Resource；只一個 World 列 `sdl_window`；時間取樣寫明「等使用者、W 不自己定」；新的 DI 草案 SDL-7（`sdl_window` 只翻譯、不持狀態）。
@@ -177,7 +178,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 - **`default`**（L17）：只有資料的 `input`、`window` 與 `transform`、`camera` 預設帶——沒有 SDL 時它們只是空的資料，Match 帶著也無害（同 Bevy：`InputPlugin` 無條件、`WindowPlugin` 在 `bevy_window` feature 開著時在 `DefaultPlugins`，`bevy_internal/src/default_plugins.rs:14`、`:19-22`，沒有後端也照跑；使用者 Q4＝(b)）。**明列 `units` 的產品**（多 World）要自己列預設帶的 Module（`world_time`、`entity_ids` 等），漏列不報錯、那個 Module 只跑 `Configure`。`window` 的資料放在每個 World：雜湊函式照 `input` 的判法（第 6.3 節）；新建或替換的 World 怎麼拿到目前的狀態（視窗大小、焦點、按住的鍵、剪貼簿）交 W 定——候選：`sdl_window` 在那個 World 的第一輪寫一次目前狀態的 `Message`；準備函式放初值；或用 `CarryOver<T>`（O-10）。渲染側的單位照角色只放渲染 World，`default=no`。修訂 5 以前的「要後端的 Module `default=no`」跟著 B' 拿掉（沒有「缺後端」了）。
 - **`window`、`camera` 都不依賴別的列**（L17）：Bevy 的 `bevy_window` 依賴 `bevy_input`，是因為總 enum `WindowEvent` 也裝輸入事件；GYO 的 `window` 資料不含輸入，依賴沒有內容（修訂 9 以前的「`window` 依賴 `input`」拿掉）。`camera` 不依賴 `window` 的理由分兩半：Bevy 的 `RenderTarget::Window(WindowRef)` 那一半沒有內容（GYO 的視窗不是實體、沒有多視窗），目標用 `camera` 定的中性 id；但 **「目標的大小誰給相機」那一半有內容**——Bevy 的 `camera_system` 在 main world 讀視窗大小更新投影（`bevy_render/src/camera.rs:357-363`），`viewport_to_world_2d`、`ScalingMode` 都靠它。這一題列給 **X1 的宣告**定：(a) 照 Bevy 讓 `camera` 依賴 `window`（X1 等 W、列了 `camera` 的 World 也要列 `window`）；(b) `camera` 定「目標大小」的資料、由一個膠水 System 或作者填（X1 不等 W）←傾向；(c) 只在渲染側算投影（來源側做不了射線與滑鼠換算）。
 - **`render` 不依賴 `window`**：畫到哪個目標由 `RenderCommands` 裡的目標 id（來自相機）表示，`sdl_gpu` 對到真的視窗。
-- **測試**：輸入的測試與網路注入用一個帶 `MessageWriter` 的 System 寫同一種 `Message`（`input`、`window` 定的型別；Kernel 在 Run 之外沒有寫訊息的介面），排在 `input`、`window` 的 set 之前，狀態邏輯照常跑；渲染的測試讀 `RenderCommands` 比內容；不需要假後端。SDL 的 Plugin 自己的測試照 master（`SDL_VIDEODRIVER=dummy`、Lavapipe）。
+- **測試**：輸入的測試與網路注入用一個帶 `MessageWriter` 的 System 寫同一種 `Message`（`input`、`window` 定的型別；Kernel 在 Run 之外沒有寫訊息的介面），排在 `input`、`window` 的 set 之前，狀態邏輯照常跑；渲染的測試讀 `RenderCommands` 比內容；不需要假後端。SDL 的 Plugin 自己的測試照 master（`SDL_VIDEODRIVER=dummy`、Lavapipe）；要直接呼叫 SDL 的測試（例：`SDL_PushEvent` 餵事件）放 `plugins/<名>/tests/adapters/sdl/`，算 adapter 的一部分（SDL-1）、PRIVATE 連 SDL3。
 
 ## 4. 基盤 Architecture 的根據（AGENTS §2）
 
@@ -262,7 +263,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 |---|---|---|
 | 模擬（或文件）World → 渲染 World | **Extract**（同一條執行緒上 World 到 World 唯一的路） | P7 |
 | ImGui 的 draw list（文件 World → 渲染 World） | **Extract**（P23） | 使用者 11-11 §3b |
-| OS 事件 → 讀輸入的 World | **套用點**（登記的是 Plugin 的單位）：runner 呼叫 `sdl_window` 的 adapter 泵事件，adapter 把 `SDL_Event` 直接翻成 `input`、`window` 定的 `Message` 內容（含時間戳換算；不另立事件型別），放進 `sdl_window` 自己的佇列；`sdl_window` 的 System 在 `Main`／`PreUpdate`、排在 `input`、`window` 的 set 之前，依型別交給對應的 `MessageWriter`；`input`、`window` 的 System 更新狀態（照 Bevy 的 winit → bevy_window → bevy_input）。stage 用 `PreUpdate` 是照 Bevy 的位置與 HANDOFF `-plugin-in-world-rule-removed` 的字面；放 O-12 預設的 `First` 一樣排在 `input` 之前（stage 之間有順序，`Scheduler.cpp:6-8`），不必寫 `before`、漏寫也不會安靜地錯序；放 `PreUpdate` 的代價是靠 set 的 `before`（`input` 的公開 set 對網路注入等仍有用）。選哪個交主會話（第 16 節 (3)） | 第 4.3 節、`-plugin-in-world-rule-removed`、`-sdl-system-calls-via-adapter` |
+| OS 事件 → 讀輸入的 World | **套用點**（登記的是 Plugin 的單位）：runner 呼叫 `sdl_window` 的 adapter 泵事件，adapter 把 `SDL_Event` 直接翻成 `input`、`window` 定的 `Message` 內容（含時間戳換算；不另立事件型別），放進 `sdl_window` 自己的佇列；`sdl_window` 的 System 在 `Main`／`PreUpdate`、排在 `input`、`window` 的 set 之前，依型別交給對應的 `MessageWriter`；`input`、`window` 的 System 更新狀態（照 Bevy 的 winit → bevy_window → bevy_input）。**stage 用 `PreUpdate`、`before` 擁有者的公開 set**（使用者 2026-11-23，`v8-arch-gyo2-sdl-input-writer-preupdate`；`sdl_window` 的 System、測試、網路注入都一樣）：照 Bevy（`bevy_input` 在 `PreUpdate` 的 `InputSystems`）；比過的 `First` 合 O-12 的字面、不必 `before`，但偏離 Bevy。O-12 的條文要補一句，改前改後在第 14 節核准清單第 4 件 | 第 4.3 節、`-plugin-in-world-rule-removed`、`-sdl-system-calls-via-adapter`、`-sdl-input-writer-preupdate` |
 | 渲染 World → GPU（送出畫面） | **套用點「出」**（登記的是 Plugin 的單位；Q7＝(a)）：`render_world` 與各 `<x>_render` 的 System 用 `render` 的函式產出 `RenderCommands`（資料）；`sdl_gpu` 的 `GpuSubmit` 呼叫自己的 adapter 的 `Submit(commands)` 畫、present；上傳貼圖、讀回 swapchain 大小也由 System 當場經 adapter。`render_world` 的 schedule 留最後一個 stage 給送出（Kernel 沒有「排在所有人之後」的寫法） | 同 Bevy 的 `render_system`；只多包一層 adapter；和 audio 5.3 同形 |
 | runner 的時間取樣 → 各 World | **未定**：交換點宣告 5.5 留的接法是交換函式「進」（world_time 登記，把 runner 給的取樣寫進 `TimeSampling` 的 `ManualInstant`）；要不要照 Bevy 改回 System（Bevy 的 `time_system` 在 `First`，`bevy_time/src/lib.rs:84-89`）另議——**W 的事前宣告列選項、動工前交使用者定，W 不自己判**（W 列）；定之前照已核准的方向（移給 runner，P12）寫 | P12；交換點宣告 5.5 |
 | 混音器、裝置、真的 GPU 物件、SDL 的視窗 | 不進 World：共用處（O-15），由 `plugins/sdl*` 持有；World 裡只有資料（`RenderCommands` 以 id 指 GPU 物件） | P9、P27 |
@@ -351,7 +352,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | 有視窗的 runner 由 SDL 的實作在 `Configure` 裝 | 同 Bevy（`WinitPlugin::set_runner`） | — | — | — | 照 Bevy |
 | 輸入照 winit → bevy_window → bevy_input 的順序 | 同 Bevy 的分工；最像的是 `bevy_gilrs`（Plugin 自己的 System 在 `PreUpdate`、`before(InputSystems)`，從自己持有的東西取事件寫成訊息，`bevy_gilrs/src/lib.rs:110`） | — | 兩處和 winit 不同：(1) Bevy 的 runner 在 schedule 外直接寫總訊息、再由 `bevy_window` 的 System 拆成各型別；GYO 的 runner 存進 Plugin 的佇列、由 Plugin 的 System 直接寫各型別（沒有總訊息；Kernel 在 Run 之外沒有寫訊息的介面）。(2) 先後 Bevy 由 `bevy_window` 宣告（它依賴 `bevy_input`）；GYO 的 `window` 不依賴 `input`（L-4），由寫的一方 `before` `input` 的 set | 一個 System＋一個把手 Resource（佇列本身 Bevy 的 winit 也有，`state.rs:911-912`） | 照 Bevy，寫明接合點 |
 | `window` 的狀態由自己的 System 從 `Message` 更新 | **偏離**：Bevy 的 winit 直接改 `Window` 元件、同時送訊息（`bevy_winit/src/state.rs:256-257`、`:368`） | — | 狀態只從 `Message` 推：`sdl_window` 的佇列或 Kernel 的 `Message` 緩衝（預設 1024、丟最舊）滿了丟掉時，大小或焦點停在舊值；Bevy 直接寫狀態不會 | `window` 一個狀態 System；W 定上限時一起看 | 照 `input` 的形統一、測試一條路（L17） |
-| `sdl_window` 不合成、不記修飾鍵（SDL-7） | **偏離**：Bevy 的 winit 這一層記修飾鍵並合成按鍵事件（`state.rs:789-803`）、失焦時合成放開（`system.rs:141-170`） | — | OS 吃掉快捷鍵的 key-up 時，Bevy 由 adapter 補；GYO 靠 SDL 3.4 失焦時自己補 key-up（`SDL_keyboard.c:354-356`），其餘由 `input` 的失焦清鍵 | 無（`input` 本來就清鍵） | 權威在 `input`、`sdl_window` 只翻譯 |
+| `sdl_window` 不合成、不記修飾鍵（SDL-7） | **偏離**：Bevy 的 winit 這一層記修飾鍵並合成按鍵事件（`state.rs:789-803`）、失焦時合成放開（`system.rs:141-170`） | — | Bevy 的註解點名三種情形：OS 吃掉快捷鍵的 key-up、沒有焦點轉移、回焦時鍵已按著（`state.rs:789-802`）；SDL 3.4 只在鍵盤焦點變成空時補 key-up（`SDL_keyboard.c:354-356`），另兩種情形修飾鍵會卡 | `input` 用每個鍵盤事件帶的 `mod` 對齊修飾鍵（做不做 W 定）；卡鍵進第 15 節 | 權威在 `input`、`sdl_window` 只翻譯 |
 | **System 經 Plugin 自己的 adapter 呼叫 SDL**（讀法 2） | **偏離**（只多包一層）：Bevy 的 `bevy_winit`、`bevy_render` 在 System 裡直接用 winit、wgpu | — | — | 每個 Plugin 一層 adapter 函式（`src/adapters/sdl/`） | 使用者的決定（`-sdl-system-calls-via-adapter`）；AGENTS §6 |
 | **視窗不是實體；輸入法的資料放 `input`** | **偏離**：Bevy 的 `Window` 元件同時是請求與狀態，`ime_enabled`／`ime_position`（`crates/bevy_window/src/window.rs:279-285`）與 `Ime` 事件在 `bevy_window` | — | GYO 的視窗是共用處的服務、World 裡只有資料；請求另立型別 | `TextInput`、`TextInputRequest` 在 `input`（P27 使用者定的形） | 使用者的決定（P27）；不是混搭 |
 | 輸入與視窗事件用 `Message` | 同 Bevy（`Messages<KeyboardInput>`、`Messages<WindowResized>`） | — | Kernel 卡已定 (b)、摘要的問題解了（`-kernel-summary-messages`） | — | 照 Bevy |
@@ -427,14 +428,14 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | 做法 | 內容 | 代價 |
 |---|---|---|
 | (一) 一列 `sdl` | 一個 Plugin、一個單位，做 Runner、Window、InputEvents、Ime、Gpu、GpuSubmit、AudioOutput | **兩個 World 的產品放不進去**：這一列的依賴是 `input`、`window`（來源側）與 `render_world`（渲染側）的聯集，O-E3 逐 World 檢查（`Product.cpp:175-205`）——放進文件 World 就要求 `render_world` 也在那裡，放進渲染 World 就要求 `input`、`window` 也在那裡。變體「一列＋每個 World 的選項指明角色」：若不寫 `render_world` 的依賴、渲染 World 也列上 `input`、`window`（只是空的資料），O-E3 過得了——但少了 `render_world` 的依賴就少了 O-E3 的保護、同一個單位靠選項分四種角色、選了就連音訊裝置一起開（KeepTool 不出聲也開） |
-| **(二) 拆成角色各一列** ← 建議 | 下表；不改登記檔的格式、不改編排層 | 列多；`SDL_Window*` 從 `sdl_window` 交到 `sdl_gpu` 要經共用處（下面） |
+| **(二) 拆成角色各一列** ← 建議 | 下表；不改登記檔的格式、不改編排層 | 列多；視窗（修訂 20 起是不透明把手）從 `sdl_window` 交到 `sdl_gpu` 要經共用處（下面） |
 | (三) 一列多 target（登記檔改格式） | 照 11-13 原句「一個 `sdl` plugin 內含多個 target」 | 登記檔、`gyo_product_units`、產生的登記單位表都要改；屬 RC-O6（登記檔的欄位不夠用） |
 
 **建議 (二)**：不改編排層或登記檔、每列的依賴都受 O-E3 保護、產品只帶要的那幾件；Plugin 自己內部照角色分，和第 3.3 節 Engine 側的分法一致。**(二) 改了使用者 11-13（P22）的「SDL 是一個 `sdl` plugin、內含多個後端 target；整個 repo 的 SDL 呼叫只在 `sdl` plugin」**——變成「一組 `sdl*` Plugin」、「SDL 呼叫只在 `sdl*` 這一組」；列在第 14 節末「核准時一併確認的」，不同意就選 (三)。系譜：(二)＝修訂 5 的「B-多列」，對照 Bevy 的 `bevy_winit`、`bevy_render`、`bevy_audio` 各一個 crate；(三)＝11-13 原句；需要它的 Feature：KeepTool（兩個 World）、Match（一個都不帶）、只測音訊（只帶 `sdl_audio`）。
 
 | 列（暫名，子批 P 照命名規範定） | 角色 | 內容（P27 的 Plugin 各件） | 依賴 |
 |---|---|---|---|
-| `sdl` | 函式庫（Plugin、`library_only`） | SDL3 的 FetchContent（`release-3.4.0`＋`gyo-cocoa-ime-composing-keydown.patch`，帶移除條件與「補丁有沒有上」的設定時檢查）；Plugin 之間共用的型別（例：視窗的登錄表，SDL 的視窗 id ↔ `SDL_Window*`）；時鐘配對的純函式 | — |
+| `sdl` | 函式庫（Plugin、`library_only`） | SDL3 的 FetchContent（`release-3.4.0`＋`gyo-cocoa-ime-composing-keydown.patch`，帶移除條件與「補丁有沒有上」的設定時檢查）；Plugin 之間共用的型別（例：視窗的登錄表，我們的視窗 id ↔ 不透明的把手 `NativeWindow*`〔不完整型別，只在各 adapter 的 `.cpp` 轉回 `SDL_Window*`〕；修訂 20 起不露 SDL 的型別）；時鐘配對的純函式 | — |
 | `sdl_window` | 來源側（**一個 Product 只有一個 World 列它**；那個 World 在主執行緒，今天 Kernel 序列執行；把手 Resource 今天就標 `threadBound`，錯的執行緒碰到會斷言，將來 schedule 平行化（LIM-2）照 Bevy 排在綁定的執行緒，DI-KS 14） | **Runner**（在 `Configure` 裝：呼叫 adapter 泵事件 → 取樣 → `RunFrame`；等垂直同步發生在送出畫面時；選項可以不裝，不裝時給產品的 runner 呼叫的泵函式）、**Window**（adapter：`SDL_CreateWindow`、`SDL_PollEvent`，主執行緒）、**InputEvents**（adapter 把 `SDL_Event` 直接翻成 `input`、`window` 定的 `Message` 內容、`SDL_GetTicksNS` 換時間基準〔第 8 節〕，放進 `sdl_window` 自己的佇列——佇列的元素就是這些 `Message` 內容（同 Bevy 的 winit 直接轉成 `bevy_window`／`bevy_input` 的型別放進自己的佇列，`bevy_winit/src/state.rs:80`、`:256-289`），佇列本身是 `sdl_window` 自己的型別、不公開，由單位持有；`Build` 在那個 World 登記一個自己的 Resource 當把手〔照 `world_asset` 的 `AssetRequests`，`WorldAssetModule.cpp:30-33`、`:99-114`〕，雜湊函式什麼都不寫；`sdl_window` 的 System 在 `Main`／`PreUpdate`、`before` `input`、`window` 的 set，依型別交給對應的 `MessageWriter`；一個 SDL 的失焦事件寫兩種 `Message`（`window` 的焦點、`input` 的失去鍵盤焦點；`input` 不依賴 `window`，L-4）；佇列有上限、滿了丟棄並計數——丟掉 key-up 會卡鍵，怎麼告訴 `input`、和 Kernel 的 `Message` 緩衝〔預設 1024、丟最舊〕兩層上限怎麼定，W 定）、**Ime**（System 在 `Main`／`Last` 唯讀 `TextInputRequest` → 呼叫 adapter → `SDL_StartTextInput`／`SDL_SetTextInputArea`；macOS 的輸入法補丁照帶；Windows 的組字 hint 在開窗前設）、剪貼簿（adapter 在剪貼簿更新事件時讀 SDL 的剪貼簿、放進佇列，System 寫成 `window` 的「剪貼簿的內容」`Message`；System 在 `Last` 讀「複製」的請求、經 adapter 寫 SDL）。SDL 的型別與呼叫只在 `src/adapters/sdl/`。**列兩個 World 的後果**：佇列只有一份，先跑的 World 的 System 取完、後跑的拿不到；讀請求的 System 各跑一次、狀態式的請求後跑的蓋掉先跑的（照 `no-guards-against-misuse` 不加守衛，寫在 W 的說明頁） | sdl、input、window |
 | `sdl_gpu` | 渲染側 | **Gpu**（adapter：持有真的 GPU 物件、以 id 對照、上傳、pipeline；shader 的編譯工具）、**GpuSubmit**（渲染 World 最後一個 stage 的 System：讀 `RenderCommands` → 呼叫 adapter 的 `Submit(commands)` 畫、present；上傳貼圖、讀回 swapchain 大小也由 System 當場經 adapter）；`Build` 在渲染 World 登記自己的把手 Resource（指向 adapter 的實例：裝置、swapchain），標 `threadBound`、雜湊函式什麼都不寫（同 `sdl_window`）。SDL 的型別與呼叫只在 `src/adapters/sdl/` | sdl、render、render_world |
 | `sdl_audio` | 只做 `Configure` | **AudioOutput**（第 7 節：建混音器或用產品給的、開裝置、回呼 `Mixer::Render`、`OnDestroy` 停） | sdl、audio |
@@ -442,7 +443,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 | `world_imgui` | 來源側（文件 World） | widget 那半（P23） | imgui、input、window |
 | `imgui_render` | 渲染側 | 繪製那半（P23）：把經 Extract 拿到的 draw list 轉成 `RenderCommands` | imgui、render、render_world |
 
-- **`SDL_Window*` 的交接**：`sdl_window` 在 `Configure` 建視窗、把「視窗 id ↔ `SDL_Window*`」放進共用處（O-15；型別定在 `sdl` 函式庫）；`sdl_gpu` 找它、claim 視窗——在哪一步做（`Configure` 還是 `Build`；`Build` 在替換 World 時會重跑，`Product.cpp:781`）由 R2a 定、重跑要安全；沒帶 `sdl_window` 在 `sdl_gpu` 的 `Configure` 就查得到（`sdl_window` 的 `Configure` 先跑）。兩者都在 Plugin 這一側，`engine/` 看不到 SDL 型別（使用者 11-13 (iii)：Plugin 之間可以露第三方型別）。`sdl_gpu` 不寫 `sdl_window` 的登記檔依賴（`sdl_window` 不在渲染 World，寫了就是 O-E3，`Product.cpp:187-198`）；產品沒帶 `sdl_window` 時 `sdl_gpu` 在 `Check` 回報自己的錯誤碼。
+- **視窗的交接**：`sdl_window` 在 `Configure` 經 adapter 建視窗、把「視窗 id ↔ 不透明把手」放進共用處（O-15；型別定在 `sdl` 函式庫，不含 SDL 的型別；`sdl_gpu` 的 adapter 在 `.cpp` 裡轉回 `SDL_Window*`）；`sdl_gpu` 找它、claim 視窗——在哪一步做（`Configure` 還是 `Build`；`Build` 在替換 World 時會重跑，`Product.cpp:781`）由 R2a 定、重跑要安全；沒帶 `sdl_window` 在 `sdl_gpu` 的 `Configure` 就查得到（`sdl_window` 的 `Configure` 先跑）。兩者都在 Plugin 這一側，`engine/` 看不到 SDL 型別；使用者 11-13 (iii) 允許 Plugin 之間露第三方型別，修訂 20 為了讓 SDL-1 沒有例外、掃描判得了而不用這個允許（交接面不露 SDL）。`sdl_gpu` 不寫 `sdl_window` 的登記檔依賴（`sdl_window` 不在渲染 World，寫了就是 O-E3，`Product.cpp:187-198`）；產品沒帶 `sdl_window` 時 `sdl_gpu` 在 `Check` 回報自己的錯誤碼。
 - **KeepTool 的兩個 World 各帶什麼**：
 
 | World | `units` | 說明 |
@@ -457,8 +458,8 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 - **只建有產品選的 Plugin**（`GyoBuild.cmake:59-66` 今天是登記檔有列就建）：子批 P 要把 Plugin 的 `add_subdirectory` 移到產品之後或分兩段；`library_only` 的 `sdl` 照依賴遞移帶入；Plugin 自己的測試放在它的目錄、它的列不在時不納入；刪除測試要一併拿掉依賴 SDL 的產品與 examples（KeepTool）。
 - **刪掉 SDL 的建置測試**：CI 的組態檢查——在暫存副本拿掉 `sdl*` 的列與目錄（與依賴它們的產品），Engine、所有 Module、headless 的測試照樣 configure、build、ctest，而且 **SDL3 沒有被抓、沒有被建**。守 SDL-2。
 - **shader 的編譯**（使用者 11-13，P22：「shader 的編譯步驟留在共通的內容管線，共通管線從已選 plugin 的登記資料找到編譯器」）：HLSL 原始碼在 `render`（P27），編譯工具（DXC、SDL_shadercross、SPIRV-Cross）在 `sdl_gpu`；共通管線怎麼找到它在子批 R2a 照這一句做，要改這一句就在 R2a 的宣告交使用者。
-- **`plugins/` 加進共通的根**（修訂 19；apps→games 卡在它的宣告第 6 節發現，主會話轉來，卡片照 gyo2 的程式確認）：今天幾個共通處理只走固定的頂層目錄，沒有 `plugins/`——code page（`build/cmake/GyoCodePage.cmake:27`，`engine apps tools build/acceptance tests`；執行檔套 UTF-8 manifest）、os 守衛的原始碼掃描（`tests/common/os/os_boundary_guard.py:31-32` 的 `ROOTS`、`RUNTIME_ROOTS`）、建置定義的檢查（`tests/common/os/CMakeLists.txt:158` 的 `GYO_OS_DEFINITION_ROOTS`）。不補的話，Plugin 裡的執行檔（例：`sdl_gpu` 的 shader 編譯工具）在 Windows 不套 UTF-8，Plugin 裡的平台分支也不會被查。**子批 P 補上**（第一個建 `plugins/` 的子批，在第一個 Plugin 進來之前）：四處都加 `plugins`；`plugins/` 是執行時的程式，進 `RUNTIME_ROOTS`；不進 `REQUIRED_ROOTS`（今天 `config/plugins.csv` 只有表頭，沒有原始碼時照現有的規則略過並回報）。SDL3 的原始碼（含輸入法補丁）由 FetchContent 放在建置輸出、不在 `plugins/` 底下，不受掃描；SDL 的 adapter 若需要平台分支，照 OS 層的原意落在 `core/os` 或寫成 SDL 的 hint，要豁免就是 P 或 W 的宣告裡的 Architecture Delta、交使用者。驗收：os 守衛的既有正例在 `plugins/` 底下放一份也命中（AGENTS §14.2：先用正例命中）；一個 Plugin 的執行檔在 Windows 套上 manifest（L1 windows-x64）。**協調**：apps→games 那批會把同幾處的 `apps` 改成 `games`；誰後合併誰跟上 gyo2（fetch＋merge，不 rebase）。
-- **AGENTS §3 的守衛時期**：子批 P 只立行為面的（上面的刪除測試）；「`engine/` 不 include `plugins/`、不含 SDL 標頭」的原始碼掃描與「SDL 只被 `plugins/sdl*` PRIVATE 連結」的設定時檢查（名單照登記檔產生、不手寫），在子批 K 的 scenario 通過後立；第三個是 Plugin 之內的界線：「`plugins/sdl*` 之內、`src/adapters/sdl/` 之外不 include `SDL3/` 與 `sdl` 函式庫的公開標頭」的原始碼掃描（SDL-1 的例外照條文），同樣 K 之後立、之前由每批的設計審查看；掃描照 AGENTS §14.2（跨平台、不丟 stderr、先用正例命中）。
+- **`plugins/` 加進共通的根**（修訂 19、20；apps→games 卡在它的宣告第 6 節發現，主會話轉來，卡片照 gyo2 的程式確認）：今天幾個共通處理只走固定的頂層目錄，沒有 `plugins/`——code page（`build/cmake/GyoCodePage.cmake:27`，`engine apps tools build/acceptance tests`；執行檔套 UTF-8 manifest）、code page 的獨立檢查（`tests/common/os/ProcessCodePageCheck.cmake:19`）、os 守衛的原始碼掃描（`tests/common/os/os_boundary_guard.py:31-32` 的 `ROOTS`、`RUNTIME_ROOTS`）、建置定義的檢查（`tests/common/os/CMakeLists.txt:158` 的 `GYO_OS_DEFINITION_ROOTS`）。不補的話，Plugin 裡的執行檔（例：`sdl_gpu` 的 shader 編譯工具）在 Windows 不套 UTF-8，Plugin 裡的平台分支也不會被查。**子批 P 補上**（第一個建 `plugins/` 的子批，在第一個 Plugin 進來之前）：**五處**都加 `plugins`；`plugins/` 是執行時的程式，進 `RUNTIME_ROOTS`，但 `plugins/<名>/tests/` 照 os.md DI 2「Tests … are not bound by R4」不受 R4；不進 `REQUIRED_ROOTS`——理由是可刪性（SDL-2：拿掉 SDL 的 Plugin 之後 `plugins/` 可能沒有原始碼），照現有的規則略過並回報。連帶要改的：釘死根的測試（`tests/common/os/test_os_boundary_guard.py:221-224`）與「沒有原始碼的根略過」的測試（`:197-203`）；突變 `pu-x8` 的 `find`（`tests/common/mutation/mutations.json:1448-1455`）照新的字面改、確認仍 killed。這是 os.md DI 1、2 的條文與守衛判定的改動，第 14 節核准清單第 5 件。SDL3 的原始碼（含輸入法補丁）由 FetchContent 放在建置輸出、不在 `plugins/` 底下，不受掃描；SDL 的 adapter 若需要平台分支：和 SDL 無關的呼叫落在 `core/os`（`core/os` 照 R5 不能 include SDL），SDL 的設定寫成 SDL 的 hint；要豁免就是 P 或 W 的宣告裡的 Architecture Delta、交使用者。驗收：在合成的目錄樹（測試的暫存目錄，P 裡可能還沒有 Plugin 的執行檔）放 `plugins/<x>/` 的正例，os 守衛命中、code page 的獨立檢查命中——五處都加了就任何 OS 都能驗，不必等 L1 windows-x64（AGENTS §14.2：先用正例命中）。**協調**：apps→games 那批會把同幾處的 `apps` 改成 `games`；誰後合併誰跟上 gyo2（fetch＋merge，不 rebase）。
+- **AGENTS §3 的守衛時期**：子批 P 只立行為面的（上面的刪除測試）；「`engine/` 不 include `plugins/`、不含 SDL 標頭」的原始碼掃描與「SDL 只被 `plugins/sdl*` PRIVATE 連結」的設定時檢查（名單照登記檔產生、不手寫），在子批 K 的 scenario 通過後立；第三個是 Plugin 之內的界線：「`SDL3/` 只出現在 `plugins/sdl*` 的 `src/adapters/sdl/*.cpp`、`tests/adapters/sdl/*.cpp` 的 include；任何標頭都不 include `SDL3/`」的原始碼掃描（SDL-1；標頭不帶 SDL，所以直接 include 的掃描就涵蓋遞移），同樣 K 之後立、之前由每批的設計審查看；掃描照 AGENTS §14.2（跨平台、不丟 stderr、先用正例命中）。
 - 第三方授權告示（SDL、FreeType〔選 FTL 要標 credit〕、HarfBuzz、ImGui、stb_image，以及字型檔本身——K 的 CJK 字型、Object_Connect 用的 BIZ UDPGothic）：照產品實際連結的產生（`text`、`image` 是函式庫，沒用到的產品不會連進去）；子批 K 的 tools 線打包一起做。
 
 ### 9.2 Plugin 與 Module 的接法（B' 之後；修訂 16）
@@ -468,7 +469,7 @@ ECS 相關的機制以 Bevy（含生態）為主參考。下表把本宣告裡**
 2. **主執行緒**：`sdl_window`、`sdl_gpu` 所在的 World 要在主執行緒（C1）；今天 Kernel 是序列執行，`sdl_window`、`sdl_gpu` 的把手 Resource 今天就標 `threadBound`（卡片的判斷，L-12；它綁的是放進值的那條執行緒，`Declarations.hpp:31-35`，和建視窗的執行緒相等靠 runner 在主執行緒建 World；真正對著建視窗執行緒的是 adapter 的 `SDL_IsMainThread` 斷言）；將來 schedule 平行化（LIM-2）照 Bevy 把這些 System 排在綁定的執行緒（DI-KS 14）。**其他 World 的輸入**：作者在有 `sdl_window` 的 World 讀 `Message`、轉到另一個 World、在那裡用 System 寫同一種 `Message`；跨執行緒時經 O-13 (3) 的有鎖物件（入口在 PvP Client 移植那批、W 不做）；同一條執行緒上的第二個 World 不是 O-13 的情形、目前沒有點名的 Feature。
 3. **沒有 SDL 時**：Module 照跑，只是沒有輸入、沒有視窗、沒有人執行 `RenderCommands`——同 Bevy 沒有 winit 時。不是錯誤（Q4，使用者定 (b)）。
 4. **兩個 SDL 的實作同時選**：兩個 runner 是 O-E4；兩個單位 `Create` 同一型別是 O-2、O-15 的斷言。
-5. **Plugin 之間的共用**：經共用處（O-15），型別定在 `sdl` 函式庫（第 9.1 節的視窗登錄表）。
+5. **Plugin 之間的共用**：經共用處（O-15），型別定在 `sdl` 函式庫（第 9.1 節的視窗登錄表，不透明把手、不露 SDL 的型別）。
 
 **條號的分配**（各子批寫文字，號碼在這裡先定，避免並行時撞號；主會話通知並行的卡）：編排層 **O-E9**（Extract 的來源，第 6.1 節 2）；Module 的 DI 前綴——`window` WN-、`input` IN-、`render`／`render_world` RD-、`transform` TF-、`camera` CM-、`text` TX-、`ui`／`world_ui`／`ui_render` UI-、`image` 照 asset 宣告（RC-IM1 已用 IM-）；SDL 的 Plugin 用 SDL-（整條線的 DI 也是 SDL-），錯誤碼 SDL-E1 起；Kernel 的條號見第 10.1 節。
 
@@ -516,8 +517,8 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | KR | 第 6.5 節（需求 1～5、K1～K9 的選擇、邊界統合宣告的職責清單） | 上段：Kernel 的公開介面與職責清單 | Opus／high ×3；宣告送 Fable／high | 選定之後寫；至少含第 6.5 節的例子（刪父連帶刪子、換父、回滾讓預測刪掉的子回來、深的樹）與 K6 的三種回滾情形 | 有（DI-KS 的守衛） |
 | X1、X2 | 第 6.4 節 Transform、相機（X1：含目標大小的做法、縮放模式、視區、螢幕↔世界的換算的欄位；預設帶的 Module 增加後 Registry 指紋與 golden 的影響）、階層（X2） | 上段：基盤（複製、回滾、權威登記會積在上面） | Opus／high ×3；宣告送 Fable／high | 傳播（沒有 `ChildOf`＝`Transform` 本身、有＝相乘）、第一幀與放回後的重算、`GlobalTransform` 不在回滾的登記裡、相機的投影 | 有（TF-、CM- 的守衛） |
 | I | asset 宣告 5.11、5.4 | 上段：資料契約（`"image"` 型別） | Opus／high ×3 | 照 asset 宣告（PNG 的 golden、`STBI_*` 的設定、拒絕的輸入） | 有（受理判定） |
-| P | 第 9.1 節（含「`plugins/` 加進共通的根」：code page、os 守衛的 `ROOTS`／`RUNTIME_ROOTS`、`GYO_OS_DEFINITION_ROOTS`） | 上段：建置圖 | Opus／high ×3 | 刪 SDL 的建置測試（SDL3 不被抓、不被建）；只建選了的 Plugin；MSVC 上的編譯選項；os 守衛的正例在 `plugins/` 底下命中；Plugin 的執行檔在 Windows 套上 manifest；L1 三平台 | 有（刪除測試是 SDL-2 的守衛） |
-| W | `input`、`window`（資料與 `Message` 的型別；各自的狀態 System 在 `Main`／`PreUpdate`、放進自己的公開 set，寫 `Message` 的一方 `before` 它）、`sdl_window`（來源側：Runner 在 `Configure` 裝，O-3、可以不裝；Window；InputEvents 的內部佇列與寫 `Message` 的 System；Ime、剪貼簿在 `Last` 讀請求的 System）；W 要定的：`input` 這一側的契約（其他 World 的輸入照第 9.2 節第 2 條由作者轉；W 只定 `input` 的 `Message` 與 set）；`sdl_window` 列兩個 World 的後果寫進說明頁；骨架關掉的 World 裡 `input`、`window`、`sdl_window` 的 System 掛哪（由產品指定，照 `world_asset` 的 `applySchedule`／`applyStage`）；請求的 System 的錯誤怎麼出去（卡片的傾向：`SDL_StartTextInput` 失敗不當 System 的錯誤、照「告訴外面發生了什麼」）；SDL-7 的最終文字（交使用者）；新建或替換的 World 的初始狀態（視窗大小、焦點、按住的鍵、剪貼簿）；生成世界（O-14）期間的事件；`TextInputRequest` 兩個寫者（`world_ui`、ImGui）時聽誰的；**時間取樣的形**——留在本批（HANDOFF `-forwarding-audit-exchange-keep` 末句；交換點宣告 5.5「那一批一起定」）：**W 的事前宣告列兩個選項（交換函式「進」／照 Bevy 改回 System）與各自要改的已核准條文，在 W 的動工前核准交使用者定，W 不自己判**；宣告之前照 P12（移給 runner）寫，若改回 System 要改 P12、WT-6 (2)、交換點宣告 5.5、第 1 節（「取一次時間」）、第 6.1 節 7、第 9.1 節 Runner 的步驟、第 10.1 節的樹、第 11 節第 3 項、SDL-3；等待零件在哪（world-time 第 3 節、WT-2、WT-6 (2) 的文字照交換點宣告 5.5 改）、渲染 World 的時間（第 6.1 節 7）、時間戳、請求資料（文字輸入、候選窗、改視窗、游標形狀、剪貼簿；後兩者是 Q3＝(b) 的連帶） | 上段：公開介面、時間 | Opus／high ×3；宣告送 Fable／high | 時間戳三條保證的測試（假讀取函式、精確等式）；SDL dummy 驅動下的泵與事件；`Message` 的先後（`sdl_window` → `input`、`window`：寫的一方 `before` 它們的 set；檢出力用突變「拿掉 `before` → 先後的測試失敗」，不把 Kernel 不承諾的 tie-break 釘成測試）；SDL-7 的 `Message` 序列一對一；runner 跑 `examples` 的一個視窗程式 | 有 |
+| P | 第 9.1 節（含「`plugins/` 加進共通的根」：code page 與它的獨立檢查、os 守衛的 `ROOTS`／`RUNTIME_ROOTS`、`GYO_OS_DEFINITION_ROOTS`；釘死根的測試、突變 `pu-x8`；os.md DI 1、2 的改動照核准清單第 5 件） | 上段：建置圖 | Opus／high ×3 | 刪 SDL 的建置測試（SDL3 不被抓、不被建）；只建選了的 Plugin；MSVC 上的編譯選項；合成目錄樹裡 `plugins/` 底下的正例被 os 守衛與 code page 的獨立檢查命中；L1 三平台 | 有（刪除測試是 SDL-2 的守衛） |
+| W | `input`、`window`（資料與 `Message` 的型別；各自的狀態 System 在 `Main`／`PreUpdate`、放進自己的公開 set，寫 `Message` 的一方 `before` 它）、`sdl_window`（來源側：Runner 在 `Configure` 裝，O-3、可以不裝；Window；InputEvents 的內部佇列與寫 `Message` 的 System；Ime、剪貼簿在 `Last` 讀請求的 System）；W 要定的：`input` 這一側的契約（其他 World 的輸入照第 9.2 節第 2 條由作者轉；W 只定 `input` 的 `Message` 與 set）；SDL-7 的對應表（每種 SDL 事件對應哪些 `Message`）；**關窗與結束迴圈的接法**（runner 不看事件內容；Bevy 的寫法：`WindowCloseRequested` → `close_when_requested` 關窗 → `exit_on_all_closed` 寫 `AppExit` → runner 看 `AppExit`；GYO 要決定「要求關閉」→ 誰決定結束 → runner 怎麼知道，產品能不能擋下）；修飾鍵用 `mod` 對齊做不做（第 15 節）；`input` 收到沒按著的鍵的放開要當作無事（SDL 先送失焦再補 key-up）；`sdl_window` 列兩個 World 的後果寫進說明頁；骨架關掉的 World 裡 `input`、`window`、`sdl_window` 的 System 掛哪（由產品指定，照 `world_asset` 的 `applySchedule`／`applyStage`）；請求的 System 的錯誤怎麼出去（卡片的傾向：`SDL_StartTextInput` 失敗不當 System 的錯誤、照「告訴外面發生了什麼」）；SDL-7 的最終文字（交使用者）；新建或替換的 World 的初始狀態（視窗大小、焦點、按住的鍵、剪貼簿）；生成世界（O-14）期間的事件；`TextInputRequest` 兩個寫者（`world_ui`、ImGui）時聽誰的；**時間取樣的形**——留在本批（HANDOFF `-forwarding-audit-exchange-keep` 末句；交換點宣告 5.5「那一批一起定」）：**W 的事前宣告列兩個選項（交換函式「進」／照 Bevy 改回 System）與各自要改的已核准條文，在 W 的動工前核准交使用者定，W 不自己判**；宣告之前照 P12（移給 runner）寫，若改回 System 要改 P12、WT-6 (2)、交換點宣告 5.5、第 1 節（「取一次時間」）、第 6.1 節 7、第 9.1 節 Runner 的步驟、第 10.1 節的樹、第 11 節第 3 項、SDL-3；等待零件在哪（world-time 第 3 節、WT-2、WT-6 (2) 的文字照交換點宣告 5.5 改）、渲染 World 的時間（第 6.1 節 7）、時間戳、請求資料（文字輸入、候選窗、改視窗、游標形狀、剪貼簿；後兩者是 Q3＝(b) 的連帶） | 上段：公開介面、時間 | Opus／high ×3；宣告送 Fable／high | 時間戳三條保證的測試（假讀取函式、精確等式）；SDL dummy 驅動下的泵與事件；`Message` 的先後（`sdl_window` → `input`、`window`：寫的一方 `before` 它們的 set；檢出力用突變「拿掉 `before` → 先後的測試失敗」，不把 Kernel 不承諾的 tie-break 釘成測試）；SDL-7 的 `Message` 序列一對一；runner 跑 `examples` 的一個視窗程式 | 有 |
 | A | 第 7 節（`sdl_audio`） | 上段：audio DI 7 | Opus／high ×3 | `OnDestroy` 的先後（裝置先停）；產品給的混音器（覆寫）；SDL `disk`／`dummy` 驅動；`scheduleDelay` 的量測（判定先宣告） | 有（DI 7 的守衛） |
 | T | `text`（介面：字型、量字、換行、排版結果＝字形＋位置＋原文範圍、點陣圖；換行、fallback 字體、字形快取／圖集在 `text` 的 `src/`；狀態由呼叫者持有）；FreeType 在 `src/adapters/freetype/`、HarfBuzz 在 `src/adapters/harfbuzz/`（預設不用 hb-ft），`third_party/freetype`、`harfbuzz` 只被兩個 adapter 私有連結；FreeType＋HarfBuzz 一起實作（建議不採薄起步，核准時確認）；釘版本與下載來源；建置時間的量測（Q6） | 上段：公開介面 | Opus／high ×3 | 量字的精確值；日文換行（禁則照 T 或 `gyo.ui` 的 layout 定）；fallback 換字型；同一個字不重複進圖集；字形對回原文的範圍；點陣圖的 golden；上下顛倒的坑（master 坑 17：在 UV 轉換的單一邊界修，那半在 R2b） | 有（受理判定） |
 | R2a | 裝置在哪一步建（`sdl_gpu` 的 `Configure`，讓替換 World 時 `Build` 重跑不重建裝置）；`render` 的 `RenderCommands` 格式（P27：貼圖 id、shader id、頂點、裁切框、混合模式、實例數等）與一個 2D pass（貼圖、混合、裁切）、`render_world`、`sdl_gpu`（Gpu：裝置、swapchain、id 對照、上傳、pipeline；GpuSubmit）、**CPU 像素的貼圖：建立與局部更新、id 誰配**（K 的 ImGui 字型圖集、U 的字形圖集都用）、`GpuSubmit` 怎麼排在最後（`render_world` 的 schedule 留最後一個 stage 給送出）、`sdl_gpu` 的 adapter（`Submit(commands)`、上傳、讀回 swapchain 大小）、**`GpuSubmit` 的錯誤怎麼出去**（裝置遺失、swapchain 取不到、視窗最小化哪些不算 System 的錯誤——System 回錯誤會讓 World 壞、Product 結束，O-11；照「告訴外面發生了什麼」）、`sdl_gpu` 的把手 Resource、多個渲染 World 各有一個 `GpuSubmit` 時一個視窗一幀只能送出一次（沒有點名的 Feature，有了再定）、視窗登錄表的交接、最小的 shader 管線（HLSL 在 `render`、host 工具在 `sdl_gpu`、ABI、共通管線找編譯器） | 上段：公開介面 | Opus／high ×3 | Linux Lavapipe 上的像素比對（比確切顏色，master 坑 18）；macOS Metallib 離線編譯；幀時間的預算先宣告 | 有 |
@@ -543,12 +544,12 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 **放哪**：新頁 `docs/architecture/target/v2/sdl.zh-Hant.md`（`plugins/sdl*` 的 owner 文件），由子批 P 開，各子批補。各 Module 的 DI 在各自的頁（`target/v2/window.zh-Hant.md` 等，跟著子批開）。
 
-- **SDL-1 SDL 只在 `plugins/sdl*` 的 adapter**：SDL 的型別與呼叫只出現在 `plugins/sdl*` 的 `src/adapters/sdl/`；System、runner、單位的 `Configure`／`Build` 的程式裡沒有 SDL（建視窗、開裝置、claim 視窗也呼叫 adapter）；`engine/` 底下沒有 SDL（P27、`-sdl-system-calls-via-adapter`）。**例外一個**：`sdl` 函式庫的公開標頭是 `sdl*` 之間的交接面（視窗登錄表帶 `SDL_Window*`，使用者 11-13 (iii)：Plugin 之間可以露第三方型別），只有各 Plugin 的 `src/adapters/sdl/` include 它。守衛：子批 K 的 scenario 通過後立（第 9.1 節），之前由每批的設計審查看。
+- **SDL-1 SDL 只在 `plugins/sdl*` 的 adapter 的 `.cpp`**：`SDL3/` 的標頭只被 `plugins/sdl*` 的 `src/adapters/sdl/*.cpp` 與 `tests/adapters/sdl/*.cpp` include；**任何標頭（含 adapter 自己的介面標頭）都不 include `SDL3/`、不出現 SDL 的型別**，所以 SDL 不會經遞移的 include 漏到 System；System、runner、單位的 `Configure`／`Build`／`Check` 的程式裡沒有 SDL（建視窗、開裝置、claim 視窗也呼叫 adapter）；`engine/` 底下沒有 SDL（P27、`-sdl-system-calls-via-adapter`）。Plugin 之間的交接（視窗登錄表）用不透明的把手，不露 SDL 的型別（第 9.1 節）。SDL3 對 `sdl*` 的 target 都是 PRIVATE 連結。沒有例外。守衛：子批 K 的 scenario 通過後立（第 9.1 節的第三個掃描），之前由每批的設計審查看。
 - **SDL-2 沒有 SDL 也成立**：拿掉 SDL 的 Plugin（與登記檔的列），Engine、所有 Module、headless 的測試仍 configure、build、通過，SDL3 不被抓、不被建。守衛：子批 P 的刪除建置測試。
 - **SDL-3 一條時間線**：輸入事件的時刻、送進混音器的時刻、runner 的取樣都是 `Time::TimePoint`；SDL 的時刻不出 SDL 的實作。守衛：第 8 節的測試；審查。
 - **SDL-4 主執行緒**：視窗、事件泵、swapchain 的取得與送出，以及在 World 裡經 adapter 呼叫 SDL 的 System（輸入法、剪貼簿、改視窗、`GpuSubmit`），只在建視窗的執行緒；由 runner 安排、adapter 在進入點斷言（`SDL_IsMainThread`），把手 Resource 標 `threadBound`（DI-KS 14），不由 Kernel 的啟動檢查（P19）。
 - **SDL-5 渲染只讀**：受 DI-KS 13 約束（全文只在 Kernel 頁）。
-- **SDL-7 `sdl_window` 只翻譯、不持狀態**（草案，修訂 17、18；修訂 13 的 SDL-6 已撤，號碼不重用）：整個 `sdl_window`（單位、runner、adapter、System）只做翻譯——SDL 事件 → `input`、`window` 的 `Message`（一個 SDL 事件對應固定的 `Message`，不多不少），請求 → adapter 的呼叫；不持有按鍵、焦點、組字的狀態，不合成 SDL 沒給的事件，不做失焦清鍵、去重、合併。理由與接手：Bevy 的 winit 這一層自己記修飾鍵並合成按鍵事件（`bevy_winit/src/state.rs:789-803` 的 `reconcile_pending_modifiers`，理由是 OS 吃掉快捷鍵的 key-up），失焦時合成放開（`bevy_winit/src/system.rs:141-170`）；SDL 3.4 失去鍵盤焦點時自己補齊 key-up（`SDL_keyboard.c:354-356`），剩下的失焦清鍵由 `input` 的狀態 System 做（權威在 `input`），所以 GYO 不在 `sdl_window` 照做（第 6.6 節）。它記的「上次套用給 SDL 的值」（避免每幀重複呼叫，同 Bevy 的 `CachedWindow`，`bevy_winit/src/system.rs:302`）是自己輸出側的快取、不算副本；向 SDL 查目前的值（`SDL_GetKeyboardState`、`SDL_GetWindowSize`）不算持有。`input`、`window` 的狀態只從 `Message` 推出；例外：新建或替換的 World 的初值，形在 W 定（第 3.3 節 `default` 段的候選）。守衛：行為面的 scenario——在 SDL dummy 驅動餵一串 SDL 事件，比 `sdl_window` 寫出的 `Message` 序列和期望的一對一（合成 key-up、丟事件、合併都會讓序列不同）；實作方式的守衛照 AGENTS §3 之後再說；最終文字在 W 交使用者。
+- **SDL-7 `sdl_window` 只翻譯、不持狀態**（草案，修訂 17、18、20；修訂 13 的 SDL-6 已撤，號碼不重用）：整個 `sdl_window`（單位、runner、adapter、System）只做翻譯——SDL 事件 → `input`、`window` 的 `Message`，**照 W 定的對應表**（每種 SDL 事件對應 0 個或固定的幾個 `Message`；例：失焦 → `window` 的焦點＋`input` 的失去鍵盤焦點；用不到的事件 → 0 個；鍵盤事件照帶 SDL 給的修飾鍵 `mod`）；請求 → adapter 的呼叫。在**事件的方向**不持有按鍵、焦點、組字的狀態，不合成對應表以外的 `Message`，不做失焦清鍵、去重、合併；**runner 不看事件的內容**（例：`SDL_EVENT_QUIT`、關窗也只是翻成 `window` 的「要求關閉」，結束迴圈的接法在 W 定）。**兩個例外**：(1) 佇列滿了丟棄並計數（第 9.1 節）；(2) 新建或替換的 World 的初值（第 3.3 節 `default` 段的候選，含「第一輪寫一次目前狀態的 `Message`」），形在 W 定。**請求的方向**記的「上次 SDL 接受了的值」（避免每幀重複呼叫，呼叫失敗時不記、下一幀重試；同 Bevy 的 `CachedWindow`，`bevy_winit/src/system.rs:302`）是自己輸出側的快取、不算副本；向 SDL 查目前的值（`SDL_GetKeyboardState`、`SDL_GetWindowSize`）不算持有。理由與接手：Bevy 的 winit 這一層自己記修飾鍵並合成按鍵事件（`bevy_winit/src/state.rs:789-803` 的 `reconcile_pending_modifiers`：OS 吃掉快捷鍵的 key-up、沒有焦點轉移、回焦時鍵已按著），失焦時合成放開（`bevy_winit/src/system.rs:141-170`）；SDL 3.4 只在鍵盤焦點變成空時補齊 key-up（`SDL_keyboard.c:354-356`），所以 Bevy 點名的另兩種情形修飾鍵會卡——GYO 由 `input` 接手（權威在 `input`）：每個鍵盤事件帶的 `mod` 讓 `input` 能對齊修飾鍵，做不做、怎麼做 W 定；卡鍵寫進第 15 節（第 6.6 節）。`input`、`window` 的狀態只從 `Message` 推出（例外 (2) 除外）。守衛：行為面的 scenario——在 SDL dummy 驅動用 `tests/adapters/sdl/` 的測試餵一串 SDL 事件，比 `sdl_window` 寫出的 `Message` 序列和對應表推出的期望（合成、丟事件〔沒計數〕、合併都會讓序列不同；丟棄的數和計數要對得上）；「持有但不輸出」的狀態序列比對抓不到，由設計審查看；實作方式的守衛照 AGENTS §3 之後再說；最終文字（含對應表）在 W 交使用者。
 
 **Replacement Criteria**（整條線）：
 - RC-SDL 1：要第二個非 SDL 的視窗或 GPU 實作時，某個 Module 的資料（例：`RenderCommands`、`InputFrame`）露出 SDL 才有的概念（換不掉）→ 資料切錯了，重切（master `platform-sdl.md` RC 1、2）。
@@ -678,6 +679,18 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 （修訂 14 的 Q8「`input`、`window` 怎麼把事件寫進 World」隨這條規則去掉而撤回：寫進 World 的是 `sdl_window` 的 System，用 `MessageWriter`，不必改 Kernel。）
 
+### 寫輸入、視窗 `Message` 的 System 放哪個 stage —— **已定：`PreUpdate`**（使用者 2026-11-23，主會話；HANDOFF `v8-arch-gyo2-sdl-input-writer-preupdate`）
+
+**原話**：「照建議，PreUpdate」。
+
+**定下的**：寫 `input`、`window` 的 `Message` 的 System（`sdl_window` 的 System、測試、網路注入）放 `Main`／`PreUpdate`，`before` `input`／`window` 的公開 set。
+
+**比過的選項**：`First`（合 O-12 的字面、不必寫 `before`；偏離 Bevy）／**`PreUpdate`** ←選（照 Bevy：`bevy_input` 在 `PreUpdate` 的 `InputSystems`，`bevy_input/src/lib.rs:106`；`bevy_gilrs` 的 System 在 `PreUpdate`、`before(InputSystems)`，`bevy_gilrs/src/lib.rs:110`；合 `-plugin-in-world-rule-removed` 的字面）。
+
+**理由**（主會話的建議）：Bevy 是主參考；`before` 一個公開的 set 只是一行，不算膠水。
+
+**出處**：主會話 2026-11-23。**連帶**：O-12 補一句，改前改後在下面核准清單第 4 件。
+
 ### 接 Q7：System 不直接呼叫 SDL —— **已定：讀法 2，System 經 Plugin 自己的 adapter 呼叫**（使用者 2026-11-23，主會話；HANDOFF `v8-arch-gyo2-sdl-system-calls-via-adapter`）
 
 **原話**：side chat 追加「注意，但是我不想讓System直接調用SDL。」→ 主會話列兩種讀法 →「讀法 2，Fable 檢查也加」。
@@ -697,6 +710,18 @@ Q1～Q7 都已定（Q8 隨 `-plugin-in-world-rule-removed` 撤回）。下面三
 2. **B' 的「Module 只有資料」的讀法**——**已定**（主會話重新評審，使用者「照建議」，2026-11-23，HANDOFF `v8-arch-gyo2-sdl-input-via-exchange`），**之後一半被推翻**（使用者 2026-11-23，`v8-arch-gyo2-plugin-in-world-rule-removed`）：「Plugin 只在 World 外、進出由 Module 的交換點做」去掉；留下的是「`Message` 的型別與狀態邏輯屬於 `input`、`window`」。「只有資料」讀成「沒有 SDL、沒有後端介面；`Message` 的型別與狀態邏輯屬於自己」（第 3.3、6.2、9.1、9.2 節）。
 3. **Q6 的薄起步**——**已定：不採薄起步**（使用者 2026-11-23，side chat「照建議就行。」；比過 (甲) 薄起步／(乙) 一起實作 FreeType＋HarfBuzz ←選）。理由：「字形對回原文的範圍」的介面在 T 就被 HarfBuzz 驗過，不讓 `ui` 與 KeepTool 積在沒驗過的介面上（`gyo2-mechanism-not-conservative`）。代價：T 變大、`third_party` 多建一個 HarfBuzz，三平台都要過 L1。（side chat 給使用者的理由裡「`bevy_text` 第一天就帶 shaping」不對，修訂 14 在 Q6 改正；結論不受影響。）
 
+下面兩件是 Design Invariant 條文的改動，隨整份宣告的動工前核准交使用者同意（AGENTS §3）；最終文字在實作的子批合併前核准：
+
+4. **O-12 的套用點**（`docs/architecture/target/v2/orchestration.zh-Hant.md` 第 52 行，O-12 第一點）——
+   - **改前**：「『進』在一輪最前面的 stage（預設骨架 `Main`／`First`），『出』在最後（`Main`／`Last`）；骨架關掉的 World 由產品指定。Module 擁有的外部服務在幀裡進出 World 的預設：……」
+   - **改後**：「『進』在一輪最前面的 stage（預設骨架 `Main`／`First`），**或在 `Main`／`PreUpdate`、`before` 擁有那份資料的 Module 定的公開 set**（例：寫 `input`、`window` 的 `Message` 的 System，照 Bevy 的 `InputSystems`；`v8-arch-gyo2-sdl-input-writer-preupdate`）；『出』在最後（`Main`／`Last`）；骨架關掉的 World 由產品指定。**登記套用點的單位可以是 Module 或 Plugin**（`v8-arch-gyo2-plugin-in-world-rule-removed`）。Module 擁有的外部服務在幀裡進出 World 的預設：……」
+   - 前半是使用者這次的決定；後半「可以是 Module 或 Plugin」是卡片照 `-plugin-in-world-rule-removed` 推的（之前回報過的 O-12 字面），兩處分開同意。緩的面：以前只允許 `First` 的「進」，改後也允許 `PreUpdate`＋`before`；締的面：沒有。守衛：W 的先後測試與突變「拿掉 `before` → 失敗」。
+5. **os.md 的 Design Invariants 1、2 的根加 `plugins`**（`docs/architecture/os.md` 第 386～397 行；子批 P，第 9.1 節「`plugins/` 加進共通的根」）——
+   - **改前**：DI 1「C/C++ sources outside engine/core/os/src (engine, apps, tools, build/acceptance and tests, except tests/common/os) …」；DI 2「Runtime code in engine (…), apps and tools uses no fstream …」。
+   - **改後**：DI 1 的列舉加 `plugins`；DI 2 的 runtime code 加 `plugins`（`plugins/<名>/tests/` 照 DI 2「Tests … are not bound by R4」不受 R4）。apps→games 那批同時把 `apps` 改成 `games`，誰後合併誰跟上。
+   - AGENTS §14.4 的 1～5：(1) 守的性質：OS 知識只在 `engine/core/os`（R1～R3）、執行時的程式不直接開原生檔（R4）；(2) 緩的面：沒有（plugins 以前完全不掃）；(3) 締的面：`plugins/` 底下的原始碼與 target 從此受 R1～R4 與建置定義的檢查；(4) 不適用（沒有緩的面）；(5) 根據：`os_boundary_guard.py:31-32`、`GyoCodePage.cmake:27`、`ProcessCodePageCheck.cmake:19`、`tests/common/os/CMakeLists.txt:158`；盤點早已列這件（`docs/architecture/plans/kernel/guards-inventory.zh-Hant.md` 行 68、77，「改寫（締める面）」）。Design Invariants 的守衛測試（`test_os_boundary_guard.py:221-224` 釘死根的那條）判定跟著改，照 §14.4「DI 的守衛不論緩締都要使用者同意」。
+   - 連帶要判、子批 P 或 R2a 的宣告定：shader 編譯工具搬進 `plugins/sdl_gpu` 後的 R4 地位（DI 2 的字面還寫「the host shader tool」豁免，gyo2 的程式已拿掉這個豁免，`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`）——字面和程式不一致是既有的，回報主會話。
+
 要走才交使用者、現在不問的：`text` 用 hb-ft、ImGui 用 imgui_freetype（AGENTS §6 的例外，T、K 的宣告真的要走時再交）。
 
 ## 15. 範囲の限界
@@ -713,6 +738,7 @@ Q1～Q7 都已定（Q8 隨 `-plugin-in-world-rule-removed` 撤回）。下面三
 - 2D 世界管線較重的部分（tilemap、大量 sprite 的合批、圖集、2D 光影）不在本線（Q5：Object_Connect 不需要），有需要的遊戲來時再做。
 - 預設帶的 Module 增加（`transform`、`camera`、`input`、`window`）對既有測試的 Registry 指紋與 golden 的影響沒有查，X1、W 的宣告各寫一句。
 - `GlobalTransform` 不進摘要、判定不讀它（第 6.4 節）：畫面與判定的姿態可能差一幀以內，這是有意的。
+- 修飾鍵可能卡住：OS 吃掉快捷鍵的 key-up 而沒有焦點轉移、或回焦時鍵已按著，SDL 3.4 不補 key-up（`SDL_keyboard.c:354-356` 只處理焦點變成空），`sdl_window` 不合成（SDL-7）；`input` 用 `mod` 對齊要在 W 定，定之前這是已知的限制。
 - 只有一個在主執行緒的 World 直接拿到 OS 的輸入（`sdl_window`）；其他 World 由作者轉（第 9.2 節第 2 條）。
 - 多個渲染 World 各有一個 `GpuSubmit`、一個視窗一幀只能送出一次——目前沒有點名的 Feature，有了再定（R2a 記一句）。
 - 時間取樣的形（交換函式或照 Bevy 改回 System）在 W 的動工前核准交使用者定。
@@ -728,7 +754,7 @@ Q1～Q7 都已定（Q8 隨 `-plugin-in-world-rule-removed` 撤回）。下面三
 - **讀檔**：存不存 `Children`、放回時跳不跳維護（K7），KR 的宣告和讀檔的說明頁（`system-contract-page.zh-Hant.md` 的讀檔一節）一起改。
 - **`gyo2-kernel-summary-msg`**（Kernel 的 `Summary` 與訊息）：已定 (b)、外部事件用 `Message`（`-kernel-summary-messages`，PR #287）；`sdl_window` 的 System 用 `MessageWriter` 寫，接得上；它和 KR 都改 Kernel，誰後合併誰跟上 gyo2。
 - **主會話的代碼審計**（使用者「讓主會話，做一次代碼審計。移除掉這種無意義的轉發」）：不在本卡；本宣告的子批照修訂 16 的形寫。
-- **回報主會話**：(1) 核准清單第 3 件的理由裡「`bevy_text` 第一天就帶 shaping」不對（2024-07 才換 cosmic-text），結論不受影響（Q6）——**主會話已在 HANDOFF 補記**（f6551fc7）。(2) HANDOFF `-plugin-in-world-rule-removed` 的連帶寫「其他 World 要輸入時由作者經 O-13 轉交」：O-13 是交給別的執行緒時的規則，同一條執行緒上的第二個 World 不在它的字面裡（第 9.2 節第 2 條）——**已交主會話**，記進批次表的後續小事。(3) O-12 條文寫套用點是「**Module** 擁有的外部服務」、「進」在 `Main`／`First`；本線的套用點有 Plugin 的單位登記、「進」在 `Main`／`PreUpdate`（照 Bevy）——O-12 的字面要不要跟著改，是使用者核准過的條文，交主會話（和代碼審計一起）。取捨一起帶上：放 `First` 就合 O-12 的字面、`sdl_window` 不需要 `before`、漏寫也不會錯序（stage 之間有順序）；放 `PreUpdate` 是照 Bevy 與 HANDOFF 的字面，代價是寫的一方靠 set 的 `before`。(4) 時間取樣：HANDOFF 寫「留 SDL 批」，卡片讀成「W 的事前宣告列選項、動工前交使用者定」——**主會話確認是這個意思**（2026-11-23）。(3) 等使用者回覆，由主會話照四樣轉來。
+- **回報主會話**：(1) 核准清單第 3 件的理由裡「`bevy_text` 第一天就帶 shaping」不對（2024-07 才換 cosmic-text），結論不受影響（Q6）——**主會話已在 HANDOFF 補記**（f6551fc7）。(2) HANDOFF `-plugin-in-world-rule-removed` 的連帶寫「其他 World 要輸入時由作者經 O-13 轉交」：O-13 是交給別的執行緒時的規則，同一條執行緒上的第二個 World 不在它的字面裡（第 9.2 節第 2 條）——**已交主會話**，記進批次表的後續小事。(3) O-12 條文寫套用點是「**Module** 擁有的外部服務」、「進」在 `Main`／`First`；本線的套用點有 Plugin 的單位登記、「進」在 `Main`／`PreUpdate`（照 Bevy）——**已定 `PreUpdate`**（使用者 2026-11-23，`-sdl-input-writer-preupdate`）；O-12 的改前改後在第 14 節核准清單第 4 件。(4) 時間取樣：HANDOFF 寫「留 SDL 批」，卡片讀成「W 的事前宣告列選項、動工前交使用者定」——**主會話確認是這個意思**（2026-11-23）。(5) os.md DI 2 的字面還寫「the host shader tool」豁免 R4，gyo2 的程式已拿掉這個豁免（`test_render_shader_tool_is_runtime_code_for_r4`）——字面和程式不一致是既有的，請主會話判誰來改（子批 P 改 DI 2 的根時可以一起，要使用者同意）。
 - **主會話（Kernel）**：KR、R1a、R1b 都改 Kernel，合併先後與條號分配見第 10.1 節；邊界統合宣告的職責清單由 KR 改；O-E9 與各前綴的保留（第 9.2 節），通知並行的卡。
 - **`TextInputRequest` 有兩個寫者**（`world_ui` 的文字框、ImGui）：同一個 World 兩者都在時聽誰的，W 的宣告定。
 - **圖書管理員**：同詞異義表行 74、124 的 Plugin 例子還寫「SDL_image、SDL_ttf」，`runtime-composition.zh-Hant.md` 行 62、64「SDL_image、SDL_ttf 各自一個 plugin」——兩個都不用了（P20、Q6），統一處理時改；asset 宣告的行 140、994 還寫「SDL 的 adapter、ufbx 歸哪一類未定」，下次整理時改（Q1、Q2 已定）；「送進 World 外服務的時刻都是時間基準」登記成 CCR（第 8 節末）。
@@ -1029,3 +1055,23 @@ Q1～Q7 都已定（Q8 隨 `-plugin-in-world-rule-removed` 撤回）。下面三
 | N-6 讀法 2 與 ImGui | 寫一句：只講 SDL | 第 3.3 節 |
 | N-7 答案寫在題目裡 | 標「卡片的傾向」 | 第 10.2 節 W |
 | N-8 失焦寫兩種 `Message` | 補 | 第 9.1 節 |
+
+## 33. 修訂 20：修訂 18～19 的窄複查（Opus／high，作者同模型）與 `PreUpdate` 的決定
+
+| 項 | 處理 | 改在哪 |
+|---|---|---|
+| `-sdl-input-writer-preupdate` | 第 6.2 節照寫；第 14 節決定紀錄（四樣）；O-12 的改前改後列進核准清單第 4 件；第 16 節 (3) 改成已定 | 第 6.2、14、16 節 |
+| S-1 SDL-1 的例外在建置圖上不成立 | 拿掉例外：任何標頭都不 include `SDL3/`、只有 adapter 的 `.cpp`；視窗登錄表改成不透明把手（不用 11-13 (iii) 的允許）；數法不必另算交接面 | 第 9.1、9.2、12 節 |
+| S-2 遞移 include、PRIVATE 連結 | 同上（標頭不帶 SDL → 直接 include 的掃描涵蓋遞移；SDL3 全部 PRIVATE） | 第 9.1、12 節 |
+| S-3 SDL-7 的測試要呼叫 SDL | 放 `tests/adapters/sdl/`、算 adapter 的一部分 | 第 3.3、12 節 |
+| S-4 「固定、一對一」和自己允許的事衝突 | 改照 W 定的對應表（0 個或固定的幾個）；兩個例外（丟棄、初值）寫在條文本體 | 第 12 節 |
+| S-5 修飾鍵卡住 | SDL-7、第 6.6 節補 Bevy 點名的三種情形與 SDL 只處理焦點變空；`input` 用 `mod` 對齊進 W；第 15 節記限制 | 第 6.6、12、15 節、W |
+| S-6 誰結束迴圈 | runner 不看事件內容；關窗與結束迴圈的接法進 W（附 Bevy 的寫法） | 第 12 節、W |
+| S-7 子批 P 漏的 | 第五處 `ProcessCodePageCheck.cmake:19`、釘死根的測試、突變 `pu-x8`；驗收改用合成目錄樹、任何 OS | 第 9.1 節、P 列 |
+| S-8 os.md DI 1、2 | 核准清單第 5 件（§14.4 的 1～5）；`plugins/<名>/tests/` 不受 R4；shader 工具的 R4 地位與 DI 2 字面不一致回報主會話 | 第 9.1、14、16 節 |
+| N-1 去重的方向 | 禁令限在事件方向；快取記 SDL 接受了的值、失敗時重試 | 第 12 節 |
+| N-2 只持有不輸出 | 寫明由設計審查看 | 第 12 節 |
+| N-3 `REQUIRED_ROOTS` 的理由 | 改成可刪性 | 第 9.1 節 |
+| N-4 `core/os` 不能 include SDL | 寫明只適用和 SDL 無關的呼叫 | 第 9.1 節 |
+| N-5 本分支沒 merge gyo2 | 已 merge（6257c90c）；第 6.2、16 節照已定的寫 | — |
+| N-6 放開沒按著的鍵 | 進 W | W |
