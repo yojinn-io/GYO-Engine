@@ -31,7 +31,7 @@ Owner：架構。GYO2 主會話開的任務卡（使用者「開 W、A、3D 物�
 
 ## 交使用者的
 
-- **時間取樣的形**（總宣告：W 不自己判）：(a) 交換函式「進」／(b) 照 Bevy 留在 System（今天的程式）。卡片傾向 (b) 轉主會話；**使用者選 (b)**（「這個照你建議就好。」，2026-11-23，HANDOFF `v8-arch-gyo2-time-sampling-in-system`，推翻時間設計決定 1〔P12〕）。world_time 的程式不變；改字：world-time 第 3 節、WT-6 (2)、交換點宣告 5.5 的後記、sdl 頁（runner 不取樣、SDL-3、總宣告 9.1／6.1 第 7 點的處置——總宣告檔不在 `gyo2` 上，記在 sdl 頁）、`WorldTimeModule.hpp` 的註解。
+- **時間取樣的形**（總宣告：W 不自己判）：(a) 交換函式「進」／(b) 照 Bevy 留在 System（今天的程式）。卡片傾向 (b) 轉主會話；**使用者選 (b)**（「這個照你建議就好。」，2026-11-23，HANDOFF `v8-arch-gyo2-time-sampling-in-system`，推翻時間設計決定 1〔P12〕）。world_time 的程式不變；改字：world-time 第 3 節、WT-6 (2)、交換點宣告 5.5 的後記、sdl 頁（runner 不取樣、SDL-3、總宣告 9.1／6.1 第 7 點的處置；總宣告由主會話帶進 gyo2、開頭加後記）、`WorldTimeModule.hpp` 的註解。
 - 三頁 Design Invariants（IN-、WN-、SDL-3／4／7）與 O-12 的最終文字：合併前核准。
 
 ## 設計審查（Opus／high，作者同為 Opus；Fable 暫停）
