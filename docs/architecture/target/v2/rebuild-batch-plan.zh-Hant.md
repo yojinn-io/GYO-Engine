@@ -111,6 +111,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | hitbox 回溯（lag compensation）：master 沒有（判定用當 tick 姿勢），GYO2 要做是全新設計；命中形狀的姿勢要等 model＋骨骼動畫（Match 端也要） | PvP 移植準備（共享筆記 `gyo2-pvp-prep-physics-needs.md`） | PvP 移植時，和網路、權威一起設計 |
 | **待使用者定（未決）：model Module 的時機**——前提：model 放 Engine，做成 `engine/modules/model` 函式庫（`library_only=yes`、`default=no`、無 `ModelModule`；節點、材質、蒙皮網格、動畫片段、取樣 Pose＋ufbx adapter）。(A) 照 11-19 跟著產品（PvP、model_viewer）回來／(B) 現在當基礎做，排在 SDL 之後或併進畫面子批 | 主會話 2026-11-23 提（原文只在對話，11-23 晚補進本表） | PvP 移植準備的盤點出來後交使用者 |
 | **待使用者定（未決）：骨骼動畫的三層**——1 資料與取樣（骨架、片段、時刻 t 的姿勢純函式）→ model 函式庫；2 播放（每個實體播哪個片段、播到哪裡，照 World 時間前進取樣 Pose）→ 登記單位 `animation`／`AnimationModule`，PvP 進模擬所以要能進回滾、取樣照 tick，碰時間／回滾／權威，是基盤；3 蒙皮顯示 → render，經 Extract 拿 Pose。hitbox、切片段、混合規則是遊戲規則 | 主會話 2026-11-23 提（同上） | 同上 |
+| R2b 讀 `ImageData` 照 `image.zh-Hant.md` 第 2 節：RGBA8、straight alpha、第 0 列在最上面、不翻轉、rowPitch＝寬×4、色彩空間是標籤；上下方向在 R2b 的 UV 轉換單一邊界處理（master 坑 17）。另：X1 定的 2D 排序是 z 大在前 | I #301、X1 #298 | 子批 R2b（開卡時寫進 brief） |
+| I 卡照 L17 自判的六件 I-1～I-6（只有 RGBA8；settings 只收 colorSpace；image 是 library_only、產品自己 `Register<PngLoader>`；型別名 `ImageData`；長寬上限各 16384；stb 只抓單一檔＋SHA-256）在 `image.zh-Hant.md` 第 5 節。照新 AGENTS §2.6 不必逐條核准；使用者想推翻時再開 | I #301 | 只記錄 |
 | Object_Connect 盤點的 Engine 缺口（`games/object_connect/docs/porting-inventory.zh-Hant.md`，#302）：G3 游標 warp、G4 滑鼠相對移動量、G5 游標進出視窗、G6 視窗不可改大小 | Object_Connect 移植準備 #302 | 子批 W（開卡時寫進 brief） |
 | Object_Connect 盤點的 Engine 缺口：G1 播放中改音量、G2 循環播放 | Object_Connect 移植準備 #302 | audio 小批（Object_Connect 要聲音前） |
 | examples 只有一個 `examples/CMakeLists.txt`：第一個帶 `sdl*` 的 example 要能被 `plugin_removal.py` 拿掉（例：每個 example 一個目錄、照目錄加入），否則 CI 的 core 步驟報「still names the removed Plugin」；Plugin 自己的測試可用 `gyo_product_units(... PLUGINS <自己>)` | P #300 | 子批 W |
