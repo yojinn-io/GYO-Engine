@@ -1,0 +1,261 @@
+#include "TestSupport.hpp"
+
+#include "object_connect/game/GameFlow.hpp"
+
+namespace object_connect::tests {
+namespace {
+
+constexpr std::size_t kPuzzleCount = 3;
+
+[[nodiscard]] GameFlowResult ClickItem(GameFlow& flow, const std::size_t item,
+                                       const bool hasNextPuzzle = false) {
+    GameFlowInput input{};
+    input.hoveredItem = item;
+    input.mousePrimaryPressed = true;
+    return flow.Update(input, kPuzzleCount, hasNextPuzzle);
+}
+
+void TestMainMenu(TestContext& context) {
+    GameFlow flow;
+    context.Expect(flow.GetScreen() == GameScreen::MainMenu,
+                   "flow starts at the main menu");
+    context.Expect(flow.GetItemCount(kPuzzleCount, false) == 2,
+                   "main menu contains play and exit");
+
+    GameFlowInput previous{};
+    previous.previousPressed = true;
+    static_cast<void>(flow.Update(previous, kPuzzleCount, false));
+    context.Expect(flow.GetSelectedItem() == 1,
+                   "main-menu navigation wraps to exit");
+
+    GameFlowInput confirm{};
+    confirm.confirmPressed = true;
+    const GameFlowResult quit = flow.Update(confirm, kPuzzleCount, false);
+    context.Expect(quit.command == GameCommand::QuitGame,
+                   "main-menu exit requests game shutdown");
+
+    flow.ReturnToMainMenu();
+    const GameFlowResult play = ClickItem(flow, 0);
+    context.Expect(play.command == GameCommand::OpenLevelSelect,
+                   "play requests the level-select screen");
+    context.Expect(!play.screenChanged,
+                   "level-select request waits for the caller to commit it");
+    context.Expect(flow.GetScreen() == GameScreen::MainMenu,
+                   "deferred play request leaves the current screen active");
+
+    flow.EnterLevelSelect();
+    context.Expect(flow.GetScreen() == GameScreen::LevelSelect,
+                   "caller can commit the level-select screen");
+    context.Expect(flow.GetSelectedItem() == 0,
+                   "screen commits reset menu selection");
+}
+
+void TestLevelSelect(TestContext& context) {
+    GameFlow flow;
+    flow.EnterLevelSelect();
+    context.Expect(flow.GetItemCount(kPuzzleCount, false) == kPuzzleCount + 1,
+                   "level select adds one back item after every puzzle");
+
+    const GameFlowResult puzzle = ClickItem(flow, 1);
+    context.Expect(puzzle.command == GameCommand::StartPuzzle,
+                   "a level item requests puzzle startup");
+    context.Expect(puzzle.puzzleIndex == 1,
+                   "level startup identifies the selected puzzle");
+    context.Expect(!puzzle.screenChanged,
+                   "puzzle startup waits for construction before entering play");
+
+    const GameFlowResult back = ClickItem(flow, kPuzzleCount);
+    context.Expect(back.command == GameCommand::ReturnToMainMenu,
+                   "the final level-select item returns to the main menu");
+
+    GameFlowInput escape{};
+    escape.escapePressed = true;
+    const GameFlowResult escaped = flow.Update(escape, kPuzzleCount, false);
+    context.Expect(escaped.command == GameCommand::ReturnToMainMenu,
+                   "escape also requests the main menu from level select");
+
+    GameFlow emptyFlow;
+    emptyFlow.EnterLevelSelect();
+    context.Expect(emptyFlow.GetItemCount(0, false) == 1,
+                   "an empty catalog still exposes a back item");
+    const GameFlowResult emptyBack = emptyFlow.Update({.confirmPressed = true}, 0, false);
+    context.Expect(emptyBack.command == GameCommand::ReturnToMainMenu,
+                   "the only empty-catalog item returns to the main menu");
+}
+
+void TestPlayingAndPause(TestContext& context) {
+    GameFlow flow;
+    flow.EnterPlaying();
+    const GameFlowResult running = flow.Update({}, kPuzzleCount, false);
+    context.Expect(running.simulatePuzzle,
+                   "stable playing frames advance the puzzle");
+
+    GameFlowInput pause{};
+    pause.escapePressed = true;
+    const GameFlowResult paused = flow.Update(pause, kPuzzleCount, false);
+    context.Expect(paused.screenChanged && !paused.simulatePuzzle,
+                   "escape enters pause without simulating that frame");
+    context.Expect(flow.GetScreen() == GameScreen::Paused,
+                   "pause becomes the active screen");
+    context.Expect(flow.GetItemCount(kPuzzleCount, false) == 5,
+                   "pause contains resume, retry, level select, main menu, and exit");
+
+    const GameFlowResult resumed = flow.Update(pause, kPuzzleCount, false);
+    context.Expect(resumed.screenChanged && flow.GetScreen() == GameScreen::Playing,
+                   "escape resumes from pause");
+    context.Expect(!resumed.simulatePuzzle,
+                   "resume waits until the next frame to simulate");
+
+    flow.EnterPaused();
+    const GameFlowResult resumeButton = ClickItem(flow, 0);
+    context.Expect(resumeButton.screenChanged && flow.GetScreen() == GameScreen::Playing,
+                   "pause resume item changes screen immediately");
+
+    flow.EnterPaused();
+    context.Expect(ClickItem(flow, 1).command == GameCommand::RetryPuzzle,
+                   "pause can retry the current puzzle");
+    context.Expect(ClickItem(flow, 2).command == GameCommand::OpenLevelSelect,
+                   "pause can request level select");
+    context.Expect(ClickItem(flow, 3).command == GameCommand::ReturnToMainMenu,
+                   "pause can request the main menu");
+    context.Expect(ClickItem(flow, 4).command == GameCommand::QuitGame,
+                   "pause can request game shutdown");
+
+    flow.EnterPlaying();
+    GameFlowInput focusLost{};
+    focusLost.focusLost = true;
+    const GameFlowResult focusPause = flow.Update(focusLost, kPuzzleCount, false);
+    context.Expect(focusPause.screenChanged && flow.GetScreen() == GameScreen::Paused,
+                   "focus loss pauses active gameplay");
+}
+
+void TestSolvedMenus(TestContext& context) {
+    GameFlow flow;
+    flow.EnterSolved();
+    context.Expect(flow.GetItemCount(kPuzzleCount, true) == 3,
+                   "solved menu with a valid next puzzle contains next, level select, and retry");
+    context.Expect(ClickItem(flow, 0, true).command == GameCommand::NextPuzzle,
+                   "solved menu can advance when a valid next puzzle exists");
+    context.Expect(ClickItem(flow, 1, true).command == GameCommand::OpenLevelSelect,
+                   "solved menu with next can open level select");
+    context.Expect(ClickItem(flow, 2, true).command == GameCommand::RetryPuzzle,
+                   "solved menu with next can retry the current puzzle");
+
+    flow.EnterSolved();
+    context.Expect(flow.GetItemCount(kPuzzleCount, false) == 2,
+                   "solved menu without a valid next puzzle omits next");
+    context.Expect(ClickItem(flow, 0, false).command == GameCommand::OpenLevelSelect,
+                   "solved menu without next returns to level select");
+    context.Expect(ClickItem(flow, 1, false).command == GameCommand::RetryPuzzle,
+                   "solved menu without next retains retry");
+
+    GameFlowInput escape{};
+    escape.escapePressed = true;
+    const GameFlowResult escaped = flow.Update(escape, kPuzzleCount, false);
+    context.Expect(escaped.command == GameCommand::OpenLevelSelect,
+                   "escape requests level select from solved");
+    context.Expect(!escaped.simulatePuzzle,
+                   "solved screens never simulate the puzzle");
+}
+
+void TestSelectionTracksDynamicMenus(TestContext& context) {
+    GameFlow flow;
+    flow.EnterLevelSelect();
+    GameFlowInput hover{};
+    hover.hoveredItem = 2;
+    const GameFlowResult hovered = flow.Update(hover, kPuzzleCount, false);
+    context.Expect(hovered.command == GameCommand::None &&
+                       flow.GetSelectedItem() == 2,
+                   "mouse hover updates selection without activating an item");
+
+    static_cast<void>(flow.Update({}, 1, false));
+    context.Expect(flow.GetSelectedItem() == 0,
+                   "selection resets when a dynamic menu becomes shorter");
+
+    GameFlowInput both{};
+    both.previousPressed = true;
+    both.nextPressed = true;
+    static_cast<void>(flow.Update(both, 1, false));
+    context.Expect(flow.GetSelectedItem() == 0,
+                   "opposing navigation inputs cancel each other");
+}
+
+void TestFinalResultsMenu(TestContext& context) {
+    GameFlow flow;
+    flow.EnterFinalResults();
+    context.Expect(flow.GetScreen() == GameScreen::FinalResults,
+                   "caller can enter the final-results screen");
+    context.Expect(flow.GetItemCount(kPuzzleCount, true) == 2 &&
+                       flow.GetItemCount(kPuzzleCount, false) == 2,
+                   "final results always contains level select and main menu");
+
+    const GameFlowResult levelSelect = ClickItem(flow, 0, true);
+    context.Expect(levelSelect.command == GameCommand::OpenLevelSelect &&
+                       !levelSelect.simulatePuzzle,
+                   "final results can open level select without simulating the puzzle");
+
+    flow.EnterFinalResults();
+    const GameFlowResult mainMenu = ClickItem(flow, 1, false);
+    context.Expect(mainMenu.command == GameCommand::ReturnToMainMenu &&
+                       !mainMenu.simulatePuzzle,
+                   "final results can return to the main menu without simulating the puzzle");
+
+    flow.EnterFinalResults();
+    GameFlowInput escape{};
+    escape.escapePressed = true;
+    const GameFlowResult escaped = flow.Update(escape, kPuzzleCount, false);
+    context.Expect(escaped.command == GameCommand::OpenLevelSelect &&
+                       !escaped.simulatePuzzle,
+                   "escape opens level select from final results");
+}
+
+void TestLargeLevelSelectUsesLogicalPuzzleIndices(TestContext& context) {
+    constexpr std::size_t kLargePuzzleCount = 31;
+    GameFlow flow;
+    flow.EnterLevelSelect();
+
+    GameFlowInput puzzleClick{};
+    puzzleClick.hoveredItem = 28;
+    puzzleClick.mousePrimaryPressed = true;
+    const GameFlowResult puzzle =
+        flow.Update(puzzleClick, kLargePuzzleCount, false);
+    context.Expect(puzzle.command == GameCommand::StartPuzzle &&
+                       puzzle.puzzleIndex == 28,
+                   "large level-select menus preserve logical puzzle indices");
+
+    flow.EnterLevelSelect();
+    GameFlowInput lastPageSelection{};
+    lastPageSelection.hoveredItem = 30;
+    const GameFlowResult selectionOnly =
+        flow.Update(lastPageSelection, kLargePuzzleCount, false);
+    context.Expect(selectionOnly.command == GameCommand::None &&
+                       flow.GetSelectedItem() == 30,
+                   "page navigation can select the only puzzle on a partial fourth page");
+    const GameFlowResult confirmed = flow.Update(
+        {.confirmPressed = true}, kLargePuzzleCount, false);
+    context.Expect(confirmed.command == GameCommand::StartPuzzle &&
+                       confirmed.puzzleIndex == 30,
+                   "confirm activates the visible absolute puzzle index after paging");
+
+    GameFlowInput backClick{};
+    backClick.hoveredItem = kLargePuzzleCount;
+    backClick.mousePrimaryPressed = true;
+    const GameFlowResult back =
+        flow.Update(backClick, kLargePuzzleCount, false);
+    context.Expect(back.command == GameCommand::ReturnToMainMenu,
+                   "large level-select menus keep back after every puzzle");
+}
+
+} // namespace
+
+void RunGameFlowTests(TestContext& context) {
+    TestMainMenu(context);
+    TestLevelSelect(context);
+    TestPlayingAndPause(context);
+    TestSolvedMenus(context);
+    TestFinalResultsMenu(context);
+    TestSelectionTracksDynamicMenus(context);
+    TestLargeLevelSelectUsesLogicalPuzzleIndices(context);
+}
+
+} // namespace object_connect::tests
