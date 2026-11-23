@@ -134,14 +134,13 @@ TEST_CASE("rollback checks: a message does not cross between the resimulated sch
     CHECK_MESSAGE(writtenOutside.find("RB-E8") != std::string::npos, "[rb-msg-written-outside] " << writtenOutside);
 }
 
-TEST_CASE("rollback checks: the four entries this batch does not make return NotImplemented") {
+TEST_CASE("rollback checks: the entries not made return NotImplemented") {
+    // Entered and Exited are made since the net Module's step 4 (gate 1 A, G): rollback strategy: R-8 A cases.
     R::RollbackInbox inbox;
     const auto partial = inbox.PartialValue<Health>(1, 3, Health{1});
     const auto notSent = inbox.NotSent(1, 3);
-    const auto entered = inbox.Entered(1, 3);
-    const auto exited = inbox.Exited(1, 3);
     const auto fromEvent = inbox.FromEvent<Health>(1, 3, Health{1});
-    for (const auto* result : {&partial, &notSent, &entered, &exited, &fromEvent}) {
+    for (const auto* result : {&partial, &notSent, &fromEvent}) {
         REQUIRE_MESSAGE(!*result, "[rb-not-implemented] an entry that is not made returned Ok");
         CHECK_MESSAGE(result->error().code == R::RollbackFailureCode::NotImplemented, "[rb-not-implemented] code");
     }

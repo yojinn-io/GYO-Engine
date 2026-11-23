@@ -49,6 +49,7 @@
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/rollback/Inbox.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 namespace GYO::Engine::Net {
@@ -88,6 +89,11 @@ struct ComponentEntry final {
     std::function<ApplyOutcome(ReplicaWorld&, Kernel::EntityId, std::span<const std::byte>, ApplyMode)> apply;
     // Removes the entity's component; false when it had none.
     std::function<bool(ReplicaWorld&, Kernel::EntityId)> remove;
+    // K3 (D-5): decodes the value and writes it into the rollback Module's inbox at tick (RollbackInbox::Value);
+    // false when the bytes are not a T.
+    std::function<bool(ReplicaWorld&, Kernel::EntityId, std::span<const std::byte>, std::uint64_t tick)> toInbox;
+    // K3: the entity certainly has no T from tick on (RollbackInbox::Removed).
+    std::function<void(ReplicaWorld&, Kernel::EntityId, std::uint64_t tick)> removedToInbox;
 };
 
 // One replicated Resource (Q8 (b)), type-erased where its types are known (ReplicateResource<R, V>).
@@ -102,6 +108,9 @@ struct ResourceEntry final {
     std::function<bool(ReplicaWorld&, NetWriter&)> encode;
     // Client: decodes the value and writes it with the registration's apply.
     std::function<Base::Result<ApplyOutcome, Kernel::KernelError>(ReplicaWorld&, std::span<const std::byte>)> apply;
+    // K3 (D-5, Q8 (b)): decodes the value and writes it into the inbox at tick (RollbackInbox::ResourceValue); only
+    // when the value is the Resource itself (V = R); false when the bytes are not an R.
+    std::function<bool(ReplicaWorld&, std::span<const std::byte>, std::uint64_t tick)> toInbox;
 };
 
 struct MessageEntryBase {
@@ -194,8 +203,10 @@ enum class ReplicaDrop : std::uint8_t {
     MissingTarget,
     // A value older than one already written for that entity and component.
     StaleValue,
+    // K3: a value older than the confirmed point by more than the rollback depth (D-7: dropped, counted).
+    BeyondDepth,
 };
-inline constexpr std::size_t kReplicaDropCount = 6;
+inline constexpr std::size_t kReplicaDropCount = 7;
 
 // The ledger of one Peer (declaration D-5; on the Peer entity, NT-10): what that client has been sent and has
 // confirmed. It decides what to send; it is not a copy of the game's state.
@@ -295,6 +306,16 @@ struct NetReplicaState final {
     // Replicated Resource values handed to their apply (Q8 (b)), and of those the default apply found unchanged.
     std::uint64_t resourceValuesApplied = 0;
     std::uint64_t resourceValuesUnchanged = 0;
+    // K3 (D-5): what went into the rollback Module's inbox: values (components and Resources), removals, entries,
+    // exits, and the confirmed point last written.
+    std::uint64_t inboxValues = 0;
+    std::uint64_t inboxRemovals = 0;
+    std::uint64_t inboxEntries = 0;
+    std::uint64_t inboxExits = 0;
+    std::optional<std::uint32_t> inboxConfirmed;
+    // K3: the values of components that do not roll back for an entity not in the World yet (it comes with the
+    // rollback that puts it back, R-8 A), written once it is there; by entity, (wire, bytes), the newest per wire.
+    std::map<Kernel::EntityId, std::vector<std::pair<std::uint16_t, std::vector<std::byte>>>> waitingDirect;
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const NetReplicaState&) {}
@@ -332,6 +353,13 @@ struct NetWorldLink final {
     Kernel::EntityId clientPeer = 0;
     bool clientEndReported = false;
     std::uint64_t reportedLinkFailures = 0;
+    // K3 (D-5): a client World with a rollback strategy. The replicated types the rollback Module rolls back (by wire
+    // id) go into its inbox; the others are written directly, as at K1. depth: the strategy's DefaultInputLength (the
+    // official strategy's depth), for dropping a value older than the confirmed point by more (0: none dropped).
+    bool rollsBack = false;
+    std::vector<bool> rollbackComponents;
+    std::vector<bool> rollbackResources;
+    std::uint32_t rollbackDepth = 0;
 };
 inline void HashValue(Kernel::Hasher&, const NetWorldLink&) {}
 
@@ -586,6 +614,19 @@ public:
             auto removed = world.template Remove<T>(id);
             return removed.has_value() && *removed;
         };
+        entry->toInbox = [decode = codec.decode](ReplicaWorld& world, Kernel::EntityId id, std::span<const std::byte> bytes,
+                                                 std::uint64_t tick) {
+            T value{};
+            NetReader reader(bytes);
+            if (!decode(reader, value) || reader.Remaining() != 0) return false;
+            (void)world.template Modify<Rollback::RollbackInbox>(
+                [&](Rollback::RollbackInbox& inbox) { inbox.template Value<T>(id, tick, std::move(value)); });
+            return true;
+        };
+        entry->removedToInbox = [](ReplicaWorld& world, Kernel::EntityId id, std::uint64_t tick) {
+            (void)world.template Modify<Rollback::RollbackInbox>(
+                [&](Rollback::RollbackInbox& inbox) { inbox.template Removed<T>(id, tick); });
+        };
         table_->registry.components.push_back(std::move(entry));
     }
 
@@ -666,6 +707,16 @@ public:
                 return ApplyOutcome::Failed;
             }
         };
+        if constexpr (std::is_same_v<R, V>) {
+            entry->toInbox = [decode = options.codec.decode](ReplicaWorld& world, std::span<const std::byte> bytes, std::uint64_t tick) {
+                std::optional<R> value{std::in_place};
+                NetReader reader(bytes);
+                if (!decode(reader, *value) || reader.Remaining() != 0) return false;
+                (void)world.template Modify<Rollback::RollbackInbox>(
+                    [&](Rollback::RollbackInbox& inbox) { inbox.template ResourceValue<R>(tick, std::move(*value)); });
+                return true;
+            };
+        }
         table_->registry.resources.push_back(std::move(entry));
     }
 

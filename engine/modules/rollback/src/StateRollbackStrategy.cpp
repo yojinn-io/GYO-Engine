@@ -20,6 +20,11 @@ namespace {
 
 using Ok = Base::Result<void, Kernel::KernelError>;
 
+// The inbox's authoritative values for one history column: a component's by entity, a resource's (R-8 F).
+const InboxColumnBase* AuthoritativeOf(const RollbackInbox& inbox, const ColumnHistoryBase& column) {
+    return column.IsResource() ? inbox.ResourceValuesOf(column.Key()) : inbox.ValuesOf(column.Key());
+}
+
 Kernel::KernelError Failed(std::string message) {
     return Kernel::KernelError(Kernel::KernelErrorCode::SystemFailed, std::move(message));
 }
@@ -186,10 +191,14 @@ Ok StateRollbackStrategy::Decide(DecideContext& context) {
             return;
         }
         bool differs = false;
-        const std::vector<Kernel::EntityId>& alive = *history.AliveAt(point);
+        const std::vector<Kernel::EntityId>& recorded = *history.AliveAt(point);
         static_cast<void>(world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
+            // The alive set at C with the caller's explicit entries and exits (R-8 A): one that differs from the
+            // recorded set is a reason to go back by itself.
+            const std::vector<Kernel::EntityId> alive = inbox.AliveWith(recorded, point);
+            differs = alive != recorded;
             for (const auto& column : history.columns) {
-                if (const InboxColumnBase* values = inbox.ValuesOf(column->Key())) {
+                if (const InboxColumnBase* values = AuthoritativeOf(inbox, *column)) {
                     differs = differs || column->Differs(point, *values, alive);
                 }
             }
@@ -218,17 +227,21 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
     Exclusive& world = context.World();
     const std::uint64_t target = context.Target();
     auto built = world.Modify<RollbackHistory>([&](RollbackHistory& history) -> std::optional<Kernel::RestoreSet> {
-        const std::vector<Kernel::EntityId>* alive = history.AliveAt(target);
-        if (alive == nullptr) return std::nullopt;
+        const std::vector<Kernel::EntityId>* recorded = history.AliveAt(target);
+        if (recorded == nullptr) return std::nullopt;
         Kernel::RestoreSet set;
-        set.Alive(*alive);
         static_cast<void>(world.Read<RollbackInbox>([&](const RollbackInbox& inbox) {
+            // R-8 A: an entity the caller said entered at or before target and did not exit is put back (spawned
+            // with its id when it is not there, its values from the inbox); one said to have exited is removed.
+            const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);
+            set.Alive(alive);
             for (const auto& column : history.columns) {
-                const InboxColumnBase* values = inbox.ValuesOf(column->Key());
-                column->AddTo(set, target, *alive, values);
+                const InboxColumnBase* values = AuthoritativeOf(inbox, *column);
+                column->AddTo(set, target, alive, values);
                 // The history at target agrees with the authority afterwards.
-                if (values != nullptr) column->Adopt(target, *values, *alive);
+                if (values != nullptr) column->Adopt(target, *values, alive);
             }
+            history.SetAliveAt(target, alive);
         }));
         return set;
     });

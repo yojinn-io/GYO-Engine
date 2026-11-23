@@ -497,19 +497,6 @@
    "expect": "OnServer\\(\\)\\ logic\\ does\\ not\\ run\\ at\\ the\\ client"
   },
   {
-   "id": "nt-k3-as-k2",
-   "what": "a client with a rollback strategy (K3) is built and treated as K2. Only it catches the refusal until step 4",
-   "guards": [
-    "net-module-declaration D-5"
-   ],
-   "file": "engine/modules/net/src/NetModule.cpp",
-   "find": "    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {",
-   "replace": "    if (false) {",
-   "target": "gyo_net_tests",
-   "cases": "replication: a client with a rollback strategy*",
-   "expect": "a\\ client\\ with\\ a\\ rollback\\ strategy\\ is\\ refused\\ until\\ step\\ 4\\ \\(NT\\-E5\\)"
-  },
-  {
    "id": "nt-input-not-held",
    "what": "a missing slot does not hold the last input (the default value is written). Only it catches hold-last",
    "guards": [
@@ -1023,6 +1010,104 @@
    "target": "gyo_net_tests",
    "cases": "module:*",
    "expect": "recheck\\ small\\ thing\\ b:\\ a\\ new\\ handshake's\\ salt\\ is\\ larger"
+  },
+  {
+   "id": "nt-k3-entered-missing",
+   "what": "K3 does not tell the rollback Module of the server's spawns (no Entered): the entities never come. Only it catches D-5's entries",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Entered(entity, tick); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+  },
+  {
+   "id": "nt-k3-exit-missing",
+   "what": "K3 does not tell the rollback Module of the server's despawns (no Exited). Only it catches D-5's exits",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Exited(entity, tick); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "an\\ entity\\ the\\ authority\\ removed\\ is\\ gone\\ at\\ the\\ client"
+  },
+  {
+   "id": "nt-k3-not-confirmed",
+   "what": "K3 writes no confirmed point: no rollback ever takes the server's values. Only it catches D-7 at K3",
+   "guards": [
+    "net-module-declaration D-7",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            Inbox(world, [point](Rollback::RollbackInbox& inbox) { inbox.ConfirmedThrough(point); });\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+  },
+  {
+   "id": "nt-k3-as-k1",
+   "what": "A client World with a rollback strategy is written as K1 (spawns, despawns and values directly; no confirmed point). Only it catches the K3 branch as a whole",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "    const RollingBack* rolling = rollsBack ? &rollingBack : nullptr;\n",
+   "replace": "    const RollingBack* rolling = nullptr;\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+  },
+  {
+   "id": "nt-k3-waiting-not-written",
+   "what": "A non-rolling-back component's value waiting for its entity is never written. Only it catches the waiting values",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        for (auto it = state.waitingDirect.begin(); it != state.waitingDirect.end();) {\n            if (!rolling->Alive(it->first)) {\n",
+   "replace": "        for (auto it = state.waitingDirect.begin(); it != state.waitingDirect.end();) {\n            if (true) {\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "K3:\\ a\\ replicated\\ component\\ that\\ does\\ not\\ roll\\ back\\ is\\ written\\ directly"
+  },
+  {
+   "id": "nt-k3-values-direct",
+   "what": "K3 writes a rolling-back component's value directly instead of into the inbox. Only it catches D-5's \"not in First\" for values",
+   "guards": [
+    "net-module-declaration D-5",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (rolling != nullptr && rolling->Component(wire)) {\n                // K3: into the inbox at the part's tick",
+   "replace": "            if (false) {\n                // K3: into the inbox at the part's tick",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
+  },
+  {
+   "id": "nt-k3-resource-direct",
+   "what": "K3 writes a rolling-back Resource with its apply instead of into the inbox. Only it catches Q8 (b) at K3",
+   "guards": [
+    "net-module-declaration Q8",
+    "net 13"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (rolling != nullptr && rolling->Resource(wire) && registry.resources[wire]->toInbox) {\n",
+   "replace": "        if (false) {\n",
+   "target": "gyo_net_tests",
+   "cases": "k3:*",
+   "expect": "G\\-10\\ three\\ steps\\ a\\ frame:\\ at\\ its\\ step\\ P\\ the\\ client's\\ Digest\\ equals\\ the\\ Match's"
   }
  ]
 }

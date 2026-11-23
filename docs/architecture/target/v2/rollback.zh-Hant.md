@@ -37,7 +37,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 
 重跑的每一步外面有一段 trace（經 Base 的門面，category `rollback`、name `resimulate`；回滾份 10.4）：祖先裡有 `span.rollback` 的段是重跑，第一次跑沒有這一層。不依賴 trace Module，不讀寫 World 的值。
 
-`RollbackInbox`（所有策略共用、World 的 Resource）：`Value<T>(entity, tick, value)`、`Removed<T>(entity, tick)`、`ConfirmedThrough(tick)`；`PartialValue`、`NotSent`、`Entered`、`Exited`、`FromEvent` 本批回 `RollbackFailure`（NotImplemented）。
+`RollbackInbox`（所有策略共用、World 的 Resource）：`Value<T>(entity, tick, value)`、`Removed<T>(entity, tick)`、`ConfirmedThrough(tick)`；〔實作，合併前核准定稿；網路 PR-2 閘口 1 的 G〕`Entered(entity, tick)`、`Exited(entity, tick)`、`ResourceValue<T>(tick, value)` 實作；`NotSent` 網路第 5 步；`PartialValue`、`FromEvent` 照舊回 `RollbackFailure`（NotImplemented；網路宣告第 13 節：不用）。
 
 ## Design Invariants
 
@@ -78,14 +78,14 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 - 比對與還原以（實體、元件、tick）為單位；入口帶這樣的權威值與「第 C 步以前收齊」的標記。
 - 官方策略的「判斷」用全域的確認點 C（MC-5 的 (a)）：C 前進時在 C 比，不同就回滾到 C；作者覆寫「判斷」可以做別的規則（只回滾收到新值的實體、回到最早的不一致），不另加掛點。
 - 晚到的權威值不靜默丟（MC-1）：照 lightyear，記進確認歷史，在 C 用「C 當時或之前最後的值」比。超過最大深度時放棄這次回滾，發 `RollbackAbandoned`（宣告 10.3：E3 用 World 的訊息告知，形狀照 `TimeDiscarded`）。
-  - 這條的前提（實作，第 4 步審查 1-1）：寫入的一方在說「第 C 步以前收齊」之前，把 C 以前每一次**改變**的值（和 `Removed`）都寫進入口；沒寫的就當成「從上一筆以後沒變」（lightyear 的增量複製也是這個前提）。只送一次、之後不再送的實體，在每個 C 都會拿最後那筆比。
-  - 比對與「權威值蓋在歷史上」只看 C 當時存活的實體（實作，審查 1-2）：實體存不存在跟著遊戲的生成與刪除走，指向這個 World 沒有的實體的值不當回滾的理由。
+  - 這條的前提（實作，第 4 步審查 1-1；〔實作，合併前核准定稿；網路 PR-2 閘口 1 的 B〕）：寫入的一方在說「第 C 步以前收齊」之前，把每個實體**在 C 當時的值**寫進入口（從它上一筆寫入以來有變的才要寫，`Removed` 同）；沒寫的就當成「從上一筆以後沒變」（lightyear 的增量複製也是這個前提）。**確認點只落在寫入的一方送了值的 tick 上**：中間沒送的 tick 不單獨確認，由下一個 C 一起涵蓋。只送一次、之後不再送的實體，在每個 C 都會拿最後那筆比。
+  - 比對與「權威值蓋在歷史上」只看 C 當時存活的實體（實作，審查 1-2）。〔實作，合併前核准定稿；網路 PR-2 閘口 1 的 A〕**呼叫者明說了進入、退出的實體照它算**：進入的 tick ≤ C、而且沒在 C 以前退出，就算存活。還原到 C 時，這樣的實體照入口的值放回，不在的就生成（用同一個編號）；在 C 以前退出的刪掉。沒明說的實體照遊戲的生成與刪除走：指向這個 World 沒有的實體的值不當回滾的理由。明說的存活和記下的存活集合不同，本身就是回滾的理由（實作）；還原時 C 的存活集合換成明說之後的（實作）。
   - 入口在 C 前進而不回滾時（一致、放棄、模式 Check 或 Disabled）也修剪，每個實體留「C 當時或之前最後的值」（實作，審查 1-3）。
-- 權威值有三態：有值、確定刪除、這份沒帶；實體的有效期間（進入、退出）由呼叫者明說，沒明說的一律當遊戲的生成與刪除（MC-3、SL-1、SL-2）。本批「這份沒帶」與明說的進入、退出回 NotImplemented。
+- 權威值有三態：有值、確定刪除、這份沒帶；實體的有效期間（進入、退出）由呼叫者明說，沒明說的一律當遊戲的生成與刪除（MC-3、SL-1、SL-2）。〔實作，合併前核准定稿；網路 PR-2 閘口 1 的 C〕明說的進入、退出（`Entered`、`Exited`）第 4 步實作；「這份沒帶」（`NotSent`）第 5 步實作。
 - 事件來源的權威值可寫進歷史，由作者選（MC-2）；本批回 NotImplemented。
 - 「確認點不得晚於還沒解開的差分」是給網路 Module 的需求（MC-4），不在本頁。
 
-守衛：`rollback strategy:` 的權威值、C 之前的值、`Removed`、一致不回滾、Disabled、入口修剪、不存活的實體、C 超前時等待、深度各案；`rollback checks: the four entries…`。突變：只認同一個 tick、入口不修剪、比對不看存活、超前不等、Disabled 無效。
+守衛：`rollback strategy:` 的權威值、C 之前的值、`Removed`、一致不回滾、Disabled、入口修剪、不存活的實體、C 超前時等待、深度各案；`rollback checks: the entries not made…`。〔實作，合併前核准定稿〕A：`rollback strategy: R-8 A:` 四案（進入的放回並在之後的回滾留著、C 之後才進入的不在、退出的在 C 刪掉、修剪留 C 當時或之前最後一筆）；F：`rollback strategy: R-8 F:`（不同就回滾、一致不回滾、C 之前的值與修剪）。突變：只認同一個 tick、入口不修剪、比對不看存活、超前不等、Disabled 無效；`rb-entered-not-restored`、`rb-lifecycle-not-a-difference`、`rb-entered-at-any-tick`、`rb-lifecycle-prune-drops-c`、`rb-resource-authority-ignored`、`rb-resource-not-adopted`。
 
 **跨 schedule 的訊息**（回滾份 7.1，`time-plan-two` (5) 兩個方向）：官方策略在啟動時查——步的 schedule 與巢狀 schedule 裡寫的 `Message` 不能有外面的讀者，讀的不能有外面的寫者（RB-E8）；只看 System 的掛載，hook 與 observer 由作者負責。守衛：`rollback checks: a message…`、`messages: the nested schedules…`；突變：兩個方向各一、巢狀 schedule 不算在內、hook 的寫算進來。
 
@@ -99,11 +99,11 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 ## 3. 本批的限界
 
 - 修正（`Correct`）的官方實作本批什麼都不做：比較函式以外的修正函式還沒有登記入口，畫面修正等 Client 那一批（實作）。
-- 存活集合整份放回（回滾份 5.5，7.4 說要寫進限制）：步外生成、只帶本機元件的實體，回滾到它出生之前會被刪掉且不會再生；步外刪掉的實體會以沒有元件的空殼回來。步外的生成與刪除要不要回滾，等 Client 那一批的實際需求（審查 1-4）。
-- 權威刪掉整個實體沒有入口：`Removed<T>` 只拿掉元件，Client 多預測出來的實體留著（`Exited` 本批回 NotImplemented；審查 1-2 的反方向）。
+- 存活集合整份放回（回滾份 5.5，7.4 說要寫進限制）：步外生成、只帶本機元件的實體，回滾到它出生之前會被刪掉且不會再生；步外刪掉的實體會以沒有元件的空殼回來。〔實作，合併前核准定稿；閘口 1 的 D〕網路寫進來的生成與刪除走 `Entered`、`Exited`（R-8 的明說），回滾不會刪掉它們。**本機**的步外生成與刪除照舊整份放回。
 - 只重跑第一張步的 schedule；步的 schedule 和時間 Module 的固定步 schedule 不同也不檢查（實作；目前只有一張）。
 - 記錄 System 掛在 `recordStage`，同一個 stage 裡比它晚跑的寫者、或那個 stage 的延後命令，會記到下一步：`recordStage` 要選步裡最後的 stage（預設 `Last`）。
 - Plan 的版本在一個 World 裡不變，換 Plan 就是換 World（R-5 的新歷史）；回滾份 7.5「Plan 版本變了歷史作廢」由此滿足，不另檢查。
 - C 早於這個 World 的第一筆記錄（剛換 World）時，也當「超過深度」放棄並發 `RollbackAbandoned`。
-- Resource 本批只從歷史還原，不收權威值（`RollbackInbox` 只有元件）。
+- 〔實作，合併前核准定稿；閘口 1 的 F〕入口收 Resource 的權威值：`ResourceValue<T>(tick, value)`。比對、「蓋在歷史上」、晚到、修剪的規則同元件，只是沒有實體。
+- 〔實作，合併前核准定稿；閘口 1 的 B〕確認點只落在送了值的 tick 上：作者覆寫「判斷」、想找「最早的不一致」時，看不到中間 tick 的權威值。
 - 「這份沒帶」不參加比對（不推成「沒變」）的規則已寫進條文，本批的入口回 NotImplemented。

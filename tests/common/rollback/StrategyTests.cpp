@@ -1119,3 +1119,122 @@ TEST_CASE("rollback strategy: a component input's entry that runs before the rol
                                                        << WorldOf(*straight).Get<Health>(id)->hp);
     }
 }
+
+// ---- R-8 A and F (the net Module's PR-2 gate 1): explicit entries and exits, and a resource's authoritative value.
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to enter at or before C is put back with its id and kept by later rollbacks") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // The authority spawned entity 77 at step 3 with Health 40; this World never had it (its history at 3 lacks it).
+    Inbox(*p).Entered(77, 3);
+    Inbox(*p).Value<Health>(77, 3, Health{40});
+    Inbox(*p).ConfirmedThrough(3);
+    Frames(*p, 1);
+    REQUIRE(TickOf(*p) == 10);
+    std::int32_t later = 0;
+    for (std::uint64_t t = 4; t <= 10; ++t) later += kScript[t];
+    REQUIRE_MESSAGE(WorldOf(*p).Alive(77), "[rb-entered-restored] the entity said to enter is not there");
+    CHECK_MESSAGE(WorldOf(*p).Get<Health>(77)->hp == 40 + later, "[rb-entered-restored] " << WorldOf(*p).Get<Health>(77)->hp);
+    // A later rollback (an authoritative value of entity 1 at step 6) keeps it: alive from step 3 on.
+    Inbox(*p).Value<Health>(1, 6, Health{1});
+    Inbox(*p).ConfirmedThrough(6);
+    Frames(*p, 1);
+    CHECK_MESSAGE(WorldOf(*p).Alive(77), "[rb-entered-kept] a later rollback took the entity said to enter");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to enter after C is not there at C") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    Inbox(*p).Entered(77, 8);
+    Inbox(*p).Value<Health>(77, 8, Health{40});
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    CHECK_MESSAGE(!WorldOf(*p).Alive(77), "[rb-entered-later-waits] entity 77 is there before step 8 is confirmed");
+}
+
+TEST_CASE("rollback strategy: R-8 A: an entity said to exit at or before C is removed at C and stays removed") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // No value differs: the exit alone is the reason to go back.
+    Inbox(*p).Exited(2, 4);
+    Inbox(*p).ConfirmedThrough(4);
+    StepsRun() = 0;
+    Frames(*p, 1);
+    CHECK_MESSAGE(StepsRun() > 1, "[rb-exited-differs] the exit alone did not go back: steps " << StepsRun());
+    CHECK_MESSAGE(!WorldOf(*p).Alive(2), "[rb-exited-removed] entity 2 is still there");
+    Frames(*p, 3);
+    CHECK_MESSAGE(!WorldOf(*p).Alive(2), "[rb-exited-removed] entity 2 came back");
+}
+
+TEST_CASE("rollback strategy: R-8 A: pruning the inbox keeps an entity's last entry or exit at or before C") {
+    R::RollbackInbox inbox;
+    inbox.Entered(5, 2);
+    inbox.Exited(5, 6);
+    inbox.Prune(7);
+    CHECK_MESSAGE((inbox.AliveAt(5, 8).has_value() && !*inbox.AliveAt(5, 8)), "[rb-lifecycle-prune-keeps-c] the exit was pruned");
+    CHECK(!inbox.AliveAt(9, 8).has_value());
+    const std::vector<K::EntityId> alive = inbox.AliveWith({1, 5, 9}, 8);
+    CHECK((alive == std::vector<K::EntityId>{1, 9}));
+}
+
+namespace {
+// A resource that rolls back: the step adds the Command to it.
+struct Tally {
+    std::int32_t sum = 0;
+    friend bool operator==(const Tally&, const Tally&) = default;
+};
+void HashValue(K::Hasher& h, const Tally& v) { HashValue(h, v.sum); }
+K::SystemResult AddUp(K::ResMut<Tally> tally, K::Res<Command> command) {
+    tally->sum += command->move;
+    return {};
+}
+void BuildTally(O::WorldSetup& s) {
+    Build(s);
+    s.Registrar().Resource<Tally>({.name = "Tally"});
+    R::RollbackEntry(s).Resource<Tally>();
+    s.Registrar().AddSystem<&AddUp>(In("AddUp", "FixedUpdate", "Update"));
+}
+std::unique_ptr<O::Product> MakeTally(O::OptionBag options) {
+    auto p = Make(std::move(options), &BuildTally);
+    WorldOf(*p).SetResource(Tally{});
+    return p;
+}
+} // namespace
+
+TEST_CASE("rollback strategy: R-8 F: a resource's authoritative value that differs goes back; one that agrees does not") {
+    SUBCASE("differs") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).ResourceValue<Tally>(5, Tally{1000});
+        Inbox(*p).ConfirmedThrough(5);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 6; t <= 10; ++t) later += kScript[t];
+        CHECK_MESSAGE(WorldOf(*p).Resource<Tally>()->sum == 1000 + later, "[rb-resource-adopted] " << WorldOf(*p).Resource<Tally>()->sum);
+    }
+    SUBCASE("agrees") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        std::int32_t at5 = 0;
+        for (std::uint64_t t = 1; t <= 5; ++t) at5 += kScript[t];
+        Inbox(*p).ResourceValue<Tally>(5, Tally{at5});
+        Inbox(*p).ConfirmedThrough(5);
+        StepsRun() = 0;
+        Frames(*p, 1);
+        CHECK_MESSAGE(StepsRun() == 1, "[rb-resource-agrees] steps run in the frame: " << StepsRun());
+    }
+    SUBCASE("a value before C counts at C, and the inbox keeps it after pruning") {
+        auto p = MakeTally(WithStrategy());
+        Frames(*p, 9);
+        Inbox(*p).ResourceValue<Tally>(4, Tally{500});
+        Inbox(*p).ConfirmedThrough(6);
+        Frames(*p, 1);
+        std::int32_t later = 0;
+        for (std::uint64_t t = 7; t <= 10; ++t) later += kScript[t];
+        CHECK_MESSAGE(WorldOf(*p).Resource<Tally>()->sum == 500 + later, "[rb-resource-before-c] " << WorldOf(*p).Resource<Tally>()->sum);
+        const auto* values = Inbox(*p).ResourceValues<Tally>();
+        REQUIRE(values != nullptr);
+        CHECK_MESSAGE(values->At(R::RollbackInbox::kResourceEntity, 6).has_value(), "[rb-resource-pruned-keeps-c]");
+    }
+}

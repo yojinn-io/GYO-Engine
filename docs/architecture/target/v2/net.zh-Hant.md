@@ -220,7 +220,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
   - Client：Resource `NetReplicaState`、訊息 `ServerWorldReplaced`、System `ApplyReplication`（`Main`／`First`，在 `ReceiveNet` 之後，`ExclusiveWorld`）、`NotifyReplica`（`Main`／`PreUpdate`）、每種伺服器訊息一個 `DeliverServerMessages:<名字>`（`Main`／`PreUpdate`）。
   - 有權威策略的 World：`ReplicateOut`、`ApplyReplication`、`DeliverServerMessages:*` 也標 `authority.OneEndOnly`（它們用 `ExclusiveWorld` 或寫遊戲的訊息，只在一端）。
   - 傳輸的通道由網路 Module 定：0 號 Ordered Reliable（結構更新、確認、伺服器訊息、resync）、1 號 Unreliable（值）。
-  - `Check`：Client 角色的 World 選了回滾策略（K3）是 `NT-E5`（「第 4 步才有」），不悄悄當成 K2。
+  - Client 角色的 World 選了回滾策略是 K3（第 13 節）。第 4 步之前的 `NT-E5`（「第 4 步才有」）已拿掉。
 
 ## 8. 複製（宣告 D-4、D-5、D-13、C-MS1）
 
@@ -325,7 +325,7 @@ Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, Fi
   - |誤差| > 1 tick 連續 3 次同方向：倍率 1.05（落後）或 1/1.05（超前）。
   - |誤差| ≤ 1 tick（死區＝lightyear 的 `error_margin`，也就是目標裡加的那一個 tick）：倍率 1。
   - 倍率寫進 `TimeSyncScale`，`AdvanceTime` 乘上產品的倍率。lightyear 的增益隨誤差加大（`1＋0.05×誤差÷10×2`）；這裡照主會話的卡片用固定的 1.05。
-- 跳之後，回滾照既有的規則（確認點早於第一筆記錄就放棄）；K3 在第 4 步。
+- 跳之後，回滾照既有的規則（確認點早於第一筆記錄就放棄）；K3 見第 13 節。
 
 ## 11. ECS 元件與 W-8（3b 修正）
 
@@ -348,17 +348,34 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 - **收**（Client 的 `ApplyReplication`，K1、K2）：和實體的值一樣，等那一則要的結構 tick 套用後才寫；比寫過的 tick 舊就丟（`StaleValue`）。寫用登記的 `apply`：
   - 預設（`V`＝`R`）：用 codec 把現值編碼、和收到的位元組比，相同就不寫（CCR-8，`resourceValuesUnchanged` 計數），不同就 `Modify`，Resource 不在就 `SetResource`。
   - 作者給的 `apply`：`Kernel::SystemResult(Kernel::ExclusiveWorld<>&, const V&)`，回 Err 時 World 照 Kernel 的錯誤停。作者的 `apply` 也先比、相同就不寫（CCR-8）。狀態機的兩個套用函式（`AdoptByRequest`、`AdoptByRequestSilent`，狀態機頁第 2 節）照這個形狀，經要求換值，生效在狀態的套用 System（預設 `PreUpdate` 之後），所以收到與生效在同一幀，比它早跑的 System 看到舊值。
-  - K3 照舊由 `NT-E5` 擋（第 4 步經回滾的入口）。
+  - K3：登記成可回滾的 Resource（值就是 Resource 本身時）寫回滾的入口 `ResourceValue`，其他照 `apply`（第 13 節）。
 - **狀態機與網路不互相依賴**：網路不連狀態機，狀態機只用 Kernel 的型別（狀態機 DI 8 的連結集只有 Kernel 與編排層）；產品在自己的 `build` 把兩者接起來。
 - **時間的 Resource 不複製**：它們每幀被寫，`Changed()` 恆為真，戳記每 tick 都新；每端各自走自己的時間（D-9）。作者不登記它們；不加守衛。
 - **計數**：`PeerLedger::resourceValuesSent`；`NetReplicaState::resourceValuesApplied`、`resourceValuesUnchanged`、`resourcesWritten`（每個 wire id 寫過的最新 tick）。
+
+## 13. 模擬又回滾的 Client（K3；宣告 D-5、D-7，第 4 步）
+
+〔實作，合併前核准定稿〕Client 角色、選了回滾策略的 World 是 K3。網路在準備 World 時，照回滾 Module 的 `RollbackRegistry` 記下哪些複製的元件、Resource 會回滾（`NetWorldLink::rollbackComponents`、`rollbackResources`），以及策略的 `DefaultInputLength()`（官方策略＝深度）。
+
+- **會回滾的元件**：值寫 `RollbackInbox::Value`、拿掉寫 `Removed`，tick 是那一則的 tick；**不在 `First` 直接加減**（回滾 R-2 前提 5）。
+- **伺服器生成、刪除的實體**：寫 `Entered`／`Exited`（回滾 R-8 的明說，網路 PR-2 閘口 1 的 A）。網路不在 `First` 生成或刪除實體：實體在確認點的回滾裡用同一個編號生成、照入口的值放回；之後的回滾不會刪掉它（記下的存活集合沒有它也一樣）。退出的實體在確認點的回滾裡刪掉。
+- **不會回滾的複製元件**：直接寫（同 K1）。實體還不在 World 時（等確認點的回滾放回）先留著（`NetReplicaState::waitingDirect`，每個 wire 留最新的），實體出現後的那一幀寫進去。
+- **複製的 Resource**：會回滾、而且上 wire 的值就是 Resource 本身的，寫 `ResourceValue`（閘口 1 的 F）；其他照第 12 節的 `apply`。
+- **確認點**（D-7）：第 C 個 tick 的值訊息全部處理過、而且它們要求的結構更新已套用（`NetReplicaState::latestConfirmed`）時，寫 `ConfirmedThrough(C)`。C 只落在伺服器送了值的 tick；伺服器一幀跑好幾步時只送最後一步（第 20 節 U4），C 跳著前進（閘口 1 的 B）。伺服器訊息不算。
+- **晚到的值**：比 C 舊的照樣寫進入口（MC-1：回滾在 C 用「C 當時或之前最後的值」）；比 C 還舊超過深度的丟掉，計 `ReplicaDrop::BeyondDepth`。K1、K2 的「比寫過的舊就不寫」不用在 K3 的回滾元件上。
+- **計數**：`NetReplicaState::inboxValues`、`inboxRemovals`、`inboxEntries`、`inboxExits`、`inboxConfirmed`。
+- **範圍的限界**：
+  - 伺服器換了 World（新的世代、tick 從頭算）時，入口的確認點不會往回走；K3 的 Client 要跟著換 World（`ServerWorldReplaced`，第 8 節）。
+  - 實體出現在確認點之後（約一個來回），不在伺服器生成的那一 tick 就出現；之後由預測補到現在。
+  - 遠端玩家的輸入本線不送（宣告 Q7），Client 上它們的輸入元件是預設值。
+- **守衛**：G-10（`net.k3`：確定性的 2D 樣本，最後 80 步輸入是預設值；Client 第 P 步的 `Digest` 等於 Match 的；網路生成的實體不被回滾刪掉；件數）、伺服器一幀三步、權威刪掉整個實體；突變 `nt-k3-*`。
 
 ## Design Invariants
 
 **草稿**（宣告第 12 節）。最終文字在合併前核准定稿。守衛欄寫 1a 已有的；綁實作方式的守衛（`gyo_expect_links` 等）在 scenario「伺服器＋兩個 Client」通過之後立（AGENTS §3「ガードを立てる時期」；宣告第 8 節）。
 
 <a id="nt-1"></a>
-**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）；Q8 (b) 在 (3) 加 Resource 的複製（第 12 節；實作，合併前核准定稿）。守衛（Q8）：`net.resource`、`net.statesync`；突變 `nt-resource-*`。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`、`nt-k3-as-k2`。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
+**NT-1 職責。** 網路 Module 的職責是：(1) 連線（握手、存活、斷線理由）；(2) 傳輸（標頭、ack、通道、分片）；(3) 複製（登記、結構與值、確認、帳本、可見性）；(4) 輸入的收送與緩衝、入口；(5) 伺服器訊息的收送；(6) 對時的量測與給時間 Module 的輸入；(7) 丟棄的計數。不存判定資料的副本、不回滾、不認得 Player、不認得特定產品。1a 有 (2)、(7)；1b 有 (1)（握手、存活、斷線理由，第 6 節）；第 2 步有 (3) 的登記、結構與值、確認、帳本（可見性在第 5 步）與 (5)（第 8 節）；3a 有 (4) 的輸入的收送、緩衝、入口與 (1) 的重連（第 9 節）；3b 有 (6) 對時的量測與給時間 Module 的輸入（第 10 節）；Q8 (b) 在 (3) 加 Resource 的複製（第 12 節；實作，合併前核准定稿）；第 4 步在 (3) 加 K3 的寫法（第 13 節；實作，合併前核准定稿）。守衛（第 4 步）：`net.k3` 三案；突變 `nt-k3-*`。守衛（Q8）：`net.resource`、`net.statesync`；突變 `nt-resource-*`。守衛（3b）：`net.clock` 兩案；突變 `nt-clock-*`。守衛：G-6（`net.input`）、G-9（`net.reconnect`）；突變 `nt-input-*`、`nt-held-fires-again`、`nt-reconnect-reuses-connection`。第 2 步的守衛：守衛：G-5（`net.replication`）、scenario（`net.scenario`）；突變 `nt-value-before-structure`、`nt-ledger-at-send`、`nt-empty-tick-not-sent`、`nt-ledger-not-advanced`、`nt-generation-unchecked`、`nt-removed-not-encoded`、`nt-resync-ignored`（`nt-k3-as-k2` 隨 NT-E5 拿掉在第 4 步退役，由 `nt-k3-as-k1` 接手）。1b 的守衛：G-3（`net.handshake`）、G-4（`net.liveness`）；突變 `nt-compare-*`、`nt-k1-compared`、`nt-challenge-unchecked`、`nt-admission-ignored`、`nt-request-min-size`、`nt-liveness-not-refreshed`、`nt-keepalive-with-data`、`nt-interrupt-at-threshold`、`nt-timeout-at-threshold`。
 
 <a id="nt-2"></a>
 **NT-2 一套內部協議。** Link 之上只有一種協議；Link 只有 bytes 與連線狀態。1a：`Link` 只有 `Send`、`Receive`；`UdpLink`、`MemoryLink` 換了上層不改（`net.transport` 用 `MemoryLink`、`net.link` 用 `UdpLink`，`Connection` 同一份）。

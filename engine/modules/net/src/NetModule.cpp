@@ -217,7 +217,11 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     const std::optional<IdRange> givenRange = role->idRange;
     const auto* authority = setup.Options<Authority::AuthorityOptions>();
     const bool strategy = authority != nullptr && authority->strategy != nullptr;
-    setup.Prepare([service, worldRole, givenRange, strategy, &table](Kernel::World& world)
+    // K3 (D-5): a client World with a rollback strategy writes what rolls back into the rollback Module's inbox.
+    const auto* rollbackOptions = setup.Options<Rollback::RollbackOptions>();
+    const std::shared_ptr<Rollback::RollbackStrategy> rollbackStrategy =
+        worldRole == NetRole::Client && rollbackOptions != nullptr ? rollbackOptions->strategy : nullptr;
+    setup.Prepare([service, worldRole, givenRange, strategy, rollbackStrategy, &table](Kernel::World& world)
                       -> Base::Result<void, Orchestration::OrchestrationError> {
         // Check reported a World with a role and no NetService (NT-E1): no World is built then.
         NetWorldLink link;
@@ -225,6 +229,19 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         link.role = worldRole;
         link.idRange = givenRange;
         link.registry = std::make_shared<const NetRegistry>(table.registry);
+        if (rollbackStrategy) {
+            link.rollsBack = true;
+            link.rollbackDepth = rollbackStrategy->DefaultInputLength();
+            const auto* rollback = world.Resource<Rollback::RollbackRegistry>();
+            for (const auto& entry : link.registry->components) {
+                const Rollback::DataRecord* record = rollback != nullptr ? rollback->Data(entry->key) : nullptr;
+                link.rollbackComponents.push_back(record != nullptr && record->kind == Rollback::DataKind::Component);
+            }
+            for (const auto& entry : link.registry->resources) {
+                const Rollback::DataRecord* record = rollback != nullptr ? rollback->Data(entry->key) : nullptr;
+                link.rollbackResources.push_back(record != nullptr && record->kind == Rollback::DataKind::Resource);
+            }
+        }
         if (strategy) {
             auto fingerprint = Authority::ConsistencyFingerprintOf(world);
             if (fingerprint) link.fingerprint = fingerprint->Text();
@@ -269,13 +286,6 @@ void NetModule::Check(const Kernel::FrozenRegistry&, Orchestration::WorldCheck& 
     }
     if (service->Role() != role->role) {
         context.Report("NT-E2", "World '" + context.WorldName() + "' has another net role than the Product's NetProductOptions");
-        return;
-    }
-    const auto* rollback = context.Options<Rollback::RollbackOptions>();
-    if (role->role == NetRole::Client && rollback != nullptr && rollback->strategy != nullptr) {
-        context.Report("NT-E5", "World '" + context.WorldName() +
-                                    "' is a client with a rollback strategy (K3): writing the server's values into the "
-                                    "rollback inbox comes with step 4 of the net Module; it is not treated as K2");
         return;
     }
     if (!service->Bind(context.WorldName())) {

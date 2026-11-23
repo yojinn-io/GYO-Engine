@@ -192,7 +192,7 @@
     "authority-rollback-declaration 5.5"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "        set.Alive(*alive);\n",
+   "find": "            set.Alive(alive);\n",
    "replace": "",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-2 with spawns*",
@@ -262,8 +262,8 @@
     "authority-rollback-declaration 5.5"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                column->AddTo(set, target, *alive, values);",
-   "replace": "                column->AddTo(set, target, *alive, nullptr);",
+   "find": "                column->AddTo(set, target, alive, values);",
+   "replace": "                column->AddTo(set, target, alive, nullptr);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: an authoritative value that differs*",
    "expect": "\\[rb\\-authority\\-adopted\\]"
@@ -781,8 +781,8 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
-   "find": "    static bool Same(Equal equal, const T& a, const T& b) {\n        if (equal != nullptr) return equal(a, b);",
-   "replace": "    static bool Same(Equal equal, const T& a, const T& b) {\n        static_cast<void>(equal);",
+   "find": "    };\n    static bool Same(Equal equal, const T& a, const T& b) {\n        if (equal != nullptr) return equal(a, b);",
+   "replace": "    };\n    static bool Same(Equal equal, const T& a, const T& b) {\n        static_cast<void>(equal);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: Differs compares at C*",
    "expect": "\\[rb\\-differs\\-registered\\-comparison\\]"
@@ -794,7 +794,7 @@
     "rollback R-8"
    ],
    "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
-   "find": "                if (values != nullptr) column->Adopt(target, *values, *alive);",
+   "find": "                if (values != nullptr) column->Adopt(target, *values, alive);",
    "replace": "                static_cast<void>(values);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8: the authoritative value is laid over*",
@@ -1103,6 +1103,84 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-2 with a component input*",
    "expect": "RB\\-E3"
+  },
+  {
+   "id": "rb-entered-not-restored",
+   "what": "A restore puts back the recorded alive set, not the one with the caller's entries and exits. Only it catches R-8 A's restore",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);\n",
+   "replace": "            const std::vector<Kernel::EntityId> alive = *recorded;\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-entered\\-restored\\]"
+  },
+  {
+   "id": "rb-lifecycle-not-a-difference",
+   "what": "An alive set the caller's entries and exits change is not a reason to go back by itself. Only it catches R-8 A's decision (an exit without a differing value)",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            differs = alive != recorded;\n",
+   "replace": "            differs = false;\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-exited\\-differs\\]"
+  },
+  {
+   "id": "rb-entered-at-any-tick",
+   "what": "An entry counts at any tick, also before the one said. Only it catches R-8 A's \"entered at or before C\"",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "        auto it = found->second.upper_bound(tick);\n",
+   "replace": "        auto it = found->second.end();\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-entered\\-later\\-waits\\]"
+  },
+  {
+   "id": "rb-lifecycle-prune-drops-c",
+   "what": "Pruning the inbox drops an entity's last entry or exit at or before C too. Only it catches the lifecycle's prune base",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/Inbox.hpp",
+   "find": "            while (entries.size() >= 2 && std::next(entries.begin())->first <= oldest) entries.erase(entries.begin());\n",
+   "replace": "            while (!entries.empty() && entries.begin()->first <= oldest) entries.erase(entries.begin());\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-lifecycle\\-prune\\-keeps\\-c\\]"
+  },
+  {
+   "id": "rb-resource-authority-ignored",
+   "what": "A resource's history is given no authoritative values (the inbox's resource values are not looked up). Only it catches R-8 F's lookup",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "    return column.IsResource() ? inbox.ResourceValuesOf(column.Key()) : inbox.ValuesOf(column.Key());\n",
+   "replace": "    return column.IsResource() ? nullptr : inbox.ValuesOf(column.Key());\n",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-resource\\-adopted\\]"
+  },
+  {
+   "id": "rb-resource-not-put-back",
+   "what": "A restore puts back a resource's recorded value, not the authoritative one. Only it catches R-8 F's restore",
+   "guards": [
+    "rollback R-8"
+   ],
+   "file": "engine/modules/rollback/include/engine/rollback/History.hpp",
+   "find": "        if (authoritative != nullptr) {\n            if (const auto wanted = static_cast<const InboxColumn<T>*>(authoritative)->At(RollbackInbox::kResourceEntity, tick)) {\n                value = *wanted;\n            }\n        }\n",
+   "replace": "",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy:*",
+   "expect": "\\[rb\\-resource\\-adopted\\]"
   }
  ]
 }

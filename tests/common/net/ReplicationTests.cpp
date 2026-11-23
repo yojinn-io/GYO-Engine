@@ -11,6 +11,7 @@
 #include "GameTestSupport.hpp"
 #include "NetTestSupport.hpp"
 #include "engine/net/MemoryLink.hpp"
+#include "engine/rollback/Registrations.hpp"
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
 namespace N = GYO::Engine::Net;
@@ -91,7 +92,7 @@ N::MemoryLinkSettings Lossy() {
 }
 
 std::string Drops(const N::NetReplicaState& state) {
-    const char* names[] = {"StaleGeneration", "StaleEpoch", "Malformed", "SpawnRejected", "MissingTarget", "StaleValue"};
+    const char* names[] = {"StaleGeneration", "StaleEpoch", "Malformed", "SpawnRejected", "MissingTarget", "StaleValue", "BeyondDepth"};
     std::string out;
     for (std::size_t i = 0; i < N::kReplicaDropCount; ++i) out += std::string(i ? " " : "") + names[i] + "=" + std::to_string(state.drops[i]);
     return out;
@@ -218,16 +219,22 @@ TEST_CASE("replication: two ends that replicate differently do not connect (Prot
     CHECK(seen[0].detail.find("protocol hash") != std::string::npos);
 }
 
-TEST_CASE("replication: a client with a rollback strategy (K3) is refused until step 4") {
+TEST_CASE("replication: a client with a rollback strategy (K3) is built (NT-E5 is gone with step 4)") {
     End client = GameEnd(N::NetRole::Client, {});
     client.net.link = std::make_shared<N::MemoryLink>(N::MemoryLink::Pair({}).second);
+    // A registration a rollback strategy takes (the sample game writes DoorOpened in the step and reads it outside:
+    // RB-E8); the K3 game itself is in RollbackClientTests.cpp.
+    client.build = [](O::WorldSetup& s) {
+        s.Registrar().Component<Position>({.name = "Position"});
+        N::NetEntry(s).Replicate<Position>("Position", PositionCodec());
+        GYO::Engine::Rollback::RollbackEntry(s).StepSchedule();
+    };
     auto description = Describe(client);
     GYO::Engine::Rollback::RollbackOptions rollback;
     rollback.strategy = std::make_shared<GYO::Engine::Rollback::StateRollbackStrategy>();
     description.worlds[0].options.Set(rollback);
     const auto built = O::Product::Build(std::move(description), Units(true));
-    const bool refused = !built && Reported(built).find("NT-E5") != std::string::npos;
-    CHECK_MESSAGE(refused, "a client with a rollback strategy is refused until step 4 (NT-E5)");
+    CHECK_MESSAGE(static_cast<bool>(built), "a client with a rollback strategy is built (K3): " << Reported(built));
 }
 
 namespace {
