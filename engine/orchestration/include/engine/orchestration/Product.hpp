@@ -182,8 +182,6 @@ private:
         // A DropOldFirst replacement dropped the old World and has not swapped yet (error
         // levels P12: an empty place is told apart from a broken one by this, not by guessing).
         bool replacing = false;
-        // O-E9 (a) was found for extractFrom: the World is not registered (only that error is reported).
-        bool extractFromRefused = false;
     };
     // One World's registration, built but not yet a World. Its prepare functions and ModuleBuffer live until the
     // prepare functions have run (O-2): the World's slot keeps neither.

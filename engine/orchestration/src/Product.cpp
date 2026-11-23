@@ -163,8 +163,8 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
         WorldDescription& world = description.worlds[index];
         // O-E9 (a) (O-12; v8-arch-gyo2-sdl-extract): extractFrom names a World described before this
         // one. Checked against the description itself, so a source that O-E6 drops below is not
-        // reported again here (the reader is then left unchecked at registration).
-        bool extractFromRefused = false;
+        // reported again here (the reader is then left unchecked at registration: its source is not
+        // before it among the slots).
         if (!world.extractFrom.empty()) {
             std::size_t at = describedNames.size();
             for (std::size_t other = 0; other < describedNames.size(); ++other) {
@@ -185,7 +185,6 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
                 errors.push_back({OrchestrationCode::OE9,
                                   "World " + Quoted(world.name) + ": extractFrom " + Quoted(world.extractFrom) + " " + problem,
                                   {world.name, world.extractFrom}});
-                extractFromRefused = true;
             }
         }
         if (!worldNames.insert(world.name).second) {
@@ -243,7 +242,6 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
             }
         }
         slot.description = std::move(world);
-        slot.extractFromRefused = extractFromRefused;
         self.worlds_.push_back(std::move(slot));
     }
 
@@ -293,12 +291,13 @@ Base::Result<std::unique_ptr<Product>, ProductStartupReport> Product::Build(Prod
         }
         // O-12: a World that extracts from another registers after it, with its Registry as the extract
         // source. Not registered (unchecked; the error that stops it is reported once, declaration Q1):
-        // its extractFrom was refused (O-E9), names a World O-E6 dropped, or names one that did not register.
+        // its extractFrom names no World before it among the slots (refused by O-E9, or dropped by O-E6),
+        // or one that did not register.
         const WorldSlot& slot = self.worlds_[i];
         const Kernel::Registry* source = nullptr;
         if (!slot.description.extractFrom.empty()) {
             const std::size_t at = self.ExtractSourceIndex(slot);
-            if (!slot.extractFromRefused && at < i) source = registrations[at].registry.get();
+            if (at < i) source = registrations[at].registry.get();
             if (source == nullptr) {
                 results.push_back(WorldStartupResult{slot.description.name, std::nullopt, true});
                 registrations.emplace_back();

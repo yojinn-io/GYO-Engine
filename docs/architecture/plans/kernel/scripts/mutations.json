@@ -7968,7 +7968,7 @@
     },
     {
       "id": "ex-reads-reader",
-      "what": "An Extract<Read<T>> handle reads the reading World instead of the source (DI-KS 36). No other mutant makes a handle read the wrong World.",
+      "what": "An Extract<Read<T>> handle reads the reading World instead of the source (DI-KS 36). ex-res-reads-reader is the same error in ExtractRes, another constructor.",
       "guards": [
         "kernel DI-KS 36",
         "kernel DI-KS 13"
@@ -8122,6 +8122,59 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 35: RunExtract reads KernelSettings when it starts and keeps its own DroppedMessages records",
       "expect": "XK\\-6:\\ one\\ DroppedMessages\\ record\\ per\\ RunExtract"
+    },
+    {
+      "id": "ex-res-reads-reader",
+      "what": "An ExtractRes handle reads the reading World instead of the source (DI-KS 36; mutant-list check M-1).",
+      "guards": [
+        "kernel DI-KS 36",
+        "kernel DI-KS 13"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ResourceIdOf(*source_, KeyOf<R>())) {}",
+      "replace": "        : Handle(call), source_(call.world), id_(Detail::ResourceIdOf(*source_, KeyOf<R>())) {}",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 35: RunExtract reads the source World's values*",
+      "expect": "XK\\-1:\\ the\\ extract\\ System\\ read\\ the\\ source"
+    },
+    {
+      "id": "ex-component-id-from-reader",
+      "what": "Extract<Read<T>> looks T up in the reading World's Registry, not the source's: the ids differ when the two Registries register in another order (DI-KS 36; mutant-list check M-2).",
+      "guards": [
+        "kernel DI-KS 36"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ComponentIdOf(*source_, KeyOf<T>())) {}",
+      "replace": "        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ComponentIdOf(*call.world, KeyOf<T>())) {}",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 36: Extract parameters look their types up in the source Registry",
+      "expect": "XK\\-8:\\ the\\ ids\\ are\\ the\\ source\\ Registry's"
+    },
+    {
+      "id": "ex-resource-id-from-reader",
+      "what": "ExtractRes looks R up in the reading World's Registry, not the source's (DI-KS 36; mutant-list check M-2).",
+      "guards": [
+        "kernel DI-KS 36"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Params.hpp",
+      "find": "        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ResourceIdOf(*source_, KeyOf<R>())) {}",
+      "replace": "        : Handle(call), source_(&Detail::ExtractSourceOf(call)), id_(Detail::ResourceIdOf(*call.world, KeyOf<R>())) {}",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 36: Extract parameters look their types up in the source Registry",
+      "expect": "XK\\-8:\\ the\\ ids\\ are\\ the\\ source\\ Registry's"
+    },
+    {
+      "id": "ks-de7-extract-condition-reported",
+      "what": "D-E7 reports a run condition with Extract parameters on an extract schedule too (the \"does not report\" half; mutant-list check M-11).",
+      "guards": [
+        "kernel DI-KS 35"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "                if (record == nullptr || record->options.extract) return;",
+      "replace": "                if (record == nullptr) return;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 35: a run condition with Extract parameters outside an extract schedule is D-E7",
+      "expect": "XK\\-7:\\ the\\ same\\ condition\\ on\\ an\\ extract\\ schedule"
     }
   ]
 }

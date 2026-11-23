@@ -227,6 +227,22 @@ TEST_CASE("extract: a source that did not register leaves the reader unchecked, 
     CHECK_MESSAGE(NotChecked(droppedBuilt.error(), "Render"), "[or-ex-reader-unchecked] O-E6: " << Describe(droppedBuilt));
 }
 
+TEST_CASE("extract: a reader after a World that was not registered still gets its own source") {
+    // The skipped World keeps its place in the registrations: the reader is given Sim's Registry, not Other's.
+    O::ProductDescription d;
+    d.name = "game";
+    d.worlds.push_back(Reader("Bad", "Nope"));
+    d.worlds.push_back(Sim());
+    O::WorldDescription other = World("Other", [](O::WorldSetup& s) { Basics(s.Registrar(), {Once("Step")}); }, {"Step"});
+    other.skeleton = O::ScheduleSkeleton::Off;
+    d.worlds.push_back(std::move(other));
+    d.worlds.push_back(Reader("Render", "Sim"));
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    REQUIRE_FALSE(static_cast<bool>(built));
+    CHECK(built.error().Count(O::OrchestrationCode::OE9) == 1);
+    CHECK_MESSAGE(built.error().KernelReportOf("Render") == nullptr, "[or-ex-registrations-aligned] " << Describe(built));
+}
+
 TEST_CASE("extract: RunSchedule on an extract schedule reads what the source has now") {
     Log().clear();
     auto built = O::Product::Build(Pair(), Units().Take());
@@ -251,7 +267,9 @@ TEST_CASE("extract: a replaced reader extracts again, beforeSwap included, in bo
         O::ReplaceRequest request;
         request.order = order;
         request.beforeSwap = {"Extract"};
-        REQUIRE(static_cast<bool>(p.ReplaceWorld("Render", std::move(request))));
+        const auto replaced = p.ReplaceWorld("Render", std::move(request));
+        REQUIRE_MESSAGE(static_cast<bool>(replaced),
+                        "[or-ex-replace-reader-registered] " << (replaced ? std::string() : replaced.error().message + ": " + replaced.error().detail));
         REQUIRE(static_cast<bool>(p.RunFrame()));
         CHECK_MESSAGE(Joined() == "extract n=1 | extract n=2", "[or-ex-replace-reader] " << Joined());
     }
@@ -292,7 +310,7 @@ TEST_CASE("extract: one source with two readers, and a reader of a reader") {
     d.worlds.push_back(Reader("Overlay", "Sim"));
     d.worlds.push_back(ChainReader("Chain", "Render"));
     auto built = O::Product::Build(std::move(d), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
+    REQUIRE_MESSAGE(static_cast<bool>(built), "[or-ex-two-readers-chain] " << Describe(built));
     REQUIRE(static_cast<bool>((*built)->RunFrame()));
     CHECK_MESSAGE(Joined() == "extract n=1 | extract n=1 | chain n=1", "[or-ex-two-readers-chain] " << Joined());
 }

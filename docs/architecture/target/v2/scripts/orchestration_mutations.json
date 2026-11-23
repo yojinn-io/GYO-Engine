@@ -3146,17 +3146,19 @@
   },
   {
    "id": "or-pbuf-worlds-forward",
-   "what": "~Product destroys the Worlds in description order instead of the reverse (5.2 point 5: a World extracting from another goes first). Only it catches the order between Worlds",
+   "what": "~Product destroys the Worlds in description order instead of the reverse (5.2 point 5: a World extracting from another goes first). Only it catches the order between Worlds. Joined (v8-arch-gyo2-sdl-extract, mutant-list check M-21): the extract case of a reader and its source (O-15, DI-KS 37)",
    "guards": [
     "orchestration O-2",
-    "exchange-declaration 5.2"
+    "exchange-declaration 5.2",
+    "orchestration O-15",
+    "kernel DI-KS 37"
    ],
    "file": "engine/orchestration/src/Product.cpp",
    "find": "    for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {",
    "replace": "    for (auto slot = worlds_.begin(); slot != worlds_.end(); ++slot) {",
    "target": "gyo_orchestration_tests",
-   "cases": "product-buffer: P-5*",
-   "expect": "\\[or\\-pbuf\\-order\\] ~exchange A ~world A ~exchange B ~world B"
+   "cases": "product-buffer: P-5*,extract: the reader World is destroyed before its source",
+   "expect": "(?=[\\s\\S]*(?:\\[or\\-pbuf\\-order\\] ~exchange A ~world A ~exchange B ~world B))[\\s\\S]*(?:\\[or\\-ex\\-destroy\\-order\\])"
   },
   {
    "id": "or-pbuf-exchange-after-world",
@@ -3879,6 +3881,61 @@
    "target": "gyo_orchestration_tests",
    "cases": "extract: the asserts: an extract schedule on a World without a source*",
    "expect": "\\[or\\-ex\\-assert\\-before\\-run\\]"
+  },
+  {
+   "id": "or-ex-source-index-wrong",
+   "what": "ExtractSourceIndex answers another slot (the first one) than the World extractFrom names (O-12; mutant-list check M-13): used by Build, RunWith, RunOn and ReplaceWorld.",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (worlds_[i].description.name == slot.description.extractFrom) return i;",
+   "replace": "        if (worlds_[i].description.name == slot.description.extractFrom) return 0;",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: one source with two readers*",
+   "expect": "\\[or\\-ex\\-two\\-readers\\-chain\\]"
+  },
+  {
+   "id": "or-ex-registrations-misaligned",
+   "what": "A World left unregistered takes no place in the registrations: a later reader is given another World's Registry (O-5 Q1, O-12; mutant-list check M-15).",
+   "guards": [
+    "orchestration O-5",
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "                registrations.emplace_back();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: a reader after a World that was not registered still gets its own source",
+   "expect": "\\[or\\-ex\\-registrations\\-aligned\\]"
+  },
+  {
+   "id": "or-ex-replace-reader-source-unset",
+   "what": "A replaced reader registers again without its source's Registry (O-8, O-12; mutant-list check M-16): or-ex-source-not-set is Register's own call, this is the replacement's lookup.",
+   "guards": [
+    "orchestration O-8",
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (!slot.description.extractFrom.empty()) source = worlds_[ExtractSourceIndex(slot)].registry.get();",
+   "replace": "        if (false) source = worlds_[ExtractSourceIndex(slot)].registry.get();",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: a replaced reader extracts again*",
+   "expect": "\\[or\\-ex\\-replace\\-reader\\-registered\\]"
+  },
+  {
+   "id": "or-ex-beforeswap-plain-run",
+   "what": "beforeSwap runs an extract schedule with Run, not RunExtract (O-8, O-12; mutant-list check M-17): or-ex-runon-plain-run changes RunWith itself, this is the replacement's call.",
+   "guards": [
+    "orchestration O-8",
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            auto ran = RunWith(*fresh, slot, schedule);",
+   "replace": "            auto ran = fresh->Run(schedule);",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: a replaced reader extracts again*",
+   "expect": "Run:\\ an\\ extract\\ schedule\\ runs\\ through\\ RunExtract"
   }
  ]
 }

@@ -39,6 +39,16 @@ void RegisterExtractData(Registrar& r) {
     r.Message<XDrop>({.name = "XDrop", .capacity = 1});
 }
 
+// The same types in another order: their ids in this Registry differ from the source's (XK-8).
+void RegisterExtractDataReversed(Registrar& r) {
+    r.Message<XDrop>({.name = "XDrop", .capacity = 1});
+    r.Message<XNote>({.name = "XNote"});
+    r.Resource<XOut>({.name = "XOut"});
+    r.Resource<XRes>({.name = "XRes"});
+    r.Component<XVel>({.name = "XVel"});
+    r.Component<XPos>({.name = "XPos"});
+}
+
 bool Done(const GYO::Engine::Base::Result<void, StartupReport>& result) { return static_cast<bool>(result); }
 bool Done(const GYO::Engine::Base::Result<void, KernelError>& result) { return static_cast<bool>(result); }
 
@@ -71,6 +81,14 @@ SystemResult CopyFromSource(Extract<Read<XPos>> pos, ExtractRes<XRes> res, Comma
     line += res.Present() ? " res:" + std::to_string(res->value) : std::string(" res:none");
     Seen().push_back(line);
     if (res.Present()) out->value = (*res).value;
+    return Ok();
+}
+
+// Reads one component and one resource of the source (XK-8).
+SystemResult ReadsPosAndRes(Extract<Read<XPos>> pos, ExtractRes<XRes> res) {
+    const XPos* five = pos.Get(5);
+    Seen().push_back("pos " + (five != nullptr ? std::to_string(five->x) : std::string("null")) +
+                     " res " + (res.Present() ? std::to_string(res->value) : std::string("none")));
     return Ok();
 }
 
@@ -205,6 +223,26 @@ TEST_CASE("DI-KS 36: RunExtract leaves the source World as it was") {
     CHECK_MESSAGE(source.GetWorld().Stamps<XPos>(3) == stampsBefore, "XK-2: the source cell's stamps are unchanged");
     CHECK(source.GetWorld().State() == WorldState::Ready);
     CHECK(reader.GetWorld().Get<XPos>(3) != nullptr);
+}
+
+TEST_CASE("DI-KS 36: Extract parameters look their types up in the source Registry") {
+    Seen().clear();
+    auto sourceRegistry = MakeSource();
+    auto reader = std::make_unique<Registry>();
+    reader->SetExtractSource(*sourceRegistry);
+    REQUIRE(Done(RegisterAll(*reader, {{"reader", [](Registrar& r) {
+                                           RegisterExtractDataReversed(r);
+                                           r.Schedule(ExtractSchedule());
+                                           r.AddSystem<&ReadsPosAndRes>(Sys("ReadsPosAndRes", {At("Extract", "Copy")}));
+                                       }}})));
+    WorldExecutor source(*sourceRegistry, "source");
+    WorldExecutor readerExecutor(*reader, "reader");
+    source.GetWorld().Insert(5, XPos{50});
+    source.GetWorld().Insert(5, XVel{70});
+    source.GetWorld().SetResource(XRes{11});
+    source.GetWorld().SetResource(XOut{22});
+    REQUIRE(static_cast<bool>(readerExecutor.RunExtract("Extract", source.GetWorld())));
+    CHECK_MESSAGE(Seen() == std::vector<std::string>{"pos 50 res 11"}, "XK-8: the ids are the source Registry's");
 }
 
 TEST_CASE("DI-KS 36: the read methods of Extract parameters") {
