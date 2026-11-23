@@ -236,17 +236,19 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 
 ## 6. 資產
 
+授權：使用者 2026-11-23「除了骨骼動畫，都是我自己做的。」（HANDOFF `v8-arch-gyo2-pvp-assets-license`）——master 記 `unrecorded` 的 8 個是使用者本人製作；骨骼動畫（UAL1）照 CC0。各檔跟著讀它的程式搬（model、A、asset 的接法），搬時把來源記錄改成這個決定。
+
 規則（`docs/object_fps_pvp/assets.zh-Hant.md` §8）：非 text 的項目要有來源記錄；text 由 git 歷史記錄。來源記錄在 `origin/master:tests/object_fps_pvp/asset_sources.json`。
 
 | 檔 | 大小 | 授權 | 狀態 |
 |---|---|---|---|
-| `animations/ual_mannequin/UAL1_Standard.fbx` | 23.8 MB | CC0（Universal Animation Library；`assets.zh-Hant.md` 附錄 A.3） | 授權可放；**大檔，要不要原樣進 git 待使用者定**（已轉主會話） |
-| `characters/player/Player_V20.fbx` | 0.83 MB | 使用者在 Blender 做的（2026-10-29 交付），授權 `unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` | 2.8 MB | 使用者交付（2026-10-29），`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/textures/Nailer1_D.png` | 1.3 MB | 由交付的 JPG 轉的，`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/viewmodel/textures/LowPoly_{Skin,Glove,Skin_Shadow}.png` | 各 74 B | 由交付的單色材質生成，`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/world/Nailer2_TPS.fbx` | 0.37 MB | 使用者在 Blender 做的（2026-10-31），`unrecorded` | **待使用者確認** |
-| `weapons/nailer_v2/world/textures/Nailer2_D.png` | 1.25 MB | 由 FBX 內嵌的 JPG 轉的，`unrecorded` | **待使用者確認** |
+| `animations/ual_mannequin/UAL1_Standard.fbx` | 23.8 MB | CC0（Universal Animation Library；`assets.zh-Hant.md` 附錄 A.3） | 可放；原樣進 git（主會話判，比照 Object_Connect 音訊的先例，`v8-arch-gyo2-pvp-assets-license`） |
+| `characters/player/Player_V20.fbx` | 0.83 MB | 使用者在 Blender 做的（2026-10-29 交付），授權 `unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` | 2.8 MB | 使用者交付（2026-10-29），`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/textures/Nailer1_D.png` | 1.3 MB | 由交付的 JPG 轉的，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/viewmodel/textures/LowPoly_{Skin,Glove,Skin_Shadow}.png` | 各 74 B | 由交付的單色材質生成，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/world/Nailer2_TPS.fbx` | 0.37 MB | 使用者在 Blender 做的（2026-10-31），`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
+| `weapons/nailer_v2/world/textures/Nailer2_D.png` | 1.25 MB | 由 FBX 內嵌的 JPG 轉的，`unrecorded` | 使用者本人製作，可放（`v8-arch-gyo2-pvp-assets-license`） |
 | `audio/{gun_shoot,gun_reload,hit_flesh,player_footstep}.wav` | 共 350 KB（48 kHz、PCM16、stereo） | 使用者自己的混音（2026-10-30 使用者的話） | 可放（等 A 與 asset 的接法時搬） |
 | `fonts/BIZUDPGothic-Regular.ttf` | 4.5 MB | SIL OFL 1.1 | 可放；要一起帶授權文字（Object_Connect 也用同一個字型，可共用一份，搬時判） |
 | `maps/*.json`、`maps/*.voxel_mesh.json`（biome 1.4 MB、其餘各 23 KB） | 1.5 MB | 產品自己的資料（text） | 可放；讀法等 PV8 |
