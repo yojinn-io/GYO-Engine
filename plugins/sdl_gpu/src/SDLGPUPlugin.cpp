@@ -44,6 +44,7 @@ public:
             lastFailure_ = device_->LastError();
             break;
         }
+        if (!tally.lastRefusal.empty()) lastFailure_ = tally.lastRefusal;
         refusedAsks_ += tally.refusedAsks;
         skippedDraws_ += tally.skippedDraws;
         unmappedPasses_ += tally.unmappedPasses;
@@ -51,6 +52,7 @@ public:
     // The number of a newly prepared World.
     std::uint64_t NextWorld() noexcept { return ++preparedWorlds_; }
     void Shutdown() { device_.reset(); }
+    [[nodiscard]] std::size_t TextureCount() const noexcept { return device_ ? device_->TextureCount() : 0; }
 
     std::uint64_t shown_ = 0;
     std::uint64_t skipped_ = 0;
@@ -102,6 +104,7 @@ std::uint64_t SDLGPUStatus::RefusedTextureAsks() const { return service_->refuse
 std::uint64_t SDLGPUStatus::SkippedDraws() const { return service_->skippedDraws_; }
 std::uint64_t SDLGPUStatus::UnmappedPasses() const { return service_->unmappedPasses_; }
 const std::string& SDLGPUStatus::DriverName() const { return service_->driver_; }
+std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
 
 SDLGPUPlugin::SDLGPUPlugin() = default;
 SDLGPUPlugin::~SDLGPUPlugin() = default;

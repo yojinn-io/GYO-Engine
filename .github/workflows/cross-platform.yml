@@ -131,7 +131,7 @@ jobs:
           # sources. A change of the tool alone restores the build of the same pins
           # (restore-keys): DXC and the rest are up to date there and only the tool
           # is built again; new pins build everything.
-          key: shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/**', 'plugins/sdl_gpu/src/adapters/sdl/ShaderTool.cpp', 'plugins/sdl_gpu/CMakeLists.txt') }}
+          key: shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/**', 'plugins/sdl_gpu/src/adapters/sdl/ShaderTool.cpp', 'engine/core/os/cmake/GyoProcessCodePage.cmake') }}
           restore-keys: |
             shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-
 

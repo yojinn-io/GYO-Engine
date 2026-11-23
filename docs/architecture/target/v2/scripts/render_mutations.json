@@ -14,7 +14,7 @@
    "replace": "    const float sy = 2.0F / view.height;",
    "target": "gyo_render_tests",
    "cases": "render: the view*",
-   "expect": "\\[rd\\-clip\\-top\\-left\\]"
+   "expect": "\\[rd\\-clip\\-bottom\\-right\\]"
   },
   {
    "id": "rd-clip-origin-ignored",
@@ -131,7 +131,7 @@
    "replace": "    std::uint32_t next_ = 0;",
    "target": "gyo_render_tests",
    "cases": "render: texture ids*",
-   "expect": "\\[rd\\-tex\\-first\\-id\\]"
+   "expect": "\\[rd\\-tex\\-first\\-id\\]|GYO_ASSERT failed: .*every texture id has been given"
   },
   {
    "id": "rd-tex-reuse",
@@ -388,7 +388,7 @@
     "render section 3"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                SDL_ReleaseGPUTexture(device, it->second.texture);\n                textures.erase(it);\n",
+   "find": "                frame.released.push_back(it->second.texture);\n                textures.erase(it);\n",
    "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a texture*",
@@ -419,6 +419,58 @@
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a pass clears*",
    "expect": "\\[gp\\-clear\\]"
+  },
+  {
+   "id": "gp-filter-nearest-always",
+   "what": "a Linear texture is sampled nearest",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "t->filter == R::TextureFilter::Nearest ? nearest : linear",
+   "replace": "nearest",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a Linear*",
+   "expect": "\\[gp\\-linear\\-between\\]"
+  },
+  {
+   "id": "gp-world-no-forget",
+   "what": "a new World keeps the old World textures (ids collide)",
+   "guards": [
+    "sdl sdl_gpu"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "            device_->ForgetTextures();\n            drawingWorld_ = world;",
+   "replace": "            drawingWorld_ = world;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu frames:*",
+   "expect": "\\[gp\\-world\\-new\\-forgets\\]"
+  },
+  {
+   "id": "gp-world-forget-always",
+   "what": "the textures are forgotten every frame",
+   "guards": [
+    "sdl sdl_gpu"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "        if (world != drawingWorld_) {",
+   "replace": "        if (true) {",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu frames:*",
+   "expect": "\\[gp\\-frames\\-texture\\]"
+  },
+  {
+   "id": "gp-world-one-number",
+   "what": "every prepared World gets the same number",
+   "guards": [
+    "sdl sdl_gpu"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "    std::uint64_t NextWorld() noexcept { return ++preparedWorlds_; }",
+   "replace": "    std::uint64_t NextWorld() noexcept { return 1; }",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu frames:*",
+   "expect": "\\[gp\\-world\\-new\\-forgets\\]"
   }
  ]
 }

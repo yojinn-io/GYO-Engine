@@ -29,7 +29,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 | `target` | 畫到哪個目標，用 `camera` 的 id 空間（`CameraTarget::id`）：0 是主目標（有視窗時是視窗）。其他 id 對到什麼是後端的事；R2a 的 `sdl_gpu` 只對 0，別的 pass 不畫、計數 |
 | `clear` | 先清成這個顏色。某個目標這一幀的第一個 pass 沒給時清成透明黑（視窗的畫面在幀開始時是未定的）；之後的 pass 沒給就疊在已有的畫面上 |
 | `view` | 拉滿整個目標的那個矩形（view 單位，y 向下）。沒給＝目標自己的像素（1 單位＝1 像素、原點在左上角的像素） |
-| `vertices`、`indices` | 這個 pass 所有 draw 的頂點與索引各一份（Dear ImGui 的 draw list 原樣交得進來）。`Vertex2D`＝位置、uv、顏色（20 bytes） |
+| `vertices`、`indices` | 這個 pass 所有 draw 的頂點與索引各一份。`Vertex2D`＝位置、uv、顏色（20 bytes，和 Dear ImGui 的 `ImDrawVert` 同一排法）；索引是 32 位元——ImGui 預設的 `ImDrawIdx` 是 16 位元，K 定 `#define ImDrawIdx unsigned int` 或轉換；ImGui 的 `ImDrawCallback`（draw 之間插自己的指令）表達不了，K 用到時再定 |
 | `draws` | 照順序畫；後面的蓋在前面的上面。`Draw2D`＝貼圖、混合、裁切、`indexOffset`／`indexCount`／`vertexOffset`（索引加 `vertexOffset` 指到這個 pass 的頂點） |
 
 - **座標**：view 單位、y 向下；uv (0,0) 是貼圖的左上角、(1,1) 是右下角，和 `image` 的 `ImageData` 一樣（第 0 列在最上面、不翻轉；I #301 交來的約定）。**上下只在 `ViewToClip` 轉一次**（y 向下的 view → y 向上的 clip space；SDL_GPU 的 NDC、viewport、貼圖座標各後端已經統一，`SDL_gpu.h` 的 Coordinate System 一節），uv 不轉（master 坑 17 的單一邊界）。
@@ -38,6 +38,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 - **裁切**：`clip`（view 單位）讓**中心在裡面**的像素通過——左、上邊含，右、下邊不含（光柵化自己的規則，所以對齊整像素的裁切是精確的），再切到目標裡（`ClipToPixels`）。沒給＝整個目標。
 - **白貼圖**：`TextureId{}`（0）一直都在、不建也不放，畫出來就是頂點色（不貼圖的純色形狀，Object_Connect 盤點的 R2a 項）。
 - **R2a 不帶的欄位**：總宣告 P27 列的 shader id、實例數——沒有消費者（2D pass 只有一組內建 shader、沒有實例），R2b（3D、自訂 shader）有需要時加。頂點色以外的 tint、相機、視區也是 R2b。
+- **幀時間的預算**（總宣告第 10.2 節 R2a 列「幀時間的預算先宣告」）：Object_Connect 大小的一幀——1280×720、一個 pass、2,000 個各自一次 draw 的半透明矩形——經 `sdl_gpu` 的 `Capture`（套用、上傳、畫、讀回並等 GPU，比畫到視窗多了讀回）**8 ms 以內**（60 Hz 一幀的一半）。量法：`sdl_gpu.budget`（label `gpu`，只印、不判：GPU 與 driver 決定它，Lavapipe 比任何玩家的 GPU 都慢）。本機（macOS Intel、Metal、不開 SDL 的驗證）2026-11-24 量三次：4.89、4.97、5.25 ms。超過時看 RC-RD 2。
 - **契約**：draw 的索引範圍超出 pass 的 `indices` 是 Programmer Error（後端斷言）；索引值指到 pass 外的頂點不檢查（每個索引都查是逐值的守衛，Bevy／wgpu 也不查；由寫的一方保證）。
 
 ## 3. `RenderTextures`：CPU 像素的貼圖（id 由資料這一側配）
@@ -92,7 +93,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 
 ## 範囲の限界
 
-- 只有 2D pass、只有內建的一組 shader；shader id、實例數、相機、視區、合成、3D 在 R2b。
+- 只有 2D pass、只有內建的一組 shader；shader id、實例數、相機、視區、合成、3D 在 R2b。R2b 的幀時間預算（3D、合成）在 R2b 另宣告。
 - 顏色照 bytes 混合（sRGB 編碼的值直接線性內插）：半透明的邊緣比線性空間混合暗一點，同 ImGui 與多數 2D 引擎；R2b 帶 3D 時重看（RC-RD 3）。
 - 貼圖只有 RGBA8；沒有 mipmap、沒有壓縮格式、沒有渲染到貼圖（R2b 的合成、疊層需要時加）。
 - 一個 Product 只有一個 World 列 `sdl_gpu`（一個視窗、一張貼圖表）；多個渲染 World 各有一個 `GPUSubmit` 時一個視窗一幀只能送出一次——沒有點名的 Feature，有了再定（總宣告第 10.2 節 R2a 列）。

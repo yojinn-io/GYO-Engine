@@ -72,8 +72,8 @@ struct TextureRelease final {
 
 using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease>;
 
-// render_world's Resource. The asks of a frame stay until render_world clears them at the start of the next frame;
-// a backend reads them in order before it draws. Ids are never given twice.
+// render_world's Resource. The asks of a frame stay until render_world clears them after the frame was drawn (its
+// Cleanup stage); a backend reads them in order before it draws. Ids are never given twice.
 class RenderTextures final {
 public:
     // A new texture with these pixels. A zero width or height, or pixels of another size, is a Programmer Error.
@@ -89,7 +89,7 @@ public:
     [[nodiscard]] std::size_t LiveCount() const noexcept { return live_.size(); }
     // This frame's asks, in the order they were made.
     [[nodiscard]] std::span<const TextureOp> Pending() const noexcept { return pending_; }
-    // render_world, at the start of each frame.
+    // render_world, after each frame was drawn (Cleanup).
     void ClearPending() noexcept { pending_.clear(); }
 
 private:

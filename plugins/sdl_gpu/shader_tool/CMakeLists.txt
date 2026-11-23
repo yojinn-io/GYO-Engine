@@ -66,5 +66,7 @@ if(BUILD_TESTING AND GYO_RENDER_SHADER_DIR)
                 --shader pass2d.vert vertex "${GYO_RENDER_SHADER_DIR}/pass2d.vert.hlsl")
     set_tests_properties(sdl_gpu.shader_tool.compiles sdl_gpu.shader_tool.rejects sdl_gpu.shader_tool.unknown_format
         PROPERTIES LABELS "shader" TIMEOUT 300)
-    set_tests_properties(sdl_gpu.shader_tool.rejects sdl_gpu.shader_tool.unknown_format PROPERTIES WILL_FAIL TRUE)
+    # The refusals are judged by the tool's own text (any other failure of the tool is not a refusal).
+    set_tests_properties(sdl_gpu.shader_tool.rejects PROPERTIES PASS_REGULAR_EXPRESSION "gyo_sdl_gpu_shader_tool: .*broken\\.frag\\.hlsl to SPIR-V")
+    set_tests_properties(sdl_gpu.shader_tool.unknown_format PROPERTIES PASS_REGULAR_EXPRESSION "gyo_sdl_gpu_shader_tool: unknown format glsl")
 endif()

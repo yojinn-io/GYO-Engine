@@ -21,6 +21,7 @@
 // One World of a Product lists sdl_gpu (one window, one texture table): a second World that draws is not named by any
 // Feature yet (SDL declaration section 10.2, R2a).
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -40,16 +41,19 @@ public:
     [[nodiscard]] std::uint64_t FramesShown() const;
     // Frames the window gave no picture for (minimized, hidden): nothing drawn, the texture asks applied.
     [[nodiscard]] std::uint64_t FramesSkipped() const;
-    // Frames SDL refused a step of; LastFailure() is the last refusal's text.
+    // Frames SDL refused a step of. LastFailure(): SDL's text for the last refused frame, texture or pipeline.
     [[nodiscard]] std::uint64_t FramesFailed() const;
     [[nodiscard]] const std::string& LastFailure() const;
-    // Texture asks SDL refused (that texture has no GPU texture), draws skipped because their texture has none, passes
-    // whose target is not mapped (only target 0, the window, is).
+    // Texture asks SDL refused (that texture has no GPU texture; also the textures made in a frame whose uploads
+    // failed), draws skipped (their texture has no GPU texture, or their pipeline could not be made), passes whose
+    // target is not mapped (only target 0, the window, is).
     [[nodiscard]] std::uint64_t RefusedTextureAsks() const;
     [[nodiscard]] std::uint64_t SkippedDraws() const;
     [[nodiscard]] std::uint64_t UnmappedPasses() const;
     // The GPU driver SDL chose ("vulkan", "direct3d12", "metal").
     [[nodiscard]] const std::string& DriverName() const;
+    // The textures of render's asks that have a GPU texture now (the white one not counted).
+    [[nodiscard]] std::size_t TextureCount() const;
 
 private:
     Service* service_;

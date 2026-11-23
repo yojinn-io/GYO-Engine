@@ -28,7 +28,7 @@ using Bytes = std::vector<std::uint8_t>;
 
 [[noreturn]] void Fail(const std::string& message) { throw std::runtime_error(message); }
 
-std::string SdlError() {
+std::string SDLError() {
     const char* text = SDL_GetError();
     return text != nullptr && *text != '\0' ? std::string(text) : std::string("(SDL gave no text)");
 }
@@ -36,7 +36,7 @@ std::string SdlError() {
 Bytes Read(const std::string& path) {
     std::size_t size = 0;
     void* data = SDL_LoadFile(path.c_str(), &size);
-    if (data == nullptr) Fail("cannot read " + path + ": " + SdlError());
+    if (data == nullptr) Fail("cannot read " + path + ": " + SDLError());
     const auto* first = static_cast<const std::uint8_t*>(data);
     Bytes bytes(first, first + size);
     SDL_free(data);
@@ -44,16 +44,21 @@ Bytes Read(const std::string& path) {
 }
 
 void Write(const std::string& path, const void* data, const std::size_t size) {
-    if (!SDL_SaveFile(path.c_str(), data, size)) Fail("cannot write " + path + ": " + SdlError());
+    if (!SDL_SaveFile(path.c_str(), data, size)) Fail("cannot write " + path + ": " + SDLError());
 }
 
-// Writes next to the destination, then renames: a failed run leaves the old output whole.
+// Writes next to the destination (its directory made first), then renames: a failed run leaves the old output whole.
 void Publish(const std::string& path, const std::string& text) {
+    const std::size_t slash = path.find_last_of("/\\");
+    if (slash != std::string::npos && slash > 0) {
+        const std::string directory = path.substr(0, slash);
+        if (!SDL_CreateDirectory(directory.c_str())) Fail("cannot make " + directory + ": " + SDLError());
+    }
     const std::string temporary = path + ".tmp";
     Write(temporary, text.data(), text.size());
     if (!SDL_RenamePath(temporary.c_str(), path.c_str())) {
         static_cast<void>(SDL_RemovePath(temporary.c_str()));
-        Fail("cannot publish " + path + ": " + SdlError());
+        Fail("cannot publish " + path + ": " + SDLError());
     }
 }
 
@@ -63,14 +68,14 @@ void Run(const std::vector<std::string>& arguments) {
     for (const std::string& argument : arguments) argv.push_back(argument.c_str());
     argv.push_back(nullptr);
     const SDL_PropertiesID properties = SDL_CreateProperties();
-    if (properties == 0) Fail("cannot make process properties: " + SdlError());
+    if (properties == 0) Fail("cannot make process properties: " + SDLError());
     SDL_SetPointerProperty(properties, SDL_PROP_PROCESS_CREATE_ARGS_POINTER, argv.data());
     SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDIN_NUMBER, SDL_PROCESS_STDIO_NULL);
     SDL_SetNumberProperty(properties, SDL_PROP_PROCESS_CREATE_STDOUT_NUMBER, SDL_PROCESS_STDIO_APP);
     SDL_SetBooleanProperty(properties, SDL_PROP_PROCESS_CREATE_STDERR_TO_STDOUT_BOOLEAN, true);
     SDL_Process* process = SDL_CreateProcessWithProperties(properties);
     SDL_DestroyProperties(properties);
-    if (process == nullptr) Fail("cannot start " + arguments.front() + ": " + SdlError());
+    if (process == nullptr) Fail("cannot start " + arguments.front() + ": " + SDLError());
     int exitCode = -1;
     std::size_t size = 0;
     void* output = SDL_ReadProcess(process, &size, &exitCode);
@@ -85,7 +90,7 @@ void Run(const std::vector<std::string>& arguments) {
 }
 
 Bytes TakeCompilerOutput(void* memory, const std::size_t size, const std::string& what) {
-    if (memory == nullptr || size == 0) Fail(what + ": " + SdlError());
+    if (memory == nullptr || size == 0) Fail(what + ": " + SDLError());
     const auto* first = static_cast<const std::uint8_t*>(memory);
     Bytes bytes(first, first + size);
     SDL_free(memory);
@@ -207,17 +212,17 @@ SDL_ShaderCross_SPIRV_Info SpirvInfo(const Bytes& spirv, const Shader& shader) {
 Compiled Metallib(const Bytes& spirv, const Shader& shader, const Options& options) {
     SDL_ShaderCross_SPIRV_Info info = SpirvInfo(spirv, shader);
     const SDL_PropertiesID properties = SDL_CreateProperties();
-    if (properties == 0) Fail("cannot make properties: " + SdlError());
+    if (properties == 0) Fail("cannot make properties: " + SDLError());
     SDL_SetStringProperty(properties, SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING, "2.0.0");
     info.props = properties;
     void* memory = SDL_ShaderCross_TranspileMSLFromSPIRV(&info);
     SDL_DestroyProperties(properties);
-    if (memory == nullptr) Fail(shader.path + " to Metal source: " + SdlError());
+    if (memory == nullptr) Fail(shader.path + " to Metal source: " + SDLError());
     const std::string msl(static_cast<const char*>(memory));
     SDL_free(memory);
     // SPIRV-Cross renames the entry point "main", a reserved name in Metal.
     if (msl.find("main0(") == std::string::npos) Fail(shader.path + ": the Metal source has no entry point main0");
-    if (!SDL_CreateDirectory(options.work.c_str())) Fail("cannot make " + options.work + ": " + SdlError());
+    if (!SDL_CreateDirectory(options.work.c_str())) Fail("cannot make " + options.work + ": " + SDLError());
     const std::string base = options.work + "/" + shader.name;
     const std::string metal = base + ".metal";
     const std::string air = base + ".air";
@@ -238,7 +243,7 @@ Result CompileShader(const Shader& shader, const Options& options) {
     result.shader = &shader;
     const Bytes spirv = CompileSpirv(shader, options);
     SDL_ShaderCross_GraphicsShaderMetadata* metadata = SDL_ShaderCross_ReflectGraphicsSPIRV(spirv.data(), spirv.size(), 0);
-    if (metadata == nullptr) Fail(shader.path + ": cannot read what the shader uses: " + SdlError());
+    if (metadata == nullptr) Fail(shader.path + ": cannot read what the shader uses: " + SDLError());
     result.resources = metadata->resource_info;
     SDL_free(metadata);
     for (const std::string& format : options.formats) {
@@ -309,7 +314,7 @@ std::string Source(const std::vector<Result>& results) {
 int main(int argc, char** argv) {
     try {
         const Options options = Parse(argc, argv);
-        if (!SDL_ShaderCross_Init()) Fail("SDL_ShaderCross_Init: " + SdlError());
+        if (!SDL_ShaderCross_Init()) Fail("SDL_ShaderCross_Init: " + SDLError());
         std::vector<Result> results;
         for (const Shader& shader : options.shaders) results.push_back(CompileShader(shader, options));
         SDL_ShaderCross_Quit();

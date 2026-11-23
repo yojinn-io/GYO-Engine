@@ -76,18 +76,22 @@ struct FrameTally final {
     // Texture asks SDL refused (a texture too large, no memory): the id has no GPU texture; draws naming it are
     // skipped.
     std::uint64_t refusedAsks = 0;
-    // Draws skipped: their texture has no GPU texture.
+    // Draws skipped: their texture has no GPU texture, or their pipeline could not be made.
     std::uint64_t skippedDraws = 0;
     // Passes whose target has no picture here (the window is target 0; nothing else is mapped yet).
     std::uint64_t unmappedPasses = 0;
+    // SDL's text for the last refusal of this frame (a texture, a pipeline); empty when none.
+    std::string lastRefusal;
 };
 
 class GPUDevice final {
 public:
     // Starts SDL's video (with GYO's hints, as sdl_window does), makes the GPU device for the formats the shaders were
     // compiled to, claims the window when one is given (nullptr: a device without a window, which draws only to
-    // Capture) and makes the 2D pass's shaders, pipelines, samplers and white texture.
-    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(SDL::NativeWindow* window);
+    // Capture) and makes the 2D pass's shaders, pipelines, samplers and white texture. debug: SDL's GPU validation (the
+    // tests; SDL warns and goes on where the driver has none).
+    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(SDL::NativeWindow* window,
+                                                                                                bool debug = false);
     ~GPUDevice();
     GPUDevice(const GPUDevice&) = delete;
     GPUDevice& operator=(const GPUDevice&) = delete;

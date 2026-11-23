@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdint>
+#include <chrono>
 #include <cstdlib>
 #include <memory>
 #include <optional>
@@ -46,7 +47,7 @@ constexpr R::Color8 kYellow{255, 255, 0, 255};
 // One device for every case (making one per case is slow on Lavapipe).
 G::GPUDevice& Device() {
     static std::unique_ptr<G::GPUDevice> device = [] {
-        auto made = G::GPUDevice::Create(nullptr);
+        auto made = G::GPUDevice::Create(nullptr, true);  // SDL's validation on
         REQUIRE_MESSAGE(static_cast<bool>(made), (made ? std::string() : std::string(G::ToString(made.error().code)) + ": " + made.error().message));
         return std::move(*made);
     }();
@@ -169,6 +170,25 @@ TEST_CASE("sdl_gpu pass2d: a texture is sampled top row first, nearest pixel, ti
     CHECK_MESSAGE(r.All(0, 0, 8, 8, kBlue), "[gp-tex-released-not-drawn] a released texture draws nothing");
     CHECK_MESSAGE(r.tally.skippedDraws == 1, "[gp-tex-released-counted] the skipped draw is counted");
     CHECK_MESSAGE(Device().TextureCount() == 0, "[gp-tex-released-gone] its GPU texture is gone");
+}
+
+TEST_CASE("sdl_gpu pass2d: a Linear texture is blended between its pixels") {
+    R::RenderTextures textures;
+    // 2 by 1: black, white. Over 8 pixels, pixel x samples u = (x + 0.5) / 8, texel position 2u - 0.5 (clamped).
+    const R::TextureId id = textures.Create(R::TextureDesc{2, 1, R::TextureFilter::Linear}, {0, 0, 0, 255, 255, 255, 255, 255});
+    R::RenderCommands commands;
+    R::Pass2D pass = Cleared(kBlue);
+    Quad(pass, Rect{0, 0, 8, 8}, kWhite, id);
+    commands.passes.push_back(std::move(pass));
+    const Picture p = Draw(commands, &textures);
+    CHECK_MESSAGE(p.All(0, 0, 2, 8, R::Color8{0, 0, 0, 255}), "[gp-linear-left] left of the first texel's centre: black (clamped)");
+    CHECK_MESSAGE(p.All(6, 0, 8, 8, kWhite), "[gp-linear-right] right of the last texel's centre: white");
+    // Pixel 3: texel position 0.375, so 0.375 of the way to white (95.6); the GPU's filter precision may differ by 2.
+    const R::Color8 between = p.At(3, 4);
+    CHECK_MESSAGE((Diff(between.r, 96) <= 2 && between.r == between.g && between.g == between.b), "[gp-linear-between] blended between them");
+    textures.ClearPending();
+    textures.Release(id);
+    static_cast<void>(Draw(R::RenderCommands{}, &textures));
 }
 
 TEST_CASE("sdl_gpu pass2d: a clip lets only its pixels through") {
@@ -315,4 +335,46 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     CHECK_MESSAGE(status->RefusedTextureAsks() == 0, "[gp-frames-asks] the texture ask was applied");
     CHECK_MESSAGE(status->SkippedDraws() == 0, "[gp-frames-draws] no draw skipped");
     CHECK_MESSAGE(!status->DriverName().empty(), "[gp-frames-driver] SDL names its driver");
+    CHECK_MESSAGE(status->TextureCount() == 1, "[gp-frames-texture] the texture asked for in the first frame has a GPU texture");
+
+    // A replacement that fails before the swap: the old World goes on drawing with its textures.
+    O::ReplaceRequest failing;
+    failing.extra = [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "refused by the test", {}, "test"));
+    };
+    REQUIRE_FALSE(static_cast<bool>(product.ReplaceWorld("Main", std::move(failing))));
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->TextureCount() == 1, "[gp-world-failed-keeps] a failed replacement forgets no texture");
+    // A replacement that succeeds: the new World's ids start again at 1, so the old World's textures go.
+    REQUIRE(static_cast<bool>(product.ReplaceWorld("Main", O::ReplaceRequest{})));
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->TextureCount() == 0, "[gp-world-new-forgets] the new World's first frame lets the old World's textures go");
+    CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-world-frames] no frame failed");
+}
+
+// The frame-time budget declared in render.zh-Hant.md section 2 (batch R2a): measured, not judged (the GPU and the
+// driver decide it; Lavapipe is far slower than any player's GPU). It prints the mean of Capture (asks, uploads, the
+// pass and the read back, waiting for the GPU) of an Object_Connect-sized frame: 1280 by 720, 2,000 quads, one pass.
+TEST_CASE("sdl_gpu budget: an Object_Connect-sized 2D frame") {
+    R::RenderCommands commands;
+    R::Pass2D pass = Cleared(kBlue);
+    pass.view = Rect{0, 0, 1280, 720};
+    for (int i = 0; i < 2000; ++i) {
+        const float x = static_cast<float>((i * 37) % 1240);
+        const float y = static_cast<float>((i * 53) % 680);
+        Quad(pass, Rect{x, y, 40, 40}, R::Color8{255, 0, 0, 128});
+    }
+    commands.passes.push_back(std::move(pass));
+    // A device as a product has it: without SDL's validation.
+    auto made = G::GPUDevice::Create(nullptr, false);
+    REQUIRE(static_cast<bool>(made));
+    G::GPUDevice& device = **made;
+    G::FrameTally tally;
+    static_cast<void>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally));
+    constexpr int kRuns = 20;
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally)));
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
+    MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
+    CHECK(ms > 0.0);
 }
