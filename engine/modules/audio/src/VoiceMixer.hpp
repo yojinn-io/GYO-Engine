@@ -21,8 +21,9 @@ struct ScheduledPlay final {
     std::int64_t startFrame = 0;
     float gainLeft = 1.0f;
     float gainRight = 1.0f;
-    std::uint64_t cookie = 0; // opaque to the voice mixer; Stop matches it
+    std::uint64_t cookie = 0; // opaque to the voice mixer; Stop and SetGain match it
     std::uint64_t lease = 0;  // opaque to the voice mixer; 0 is reported nowhere
+    bool loop = false;        // the clip starts again from its first frame each time it ends
 };
 
 enum class StartOutcome : std::uint8_t { OnTime, Late, NoVoice };
@@ -39,6 +40,13 @@ struct VoiceState final {
 // had started and was stopped at a frame already rendered.
 struct StopResult final {
     std::uint32_t stopped = 0;
+    bool late = false;
+};
+
+// What one SetGain call did: how many voices it changed, and whether its start
+// frame was already rendered.
+struct GainResult final {
+    std::uint32_t changed = 0;
     bool late = false;
 };
 
@@ -87,6 +95,15 @@ public:
     // stop frame of a voice wins.
     StopResult Stop(std::uint64_t cookie, std::uint64_t mask, std::int64_t stopFrame) noexcept;
 
+    // The audio thread. Every sounding or scheduled voice whose cookie equals
+    // cookie moves from the gain it has at the next frame to render, held until
+    // startFrame (or that next frame, late, when startFrame is before it), to
+    // the new gains linearly over rampFrames frames; a change it had not finished
+    // is replaced. A gain is a function of the output frame only, so the output
+    // does not depend on how blocks split it once the change is taken.
+    GainResult SetGain(std::uint64_t cookie, std::int64_t startFrame, std::uint32_t rampFrames, float gainLeft,
+                       float gainRight) noexcept;
+
     // The audio thread. The lease marks of the voices that ended (reached their
     // end or stop frame, or were freed by Stop) since ClearEnded, at most
     // maxVoices of them between two Stop or Render calls: the caller drains them
@@ -116,15 +133,25 @@ public:
     }
 
 private:
+    // A voice's gain on one channel, in Q16: `from` until rampStart, then a
+    // straight line to `to` over rampFrames frames, then `to`.
+    struct GainRamp final {
+        std::int64_t from = 0;
+        std::int64_t to = 0;
+        [[nodiscard]] std::int64_t At(std::int64_t frame, std::int64_t rampStart, std::uint32_t rampFrames) const noexcept;
+    };
     struct Voice final {
         bool active = false;
+        bool loop = false;
         std::int64_t startFrame = 0;
         std::int64_t stopFrame = std::numeric_limits<std::int64_t>::max(); // the first frame not mixed
         std::uint64_t cookie = 0;
         std::uint64_t lease = 0;
-        std::uint32_t position = 0; // frames of the clip already mixed
-        std::int64_t gainLeftQ16 = 0;
-        std::int64_t gainRightQ16 = 0;
+        std::uint32_t position = 0; // frames of the clip already mixed (this pass, when looping)
+        GainRamp left;
+        GainRamp right;
+        std::int64_t rampStart = 0;
+        std::uint32_t rampFrames = 0;
         ClipView clip;
     };
     struct Counters final {

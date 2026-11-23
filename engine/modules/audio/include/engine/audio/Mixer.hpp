@@ -32,7 +32,8 @@ struct MixerConfig final {
     Time::Duration scheduleDelay = std::chrono::duration_cast<Time::Duration>(std::chrono::milliseconds(60));
 };
 
-// One sound, played once. The consumer turns direction and distance into gains.
+// One sound: played once, or looped until stopped. The consumer turns direction
+// and distance into gains.
 struct PlayRequest final {
     // What to play. The mixer holds a reference to it until the sound has ended
     // and the submitter is called again; the samples are never copied.
@@ -46,6 +47,10 @@ struct PlayRequest final {
     Time::TimePoint at{};
     float gainLeft = 1.0f;   // 0 to kMaxGain
     float gainRight = 1.0f;
+    // Plays the whole clip again from its first frame each time it ends, until a
+    // stop ends it (v8-arch-gyo2-sdl-a, G2). An intro followed by a loop is two
+    // plays: the loop's `at` is the intro's start plus the intro's length.
+    bool loop = false;
 };
 
 // One play sent through one submitter, never reused for the mixer's life: the
@@ -61,7 +66,8 @@ struct SoundHandle final {
 
 // Where one sound is, for display only, never for decisions (Design Invariant
 // 4): as of the end of the last Render, so up to one block old, and ahead of
-// what is heard by the output's latency.
+// what is heard by the output's latency. A looping sound's clipFrame counts the
+// current pass: it goes back to 0 each time the clip starts again.
 struct Playhead final {
     // NotPlaying: not taken by the audio thread yet, ended, stopped or dropped.
     // Scheduled: holds a voice but has not started. Playing: clipFrame frames
@@ -94,6 +100,15 @@ struct MixerStats final {
     std::uint64_t stopsUnmatched = 0;
     std::uint64_t stopsDroppedQueueFull = 0;
     std::uint64_t stopsLate = 0;
+    // Gain changes (SetGain, one each) end in exactly one of matched (they
+    // reached at least one voice), unmatched and droppedQueueFull; gainsSubmitted
+    // is their sum once none is in flight. gainsLate counts the matched changes
+    // whose start frame was already rendered.
+    std::uint64_t gainsSubmitted = 0;
+    std::uint64_t gainsMatched = 0;
+    std::uint64_t gainsUnmatched = 0;
+    std::uint64_t gainsDroppedQueueFull = 0;
+    std::uint64_t gainsLate = 0;
     Time::Duration maxLateness{};     // the latest late start
     std::uint64_t renderedFrames = 0;
     std::uint64_t clippedSamples = 0;
@@ -143,12 +158,27 @@ public:
     // The same for every sound this submitter sent before the call; one stop
     // request in the counters.
     [[nodiscard]] bool StopAll(Time::TimePoint at);
+    // Moves the sound's gains to gainLeft and gainRight from the frame `at` maps
+    // to (the rule of a play's start, delay included, from the anchor of the
+    // block that takes the change), linearly over `ramp` (zero: at that frame).
+    // The ramp starts from the gain the sound has when the audio thread takes the
+    // change, and keeps it until the start frame: a change not finished by then
+    // (still ramping, or not started) is replaced, as a Kira tween is. A start
+    // frame already rendered is the block's first frame, counted late. A ramp is
+    // clamped to an hour. An invalid handle changes nothing and returns true;
+    // another submitter's handle, one this submitter never returned, a gain
+    // outside [0, kMaxGain] or a negative ramp is a Programmer Error. False when
+    // the queue is full (counted; the gains stay). (v8-arch-gyo2-sdl-a, G1.)
+    [[nodiscard]] bool SetGain(SoundHandle sound, float gainLeft, float gainRight, Time::TimePoint at,
+                               Time::Duration ramp = Time::Duration::zero());
 
 private:
     friend class Mixer;
     Submitter(std::shared_ptr<Detail::MixerState> state, Detail::SubmitterSlot* slot) noexcept;
     bool Enqueue(const Detail::Command& command);
     bool SendStop(const Detail::Command& command);
+    // Asserts that sound is one this submitter returned; false for an invalid handle.
+    bool CheckOwnHandle(SoundHandle sound) const;
     // Lets go of the clips of the table entries the audio thread handed back.
     void Reclaim() noexcept;
 

@@ -28,6 +28,10 @@ Owner：架構（`plugins/sdl*`）、audio Module。GYO2 主會話開的任務�
 - N1 SDL-3 的「分幾次算」改由審查守；N2 TSan 突變補 DI 7 標記；N3 `deviceSampleFrames` 註明行程全域、環境變數優先；N4 `test_acronym_table`、測試資料 `GYO::SDLWindow`（`SdlBuildTests.cpp` 是 P 的檔、W 正在改 `plugins/sdl`，轉 W）；N5 換 `wav` loader 做不到，記在範囲の限界；N6 不改。
 - 修後：相關 CTest 10/10；`au-sched-full-off-by-one`、`au-sched-head-not-published`、`au-ctl-stress-reassign-every-block`、命名 3 個，6/6 killed。
 
-## 待定
+## G1、G2：播放中改增益與 loop
 
-- G1（播放中改音量）、G2（loop）觸發 audio RC 2、6，已經主會話問使用者「修還是重建」（建議修）。
+- **決定**：G1、G2 觸發 audio RC 2、6（「交使用者決定修還是重建」）。經主會話問使用者，選 (A) 修（原話「這個照你建議就好。」，HANDOFF `v8-arch-gyo2-audio-repair-not-rebuild`）。比過 (B) 重建成 kira 式的每聲音參數（Tween、loop region、track/bus）：範圍遠大於 Object_Connect 要的。主會話記的注意：之後再要 bus、空間音效、ducking 或循環區段，會再碰到 RC 2，那時考慮 (B)。
+- **做法**：混音器的結構不換。`PlayRequest::loop`（整段循環，直到停止；序奏接循環段是兩個播放）。`Submitter::SetGain(handle, 左, 右, at, ramp)`：走同一個環，`at` 照起播的規則換成 frame（偏移、取整、夾住、`scheduleDelay`），晚到從 block 的第一個 frame 開始並記晚；起點是音訊執行緒取到時的增益、到起始 frame 前維持，未完成的變化被取代——照 Kira 的 `Parameter::set`（`crates/kira/src/parameter.rs:71-79`）。每個 voice 只持一段增益（from、to、起點、長度），增益是輸出 frame 的函數，所以取到之後和怎麼切 block 無關（DI 8 (a) 補一句）。新的帳 `gains*`（DI 6）。
+- **別家**：kira `set_volume(…, Tween)`（`track/main/handle.rs:31`）、`set_loop_region`（`sound/static_sound/handle.rs:282`）；Bevy `AudioSink::set_volume`（立即，`bevy_audio/src/sinks.rs:172`）、`PlaybackMode::Loop`（`audio.rs:21`）；SoLoud `fadeVolume`／`setLooping`（`soloud.h:368`、`:333`）；miniaudio `ma_sound_set_fade_in_milliseconds`／`ma_sound_set_looping`（`miniaudio.h:11465`、`:11478`）。和 Bevy 不同處：Bevy 的音量立即生效、沒有時刻；這裡的變化和播放、停止在同一條時間線上（DI 3），淡出照 kira 有長度。
+- **RC 6 的重驗**：`GainLoopTests.cpp`（換算、delay、晚到、取代、切 block、帳、環滿、環的順序、無效與別人的 handle、併發的帳；loop 的循環、切 block、播放位置、序奏接循環）、`RenderAllocTests.cpp` 一案（漸變與 loop 時 Render 不配置、loop 的 clip 在停止之後的下一次呼叫放掉）。gyo_audio_tests 94、alloc 12 通過。新突變 `au-gain-*`、`au-loop-*` 13/13 killed（`au-gain-render-allocates` 第一版用 `std::vector` 被最佳化掉而存活，改成明寫的 `::operator new`，同 `au-ctl-alloc-in-render`）。
+- 文件：audio 第 2、3 節、DI 4、6、7、8、RC 2、6（最終文字在合併前核准）。

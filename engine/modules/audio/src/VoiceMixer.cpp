@@ -86,9 +86,37 @@ StartOutcome VoiceMixer::ScheduleChecked(const ScheduledPlay& play) noexcept {
     } else {
         counters_.onTime.fetch_add(1, std::memory_order_relaxed);
     }
-    *free = Voice{true, start, std::numeric_limits<std::int64_t>::max(), play.cookie, play.lease, 0,
-                  ToQ16(play.gainLeft), ToQ16(play.gainRight), play.clip};
+    const std::int64_t left = ToQ16(play.gainLeft);
+    const std::int64_t right = ToQ16(play.gainRight);
+    *free = Voice{true, play.loop, start, std::numeric_limits<std::int64_t>::max(), play.cookie, play.lease, 0,
+                  GainRamp{left, left}, GainRamp{right, right}, start, 0, play.clip};
     return outcome;
+}
+
+std::int64_t VoiceMixer::GainRamp::At(const std::int64_t frame, const std::int64_t rampStart,
+                                      const std::uint32_t rampFrames) const noexcept {
+    if (frame < rampStart) return from;
+    const std::int64_t into = frame - rampStart;
+    if (into >= std::int64_t{rampFrames}) return to;
+    // Truncated toward zero, the same on every platform; |to - from| * rampFrames < 2^48.
+    return from + (to - from) * into / std::int64_t{rampFrames};
+}
+
+GainResult VoiceMixer::SetGain(const std::uint64_t cookie, const std::int64_t startFrame,
+                               const std::uint32_t rampFrames, const float gainLeft, const float gainRight) noexcept {
+    GainResult result;
+    const std::int64_t start = std::max(startFrame, nextFrame_);
+    result.late = startFrame < nextFrame_;
+    for (Voice& voice : voices_) {
+        if (!voice.active || voice.cookie != cookie) continue;
+        ++result.changed;
+        voice.left = GainRamp{voice.left.At(nextFrame_, voice.rampStart, voice.rampFrames), ToQ16(gainLeft)};
+        voice.right = GainRamp{voice.right.At(nextFrame_, voice.rampStart, voice.rampFrames), ToQ16(gainRight)};
+        voice.rampStart = start;
+        voice.rampFrames = rampFrames;
+    }
+    if (result.changed == 0) result.late = false;
+    return result;
 }
 
 StopResult VoiceMixer::Stop(const std::uint64_t cookie, const std::uint64_t mask, const std::int64_t stopFrame) noexcept {
@@ -136,6 +164,8 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
         std::uint32_t at = voice.startFrame > chunkStart ? static_cast<std::uint32_t>(voice.startFrame - chunkStart) : 0;
         const std::int16_t* samples = voice.clip.samples.data();
         const std::int64_t untilFrame = std::min(voice.stopFrame, chunkEnd);
+        // A steady gain is read once; a ramp is evaluated at every output frame.
+        const bool steady = voice.left.from == voice.left.to && voice.right.from == voice.right.to;
         while (chunkStart + at < untilFrame && voice.position < voice.clip.frames) {
             std::int64_t left = 0;
             std::int64_t right = 0;
@@ -145,10 +175,23 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
                 left = samples[std::size_t{voice.position} * 2];
                 right = samples[std::size_t{voice.position} * 2 + 1];
             }
-            accumulator_[std::size_t{at} * 2] += left * voice.gainLeftQ16;
-            accumulator_[std::size_t{at} * 2 + 1] += right * voice.gainRightQ16;
+            std::int64_t gainLeft = voice.left.to;
+            std::int64_t gainRight = voice.right.to;
+            if (!steady) {
+                const std::int64_t frame = chunkStart + at;
+                gainLeft = voice.left.At(frame, voice.rampStart, voice.rampFrames);
+                gainRight = voice.right.At(frame, voice.rampStart, voice.rampFrames);
+            }
+            accumulator_[std::size_t{at} * 2] += left * gainLeft;
+            accumulator_[std::size_t{at} * 2 + 1] += right * gainRight;
             ++at;
             ++voice.position;
+            if (voice.loop && voice.position == voice.clip.frames) voice.position = 0;
+        }
+        // A finished ramp is steady from here on.
+        if (!steady && chunkEnd >= voice.rampStart + std::int64_t{voice.rampFrames}) {
+            voice.left.from = voice.left.to;
+            voice.right.from = voice.right.to;
         }
         if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) End(voice);
     }
