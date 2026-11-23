@@ -1,0 +1,30 @@
+#pragma once
+
+#include <cstdint>
+#include <span>
+#include <vector>
+
+// The libunibreak adapter's interface, in the text Module's words (Design
+// Invariant TX-1: libunibreak's headers, types and calls stay in
+// src/adapters/libunibreak/; decision v8-arch-gyo2-sdl-t, choice (丁)).
+namespace GYO::Engine::Text::Detail {
+
+enum class LineBreakAfter : std::uint8_t {
+    // A line must end after this character (a line feed and the like, and the
+    // end of the text).
+    Mandatory = 0,
+    // A line may end after it.
+    Allowed = 1,
+    None = 2,
+};
+
+// UAX #14 with the default resolution of its classes (CJ as NS: no small kana
+// at the start of a line), one entry per code point: out[i] is the break after
+// text[i].
+void FindLineBreaks(std::span<const char32_t> text, std::vector<LineBreakAfter>& out);
+
+// UAX #29 extended grapheme clusters: out[i] is 1 when a grapheme ends after
+// text[i] (always at the end of the text).
+void FindGraphemeBoundaries(std::span<const char32_t> text, std::vector<std::uint8_t>& out);
+
+} // namespace GYO::Engine::Text::Detail
