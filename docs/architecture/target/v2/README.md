@@ -56,7 +56,7 @@
 - [trace-merge-approval.zh-Hant.md](trace-merge-approval.zh-Hant.md)：`v8-arch-gyo2-trace` 的合併前核准頁。
 - [os-wait-declaration.zh-Hant.md](os-wait-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的事前宣告（core/time 的等待改呼叫 core/os 的 `WakeSignal`；W3 的分析；修訂 3，使用者 2026-11-21 動工前核准「照建議，全部核准，開始」）。
 - [os-wait-merge-approval.zh-Hant.md](os-wait-merge-approval.zh-Hant.md)：`v8-arch-gyo2-os-wait` 的合併前核准頁。
-- [os-wake-test-backoff-declaration.zh-Hant.md](os-wake-test-backoff-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wake-test-backoff` 的事前宣告（WakeSignalTests「loses no signal」的退避：自旋 65536 次後才 yield；修訂 1 草稿）。
+- [os-wake-test-backoff-declaration.zh-Hant.md](os-wake-test-backoff-declaration.zh-Hant.md)：`v8-arch-gyo2-os-wake-test-backoff` 的事前宣告（WakeSignalTests「loses no signal」的退避：自旋 65536 次後才 yield；修訂 3，使用者 2026-11-23 核准「開始」，修訂 2、3 是看到結果後使用者改的判定）。
 - [os-src-platform-declaration.zh-Hant.md](os-src-platform-declaration.zh-Hant.md)：`v8-arch-gyo2-os-src-platform` 的事前宣告（core/os 的平台程式集中到 `src/sys/`，macOS 與 Linux 不同的步驟走抽象類別 `Detail::Platform`；修訂 3）。
 - [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 - [spawn-reject-declaration.zh-Hant.md](spawn-reject-declaration.zh-Hant.md)：`v8-arch-gyo2-spawn-reject` 的事前宣告（同步點丟掉不能生成的那一筆；修訂 2，使用者 2026-11-15 核准）。
@@ -129,6 +129,7 @@
 - [2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md)：負向編譯樣本的判法——「靜態斷言失敗＋標記在同一行」做成共用函式 `tests/common/support/ExpectStaticAssert.cmake`，Kernel、world_logging、world_asset 三處改用（asset 宣告第 15 節第 12 項）。
 - [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
 - [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 每回合 yield、負載下讓出 CPU，不在 WakeSignal；改不改測試交使用者）。
+- [2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：「loses no signal」的退避改成自旋 65536 次才 yield（`v8-arch-gyo2-os-wake-test-backoff`；Linux 為判定標準、檢出力看 2 萬回合內抓到的比例，都是看到結果後使用者改的判定；拿掉 #289 在案例裡的 Note）。
 
 ## 沒有搬過來的
 
