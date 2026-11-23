@@ -9,12 +9,12 @@
 // All points and normals are in world space.
 //
 // The supported pairs (shape 1 -> shape 2); any other pair returns Unsupported (P3-4):
-//   CastRay     -> Sphere, Capsule, Cuboid, BoxSet, any pose
-//   FindContact  Sphere, Capsule -> Sphere, Capsule, Cuboid, BoxSet, any pose
-//   CastShape    Sphere -> Cuboid, BoxSet, any pose
-//   CastShape    Capsule -> Cuboid, BoxSet, when the capsule's axis in the box's local frame has exactly two zero
-//                components (an upright capsule against axis-aligned boxes)
-// Moving a shape against a Sphere or a Capsule is not implemented (the PvP inventory: characters are never swept
+//   CastRay     -> Ball, Capsule, Cuboid, BoxSet, any pose
+//   FindContact  Ball, Capsule -> Ball, Capsule, Cuboid, BoxSet, any pose
+//   CastShape    Ball -> Cuboid, BoxSet, any pose
+//   CastShape    Capsule -> Cuboid, BoxSet, when the capsule's segment (b - a) in the box's local frame has exactly
+//                two zero components (an upright capsule against axis-aligned boxes), or its ends coincide (a ball)
+// Moving a shape against a Ball or a Capsule is not implemented (the PvP inventory: characters are never swept
 // against each other; placement uses FindContact).
 
 #include <cstdint>
@@ -22,9 +22,7 @@
 #include <vector>
 
 #include "engine/base/Result.hpp"
-#include "engine/math/geometry/Capsule.hpp"
 #include "engine/math/geometry/Ray.hpp"
-#include "engine/math/geometry/Sphere.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/physics_3d/Physics3dError.hpp"
 #include "engine/physics_3d/Shapes.hpp"
@@ -91,12 +89,9 @@ struct ShapeCastOptions final {
 // maxTime finite and >= 0, targetDistance finite and >= 0.
 [[nodiscard]] bool IsValid(const ShapeCastOptions& options) noexcept;
 
-// The first t in [0, maxT] at which the ray meets the solid shape. maxT >= 0 (infinity allowed).
+// The first t in [0, maxT] at which the ray meets the solid shape. maxT >= 0 (infinity allowed). A product's hit
+// shapes that are not entities (a bone's capsule in world space) are a Capsule{a, b, radius} at the identity Pose.
 [[nodiscard]] std::optional<RayHit> CastRay(const Shape& shape, const Pose& pose, const Math::Ray& ray, float maxT);
-// The same for a world-space sphere (radius > 0) and a world-space capsule (any orientation; radius > 0;
-// coincident segment ends are a sphere): a product's hit shapes that are not entities.
-[[nodiscard]] std::optional<RayHit> CastRay(const Math::Ray& ray, float maxT, const Math::Sphere& sphere);
-[[nodiscard]] std::optional<RayHit> CastRay(const Math::Ray& ray, float maxT, const Math::Capsule& capsule);
 
 // The contact when the distance between the shapes is at most prediction (>= 0). Against a BoxSet: the deepest
 // contact (the smallest distance, ties to the lowest index).

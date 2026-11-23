@@ -18,6 +18,8 @@
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/linear/Vec3d.hpp"
 
+#include "BoxSetData.hpp"
+
 namespace GYO::Engine::Physics3d {
 
 namespace {
@@ -304,10 +306,9 @@ struct Core final {
 };
 
 std::optional<Core> CoreOf(const Shape& shape, const Frame& f) {
-    if (const auto* sphere = std::get_if<Sphere>(&shape)) return Core{f.t, f.t, sphere->radius};
+    if (const auto* ball = std::get_if<Ball>(&shape)) return Core{f.t, f.t, ball->radius};
     if (const auto* capsule = std::get_if<Capsule>(&shape)) {
-        const Vec3d half = f.c1 * static_cast<double>(capsule->halfHeight);
-        return Core{f.t - half, f.t + half, capsule->radius};
+        return Core{ToWorld(f, Math::ToVec3d(capsule->a)), ToWorld(f, Math::ToVec3d(capsule->b)), capsule->radius};
     }
     return std::nullopt;
 }
@@ -524,7 +525,7 @@ std::vector<BoxContactD> CoreBoxSet(const Detail::BoxSetData* data, const Core& 
 
 const char* NameOf(const Shape& shape) {
     switch (shape.index()) {
-    case 0: return "Sphere";
+    case 0: return "Ball";
     case 1: return "Capsule";
     case 2: return "Cuboid";
     default: return "BoxSet";
@@ -668,8 +669,6 @@ void CheckRay(const Math::Ray& ray, const float maxT) {
     GYO_ASSERT(maxT >= 0.0F);
 }
 
-bool IsValidRadius(const float radius) { return std::isfinite(radius) && radius > 0.0F; }
-
 } // namespace
 
 bool IsValid(const Math::Ray& ray) noexcept {
@@ -689,13 +688,13 @@ std::optional<RayHit> CastRay(const Shape& shape, const Pose& pose, const Math::
     const Frame f = FrameOf(pose);
     const RayD world{Math::ToVec3d(ray.origin), Math::ToVec3d(ray.direction)};
     const double limit = maxT;
-    if (const auto* sphere = std::get_if<Sphere>(&shape)) {
-        const auto hit = RaySphere(world, f.t, sphere->radius, limit);
+    if (const auto* ball = std::get_if<Ball>(&shape)) {
+        const auto hit = RaySphere(world, f.t, ball->radius, limit);
         return hit ? std::optional<RayHit>(ToRayHit(*hit)) : std::nullopt;
     }
     if (const auto* capsule = std::get_if<Capsule>(&shape)) {
-        const Vec3d half = f.c1 * static_cast<double>(capsule->halfHeight);
-        const auto hit = RayCapsule(world, f.t - half, f.t + half, capsule->radius, limit);
+        const auto hit = RayCapsule(world, ToWorld(f, Math::ToVec3d(capsule->a)), ToWorld(f, Math::ToVec3d(capsule->b)),
+                                    capsule->radius, limit);
         return hit ? std::optional<RayHit>(ToRayHit(*hit)) : std::nullopt;
     }
     const RayD local{ToLocal(f, world.origin), Unrotate(f, world.direction)};
@@ -704,29 +703,11 @@ std::optional<RayHit> CastRay(const Shape& shape, const Pose& pose, const Math::
         if (!hit) return std::nullopt;
         return RayHit{static_cast<float>(hit->enter), Math::ToVec3(Rotate(f, SlabNormal(local, *hit)))};
     }
-    const Detail::BoxSetData* data = std::get_if<BoxSet>(&shape)->Data();
+    const Detail::BoxSetData* data = Detail::BoxSetAccess::Data(*std::get_if<BoxSet>(&shape));
     if (data == nullptr) return std::nullopt;
     const auto hit = RayBoxSet(*data, local, limit);
     if (!hit) return std::nullopt;
     return RayHit{hit->t, Math::ToVec3(Rotate(f, SlabNormal(local, hit->slab)))};
-}
-
-std::optional<RayHit> CastRay(const Math::Ray& ray, const float maxT, const Math::Sphere& sphere) {
-    CheckRay(ray, maxT);
-    GYO_ASSERT(Math::IsFinite(sphere.center) && IsValidRadius(sphere.radius));
-    const auto hit = RaySphere({Math::ToVec3d(ray.origin), Math::ToVec3d(ray.direction)}, Math::ToVec3d(sphere.center),
-                               sphere.radius, maxT);
-    return hit ? std::optional<RayHit>(ToRayHit(*hit)) : std::nullopt;
-}
-
-std::optional<RayHit> CastRay(const Math::Ray& ray, const float maxT, const Math::Capsule& capsule) {
-    CheckRay(ray, maxT);
-    GYO_ASSERT(Math::IsFinite(capsule.segmentStart) && Math::IsFinite(capsule.segmentEnd) &&
-               IsValidRadius(capsule.radius));
-    const auto hit = RayCapsule({Math::ToVec3d(ray.origin), Math::ToVec3d(ray.direction)},
-                                Math::ToVec3d(capsule.segmentStart), Math::ToVec3d(capsule.segmentEnd), capsule.radius,
-                                maxT);
-    return hit ? std::optional<RayHit>(ToRayHit(*hit)) : std::nullopt;
 }
 
 namespace {
@@ -747,7 +728,7 @@ Base::Result<std::vector<BoxContactD>, Physics3dError> BoxSetContacts(const Shap
     const std::optional<Core> core = CoreOf(shape1, FrameOf(pose1));
     if (!core) return Base::Err(UnsupportedPair("FindContact", shape1, asShape));
     const Frame f = FrameOf(pose2);
-    std::vector<BoxContactD> found = CoreBoxSet(boxes.Data(), CoreToLocal(f, *core), prediction, deepestOnly);
+    std::vector<BoxContactD> found = CoreBoxSet(Detail::BoxSetAccess::Data(boxes), CoreToLocal(f, *core), prediction, deepestOnly);
     for (BoxContactD& c : found) c.contact = ToWorld(f, c.contact);
     return found;
 }
@@ -807,26 +788,32 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
     GYO_ASSERT(IsValid(shape2));
     GYO_ASSERT(IsValid(pose2));
     GYO_ASSERT(IsValid(options));
-    const bool sphere = std::holds_alternative<Sphere>(shape1);
+    const bool ball = std::holds_alternative<Ball>(shape1);
     const bool capsule = std::holds_alternative<Capsule>(shape1);
     const bool box = std::holds_alternative<Cuboid>(shape2) || std::holds_alternative<BoxSet>(shape2);
-    if (!(sphere || capsule) || !box) return Base::Err(UnsupportedPair("CastShape", shape1, shape2));
+    if (!(ball || capsule) || !box) return Base::Err(UnsupportedPair("CastShape", shape1, shape2));
     const Frame f1 = FrameOf(pose1);
     const Frame f2 = FrameOf(pose2);
     Sweep s;
-    s.centre = ToLocal(f2, f1.t);
     s.motion = Unrotate(f2, Math::ToVec3d(motion));
-    if (sphere) {
-        s.radius = std::get_if<Sphere>(&shape1)->radius;
+    if (ball) {
+        s.centre = ToLocal(f2, f1.t);
+        s.radius = std::get_if<Ball>(&shape1)->radius;
     } else {
         const Capsule& c = *std::get_if<Capsule>(&shape1);
+        const Vec3d a = Math::ToVec3d(c.a);
+        const Vec3d b = Math::ToVec3d(c.b);
         s.radius = c.radius;
-        if (c.halfHeight > 0.0F) {
-            // The capsule's axis in the box's frame must have exactly two zero components.
-            const Vec3d axis = Unrotate(f2, f1.c1);
+        if (a.x == b.x && a.y == b.y && a.z == b.z) {
+            s.centre = ToLocal(f2, ToWorld(f1, a));  // coincident ends: a ball, any orientation
+        } else {
+            // The segment's direction in the box's frame must have exactly two zero components; the capsule is
+            // then its midpoint's ball against the box grown by half the segment along that axis.
+            s.centre = ToLocal(f2, ToWorld(f1, (a + b) * 0.5));
+            const Vec3d direction = Unrotate(f2, Rotate(f1, b - a));
             int zeros = 0;
             for (int i = 0; i < 3; ++i) {
-                if (Component(axis, i) == 0.0) {
+                if (Component(direction, i) == 0.0) {
                     ++zeros;
                 } else {
                     s.axis = i;
@@ -834,9 +821,9 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
             }
             if (zeros != 2) {
                 return Base::Err(UnsupportedPair("CastShape", shape1, shape2,
-                                                 "the capsule's axis is not parallel to an axis of the box"));
+                                                 "the capsule's segment is not parallel to an axis of the box"));
             }
-            s.extend = static_cast<double>(c.halfHeight) * std::abs(Component(axis, s.axis));
+            s.extend = std::abs(Component(direction, s.axis)) * 0.5;
         }
     }
     s.inflated = s.radius + static_cast<double>(options.targetDistance);
@@ -845,7 +832,7 @@ Base::Result<std::optional<ShapeHit>, Physics3dError> CastShape(const Shape& sha
         if (!hit) return std::optional<ShapeHit>{};
         return std::optional<ShapeHit>(ToShapeHit(f2, *hit));
     }
-    const Detail::BoxSetData* data = std::get_if<BoxSet>(&shape2)->Data();
+    const Detail::BoxSetData* data = Detail::BoxSetAccess::Data(*std::get_if<BoxSet>(&shape2));
     if (data == nullptr) return std::optional<ShapeHit>{};
     // Candidates: the boxes the swept core (grown by the inflated radius) can reach within maxTime.
     Vec3d half{};

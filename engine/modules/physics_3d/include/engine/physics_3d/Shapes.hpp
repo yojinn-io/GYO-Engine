@@ -10,7 +10,6 @@
 #include <utility>
 #include <span>
 #include <variant>
-#include <vector>
 
 #include "engine/base/Result.hpp"
 #include "engine/math/geometry/Aabb.hpp"
@@ -20,17 +19,23 @@
 
 namespace GYO::Engine::Physics3d {
 
-// A ball around the local origin.
-struct Sphere final {
+// A ball around the local origin (parry's Ball; not Math::Sphere, which is a world-space centre and radius).
+struct Ball final {
     float radius = 0.5F;
 };
 
-// The points within radius of the segment from (0, -halfHeight, 0) to (0, halfHeight, 0): along local Y.
-// halfHeight 0 is a sphere.
+// The points within radius of the local segment [a, b] (parry's Capsule: a segment and a radius). Any orientation;
+// coincident ends are a ball. CapsuleY builds the upright one along local Y.
 struct Capsule final {
-    float halfHeight = 0.5F;
+    Math::Vec3 a{0.0F, -0.5F, 0.0F};
+    Math::Vec3 b{0.0F, 0.5F, 0.0F};
     float radius = 0.5F;
 };
+
+// The capsule from (0, -halfHeight, 0) to (0, halfHeight, 0).
+[[nodiscard]] constexpr Capsule CapsuleY(const float halfHeight, const float radius) noexcept {
+    return Capsule{{0.0F, -halfHeight, 0.0F}, {0.0F, halfHeight, 0.0F}, radius};
+}
 
 // The box from -halfExtents to halfExtents.
 struct Cuboid final {
@@ -39,22 +44,10 @@ struct Cuboid final {
 
 namespace Detail {
 
-// A node of BoxSet's static bounding volume hierarchy, in depth-first order: the left child of a branch is the
-// next node, the right child is at `right`. A leaf names the range [first, first + count) of BoxSetData::order.
-// The bounds are the union of the children's (float min and max are exact).
-struct BoxNode final {
-    Math::Aabb bounds{};
-    std::uint32_t first = 0;
-    std::uint32_t count = 0;  // 0: a branch
-    std::uint32_t right = 0;
-};
-
-struct BoxSetData final {
-    std::vector<Math::Aabb> boxes;
-    std::vector<BoxNode> nodes;
-    std::vector<std::uint32_t> order;
-    std::uint64_t digest = 0;
-};
+// The body of a BoxSet (the boxes, the hierarchy, the digest) and the accessor the Module's sources read it with:
+// both live in the Module's src/ (BoxSetData.hpp), so the layout of the hierarchy is not part of the interface.
+struct BoxSetData;
+struct BoxSetAccess;
 
 } // namespace Detail
 
@@ -83,16 +76,15 @@ public:
     // Collider's HashValue hashes (CCR-13).
     friend bool operator==(const BoxSet& a, const BoxSet& b) noexcept;
 
-    // The body, for the queries. nullptr for the empty set.
-    [[nodiscard]] const Detail::BoxSetData* Data() const noexcept { return data_.get(); }
-
 private:
+    friend struct Detail::BoxSetAccess;
+
     explicit BoxSet(std::shared_ptr<const Detail::BoxSetData> data) : data_(std::move(data)) {}
 
     std::shared_ptr<const Detail::BoxSetData> data_;
 };
 
-using Shape = std::variant<Sphere, Capsule, Cuboid, BoxSet>;
+using Shape = std::variant<Ball, Capsule, Cuboid, BoxSet>;
 
 // Transform without the scale. The rotation need not be exactly unit length: the queries normalize it (in double).
 struct Pose final {
@@ -103,8 +95,8 @@ struct Pose final {
 // Content checks (section 4.2). A pure query given content that fails them is a programmer error (GYO_ASSERT);
 // data that comes from content is checked with these first.
 // radius finite and > 0.
-[[nodiscard]] bool IsValid(const Sphere& sphere) noexcept;
-// halfHeight finite and >= 0, radius finite and > 0.
+[[nodiscard]] bool IsValid(const Ball& ball) noexcept;
+// Finite ends (coincident ends allowed), radius finite and > 0.
 [[nodiscard]] bool IsValid(const Capsule& capsule) noexcept;
 // Every half extent finite and >= 0.
 [[nodiscard]] bool IsValid(const Cuboid& cuboid) noexcept;

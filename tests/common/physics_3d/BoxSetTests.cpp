@@ -153,8 +153,10 @@ bool SameHit(const P3::ShapeHit& a, const P3::ShapeHit& b) {
 }
 
 P3::Shape MovingShape(Random& r) {
-    if (r.Chance(50)) return P3::Sphere{r.Uniform(0.2F, 2.0F)};
-    return P3::Capsule{r.Chance(10) ? 0.0F : r.Uniform(0.0F, 2.0F), r.Uniform(0.2F, 1.5F)};
+    if (r.Chance(50)) return P3::Ball{r.Uniform(0.2F, 2.0F)};
+    const float halfHeight = r.Chance(10) ? 0.0F : r.Uniform(0.0F, 2.0F);  // sequenced: one draw after the other
+    const float radius = r.Uniform(0.2F, 1.5F);
+    return P3::CapsuleY(halfHeight, radius);
 }
 
 struct Counts final {
@@ -201,7 +203,7 @@ void RunQueries(const Corpus& corpus, const std::uint64_t seed, const int perKin
         // Grid shapes at grid points without rotation: distances to the grid boxes land exactly on multiples of
         // 0.5, so contacts sit exactly at the prediction limit (where a too small candidate box loses them).
         const bool exact = r.Chance(40);
-        const P3::Shape shape = exact ? P3::Shape(P3::Sphere{0.5F * static_cast<float>(1 + r.Below(3))}) : MovingShape(r);
+        const P3::Shape shape = exact ? P3::Shape(P3::Ball{0.5F * static_cast<float>(1 + r.Below(3))}) : MovingShape(r);
         const P3::Pose pose{Point(r, 22.0F, exact || r.Chance(40)), exact ? M::Quaternion{} : Rotation(r)};
         const float prediction = exact ? 0.5F * static_cast<float>(r.Below(3)) : (r.Chance(40) ? 0.0F : r.Uniform(0.0F, 1.5F));
         std::optional<P3::BoxContact> deepest;
@@ -233,7 +235,7 @@ void RunQueries(const Corpus& corpus, const std::uint64_t seed, const int perKin
     }
     for (int q = 0; q < perKind; ++q) {
         const bool exact = r.Chance(30);
-        const P3::Shape shape = exact ? P3::Shape(P3::Sphere{0.5F * static_cast<float>(1 + r.Below(3))}) : MovingShape(r);
+        const P3::Shape shape = exact ? P3::Shape(P3::Ball{0.5F * static_cast<float>(1 + r.Below(3))}) : MovingShape(r);
         // Capsules turn about Y only (their axis in the set's frame stays exactly Y when the set turns about Y).
         const bool capsule = std::holds_alternative<P3::Capsule>(shape);
         const P3::Pose pose{Point(r, 22.0F, exact || r.Chance(40)),
@@ -316,12 +318,12 @@ TEST_CASE("box_set: the digest and == follow the boxes' bits; Collider's == and 
     CHECK_MESSAGE(HashOf(ca) == HashOf(cb), "[p3-collider-hash] equal colliders hash equal");
     CHECK(!(ca == cz));
     CHECK_MESSAGE(HashOf(ca) != HashOf(cz), "[p3-collider-hash] the BoxSet digest is hashed");
-    const P3::Collider sphere{P3::Sphere{0.5F}};
-    const P3::Collider negative{P3::Sphere{-0.0F}};
-    const P3::Collider zero{P3::Sphere{0.0F}};
+    const P3::Collider sphere{P3::Ball{0.5F}};
+    const P3::Collider negative{P3::Ball{-0.0F}};
+    const P3::Collider zero{P3::Ball{0.0F}};
     CHECK_MESSAGE(!(negative == zero), "[p3-collider-eq-bits] -0 and +0 differ");
     CHECK(HashOf(negative) != HashOf(zero));
-    const P3::Collider capsule{P3::Capsule{0.5F, 0.5F}};
+    const P3::Collider capsule{P3::CapsuleY(0.5F, 0.5F)};
     CHECK_MESSAGE(!(sphere == capsule), "[p3-collider-eq] different shapes");
     CHECK_MESSAGE(HashOf(sphere) != HashOf(P3::Collider{P3::Cuboid{{0.5F, 0.5F, 0.5F}}}), "[p3-collider-hash] the kind");
     CHECK(HashOf(P3::Collider{P3::Cuboid{{0.5F, 0.5F, 0.5F}}}) != HashOf(P3::Collider{P3::Cuboid{{0.5F, 0.5F, 0.25F}}}));

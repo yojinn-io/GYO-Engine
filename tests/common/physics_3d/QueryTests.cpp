@@ -48,7 +48,7 @@ P3::Pose FloorPose() { return At(0.0F, -1.0F, 0.0F); }  // top face at y = 0
 // ---- CastRay
 
 TEST_CASE("queries: a ray hits a sphere at the first crossing with the outward normal") {
-    const P3::Shape ball = P3::Sphere{1.0F};
+    const P3::Shape ball = P3::Ball{1.0F};
     const M::Ray ray{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 1.0F}};
     const auto hit = P3::CastRay(ball, At(0.0F, 0.0F, 5.0F), ray, 100.0F);
     REQUIRE_MESSAGE(hit.has_value(), "[p3-ray-sphere] no hit");
@@ -61,7 +61,7 @@ TEST_CASE("queries: a ray hits a sphere at the first crossing with the outward n
 }
 
 TEST_CASE("queries: a ray grazing a sphere hits it; t is in units of |direction|") {
-    const P3::Shape ball = P3::Sphere{1.0F};
+    const P3::Shape ball = P3::Ball{1.0F};
     const auto graze = P3::CastRay(ball, At(1.0F, 0.0F, 5.0F), M::Ray{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 1.0F}}, kInf);
     REQUIRE_MESSAGE(graze.has_value(), "[p3-ray-graze] a tangent ray missed");
     CHECK(graze->t == 5.0F);
@@ -73,10 +73,10 @@ TEST_CASE("queries: a ray grazing a sphere hits it; t is in units of |direction|
 
 TEST_CASE("queries: a ray starting inside a solid shape hits at t = 0 with a zero normal") {
     const M::Ray ray{{0.0F, 0.0F, 5.5F}, {0.0F, 0.0F, 1.0F}};
-    const auto ball = P3::CastRay(P3::Sphere{1.0F}, At(0.0F, 0.0F, 5.0F), ray, kInf);
+    const auto ball = P3::CastRay(P3::Ball{1.0F}, At(0.0F, 0.0F, 5.0F), ray, kInf);
     REQUIRE(ball.has_value());
     CHECK_MESSAGE((ball->t == 0.0F && Same(ball->normal, {})), "[p3-ray-inside] sphere");
-    const auto capsule = P3::CastRay(P3::Capsule{1.0F, 0.5F}, At(0.0F, 0.0F, 5.0F), ray, kInf);
+    const auto capsule = P3::CastRay(P3::CapsuleY(1.0F, 0.5F), At(0.0F, 0.0F, 5.0F), ray, kInf);
     REQUIRE(capsule.has_value());
     CHECK_MESSAGE((capsule->t == 0.0F && Same(capsule->normal, {})), "[p3-ray-inside] capsule");
     const auto box = P3::CastRay(P3::Cuboid{{1.0F, 1.0F, 1.0F}}, At(0.0F, 0.0F, 5.0F), ray, kInf);
@@ -88,7 +88,7 @@ TEST_CASE("queries: a ray starting inside a solid shape hits at t = 0 with a zer
 }
 
 TEST_CASE("queries: a ray hits an upright capsule on its side and on its caps") {
-    const P3::Shape capsule = P3::Capsule{1.0F, 0.5F};
+    const P3::Shape capsule = P3::CapsuleY(1.0F, 0.5F);
     const auto side = P3::CastRay(capsule, At(0.0F, 0.0F, 0.0F), M::Ray{{-5.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}, kInf);
     REQUIRE_MESSAGE(side.has_value(), "[p3-ray-capsule] side");
     CHECK(side->t == 4.5F);
@@ -113,31 +113,31 @@ TEST_CASE("queries: a ray hits an upright capsule on its side and on its caps") 
     CHECK(Near(lying->normal, {0.0F, 1.0F, 0.0F}));
 }
 
-TEST_CASE("queries: rays on world-space Math shapes: a sphere, a capsule in any orientation, a degenerate capsule") {
-    const M::Ray ray{{0.0F, 0.0F, 5.0F}, {0.0F, 0.0F, -1.0F}};
-    const auto slanted = P3::CastRay(ray, kInf, M::Capsule{{-1.0F, -1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}, 0.5F});
-    REQUIRE_MESSAGE(slanted.has_value(), "[p3-ray-math-capsule] slanted");
+TEST_CASE("queries: a capsule is any segment: a slanted one, its end cap, coincident ends (a ball), at the identity pose") {
+    // A product's hit shapes (bones' capsules in world space) are Capsule{a, b, radius} at the identity Pose.
+    const P3::Shape slantedCapsule = P3::Capsule{{-1.0F, -1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}, 0.5F};
+    const auto slanted = P3::CastRay(slantedCapsule, P3::Pose{}, M::Ray{{0.0F, 0.0F, 5.0F}, {0.0F, 0.0F, -1.0F}}, kInf);
+    REQUIRE_MESSAGE(slanted.has_value(), "[p3-ray-segment-capsule] slanted");
     CHECK(slanted->t == 4.5F);
     CHECK(Same(slanted->normal, {0.0F, 0.0F, 1.0F}));
-    const auto end = P3::CastRay(M::Ray{{3.0F, 3.0F, 0.0F}, {-1.0F, -1.0F, 0.0F}}, kInf,
-                                 M::Capsule{{-1.0F, -1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}, 0.5F});
-    REQUIRE_MESSAGE(end.has_value(), "[p3-ray-math-capsule] end cap");
+    const auto end = P3::CastRay(slantedCapsule, P3::Pose{}, M::Ray{{3.0F, 3.0F, 0.0F}, {-1.0F, -1.0F, 0.0F}}, kInf);
+    REQUIRE_MESSAGE(end.has_value(), "[p3-ray-segment-capsule] end cap");
     CHECK(end->t == doctest::Approx(2.0F - 0.5F / std::sqrt(2.0F)));
-    const auto point = P3::CastRay(M::Ray{{-3.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}, kInf,
-                                   M::Capsule{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, 1.0F});
-    REQUIRE_MESSAGE(point.has_value(), "[p3-ray-math-capsule] degenerate");
+    const auto point = P3::CastRay(P3::Capsule{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, 1.0F}, P3::Pose{},
+                                   M::Ray{{-3.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}, kInf);
+    REQUIRE_MESSAGE(point.has_value(), "[p3-ray-segment-capsule] coincident ends");
     CHECK(point->t == 2.0F);
     CHECK(Same(point->normal, {-1.0F, 0.0F, 0.0F}));
-    const auto ball = P3::CastRay(M::Ray{{-3.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}, 10.0F, M::Sphere{{1.0F, 0.0F, 0.0F}, 1.0F});
-    REQUIRE_MESSAGE(ball.has_value(), "[p3-ray-math-sphere]");
+    const auto ball = P3::CastRay(P3::Ball{1.0F}, At(1.0F, 0.0F, 0.0F), M::Ray{{-3.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}}, 10.0F);
+    REQUIRE_MESSAGE(ball.has_value(), "[p3-ray-ball]");
     CHECK(ball->t == 3.0F);
-    // The shape-and-pose overload gives the same bits as the Math overload (one implementation).
-    const auto posed = P3::CastRay(P3::Capsule{1.0F, 0.5F}, At(0.25F, 0.0F, 0.0F),
+    // CapsuleY at a pose and the same segment written out at the identity pose give the same bits.
+    const auto posed = P3::CastRay(P3::CapsuleY(1.0F, 0.5F), At(0.25F, 0.0F, 0.0F),
                                    M::Ray{{-3.0F, 0.75F, 0.1F}, {1.0F, 0.0F, 0.0F}}, kInf);
-    const auto math = P3::CastRay(M::Ray{{-3.0F, 0.75F, 0.1F}, {1.0F, 0.0F, 0.0F}}, kInf,
-                                  M::Capsule{{0.25F, -1.0F, 0.0F}, {0.25F, 1.0F, 0.0F}, 0.5F});
-    REQUIRE((posed.has_value() && math.has_value()));
-    CHECK_MESSAGE((posed->t == math->t && Same(posed->normal, math->normal)), "[p3-ray-math-same]");
+    const auto written = P3::CastRay(P3::Capsule{{0.25F, -1.0F, 0.0F}, {0.25F, 1.0F, 0.0F}, 0.5F}, P3::Pose{},
+                                     M::Ray{{-3.0F, 0.75F, 0.1F}, {1.0F, 0.0F, 0.0F}}, kInf);
+    REQUIRE((posed.has_value() && written.has_value()));
+    CHECK_MESSAGE((posed->t == written->t && Same(posed->normal, written->normal)), "[p3-ray-segment-same]");
 }
 
 TEST_CASE("queries: a ray hits a cuboid on the entered face, also rotated") {
@@ -192,7 +192,7 @@ TEST_CASE("queries: a ray reaching two boxes at the same t through different fac
 // ---- FindContact
 
 TEST_CASE("queries: sphere-sphere contact: separated within prediction, penetrating, coincident") {
-    const P3::Shape ball = P3::Sphere{1.0F};
+    const P3::Shape ball = P3::Ball{1.0F};
     auto none = P3::FindContact(ball, At(0.0F, 0.0F, 0.0F), ball, At(3.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE(static_cast<bool>(none));
     CHECK_MESSAGE(!none->has_value(), "[p3-contact-prediction] beyond prediction");
@@ -217,7 +217,7 @@ TEST_CASE("queries: sphere-sphere contact: separated within prediction, penetrat
 }
 
 TEST_CASE("queries: capsule-capsule contact: parallel and crossing") {
-    const P3::Shape capsule = P3::Capsule{1.0F, 0.5F};
+    const P3::Shape capsule = P3::CapsuleY(1.0F, 0.5F);
     auto parallel = P3::FindContact(capsule, At(0.0F, 0.0F, 0.0F), capsule, At(0.75F, 0.0F, 0.0F), 0.0F);
     REQUIRE((parallel && parallel->has_value()));
     CHECK_MESSAGE((*parallel)->distance == -0.25F, "[p3-contact-capsule] parallel");
@@ -230,7 +230,7 @@ TEST_CASE("queries: capsule-capsule contact: parallel and crossing") {
     REQUIRE((crossing && crossing->has_value()));
     CHECK(std::abs((*crossing)->distance) <= 1.0e-6F);
     CHECK(Near((*crossing)->normal1, {0.0F, 1.0F, 0.0F}));
-    auto sphere = P3::FindContact(P3::Sphere{0.5F}, At(1.0F, 0.0F, 0.0F), capsule, At(0.0F, 0.0F, 0.0F), 0.0F);
+    auto sphere = P3::FindContact(P3::Ball{0.5F}, At(1.0F, 0.0F, 0.0F), capsule, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE((sphere && sphere->has_value()));
     CHECK_MESSAGE((*sphere)->distance == 0.0F, "[p3-contact-sphere-capsule]");
     CHECK(Same((*sphere)->normal1, {-1.0F, 0.0F, 0.0F}));
@@ -238,24 +238,24 @@ TEST_CASE("queries: capsule-capsule contact: parallel and crossing") {
 
 TEST_CASE("queries: contact with a cuboid: separated, core outside, core inside (face exit, tie order)") {
     const P3::Shape cube = P3::Cuboid{{1.0F, 1.0F, 1.0F}};
-    auto near = P3::FindContact(P3::Sphere{0.5F}, At(2.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.5F);
+    auto near = P3::FindContact(P3::Ball{0.5F}, At(2.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.5F);
     REQUIRE((near && near->has_value()));
     CHECK_MESSAGE((*near)->distance == 0.5F, "[p3-contact-cuboid] separated");
     CHECK(Same((*near)->point1, {1.5F, 0.0F, 0.0F}));
     CHECK(Same((*near)->point2, {1.0F, 0.0F, 0.0F}));
     CHECK(Same((*near)->normal1, {-1.0F, 0.0F, 0.0F}));
-    auto far = P3::FindContact(P3::Sphere{0.5F}, At(2.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
+    auto far = P3::FindContact(P3::Ball{0.5F}, At(2.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE(far);
     CHECK(!far->has_value());
     // Centre inside: the nearest face is +X (push 0.25).
-    auto inside = P3::FindContact(P3::Sphere{0.5F}, At(0.75F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
+    auto inside = P3::FindContact(P3::Ball{0.5F}, At(0.75F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE((inside && inside->has_value()));
     CHECK_MESSAGE((*inside)->distance == -0.75F, "[p3-contact-face-exit] depth");
     CHECK(Same((*inside)->normal1, {-1.0F, 0.0F, 0.0F}));
     CHECK(Same((*inside)->point2, {1.0F, 0.0F, 0.0F}));
     CHECK(Same((*inside)->point1, {0.25F, 0.0F, 0.0F}));
     // Centre at the centre: every push is 1; the first in the order -X, +X, -Y, +Y, -Z, +Z is -X.
-    auto centre = P3::FindContact(P3::Sphere{0.5F}, At(0.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
+    auto centre = P3::FindContact(P3::Ball{0.5F}, At(0.0F, 0.0F, 0.0F), cube, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE((centre && centre->has_value()));
     CHECK_MESSAGE(Same((*centre)->normal1, {1.0F, 0.0F, 0.0F}), "[p3-contact-face-tie] exit through -X");
     CHECK(Same((*centre)->point2, {-1.0F, 0.0F, 0.0F}));
@@ -263,7 +263,7 @@ TEST_CASE("queries: contact with a cuboid: separated, core outside, core inside 
 }
 
 TEST_CASE("queries: an upright capsule on a floor: touching, sinking, core entering the floor") {
-    const P3::Shape capsule = P3::Capsule{1.0F, 0.5F};
+    const P3::Shape capsule = P3::CapsuleY(1.0F, 0.5F);
     auto standing = P3::FindContact(capsule, At(0.0F, 1.5F, 0.0F), Floor(), FloorPose(), 0.0F);
     REQUIRE((standing && standing->has_value()));
     CHECK_MESSAGE((*standing)->distance == 0.0F, "[p3-contact-floor] touching");
@@ -291,7 +291,7 @@ TEST_CASE("queries: an upright capsule on a floor: touching, sinking, core enter
 
 TEST_CASE("queries: contact with a BoxSet: the deepest (ties to the lowest index) and all by index") {
     const P3::BoxSet set = MakeBoxes({{{-2.0F, -1.0F, -1.0F}, {0.0F, 0.0F, 1.0F}}, {{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}});
-    const P3::Shape ball = P3::Sphere{0.5F};
+    const P3::Shape ball = P3::Ball{0.5F};
     auto seam = P3::FindDeepestBoxContact(ball, At(0.0F, 0.25F, 0.0F), set, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE((seam && seam->has_value()));
     CHECK_MESSAGE((*seam)->box == 0, "[p3-boxset-contact-tie] " << (*seam)->box);
@@ -314,7 +314,7 @@ TEST_CASE("queries: contact with a BoxSet: the deepest (ties to the lowest index
 }
 
 TEST_CASE("queries: contact pairs outside the table return Unsupported") {
-    auto box = P3::FindContact(P3::Cuboid{}, At(0.0F, 0.0F, 0.0F), P3::Sphere{}, At(0.0F, 0.0F, 0.0F), 0.0F);
+    auto box = P3::FindContact(P3::Cuboid{}, At(0.0F, 0.0F, 0.0F), P3::Ball{}, At(0.0F, 0.0F, 0.0F), 0.0F);
     REQUIRE_FALSE(static_cast<bool>(box));
     CHECK_MESSAGE(box.error().code == P3::Physics3dErrorCode::Unsupported, "[p3-unsupported-contact]");
     auto set = P3::FindBoxContacts(P3::Cuboid{}, At(0.0F, 0.0F, 0.0F), P3::BoxSet{}, At(0.0F, 0.0F, 0.0F), 0.0F);
@@ -325,7 +325,7 @@ TEST_CASE("queries: contact pairs outside the table return Unsupported") {
 // ---- CastShape
 
 TEST_CASE("queries: a sphere cast onto a floor: time, witnesses, normal, maxTime, touching at the end") {
-    const P3::Shape ball = P3::Sphere{0.5F};
+    const P3::Shape ball = P3::Ball{0.5F};
     auto hit = P3::CastShape(ball, At(0.0F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE((hit && hit->has_value()));
     const P3::ShapeHit& h = **hit;
@@ -354,7 +354,7 @@ TEST_CASE("queries: a sphere cast onto a floor: time, witnesses, normal, maxTime
 }
 
 TEST_CASE("queries: a cast that starts overlapping: stopAtPenetration, separating and tangential motion, zero motion") {
-    const P3::Shape ball = P3::Sphere{0.5F};
+    const P3::Shape ball = P3::Ball{0.5F};
     const P3::Pose start = At(0.0F, 0.25F, 0.0F);
     auto stop = P3::CastShape(ball, start, {0.0F, 1.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE((stop && stop->has_value()));
@@ -385,7 +385,7 @@ TEST_CASE("queries: a cast that starts overlapping: stopAtPenetration, separatin
 
 TEST_CASE("queries: a sphere cast onto a cuboid's edge and corner") {
     const P3::Shape cube = P3::Cuboid{{1.0F, 1.0F, 1.0F}};
-    const P3::Shape ball = P3::Sphere{0.5F};
+    const P3::Shape ball = P3::Ball{0.5F};
     auto edge = P3::CastShape(ball, At(3.0F, 3.0F, 0.0F), {-2.0F, -2.0F, 0.0F}, cube, At(0.0F, 0.0F, 0.0F));
     REQUIRE((edge && edge->has_value()));
     const float r2 = 0.5F / std::sqrt(2.0F);
@@ -409,7 +409,7 @@ TEST_CASE("queries: a sphere cast onto a cuboid's edge and corner") {
 }
 
 TEST_CASE("queries: an upright capsule cast onto a floor and into a wall, also with the boxes turned about Y") {
-    const P3::Shape capsule = P3::Capsule{1.0F, 0.5F};
+    const P3::Shape capsule = P3::CapsuleY(1.0F, 0.5F);
     auto down = P3::CastShape(capsule, At(0.0F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE((down && down->has_value()));
     CHECK_MESSAGE((*down)->time == 0.35F, "[p3-cast-capsule-floor] " << (*down)->time);
@@ -434,6 +434,16 @@ TEST_CASE("queries: an upright capsule cast onto a floor and into a wall, also w
     CHECK(Near((*ledge)->witness2, {4.0F, -0.25F, 0.0F}));
     CHECK(Near((*ledge)->witness1, {4.0F, -0.25F, 0.0F}));
     CHECK(Near((*ledge)->normal1, {reach / 0.5F, -0.5F, 0.0F}));
+    // Any axis-parallel segment, not only along Y and not only centred: lying along X, and one from 0 to 2 in Y.
+    auto lying = P3::CastShape(P3::Capsule{{-1.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, 0.5F}, At(0.0F, 5.0F, 0.0F),
+                               {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
+    REQUIRE_MESSAGE((lying && lying->has_value()), "[p3-cast-capsule-segment] lying along X");
+    CHECK((*lying)->time == 0.45F);
+    auto offset = P3::CastShape(P3::Capsule{{0.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, 0.5F}, At(0.0F, 5.0F, 0.0F),
+                                {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
+    REQUIRE_MESSAGE((offset && offset->has_value()), "[p3-cast-capsule-segment] not centred");
+    CHECK((*offset)->time == 0.45F);
+    CHECK(Near((*offset)->witness1, {0.0F, 0.0F, 0.0F}, 1.0e-6F));
     // Both turned about Y (by different angles): the capsule's axis in the box's frame stays exactly Y.
     auto turned = P3::CastShape(capsule, At(0.0F, 0.0F, 0.0F, {0.0F, kS22, 0.0F, kC22}), {10.0F, 0.0F, 0.0F}, wall,
                                 At(5.0F, 0.0F, 0.0F, {0.0F, 1.0F, 0.0F, 0.0F}));
@@ -444,11 +454,11 @@ TEST_CASE("queries: an upright capsule cast onto a floor and into a wall, also w
 
 TEST_CASE("queries: cast pairs outside the table return Unsupported") {
     const auto code = [](const auto& result) { return result.error().code; };
-    auto tilted = P3::CastShape(P3::Capsule{1.0F, 0.5F}, At(0.0F, 0.0F, 0.0F, {0.0F, 0.0F, kS22, kC22}),
+    auto tilted = P3::CastShape(P3::CapsuleY(1.0F, 0.5F), At(0.0F, 0.0F, 0.0F, {0.0F, 0.0F, kS22, kC22}),
                                 {1.0F, 0.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE_FALSE(static_cast<bool>(tilted));
     CHECK_MESSAGE(code(tilted) == P3::Physics3dErrorCode::Unsupported, "[p3-unsupported-cast] tilted capsule");
-    auto spheres = P3::CastShape(P3::Sphere{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, P3::Sphere{}, At(3.0F, 0.0F, 0.0F));
+    auto spheres = P3::CastShape(P3::Ball{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, P3::Ball{}, At(3.0F, 0.0F, 0.0F));
     REQUIRE_FALSE(static_cast<bool>(spheres));
     CHECK_MESSAGE(code(spheres) == P3::Physics3dErrorCode::Unsupported, "[p3-unsupported-cast] sphere-sphere");
     auto capsules = P3::CastShape(P3::Capsule{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, P3::Capsule{},
@@ -458,8 +468,12 @@ TEST_CASE("queries: cast pairs outside the table return Unsupported") {
     auto box = P3::CastShape(P3::Cuboid{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE_FALSE(static_cast<bool>(box));
     CHECK(code(box) == P3::Physics3dErrorCode::Unsupported);
-    // A capsule of half height 0 is a sphere: any orientation.
-    auto round = P3::CastShape(P3::Capsule{0.0F, 0.5F}, At(0.0F, 5.0F, 0.0F, {0.0F, 0.0F, kS22, kC22}),
+    auto diagonal = P3::CastShape(P3::Capsule{{-1.0F, -1.0F, 0.0F}, {1.0F, 1.0F, 0.0F}, 0.5F}, At(0.0F, 5.0F, 0.0F),
+                                  {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
+    REQUIRE_FALSE(static_cast<bool>(diagonal));
+    CHECK_MESSAGE(code(diagonal) == P3::Physics3dErrorCode::Unsupported, "[p3-unsupported-cast] diagonal segment");
+    // A capsule of with coincident ends is a ball: any orientation.
+    auto round = P3::CastShape(P3::CapsuleY(0.0F, 0.5F), At(0.0F, 5.0F, 0.0F, {0.0F, 0.0F, kS22, kC22}),
                                {0.0F, -10.0F, 0.0F}, Floor(), FloorPose());
     REQUIRE(static_cast<bool>(round));
     REQUIRE(round->has_value());
@@ -469,10 +483,10 @@ TEST_CASE("queries: cast pairs outside the table return Unsupported") {
 TEST_CASE("queries: a cast onto a BoxSet returns the earliest box, ties to the lowest index") {
     const P3::BoxSet set = MakeBoxes({{{0.0F, -1.0F, -1.0F}, {2.0F, 0.0F, 1.0F}}, {{-2.0F, -1.0F, -1.0F}, {0.0F, 0.0F, 1.0F}},
                                       {{-2.0F, -1.0F, -1.0F}, {-1.0F, 2.0F, 1.0F}}});
-    auto seam = P3::CastShape(P3::Sphere{0.5F}, At(0.0F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, set, At(0.0F, 0.0F, 0.0F));
+    auto seam = P3::CastShape(P3::Ball{0.5F}, At(0.0F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, set, At(0.0F, 0.0F, 0.0F));
     REQUIRE((seam && seam->has_value()));
     CHECK_MESSAGE((*seam)->time == 0.45F, "[p3-cast-boxset]");
-    auto pillar = P3::CastShape(P3::Sphere{0.5F}, At(-1.5F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, set, At(0.0F, 0.0F, 0.0F));
+    auto pillar = P3::CastShape(P3::Ball{0.5F}, At(-1.5F, 5.0F, 0.0F), {0.0F, -10.0F, 0.0F}, set, At(0.0F, 0.0F, 0.0F));
     REQUIRE((pillar && pillar->has_value()));
     CHECK_MESSAGE((*pillar)->time == 0.25F, "[p3-cast-boxset] the nearer box wins");
 }
@@ -481,17 +495,18 @@ TEST_CASE("queries: a cast onto a BoxSet returns the earliest box, ties to the l
 
 TEST_CASE("queries: invalid query arguments are programmer errors; IsValid tells them") {
     const M::Ray ray{{0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}};
-    CHECK(!P3::IsValid(P3::Sphere{0.0F}));
-    CHECK(!P3::IsValid(P3::Capsule{-1.0F, 0.5F}));
-    CHECK(P3::IsValid(P3::Capsule{0.0F, 0.5F}));
+    CHECK(!P3::IsValid(P3::Ball{0.0F}));
+    CHECK(!P3::IsValid(P3::Capsule{{0.0F, std::numeric_limits<float>::infinity(), 0.0F}, {}, 0.5F}));
+    CHECK(P3::IsValid(P3::CapsuleY(0.0F, 0.5F)));
+    CHECK(!P3::IsValid(P3::CapsuleY(1.0F, 0.0F)));
     CHECK(!P3::IsValid(P3::Cuboid{{1.0F, std::numeric_limits<float>::quiet_NaN(), 1.0F}}));
     CHECK(!P3::IsValid(P3::Pose{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F, 0.0F}}));
     CHECK(!P3::IsValid(M::Ray{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}}));
     CHECK(!P3::IsValid(P3::ShapeCastOptions{-1.0F, 0.0F, true}));
-    GYO_CHECK_ASSERTS(P3::CastRay(P3::Sphere{-1.0F}, At(0.0F, 0.0F, 0.0F), ray, 1.0F));
-    GYO_CHECK_ASSERTS(P3::CastRay(P3::Sphere{}, At(0.0F, 0.0F, 0.0F), M::Ray{}, 1.0F));
-    GYO_CHECK_ASSERTS(P3::CastRay(P3::Sphere{}, At(0.0F, 0.0F, 0.0F), ray, std::numeric_limits<float>::quiet_NaN()));
-    GYO_CHECK_ASSERTS(P3::FindContact(P3::Sphere{}, At(0.0F, 0.0F, 0.0F), P3::Sphere{}, At(0.0F, 0.0F, 0.0F), -1.0F));
-    GYO_CHECK_ASSERTS(P3::CastShape(P3::Sphere{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, Floor(), FloorPose(),
+    GYO_CHECK_ASSERTS(P3::CastRay(P3::Ball{-1.0F}, At(0.0F, 0.0F, 0.0F), ray, 1.0F));
+    GYO_CHECK_ASSERTS(P3::CastRay(P3::Ball{}, At(0.0F, 0.0F, 0.0F), M::Ray{}, 1.0F));
+    GYO_CHECK_ASSERTS(P3::CastRay(P3::Ball{}, At(0.0F, 0.0F, 0.0F), ray, std::numeric_limits<float>::quiet_NaN()));
+    GYO_CHECK_ASSERTS(P3::FindContact(P3::Ball{}, At(0.0F, 0.0F, 0.0F), P3::Ball{}, At(0.0F, 0.0F, 0.0F), -1.0F));
+    GYO_CHECK_ASSERTS(P3::CastShape(P3::Ball{}, At(0.0F, 0.0F, 0.0F), {1.0F, 0.0F, 0.0F}, Floor(), FloorPose(),
                                     P3::ShapeCastOptions{1.0F, -0.5F, true}));
 }

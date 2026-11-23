@@ -118,7 +118,7 @@ struct Probe final {
     ProbeKind kind = ProbeKind::Ray;
     M::Ray ray{{0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}};
     float maxT = 1000.0F;
-    P3::Shape shape = P3::Sphere{0.5F};
+    P3::Shape shape = P3::Ball{0.5F};
     P3::Pose pose{};
     M::Vec3 motion{};
     std::function<bool(K::EntityId)> filter;  // empty: every entity
@@ -172,12 +172,12 @@ Probe Ask(O::Product& p, Probe setup) {
 std::unique_ptr<O::Product> RayScene() {
     auto p = Make(&BuildProbe);
     // Inserted out of id order: the tie goes to the smaller EntityId, not to the order of insertion.
-    Put(*p, 5, P3::Sphere{1.0F}, Placed(5.0F, 0.0F, 0.0F));
-    Put(*p, 3, P3::Sphere{1.0F}, Placed(5.0F, 0.0F, 0.0F));
+    Put(*p, 5, P3::Ball{1.0F}, Placed(5.0F, 0.0F, 0.0F));
+    Put(*p, 3, P3::Ball{1.0F}, Placed(5.0F, 0.0F, 0.0F));
     Put(*p, 7, P3::Cuboid{{1.0F, 1.0F, 1.0F}}, Placed(2.5F, 5.0F, 0.0F));
-    Put(*p, 9, P3::Sphere{1.0F}, Placed(10.0F, 0.0F, 0.0F));
+    Put(*p, 9, P3::Ball{1.0F}, Placed(10.0F, 0.0F, 0.0F));
     // A child would be the nearest: Without<ChildOf> leaves it out (its Transform is not its global pose).
-    Put(*p, 11, P3::Sphere{1.0F}, Placed(2.0F, 0.0F, 0.0F));
+    Put(*p, 11, P3::Ball{1.0F}, Placed(2.0F, 0.0F, 0.0F));
     WorldOf(*p).Insert(11, K::ChildOf{9});
     return p;
 }
@@ -239,7 +239,7 @@ TEST_CASE("world: a collider whose Transform's scale is not exactly (1, 1, 1) ma
     auto p = RayScene();
     T::Transform scaled = Placed(50.0F, 0.0F, 0.0F);
     scaled.scale = {1.0F, 1.0F, 1.0000001F};
-    Put(*p, 6, P3::Sphere{1.0F}, scaled);
+    Put(*p, 6, P3::Ball{1.0F}, scaled);
     const Probe failed = Ask(*p, Probe{});
     REQUIRE_MESSAGE(failed.error.has_value(), "[p3-world-scale] the scale was ignored");
     CHECK(failed.error->code == P3::Physics3dErrorCode::UnsupportedScale);
@@ -273,7 +273,7 @@ TEST_CASE("world: a shape cast returns the earliest collider; an unsupported pai
     REQUIRE(floor.castHit.has_value());
     CHECK(floor.castHit->entity == 1);
     CHECK(floor.castHit->hit.time == 0.45F);
-    Put(*p, 4, P3::Sphere{0.5F}, Placed(8.0F, 0.0F, 0.0F));
+    Put(*p, 4, P3::Ball{0.5F}, Placed(8.0F, 0.0F, 0.0F));
     const Probe unsupported = Ask(*p, cast);
     REQUIRE_MESSAGE(unsupported.error.has_value(), "[p3-world-unsupported] a sphere collider was swept against");
     CHECK(unsupported.error->code == P3::Physics3dErrorCode::Unsupported);
@@ -282,9 +282,9 @@ TEST_CASE("world: a shape cast returns the earliest collider; an unsupported pai
 
 TEST_CASE("world: Intersections lists the overlapped colliders by ascending EntityId") {
     auto p = Make(&BuildProbe);
-    Put(*p, 4, P3::Sphere{0.5F}, Placed(0.5F, 0.25F, 0.0F));
+    Put(*p, 4, P3::Ball{0.5F}, Placed(0.5F, 0.25F, 0.0F));
     Put(*p, 1, P3::Cuboid{{10.0F, 1.0F, 10.0F}}, Placed(0.0F, -1.0F, 0.0F));
-    Put(*p, 2, P3::Capsule{1.0F, 0.5F}, Placed(5.0F, 1.5F, 0.0F));
+    Put(*p, 2, P3::CapsuleY(1.0F, 0.5F), Placed(5.0F, 1.5F, 0.0F));
     Probe overlap;
     overlap.kind = ProbeKind::Overlap;
     overlap.pose = P3::Pose{{0.0F, 0.25F, 0.0F}, {}};
@@ -365,7 +365,7 @@ constexpr W::Nanoseconds kStep = 15'625'000;
 std::unique_ptr<O::Product> MakeRoll(O::OptionBag options) {
     auto p = Make(&BuildRoll, std::move(options), true);
     WorldOf(*p).SetResource(W::TimeSampling{kStep, W::SamplingMode::ManualDelta});
-    Put(*p, 1, P3::Sphere{0.5F}, Placed(0.0F, 0.0F, 0.0F));
+    Put(*p, 1, P3::Ball{0.5F}, Placed(0.0F, 0.0F, 0.0F));
     WorldOf(*p).Insert(1, Seen{});
     Put(*p, 2, P3::Cuboid{{1.0F, 1.0F, 1.0F}}, Placed(20.0F, 0.0F, 0.0F));
     auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{30.0F, -1.0F, -1.0F}, {31.0F, 1.0F, 1.0F}}});

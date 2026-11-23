@@ -28,26 +28,32 @@ namespace Detail {
     return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);
 }
 
-[[nodiscard]] inline bool SameShape(const Sphere& a, const Sphere& b) noexcept { return SameBits(a.radius, b.radius); }
+[[nodiscard]] inline bool SameBits(const Math::Vec3& a, const Math::Vec3& b) noexcept {
+    return SameBits(a.x, b.x) && SameBits(a.y, b.y) && SameBits(a.z, b.z);
+}
+
+[[nodiscard]] inline bool SameShape(const Ball& a, const Ball& b) noexcept { return SameBits(a.radius, b.radius); }
 [[nodiscard]] inline bool SameShape(const Capsule& a, const Capsule& b) noexcept {
-    return SameBits(a.halfHeight, b.halfHeight) && SameBits(a.radius, b.radius);
+    return SameBits(a.a, b.a) && SameBits(a.b, b.b) && SameBits(a.radius, b.radius);
 }
 [[nodiscard]] inline bool SameShape(const Cuboid& a, const Cuboid& b) noexcept {
-    return SameBits(a.halfExtents.x, b.halfExtents.x) && SameBits(a.halfExtents.y, b.halfExtents.y) &&
-           SameBits(a.halfExtents.z, b.halfExtents.z);
+    return SameBits(a.halfExtents, b.halfExtents);
 }
 [[nodiscard]] inline bool SameShape(const BoxSet& a, const BoxSet& b) noexcept { return a == b; }
 
-inline void HashShape(Kernel::Hasher& h, const Sphere& v) { Kernel::HashValue(h, v.radius); }
+inline void HashVec3(Kernel::Hasher& h, const Math::Vec3& v) {
+    Kernel::HashValue(h, v.x);
+    Kernel::HashValue(h, v.y);
+    Kernel::HashValue(h, v.z);
+}
+
+inline void HashShape(Kernel::Hasher& h, const Ball& v) { Kernel::HashValue(h, v.radius); }
 inline void HashShape(Kernel::Hasher& h, const Capsule& v) {
-    Kernel::HashValue(h, v.halfHeight);
+    HashVec3(h, v.a);
+    HashVec3(h, v.b);
     Kernel::HashValue(h, v.radius);
 }
-inline void HashShape(Kernel::Hasher& h, const Cuboid& v) {
-    Kernel::HashValue(h, v.halfExtents.x);
-    Kernel::HashValue(h, v.halfExtents.y);
-    Kernel::HashValue(h, v.halfExtents.z);
-}
+inline void HashShape(Kernel::Hasher& h, const Cuboid& v) { HashVec3(h, v.halfExtents); }
 // The count and the digest Build computed: hashing tens of thousands of boxes every summary is not needed.
 inline void HashShape(Kernel::Hasher& h, const BoxSet& v) {
     Kernel::HashValue(h, v.Size());

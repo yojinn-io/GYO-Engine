@@ -12,6 +12,8 @@
 #include <variant>
 #include <vector>
 
+#include "BoxSetData.hpp"
+
 namespace GYO::Engine::Physics3d {
 
 namespace {
@@ -151,10 +153,10 @@ bool operator==(const BoxSet& a, const BoxSet& b) noexcept {
     return true;
 }
 
-bool IsValid(const Sphere& sphere) noexcept { return FinitePositive(sphere.radius); }
+bool IsValid(const Ball& ball) noexcept { return FinitePositive(ball.radius); }
 
 bool IsValid(const Capsule& capsule) noexcept {
-    return FiniteNonNegative(capsule.halfHeight) && FinitePositive(capsule.radius);
+    return Math::IsFinite(capsule.a) && Math::IsFinite(capsule.b) && FinitePositive(capsule.radius);
 }
 
 bool IsValid(const Cuboid& cuboid) noexcept {

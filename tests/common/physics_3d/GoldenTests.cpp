@@ -52,37 +52,37 @@ std::vector<std::uint32_t> Results() {
         Push(out, h.normal1);
     };
     const M::Ray slanted{{-7.3F, 2.1F, 0.37F}, {0.8F, -0.11F, 0.05F}};
-    ray(P3::CastRay(P3::Sphere{1.3F}, P3::Pose{{1.1F, 0.9F, 0.7F}, kTilt}, slanted, 100.0F));
-    ray(P3::CastRay(P3::Capsule{0.9F, 0.45F}, P3::Pose{{0.3F, 1.2F, 0.6F}, kTilt}, slanted, 100.0F));
+    ray(P3::CastRay(P3::Ball{1.3F}, P3::Pose{{1.1F, 0.9F, 0.7F}, kTilt}, slanted, 100.0F));
+    ray(P3::CastRay(P3::CapsuleY(0.9F, 0.45F), P3::Pose{{0.3F, 1.2F, 0.6F}, kTilt}, slanted, 100.0F));
     ray(P3::CastRay(P3::Cuboid{{0.7F, 1.9F, 0.4F}}, P3::Pose{{0.2F, 1.0F, 0.5F}, kTilt}, slanted, 100.0F));
-    ray(P3::CastRay(slanted, 100.0F, M::Capsule{{0.1F, -0.6F, 0.2F}, {0.7F, 2.3F, 0.9F}, 0.35F}));
+    ray(P3::CastRay(P3::Capsule{{0.1F, -0.6F, 0.2F}, {0.7F, 2.3F, 0.9F}, 0.35F}, P3::Pose{}, slanted, 100.0F));
     auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{-1.0F, -1.0F, -1.0F}, {0.5F, 3.0F, 0.75F}},
                                                          {{0.25F, -2.0F, 0.1F}, {1.5F, 0.3F, 1.2F}},
                                                          {{-3.0F, 0.0F, -0.5F}, {-2.0F, 1.0F, 0.5F}}});
     REQUIRE(static_cast<bool>(boxes));
     const P3::Pose setPose{{0.4F, 0.3F, -0.2F}, kTilt};
     ray(P3::CastRay(*boxes, setPose, slanted, 100.0F));
-    auto c1 = P3::FindContact(P3::Capsule{0.8F, 0.4F}, P3::Pose{{0.2F, 0.6F, 0.1F}, kTurnY}, P3::Capsule{0.6F, 0.3F},
+    auto c1 = P3::FindContact(P3::CapsuleY(0.8F, 0.4F), P3::Pose{{0.2F, 0.6F, 0.1F}, kTurnY}, P3::CapsuleY(0.6F, 0.3F),
                               P3::Pose{{0.7F, 0.9F, 0.3F}, kTilt}, 0.5F);
     REQUIRE((c1 && c1->has_value()));
     contact(**c1);
-    auto c2 = P3::FindContact(P3::Capsule{0.8F, 0.4F}, P3::Pose{{0.9F, 0.55F, 0.3F}, kTurnY},
+    auto c2 = P3::FindContact(P3::CapsuleY(0.8F, 0.4F), P3::Pose{{0.9F, 0.55F, 0.3F}, kTurnY},
                               P3::Cuboid{{0.7F, 0.6F, 0.4F}}, P3::Pose{{0.3F, -0.2F, 0.1F}, kTilt}, 0.5F);
     REQUIRE((c2 && c2->has_value()));
     contact(**c2);
-    auto c3 = P3::FindDeepestBoxContact(P3::Sphere{0.6F}, P3::Pose{{0.6F, 0.4F, 0.3F}, {}}, *boxes, setPose, 0.25F);
+    auto c3 = P3::FindDeepestBoxContact(P3::Ball{0.6F}, P3::Pose{{0.6F, 0.4F, 0.3F}, {}}, *boxes, setPose, 0.25F);
     REQUIRE((c3 && c3->has_value()));
     contact((*c3)->contact);
     out.push_back((*c3)->box);
-    auto s1 = P3::CastShape(P3::Sphere{0.45F}, P3::Pose{{3.1F, 2.7F, 1.9F}, {}}, {-4.3F, -3.1F, -2.2F},
+    auto s1 = P3::CastShape(P3::Ball{0.45F}, P3::Pose{{3.1F, 2.7F, 1.9F}, {}}, {-4.3F, -3.1F, -2.2F},
                             P3::Cuboid{{0.7F, 0.6F, 0.4F}}, P3::Pose{{0.3F, -0.2F, 0.1F}, kTilt});
     REQUIRE((s1 && s1->has_value()));
     cast(**s1);
-    auto s2 = P3::CastShape(P3::Capsule{0.9F, 0.35F}, P3::Pose{{2.9F, 1.3F, 0.7F}, kTurnY}, {-3.7F, -0.9F, -0.4F},
+    auto s2 = P3::CastShape(P3::CapsuleY(0.9F, 0.35F), P3::Pose{{2.9F, 1.3F, 0.7F}, kTurnY}, {-3.7F, -0.9F, -0.4F},
                             P3::Cuboid{{0.7F, 0.6F, 0.4F}}, P3::Pose{{0.3F, -0.2F, 0.1F}, kTurnY});
     REQUIRE((s2 && s2->has_value()));
     cast(**s2);
-    auto s3 = P3::CastShape(P3::Sphere{0.3F}, P3::Pose{{6.0F, 6.0F, 4.0F}, {}}, {-7.8F, -6.6F, -5.2F}, *boxes, setPose,
+    auto s3 = P3::CastShape(P3::Ball{0.3F}, P3::Pose{{6.0F, 6.0F, 4.0F}, {}}, {-7.8F, -6.6F, -5.2F}, *boxes, setPose,
                             P3::ShapeCastOptions{1.0F, 0.05F, true});
     REQUIRE((s3 && s3->has_value()));
     cast(**s3);

@@ -6,10 +6,10 @@ Owner：架構。程式：`engine/modules/physics_3d/`（`GYO::Engine::Physics3d
 
 ## 一個例子
 
-FPS 的地圖是一個實體：`Collider{BoxSet}`（體素工具烘出的 1,260 個方塊）＋`Transform`。每個玩家是一個實體：`Collider{Capsule{halfHeight, radius}}`＋`Transform`。
+FPS 的地圖是一個實體：`Collider{BoxSet}`（體素工具烘出的 1,260 個方塊）＋`Transform`。每個玩家是一個實體：`Collider{CapsuleY(halfHeight, radius)}`＋`Transform`。
 
 - 走路：產品的移動規則在固定步裡呼叫 `Physics3d::CastShape(colliders, Capsule{…}, pose, motion, options, filter)`，`filter` 排除玩家（只掃牆），拿第一個接觸的比例與法線，自己決定滑動。
-- 開槍：`Physics3d::CastRay(colliders, ray, range, filter)` 拿最近的牆；hitbox 不是實體，對每顆骨頭上的球、膠囊直接用 `CastRay(ray, range, Math::Capsule{…})`。
+- 開槍：`Physics3d::CastRay(colliders, ray, range, filter)` 拿最近的牆；hitbox 不是實體，對每顆骨頭上的球、膠囊直接用 `CastRay(Capsule{a, b, radius}, Pose{}, ray, range)`（世界座標的線段膠囊放在單位姿態；球是 `Ball` 放在球心的姿態）。
 - 出生：`Intersections(colliders, Capsule{…}, pose, filter)` 是空的就放得下。
 - 回滾：查詢只讀 `Transform` 與 `Collider`，重跑時結果逐位元相同。
 
@@ -20,22 +20,22 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 ```
 
 - 登記檔一列：`library_only=no`、`default=no`、`depends=transform`。
-- 標頭：`Shapes.hpp`（`Sphere`、`Capsule`、`Cuboid`、`BoxSet`、`Shape`、`Pose`、`IsValid`）、`Queries.hpp`（純查詢）、`Collider.hpp`、`SpatialQuery.hpp`（接作者 Query 的函式）、`Physics3dModule.hpp`、`Physics3dError.hpp`。
+- 標頭：`Shapes.hpp`（`Ball`、`Capsule`、`CapsuleY`、`Cuboid`、`BoxSet`、`Shape`、`Pose`、`IsValid`）、`Queries.hpp`（純查詢）、`Collider.hpp`、`SpatialQuery.hpp`（接作者 Query 的函式）、`Physics3dModule.hpp`、`Physics3dError.hpp`。
 - 純查詢不需要 World，工具與測試也能用。
 
 ## 2. 用法與後果
 
-- **形狀**：`Sphere{radius}`、`Capsule{halfHeight, radius}`（沿局部 Y；`halfHeight` 為 0 是球）、`Cuboid{halfExtents}`（≥ 0，厚度 0 可以）、`BoxSet`（`Build(span<const Aabb>)` 回 `Result`；不可變、共用；建立時算內容摘要）。
+- **形狀**：`Ball{radius}`（照 parry 的名字，和 `Math::Sphere` 分開）、`Capsule{a, b, radius}`（局部線段＋半徑，照 parry；任意方向；兩端重合是球；`CapsuleY(halfHeight, radius)` 建沿局部 Y 的那顆）、`Cuboid{halfExtents}`（≥ 0，厚度 0 可以）、`BoxSet`（`Build(span<const Aabb>)` 回 `Result`；不可變、共用；建立時算內容摘要；階層的佈局在 Module 內部的 `src/BoxSetData.hpp`，不在介面）。
 - **姿態** `Pose{translation, rotation}`：`Transform` 去掉縮放。
 - **純查詢**：`CastRay`、`FindContact`、`FindDeepestBoxContact`、`FindBoxContacts`、`CastShape`。結果型別照 parry：`RayHit{t, normal}`、`Contact{point1, point2, normal1, normal2, distance}`、`ShapeHit{time, witness1, witness2, normal1, normal2, status}`；**點與法線都是世界座標**（parry 是各形狀的局部座標）。`t` 以 |direction| 為單位（同 `Math::Intersect`）。碰到就算（touching counts）。
 - **支援的組合**：
 
   | 查詢 | 形狀 1 | 形狀 2 | 條件 |
   |---|---|---|---|
-  | `CastRay` | — | 四種 | 任意姿態；另有世界座標 `Math::Sphere`、`Math::Capsule` 的多載 |
+  | `CastRay` | — | 四種 | 任意姿態（hitbox：`Capsule{a, b, r}` 放在 `Pose{}`） |
   | `FindContact` | 球、膠囊 | 四種 | 任意姿態 |
   | `CastShape` | 球 | 方塊、`BoxSet` | 任意姿態 |
-  | `CastShape` | 膠囊 | 方塊、`BoxSet` | 膠囊的軸在方塊的局部座標裡恰有兩個分量為 0 |
+  | `CastShape` | 膠囊 | 方塊、`BoxSet` | 膠囊的線段（`b - a`）在方塊的局部座標裡恰有兩個分量為 0，或兩端重合（當球） |
 
   其餘回 `Unsupported`。對球、膠囊的掃掠（角色互推）PvP 沒用到。
 - **核進到方塊裡的接觸**：沿面法線推出量最小的面（平手依 −X、+X、−Y、+Y、−Z、+Z）；不一定是真正的最小移動量。兩個核重合時法線是 +X（同 parry）。
@@ -72,9 +72,10 @@ GYO::Base、GYO::Math ◄── GYO::Kernel ◄── GYO::Orchestration ◄─�
 - **RC-P3-1**：產品要的掃掠組合需要一般方向（GJK／EPA）時，重看形狀與查詢的分派（parry 的 `QueryDispatcher`）。
 - **RC-P3-2**：一個 World 的 collider 多到線性走訪實體不夠（計測）：加每步維護的寬相位。
 - **RC-P3-3**：要剛體或子實體 collider：要不要另立物理姿態元件（avian 的 `Position`／`Rotation`）在那一批重看。
+- **RC-P3-4**：工具要用純查詢、又不想帶進 Kernel 時（設計審查 N3）：把形狀與純查詢拆成 library-only 的 target，`Collider` 與空間查詢留在 Module。
 
 ## 範囲の限界
 
 - 沒有剛體、角色控制器（下一步，照 rapier／avian）、子實體 collider、縮放、半空間、凸包、三角網格。
 - golden 是在 Intel Mac（macos-x64）產生的；三平台由 L1 確認。
-- avian、parry、rapier 的對照依記憶，未對原始碼（下載等使用者同意）。
+- 和 avian、parry、rapier、Jolt 的對照（檔名行號）在[事前宣告](physics-3d-declaration.zh-Hant.md)第 5 節。
