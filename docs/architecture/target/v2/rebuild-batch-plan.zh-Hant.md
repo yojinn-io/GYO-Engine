@@ -108,6 +108,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | HarfBuzz 單檔彙整 `harfbuzz.cc` 本機編譯 172.6 s（T 的停止門檻 180 s，只差 4%；FreeType 35.4 s，合計 208 s／門檻 300 s）：單一編譯單位不能並行、可能成為建置的關鍵路徑；起因是 SDL 總宣告第 9.1 節「third_party 無條件加入、每個組態（含 Match）都建」。改法候選：改編上游個別 `hb-*.cc` 讓它並行／HarfBuzz 精簡組態／third_party 跟著有人用才建（建置圖的 Architecture Delta） | T #297（主 checkout `build/evidence/gyo2-sdl-text/build-time/measurements.md`、design-review 第 3 條） | 下一個加 third_party 的批之前看；或 L1 時間明顯變長時 |
+| hitbox 回溯（lag compensation）：master 沒有（判定用當 tick 姿勢），GYO2 要做是全新設計；命中形狀的姿勢要等 model＋骨骼動畫（Match 端也要） | PvP 移植準備（共享筆記 `gyo2-pvp-prep-physics-needs.md`） | PvP 移植時，和網路、權威一起設計 |
 | **待使用者定（未決）：model Module 的時機**——前提：model 放 Engine，做成 `engine/modules/model` 函式庫（`library_only=yes`、`default=no`、無 `ModelModule`；節點、材質、蒙皮網格、動畫片段、取樣 Pose＋ufbx adapter）。(A) 照 11-19 跟著產品（PvP、model_viewer）回來／(B) 現在當基礎做，排在 SDL 之後或併進畫面子批 | 主會話 2026-11-23 提（原文只在對話，11-23 晚補進本表） | PvP 移植準備的盤點出來後交使用者 |
 | **待使用者定（未決）：骨骼動畫的三層**——1 資料與取樣（骨架、片段、時刻 t 的姿勢純函式）→ model 函式庫；2 播放（每個實體播哪個片段、播到哪裡，照 World 時間前進取樣 Pose）→ 登記單位 `animation`／`AnimationModule`，PvP 進模擬所以要能進回滾、取樣照 tick，碰時間／回滾／權威，是基盤；3 蒙皮顯示 → render，經 Extract 拿 Pose。hitbox、切片段、混合規則是遊戲規則 | 主會話 2026-11-23 提（同上） | 同上 |
 | Object_Connect 盤點的 Engine 缺口（`games/object_connect/docs/porting-inventory.zh-Hant.md`，#302）：G3 游標 warp、G4 滑鼠相對移動量、G5 游標進出視窗、G6 視窗不可改大小 | Object_Connect 移植準備 #302 | 子批 W（開卡時寫進 brief） |
