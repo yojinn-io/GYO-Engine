@@ -244,7 +244,7 @@ v3 和 v2 的差別：
 |---|---|---|
 | Event | (i) `AnimationEvent`、`InputEvent`、`FileChangeEvent`；(ii) 舊 Kernel 設計：World 裡的事件緩衝；(iii) 這一版 Bevy：緩衝的叫 `Message`（`bevy_ecs/src/message/mod.rs:100`），`Event` 留給觸發式的（`bevy_ecs/src/event/mod.rs:89`） | 不加限定指 (ii)，照程式定義 |
 | Snapshot | (i) PvP wire 的 `WorldSnapshot`、`SnapshotFrame`；(ii) 舊 Kernel 設計：回滾用、驗證用的快照 | 寫法同 v2，定義改成用途 |
-| Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
+| Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoGameRegistry.cmake`、共用解析 `GyoRegistryCsv.cmake`、`games.csv`（2026-11-23 前叫 `GyoAppRegistry.cmake`、`projects.csv`，`v8-arch-gyo2-build-games-dir`）；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」；(iii) `CompositeLayer`（`RenderTypes.hpp:98`） | 同 v2 |
 | Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節）；2026-11-16 改成「誰維護、介面是誰的」（第 0 節末） | 照第 0 節末的定義 |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 寫「stage（舊）」 |

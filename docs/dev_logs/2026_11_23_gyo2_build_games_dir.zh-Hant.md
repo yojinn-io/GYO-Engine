@@ -90,4 +90,5 @@ LIM-9：L1（quick）不經過建置層的遊戲路徑，os 定義守衛的 `gam
   - 不補：C8 讓 KIND 多接受 `app`（schema 4 已擋掉所有舊 manifest，只剩手寫的，算誤用）、`GyoUnitRegistry` 改回 include `GyoGameRegistry`（行為不變，交 review）。
   - 順手修：改名留下的「an game」錯字三處、`GyoRegistryCsv.cmake` 的舊註解、`GameRegistryTests` 的 `*_apps` 區域變數。
 - 補完後本機 ctest 196/196（`after/ctest3.log`）。
+- **合併前設計審查**（`design-review.md`）：可以合併。機械式的已修：`release_channels.py` 的 `app_pairs`（改名表有、漏做）、`creating_games.md` 的 `--kind app` 與 `GYO_CURRENT_APP`、同詞異義表 Registry 列、`target/README.md`、`GyoRegistryCsv.cmake` 的檔頭與區域變數（修時一度留下 `string(JSON project SET "${entry}"`，建置類測試前就改回）、`docs/architecture/README.md` 寫明比照 Cargo／go.work 取了什麼。`game_registry.py` 名字（B1）與幾件後續交使用者，見[合併前核准頁](../architecture/target/v2/build-games-dir-merge-approval.zh-Hant.md)第 5 節。
 

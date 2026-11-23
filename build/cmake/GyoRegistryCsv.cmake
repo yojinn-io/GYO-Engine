@@ -1,7 +1,10 @@
-# Registry reading shared by every register the build reads: the game and tool
-# registers (config/games.csv, config/tools.csv) and the Module and Plugin
-# registers (config/modules.csv, config/plugins.csv). Names nothing of any one
-# register. Keep this module usable with `cmake -P` by CI and the registry tests.
+# Registry reading shared by the registers the build reads. The CSV reader
+# (_gyo_registry_csv_records) serves all four: the game and tool registers
+# (config/games.csv, config/tools.csv) and the Module and Plugin registers
+# (config/modules.csv, config/plugins.csv). The product register rules
+# (_gyo_read_registry, _gyo_registry_package_platforms) serve the game and tool
+# registers. Names nothing of any one register. Keep this module usable with
+# `cmake -P` by CI and the registry tests.
 
 include_guard(GLOBAL)
 
@@ -142,7 +145,7 @@ function(_gyo_read_registry csv kind collection columns output)
         endif()
     endforeach()
 
-    set(projects "[]")
+    set(entries "[]")
     set(names "")
     if(record_count GREATER 1)
         math(EXPR last_record "${record_count} - 1")
@@ -166,7 +169,7 @@ function(_gyo_read_registry csv kind collection columns output)
                 message(FATAL_ERROR "Duplicate ${kind} name '${name}' in registry: ${csv}")
             endif()
             list(APPEND names "${name}")
-            set(project "{}")
+            set(entry "{}")
             foreach(index RANGE 0 ${last_column})
                 list(GET columns ${index} column)
                 string(JSON value GET "${records}" ${record} ${index})
@@ -183,12 +186,12 @@ function(_gyo_read_registry csv kind collection columns output)
                             "Invalid boolean '${value}' for ${kind} '${name}' column '${column}'; expected true, false, 1 or 0: ${csv}")
                     endif()
                 endif()
-                string(JSON project SET "${project}" "${column}" "${json_value}")
+                string(JSON entry SET "${entry}" "${column}" "${json_value}")
             endforeach()
-            _gyo_registry_json_append("${projects}" "${project}" projects)
+            _gyo_registry_json_append("${entries}" "${entry}" entries)
         endforeach()
     endif()
-    string(JSON registry SET "{}" "${collection}" "${projects}")
+    string(JSON registry SET "{}" "${collection}" "${entries}")
     set(${output} "${registry}" PARENT_SCOPE)
 endfunction()
 

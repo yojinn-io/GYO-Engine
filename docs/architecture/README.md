@@ -58,6 +58,10 @@ the top-level `config/`, outside the Engine, the plugins and the products (user,
 composition the build reads, not a capability of the Engine, and the Engine does not know products (like Go's `go.work`
 or a Cargo workspace manifest at the root). `games.csv` was named `projects.csv` until `v8-arch-gyo2-build-games-dir`
 (2026-11-23), which renamed the build's "app" to "game".
+What is taken from Cargo and `go.work` is one explicit list at the root that the build reads, and nothing found by
+scanning directories. Unlike their path lists (identity from each member's own manifest), `games.csv` and `tools.csv`
+list names: the directory is derived from the name (`games/<name>/`, `tools/<name>/`) and the identity is that name, so a
+copied game needs a new directory and one register row, no source change (AGENTS.md section 7).
 
 ## Naming
 

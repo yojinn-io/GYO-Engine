@@ -52,7 +52,7 @@ gyo_finalize_product_packages()
 ]=])
 # The display name carries a quote: the generated header must escape it.
 set(project_json "{\"version\":1,\"display_name\":\"Fixture \\\"game\\\"\",\"components\":[]}\n")
-set(app_cmake [=[
+set(game_cmake [=[
 file(APPEND "${PROJECT_BINARY_DIR}/configured.txt" "${GYO_CURRENT_GAME}\n")
 gyo_game_project()
 gyo_game_add_library(domain OUT_TARGET domain SOURCES domain.cpp)
@@ -69,7 +69,7 @@ file(GENERATE OUTPUT "${PROJECT_BINARY_DIR}/${GYO_CURRENT_GAME}-$<CONFIG>.txt" C
 ]=])
 foreach(game first second)
     file(WRITE "${source}/games/${game}/project.json" "${project_json}")
-    file(WRITE "${source}/games/${game}/CMakeLists.txt" "${app_cmake}")
+    file(WRITE "${source}/games/${game}/CMakeLists.txt" "${game_cmake}")
     file(WRITE "${source}/games/${game}/domain.cpp"
         "#include <gyo/GameConfig.hpp>\nconst char* identity() { return GYO_GAME_ID; }\n")
     file(WRITE "${source}/games/${game}/main.cpp"

@@ -130,7 +130,7 @@ Copy the catalog-listed files only. If shader bundles are declared, also copy ea
 The equivalent content operation is already scripted:
 
 ```sh
-python build/assemble_runtime.py --kind app --product my_game --stage build/target/manual/my_game --assets assets/my_game --executable build/target/my_game/bin/gyo_my_game.exe
+python build/assemble_runtime.py --kind game --product my_game --stage build/target/manual/my_game --assets assets/my_game --executable build/target/my_game/bin/gyo_my_game.exe
 ```
 
 For shader-enabled content, supply the declared compiled bundles, for example `--shader builtin=build/target/_build/dev/games/my_game/shaders/builtin --shader game=build/target/_build/dev/games/my_game/shaders/game`. The helper validates sources, synchronizes catalog files and compiled objects, removes stale managed content and emits the runtime descriptor. Native-library scheduling and synchronization remain in the shared build helper. Ordinary builds and `cmake --install` already invoke these steps; games do not repeat this recipe in their own CMake files. A future editor should edit these same descriptors instead of generating a second assembly policy.
@@ -147,7 +147,7 @@ For shader-enabled content, supply the declared compiled bundles, for example `-
 
 Do not globally rename C++ namespaces, AssetIds, shader IDs, clip names or definition references merely to change deployment identity. They can remain the same until the variant's gameplay/content actually needs different values. The copied game does not carry tests, CI, acceptance scripts, source-art archives or editor tools.
 
-To integrate variant-specific validation later, copy or add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Use `GYO_CURRENT_APP` and `gyo_use_app_config(target app)` to obtain that app's generated configuration privately, and `@CHECK_ROOT@` in acceptance commands to resolve the declaring owner's script directory. Python tests derive their acceptance owner from their own location. These support copies must keep working after the original support is removed. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
+To integrate variant-specific validation later, copy or add an outer adapter under `tests/my_variant` or `build/acceptance/my_variant`. This is optional for ordinary local builds. Use `GYO_CURRENT_GAME` and `gyo_use_game_config(target game)` to obtain that game's generated configuration privately, and `@CHECK_ROOT@` in acceptance commands to resolve the declaring owner's script directory. Python tests derive their acceptance owner from their own location. These support copies must keep working after the original support is removed. Generic product packaging remains engine-owned. New games do not require names to be added to workflow YAML.
 
 ## Validation boundaries
 
