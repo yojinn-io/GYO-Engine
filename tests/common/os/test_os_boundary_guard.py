@@ -118,6 +118,16 @@ class Rules(GuardTree):
         self.write("engine/core/os/include/engine/os/Files.hpp", "inline void F() { std::ifstream in(\"x\"); }\n")
         self.assertClean()
 
+    def test_os_knowledge_and_file_access_in_plugins_are_reported(self):
+        # plugins/ is runtime code: R1-R3 and R4 apply, its tests included (no exclusion, unlike tests/).
+        self.write("plugins/sample/src/adapters/sample/Window.cpp", "#include <windows.h>\n#ifdef __APPLE__\n#endif\n")
+        self.write("plugins/sample/src/Load.cpp", "void F() { std::ifstream in(\"x\"); }\n")
+        self.write("plugins/sample/tests/SampleTests.cpp", "void F() { FILE* f = fopen(\"x\", \"r\"); }\n")
+        self.assertReported("plugins/sample/src/adapters/sample/Window.cpp:1: R1 windows.h")
+        self.assertReported("plugins/sample/src/adapters/sample/Window.cpp:2: R2 __APPLE__")
+        self.assertReported("plugins/sample/src/Load.cpp:1: R4 std::ifstream")
+        self.assertReported("plugins/sample/tests/SampleTests.cpp:1: R4 fopen")
+
     def test_direct_file_access_in_products_and_tools_is_reported(self):
         self.write("games/sample/src/Load.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("tools/sample/src/Save.cpp", "void F() { std::filesystem::rename(a, b); }\n")
@@ -191,15 +201,16 @@ class Rules(GuardTree):
         problems = guard.check(self.root, skipped=skipped)
         self.assertEqual(problems, ["engine: no C/C++ source scanned (does not exist); is the root right?",
                                     "tests: no C/C++ source scanned (does not exist); is the root right?"])
-        self.assertEqual(skipped, ["games (does not exist)", "tools (does not exist)",
+        self.assertEqual(skipped, ["plugins (does not exist)", "games (does not exist)", "tools (does not exist)",
                                    "build/acceptance (does not exist)"])
 
     def test_product_roots_without_sources_are_skipped_and_named(self):
-        # No product or tool is registered: games and tools are absent, build/acceptance holds only scripts.
+        # No Plugin, product or tool is registered: plugins, games and tools are absent, build/acceptance holds
+        # only scripts. plugins/ is not required: removing the SDL Plugins may leave it without sources (SDL-2).
         self.write("build/acceptance/common/check.py", "print('x')\n")
         skipped = []
         self.assertEqual(guard.check(self.root, skipped=skipped), [])
-        self.assertEqual(skipped, ["games (does not exist)", "tools (does not exist)",
+        self.assertEqual(skipped, ["plugins (does not exist)", "games (does not exist)", "tools (does not exist)",
                                    "build/acceptance (holds no C/C++ source)"])
         self.write("games/sample/project.json", "{}\n")
         skipped = []
@@ -220,8 +231,8 @@ class Rules(GuardTree):
 
     def test_roots_name_no_product(self):
         # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
-        self.assertEqual(guard.ROOTS, ("engine", "games", "tools", "build/acceptance", "tests"))
-        self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "games", "tools"))
+        self.assertEqual(guard.ROOTS, ("engine", "plugins", "games", "tools", "build/acceptance", "tests"))
+        self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "plugins", "games", "tools"))
 
     def test_exclusions_and_required_roots_are_pinned(self):
         # Each of these narrows the guard when it grows (an exclusion, an allowlist scope) or shrinks (a required
@@ -293,7 +304,7 @@ class CommandLine(GuardTree):
     def test_main_names_skipped_roots_and_passes(self):
         status, output = self.run_main()
         self.assertEqual(status, 0)
-        for root in ("games", "tools", "build/acceptance"):
+        for root in ("plugins", "games", "tools", "build/acceptance"):
             self.assertIn(f"OS boundary guard: skipped root {root} (does not exist); it is scanned again", output)
         self.assertNotIn("skipped root engine", output)
         self.assertNotIn("skipped root tests", output)

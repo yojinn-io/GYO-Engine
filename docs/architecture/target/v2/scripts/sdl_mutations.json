@@ -1,0 +1,102 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the SDL line (docs/architecture/target/v2/sdl-declaration.zh-Hant.md; Design Invariants in docs/architecture/target/v2/sdl.zh-Hant.md). Sub-batch P (v8-arch-gyo2-sdl-p): only selected Plugins are added. The plugins/ roots of the OS guards are in docs/architecture/plans/os-subsystem/scripts/mutations.json (sdlp-*). A mutant is killed only when its check fails with the expected message. Run with tests/common/mutation/run_mutations.py --build-dir <a test build> --catalog docs/architecture/target/v2/scripts/sdl_mutations.json.",
+ "mutants": [
+  {
+   "id": "sdlp-selection-no-closure",
+   "what": "A selected Plugin no longer brings the Plugins it depends on: sdl_window would be added without the sdl library that fetches SDL",
+   "guards": [
+    "sdl-declaration 9.1",
+    "SDL-2"
+   ],
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "            if(dep_kind STREQUAL \"Plugin\")\n                list(APPEND wanted \"${dep}\")\n",
+   "replace": "            if(FALSE)\n                list(APPEND wanted \"${dep}\")\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "a\\s+Plugin\\s+brings\\s+the\\s+Plugins\\s+it\\s+depends\\s+on:\\s+expected\\s+'tool;gadget',\\s+got\\s+'gadget'",
+   "timeout": 300
+  },
+  {
+   "id": "sdlp-selection-all-unread",
+   "what": "GYO_PLUGINS=ALL is read as a Plugin's name (the test presets would stop building the Plugins)",
+   "guards": [
+    "sdl-declaration 9.1",
+    "SDL-2"
+   ],
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(name STREQUAL \"ALL\")\n",
+   "replace": "        if(FALSE)\n",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "GYO_PLUGINS\\s+names\\s+'ALL',\\s+which\\s+is\\s+no\\s+Plugin",
+   "timeout": 300
+  },
+  {
+   "id": "sdlp-selection-takes-modules",
+   "what": "GYO_PLUGINS takes a Module's name (a Module would be added a second time, from plugins/)",
+   "guards": [
+    "sdl-declaration 9.1",
+    "SDL-2"
+   ],
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        if(NOT name IN_LIST order OR NOT kind STREQUAL \"Plugin\")\n            message(FATAL_ERROR \"GYO_PLUGINS names",
+   "replace": "        if(NOT name IN_LIST order)\n            message(FATAL_ERROR \"GYO_PLUGINS names",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "Invalid\\s+unit\\s+register\\s+case\\s+'plugins_module'\\s+was\\s+accepted",
+   "timeout": 300
+  },
+  {
+   "id": "sdlp-requests-unrecorded",
+   "what": "gyo_product_units no longer records the Plugins a product carries, so the build layer never adds them",
+   "guards": [
+    "sdl-declaration 9.1",
+    "SDL-2"
+   ],
+   "file": "build/cmake/GyoUnitRegistry.cmake",
+   "find": "        set_property(GLOBAL APPEND PROPERTY GYO_PLUGINS_REQUESTED ${ARG_PLUGINS})\n",
+   "replace": "",
+   "command": [
+    "{cmake}",
+    "-DGYO_UNIT_REGISTRY_TEST_WORK=build/target/_build/test/unit-registry-mutants",
+    "-P",
+    "tests/common/cmake/UnitRegistryTests.cmake"
+   ],
+   "expect": "the\\s+Plugins\\s+the\\s+products\\s+carry:\\s+expected\\s+'PROBE_REQUESTED=\\[kit;tool;gadget;tool\\]',\\s+got\\s+'PROBE_REQUESTED=\\[\\]'",
+   "timeout": 300
+  },
+  {
+   "id": "sdlp-every-plugin-added",
+   "what": "The build layer adds every Plugin row again, selected or not (before v8-arch-gyo2-sdl-p): a build with no product fetches SDL",
+   "guards": [
+    "sdl-declaration 9.1",
+    "SDL-2"
+   ],
+   "file": "build/cmake/GyoBuild.cmake",
+   "find": "gyo_plugin_selection(GYO_UNITS GYO_SELECTED_PLUGINS ${_gyo_requested_plugins} ${GYO_PLUGINS})\n",
+   "replace": "gyo_plugin_selection(GYO_UNITS GYO_SELECTED_PLUGINS ALL)\n",
+   "command": [
+    "{cmake}",
+    "-DPARENT_BINARY={build}",
+    "-DWORK_ROOT={build}",
+    "-P",
+    "tests/common/cmake/PluginSelectionTests.cmake"
+   ],
+   "expect": "Plugins added with none selected: \\[ \"sdl\" \\]|did not configure with no Plugin selected",
+   "timeout": 600
+  }
+ ]
+}
