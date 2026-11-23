@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <initializer_list>
 #include <sstream>
 #include <string>
 #include <utility>

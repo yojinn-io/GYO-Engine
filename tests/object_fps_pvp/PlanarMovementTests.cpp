@@ -8,6 +8,7 @@
 #include "object_fps_pvp/sim/PlanarMovement.hpp"
 
 #include <cmath>
+#include <initializer_list>
 #include <numbers>
 
 namespace {
