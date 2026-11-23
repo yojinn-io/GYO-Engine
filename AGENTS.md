@@ -3,7 +3,7 @@
 # GYO-Engine Agent Rules
 
 この文書には、設計の根と、作業の進め方だけを書く。
-詳しい設計と現況は書かない。設計は docs に、現況はコードと git にある。
+詳しい設計と現況は書かない。設計は docs にあり、入口は `docs/architecture/README.md` である。現況はコードと git にある。
 
 ---
 
@@ -13,10 +13,12 @@
 2. Kernel の責務は ECS である。
 3. 依存は一方向にする。Engine は Game と Tool に依存しない。下の層は上の層を参照しない。
 4. 外部の Component（第三者の Library、Platform の API など）の型と呼び出しは、その adapter の中にだけ現れる。
-   adapter が外に見せる Interface は、使う側の言葉で決める。
-   部品が Module か Plugin かは、誰が保守し、外に見せる Interface が誰のものかで決める
-   （自分たちが保守し Interface も自分たちのもの＝Module、第三者が公式に保守するもの＝Plugin）。
-5. Platform に依存するものは、OS 層にだけ置く。
+   一つの外部 Component に、adapter は一つだけ置く。adapter が外に見せる Interface は、使う側の言葉で決める。
+   部品が Module か Plugin かは、誰が保守し、外に見せる Interface が誰のものかで決める。
+   自分たちが保守し、Interface も自分たちのものは Module である（外部の Library を使っていても、
+   その Interface の後ろに完全に隠れていれば Module）。第三者が公式に保守するものは Plugin である。
+   Plugin は Engine の外に置き、Engine から参照されない。
+5. Platform による分岐とファイル I/O は、OS 層にだけ置く。
 6. 名前は概念の tag である。Product の言葉と概念を Engine に入れない。
 7. Tool と Game は、データの形式だけで受け渡す。Game は、Tool がなくても動く。
 8. Product を一つ削除しても、Engine と他の Product は成り立つ。
@@ -50,5 +52,5 @@
 
 * 変更は PR で出す。ユーザーが「合併」と言ったときだけ合併する。rebase と force push はしない。
 * 子 Agent を起動するときは、モデルとギア（effort）を明示する。
-* 根の決定は、一つのファイル（`docs/decisions.md`）に記録する。
+* §1 の根の決定は、一つのファイル（`docs/decisions.zh-Hant.md`）に記録する。
   書くのはユーザーの原話と理由だけである。バッチごとに分けず、代号を付けない。
