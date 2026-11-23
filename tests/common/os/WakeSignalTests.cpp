@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
+#include "CaseTiming.hpp"
 #include "engine/os/WakeSignal.hpp"
 
 #include <algorithm>
@@ -272,7 +273,20 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
     });
     int lost = 0;
     int rounds = 0;
+    // Observation only (v8-arch-gyo2-os-test-timeout): how the case's time is
+    // spent, noted every NoteEvery rounds and at the end. No check reads it.
+    constexpr int NoteEvery = 2000;
+    const auto caseStart = Clock::now();
+    int blockedRounds = 0;
+    int slowRounds = 0;
+    auto longestRound = Clock::duration::zero();
+    const auto note = [&](const char* when) {
+        GYO::Test::CaseTiming::Note("lost-wakeup %s rounds=%d blocked=%d slow(>=10ms)=%d longest=%.3fs elapsed=%.3fs",
+            when, rounds, blockedRounds, slowRounds, std::chrono::duration<double>(longestRound).count(),
+            std::chrono::duration<double>(Clock::now() - caseStart).count());
+    };
     for (; rounds < Rounds && lost < StopAfterLost; ++rounds) {
+        if (rounds > 0 && rounds % NoteEvery == 0) note("progress");
         started.store(rounds, std::memory_order_release);
         for (int read = 0; read < rounds % 64; ++read) static_cast<void>(Clock::now());
         const auto start = Clock::now();
@@ -288,7 +302,12 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
             wake.Block(std::chrono::seconds(2));
         }
         consumed.store(rounds, std::memory_order_release);
+        const auto round = Clock::now() - start;
+        if (blocked) ++blockedRounds;
+        if (round >= std::chrono::milliseconds(10)) ++slowRounds;
+        longestRound = std::max(longestRound, round);
     }
+    note("end");
     stop.store(true, std::memory_order_release);
     signaller.join();
     CAPTURE(rounds);
