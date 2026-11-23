@@ -43,6 +43,18 @@ class ScopePolicyTests(unittest.TestCase):
             with self.subTest(event=event_name):
                 self.assertEqual(select_scope(event_name, {}, unexpected_changes),
                                  Scope(run_l1=True, run_quick=True, reason="integration"))
+        # A manual run on a branch without an open pull request integrates too.
+        self.assertEqual(select_scope("workflow_dispatch", {}, unexpected_changes, open_pull_requests=0),
+                         Scope(run_l1=True, run_quick=True, reason="integration"))
+
+    def test_manual_run_on_a_pull_request_branch_runs_l1_without_quick(self):
+        for count in (1, 2):
+            with self.subTest(open_pull_requests=count):
+                self.assertEqual(select_scope("workflow_dispatch", {}, unexpected_changes, None, unexpected_increment,
+                                              open_pull_requests=count),
+                                 Scope(run_l1=True, run_quick=False, reason="pull-request-dispatch"))
+        # Pushes always integrate, whatever pull requests are open.
+        self.assertEqual(select_scope("push", {}, unexpected_changes, open_pull_requests=1).reason, "integration")
 
     def test_draft_pull_request_runs_nothing_and_never_inspects_changes(self):
         self.assertEqual(select_scope("pull_request", pull_request(True), unexpected_changes, live_draft=True),
@@ -75,9 +87,13 @@ class ScopePolicyTests(unittest.TestCase):
 
     def test_documentation_increment_reuses_a_verified_l1_result(self):
         code = lambda: ["engine/a.cpp", "docs/a.md"]  # noqa: E731
-        self.assertEqual(select_scope("pull_request", pull_request(False), code, False, lambda: ("c0ffee", "why")),
-                         Scope(run_l1=False, run_quick=False, reason="docs-increment", detail="why"))
-        self.assertEqual(select_scope("pull_request", pull_request(False), code, False, lambda: (None, "why not")),
+        for reason in ("docs-increment", "head-verified"):
+            with self.subTest(reason=reason):
+                self.assertEqual(select_scope("pull_request", pull_request(False), code, False,
+                                              lambda reason=reason: ("c0ffee", "why", reason)),
+                                 Scope(run_l1=False, run_quick=False, reason=reason, detail="why"))
+        self.assertEqual(select_scope("pull_request", pull_request(False), code, False,
+                                      lambda: (None, "why not", None)),
                          Scope(run_l1=True, run_quick=False, reason="pull-request", detail="why not"))
         # Without the check the classification is unchanged.
         self.assertEqual(select_scope("pull_request", pull_request(False), code, False),
@@ -283,7 +299,9 @@ class DocumentationIncrementTests(GitRepositoryCase):
         def l1_passed(commit):
             asked.append(commit)
             return commit in passed
-        commit, note = ci_scope.verified_increment(self.repository, l1_passed, limit=limit)
+        commit, note, reason = ci_scope.verified_increment(self.repository, l1_passed, limit=limit)
+        self.assertEqual(reason is None, commit is None, note)
+        self.reason = reason
         return commit, note, asked
 
     def code(self, content):
@@ -298,10 +316,22 @@ class DocumentationIncrementTests(GitRepositoryCase):
         commit, note, asked = self.find({code})
         self.assertEqual(commit, code)
         self.assertIn("only under docs/", note)
-        # The head itself is never its own evidence; the walk stops at the first verified commit.
-        self.assertEqual(asked, [docs1, code])
+        self.assertEqual(self.reason, "docs-increment")
+        # The walk starts at the head and stops at the first verified commit.
+        self.assertEqual(asked, [docs2, docs1, code])
         self.assertEqual(self.find({code, docs1})[0], docs1)
         self.assertEqual(ci_scope.merge_parents(self.repository)[1], docs2)
+
+    def test_a_verified_head_that_contains_the_base_is_reused(self):
+        # A manual run passed L1 on the head while the pull request was a
+        # draft; marking it ready must not run the same tree again.
+        _, head = self.branch(self.code("int a = 1;\n"), self.code("int a = 2;\n"))
+        self.merge_into_main()
+        commit, note, asked = self.find({head})
+        self.assertEqual(commit, head)
+        self.assertEqual(self.reason, "head-verified")
+        self.assertIn("the head", note)
+        self.assertEqual(asked, [head])
 
     def test_no_reuse_without_a_verified_commit_or_beyond_the_limit(self):
         code, docs1, docs2 = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"), self.docs("v3\n"))
@@ -310,21 +340,20 @@ class DocumentationIncrementTests(GitRepositoryCase):
         commit, note, asked = self.find(set())
         self.assertIsNone(commit)
         self.assertIn("outside docs/", note)
-        self.assertEqual(asked, [docs1, code])
-        self.assertIsNone(self.find({docs2})[0])
+        self.assertEqual(asked, [docs2, docs1, code])
         commit, note, asked = self.find({code}, limit=1)
         self.assertIsNone(commit)
         self.assertIn("within 1 commits", note)
-        self.assertEqual(asked, [docs1])
+        self.assertEqual(asked, [docs2, docs1])
 
     def test_code_after_the_verified_commit_runs_l1(self):
-        code, later, _ = self.branch(self.code("int a = 1;\n"), lambda: self.write("engine/b.cpp", "int b;\n"),
+        code, later, head = self.branch(self.code("int a = 1;\n"), lambda: self.write("engine/b.cpp", "int b;\n"),
                                      self.docs("v2\n"))
         self.merge_into_main()
         commit, note, asked = self.find({code})
         self.assertIsNone(commit)
         self.assertIn("outside docs/", note)
-        self.assertEqual(asked, [later])
+        self.assertEqual(asked, [head, later])
         self.assertEqual(self.find({later})[0], later)
 
     def test_moving_code_into_docs_is_a_code_change(self):
@@ -335,13 +364,14 @@ class DocumentationIncrementTests(GitRepositoryCase):
 
     def test_an_advanced_base_runs_l1(self):
         # The verified commit was tested against an older base; the merge now
-        # also contains newer base code, so its tree was never tested.
-        code, _ = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"))
+        # also contains newer base code, so its tree was never tested. This
+        # holds for a verified head too.
+        code, head = self.branch(self.code("int a = 1;\n"), self.docs("v2\n"))
         self.git("checkout", "-q", "main")
         self.write("engine/c.cpp", "int c;\n")
         self.commit("base advanced")
         self.git("merge", "-q", "--no-ff", "-m", "merge", "topic")
-        commit, note, asked = self.find({code})
+        commit, note, asked = self.find({code, head})
         self.assertIsNone(commit)
         self.assertIn("not an ancestor", note)
         self.assertEqual(asked, [])
@@ -383,6 +413,9 @@ class CommandLineTests(unittest.TestCase):
         for event_name, event, extra, expected in (
             ("push", {"ref": "refs/heads/master"}, (), ("true", "true", "integration")),
             ("workflow_dispatch", {"inputs": {}}, (), ("true", "true", "integration")),
+            ("workflow_dispatch", {"inputs": {}}, ("--open-pull-requests", "0"), ("true", "true", "integration")),
+            ("workflow_dispatch", {"inputs": {}}, ("--open-pull-requests", "1"),
+             ("true", "false", "pull-request-dispatch")),
             ("pull_request", pull_request(False), ("--live-draft", "true"), ("false", "false", "draft")),
         ):
             with self.subTest(event=event_name):

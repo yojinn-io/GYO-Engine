@@ -15,7 +15,7 @@
 | 段階 | いつ実行するか | 内容 | 止めるもの |
 |---|---|---|---|
 | **L1**（merge gate） | Ready の pull request、master への push、Cross-platform CI の手動実行 | Platform ごとに 1 job。`ci-<os>` preset で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行します。Linux 行はさらに host shader tests、Lavapipe による共通 GPU tests、core baseline、Go の vet／test／race、Go service の cross build を実行します。パッケージングはしません | PR の merge（`CI gate`） |
-| **master 完全実行**（L1 + Quick） | master への push、Cross-platform CI の手動実行 | L1 に加え、`build-and-validate.yml` を `profile: quick` で全製品に実行します。Toolchain 3 行とゲームの各 platform 行がパッケージング、install 後の Quick 検証、archive 化を行い、Actions artifacts に upload します | Snapshot の公開（全 train） |
+| **master 完全実行**（L1 + Quick） | master への push、open な PR のない branch（または tag）での Cross-platform CI の手動実行 | L1 に加え、`build-and-validate.yml` を `profile: quick` で全製品に実行します。Toolchain 3 行とゲームの各 platform 行がパッケージング、install 後の Quick 検証、archive 化を行い、Actions artifacts に upload します | Snapshot の公開（全 train） |
 | **Release** | **Prepare Release**（手動） | 選んだ train について、toolchain baseline 3 行とその train の行を `profile: release` で build・検証します。全行で tests、host shader tests、Release checks を実行し、Linux 行で Go checks を実行します | Tag と Draft の作成 |
 | **L4**（実機） | 人が実機で実行 | ゲームが `release_evidence` で宣言した項目（実機 GPU、実ディスプレイなど）。CI は実行しません | ゲーム train の Prepare Release（証拠参照がなければ build 前に失敗）と、公開者の確認 |
 
@@ -56,25 +56,28 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | Draft PR の作成・push | Cross-platform CI、Package trial | `Select CI scope`（CI policy tests と範囲判定、理由 `draft`）。L1／Quick は skip、`CI gate` は意図した skip として成功。Package trial は label がなければ build しません | `Select CI scope`、`CI gate`、`Select trial packaging`（skip された job も表示） |
 | `docs/` 配下だけを変える PR | 同上 | 理由 `docs-only`。L1 を skip し、`CI gate` は成功 | 同上 |
 | コードを変えた Ready PR に `docs/` 配下だけを変える commit を push | 同上 | 理由 `docs-increment`。より前の commit で成功した L1 を再利用して L1 を skip し、`CI gate` は成功。条件は下記。満たさない場合は理由 `pull-request` で通常どおり L1 を実行 | 同上 |
+| Head ですでに L1 が成功している PR を Ready にする（例：Draft の間に手動実行した） | 同上 | 理由 `head-verified`。Head が base branch の先端を含む場合、head 自身の成功した L1 を再利用して L1 を skip し、`CI gate` は成功。条件は `docs-increment` と同じ（下記）。Base branch が進んでいれば通常どおり L1 を実行 | 同上 |
 | Ready の PR（作成、push、Ready への変更、reopen） | 同上 | 理由 `pull-request`。`L1 / <platform>` を 3 行実行。Quick とパッケージングはしません | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`Quick acceptance`（skip）、`CI gate`、`Select trial packaging`（open／push／reopen 時） |
 | Open な PR に `package` label | Package trial | Quick パッケージング（全製品）を Actions artifacts として upload。Label がある間は push のたびに再 build | `Trial packages / ...`（required ではない） |
 | **Package trial** の手動実行 | Package trial | 選んだ branch で同じ Quick パッケージング | — |
 | master への push（merge） | Cross-platform CI | L1 + Quick + `CI gate`。成功すれば `Snapshot / <train>` が train ごとに snapshot を公開。L1 が compiler cache を保存 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）。Snapshot は公開しません。master で実行した場合だけ compiler cache を保存します。L1 の終了後、`Report dispatched L1` が検証した commit に commit status `L1 (dispatch)`（その実行へのリンク）を設定し、その branch の open な PR ごとに目印付きのコメント（commit SHA、platform ごとの L1 結論、実行 URL）を作成または更新します。PR のない branch は status だけです | 同上（snapshot なし）＋`Report dispatched L1`。PR の checks は pull_request event の実行しか表示しないため、Draft PR では `L1 (dispatch)` status とコメントが記録になります |
+| PR の close／merge | Cross-platform CI | 同じ PR の実行中の run を取り消すだけで、job は実行しません（下記の concurrency） | — |
+| Open な PR のある branch での **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + `CI gate`（理由 `pull-request-dispatch`）。Draft PR の L1 の代わりで、Quick とパッケージングはしません。`Report dispatched L1` は次の行と同じ | `Select CI scope`、`L1 / ...`、`Quick acceptance`（skip）、`CI gate`、`Report dispatched L1` |
+| Open な PR のない branch（または tag）での **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）。Snapshot は公開しません。master で実行した場合だけ compiler cache を保存します。L1 の終了後、`Report dispatched L1` が検証した commit に commit status `L1 (dispatch)`（その実行へのリンク）を設定し、その branch の open な PR ごとに目印付きのコメント（commit SHA、platform ごとの L1 結論、実行 URL）を作成または更新します。PR のない branch は status だけです | 同上（snapshot なし）＋`Report dispatched L1`。PR の checks は pull_request event の実行しか表示しないため、Draft PR では `L1 (dispatch)` status とコメントが記録になります |
 | **Prepare Release** | Prepare Release | 1 train の Release 検証、tag、Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
 | Tag の push、**Publish release** | なし | 何も build しません。Publish は既存 Draft を公開するだけです | — |
 
 - 範囲判定（`build/ci/common/ci_scope.py`）は job の中で行い、trigger の path／draft filter は使いません。そのため `CI gate` はすべての PR event で報告されます。
 - `docs-only` の判定対象は `docs/` で始まる path だけです。Root の `README*.md`、`AGENTS.md` などを変えた PR は L1 を実行します。Rename は分割して判定するため、`docs/` の外から `docs/` へ移したファイルも非文書の変更として扱います。
-- `docs-increment`：PR head の 1 つ前の commit から first-parent をたどり（最大 20 個）、次の条件をすべて満たす最初の commit の L1 を再利用します。
+- `head-verified`／`docs-increment`：PR head 自身から first-parent をたどり（head のほかに最大 20 個）、次の条件をすべて満たす最初の commit の L1 を再利用します。Head 自身なら理由は `head-verified`、より前の commit なら `docs-increment` です。
   - 3 行の `L1 / <platform>` の最新 check run がすべて GitHub Actions の `success`。skip、cancel、失敗、未完了は数えません。
-  - その commit から head までの変更が `docs/` 配下だけ（判定方法は `docs-only` と同じ）。
+  - その commit から head までの変更が `docs/` 配下だけ（head 自身は変更なし。判定方法は `docs-only` と同じ）。
   - 現在の master の先端がその commit の祖先。master は前進するだけなので、その commit を検証した時の merge 結果はその commit 自身であり、現在の merge 結果は head です。両者のコードは完全に同じです。
   - master が進んだ、途中にコード変更がある、コードの push の L1 が新しい push で cancel された、check run を読めなかった、のいずれかなら通常どおり L1 を実行します。最悪でも 1 回多く実行するだけで、未検証のコードを skip することはありません。
   - `Select CI scope` の Summary に、再利用した commit または再利用しなかった理由が表示されます。
   - Check run の読み取りに `checks: read`、履歴をたどるために完全な履歴（checkout の `fetch-depth: 0`）が必要です。master の履歴を書き換えない（force push しない）ことが前提です。
 - Draft の判定には実行開始時に読む PR の現在の状態を使います。古い Draft 実行を re-run した場合、PR がすでに Ready なら L1 を実行し、まだ Draft なら再び skip します。
-- 同じ PR への新しい push は古い実行を取り消します。master の実行は互いに取り消しません。
+- 同じ PR の新しい event（push、Ready への変更、close、merge）は古い実行を取り消します。同じ ref の手動実行は新しいものが古いものを取り消し、取り消された実行は `L1 (dispatch)` status もコメントも書きません。master への push の実行は互いに取り消しません。
 - Base branch の変更（`edited`）では再実行しません。Merge queue（`merge_group`）は未対応で、有効化する前にその trigger と範囲判定を追加します。
 - Package trial は close／merge 済みの PR では build せず、`package` 以外の label を追加しても実行中の trial を取り消しません。
 
@@ -83,7 +86,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 Branch protection（または ruleset）で master の required status check に **`CI gate` だけ**を設定することを推奨します。設定は GitHub の Settings → Branches（または Rules → Rulesets）で行い、リポジトリのファイルには含まれません。
 
 - `CI gate` は常に実行され、`Select CI scope` が成功し、選ばれた段階（L1、Quick）がすべて `success`、選ばれなかった段階が `skipped` の場合だけ成功します。失敗、取消、意図しない skip は失敗です。
-- `L1 / <platform>` や Quick の各行を個別に required にしないでください。Draft、docs-only、docs-increment では skip されるため、個別に指定すると merge できなくなります。
+- `L1 / <platform>` や Quick の各行を個別に required にしないでください。Draft、docs-only、docs-increment、head-verified では skip されるため、個別に指定すると merge できなくなります。
 - Package trial の check は required にしません。
 
 ## 5. Platform と検証水準
@@ -148,7 +151,7 @@ Branch protection（または ruleset）で master の required status check に
 2. **公開は手動。** Draft を確認してから人が **Publish release** を押します（または `gh release edit <tag> --draft=false`）。Publish は再 build しません。
 3. **master は当日中に直すか revert する。** master 完全実行が失敗すると全 train の snapshot が止まり、次の Prepare Release の前提も崩れます。
 4. **Prepare Release は、完全実行（L1 + Quick、`CI gate`）が成功した master の commit からだけ実行する。** Workflow 自体は任意の branch を受け付け、この条件を検査しません。実行前に 10.5 節の手順 1 で確認します。
-5. `.github/`、`build/ci/`、`build/acceptance/`、パッケージング CMake を変える PR は、L1 がパッケージングと install 後の検証を実行しないため、merge 前にその branch で **Cross-platform CI** を手動実行するか `package` label で trial を実行し、Quick パッケージングが通ることを確認します。
+5. `.github/`、`build/ci/`、`build/acceptance/`、パッケージング CMake を変える PR は、L1 がパッケージングと install 後の検証を実行しないため、merge 前に `package` label または **Package trial** の手動実行で、Quick パッケージングが通ることを確認します。Open な PR のある branch で Cross-platform CI を手動実行しても L1 だけです。
 6. ローカルの tests や workflow の静的検査は、リモートの各 platform や Draft の成功を意味しません。公開する revision の Actions Summary、必須 jobs、検証報告、添付を根拠にします。`docs/dev_logs/` の過去の記録は当時の commit の結果です。
 
 ## 10. 実例
@@ -172,12 +175,12 @@ gh pr create --draft --base master --fill        # Draft PR
    gh pr checks <n> --watch
    ```
 
-   `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` と `CI gate` が実行されます。Head commit を変えずに Ready にした場合、新しい `CI gate` は L1 が終わるまで現れず、その間は Draft 実行の成功が表示されたままです。**新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。**
+   `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` と `CI gate` が実行されます。Draft の間に head で手動実行した L1 が成功していて、head が master の先端を含む場合は、理由 `head-verified` で L1 を skip します。Head commit を変えずに Ready にした場合、新しい `CI gate` は L1 が終わるまで現れず、その間は Draft 実行の成功が表示されたままです。**新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。**
 3. 以後の push は同じ PR の古い実行を取り消して L1 をやり直します。
 4. `.github/`、`build/ci/`、`build/acceptance/`、パッケージング CMake を変えた場合は、merge 前にパッケージング経路も確認します（10.3 節、または次のコマンド）。
 
    ```sh
-   gh workflow run cross-platform.yml --ref feature/ui-text-wrap
+   gh workflow run package-trial.yml --ref feature/ui-text-wrap
    ```
 
 5. Merge します。

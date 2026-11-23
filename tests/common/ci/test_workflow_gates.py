@@ -548,18 +548,24 @@ xvfb-run() {
         # No paths/draft/branch filters: a filtered pull request event would
         # leave the required gate check unreported.
         self.assertEqual(trigger, ["push:", "branches: [master]", "pull_request:",
-                                   "types: [opened, synchronize, reopened, ready_for_review]",
+                                   "types: [opened, synchronize, reopened, ready_for_review, closed]",
                                    "workflow_dispatch:"])
         self.assertNotRegex(self.quick, r"paths(-ignore)?:|branches-ignore:|tags(-ignore)?:")
         self.assertNotIn("pull_request.draft", self.quick)
 
-    def test_pull_request_runs_supersede_each_other_but_integration_runs_never_do(self):
+    def test_pull_request_and_manual_runs_supersede_each_other_but_pushes_never_do(self):
         concurrency = top_level_block(self.quick, "concurrency")
         group = re.search(r"(?m)^  group:\s*(.+)$", concurrency).group(1)
-        self.assertIn("github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)", group)
-        self.assertIn("|| github.run_id }}", group)
-        self.assertNotIn("github.ref", group)
-        self.assertRegex(concurrency, r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$")
+        # One group per pull request (its closed event cancels the run still in
+        # progress), one per manually run ref, and one per push run.
+        self.assertTrue(group.endswith(
+            "${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || "
+            "github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.ref) || github.run_id }}"), group)
+        self.assertRegex(concurrency, r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name != 'push' \}\}$")
+        # A closed event cancels and runs no job of its own.
+        self.assertRegex(job_block(self.quick, "scope"), r"(?m)^    if: github\.event\.action != 'closed'$")
+        for name in ("l1", "quick"):
+            self.assertRegex(job_block(self.quick, name), r"(?m)^    needs: scope$")
 
     def test_scope_job_alone_selects_tiers_through_the_tested_helper(self):
         scope = job_block(self.quick, "scope")
@@ -577,11 +583,16 @@ xvfb-run() {
         python_options = re.findall(r"(--[a-z][a-z-]*)", invocations[0] + re.search(
             r"(?m)^arguments=\((.+)\)$", command).group(1) + re.search(r"arguments\+=\((.+)\)", command).group(1))
         self.assertIn("--live-draft", python_options)
+        self.assertIn("--open-pull-requests", command)
+        for option in re.findall(r"(--[a-z][a-z-]*)", "".join(re.findall(r"arguments\+=\((.+)\)", command))):
+            self.assertIn(option, help_text.stdout)
         for option in python_options:
             self.assertIn(option, help_text.stdout)
         self.assertEqual(env_block(classifier, 8), {
             "EVENT_NAME": "${{ github.event_name }}",
             "PR_NUMBER": "${{ github.event.pull_request.number }}",
+            "REF_TYPE": "${{ github.ref_type }}",
+            "BRANCH": "${{ github.ref_name }}",
             "GH_TOKEN": "${{ github.token }}",
         })
         # Reading the live draft state and earlier check runs are the only extra permissions.
@@ -606,31 +617,39 @@ xvfb-run() {
         self.assertIn("source_commit: ${{ github.sha }}", quick)
         self.assertIn("profile: quick", quick)
 
-    def test_actual_classifier_reads_the_live_draft_state_only_for_pull_requests(self):
+    def test_actual_classifier_reads_the_live_draft_state_and_open_pull_requests_by_event(self):
         bash = find_bash()
         if bash is None:
             if os.name == "nt":
                 self.skipTest("Native Git Bash cannot execute in this Windows environment")
             self.fail("Bash is required by the Ubuntu CI scope job")
         script = run_script(step_with(job_block(self.quick, "scope"), "ci_scope.py"))
-        prefix = '''gh() { printf '%s\\n' "$*" >> gh-calls; [ "$GH_STATUS" = 0 ] || return "$GH_STATUS"; printf '%s\\n' "$LIVE_DRAFT"; }
+        prefix = '''gh() { printf '%s\\n' "$*" >> gh-calls; [ "$GH_STATUS" = 0 ] || return "$GH_STATUS"; printf '%s\\n' "$ANSWER"; }
 python() { printf '%s\\n' "$@" > python-arguments; }
 '''
         lookup = ["api repos/owner/repository/pulls/7 --jq .draft"]
-        for event_name, gh_status, live_draft, expected_gh, expected_draft in (
-            ("pull_request", 0, "true", lookup, "true"),
-            ("pull_request", 0, "false", lookup, "false"),
-            ("push", 0, "true", [], None),
-            ("workflow_dispatch", 0, "true", [], None),
-            ("pull_request", 1, "false", lookup, None),
+        pulls = ["api -X GET repos/owner/repository/pulls -f state=open -f head=owner:feature/x --jq length"]
+        # (event, ref type, gh exit status, gh answer, expected gh calls, expected option and value)
+        for event_name, ref_type, gh_status, answer, expected_gh, expected_option in (
+            ("pull_request", "branch", 0, "true", lookup, ("--live-draft", "true")),
+            ("pull_request", "branch", 0, "false", lookup, ("--live-draft", "false")),
+            ("push", "branch", 0, "true", [], None),
+            ("workflow_dispatch", "branch", 0, "2", pulls, ("--open-pull-requests", "2")),
+            ("workflow_dispatch", "branch", 0, "0", pulls, ("--open-pull-requests", "0")),
+            # A manual run on a tag has no branch and so no pull request.
+            ("workflow_dispatch", "tag", 0, "2", [], None),
+            ("pull_request", "branch", 1, "false", lookup, None),
+            ("workflow_dispatch", "branch", 1, "1", pulls, None),
         ):
-            with self.subTest(event=event_name, gh_status=gh_status, live_draft=live_draft), \
+            with self.subTest(event=event_name, ref_type=ref_type, gh_status=gh_status, answer=answer), \
                     tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 environment = dict(os.environ, EVENT_NAME=event_name, PR_NUMBER="7" if event_name == "pull_request" else "",
-                                   GITHUB_REPOSITORY="owner/repository", GITHUB_EVENT_PATH="event.json",
+                                   REF_TYPE=ref_type, BRANCH="feature/x",
+                                   GITHUB_REPOSITORY="owner/repository", GITHUB_REPOSITORY_OWNER="owner",
+                                   GITHUB_EVENT_PATH="event.json",
                                    GITHUB_OUTPUT="outputs", GITHUB_STEP_SUMMARY="summary",
-                                   GH_STATUS=str(gh_status), LIVE_DRAFT=live_draft)
+                                   GH_STATUS=str(gh_status), ANSWER=answer)
                 result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", prefix + script],
                                         cwd=root, env=environment, capture_output=True, text=True, timeout=10)
                 calls = (root / "gh-calls").read_text().splitlines() if (root / "gh-calls").exists() else []
@@ -644,13 +663,19 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                 arguments = (root / "python-arguments").read_text().splitlines()
                 self.assertEqual(arguments[:5], ["build/ci/common/ci_scope.py", "--event-name", event_name,
                                                  "--event-path", "event.json"])
-                if expected_draft is None:
-                    self.assertNotIn("--live-draft", arguments)
+                options = [argument for argument in arguments if argument.startswith("--")]
+                self.assertEqual(options[-2:], ["--output", "--summary"])
+                if expected_option is None:
+                    self.assertEqual(options, ["--event-name", "--event-path", "--output", "--summary"])
+                    continue
+                option, value = expected_option
+                self.assertEqual(arguments[arguments.index(option) + 1], value)
+                if option == "--live-draft":
                     # Earlier L1 results are reused only inside a pull request.
-                    self.assertNotIn("--github-repository", arguments)
-                else:
-                    self.assertEqual(arguments[arguments.index("--live-draft") + 1], expected_draft)
+                    self.assertEqual(options[2:4], ["--live-draft", "--github-repository"])
                     self.assertEqual(arguments[arguments.index("--github-repository") + 1], "owner/repository")
+                else:
+                    self.assertEqual(options[2:-2], ["--open-pull-requests"])
 
     def test_actual_ci_gate_accepts_only_selected_successes_and_unselected_skips(self):
         bash = find_bash()
@@ -671,8 +696,9 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             "QUICK_RESULT": "${{ needs.quick.result }}",
         })
         # A skipped job counts as passing a required check, so the gate must
-        # never be skippable by a failed or cancelled dependency.
-        self.assertRegex(gate, r"(?m)^    if: always\(\)$")
+        # never be skippable by a failed or cancelled dependency; only a
+        # closed pull request, which nothing merges on, skips it.
+        self.assertRegex(gate, r"(?m)^    if: always\(\) && github\.event\.action != 'closed'$")
         self.assertNotRegex(gate, r"continue-on-error:\s*true")
         runs = list(re.finditer(r"(?m)^        run: \|\s*$", gate))
         self.assertEqual(len(runs), 1, "The gate job must have one executable policy block")
@@ -973,8 +999,9 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertRegex(report, r"(?m)^    name: Report dispatched L1$")
         self.assertRegex(report, r"(?m)^    needs: \[scope, l1\]$")
         # Push and pull request runs never reach the writes; manual runs report
-        # even when L1 failed or was cancelled.
-        self.assertRegex(report, r"(?m)^    if: always\(\) && github\.event_name == 'workflow_dispatch'$")
+        # even when L1 failed, but a cancelled run (superseded on its ref)
+        # reports nothing.
+        self.assertRegex(report, r"(?m)^    if: \$\{\{ !cancelled\(\) && github\.event_name == 'workflow_dispatch' \}\}$")
         self.assertNotIn("dispatch_report", job_block(self.quick, "gate"))
         step = step_with(report, "statuses/")
         self.assertEqual(env_block(step, 8), {

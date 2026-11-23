@@ -20,8 +20,8 @@ from product_registry import RELEASE_PLATFORMS, ROOT, TOOLCHAINS
 # A change set touching only these roots cannot affect any native build.
 DOCUMENTATION_ROOTS = ("docs/",)
 
-# How many commits before a pull request head the documentation-increment check
-# examines; past it, L1 simply runs again.
+# How many commits before a pull request head the reuse check examines beside
+# the head itself; past it, L1 simply runs again.
 INCREMENT_LIMIT = 20
 
 
@@ -34,7 +34,7 @@ class Scope:
     run_l1: bool
     run_quick: bool
     reason: str
-    # Why an earlier L1 result was or was not reused; shown in the summary only.
+    # Why an L1 result was or was not reused; shown in the summary only.
     detail: str = ""
 
 
@@ -72,31 +72,37 @@ def merge_changes(repository: Path, *, git: str = "git") -> list[str]:
 
 
 def verified_increment(repository: Path, l1_passed, *, git: str = "git",
-                       limit: int = INCREMENT_LIMIT) -> tuple[str | None, str]:
-    """An earlier commit of the pull request whose passed L1 also covers the head.
+                       limit: int = INCREMENT_LIMIT) -> tuple[str | None, str, str | None]:
+    """A commit of the pull request whose passed L1 also covers the head.
 
-    Walks the head's first-parent history, the head itself excluded, and returns
-    (commit, note) for the nearest commit C where
+    Walks the head's first-parent history, the head itself first, and returns
+    (commit, note, reason) for the nearest commit C where
       - the base tip (HEAD^1) is an ancestor of C. The base branch only moves
         forward, so the base C was tested against was an ancestor of C as well:
         GitHub's test merge of C had exactly C's tree, as the merge at HEAD has
         exactly the head's tree;
       - every path changed from C to the head is documentation;
       - l1_passed(C): every L1 row of C completed with success.
-    Otherwise it returns (None, why). The walk stops at the first commit that
+    The reason is "head-verified" when C is the head (its L1 ran earlier, for
+    example a manual run while the pull request was a draft) and
+    "docs-increment" when C is an earlier commit.
+    Otherwise it returns (None, why, None). The walk stops at the first commit that
     fails either history condition: no older commit can pass the first, and
     none is trusted for the second.
     """
     base, head = merge_parents(repository, git=git)
     history = _git(repository, git, "rev-list", "--first-parent", f"--max-count={limit + 1}", head).stdout.split()
-    for commit in history[1:]:
+    for commit in history:
         if _git(repository, git, "merge-base", "--is-ancestor", base, commit, accept=(0, 1)).returncode:
-            return None, f"the base {base[:12]} is not an ancestor of {commit[:12]}"
+            return None, f"the base {base[:12]} is not an ancestor of {commit[:12]}", None
         if not all(is_documentation(path) for path in diff_paths(repository, commit, head, git=git)):
-            return None, f"{commit[:12]} differs from the head outside docs/"
+            return None, f"{commit[:12]} differs from the head outside docs/", None
         if l1_passed(commit):
-            return commit, f"every L1 row passed on {commit[:12]}, which differs from the head only under docs/"
-    return None, f"no commit with every L1 row passed within {limit} commits before the head"
+            if commit == head:
+                return commit, f"every L1 row passed on the head {commit[:12]}, which contains the base", "head-verified"
+            return (commit, f"every L1 row passed on {commit[:12]}, which differs from the head only under docs/",
+                    "docs-increment")
+    return None, f"no commit with every L1 row passed on the head or within {limit} commits before it", None
 
 
 def l1_rows_passed(listing, platforms) -> bool:
@@ -128,7 +134,7 @@ def github_l1_lookup(repository_slug: str, platforms, *, gh: str = "gh"):
 
 
 def select_scope(event_name: str, event, changed_paths, live_draft: bool | None = None,
-                 increment=None) -> Scope:
+                 increment=None, open_pull_requests: int | None = None) -> Scope:
     """Map one event to the tiers that must pass; changed_paths is called lazily.
 
     live_draft is the pull request's draft state read when the run starts. A
@@ -136,9 +142,16 @@ def select_scope(event_name: str, event, changed_paths, live_draft: bool | None 
     stale and never decides whether the merge gate is skipped.
 
     increment, when given, is called lazily for a ready pull request that also
-    changes files outside docs/ and returns verified_increment's (commit, note).
-    A commit skips L1 as "docs-increment"; any error runs L1.
+    changes files outside docs/ and returns verified_increment's
+    (commit, note, reason). A commit skips L1 with that reason; any error runs L1.
+
+    open_pull_requests is the number of open pull requests whose head is the
+    branch of a manual run. Such a run stands in for the L1 of a draft pull
+    request, so it runs L1 alone; packaging stays with integration runs and
+    the Package trial. Unknown (None) keeps the complete integration run.
     """
+    if event_name == "workflow_dispatch" and open_pull_requests:
+        return Scope(run_l1=True, run_quick=False, reason="pull-request-dispatch")
     if event_name in ("push", "workflow_dispatch"):
         # Integration runs keep a complete record for every commit they see.
         return Scope(run_l1=True, run_quick=True, reason="integration")
@@ -156,12 +169,12 @@ def select_scope(event_name: str, event, changed_paths, live_draft: bool | None 
         if increment is None:
             return Scope(run_l1=True, run_quick=False, reason="pull-request")
         try:
-            commit, note = increment()
+            commit, note, reason = increment()
         except (ScopeError, OSError, subprocess.SubprocessError, ValueError) as error:
             # Reusing a result is only an optimization; when unsure, verify.
-            commit, note = None, f"the documentation-increment check failed: {error}"
+            commit, note, reason = None, f"the L1 reuse check failed: {error}", None
         if commit:
-            return Scope(run_l1=False, run_quick=False, reason="docs-increment", detail=note)
+            return Scope(run_l1=False, run_quick=False, reason=reason, detail=note)
         return Scope(run_l1=True, run_quick=False, reason="pull-request", detail=note)
     raise ScopeError(f"Unsupported CI event: {event_name!r}")
 
@@ -178,8 +191,11 @@ def main():
     parser.add_argument("--live-draft", choices=("true", "false"),
                         help="Current pull request draft state; required for pull_request events")
     parser.add_argument("--github-repository", metavar="OWNER/NAME",
-                        help="Enables the documentation-increment check for pull_request events: reuse the passed L1 "
-                             "of an earlier commit whose code equals the head (check runs read with the gh CLI)")
+                        help="Enables the L1 reuse check for pull_request events: reuse the passed L1 of the head, "
+                             "or of an earlier commit whose code equals the head (check runs read with the gh CLI)")
+    parser.add_argument("--open-pull-requests", type=int, metavar="N",
+                        help="Open pull requests whose head is the branch of a workflow_dispatch run; "
+                             "a positive number runs L1 without Quick")
     parser.add_argument("--repository", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path, help="Append GitHub Actions outputs")
     parser.add_argument("--summary", type=Path, help="Append a Markdown step summary")
@@ -191,7 +207,8 @@ def main():
         if args.github_repository:
             lookup = github_l1_lookup(args.github_repository, RELEASE_PLATFORMS)
             increment = lambda: verified_increment(args.repository, lookup)  # noqa: E731
-        scope = select_scope(args.event_name, event, lambda: merge_changes(args.repository), live_draft, increment)
+        scope = select_scope(args.event_name, event, lambda: merge_changes(args.repository), live_draft, increment,
+                             args.open_pull_requests)
     except (OSError, json.JSONDecodeError, ScopeError) as error:
         print(f"::error::{error}", file=sys.stderr)
         return 1
@@ -210,7 +227,7 @@ def main():
             stream.write(f"## CI scope\n\n- Event: `{args.event_name}`\n- Reason: `{scope.reason}`\n"
                          f"- L1 merge gate: `{outputs['run_l1']}`\n- Quick acceptance: `{outputs['run_quick']}`\n")
             if scope.detail:
-                stream.write(f"- Documentation increment: {scope.detail}\n")
+                stream.write(f"- L1 reuse: {scope.detail}\n")
     printed = {name: value for name, value in outputs.items() if name != "platforms"}
     if scope.detail:
         printed["detail"] = scope.detail

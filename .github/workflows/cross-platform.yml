@@ -3,32 +3,37 @@ run-name: ${{ github.event_name }} / ${{ github.ref_name }}
 
 # Mainline development: only master pushes integrate. Pull requests carry no
 # path or draft filters here; the scope job decides what runs, so the single
-# required "CI gate" check reports for every pull request event.
+# required "CI gate" check reports for every pull request event. Closing or
+# merging a pull request only cancels its run still in progress (see
+# concurrency); a closed event runs no job.
 on:
   push:
     branches: [master]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# A newer push to the same pull request supersedes its older run. Integration
-# runs never share a group: GitHub replaces even a pending run in a shared
-# group, which would leave a master commit without a gate result, packages
-# or a compiler cache seed.
+# A newer event of the same pull request supersedes its older run, and a newer
+# manual run on the same ref supersedes the older manual run: only the newest
+# commit is merged or reported. Pushes never share a group: GitHub replaces
+# even a pending run in a shared group, which would leave a master commit
+# without a gate result, packages or a compiler cache seed.
 concurrency:
-  group: gyo-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: gyo-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   scope:
     name: Select CI scope
+    # A closed pull request needs no verdict; its event exists to cancel.
+    if: github.event.action != 'closed'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Reading the live draft state needs read access to pull requests; reusing
-    # an earlier L1 result of the pull request reads its check runs.
+    # Reading the live draft state and a manual run's open pull requests needs
+    # read access to pull requests; reusing an L1 result reads check runs.
     permissions:
       contents: read
       pull-requests: read
@@ -51,11 +56,13 @@ jobs:
       # before it; a broken classifier must not silently skip the merge gate.
       - name: Test the CI scope and gate policies
         run: python -m unittest discover -s tests/common/ci -v
-      - name: Classify draft, documentation-only, documentation-increment and integration events
+      - name: Classify draft, documentation-only, verified, manual and integration events
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_TYPE: ${{ github.ref_type }}
+          BRANCH: ${{ github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           arguments=(--event-name "$EVENT_NAME" --event-path "$GITHUB_EVENT_PATH")
@@ -64,6 +71,10 @@ jobs:
             # stale; the current state decides whether L1 may be skipped.
             draft=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .draft)
             arguments+=(--live-draft "$draft" --github-repository "$GITHUB_REPOSITORY")
+          elif [ "$EVENT_NAME" = workflow_dispatch ] && [ "$REF_TYPE" = branch ]; then
+            # A manual run on a pull request's branch stands in for its L1.
+            pulls=$(gh api -X GET "repos/$GITHUB_REPOSITORY/pulls" -f state=open -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" --jq length)
+            arguments+=(--open-pull-requests "$pulls")
           fi
           python build/ci/common/ci_scope.py "${arguments[@]}" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
@@ -282,10 +293,12 @@ jobs:
 
   # The only required check. It always runs (a skipped job would count as
   # passing) and accepts exactly a selected success or an unselected skip.
+  # Only a closed pull request skips it: no merge waits on that verdict, and
+  # reopening the pull request runs the gate again.
   gate:
     name: CI gate
     needs: [scope, l1, quick]
-    if: always()
+    if: always() && github.event.action != 'closed'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -325,11 +338,12 @@ jobs:
   # Manual runs alone report L1 back as a commit status on the tested commit
   # and one marked comment on each open pull request of the dispatched branch.
   # Listing the run's L1 jobs reads Actions; push and pull request runs skip
-  # this job and never write statuses or comments.
+  # this job and never write statuses or comments. A cancelled run (a newer
+  # manual run on the ref superseded it) verified nothing and reports nothing.
   dispatch_report:
     name: Report dispatched L1
     needs: [scope, l1]
-    if: always() && github.event_name == 'workflow_dispatch'
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

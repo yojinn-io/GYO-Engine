@@ -15,7 +15,7 @@
 | 層級 | 何時執行 | 內容 | 擋住什麼 |
 |---|---|---|---|
 | **L1**（合併閘門） | Ready 的 pull request、推送 master、手動執行 Cross-platform CI | 每個平台一個 job，以 `ci-<os>` preset 建置登錄啟用的遊戲、預設工具、Engine 與測試，並執行 `cpu`／`shader` 標籤的測試。Linux 列另外執行 host shader 測試、以 Lavapipe 執行的通用 GPU 測試、core 基準、Go 的 vet／test／race，以及 Go 服務的交叉編譯。不封裝 | PR 合併（`CI gate`） |
-| **master 完整執行**（L1 + Quick） | 推送 master、手動執行 Cross-platform CI | 在 L1 之外，以 `profile: quick` 對全部產品執行 `build-and-validate.yml`。三個 toolchain 列與遊戲各平台列進行封裝、安裝後 Quick 驗收與壓縮，並上傳 Actions artifacts | Snapshot 發佈（全部 train） |
+| **master 完整執行**（L1 + Quick） | 推送 master、在沒有 open PR 的分支（或 tag）手動執行 Cross-platform CI | 在 L1 之外，以 `profile: quick` 對全部產品執行 `build-and-validate.yml`。三個 toolchain 列與遊戲各平台列進行封裝、安裝後 Quick 驗收與壓縮，並上傳 Actions artifacts | Snapshot 發佈（全部 train） |
 | **Release** | **Prepare Release**（手動） | 針對所選 train，以 `profile: release` 建置並驗收三個 toolchain 基準列與該 train 的各列。所有列都執行測試、host shader 測試與 Release checks，Linux 列執行 Go checks | 建立 tag 與 Draft |
 | **L4**（實機） | 由人在實機上執行 | 遊戲以 `release_evidence` 宣告的項目（實體 GPU、真實螢幕等）。CI 不執行 | 遊戲 train 的 Prepare Release（沒有證據參照就在建置前失敗），以及發佈者的確認 |
 
@@ -56,25 +56,28 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 建立 Draft PR 或推送到 Draft PR | Cross-platform CI、Package trial | `Select CI scope`（CI 政策測試與範圍判定，理由 `draft`）。L1／Quick 略過，`CI gate` 以預期略過通過。Package trial 在沒有標籤時不建置 | `Select CI scope`、`CI gate`、`Select trial packaging`（略過的 job 也會顯示） |
 | 只變更 `docs/` 底下的 PR | 同上 | 理由 `docs-only`。略過 L1，`CI gate` 通過 | 同上 |
 | 已變更程式的 Ready PR，再推送只改 `docs/` 的 commit | 同上 | 理由 `docs-increment`。沿用較早一個 commit 已通過的 L1，略過 L1，`CI gate` 通過；條件見下方。條件不成立時理由為 `pull-request`，照常執行 L1 | 同上 |
+| head 已通過 L1 的 PR 改為 Ready（例如 Draft 時手動執行過） | 同上 | 理由 `head-verified`。head 包含目標分支的尖端時，沿用 head 自己已通過的 L1，略過 L1，`CI gate` 通過；條件與 `docs-increment` 相同（見下方）。目標分支已前進時照常執行 L1 | 同上 |
 | Ready 的 PR（建立、推送、改為 Ready、重新開啟） | 同上 | 理由 `pull-request`。執行三列 `L1 / <platform>`；不跑 Quick，也不封裝 | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`Quick acceptance`（略過）、`CI gate`、`Select trial packaging`（建立／推送／重新開啟時） |
 | 開啟中的 PR 加上 `package` 標籤 | Package trial | 以 Quick 封裝全部產品並上傳 Actions artifacts；標籤存在期間，每次推送都重新建置 | `Trial packages / ...`（不是必要檢查） |
 | 手動執行 **Package trial** | Package trial | 在所選分支執行相同的 Quick 封裝 | — |
 | 推送 master（合併） | Cross-platform CI | L1 + Quick + `CI gate`；通過後 `Snapshot / <train>` 為每條 train 發佈 snapshot；L1 儲存編譯快取 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| 手動執行 **Cross-platform CI** | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）；不發佈 snapshot；只有在 master 上執行時才儲存編譯快取。L1 結束後 `Report dispatched L1` 在受測 commit 設定 commit status `L1 (dispatch)`（連到該次執行），並在該分支每個 open PR 建立或更新一則帶標記的留言（commit SHA、各平台 L1 結論、執行 URL）；沒有 PR 的分支只設定 status | 同上（沒有 snapshot）＋`Report dispatched L1`。PR 的 checks 只列 pull_request 事件的執行，所以 Draft PR 上以 `L1 (dispatch)` status 與留言為紀錄 |
+| 關閉或合併 PR | Cross-platform CI | 只取消同一 PR 執行中的 run（見下方 concurrency），不執行任何 job | — |
+| 在有 open PR 的分支手動執行 **Cross-platform CI** | Cross-platform CI | L1 + `CI gate`（理由 `pull-request-dispatch`），代替 Draft PR 的 L1；不跑 Quick，也不封裝。`Report dispatched L1` 與下一列相同 | `Select CI scope`、`L1 / ...`、`Quick acceptance`（略過）、`CI gate`、`Report dispatched L1` |
+| 在沒有 open PR 的分支（或 tag）手動執行 **Cross-platform CI** | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）；不發佈 snapshot；只有在 master 上執行時才儲存編譯快取。L1 結束後 `Report dispatched L1` 在受測 commit 設定 commit status `L1 (dispatch)`（連到該次執行），並在該分支每個 open PR 建立或更新一則帶標記的留言（commit SHA、各平台 L1 結論、執行 URL）；沒有 PR 的分支只設定 status | 同上（沒有 snapshot）＋`Report dispatched L1`。PR 的 checks 只列 pull_request 事件的執行，所以 Draft PR 上以 `L1 (dispatch)` status 與留言為紀錄 |
 | **Prepare Release** | Prepare Release | 一條 train 的 Release 驗收、tag 與 Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
 | 推送 tag、**Publish release** | 無 | 不建置任何東西；Publish 只公開既有 Draft | — |
 
 - 範圍判定（`build/ci/common/ci_scope.py`）在 job 內進行，不使用觸發條件的 path／draft 篩選，因此 `CI gate` 在每個 PR 事件都會回報。
 - `docs-only` 只認以 `docs/` 開頭的路徑。變更根目錄 `README*.md`、`AGENTS.md` 等檔案的 PR 會執行 L1。重新命名會拆開判定，從 `docs/` 以外移入 `docs/` 的檔案也算非文件變更。
-- `docs-increment`：從 PR head 的前一個 commit 沿第一親代往回找，最多 20 個，找到第一個同時滿足下列條件的 commit，就沿用它的 L1。
+- `head-verified`／`docs-increment`：從 PR head 本身開始沿第一親代往回找（head 之外最多 20 個），找到第一個同時滿足下列條件的 commit，就沿用它的 L1。找到 head 本身時理由為 `head-verified`，找到較早的 commit 時為 `docs-increment`。
   - 三列 `L1 / <platform>` 的最新 check run 都是 GitHub Actions 的 `success`。略過、取消、失敗或尚未完成都不算。
-  - 從它到 head 的變更只在 `docs/` 底下，判定方式與 `docs-only` 相同。
+  - 從它到 head 的變更只在 `docs/` 底下（head 本身沒有變更），判定方式與 `docs-only` 相同。
   - 目前 master 的尖端是它的祖先。master 只會前進，所以它當時測試的合併結果就是它本身；現在的合併結果就是 head，兩者的程式完全相同。
   - master 前進了、中間有程式變更、程式那次推送的 L1 被新推送取消、或讀取 check run 失敗，一律照常執行 L1。最壞情況是多跑一次，不會略過未測試的程式。
   - `Select CI scope` 的 Summary 會寫出沿用的 commit，或不沿用的原因。
   - 讀取 check run 需要 `checks: read`，往回找需要完整歷史（checkout 的 `fetch-depth: 0`）。前提是 master 不改寫歷史（不 force push）。
 - Draft 判定使用執行開始時讀取的 PR 目前狀態；重新執行舊的 Draft 執行時，若 PR 已改為 Ready 就會跑 L1，仍是 Draft 則再次略過。
-- 同一 PR 的新推送會取消舊執行；master 的執行彼此不取消。
+- 同一 PR 的新事件（推送、改為 Ready、關閉、合併）會取消舊執行；同一 ref 的手動執行，新的會取消舊的，被取消的執行不寫 `L1 (dispatch)` status 與留言；推送 master 的執行彼此不取消。
 - 只改 PR 目標分支（`edited`）不會重新執行。目前未支援 merge queue（`merge_group`）；啟用前須先加入該觸發與範圍判定。
 - Package trial 不建置已關閉或已合併的 PR；加上 `package` 以外的標籤也不會取消執行中的 trial。
 
@@ -83,7 +86,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 建議以 branch protection（或 ruleset）把 master 的必要狀態檢查**只設為 `CI gate`**。這項設定在 GitHub 的 Settings → Branches（或 Rules → Rulesets）進行，不在儲存庫檔案中。
 
 - `CI gate` 一定會執行；只有在 `Select CI scope` 成功、被選中的層級（L1、Quick）全部 `success`、未選中的層級為 `skipped` 時才通過。失敗、取消或非預期的略過都算失敗。
-- 不要把 `L1 / <platform>` 或 Quick 各列個別設為必要檢查；它們在 Draft、docs-only 與 docs-increment 時會被略過，個別設定會讓 PR 無法合併。
+- 不要把 `L1 / <platform>` 或 Quick 各列個別設為必要檢查；它們在 Draft、docs-only、docs-increment 與 head-verified 時會被略過，個別設定會讓 PR 無法合併。
 - Package trial 的 check 不設為必要檢查。
 
 ## 5. 平台與驗證等級
@@ -148,7 +151,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 2. **手動公開。** 檢查 Draft 後由人按 **Publish release**（或執行 `gh release edit <tag> --draft=false`）。公開不會重新編譯。
 3. **master 當天修復或 revert。** master 完整執行失敗會停下所有 train 的 snapshot，也破壞下一次 Prepare Release 的前提。
 4. **只從完整執行（L1 + Quick、`CI gate`）通過的 master commit 執行 Prepare Release。** Workflow 本身接受任何分支，不檢查這個條件；執行前請依第 10.5 節步驟 1 確認。
-5. 變更 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake 的 PR，因為 L1 不執行封裝與安裝後驗收，合併前要在該分支手動執行 **Cross-platform CI**，或以 `package` 標籤執行 trial，確認 Quick 封裝通過。
+5. 變更 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake 的 PR，因為 L1 不執行封裝與安裝後驗收，合併前要以 `package` 標籤或手動執行 **Package trial**，確認 Quick 封裝通過。在有 open PR 的分支手動執行 Cross-platform CI 只跑 L1。
 6. 本機測試與 workflow 靜態檢查不等於遠端各平台或 Draft 已成功；以所發佈 revision 的 Actions Summary、必要 jobs、驗收報告與附件為準。`docs/dev_logs/` 的歷史紀錄只代表當時 commit 的結果。
 
 ## 10. 實例
@@ -172,12 +175,12 @@ gh pr create --draft --base master --fill        # Draft PR
    gh pr checks <n> --watch
    ```
 
-   會執行 `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` 與 `CI gate`。若改為 Ready 時 head commit 沒有變，新的 `CI gate` 要等 L1 結束才出現，期間仍顯示 Draft 執行的通過結果。**新的 `CI gate` 回報前，不要合併或啟用 auto-merge。**
+   會執行 `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` 與 `CI gate`；head 在 Draft 時已手動執行並通過 L1、且包含 master 的尖端時，理由為 `head-verified`，略過 L1。若改為 Ready 時 head commit 沒有變，新的 `CI gate` 要等 L1 結束才出現，期間仍顯示 Draft 執行的通過結果。**新的 `CI gate` 回報前，不要合併或啟用 auto-merge。**
 3. 之後每次推送都會取消同一 PR 的舊執行並重跑 L1。
 4. 若變更了 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake，合併前也要確認封裝路徑（第 10.3 節，或下列指令）：
 
    ```sh
-   gh workflow run cross-platform.yml --ref feature/ui-text-wrap
+   gh workflow run package-trial.yml --ref feature/ui-text-wrap
    ```
 
 5. 合併：
