@@ -258,7 +258,7 @@ master 的 platform 同時扮三個角色（偵察 9 節末）：(a) 視窗與�
 | 模擬（或文件）World → 渲染 World | **Extract**（同一條執行緒上 World 到 World 唯一的路） | P7 |
 | ImGui 的 draw list（文件 World → 渲染 World） | **Extract**（P23） | 使用者 11-11 §3b |
 | OS 事件 → 讀輸入的 World | **交換函式「進」**：`sdl_window` 的 runner 把中性事件放進共用處的緩衝（型別由 `input`、`window` 定）；每輪開始前 `input`、`window` 的交換函式取進 World、跑狀態邏輯。測試與網路注入往同一個緩衝放事件 | 第 4.3 節、P27、`-sdl-input-via-exchange` |
-| 渲染 World → GPU（送出畫面） | **Q7 交使用者**（兩個做法見第 14 節 Q7）；目前的寫法——**套用點「出」**：`render_world` 與各 `<x>_render` 的 System 用 `render` 的函式產出 `RenderCommands`（資料），`sdl_gpu` 的 `GpuSubmit` 是渲染 World 的最後一個 System，讀它、畫、送出 | P27；和 audio 5.3 同形：集中一個 System |
+| 渲染 World → GPU（送出畫面） | **Q7 交使用者**（三個做法見第 14 節 Q7）；目前的寫法——**套用點「出」**：`render_world` 與各 `<x>_render` 的 System 用 `render` 的函式產出 `RenderCommands`（資料），`sdl_gpu` 的 `GpuSubmit` 是渲染 World 的最後一個 System，讀它、畫、送出 | P27；和 audio 5.3 同形：集中一個 System |
 | runner 的時間取樣 → 各 World | **交換函式「進」**（world_time 登記，把 runner 給的取樣寫進 `TimeSampling` 的 `ManualInstant`） | P12；交換點宣告 5.5 已留的接法 |
 | 混音器、裝置、真的 GPU 物件、SDL 的視窗 | 不進 World：共用處（O-15），由 `plugins/sdl*` 持有；World 裡只有資料（`RenderCommands` 以 id 指 GPU 物件） | P9、P27 |
 | 遊戲 → OS 的操作（開關輸入法、候選窗、改視窗） | **請求資料**（`TextInputRequest`、改視窗的請求）寫在 World 裡；每輪結束後 `input`、`window` 的**交換函式「出」**放到共用處；`sdl_window` 的 runner 在 World 外讀、套用給 SDL，晚一幀生效 | P27；`-sdl-input-via-exchange`；同 Bevy 的 `Window.ime_enabled`／`ime_position` |
