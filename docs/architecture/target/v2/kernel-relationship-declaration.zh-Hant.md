@@ -531,6 +531,10 @@ Kernel 自己多登記兩個元件，下列判定的期待值要改（第 0 步�
 | 初始值的寫死值 | `InitialValueTests.cpp:656` |
 | J-32 摘要 golden（三平台相同） | `WorldTests.cpp:519` |
 | DI-KS 4 的元件數 | `RegistrationRoundTests.cpp:254`、`:264`、`:696` |
+| **補列**（實作第 1 步發現、當時漏列；停下回報後使用者 2026-11-23「照建議，KR 選 (a)」，經主會話，HANDOFF `v8-arch-gyo2-kernel-relationship-golden-extended`）：J-12 存取集合裡手寫的 ComponentId | `SignatureTests.cpp:313-358`（22 處；改用 `kFirstOwnerComponent` 加偏移） |
+| 補列：J-20 三組 Registry 指紋 golden | `SchedulerTests.cpp:175`（期待值在 `:138`、`:140`、`:142`） |
+| 補列：J-32 hook 紀錄字串裡的 ComponentId | `WorldTests.cpp:757`、`:760`、`:836` |
+| 補列：J-18 同一個 golden 的另一次比較 | `RegistryTests.cpp:64` |
 
 1. **守的性質**：Registry 指紋、World 摘要的值只取決於登記與宣告、三個平台相同；id 依登記順序（DI-KS 3、4、27）。
 2. **緩的面**：沒有。新的期待值一樣是一個固定值，任何其他改動（型別大小、順序、平台差）照舊讓判定失敗。

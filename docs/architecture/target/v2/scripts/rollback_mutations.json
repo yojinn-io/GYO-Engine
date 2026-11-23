@@ -998,14 +998,14 @@
   },
   {
    "id": "rb-restore-derives-initial-values",
-   "what": "the kernel's Restore derives InitialValue targets: R-2 breaks when a request comes back without its target (review of step 8, A3), and a revived entity gets a target it never had. The rollback's view of ks-restore-derives-initial-values",
+   "what": "the kernel's Restore derives InitialValue targets: R-2 breaks when a request comes back without its target (review of step 8, A3), and a revived entity gets a target it never had. The rollback's view of ks-restore-derives-initial-values (find/replace rewritten for the relationship batch, v8-arch-gyo2-kernel-relationship; same change)",
    "guards": [
     "rollback R-2",
     "kernel DI-KS 12"
    ],
    "file": "engine/ecs/kernel/src/Executor.cpp",
-   "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing, call, std::move(records), stamp, who, where);",
-   "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues, call, std::move(records), stamp, who, where);",
+   "find": "    return ApplyImmediateRecords(Detail::Derive::Nothing,\n                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,\n                                 std::move(records), stamp, who, where);",
+   "replace": "    return ApplyImmediateRecords(Detail::Derive::InitialValues,\n                                 targetsGiven ? Detail::Relationships::RestoreGiven : Detail::Relationships::Restore, call,\n                                 std::move(records), stamp, who, where);",
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-2: a*InitialValue*",
    "expect": "\\[rb\\-restore\\-no\\-initial\\-value\\]"

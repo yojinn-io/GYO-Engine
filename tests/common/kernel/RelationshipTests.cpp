@@ -693,11 +693,17 @@ TEST_CASE("relationship: the Host's direct puts keep Children and despawn linked
     world.Insert(21, ChildOf{10});
     world.Insert(30, ChildOf{21});
     CHECK(Kids(world, 10) == (std::vector<EntityId>{20, 21}));
-    KERNEL_REQUIRE_RUN_OK(rig->Run());  // verification on: the Host's writes are not a boundary change
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    // After a Run the boundary snapshots exist: a Host insert changes Children through the World API,
+    // so verification does not report it at the next Run.
+    world.Insert(22, ChildOf{10});
+    CHECK(Kids(world, 10) == (std::vector<EntityId>{20, 21, 22}));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
     REQUIRE(world.Remove<ChildOf>(20));
-    CHECK(Kids(world, 10) == std::vector<EntityId>{21});
+    CHECK(Kids(world, 10) == (std::vector<EntityId>{21, 22}));
     REQUIRE(world.Despawn(10));
     CHECK_FALSE(world.Alive(21));
+    CHECK_FALSE(world.Alive(22));
     CHECK_FALSE(world.Alive(30));
     CHECK(world.Alive(20));
     KERNEL_REQUIRE_RUN_OK(rig->Run());
