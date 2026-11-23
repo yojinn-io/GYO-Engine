@@ -11,6 +11,7 @@
 經過：
 - 修訂 0（5f801e92）：照卡片寫。
 - 修訂 1：修訂 0 送敵對式檢查（**Opus／high，作者與檢查者同為 Opus**：Fable 用量不足，主會話轉達使用者「暫時用Opus」）：blocker 1、should 10、nit 8，全部採用（對照在第 11 節）。報告：主 checkout `build/evidence/gyo2-sdl-extract/declaration-r0-adversarial.md`。檢查者沒有建置、沒有跑測試；B-1、S-1、S-4、S-6 卡片對原始碼核對過。最大的兩項：run 條件的 Extract 參數不受 D-E7 擋（B-1，本批補，改 `Registry.cpp`）；J4、J6 改成交使用者（第 10 節 Q1、Q2）。修訂 1 本身沒有再送複查。
+- 2026-11-23 主會話確認：J7（RC 28）可以；和 KR 不強求先後，誰後合併誰 merge gyo2（第 7 節）。宣告已轉使用者，Q1、Q2 等回覆。
 
 ---
 
@@ -206,7 +207,7 @@ R1a 不實作任何一項。DI-KS 36 草案寫「沒有 `Changed`／`Added`、�
 | J2 | O-E9 (b)：清單有 extract schedule 但 World 沒有來源＝啟動錯誤 | 跑到時才斷言 | 描述自相矛盾，啟動時就看得出來，和 O-E5 同類；不是對誤用加守衛（沒有來源，那張 schedule 根本跑不了） |
 | J3 | 替換有讀者的來源：R1b 之前是斷言 | 回新的 `OrchestrationError` 碼（R1b 會拿掉，留下只活一批的碼）；R1b 併進 R1a（R1b 有交使用者的題、要改 DI-KS 13、26 與 RC-O13，會拖慢 K 的路） | R1a 不先選 R1b 的做法；斷言最小、不留公開契約；R1a 到 R1b 之間沒有產品會走到 |
 | J5 | 沒有 `Changed`／`Added`、不讀來源的 `Message` 與移除紀錄 | 現在就做 2.4 的某一列 | 點名的 Feature 直近不用（K 的 draw list 每幀重生）；候選已留（2.4），R2b 選 |
-| J7 | Kernel RC 用 28 | — | 總宣告 10.1 原分配是 KR 25～27、R1a／R1b 28～29；25 被摘要那一批用掉，KR 改用 26、27，不影響 28。**請主會話確認** |
+| J7 | Kernel RC 用 28 | — | 總宣告 10.1 原分配是 KR 25～27、R1a／R1b 28～29；25 被摘要那一批用掉，KR 改用 26、27，不影響 28。**主會話 2026-11-23 確認** |
 | J8 | D-E7 延伸到 run 條件（B-1） | 不改、讓條件在執行時撞斷言 | H-6「Extract 參數只在 extract schedule」本來就是啟動錯誤，條件漏掉是現有的洞；只收緊、不加碼 |
 
 （修訂 0 的 J4、J6 改成第 10 節的 Q1、Q2。）
@@ -229,7 +230,7 @@ R1a 不實作任何一項。DI-KS 36 草案寫「沒有 `Changed`／`Added`、�
 
 ## 7. 和其他卡的協調（經主會話）
 
-- **KR**（`local_e2d05fe7`，分支 `claude/gyo2-kernel-hierarchy-06b6eb`）：都改 Kernel。R1a 改 `Executor.cpp`（`Run` 的入口分出共用段、巢狀給空來源、X-15 的訊息）、`World.cpp`（const 版 `ColumnAt`／`ResourceAt`，不碰同步點的套用）、`Registry.cpp`（D-E7 看條件）、`Params.hpp`、`detail/Context.hpp`、`WorldExecutor.hpp`、`kernel.zh-Hant.md`（DI-KS 35～37、RC 28、DI-KS 13 的守衛欄、DI-KS 26 的改字、更新行）、`mutations.json`。KR 改同步點的套用（`World.cpp`）、`Executor.cpp`、DI-KS 9、12、15 等。條號不重疊（KR：DI-KS 29～33、34 保留、RC 26、27）。照總宣告 R1a 先合；誰後合併誰 fetch＋merge gyo2（不 rebase）。
+- **KR**（`local_e2d05fe7`，分支 `claude/gyo2-kernel-hierarchy-06b6eb`）：都改 Kernel。R1a 改 `Executor.cpp`（`Run` 的入口分出共用段、巢狀給空來源、X-15 的訊息）、`World.cpp`（const 版 `ColumnAt`／`ResourceAt`，不碰同步點的套用）、`Registry.cpp`（D-E7 看條件）、`Params.hpp`、`detail/Context.hpp`、`WorldExecutor.hpp`、`kernel.zh-Hant.md`（DI-KS 35～37、RC 28、DI-KS 13 的守衛欄、DI-KS 26 的改字、更新行）、`mutations.json`。KR 改同步點的套用（`World.cpp`）、`Executor.cpp`、DI-KS 9、12、15 等。條號不重疊（KR：DI-KS 29～33、34 保留、RC 26、27）。**先後**（主會話 2026-11-23）：總宣告建議 R1a 先合，但 KR 已在實作、進度在前，不強求先後；誰後合併誰把 gyo2 merge 進自己的分支，兩邊的改動都保留，不 rebase。開工後若發現同步點那一段兩邊在語意上互相影響（不只是文字衝突），先停下回報。
 - **R1b**：拿掉 J3 的斷言；以 DI-KS 37 為前提。
 - **K、R2b**：用 2.2 的 API；R2b 從 2.4 的候選選。
 - **O-E9**：號已在總宣告保留；通知並行的卡由主會話。
@@ -248,7 +249,7 @@ R1a 不實作任何一項。DI-KS 36 草案寫「沒有 `Changed`／`Added`、�
 2. 卡片判的 J1～J3、J5、J7、J8（第 4 節）。
 3. 第 10 節 Q1、Q2。
 4. 條文草案的方向：DI-KS 35～37、RC 28、DI-KS 13 守衛欄、DI-KS 26 的改字、O-5／O-8／O-12／O-15 改句（最終文字在合併前核准）。
-5. 條號：RC 28（J7，主會話確認）。
+5. 條號：RC 28（J7，主會話 2026-11-23 已確認）。
 
 ## 10. 要使用者定的
 
