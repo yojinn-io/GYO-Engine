@@ -8228,8 +8228,8 @@
         "kernel-relationship-declaration Q3"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {",
-      "replace": "            if (r.kind == RecordKind::Insert && r.id == data_->childOf) {",
+      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "replace": "            if (r.kind == RecordKind::Insert && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
       "target": "gyo_kernel_tests",
       "cases": "relationship:*",
       "expect": "\\[kr\\-detach\\-then\\-despawn\\]"
@@ -8242,8 +8242,8 @@
         "kernel-relationship-declaration Q3"
       ],
       "file": "engine/ecs/kernel/src/World.cpp",
-      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {",
-      "replace": "            if (r.kind == RecordKind::Remove && r.id == data_->childOf) {",
+      "find": "            if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
+      "replace": "            if (r.kind == RecordKind::Remove && r.id == data_->childOf) {\n                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.\n                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);\n                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&\n                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;\n                if (!sameParent) rewired.push_back(r.entity);\n            }",
       "target": "gyo_kernel_tests",
       "cases": "relationship:*",
       "expect": "\\[kr\\-reparent\\-then\\-despawn\\]"
@@ -8412,6 +8412,20 @@
       "target": "gyo_kernel_tests",
       "cases": "relationship:*",
       "expect": "\\[kr\\-handover\\-while\\-owner\\-dies\\]"
+    },
+    {
+      "id": "kr-same-parent-rewired",
+      "what": "an insert of the same parent counts as a detach: in the phase the parent dies the child stays without a parent. Only it catches the same-parent rule (R-1, the user 2026-11-23)",
+      "guards": [
+        "kernel DI-KS 32",
+        "kernel-relationship-merge-approval R-1"
+      ],
+      "file": "engine/ecs/kernel/src/World.cpp",
+      "find": "                if (!sameParent) rewired.push_back(r.entity);",
+      "replace": "                (void)sameParent;\n                rewired.push_back(r.entity);",
+      "target": "gyo_kernel_tests",
+      "cases": "relationship:*",
+      "expect": "\\[kr\\-same\\-parent\\-then\\-despawn\\]"
     }
   ]
 }

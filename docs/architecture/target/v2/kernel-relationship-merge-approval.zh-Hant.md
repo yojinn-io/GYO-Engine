@@ -1,6 +1,10 @@
 # 合併前核准：Kernel 的關係與父子（`v8-arch-gyo2-kernel-relationship`，子批 KR）
 
-更新：2026-11-23。**狀態：草稿，待使用者合併前核准。合併要使用者另外說「合併」。** 宣告：[kernel-relationship-declaration.zh-Hant.md](kernel-relationship-declaration.zh-Hant.md)（修訂 1，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_kernel_relationship.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_relationship.zh-Hant.md)。PR：yojinn-io/GYO-Engine#295（draft，base `gyo2`）。
+更新：2026-11-23。**狀態：合併前核准（使用者 2026-11-23）。合併要使用者另外說「合併」。**
+
+> **第 2、3、4 件核准**（使用者，2026-11-23，本卡）：原話「核准」。核准的是第 2 節（條文的最終文字）、第 3 節（和宣告的 8 處偏差）、第 4 節（判定的變更）；8be69a6b 的版本。比過的選項：核准／不核准。理由：使用者沒有另外說。
+>
+> **第 1 件 R-1**（使用者，2026-11-23，本卡）：「核准」看不出兩個選項選哪一個，卡片另外問（選項卡）；使用者選「同值不算拆開（建議）」。比過的選項：同值不算拆開 ←選／維持現在（Q3 字面）。理由（卡片給的，不是使用者的話）：和 Bevy、和「同一個父再插入只寫 `ChildOf`」一致；Q3 沒談同值，不是推翻 Q3。照做：收拆開名單時跳過同一個父的插入、案例 `[kr-same-parent-then-despawn]`、突變 `kr-same-parent-rewired`、DI-KS 32 加半句。 宣告：[kernel-relationship-declaration.zh-Hant.md](kernel-relationship-declaration.zh-Hant.md)（修訂 1，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_kernel_relationship.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_relationship.zh-Hant.md)。PR：yojinn-io/GYO-Engine#295（draft，base `gyo2`）。
 
 要你定的四件：
 
@@ -77,8 +81,8 @@ R-1 選建議時，DI-KS 32 再加半句「同一個父再插入不算拆開」�
 
 ## 6. 判定的結果
 
-- 本機 macOS x86_64、`core` preset：ctest 197／197（`gyo_kernel_tests` 442 案、`gyo_rollback_tests` 56 案；審查修正後的版本）。
-- 突變（D184）：新加 `kr-` 33 條，33／33 killed；相關的既有突變（find 落在改動範圍內、或被本批改得對不上而照新寫法改寫）31 條＋rollback 1 條，全部 killed（審查修正後重跑：`build/evidence/gyo2-kernel-relationship/review-fix-kernel-mutants.log` 64／64、`review-fix-rollback-mutants.log` 1／1）。全清單 2209 條，本分支上不唯一的 find：0。
-- §14.5 的數量：新加 33 條；本批新增或改寫的條文 9 條 ×5＝45，未超過。
+- 本機 macOS x86_64、`core` preset：ctest 197／197（`gyo_kernel_tests` 443 案、`gyo_rollback_tests` 56 案；R-1 之後的版本）。
+- 突變（D184）：新加 `kr-` 34 條，34／34 killed（R-1 的一條與相關 6 條：`r1-mutants.log` 7／7）；相關的既有突變（find 落在改動範圍內、或被本批改得對不上而照新寫法改寫）31 條＋rollback 1 條，全部 killed（審查修正後重跑：`build/evidence/gyo2-kernel-relationship/review-fix-kernel-mutants.log` 64／64、`review-fix-rollback-mutants.log` 1／1）。全清單 2209 條，本分支上不唯一的 find：0。
+- §14.5 的數量：新加 34 條；本批新增或改寫的條文 9 條 ×5＝45，未超過。
 - 負向編譯樣本：`kernel.relationship_compile_fail` 對照組可編譯、20 個變體以各自的標記失敗。
 - L1 三平台：審查前的 999ecc6d success（run 45125895018）；審查修正後的 commit 另跑一次（結果寫在 PR）。

@@ -633,6 +633,24 @@ TEST_CASE("relationship: a weapon handed over in the phase its owner dies goes t
     CHECK(Kids(rig->world(), 11) == std::vector<EntityId>{20});
 }
 
+TEST_CASE("relationship: the same parent again in the phase it dies is no detach: the child goes with it [kr-same-parent-then-despawn]") {
+    auto rig = Start();
+    Early()[1] = [](Act& a) {
+        Items(a, {10});
+        a.spawnChild.New(20, ChildOf{10});
+    };
+    // A System that sets the same ChildOf every frame, in the frame the owner dies (R-1, the user 2026-11-23).
+    Early()[2] = [](Act& a) {
+        a.commands.Insert(20, ChildOf{10});
+        a.despawn.Entity(10);
+    };
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_FALSE(rig->world().Alive(10));
+    CHECK_FALSE(rig->world().Alive(20));
+    CHECK(rig->world().RejectedRelationships() == 0U);
+}
+
 TEST_CASE("relationship: a child attached to a parent despawned in the same phase lives without a parent [kr-despawn-and-attach]") {
     auto rig = Start();
     Early()[1] = [](Act& a) { Items(a, {10}); };

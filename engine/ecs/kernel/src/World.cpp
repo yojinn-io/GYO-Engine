@@ -850,7 +850,11 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         for (const Record& r : records) {
             if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);
             if ((r.kind == RecordKind::Remove || r.kind == RecordKind::Insert) && r.id == data_->childOf) {
-                rewired.push_back(r.entity);
+                // The same parent again is no detach (R-1, the user 2026-11-23): the child goes with it.
+                const Detail::Cell<ChildOf>* now = childOf.Find(r.entity);
+                const bool sameParent = r.kind == RecordKind::Insert && now != nullptr &&
+                                        static_cast<const Detail::TypedBox<ChildOf>&>(*r.value).value.parent == now->value.parent;
+                if (!sameParent) rewired.push_back(r.entity);
             }
         }
         std::sort(despawns.begin(), despawns.end());

@@ -15,7 +15,7 @@ Owner：Kernel（GYO2 主會話開的任務卡，使用者「開 1、2、3」的
 | 0（4b5340e2） | 建議 `Children` 依 EntityId 升冪（索引）、維護放套用步驟 | Opus／high（同模型）：blocker 5、should 11、nit 12，全部採用（主 checkout `build/evidence/gyo2-kernel-relationship/declaration-r0-adversarial-opus.md`） |
 | 1（9612408c） | Q1 改建議 (A′) 附掛先後（T、U 照 Bevy 靠 `Children` 的先後）；5b 移到 insert 之後、5a 之前；新 Q3 先拆再刪、Q4 連帶刪除先後；已核准條文與判定的改動逐條列出 | — |
 
-使用者 2026-11-23 在本卡動工前核准：「Q1～Q4 照建議，其他一起同意，開始」（f074239c）。
+使用者 2026-11-23 在本卡動工前核准：「Q1～Q4 照建議，其他一起同意，開始」（f074239c）。合併前核准（本卡）：「核准」（條文的最終文字、和宣告的偏差、判定的變更）；R-1 另問、選「同值不算拆開」（[合併前核准頁](../architecture/target/v2/kernel-relationship-merge-approval.zh-Hant.md)）。
 
 實作第 1 步停過一次（AGENTS §14 冒頭；宣告第 14 節）：Kernel 自己登記兩個元件之後，J-12、J-20、J-32、J-18 共四組守衛的期待值也要改，不在第 12.5 節同意的清單裡。停下回報三個選項。使用者在本卡回「繼續」，卡片讀成照建議的 (a)、在回覆裡寫明讀法後繼續；之後主會話轉來使用者的明確選擇「照建議，KR 選 (a)」（HANDOFF `v8-arch-gyo2-kernel-relationship-golden-extended`），第 12.5 節補列這四處。
 
@@ -36,7 +36,7 @@ Owner：Kernel（GYO2 主會話開的任務卡，使用者「開 1、2、3」的
 ## 驗證
 
 - 建置：本機 macOS x86_64，`core` preset（RelWithDebInfo）。基準（第 0 步，跟上 gyo2 之後）196／196；完成時 197／197（多 `kernel.relationship`）——見下面「受け入れ判定」。
-- kernel：`gyo_kernel_tests` 442 案全過（既有 400、新 42：審查前 39＋審查後 3）；`gyo_kernel_tests_reversed` 的 J-18 過；`gyo_rollback_tests` 56 案全過。
+- kernel：`gyo_kernel_tests` 443 案全過（既有 400、新 43：審查前 39＋審查後 3＋R-1 的 1）；`gyo_kernel_tests_reversed` 的 J-18 過；`gyo_rollback_tests` 56 案全過。
 - 負向樣本：`kernel.relationship_compile_fail` 對照組可編譯，20 個變體都以各自的標記失敗（configure 輸出）。
 
 ### 突變（D184：新加的＋find 在改動範圍內的）
@@ -48,7 +48,7 @@ Owner：Kernel（GYO2 主會話開的任務卡，使用者「開 1、2、3」的
 - 既有突變：find 落在改動範圍內、或被本批改得對不上的 29 條（kernel）＋1 條（rollback）：全部 killed（`related-kernel-mutants.log`、`related-kernel-mutants-rerun.log`、`related-rollback-mutants.log`）。其中 22＋1 條的 find／replace 照新寫法改寫、同一個改變（despawn 那段多一層迴圈、`ApplySync`／`ApplyRestore` 多一個參數、spawn 與關係兩個 lambda 有同樣的幾行）；3 條 J-32 的 expect 把 ComponentId 加 2（§14.4：緩的面沒有）。改寫後第一輪 19／29：6 條 `sr-` 的 find 因 `rejectRelationship` 抄了同樣的行而不唯一、3 條 expect 帶舊 ComponentId、1 條 replace 用到改名的變數，處理後重跑 10／10。
 - 靜態掃描：所有突變清單 2205 條，基準上唯一、本分支上不唯一的 find：0（正例 `kr-no-add` 命中 1 次）。
 - 審查之後（下一節）新加 3 條（`kr-net-stamp-not-restored`、`kr-immediate-counts-rounds`、`kr-rewired-dropped-early`）、改寫 12 條的 find（含 `sr-no-record`、`sr-records-capped`：寫入改由 `RecordKernelDiagnostics<R>` 做），重跑 64／64、rollback 1／1（`review-fix-kernel-mutants.log`、`review-fix-rollback-mutants.log`）；全清單 2209 條，不唯一的 find：0。
-- §14.5 的數量：新加 33 條，本批新增或改寫的條文 9 條（DI-KS 29～33、9、12、15，RC 不計）×5＝45，未超過。
+- §14.5 的數量：新加 34 條（含 R-1 的 `kr-same-parent-rewired`），本批新增或改寫的條文 9 條（DI-KS 29～33、9、12、15，RC 不計）×5＝45，未超過。
 
 ## 審查之後（設計審查與 code review，都是 Opus／high、和實作者同模型）
 
@@ -56,7 +56,7 @@ Owner：Kernel（GYO2 主會話開的任務卡，使用者「開 1、2、3」的
 
 | 條 | 處理 |
 |---|---|
-| 設計 F1／code N-11：刪父的同一個階段又插入同一個父 | 交使用者（合併前核准頁第 1 節 R-1） |
+| 設計 F1／code N-11：刪父的同一個階段又插入同一個父 | 交使用者（合併前核准頁第 1 節 R-1）；使用者 2026-11-23 選「同值不算拆開」：收拆開名單時跳過同一個父的插入，`[kr-same-parent-then-despawn]`、突變 `kr-same-parent-rewired`；相關 7 條重跑 7／7（`r1-mutants.log`） |
 | 設計 F2：`fromSpawn` 與拒絕分支的死碼、排版殘留 | 改：`Attach` 拿掉 `fromSpawn`，5b 對每一項都查（insert 來的必為真） |
 | 設計 F3：小動作抄了 4／2／2 份 | 改：`World::DetachChild`、`AttachChild`、`HostDetach`、`RejectedOf`、`RecordKernelDiagnostics<R>`（`RejectedSpawn` 也用）；兩條深度優先迴圈保持分開 |
 | 設計 F4：文件寫實 | 改：DI-KS 29（內部寫死、表延後）、DI-KS 33 與 R-2 前提 8（開發版報 W-1）、說明頁（從 Bevy 搬來的 `add_child` 寫法、淨差）；C15、淨差兩列寫在合併前核准頁第 3 節 |
