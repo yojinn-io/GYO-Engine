@@ -89,7 +89,9 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 第 5 批開頭的守衛：Kernel「拿掉的名字不回來」、權威 Module 的 `gyo_expect_links`（不必再加 DEFER 突變） | 第 4 批宣告 9.5、#265 | 第 5 批開頭 |
 | entity_store、trace、logging 三個 include 守衛的 `..` 路徑：照 O4 先例補 | #265 設計審查 | 2026-11-22 開卡（`v8-arch-gyo2-stale-cleanup-start`） |
 | kernel_guard K6 的標頭分支（守的是寫法）值不值得留 | #265 設計審查 | 下一次設計審查一起看 |
-| world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試 | 交換點實作 PR #270 的設計審查 | 交換點合併後 |
+| world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試；**同時把 O-3 與 O-12 對診斷紀錄的例子改成一致**（Design Invariant 條文，改前給使用者看） | 交換點實作 PR #270 的設計審查；2026-11-23 代碼審計後使用者選 (a) 留交換函式、接上（`v8-arch-gyo2-forwarding-audit-exchange-keep`） | **要開卡**（使用者已定方向） |
+| `LogWorldLabel<D>`：System 拿不到 World 名，每個描述器各抄一份 Resource（`LogWorldLabel.hpp:10-21`、`Forward.hpp:147-155`）；Bevy 的 `WorldId` 是 SystemParam（`bevy_ecs/src/world/identifier.rs:65`）。只有 Kernel 能補 | 2026-11-23 代碼審計（Fable 檢查 N2） | 下一次動 Kernel 的批（KR）一起看 |
+| `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
 | 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認。2026-11-22 交換點卡的靜態掃描：所有清單裡 find 指向 gyo2 已刪檔案的共 103 條（master 時代舊計畫的清單） | #269、#270 | 小批清理 |
