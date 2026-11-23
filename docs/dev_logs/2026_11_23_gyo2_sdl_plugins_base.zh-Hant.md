@@ -9,7 +9,7 @@ Owner：架構（`plugins/sdl*`）。GYO2 主會話開的任務卡（使用者�
 2. **定義檢查抽成模組** `tests/common/os/OsDefinitionCheck.cmake`（照 `ProcessCodePageCheck.cmake` 的先例），`cmake.ProcessCodePage` 的合成樹也跑它：`plugins/sample` 的 target 帶 `GYO_SAMPLE_LINUX=1` 在任何 OS 都被拒。合成樹裡的包裝 tool 讓走訪無限遞迴（真的樹今天沒有 tool，潛在問題），補上和 code page 走訪一樣的祖先檢查。
 3. **只建被選的 Plugin**：`gyo_product_units` 記下產品帶的 Plugin；`GYO_PLUGINS`（名字或 `ALL`）另外點名；`gyo_plugin_selection` 沿依賴補齊（library-only 的 `sdl` 跟著來）；建置層在所有產品之後照登記順序加入。Plugin 加入之後才 configure、又帶 Plugin 的產品是 FATAL_ERROR。`gyo-build.json` 多一欄 `plugins`。`test` preset 設 `ALL`（L1 三平台建 SDL、跑 Plugin 的測試），`core` 設空。
 4. **`plugins/sdl`**：登記一列（`library_only`）；FetchContent 抓 SDL 3.4.0 的 release archive（URL＋SHA-256，使用者 2026-11-23「兩個都同意」）；靜態建置；master 的補丁 `gyo-cocoa-ime-composing-keydown` 搬來；`git apply` 以 `GIT_CEILING_DIRECTORIES` 停在原始碼目錄（archive 不是 clone，而且在 GYO 的工作樹之內）；configure 時檢查補丁標記。`GYO::Sdl` 是不帶 SDL 的 INTERFACE target（共用型別由 W、R2a 加）。測試 `sdl.build`（`tests/adapters/sdl/`）：版本是 3.4.0、dummy 視訊驅動能啟動與關閉。
-5. **刪 SDL 的建置測試（SDL-2）**：`build/ci/common/plugin_removal.py`。`copy` 建 HEAD 的 git 工作樹，拿掉 `sdl*` 的列、目錄與帶它們的產品（暫存區刪除，經 git 列檔的測試照跑），剩下的 CMake 檔還提到被拿掉的名字就失敗；`check` 確認 `gyo-build.json` 沒有 `sdl*`、`_deps` 沒有抓 SDL。L1 與打包 toolchain 列的 core 步驟改在這份副本上以 `GYO_PLUGINS=ALL` configure、build、ctest，最後 `check`。另加 `cmake.PluginSelection`：整個 repo 什麼都沒選時不加 Plugin（只 configure，沿用父建置抓好的來源、`FETCHCONTENT_FULLY_DISCONNECTED`）。
+5. **刪 SDL 的建置測試（SDL-2）**：`build/ci/common/plugin_removal.py`。`remove`（CI，在 checkout 本身）或 `copy`（本機，HEAD 的 git 工作樹）拿掉 `sdl*` 的列、目錄與帶它們的產品（暫存區刪除，經 git 列檔的測試照跑），剩下的 CMake 檔還提到被拿掉的名字就失敗；`check` 確認 `gyo-build.json` 沒有 `sdl*`、`_deps` 沒有抓 SDL。L1 與打包 toolchain 列的 core 步驟在拿掉之後以 `GYO_PLUGINS=ALL` configure、build、ctest，`check` 之後 `restore`。另加 `cmake.PluginSelection`：整個 repo 什麼都沒選時不加 Plugin（只 configure，沿用父建置抓好的來源、`FETCHCONTENT_FULLY_DISCONNECTED`）。
 6. **突變**：os 目錄裡 `find` 對不到的五個（os-g11、os-g15、pu-x8、gdir 兩個）照新字面改；新加 `sdlp-*` 六個（os 目錄）與 `docs/architecture/target/v2/scripts/sdl_mutations.json` 六個。`run_mutations.py` 加 `{build}` 佔位符（`cmake.PluginSelection` 要讀父建置）。
 
 ## 查證（本機 macOS Intel，`test` preset，RelWithDebInfo）
@@ -31,6 +31,8 @@ Owner：架構（`plugins/sdl*`）。GYO2 主會話開的任務卡（使用者�
 - master 留下的 SDL「component」機制（`GyoComponents.cmake`、`GyoRuntimeDeployment.cmake` 的 `SDL3-shared`）沒有接上 `plugins/sdl`，寫進 sdl.zh-Hant.md 範囲の限界，留給重審產品登記機制的那批。
 
 - **L1 第二輪 windows-x64 建置失敗**（run 45151811686，job 137615082067）：補丁已上、configure 通過、`SDL3-static.lib` 在 MSVC 上連結成功（GYO 的編譯選項下 SDL 建得起）；失敗的只有 `SdlBuildTests.cpp:20` 的 `CHECK(std::string_view(...) == "dummy")`——doctest 只前置宣告 `std::basic_ostream`，MSVC 不會間接帶進 `<ostream>`（macOS 的 libc++ 會）。照 repo 其他測試加 `#include <ostream>`。
+
+- **L1 第三輪（run 45155842611）**：L1 三平台通過；Quick acceptance 的 toolchain / windows-x64 在 core 步驟失敗——副本（另一個路徑的 git 工作樹）裡 `authority.authority_sources` 報「System 登記在 repo 根之外」，登記的檔名是原 checkout 的路徑（`std::source_location`），根是副本。同一個 job 裡 checkout 的同一個測試通過，sccache 命中 111 次：推定 sccache＋MSVC 用了 checkout 編出的 object（本機沒有 MSVC 與 sccache，未重現，是推定）。第一個想法「副本關掉 launcher」碰到工作流程的政策測試（launcher 只由 native-setup 設定、工作裡不寫），不採。改成 `remove`（在 checkout 本身拿掉）→ `cmake --preset core`（路徑和以前一樣）→ ctest → `check` → `restore`。`copy` 留給本機。
 
 ## SDL-2 的本機實跑
 

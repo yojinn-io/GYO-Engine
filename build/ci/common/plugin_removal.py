@@ -1,19 +1,25 @@
-"""Remove a family of Plugins from a copy of the repository, and check a build of that copy fetched none of them.
+"""Remove a family of Plugins from the repository's sources, and check a build of them fetched none of them.
 
 Design Invariant SDL-2 (docs/architecture/target/v2/sdl.zh-Hant.md): with the SDL Plugins and their register rows
 removed, the Engine, every Module and the headless tests still configure, build and pass, and SDL is neither
-downloaded nor built. CI's core step runs:
+downloaded nor built. CI's core step runs, once the checkout's own build and tests are done:
 
-  plugin_removal.py copy --repository . --destination <copy> --family sdl
-  cmake -S <copy> --preset core -B <build> -DGYO_PLUGINS=ALL ...; cmake --build; ctest
+  plugin_removal.py remove --repository . --family sdl
+  cmake --preset core -B <build> -DGYO_PLUGINS=ALL ...; cmake --build; ctest
   plugin_removal.py check --build <build> --family sdl
+  plugin_removal.py restore --repository .
 
-copy makes <copy> a git work tree of HEAD (the committed sources: tests that list files through git keep working)
-and removes, staged, the family's rows of config/plugins.csv and their plugins/<name> directories, and every game
-or tool whose CMake files name a removed Plugin (its directory, tests, acceptance programs, assets and register
-row). A remaining register row that depends on a removed Plugin, or any other CMake file that still names one, is an
-error: the copy could not configure, and the removal would not be what SDL-2 asks. check reads the build record
-the fetched sources and the cache.
+remove works on the checkout itself, so the core build compiles from the same paths as ever: the compiler cache
+keys stay as they were, and no object compiled from another source tree (whose std::source_location paths name that
+tree) is reused. It needs a checkout without changes to tracked files, and restore puts every tracked file back
+as HEAD has it. copy does the same in a new git work tree of HEAD instead, for a local run that must leave the
+developer's tree alone.
+
+Either way the family's rows of config/plugins.csv and their plugins/<name> directories are removed (staged, so
+tests that list files through git see the removal), and every game or tool whose CMake files name a removed Plugin
+(its directory, tests, acceptance programs, assets and register row). A remaining register row that depends on a
+removed Plugin, or any other CMake file that still names one, is an error: the tree could not configure, and the
+removal would not be what SDL-2 asks. check reads the build record, the fetched sources and the cache.
 
 A family is a name and the names that start with it and an underscore (sdl: sdl, sdl_window, sdl_gpu...).
 Exit status 0 when done; 1 with one line per problem otherwise.
@@ -157,6 +163,23 @@ def copy(repository, destination, family):
     return remove_family(destination, family)
 
 
+def remove(repository, family):
+    repository = repository.resolve(strict=True)
+    changed = git(repository, "status", "--porcelain", "--untracked-files=no")
+    if changed.strip():
+        raise RemovalError("remove changes the checkout itself and needs its tracked files unchanged "
+                           "(use copy for a tree with changes):\n" + changed.rstrip())
+    return remove_family(repository, family)
+
+
+def restore(repository):
+    repository = repository.resolve(strict=True)
+    git(repository, "checkout", "HEAD", "--", ".")
+    changed = git(repository, "status", "--porcelain", "--untracked-files=no")
+    if changed.strip():
+        raise RemovalError("restore left tracked files different from HEAD:\n" + changed.rstrip())
+
+
 def check(build, family):
     problems = []
     record = build / "gyo-build.json"
@@ -187,31 +210,45 @@ def check(build, family):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     commands = parser.add_subparsers(dest="command", required=True)
+    remove_parser = commands.add_parser("remove")
+    remove_parser.add_argument("--repository", type=Path, default=Path("."))
+    remove_parser.add_argument("--family", required=True)
     copy_parser = commands.add_parser("copy")
     copy_parser.add_argument("--repository", type=Path, default=Path("."))
     copy_parser.add_argument("--destination", type=Path, required=True)
     copy_parser.add_argument("--family", required=True)
+    restore_parser = commands.add_parser("restore")
+    restore_parser.add_argument("--repository", type=Path, default=Path("."))
     check_parser = commands.add_parser("check")
     check_parser.add_argument("--build", type=Path, required=True)
     check_parser.add_argument("--family", required=True)
     args = parser.parse_args(argv)
-    if args.command == "copy":
-        try:
-            removed, products = copy(args.repository, args.destination, args.family)
-        except (RemovalError, subprocess.CalledProcessError) as error:
-            detail = error.stderr if isinstance(error, subprocess.CalledProcessError) else str(error)
-            for line in str(detail).strip().splitlines():
-                print(f"Plugin removal: {line}")
+    if args.command == "check":
+        problems = check(args.build, args.family)
+        for problem in problems:
+            print(f"Plugin removal: {problem}")
+        if problems:
             return 1
-        print(f"Plugin removal: removed the Plugins {', '.join(removed)}"
-              + (f" and the products {', '.join(products)}" if products else "") + f" in {args.destination}")
+        print(f"Plugin removal: the build at {args.build} added and fetched nothing of the family '{args.family}'")
         return 0
-    problems = check(args.build, args.family)
-    for problem in problems:
-        print(f"Plugin removal: {problem}")
-    if problems:
+    try:
+        if args.command == "restore":
+            restore(args.repository)
+            print(f"Plugin removal: restored the tracked files of {args.repository} as HEAD has them")
+            return 0
+        if args.command == "remove":
+            removed, products = remove(args.repository, args.family)
+            where = args.repository
+        else:
+            removed, products = copy(args.repository, args.destination, args.family)
+            where = args.destination
+    except (RemovalError, subprocess.CalledProcessError) as error:
+        detail = error.stderr if isinstance(error, subprocess.CalledProcessError) else str(error)
+        for line in str(detail).strip().splitlines():
+            print(f"Plugin removal: {line}")
         return 1
-    print(f"Plugin removal: the build at {args.build} added and fetched nothing of the family '{args.family}'")
+    print(f"Plugin removal: removed the Plugins {', '.join(removed)}"
+          + (f" and the products {', '.join(products)}" if products else "") + f" in {where}")
     return 0
 
 

@@ -88,6 +88,38 @@ class PluginRemovalTests(unittest.TestCase):
         self.assertTrue((self.repository / "plugins/sdl/CMakeLists.txt").exists())
         self.assertIn("sdl_window", (self.repository / "config/plugins.csv").read_text(encoding="utf-8"))
 
+    def test_remove_works_in_place_and_restore_puts_head_back(self):
+        self.make_repository()
+        removed, products = plugin_removal.remove(self.repository, "sdl")
+        self.assertEqual((removed, products), (["sdl", "sdl_window"], ["games/keep"]))
+        self.assertFalse((self.repository / "plugins/sdl").exists())
+        self.assertNotIn("plugins/sdl/CMakeLists.txt", self.listed(self.repository))
+        self.assertNotIn("sdl_window", (self.repository / "config/plugins.csv").read_text(encoding="utf-8"))
+        (self.repository / "build").mkdir()
+        (self.repository / "build/untracked.txt").write_text("a build output\n", encoding="utf-8")
+        plugin_removal.restore(self.repository)
+        for name, text in self.files.items():
+            self.assertEqual((self.repository / name).read_text(encoding="utf-8"), text, name)
+        self.assertIn("plugins/sdl/CMakeLists.txt", self.listed(self.repository))
+        # Untracked files (build outputs) are left alone.
+        self.assertTrue((self.repository / "build/untracked.txt").exists())
+
+    def test_remove_refuses_a_checkout_with_changes(self):
+        self.make_repository()
+        (self.repository / "games/match/CMakeLists.txt").write_text("# edited\n", encoding="utf-8")
+        with self.assertRaisesRegex(plugin_removal.RemovalError, "needs its tracked files unchanged"):
+            plugin_removal.remove(self.repository, "sdl")
+        self.assertTrue((self.repository / "plugins/sdl/CMakeLists.txt").exists())
+
+    def test_main_removes_and_restores_with_exit_status_0(self):
+        self.make_repository()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(plugin_removal.main(["remove", "--repository", str(self.repository), "--family", "sdl"]), 0)
+            self.assertEqual(plugin_removal.main(["restore", "--repository", str(self.repository)]), 0)
+        self.assertIn("Plugin removal: removed the Plugins sdl, sdl_window and the products games/keep", output.getvalue())
+        self.assertTrue((self.repository / "plugins/sdl_window/CMakeLists.txt").exists())
+
     def test_copy_starts_again_from_head_over_a_previous_copy(self):
         self.make_repository()
         plugin_removal.copy(self.repository, self.copy, "sdl")
