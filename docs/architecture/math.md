@@ -39,11 +39,11 @@ All types are `final` aggregates without constructors, trivially copyable and st
 ## Conventions
 
 - **Space**: left-handed, +X right, +Y up, +Z forward. Angles are radians. Model and world space use metres; Math itself is unitless.
-- **Matrices**: `p' = M * p`. `Multiply(a, b)` applies `b` first, so `Multiply(parent, local)` places a local transform under its parent. Translation is `values[12..14]`. `Matrix4{}` is the identity; `Zero()` (and `Matrix4{{}}`) is all zeros.
+- **Matrices**: `p' = M * p`; `Multiply(matrix, Vec4)` is the full homogeneous product (no divide by w). `Multiply(a, b)` applies `b` first, so `Multiply(parent, local)` places a local transform under its parent. Translation is `values[12..14]`. `Matrix4{}` is the identity; `Zero()` (and `Matrix4{{}}`) is all zeros.
 - **Rotation direction**: `MakeRotationY(a) * (0,0,1) = (sin a, 0, cos a)` (positive yaw turns +Z toward +X); `MakeRotationX(a) * (0,0,1) = (0, -sin a, cos a)` (positive pitch looks down); `MakeRotationZ(a) * (1,0,0) = (cos a, sin a, 0)`.
 - **Euler**: `ComposeEulerXYZ(translation, rotation, scale)` applies scale, then X, Y, Z rotation, then translation.
 - **Quaternions**: `Multiply(a, b)` applies `b` first; `Rotate(q, v)` equals `MakeRotation(q)` applied to `v`.
-- **Clip space**: `MakePerspective` is left-handed with depth 0 at near and 1 at far, clip w = view z. `MakeOrthographicPixels` maps top-left-origin, +Y-down pixels to clip space.
+- **Clip space**: `MakePerspective` is left-handed with depth 0 at near and 1 at far, clip w = view z. `MakeOrthographic(left, right, bottom, top, nearClip, farClip)` is the orthographic projection under the same convention (depth 0 at `nearClip`, 1 at `farClip`, w = 1; `nearClip` may exceed `farClip`, so a larger z is nearer). `MakeOrthographicPixels` maps top-left-origin, +Y-down pixels to clip space.
 - **GPU**: shaders declare `row_major float4x4` and compute `mul(float4(p, 1), M)`. Those 16 floats are the Math `values` in order, so uploads copy without a transpose.
 - **Ray**: `direction` need not be normalized; ray parameters `t` are in units of `|direction|`.
 - **Plane**: `normal` is unit length and points are those with `dot(normal, p) == distance`; `SignedDistance` is positive on the normal side. `MakePlane` normalizes.

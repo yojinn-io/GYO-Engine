@@ -1,0 +1,154 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the transform Module (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.3; Design Invariants TF-1 to TF-4 in docs/architecture/target/v2/transform.zh-Hant.md; ids tf-). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "tf-initial-identity",
+   "what": "the initial value of GlobalTransform is the identity (Bevy's require) instead of ComposeTRS(Transform). Only it catches a wrong first value at the spawn's sync point",
+   "guards": [
+    "transform TF-3",
+    "transform-camera-declaration 4.1"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "    return GlobalTransform{ToMatrix(transform)};\n}",
+   "replace": "    (void)transform;\n    return GlobalTransform{};\n}",
+   "target": "gyo_transform_tests",
+   "cases": "transform: a spawned Transform*",
+   "expect": "\\[tf\\-spawn\\-initial\\]"
+  },
+  {
+   "id": "tf-sync-not-mounted",
+   "what": "SyncTransforms is not registered: a written Transform never reaches GlobalTransform",
+   "guards": [
+    "transform TF-3"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "    r.AddSystem<&SyncTransforms>(std::move(sync));",
+   "replace": "    (void)sync;",
+   "target": "gyo_transform_tests",
+   "cases": "transform: a written Transform*",
+   "expect": "\\[tf\\-sync\\-writes\\]"
+  },
+  {
+   "id": "tf-sync-ignores-changed",
+   "what": "SyncTransforms drops Changed<Transform> and writes every frame. Only it catches GlobalTransform written when Transform was not",
+   "guards": [
+    "transform TF-3",
+    "transform-camera-declaration 4.1"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "Kernel::Write<GlobalTransform>, Kernel::Changed<Transform>> poses",
+   "replace": "Kernel::Write<GlobalTransform>> poses",
+   "target": "gyo_transform_tests",
+   "cases": "transform: a frame that writes no Transform*",
+   "expect": "\\[tf\\-sync\\-changed\\-only\\]"
+  },
+  {
+   "id": "tf-restore-hook-missing",
+   "what": "the OnAdd hook of Transform is not registered: an entity Restore brings back has no GlobalTransform (Restore derives no initial value, DI-KS 12)",
+   "guards": [
+    "transform TF-3",
+    "transform-camera-declaration 4.1"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "    r.Hook<Transform, &EnsureGlobalTransform>(Kernel::HookTrigger::OnAdd, {.name = \"EnsureGlobalTransform\"});\n",
+   "replace": "",
+   "target": "gyo_transform_tests",
+   "cases": "transform: Restore brings an entity back*",
+   "expect": "\\[tf\\-restore\\-global\\]"
+  },
+  {
+   "id": "tf-hash-global-nonempty",
+   "what": "GlobalTransform's hash writes the matrix: a derived value changes the summary",
+   "guards": [
+    "transform TF-2"
+   ],
+   "file": "engine/modules/transform/include/engine/transform/Transform.hpp",
+   "find": "inline void HashValue(Kernel::Hasher&, const GlobalTransform&) {}",
+   "replace": "inline void HashValue(Kernel::Hasher& h, const GlobalTransform& v) { Kernel::HashValue(h, v.matrix.values); }",
+   "target": "gyo_transform_tests",
+   "cases": "transform: the summary hashes*",
+   "expect": "\\[tf\\-hash\\-global\\-empty\\]"
+  },
+  {
+   "id": "tf-hash-transform-drops-scale",
+   "what": "Transform's hash leaves the scale out: two Worlds with different scales have one summary",
+   "guards": [
+    "transform TF-2"
+   ],
+   "file": "engine/modules/transform/include/engine/transform/Transform.hpp",
+   "find": "    Kernel::HashValue(h, v.scale.x);\n    Kernel::HashValue(h, v.scale.y);\n    Kernel::HashValue(h, v.scale.z);\n",
+   "replace": "",
+   "target": "gyo_transform_tests",
+   "cases": "transform: the summary hashes*",
+   "expect": "\\[tf\\-hash\\-transform\\-fields\\] a different scale"
+  },
+  {
+   "id": "tf-eq-float-compare",
+   "what": "Transform's == compares floats instead of bits: -0 equals +0, so Restore skips a cell whose hash differs (rollback R-2)",
+   "guards": [
+    "transform TF-2",
+    "transform-camera-declaration 4.1"
+   ],
+   "file": "engine/modules/transform/include/engine/transform/Transform.hpp",
+   "find": "    return std::bit_cast<std::uint32_t>(a) == std::bit_cast<std::uint32_t>(b);",
+   "replace": "    return a == b;",
+   "target": "gyo_transform_tests",
+   "cases": "transform: == compares bits*",
+   "expect": "\\[tf\\-eq\\-bits\\]"
+  },
+  {
+   "id": "tf-hook-identity",
+   "what": "the hook puts the identity instead of ComposeTRS(Transform). Only it catches a wrong value put at the restore (the propagation overwrites it by the end of the frame, so tf-restore-hook-missing's check of presence does not)",
+   "guards": [
+    "transform TF-3"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "commands.Insert(hook.Entity(), FromTransform(*transform));",
+   "replace": "commands.Insert(hook.Entity(), GlobalTransform{});",
+   "target": "gyo_transform_tests",
+   "cases": "transform: Restore brings an entity back*",
+   "expect": "\\[tf\\-restore\\-global\\-value\\]"
+  },
+  {
+   "id": "tf-set-membership-missing",
+   "what": "SyncTransforms is not put in the public set TransformPropagate: a System ordered after the set runs before the propagation. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too",
+   "guards": [
+    "transform TF-1"
+   ],
+   "file": "engine/modules/transform/src/TransformModule.cpp",
+   "find": "    mount.sets.push_back(std::string(kPropagateSet));\n",
+   "replace": "",
+   "target": "gyo_transform_tests",
+   "cases": "transform: a System ordered after TransformPropagate*",
+   "expect": "\\[tf\\-propagate\\-set\\]"
+  },
+  {
+   "id": "tf-default-stage-last",
+   "what": "the default stage of SyncTransforms is Last instead of PostUpdate (Bevy's): a PostUpdate reader after the set reads last frame's value. Only it catches the default stage",
+   "guards": [
+    "transform TF-1",
+    "transform-camera-declaration 4.1"
+   ],
+   "file": "engine/modules/transform/include/engine/transform/TransformModule.hpp",
+   "find": "std::string stage = std::string(Orchestration::DefaultSchedules::postUpdate);",
+   "replace": "std::string stage = std::string(Orchestration::DefaultSchedules::last);",
+   "target": "gyo_transform_tests",
+   "cases": "transform: a System ordered after TransformPropagate*",
+   "expect": "\\[tf\\-propagate\\-set\\]"
+  },
+  {
+   "id": "tf-links-more",
+   "what": "transform link set on the real tree (README rule 4: positive control): the transform row depends on one more Module (json, a row before transform). Only gyo_expect_links on gyo_transform stops it",
+   "guards": [
+    "transform TF-4"
+   ],
+   "file": "config/modules.csv",
+   "find": "and keeping them equal for entities without a parent\",no,yes,,,",
+   "replace": "and keeping them equal for entities without a parent\",no,yes,json,,",
+   "target": "gyo_transform_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_transform\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
+  }
+ ]
+}
