@@ -57,6 +57,21 @@
    "expect": "CHECK\\(\\ records\\[0\\]\\.worldInterrupted\\ \\) is NOT correct!"
   },
   {
+   "id": "lg-diag-exchange-in",
+   "what": "LG-1 / O-12: ForwardKernelDiagnostics registers an exchange function \"in\", not \"out\" (records are taken before the round, so a frame's records reach the log a frame late)",
+   "guards": [
+    "logging LG-1",
+    "orchestration O-12",
+    "kernel-diagnostics-exchange-declaration 4"
+   ],
+   "file": "engine/modules/world_logging/src/TakeKernelDiagnostics.cpp",
+   "find": "setup.ExchangeOut(",
+   "replace": "setup.ExchangeIn(",
+   "target": "gyo_world_logging_tests",
+   "cases": "diagnostics: ForwardKernelDiagnostics takes*",
+   "expect": "REQUIRE\\(\\ afterFirstFrame\\.size\\(\\)\\ ==\\ 1\\ \\)\\ is\\ NOT\\ correct!"
+  },
+  {
    "id": "lg-fatal-no-console",
    "what": "LG-2 step 2: standard error is not written",
    "guards": [

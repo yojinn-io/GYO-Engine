@@ -1,6 +1,6 @@
 # 事前宣告：Kernel 診斷紀錄接上交換函式「出」（`v8-arch-gyo2-kernel-diagnostics-exchange`）
 
-狀態：修訂 0，**等使用者動工前核准**（第 7 節）。核准與修訂都在本檔上做。
+狀態：修訂 0。**2026-11-23 使用者動工前核准**（第 8 節）。核准與修訂都在本檔上做。
 
 性質：任務卡（主會話開，2026-11-23）的事前宣告，批次表〈後續小事〉「world_logging 給一個接 `WorldSetup` 的登記函式」那一列。依據：HANDOFF `v8-arch-gyo2-forwarding-audit-exchange-keep`（使用者「照建議，選 (a)」）；已核准的設計 `exchange-declaration.zh-Hant.md:373`、`logging-declaration.zh-Hant.md:229`。
 分支：從 `origin/gyo2`（0bb64a28）開的工作樹分支，draft PR 到 `gyo2`。
@@ -75,3 +75,9 @@
 
 1. 第 2 節三條的改前改後（含把 LG-1 一起改）。
 2. 敵對式檢查與設計審查用 Fable／high。
+
+## 8. 決定紀錄
+
+2026-11-23 使用者在本卡直接回覆：「照宣告做，LG-1 一起改，用 Opus就可以了。」
+- 第 7 節第 1 件：第 2 節三條的改前改後照寫，LG-1 一起改。
+- 第 7 節第 2 件：DI 條文的敵對式檢查與設計審查用 **Opus／high**（不用 Fable）。和實作者同模型，報告寫明「同模型」（navigator「別的模型用不了時」那一條的例外是使用者選的）。

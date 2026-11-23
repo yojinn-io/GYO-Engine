@@ -70,6 +70,16 @@ O::ProductDescription NotesProduct(const bool spawnTwice) {
     return d;
 }
 
+// NotesProduct with ForwardKernelDiagnostics in the World's build (kernel-diagnostics-exchange declaration).
+O::ProductDescription ForwardedNotesProduct() {
+    O::ProductDescription d = NotesProduct(false);
+    d.worlds[0].build = [inner = d.worlds[0].build](O::WorldSetup& s) {
+        inner(s);
+        WL::ForwardKernelDiagnostics(s);
+    };
+    return d;
+}
+
 } // namespace
 
 TEST_CASE("diagnostics: dropped messages become one Warning record of category kernel; taking empties them") {
@@ -133,6 +143,41 @@ TEST_CASE("diagnostics: an interrupted World's records are taken too, marked wor
     REQUIRE_FALSE(ran);
     K::World& world = product->World("Simulation").GetWorld();
     REQUIRE(world.State() == K::WorldState::Interrupted);
+    CHECK(WL::TakeKernelDiagnostics(world) == 1);
+    const auto records = logged.Category("kernel");
+    REQUIRE(records.size() == 1);
+    CHECK(records[0].worldInterrupted);
+    CHECK(records[0].world == "Simulation");
+}
+
+// LG-1 and O-12: on a healthy World the exchange function "out" ForwardKernelDiagnostics registers takes the
+// records after the round, through the real RunFrame and the real TakeKernelDiagnostics; nobody takes them by hand.
+TEST_CASE("diagnostics: ForwardKernelDiagnostics takes the records at the end of every frame") {
+    Logged logged;
+    auto product = Make(ForwardedNotesProduct());
+    Frame(*product);
+    const auto afterFirstFrame = logged.Category("kernel");
+    REQUIRE(afterFirstFrame.size() == 1);
+    CHECK(afterFirstFrame[0].level == L::Level::Warning);
+    CHECK(afterFirstFrame[0].world == "Simulation");
+    CHECK_FALSE(afterFirstFrame[0].worldInterrupted);
+    REQUIRE(afterFirstFrame[0].Find("message") != nullptr);
+    CHECK(afterFirstFrame[0].Find("message")->text == "Note");
+    // Already taken: the World has one taker.
+    CHECK(WL::TakeKernelDiagnostics(product->World("Simulation").GetWorld()) == 0);
+    Frame(*product);
+    CHECK(logged.Category("kernel").size() == 2);
+}
+
+// O-12: a World broken in its round gets no "out"; the runner takes the records of that frame (LG-1).
+TEST_CASE("diagnostics: on a World broken in its round the out is not called; the runner takes the records") {
+    Logged logged;
+    auto product = Make(ForwardedNotesProduct());
+    product->World("Simulation").GetWorld().SetResource(FailNow{1});
+    REQUIRE_FALSE(product->RunFrame());
+    K::World& world = product->World("Simulation").GetWorld();
+    REQUIRE(world.State() == K::WorldState::Interrupted);
+    CHECK(logged.Category("kernel").empty());
     CHECK(WL::TakeKernelDiagnostics(world) == 1);
     const auto records = logged.Category("kernel");
     REQUIRE(records.size() == 1);
