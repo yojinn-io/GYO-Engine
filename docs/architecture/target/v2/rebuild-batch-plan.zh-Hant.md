@@ -98,6 +98,9 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | os.md :318-319 寫「每個存在的根至少要有一個原始碼」，`os_boundary_guard` 對空的產品根是跳過，兩者不一致 | apps→games 宣告修訂 2 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | `examples/orchestration/product_main.cpp` 不示範取壞掉 World 的診斷紀錄；world_logging 做成登記單位 | 診斷紀錄接線卡 #292 | 有產品需要時 |
 | O-13 的字面沒有涵蓋同一條執行緒上的第二個 World（例：同執行緒的兩個 World 都要輸入） | SDL 宣告修訂 19 第 16 節第 3 件 | SDL 子批 W 的宣告一起提條文 |
+| `CaseTiming.cpp` 的 listener 與沒有呼叫者的 `Note()`：照 #289 自己寫的條件拿掉 | os 退避卡 PR #293 | 下一次動 os 測試的批 |
+| 「loses no signal」的掃描：遺失只落在 `round % 64` 的頭 0～3 格，縮小掃描範圍檢出力可能提高好幾倍（宣告 Q3） | os 退避卡 PR #293 | 要研究時另開一批（使用者未定） |
+| os Invariant 8 寫「cleared under its mutex」，但把後備實作的 `pending = false` 移到鎖外任何案例都抓不到（只剩 data race） | os 退避卡的驗證者 | 交設計審查，不加突變（`no-guards-against-misuse`） |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
@@ -129,7 +132,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 打包時附第三方授權告示加 stb_image | asset 宣告第 15 節第 3 項 | 併「打包時附第三方授權告示」 |
 | catalog 工具（audio_editor 寫，ui_editor、model_viewer 讀）搬回時照新的契約（格式歸 asset） | asset 宣告第 15 節第 5 項 | 搬產品時 |
 | io 裡還有沒人用、但不在重審宣告清單裡的介面：`IOFwd.hpp`、`IFileSystem::Name()`、`FileInfo` 的 ctime／atime／permissions、`NormalizeOptions` 的旗標；`OS::Files::DefaultCaseSensitivePaths` 留不留未定（threads／io dev_log「後續」） | threads／io 卡（#277） | 下一次動 io 的批照同一判準（該不該存在）處理 |
-| `gyo_os_tests`／`os.wake_fallback` 在本機負載下偶爾逾時：**原因已切分**（os 逾時卡 PR #289，`v8-arch-gyo2-os-test-timeout-cause`）——屬「測試」：`WakeSignalTests.cpp`「loses no signal」的 signaller 自旋 4096 次後 yield，負載下每次讓出 CPU 最多約 10 ms，案例時間≈進 Block 的回合數×反應延遲（16363×1.695 ms≈27.7 s，實測 27.9 s）；觸發條件屬「環境」（機器的 CPU 負載）；「實作」沒有證據（WakeSignal 喚醒延遲負載下約 10 µs）。60 秒本身沒重現；負載下這個案例的檢出力變弱（進 Block 的回合 2.5～19% → 26～88%）。**範圍の限界**：網路卡那一次 `os.wake_fallback` 失敗的輸出沒存到，分不出失敗或逾時 | os 逾時卡 | #289 只加觀測（使用者選 (d)），2026-11-23 已合併（3dd3c272；使用者「你把需要合併的，按順序合併掉。」）；改退避的 (e) 另開卡（`local_3ef794a9`，量測中） |
+| `gyo_os_tests`／`os.wake_fallback` 在本機負載下偶爾逾時：**原因已切分**（os 逾時卡 PR #289，`v8-arch-gyo2-os-test-timeout-cause`）——屬「測試」：`WakeSignalTests.cpp`「loses no signal」的 signaller 自旋 4096 次後 yield，負載下每次讓出 CPU 最多約 10 ms，案例時間≈進 Block 的回合數×反應延遲（16363×1.695 ms≈27.7 s，實測 27.9 s）；觸發條件屬「環境」（機器的 CPU 負載）；「實作」沒有證據（WakeSignal 喚醒延遲負載下約 10 µs）。60 秒本身沒重現；負載下這個案例的檢出力變弱（進 Block 的回合 2.5～19% → 26～88%）。**範圍の限界**：網路卡那一次 `os.wake_fallback` 失敗的輸出沒存到，分不出失敗或逾時 | os 逾時卡 | #289 只加觀測（使用者選 (d)），2026-11-23 已合併（3dd3c272；使用者「你把需要合併的，按順序合併掉。」）；改退避的 (e) 另開卡（`local_3ef794a9`，PR #293）：**2026-11-23 使用者撤回退避的修改，只拿掉 Note**，PR #293 已合併（558d41bf；使用者「L1 過了就合併」）（`v8-arch-gyo2-os-wake-test-backoff-withdrawn`；CI 與 Linux 上沒有這個問題，只在 Intel Mac 本機滿載時出現） |
 | `target/v2/README.md` 的 dev_log 清單：每合一個 PR，其他開著的 PR 就在這裡撞一次 | 2026-11-23 合併順序 | 待使用者決定要不要改寫法 |
 | `orchestration_mutations.json` 約第 3521～3532 行留著 `or-exch-round-after-failed-in` 的舊副本（find 是 C19 之前的寫法，少了收尾 `},` 而和 `wg-held-not-cleared` 黏成一個物件，鍵重複被後面那組蓋掉）。同 id 的現行版（find 對 `RunRound`）在後面另一個物件，已執行並 killed（`build/evidence/gyo2-exchange/c19-mutants.log`）。刪掉舊副本後解析結果完全相同（282 條、無重複鍵、find 各命中一次），不必重跑。threads／io 卡發現（它判成「從沒執行過」，實際只是殘留文字） | 7b4cf2e9（交換點補回突變時）；threads／io 卡 2026-11-22 | **已完成**：讀檔實作 d7c0dd74 時已正規化（`2026_11_22_gyo2_restore_impl` dev_log）；機械清理卡確認 288 條、無重複鍵與 id |
 | 游標宣告第 3.2 節引的 lightyear 行號漂移（現在 `receive.rs:54、:105-110、:153-160、:447-456`） | 狀態機卡交叉比對 | 圖書管理員 |
