@@ -69,7 +69,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 - 範圍判定（`build/ci/common/ci_scope.py`）在 job 內進行，不使用觸發條件的 path／draft 篩選，因此 `CI gate` 在每個 PR 事件都會回報。
 - `docs-only` 只認以 `docs/` 開頭的路徑。變更根目錄 `README*.md`、`AGENTS.md` 等檔案的 PR 會執行 L1。重新命名會拆開判定，從 `docs/` 以外移入 `docs/` 的檔案也算非文件變更。
 - `head-verified`／`docs-increment`：從 PR head 本身開始沿第一親代往回找（head 之外最多 20 個），找到第一個同時滿足下列條件的 commit，就沿用它的 L1。找到 head 本身時理由為 `head-verified`，找到較早的 commit 時為 `docs-increment`。
-  - 三列 `L1 / <platform>` 的最新 check run 都是 GitHub Actions 的 `success`。略過、取消、失敗或尚未完成都不算。
+  - 三列 `L1 / <platform>` 的 check run 都是 GitHub Actions 的 `success`。同一個 commit 上每次執行各留一組（`filter=latest` 是每個 check suite 各一筆）；取消與略過的列沒有結論、不看，其餘的列每個平台至少一列且全部 `success`。失敗或尚未完成就不沿用。
   - 從它到 head 的變更只在 `docs/` 底下（head 本身沒有變更），判定方式與 `docs-only` 相同。
   - 目前 master 的尖端是它的祖先。master 只會前進，所以它當時測試的合併結果就是它本身；現在的合併結果就是 head，兩者的程式完全相同。
   - master 前進了、中間有程式變更、程式那次推送的 L1 被新推送取消、或讀取 check run 失敗，一律照常執行 L1。最壞情況是多跑一次，不會略過未測試的程式。

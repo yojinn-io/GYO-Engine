@@ -133,6 +133,14 @@ class ScopePolicyTests(unittest.TestCase):
                                            ("completed", "neutral"), ("in_progress", None), ("queued", None)):
                     changed = passed[:index] + [run(platform, status, conclusion)] + passed[index + 1:]
                     self.assertFalse(ci_scope.l1_rows_passed(listing(changed), RELEASE_PLATFORMS), (status, conclusion))
+                # Beside a passed row of another run on the same commit, a
+                # cancelled or skipped row has no verdict; anything else blocks.
+                for status, conclusion, expected in (("completed", "cancelled", True), ("completed", "skipped", True),
+                                                     ("completed", "failure", False), ("completed", "neutral", False),
+                                                     ("in_progress", None, False), ("queued", None, False)):
+                    extra = passed + [run(platform, status, conclusion)]
+                    self.assertEqual(ci_scope.l1_rows_passed(listing(extra), RELEASE_PLATFORMS), expected,
+                                     (status, conclusion))
                 # A same-named row from another app never verifies a commit.
                 spoofed = passed[:index] + [run(platform, app="other-app")] + passed[index + 1:]
                 self.assertFalse(ci_scope.l1_rows_passed(listing(spoofed), RELEASE_PLATFORMS))

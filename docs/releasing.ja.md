@@ -69,7 +69,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 - 範囲判定（`build/ci/common/ci_scope.py`）は job の中で行い、trigger の path／draft filter は使いません。そのため `CI gate` はすべての PR event で報告されます。
 - `docs-only` の判定対象は `docs/` で始まる path だけです。Root の `README*.md`、`AGENTS.md` などを変えた PR は L1 を実行します。Rename は分割して判定するため、`docs/` の外から `docs/` へ移したファイルも非文書の変更として扱います。
 - `head-verified`／`docs-increment`：PR head 自身から first-parent をたどり（head のほかに最大 20 個）、次の条件をすべて満たす最初の commit の L1 を再利用します。Head 自身なら理由は `head-verified`、より前の commit なら `docs-increment` です。
-  - 3 行の `L1 / <platform>` の最新 check run がすべて GitHub Actions の `success`。skip、cancel、失敗、未完了は数えません。
+  - 3 行の `L1 / <platform>` の check run がすべて GitHub Actions の `success`。同じ commit では実行ごとに 1 組ずつ残ります（`filter=latest` は check suite ごとに 1 件）。cancel と skip の行は結論がないので見ません。残りの行は platform ごとに 1 行以上あり、すべて `success` であること。失敗や未完了があれば再利用しません。
   - その commit から head までの変更が `docs/` 配下だけ（head 自身は変更なし。判定方法は `docs-only` と同じ）。
   - 現在の master の先端がその commit の祖先。master は前進するだけなので、その commit を検証した時の merge 結果はその commit 自身であり、現在の merge 結果は head です。両者のコードは完全に同じです。
   - master が進んだ、途中にコード変更がある、コードの push の L1 が新しい push で cancel された、check run を読めなかった、のいずれかなら通常どおり L1 を実行します。最悪でも 1 回多く実行するだけで、未検証のコードを skip することはありません。

@@ -25,6 +25,10 @@ DOCUMENTATION_ROOTS = ("docs/",)
 INCREMENT_LIMIT = 20
 
 
+# L1 rows that reached no verdict about the commit.
+NO_VERDICT = (("completed", "cancelled"), ("completed", "skipped"))
+
+
 class ScopeError(ValueError):
     """The event cannot be classified; the gate must fail instead of guessing."""
 
@@ -108,15 +112,20 @@ def verified_increment(repository: Path, l1_passed, *, git: str = "git",
 def l1_rows_passed(listing, platforms) -> bool:
     """Whether a check-run listing of one commit shows every L1 row completed with success.
 
-    Only check runs of GitHub Actions count; a missing, pending, skipped,
-    cancelled or failed row means the commit was not verified.
+    Only check runs of GitHub Actions count. Each run that tested the commit
+    leaves its own rows (filter=latest is per check suite). A cancelled or
+    skipped row reached no verdict and is ignored, so a manual run superseded
+    on the same commit does not hide a later passed run. Of the remaining rows
+    each platform needs at least one, and every one completed with success: a
+    missing, pending, neutral or failed row means the commit was not verified.
     """
     runs = listing.get("check_runs") if isinstance(listing, dict) else None
     if not isinstance(runs, list) or listing.get("total_count") != len(runs):
         raise ScopeError("The check-run listing is malformed or incomplete")
     actions = [run for run in runs if isinstance(run, dict) and (run.get("app") or {}).get("slug") == "github-actions"]
     for platform in platforms:
-        rows = [run for run in actions if run.get("name") == f"L1 / {platform}"]
+        rows = [run for run in actions if run.get("name") == f"L1 / {platform}"
+                and (run.get("status"), run.get("conclusion")) not in NO_VERDICT]
         if not rows or any((run.get("status"), run.get("conclusion")) != ("completed", "success") for run in rows):
             return False
     return True
