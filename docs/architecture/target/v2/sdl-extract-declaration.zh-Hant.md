@@ -1,6 +1,6 @@
 # 事前宣告：Extract 的執行（`v8-arch-gyo2-sdl-extract`，SDL 線子批 R1a）
 
-更新：2026-11-23（修訂 1）。Owner：Kernel＋編排層（GYO2 主會話開的任務卡，SDL 線子批 R1a）。**狀態：交主會話轉使用者動工前核准。核准前不動程式。**
+更新：2026-11-23（修訂 1）。Owner：Kernel＋編排層（GYO2 主會話開的任務卡，SDL 線子批 R1a）。**狀態：動工前核准（2026-11-23）**——使用者在本卡「Q1、Q2 照建議，開始」：Q1＝(a)、Q2＝(a)，其餘（範圍、J1～J3、J5、J7、J8、條文草案的方向）照宣告。最終文字在合併前核准。
 
 根據：
 - SDL 總宣告（`sdl-declaration.zh-Hant.md` 修訂 21，分支 `claude/gyo2-sdl-declaration-7e7a1f`；HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 6.1 節 1～3、5、6、8（只留形）、第 6.6 節、第 10.1～10.3 節的 R1a 列。
@@ -12,6 +12,7 @@
 - 修訂 0（5f801e92）：照卡片寫。
 - 修訂 1：修訂 0 送敵對式檢查（**Opus／high，作者與檢查者同為 Opus**：Fable 用量不足，主會話轉達使用者「暫時用Opus」）：blocker 1、should 10、nit 8，全部採用（對照在第 11 節）。報告：主 checkout `build/evidence/gyo2-sdl-extract/declaration-r0-adversarial.md`。檢查者沒有建置、沒有跑測試；B-1、S-1、S-4、S-6 卡片對原始碼核對過。最大的兩項：run 條件的 Extract 參數不受 D-E7 擋（B-1，本批補，改 `Registry.cpp`）；J4、J6 改成交使用者（第 10 節 Q1、Q2）。修訂 1 本身沒有再送複查。
 - 2026-11-23 主會話確認：J7（RC 28）可以；和 KR 不強求先後，誰後合併誰 merge gyo2（第 7 節）。宣告已轉使用者，Q1、Q2 等回覆。
+- **動工前核准（2026-11-23）**：使用者在本卡「Q1、Q2 照建議，開始」。Q1＝(a) 來源沒登記成時讀者不登記、標沒檢查（O-5 的例外，O-5 補一句）；Q2＝(a) 不加 extract 期間的寫入偵測，DI-KS 13 守衛欄改成 XK-2、D-E14 的案、J-10。
 
 ---
 
@@ -253,7 +254,7 @@ R1a 不實作任何一項。DI-KS 36 草案寫「沒有 `Changed`／`Added`、�
 
 ## 10. 要使用者定的
 
-### Q1：來源沒登記成時，讀者怎麼辦（修訂 0 的 J4）
+### Q1：來源沒登記成時，讀者怎麼辦（修訂 0 的 J4）—— **已定：(a)**（使用者 2026-11-23，本卡）
 
 **例子**：渲染 World 的 `extractFrom` 指名模擬 World，模擬 World 有一個 System 少登記了元件（Kernel 的 R-E4）。
 
@@ -264,7 +265,7 @@ R1a 不實作任何一項。DI-KS 36 草案寫「沒有 `Changed`／`Added`、�
 
 建議 (a)：前例是 O-15「有任何 `Configure` 回報就不跑任何 World 的 `Build`～`Check`，每個 World 標沒檢查」——同樣是「前面壞了，後面的不檢查」。要寫進 O-5 一句（第 2.5 節）。
 
-### Q2：extract 期間來源被寫，要不要偵測（修訂 0 的 J6）
+### Q2：extract 期間來源被寫，要不要偵測（修訂 0 的 J6）—— **已定：(a)**（使用者 2026-11-23，本卡）
 
 **例子**：渲染 World 的 extract System 經作者留著的指標，呼叫了模擬 World 的 `World::Insert`。
 
