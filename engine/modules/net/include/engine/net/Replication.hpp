@@ -49,6 +49,7 @@
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/rollback/Inbox.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 namespace GYO::Engine::Net {
@@ -88,6 +89,13 @@ struct ComponentEntry final {
     std::function<ApplyOutcome(ReplicaWorld&, Kernel::EntityId, std::span<const std::byte>, ApplyMode)> apply;
     // Removes the entity's component; false when it had none.
     std::function<bool(ReplicaWorld&, Kernel::EntityId)> remove;
+    // Private data (C-VIS2): sent only to a Peer whose PeerVisibility shows it for that entity.
+    bool privateComponent = false;
+    // K3 (D-5): decodes the value and writes it into the rollback Module's inbox at tick (RollbackInbox::Value);
+    // false when the bytes are not a T.
+    std::function<bool(ReplicaWorld&, Kernel::EntityId, std::span<const std::byte>, std::uint64_t tick)> toInbox;
+    // K3: the entity certainly has no T from tick on (RollbackInbox::Removed).
+    std::function<void(ReplicaWorld&, Kernel::EntityId, std::uint64_t tick)> removedToInbox;
 };
 
 // One replicated Resource (Q8 (b)), type-erased where its types are known (ReplicateResource<R, V>).
@@ -102,6 +110,9 @@ struct ResourceEntry final {
     std::function<bool(ReplicaWorld&, NetWriter&)> encode;
     // Client: decodes the value and writes it with the registration's apply.
     std::function<Base::Result<ApplyOutcome, Kernel::KernelError>(ReplicaWorld&, std::span<const std::byte>)> apply;
+    // K3 (D-5, Q8 (b)): decodes the value and writes it into the inbox at tick (RollbackInbox::ResourceValue); only
+    // when the value is the Resource itself (V = R); false when the bytes are not an R.
+    std::function<bool(ReplicaWorld&, std::span<const std::byte>, std::uint64_t tick)> toInbox;
 };
 
 struct MessageEntryBase {
@@ -161,6 +172,8 @@ struct NetRegistry final {
 struct NetRegistrations final {
     std::optional<NetRole> role;
     NetRegistry registry;
+    // The server's value bytes per tick and Peer (0: no limit; NetEntry::ValueBytesPerTick).
+    std::uint32_t valueBytesPerTick = 0;
 };
 
 // A message the server collected this frame (CollectServerMessages<M>), sent by ReplicateOut after the structure.
@@ -194,8 +207,10 @@ enum class ReplicaDrop : std::uint8_t {
     MissingTarget,
     // A value older than one already written for that entity and component.
     StaleValue,
+    // K3: a value older than the confirmed point by more than the rollback depth (D-7: dropped, counted).
+    BeyondDepth,
 };
-inline constexpr std::size_t kReplicaDropCount = 6;
+inline constexpr std::size_t kReplicaDropCount = 7;
 
 // The ledger of one Peer (declaration D-5; on the Peer entity, NT-10): what that client has been sent and has
 // confirmed. It decides what to send; it is not a copy of the game's state.
@@ -231,6 +246,13 @@ struct PeerLedger final {
     std::uint64_t resourceValuesSent = 0;
     // Reliable sends the connection refused (queue full, too large): the ledger did not move on for them.
     std::uint64_t reliableRejected = 0;
+    // Step 5: the accumulated priority of the entities whose changed values waited for a later tick (not in the
+    // map: none waiting), and the counts of entities sent and deferred over the budget.
+    FlatMap<Kernel::EntityId, std::uint64_t> waiting;
+    std::uint64_t valuesDeferred = 0;
+    // The ticks in a row each waiting entity has waited, and the longest wait so far (diagnostics).
+    FlatMap<Kernel::EntityId, std::uint32_t> waitedTicks;
+    std::uint32_t longestWait = 0;
     // What this client sent that the server dropped (confirmations, resyncs, inputs), by reason.
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
@@ -295,6 +317,30 @@ struct NetReplicaState final {
     // Replicated Resource values handed to their apply (Q8 (b)), and of those the default apply found unchanged.
     std::uint64_t resourceValuesApplied = 0;
     std::uint64_t resourceValuesUnchanged = 0;
+    // K3 (D-5): what went into the rollback Module's inbox: values (components and Resources), removals, entries,
+    // exits, and the confirmed point last written.
+    std::uint64_t inboxValues = 0;
+    std::uint64_t inboxRemovals = 0;
+    std::uint64_t inboxEntries = 0;
+    std::uint64_t inboxExits = 0;
+    std::uint64_t inboxNotSent = 0;
+    // K3 spawns that came while the entity was still in the World (its exit not yet at the confirmed point).
+    std::uint64_t entriesWhileAlive = 0;
+    std::optional<std::uint32_t> inboxConfirmed;
+    // K3: the values of components that do not roll back for an entity the World does not have yet as the server
+    // means it (it comes with the rollback that puts it back, R-8 A), written once it is there; by entity.
+    struct WaitingDirect {
+        // A spawn's: written only once the rollback has decided at a confirmed point at or after the spawn's tick,
+        // so not on the entity of before that a rollback to a point before the spawn may still remove (S1 b of
+        // PR-2's review). 0: once the entity is in the World.
+        std::uint32_t notBefore = 0;
+        // A spawn's values are the whole set: the components that do not roll back and are not among them are taken
+        // off the entity when they are written (an entity of before kept them, B1 of PR-2's review).
+        bool whole = false;
+        // (wire, bytes), the newest per wire.
+        std::vector<std::pair<std::uint16_t, std::vector<std::byte>>> values;
+    };
+    std::map<Kernel::EntityId, WaitingDirect> waitingDirect;
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const NetReplicaState&) {}
@@ -332,6 +378,15 @@ struct NetWorldLink final {
     Kernel::EntityId clientPeer = 0;
     bool clientEndReported = false;
     std::uint64_t reportedLinkFailures = 0;
+    // K3 (D-5): a client World with a rollback strategy. The replicated types the rollback Module rolls back (by wire
+    // id) go into its inbox; the others are written directly, as at K1. depth: the strategy's DefaultInputLength (the
+    // official strategy's depth), for dropping a value older than the confirmed point by more (0: none dropped).
+    bool rollsBack = false;
+    // Server: the value bytes per tick and Peer (step 5; 0: no limit).
+    std::uint32_t valueBytesPerTick = 0;
+    std::vector<bool> rollbackComponents;
+    std::vector<bool> rollbackResources;
+    std::uint32_t rollbackDepth = 0;
 };
 inline void HashValue(Kernel::Hasher&, const NetWorldLink&) {}
 
@@ -388,6 +443,54 @@ template <class T>
 inline void HashValue(Kernel::Hasher&, const PeerInput<T>&) {}
 static_assert(Kernel::Detail::kStorable<PeerInput<int>>, "PeerInput<T> is an ECS component: nothrow movable (W-8)");
 
+// What a Peer sees (C-VIS1, C-VIS2; step 5): on the Peer entity at the server, written by the product (its own rule
+// decides; a System that fills it each tick, as replicon's ClientVisibility is filled). Without it the Peer sees every
+// replicated entity and no private component. An entity the Peer stops seeing is removed at that client (only
+// WhileVisible: replicon's ScopeLifetime::WhileVisible); seen again, it is sent whole under the same id.
+struct PeerVisibility final {
+    // false: only the entities of `entities` (ascending; Show and Hide keep it so).
+    bool everything = true;
+    std::vector<Kernel::EntityId> entities;
+    // The private components this Peer sees, (entity, type), in no order (C-VIS2: replicon's visibility scoped to
+    // components).
+    std::vector<std::pair<Kernel::EntityId, Kernel::TypeKey>> privateComponents;
+
+    void Show(Kernel::EntityId entity) {
+        const auto at = std::lower_bound(entities.begin(), entities.end(), entity);
+        if (at == entities.end() || *at != entity) entities.insert(at, entity);
+    }
+    void Hide(Kernel::EntityId entity) {
+        const auto at = std::lower_bound(entities.begin(), entities.end(), entity);
+        if (at != entities.end() && *at == entity) entities.erase(at);
+    }
+    [[nodiscard]] bool Sees(Kernel::EntityId entity) const {
+        return everything || std::binary_search(entities.begin(), entities.end(), entity);
+    }
+    template <class T>
+    void ShowPrivate(Kernel::EntityId entity) {
+        if (!SeesPrivate(entity, Kernel::KeyOf<T>())) privateComponents.emplace_back(entity, Kernel::KeyOf<T>());
+    }
+    template <class T>
+    void HidePrivate(Kernel::EntityId entity) {
+        std::erase(privateComponents, std::pair<Kernel::EntityId, Kernel::TypeKey>{entity, Kernel::KeyOf<T>()});
+    }
+    [[nodiscard]] bool SeesPrivate(Kernel::EntityId entity, Kernel::TypeKey key) const {
+        return std::find(privateComponents.begin(), privateComponents.end(), std::pair<Kernel::EntityId, Kernel::TypeKey>{entity, key}) !=
+               privateComponents.end();
+    }
+};
+inline void HashValue(Kernel::Hasher&, const PeerVisibility&) {}
+
+// How much an entity's values matter when a tick's values do not fit the Peer's budget (step 5; author's, on the
+// entity at the server; without it 1). Each tick an entity's changed values wait, its accumulated priority grows by
+// its weight; the tick sends the highest first, and a sent entity starts again from 0 (the idea of lightyear's
+// accumulated priority, crates/transport/transport/src/channel/send_reliable.rs, kept per entity here, not per
+// message until its ack).
+struct NetPriority final {
+    std::uint32_t weight = 1;
+};
+inline void HashValue(Kernel::Hasher& h, const NetPriority& v) { HashValue(h, v.weight); }
+
 // The entity a Peer controls (written by the product; the network does not know the player, P12).
 struct PeerControls final {
     Kernel::EntityId entity = 0;
@@ -399,6 +502,8 @@ inline void HashValue(Kernel::Hasher& h, const PeerControls& v) { HashValue(h, v
 // the components hold FlatMap and std::vector instead (FlatMap.hpp), and these asserts keep the rule visible.
 static_assert(Kernel::Detail::kStorable<PeerLedger>, "PeerLedger is an ECS component: nothrow movable (W-8)");
 static_assert(Kernel::Detail::kStorable<PeerControls>, "PeerControls is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<PeerVisibility>, "PeerVisibility is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<NetPriority>, "NetPriority is an ECS component: nothrow movable (W-8)");
 static_assert(Kernel::Detail::kStorable<FlatMap<std::uint32_t, int>>, "FlatMap must stay nothrow movable (W-8)");
 
 // The options of an input type.
@@ -526,6 +631,12 @@ bool IsClient(Kernel::Res<NetWorldRole> role);
 [[nodiscard]] inline Kernel::ConditionRef OnServer() { return Kernel::Condition<&Detail::IsServer>("net.OnServer"); }
 [[nodiscard]] inline Kernel::ConditionRef OnClient() { return Kernel::Condition<&Detail::IsClient>("net.OnClient"); }
 
+// The options of NetEntry::Replicate<T> (step 5).
+struct ReplicateOptions final {
+    // Private data (C-VIS2): sent only to a Peer whose PeerVisibility shows it (ShowPrivate<T>) for that entity.
+    bool privateComponent = false;
+};
+
 // The author's way in: made from the WorldSetup of any Build of a World the net Module is built into (the
 // product's own included); without the Module it is a GYO_ASSERT. Registers at both ends the same way.
 class NetEntry final {
@@ -534,8 +645,11 @@ public:
 
     // A component the server replicates (T is registered by the author). The codec writes each field; there is no
     // byte copy. A type without a default codec (not a number or an enum) and no codec given is a GYO_ASSERT.
+    // The server's value bytes per tick and Peer (step 5; 0: no limit, the default). Over it, the values that do not
+    // fit wait for a later tick by accumulated priority (NetPriority); a simulating client is told which (NotSent).
+    void ValueBytesPerTick(std::uint32_t bytes) { table_->valueBytesPerTick = bytes; }
     template <class T>
-    void Replicate(std::string name, Codec<T> codec = DefaultCodec<T>()) {
+    void Replicate(std::string name, Codec<T> codec = DefaultCodec<T>(), ReplicateOptions options = {}) {
         GYO_ASSERT(codec.encode && codec.decode && "NetEntry::Replicate<T>: give T's codec (encode and decode); no byte copy");
         GYO_ASSERT(table_->registry.components.size() < 64 && "NetEntry::Replicate: at most 64 replicated components");
         auto entry = std::make_shared<ComponentEntry>();
@@ -543,6 +657,7 @@ public:
         entry->version = codec.version;
         entry->wire = static_cast<std::uint16_t>(table_->registry.components.size());
         entry->key = Kernel::KeyOf<T>();
+        entry->privateComponent = options.privateComponent;
         entry->visit = [](ReplicaWorld& world, const std::function<void(Kernel::EntityId, Kernel::ChangeStamp)>& f) {
             world.template ReadColumn<T>([&f](Kernel::EntityId id, Kernel::ChangeStamp, Kernel::ChangeStamp changed, const T&) {
                 f(id, changed);
@@ -585,6 +700,19 @@ public:
         entry->remove = [](ReplicaWorld& world, Kernel::EntityId id) {
             auto removed = world.template Remove<T>(id);
             return removed.has_value() && *removed;
+        };
+        entry->toInbox = [decode = codec.decode](ReplicaWorld& world, Kernel::EntityId id, std::span<const std::byte> bytes,
+                                                 std::uint64_t tick) {
+            T value{};
+            NetReader reader(bytes);
+            if (!decode(reader, value) || reader.Remaining() != 0) return false;
+            (void)world.template Modify<Rollback::RollbackInbox>(
+                [&](Rollback::RollbackInbox& inbox) { inbox.template Value<T>(id, tick, std::move(value)); });
+            return true;
+        };
+        entry->removedToInbox = [](ReplicaWorld& world, Kernel::EntityId id, std::uint64_t tick) {
+            (void)world.template Modify<Rollback::RollbackInbox>(
+                [&](Rollback::RollbackInbox& inbox) { inbox.template Removed<T>(id, tick); });
         };
         table_->registry.components.push_back(std::move(entry));
     }
@@ -666,6 +794,16 @@ public:
                 return ApplyOutcome::Failed;
             }
         };
+        if constexpr (std::is_same_v<R, V>) {
+            entry->toInbox = [decode = options.codec.decode](ReplicaWorld& world, std::span<const std::byte> bytes, std::uint64_t tick) {
+                std::optional<R> value{std::in_place};
+                NetReader reader(bytes);
+                if (!decode(reader, *value) || reader.Remaining() != 0) return false;
+                (void)world.template Modify<Rollback::RollbackInbox>(
+                    [&](Rollback::RollbackInbox& inbox) { inbox.template ResourceValue<R>(tick, std::move(*value)); });
+                return true;
+            };
+        }
         table_->registry.resources.push_back(std::move(entry));
     }
 

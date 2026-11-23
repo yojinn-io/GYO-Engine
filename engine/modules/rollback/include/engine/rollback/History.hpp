@@ -36,19 +36,22 @@ public:
     ColumnHistoryBase& operator=(const ColumnHistoryBase&) = delete;
 
     [[nodiscard]] virtual Kernel::TypeKey Key() const noexcept = 0;
+    // A resource's history: its authoritative values are the inbox's ResourceValuesOf, not ValuesOf (R-8 F).
+    [[nodiscard]] virtual bool IsResource() const noexcept { return false; }
     // Records, at tick, the cells changed since stamp since and the cells gone since the last record. Entries of
     // tick or later (left by the run a resimulation replaces) are dropped first.
     virtual void Record(Exclusive& world, Kernel::ChangeStamp since, std::uint64_t tick) = 0;
     // Drops what is older than oldest, keeping per entity the newest entry at or before oldest.
     virtual void Prune(std::uint64_t oldest) = 0;
     // Puts the state at tick into set: for each entity of alive, the authoritative value at or before tick when the
-    // inbox has one, else the history's.
+    // inbox has one, else the history's; an entity of notCarried (ascending: the snapshot of tick does not carry it,
+    // R-8's third state) always the history's.
     virtual void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
-                       const InboxColumnBase* authoritative) const = 0;
+                       const InboxColumnBase* authoritative, std::span<const Kernel::EntityId> notCarried) const = 0;
     // Whether an authoritative value at or before tick differs from the history at tick. Only the entities the
-    // inbox has a value for and that were alive at tick are compared: whether an entity is alive follows the
-    // game's spawns and despawns (declaration 5.5: what is not said is a spawn or a despawn of the game), so a
-    // value for an entity this World does not have cannot be put back and is not a reason to go back.
+    // inbox has a value for and that are alive at tick are compared: alive is the World's own alive set with the
+    // caller's explicit entries and exits applied (R-8 A); an entity not said follows the game's spawns and
+    // despawns, so a value for an entity this World does not have cannot be put back and is not a reason to go back.
     [[nodiscard]] virtual bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative,
                                        std::span<const Kernel::EntityId> alive) const = 0;
     // The history at tick takes the authoritative values of the entities alive at tick (it agrees with the
@@ -93,11 +96,11 @@ public:
     }
 
     void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId> alive,
-               const InboxColumnBase* authoritative) const override {
+               const InboxColumnBase* authoritative, std::span<const Kernel::EntityId> notCarried) const override {
         const auto* inbox = static_cast<const InboxColumn<T>*>(authoritative);
         std::vector<std::pair<Kernel::EntityId, T>> cells;
         for (Kernel::EntityId entity : alive) {
-            if (inbox != nullptr) {
+            if (inbox != nullptr && !std::binary_search(notCarried.begin(), notCarried.end(), entity)) {
                 if (const auto value = inbox->At(entity, tick)) {
                     if (*value) cells.emplace_back(entity, **value);
                     continue;
@@ -177,6 +180,7 @@ public:
     explicit ResourceHistory(Equal equal) : equal_(equal) {}
 
     [[nodiscard]] Kernel::TypeKey Key() const noexcept override { return Kernel::KeyOf<T>(); }
+    [[nodiscard]] bool IsResource() const noexcept override { return true; }
 
     void Record(Exclusive& world, Kernel::ChangeStamp since, std::uint64_t tick) override {
         while (!entries_.empty() && entries_.back().tick >= tick) entries_.pop_back();
@@ -193,29 +197,50 @@ public:
     void Prune(std::uint64_t oldest) override {
         while (entries_.size() >= 2 && entries_[1].tick <= oldest) entries_.pop_front();
     }
+    // The authoritative value at or before tick when the inbox has one (R-8 F), else the history's.
     void AddTo(Kernel::RestoreSet& set, std::uint64_t tick, std::span<const Kernel::EntityId>,
-               const InboxColumnBase*) const override {
+               const InboxColumnBase* authoritative, std::span<const Kernel::EntityId>) const override {
+        std::optional<T> value = At(tick);
+        if (authoritative != nullptr) {
+            if (const auto wanted = static_cast<const InboxColumn<T>*>(authoritative)->At(RollbackInbox::kResourceEntity, tick)) {
+                value = *wanted;
+            }
+        }
+        set.Resource<T>(std::move(value), [equal = equal_](const T& a, const T& b) { return Same(equal, a, b); });
+    }
+    // Whether the authoritative value at or before tick differs from the history at tick (R-8 F: the rules of a
+    // component's value, without an entity).
+    [[nodiscard]] bool Differs(std::uint64_t tick, const InboxColumnBase& authoritative, std::span<const Kernel::EntityId>) const override {
+        const auto wanted = static_cast<const InboxColumn<T>&>(authoritative).At(RollbackInbox::kResourceEntity, tick);
+        if (!wanted) return false;
+        const std::optional<T> had = At(tick);
+        if (wanted->has_value() != had.has_value()) return true;
+        return wanted->has_value() && !Same(equal_, **wanted, *had);
+    }
+    void Adopt(std::uint64_t tick, const InboxColumnBase& authoritative, std::span<const Kernel::EntityId>) override {
+        const auto wanted = static_cast<const InboxColumn<T>&>(authoritative).At(RollbackInbox::kResourceEntity, tick);
+        if (!wanted) return;
+        while (!entries_.empty() && entries_.back().tick >= tick) entries_.pop_back();
+        entries_.push_back({tick, *wanted});
+    }
+
+private:
+    [[nodiscard]] std::optional<T> At(std::uint64_t tick) const {
         std::optional<T> value;
         for (const Entry& entry : entries_) {
             if (entry.tick > tick) break;
             value = entry.value;
         }
-        set.Resource<T>(std::move(value), [equal = equal_](const T& a, const T& b) {
-            if (equal != nullptr) return equal(a, b);
-            if constexpr (std::equality_comparable<T>) {
-                return a == b;
-            } else {
-                return false;
-            }
-        });
+        return value;
     }
-    // Resources take no authoritative values in this batch.
-    [[nodiscard]] bool Differs(std::uint64_t, const InboxColumnBase&, std::span<const Kernel::EntityId>) const override {
-        return false;
+    static bool Same(Equal equal, const T& a, const T& b) {
+        if (equal != nullptr) return equal(a, b);
+        if constexpr (std::equality_comparable<T>) {
+            return a == b;
+        } else {
+            return false;
+        }
     }
-    void Adopt(std::uint64_t, const InboxColumnBase&, std::span<const Kernel::EntityId>) override {}
-
-private:
     struct Entry {
         std::uint64_t tick;
         std::optional<T> value;
@@ -347,11 +372,28 @@ struct RollbackHistory {
     std::optional<std::uint64_t> lastTick;
     // The confirmed point the last decision looked at.
     std::optional<std::uint64_t> decided;
+    // Rollbacks an entity said to enter took part in (its entry made the alive set at C differ from the recorded
+    // one; the review of PR-2, U3: the cost of entries is observed, not measured in time).
+    std::uint64_t rollbacksForEntries = 0;
+    // Entities left out of a decision's comparison because the snapshot of C did not carry them (NotSent; a count
+    // to observe R-8's third state).
+    std::uint64_t notSentLeftOut = 0;
 
     RollbackHistory() = default;
     RollbackHistory(RollbackHistory&&) noexcept = default;
     RollbackHistory& operator=(RollbackHistory&&) noexcept = default;
 
+    // The alive set at tick becomes alive (a restore that put back what the caller said, R-8 A).
+    void SetAliveAt(std::uint64_t tick, std::vector<Kernel::EntityId> ids) {
+        for (auto& [kept, set] : alive) {
+            if (kept == tick) {
+                set = std::move(ids);
+                return;
+            }
+        }
+        auto at = std::find_if(alive.begin(), alive.end(), [tick](const auto& entry) { return entry.first > tick; });
+        alive.insert(at, {tick, std::move(ids)});
+    }
     // The alive set at tick (the last kept at or before it), or nothing when tick is older than the history.
     [[nodiscard]] const std::vector<Kernel::EntityId>* AliveAt(std::uint64_t tick) const {
         const std::vector<Kernel::EntityId>* found = nullptr;
