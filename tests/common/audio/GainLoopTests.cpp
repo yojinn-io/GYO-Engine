@@ -178,6 +178,16 @@ TEST_CASE("Audio Mixer starts a new gain change from the gain the sound has when
     const auto left = RenderLeft(later.mixer, 960);
     CHECK(left[479] == 0);
     CHECK(left[480] == kLevel / 4);
+    // A change mapped before the next frame of a sound not started yet is not late (as a stop).
+    Rig notYet = MakeRig();
+    const SoundHandle future = notYet.submitter.Play({Constant(4800), kAnchor + Ms(20)}); // frame 960
+    REQUIRE(future);
+    static_cast<void>(RenderLeft(notYet.mixer, 480));
+    REQUIRE(notYet.submitter.SetGain(future, 0.5f, 0.5f, kAnchor - Ms(5)));
+    const auto second2 = RenderLeft(notYet.mixer, 960);
+    CHECK(second2[480] == kLevel / 2);
+    CHECK(notYet.mixer.Stats().gainsLate == 0);
+    CHECK(notYet.mixer.Stats().gainsMatched == 1);
 }
 
 TEST_CASE("Audio Mixer output with gain changes does not depend on how blocks split it") {
@@ -204,6 +214,41 @@ TEST_CASE("Audio Mixer output with gain changes does not depend on how blocks sp
         CAPTURE(block);
         CHECK(render(block) == reference);
     }
+}
+
+TEST_CASE("Audio Mixer output with a gain change taken later does not depend on how blocks split it") {
+    // A ramp is interrupted by a change taken at frame 480: the frame it is taken
+    // at is fixed, so every split after it gives the same output.
+    const auto render = [](const std::uint32_t block) {
+        Rig rig = MakeRig();
+        const SoundHandle sound = rig.submitter.Play({Constant(4800), kAnchor, 1.0f, 1.0f, true});
+        REQUIRE(sound);
+        REQUIRE(rig.submitter.SetGain(sound, 0.0f, 2.0f, kAnchor, Ms(30)));
+        auto all = RenderLeft(rig.mixer, 480);
+        REQUIRE(rig.submitter.SetGain(sound, 1.5f, 0.25f, kAnchor + Ns(3'333'333), Ms(17)));
+        const auto rest = RenderLeftInBlocks(rig.mixer, 3920, block);
+        all.insert(all.end(), rest.begin(), rest.end());
+        return all;
+    };
+    const auto reference = render(3920);
+    CHECK(reference[479] != reference[480 + 160 + 400]); // the second ramp moved it
+    for (const std::uint32_t block : {1u, 7u, 255u, 256u, 257u, 1960u}) {
+        CAPTURE(block);
+        CHECK(render(block) == reference);
+    }
+}
+
+TEST_CASE("Audio Mixer never lets a stale handle change the gain of a newer sound in the same voice") {
+    Rig rig = MakeRig(Duration::zero(), 1);
+    const SoundHandle old = rig.submitter.Play({Constant(10), kAnchor});
+    REQUIRE(old);
+    static_cast<void>(RenderLeft(rig.mixer, 480));
+    const SoundHandle newer = rig.submitter.Play({Constant(4800), kAnchor + Ms(10)});
+    REQUIRE(newer);
+    REQUIRE(rig.submitter.SetGain(old, 0.0f, 0.0f, kAnchor + Ms(10)));
+    const auto left = RenderLeft(rig.mixer, 480, kAnchor + Ms(10));
+    CHECK(std::count(left.begin(), left.end(), kLevel) == 480);
+    CHECK(rig.mixer.Stats().gainsUnmatched == 1);
 }
 
 TEST_CASE("Audio Mixer counts a gain change of a finished or dropped play as unmatched") {

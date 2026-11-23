@@ -106,16 +106,16 @@ GainResult VoiceMixer::SetGain(const std::uint64_t cookie, const std::int64_t st
                                const std::uint32_t rampFrames, const float gainLeft, const float gainRight) noexcept {
     GainResult result;
     const std::int64_t start = std::max(startFrame, nextFrame_);
-    result.late = startFrame < nextFrame_;
     for (Voice& voice : voices_) {
         if (!voice.active || voice.cookie != cookie) continue;
         ++result.changed;
+        // Late as a stop is: only a started voice can have been heard at the old gain.
+        if (startFrame < nextFrame_ && voice.startFrame < nextFrame_) result.late = true;
         voice.left = GainRamp{voice.left.At(nextFrame_, voice.rampStart, voice.rampFrames), ToQ16(gainLeft)};
         voice.right = GainRamp{voice.right.At(nextFrame_, voice.rampStart, voice.rampFrames), ToQ16(gainRight)};
         voice.rampStart = start;
         voice.rampFrames = rampFrames;
     }
-    if (result.changed == 0) result.late = false;
     return result;
 }
 

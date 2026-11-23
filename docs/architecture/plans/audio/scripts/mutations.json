@@ -1162,6 +1162,20 @@
         "audio Replacement Criteria 6",
         "audio DI 7"
       ]
+    },
+    {
+      "id": "au-gain-collapse-early",
+      "what": "A ramp is collapsed to its target as soon as it starts, so the rest of it jumps to the new gain at the next chunk",
+      "file": "engine/modules/audio/src/VoiceMixer.cpp",
+      "find": "        if (!steady && chunkEnd >= voice.rampStart + std::int64_t{voice.rampFrames}) {",
+      "replace": "        if (!steady && chunkEnd >= voice.rampStart) {",
+      "target": "gyo_audio_tests",
+      "cases": "*ramps a gain linearly*,*gain changes does not depend on how blocks split it*",
+      "expect": "is NOT correct",
+      "guards": [
+        "audio 第 2 節（增益的變化）",
+        "audio DI 8"
+      ]
     }
   ]
 }

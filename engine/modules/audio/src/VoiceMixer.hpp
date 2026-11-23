@@ -43,8 +43,8 @@ struct StopResult final {
     bool late = false;
 };
 
-// What one SetGain call did: how many voices it changed, and whether its start
-// frame was already rendered.
+// What one SetGain call did: how many voices it changed, and whether it changed
+// a started voice from a frame already rendered.
 struct GainResult final {
     std::uint32_t changed = 0;
     bool late = false;

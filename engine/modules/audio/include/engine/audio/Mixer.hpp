@@ -48,8 +48,9 @@ struct PlayRequest final {
     float gainLeft = 1.0f;   // 0 to kMaxGain
     float gainRight = 1.0f;
     // Plays the whole clip again from its first frame each time it ends, until a
-    // stop ends it (v8-arch-gyo2-sdl-a, G2). An intro followed by a loop is two
-    // plays: the loop's `at` is the intro's start plus the intro's length.
+    // stop through the same submitter ends it (v8-arch-gyo2-sdl-a, G2). An intro
+    // followed by a loop is two plays: the loop's `at` is the intro's start plus
+    // the intro's length, rounded up to the nanosecond.
     bool loop = false;
 };
 
@@ -117,8 +118,8 @@ struct MixerStats final {
 class Mixer;
 
 // The producer end of one bounded single-producer, single-consumer queue. It is
-// not bound to a thread: one user at a time calls Play, Stop, StopAll, the
-// destructor and the move assignment that overwrites it, and when another
+// not bound to a thread: one user at a time calls Play, Stop, StopAll, SetGain,
+// the destructor and the move assignment that overwrites it, and when another
 // thread takes it over, the last call of the one
 // before must happen-before the first call of the next (a join, the same mutex
 // unlocked and locked, any hand-over that synchronizes); calls merely apart in
@@ -128,11 +129,13 @@ class Mixer;
 // The mixer holds a reference to the clip of every play in this submitter's
 // table, never on the audio thread; the audio thread hands back the table entry
 // of each play that ended (or got no voice), and every call of this submitter
-// (Play, Stop, StopAll, the destructor, the move assignment that overwrites it)
-// first lets go of the clips handed back.
+// (Play, Stop, StopAll, SetGain, the destructor, the move assignment that
+// overwrites it) first lets go of the clips handed back.
 // So a clip the mixer holds is let go at the latest on the submitter's next
 // call; those of a submitter never called again are let go with the mixer's
-// state.
+// state. A looping play ends only by a stop sent through its submitter: stop
+// the loops before letting go of a submitter, or they play, holding their voice
+// and clip, until the mixer's state goes.
 class Submitter final {
 public:
     Submitter(Submitter&& other) noexcept;
@@ -164,7 +167,8 @@ public:
     // The ramp starts from the gain the sound has when the audio thread takes the
     // change, and keeps it until the start frame: a change not finished by then
     // (still ramping, or not started) is replaced, as a Kira tween is. A start
-    // frame already rendered is the block's first frame, counted late. A ramp is
+    // frame already rendered is the block's first frame, counted late when the
+    // sound had started (as a stop is). A ramp is
     // clamped to an hour. An invalid handle changes nothing and returns true;
     // another submitter's handle, one this submitter never returned, a gain
     // outside [0, kMaxGain] or a negative ramp is a Programmer Error. False when
