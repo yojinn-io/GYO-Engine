@@ -272,6 +272,7 @@ net.ServerMessage<DoorOpened>("DoorOpened", DoorOpenedCodec());
 - 換 World 之間 Client 仍套用新世代的訊息到舊 World；產品沒換 World 時，同號的實體會被 `SpawnWithId` 拒絕（計數）。
 - tick 在 wire 上截成 u32，各處直接比大小、不處理回繞：64 Hz 約 2.1 年回繞一次，一個 World 連續跑這麼久不在範圍內（審查小事 7）。
 - 超過 `maxMessageBytes`（16 MiB）的結構更新每個 tick 被拒、只計 `reliableRejected`，不拆分、不斷線（審查 S3）。點名的規模（約 400 個實體）是幾十 KB；超過時見 RC-NT8。
+- 父子關係（Kernel 的 `ChildOf`）不在本線：`ChildOf` 指向不存在的實體時不成立，複製時父實體比子實體晚到要由網路自己等（lightyear 的 `PendingChildOf`）。記成之後網路複製那批的待辦（KR 卡交來的 K8，2026-11-23）。
 
 ## 9. 輸入與重連（宣告 D-11、C-IN1～3、D-8；3a）
 
