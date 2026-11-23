@@ -1,5 +1,7 @@
 #include "object_connect/data/PuzzleCatalogLoader.hpp"
 
+#include "../adapters/fast_float/DecimalToFloat.hpp"
+
 #include "object_connect/data/Csv.hpp"
 
 #include <algorithm>
@@ -282,13 +284,9 @@ template <std::size_t Size>
         return *defaultValue;
     }
 
-    float value = 0.0f;
-    const char* const begin = text.data();
-    const char* const end = begin + text.size();
-    const std::from_chars_result result =
-        std::from_chars(begin, end, value, std::chars_format::general);
-    if (text.empty() || result.ec != std::errc{} || result.ptr != end ||
-        !std::isfinite(value) || value < 0.0f) {
+    const std::optional<float> parsed = adapters::DecimalToFloat(text);
+    const float value = parsed.value_or(0.0f);
+    if (!parsed.has_value() || !std::isfinite(value) || value < 0.0f) {
         ThrowFieldError(catalogName, lineNumber, fieldName, header,
                         "expected a finite non-negative decimal number");
     }

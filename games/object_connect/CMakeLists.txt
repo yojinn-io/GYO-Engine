@@ -7,7 +7,14 @@
 # main executable waits for the window, input and render batches.
 gyo_game_project()
 
-gyo_game_add_library(logic OUT_TARGET object_connect_logic SOURCES
+#
+# fast_float (third_party/, already fetched for the json Module) replaces the
+# floating-point std::from_chars the macOS 13.3 target lacks; its header appears
+# only in src/adapters/fast_float/.
+gyo_game_add_library(logic OUT_TARGET object_connect_logic
+    PRIVATE_LIBRARIES gyo_fast_float
+    SOURCES
+    src/adapters/fast_float/DecimalToFloat.cpp
     src/data/Csv.cpp
     src/data/PuzzleCatalogLoader.cpp
     src/game/FinalResults.cpp

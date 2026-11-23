@@ -14,7 +14,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | runtime | `Core/Application`、`Core/FrameTimer`、`Game/Game`、`Input/InputSystem`、`Rendering/*`（PuzzleRenderer、GameUiRenderer、MouseCursorRenderer、TextureHandleRegistry）、`Text/FontSystem`、`Audio/GameAudio` | 5,900 | KamataEngine（WinApp、DirectXCommon、Sprite、Input〔DirectInput〕、Audio〔XAudio2〕）、ImGui（只在 Debug、與 `imstb_truetype` 字型點陣化）、DirectXTex、D3D12、Win32 |
 | 測試 | `tests/*`（自製的 `TestContext`，沒有測試框架） | 3,800 | core；`FontSystemLifecycleTests`、`GameAudioTests` 連 runtime |
 
-外部組件：KamataEngine（學校提供的 DX12 框架，預建 `.lib`）、ImGui、DirectXTex、DXC、Windows SDK。**全部不帶進 GYO2**：視窗、輸入、畫面、音訊裝置、字型點陣化都改用 GYO2 的單位（下表）。
+外部組件：KamataEngine（學校提供的 DX12 框架，預建 `.lib`）、ImGui、DirectXTex、DXC、Windows SDK。**全部不帶進 GYO2**：視窗、輸入、畫面、音訊裝置、字型點陣化都改用 GYO2 的單位（下表）。移植後遊戲自己用的外部組件只有 fast_float（解析浮點，見 2.1 的 `Data/*` 列）。
 
 ## 2. 逐項對照
 
@@ -26,7 +26,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | `Geometry/Geometry2D` | AABB、線段與 AABB 的交點、穿邊（環面）路徑與繞數 | 遊戲（`src/geometry/`）。Engine 的 `core/math` 有 `Vec2`、2D 的 `Rect`（包含、交集）與 3D 的 `Aabb`／`Segment`，沒有 2D 線段對矩形的進入時刻；穿邊（環面）路徑與繞數是這款遊戲的規則，不進 Engine。之後 World 層可把 AABB 換成 `Math::Rect`，搬邏輯時不改 | **PR 1 已搬** |
 | `Tentacle/BloodTentacle` | 血管的 Verlet 粒子鏈（固定步 1/120 s 的累加器、約束迭代、跟隨延遲） | 遊戲（`src/tentacle/`）。不是物理 Module 的事：一條鏈的模擬是遊戲的表現規則（SDL 總宣告第 6.4 節也這樣寫） | **PR 1 已搬** |
 | `Tentacle/RibbonStrip` | 把中心線轉成三角形帶的頂點（寬度變化、像素格對齊、顏色） | 遊戲（`src/tentacle/`）；輸出的頂點之後交 R2b 的「來源側每幀給頂點的 2D 形狀」 | **PR 1 已搬**（頂點怎麼送進渲染等 R2b） |
-| `Data/Csv`、`Data/PuzzleCatalogLoader`、`Data/PuzzleData.hpp` | 嚴格的 CSV 讀取；`levels.csv`／`nodes.csv`／`maps/*.csv` 三種表組成關卡目錄；欄位驗證、預設值、舊欄位相容與警告 | 遊戲（`src/data/`）。只留從字串解析（`Parse`）；讀檔改走 asset（2.2 的 `asset` 列）。原本的 `Load`、`Csv::Load`、「貼圖檔存在嗎」的檢查碰檔案系統，違反 os 守衛 R4（runtime 程式不直接開檔），拿掉 | **PR 1 已搬**（`Parse` 部分）；讀檔的接法在 PR 2 |
+| `Data/Csv`、`Data/PuzzleCatalogLoader`、`Data/PuzzleData.hpp` | 嚴格的 CSV 讀取；`levels.csv`／`nodes.csv`／`maps/*.csv` 三種表組成關卡目錄；欄位驗證、預設值、舊欄位相容與警告 | 遊戲（`src/data/`）。只留從字串解析（`Parse`）；讀檔改走 asset（2.2 的 `asset` 列）。原本的 `Load`、`Csv::Load`、「貼圖檔存在嗎」的檢查碰檔案系統，違反 os 守衛 R4（runtime 程式不直接開檔），拿掉。浮點欄位原本用 `std::from_chars`（浮點版在 macOS 13.3 的 deployment target 沒有），改經遊戲自己的 adapter `src/adapters/fast_float/` 呼叫 fast_float（`third_party/` 已有，json Module 也用；json 的 J-1 只管 Engine，守衛不掃產品目錄），語意同 `chars_format::general` | **PR 1 已搬**（`Parse` 部分）；讀檔的接法在 PR 2 |
 | `Game/GameFlow` | 選單狀態（主選單、選關、遊玩、暫停、解開、最終結果）、選項移動、確認後的命令 | 遊戲。畫面的值改用 Engine 的 `state_machine`（`StateMachine<GameScreen>`，請求在下一次 apply 生效），選項與命令留在遊戲的 System | **PR 1 先原樣搬**（純邏輯與原測試）；PR 2 改寫成 state machine＋System |
 | `Game/FinalResults` | 一輪遊玩的通關紀錄、結果卡的頁數 | 遊戲（`src/game/`）；PR 2 成為 Resource | **PR 1 已搬** |
 | `Game/MusicSequencePolicy.hpp` | 什麼時候重播 BGM 的規則 | 遊戲 | **PR 1 已搬** |
