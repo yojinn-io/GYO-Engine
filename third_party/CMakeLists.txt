@@ -2,6 +2,11 @@
 # are added whether or not tests are built.
 add_subdirectory(yyjson)
 add_subdirectory(fast_float)
+# The text Module (engine/modules/text) is an engine Module too: FreeType,
+# HarfBuzz and libunibreak are added whether or not tests are built.
+add_subdirectory(freetype)
+add_subdirectory(harfbuzz)
+add_subdirectory(libunibreak)
 
 if(BUILD_TESTING)
     add_subdirectory(doctest)

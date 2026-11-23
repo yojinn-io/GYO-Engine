@@ -1,0 +1,1168 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the text Module batch (docs/architecture/target/v2/text-declaration.zh-Hant.md, section 8.7; ids tg- the TX-1 guard script, tx<N>- Design Invariant TX-<N> of target/v2/text.zh-Hant.md). Written with the tests; the adversarial check of the catalog (Opus/high, same model as the author while Fable is paused) is recorded in the merge approval page. Not kept (equivalent under every input, checked by hand 2026-11-23): drawing glyphs marked invisible (an invisible glyph is HarfBuzz's invisible glyph id, which FreeType cannot draw, or a space; a probe of the Kana font alone, which has no U+0020, shows \"\\n\\t\" as the invisible id with HarfBuzz's fallback space advance, not .notdef); FreeType's unscaled advance read without FT_LOAD_NO_SCALE (with no size set FreeType returns the same font units); FreeType built with FT_CONFIG_OPTION_ENVIRONMENT_PROPERTIES (the environment case rasterizes BIZ UDPGothic and the CFF Kana font with FREETYPE_PROPERTIES set and gets the same pixels: the TrueType interpreter, the CFF engine and stem darkening are set again with FT_Property_Set after FT_Init_FreeType, and the fonts are hinted by the auto-hinter, whose script and x-height properties changed nothing here; the #undef stays as a second line of defence). Not added as mutants, tests only: the padding counted when a glyph is too large (the mutant writes past the page, undefined behaviour) and TooLarge counted again for a cached glyph (no single-edit mutant). Not testable with these fonts, review: the language HarfBuzz is given (ShapeOptions::language, or \"und\"; no test font has language-specific forms, and the process locale is \"C\" in tests) and FT_LOAD_NO_BITMAP (no test font has embedded bitmaps). Adversarial check (Opus/high, same model as the author while Fable is paused, 2026-11-23): build/evidence/gyo2-sdl-text/mutation-check.md. Retired 2026-11-23 with the user's decision v8-arch-gyo2-sdl-t question B (the guard keeps the Engine side only): tg-plugins-not-scanned and the self-test it checked.",
+ "mutants": [
+  {
+   "id": "tg-freetype-include-off",
+   "what": "TX-1 guard: the FreeType include rule matches nothing",
+   "guards": [
+    "text TX-1",
+    "text-declaration 判定 5"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "include(r\"ft2build\\.h|freetype/[^>\\\"\\n]*\\.h\")",
+   "replace": "include(r\"ft2build\\.never\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_freetype_include_outside_its_adapter\\b"
+  },
+  {
+   "id": "tg-harfbuzz-include-off",
+   "what": "TX-1 guard: the HarfBuzz include rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "include(r\"hb\\.h|hb-(?!ft\\.h)[\\w-]+\\.h\")",
+   "replace": "include(r\"hb\\.never\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_harfbuzz_include_outside_its_adapter\\b"
+  },
+  {
+   "id": "tg-hbft-allowed",
+   "what": "TX-1 guard: hb-ft is allowed in the HarfBuzz adapter (TX-1: hb-ft nowhere)",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "(\"TX1-HBFT\", include(r\"hb-ft\\.h\"), NOWHERE)",
+   "replace": "(\"TX1-HBFT\", include(r\"hb-ft\\.h\"), HARFBUZZ_HOME)",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_hb_ft_is_nowhere_allowed\\b"
+  },
+  {
+   "id": "tg-libunibreak-include-off",
+   "what": "TX-1 guard: the libunibreak include rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "include(r\"(?:linebreak|graphemebreak|wordbreak|unibreakbase|unibreakdef|linebreakdef)\\.h\")",
+   "replace": "include(r\"libunibreak\\.never\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_libunibreak_include_outside_its_adapter\\b"
+  },
+  {
+   "id": "tg-freetype-name-off",
+   "what": "TX-1 guard: the FreeType name rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "re.compile(r\"\\bFT_[A-Z]\\w*\")",
+   "replace": "re.compile(r\"\\bFT_NEVER_\\w*\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "A\\.cpp:1: TX1-FREETYPE-NAME' not found"
+  },
+  {
+   "id": "tg-harfbuzz-name-off",
+   "what": "TX-1 guard: the HarfBuzz name rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "re.compile(r\"\\bhb_[a-z]\\w*\")",
+   "replace": "re.compile(r\"\\bhb_never\\w*\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "B\\.cpp:1: TX1-HARFBUZZ-NAME' not found"
+  },
+  {
+   "id": "tg-libunibreak-name-off",
+   "what": "TX-1 guard: the libunibreak name rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "set_(?:line|grapheme|word)breaks_\\w+|LINEBREAK_[A-Z]+|GRAPHEMEBREAK_[A-Z]+",
+   "replace": "set_never_breaks_\\w+",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "C\\.cpp:1: TX1-LIBUNIBREAK-NAME' not found"
+  },
+  {
+   "id": "tg-link-off",
+   "what": "TX-1 guard: the link rule matches nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "LINK = re.compile(r\"\\bgyo_(?:freetype|harfbuzz|libunibreak)\\b",
+   "replace": "LINK = re.compile(r\"\\bgyo_(?:never)\\b",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_link_outside_the_module\\b"
+  },
+  {
+   "id": "tg-fail-closed-off",
+   "what": "TX-1 guard: a rule that finds nothing allowed is not an error",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "        if count == 0:\n",
+   "replace": "        if False:\n",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_nothing_allowed_fails_closed\\b"
+  },
+  {
+   "id": "tg-missing-root-ignored",
+   "what": "TX-1 guard: a missing required root is not an error",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "errors.append(f\"scan root {top}/ not found under {root}\")",
+   "replace": "pass",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_missing_required_root_fails\\b"
+  },
+  {
+   "id": "tg-real-tree-home-wrong",
+   "what": "TX-1 guard on the real tree: the FreeType adapter's directory is mistyped, so the real adapter's includes are findings and the positive control sees nothing",
+   "guards": [
+    "text TX-1",
+    "text-declaration 判定 5"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "FREETYPE_HOME = ADAPTERS + \"freetype/\"",
+   "replace": "FREETYPE_HOME = ADAPTERS + \"free_type/\"",
+   "command": [
+    "{python}",
+    "-B",
+    "-I",
+    "tests/common/text/text_guard.py",
+    "--root",
+    "."
+   ],
+   "expect": "TX1-FREETYPE: nothing allowed found"
+  },
+  {
+   "id": "tx2-harfbuzz-advance-scaled",
+   "what": "TX-2: the HarfBuzz adapter reads advances at a scale of 1000 instead of the font units (upem 1024 for the synthetic fonts): they no longer equal FreeType's",
+   "guards": [
+    "text TX-2"
+   ],
+   "file": "engine/modules/text/src/adapters/harfbuzz/HarfBuzzShaping.cpp",
+   "find": "    FontPtr unscaled(hb_font_create(face.get()));\n",
+   "replace": "    FontPtr unscaled(hb_font_create(face.get()));\n    hb_font_set_scale(unscaled.get(), 1000, 1000);\n",
+   "target": "gyo_text_adapter_tests",
+   "cases": "text adapter: HarfBuzz and FreeType read the same advances*",
+   "expect": "CHECK\\( harfBuzz == freeTypeAdvance \\)"
+  },
+  {
+   "id": "tx3-cluster-end-short",
+   "what": "TX-3: a cluster ends one code point after it starts (a ligature loses its second character)",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "end = std::min(cpEnd, raw[u].cluster);",
+   "replace": "end = std::min(cpEnd, raw[t].cluster + 1);",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a ligature is one glyph for two characters",
+   "expect": "CHECK\\( layout\\.glyphs\\[i\\]\\.byteEnd == expected\\[i\\]\\.end \\)"
+  },
+  {
+   "id": "tx3-byte-end-wrong",
+   "what": "TX-3: a glyph's byte range ends one byte after it starts (multi-byte characters)",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "out.byteEnd = data.offsets[glyph.cpEnd];",
+   "replace": "out.byteEnd = data.offsets[glyph.cpBegin] + 1;",
+   "target": "gyo_text_tests",
+   "cases": "text shape: fallback takes the first font*",
+   "expect": "CHECK\\( layout\\.glyphs\\[i\\]\\.byteEnd == expected\\[i\\]\\.end \\)"
+  },
+  {
+   "id": "tx3-cluster-level-characters",
+   "what": "TX-3: HarfBuzz keeps marks as their own clusters (characters, not graphemes)",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/adapters/harfbuzz/HarfBuzzShaping.cpp",
+   "find": "HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES",
+   "replace": "HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a combining mark stays in its base's cluster and grapheme",
+   "expect": "CHECK\\( layout\\.glyphs\\[i\\]\\.(byteBegin|byteEnd) == expected\\[i\\]\\.(begin|end) \\)"
+  },
+  {
+   "id": "tx3-ligature-not-shared",
+   "what": "TX-3: a caret inside a ligature is put at the ligature's end, not a share per grapheme",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "return first->penX + advance * passed / graphemes;",
+   "replace": "return first->penX + advance;",
+   "target": "gyo_text_tests",
+   "cases": "text caret: inside a ligature*",
+   "expect": "CHECK\\( Text::CaretAt\\(layout, Caret\\{1\\}\\)\\.x == Units16\\(600\\) / 2\\.0f \\)"
+  },
+  {
+   "id": "tx3-affinity-ignored",
+   "what": "TX-3: CaretAt ignores the affinity at a soft break",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "caret.affinity == CaretAffinity::Upstream) {",
+   "replace": "false) {",
+   "target": "gyo_text_tests",
+   "cases": "text caret: at a soft break the affinity picks the line",
+   "expect": "CHECK\\( up\\.line == 0 \\)"
+  },
+  {
+   "id": "tx3-hit-not-upstream",
+   "what": "TX-3: HitTest at the end of a soft-wrapped line answers downstream (the next line's start)",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "        best.affinity = CaretAffinity::Upstream;",
+   "replace": "        best.affinity = CaretAffinity::Downstream;",
+   "target": "gyo_text_tests",
+   "cases": "text hit test: the nearest caret on the line the point is on",
+   "expect": "CHECK\\( Text::HitTest\\(layout, 99\\.0f, 4\\.0f\\) == Caret\\{3, CaretAffinity::Upstream\\} \\)"
+  },
+  {
+   "id": "tx3-hard-line-takes-end",
+   "what": "TX-3: HitTest on a line ending in a mandatory break may answer the offset after the break",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "const bool takesEnd = !(line.hardBreak && !last);",
+   "replace": "const bool takesEnd = true;",
+   "target": "gyo_text_tests",
+   "cases": "text hit test: the nearest caret on the line the point is on",
+   "expect": "CHECK\\( Text::HitTest\\(hard, 99\\.0f, 4\\.0f\\) == Caret\\{1\\} \\)"
+  },
+  {
+   "id": "tx3-hit-line-by-top",
+   "what": "TX-3: HitTest picks the line by its top, not its bottom",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "y >= layout.lines[l].top + layout.lines[l].height",
+   "replace": "y > layout.lines[l].top",
+   "target": "gyo_text_tests",
+   "cases": "text hit test: the nearest caret on the line the point is on",
+   "expect": "CHECK\\( Text::HitTest\\(layout, (3|7)\\.0f, 4\\.0f\\) == Caret\\{[01]\\} \\)"
+  },
+  {
+   "id": "tx3-empty-range-rect",
+   "what": "TX-3: RangeRects returns a zero-width rectangle for an empty range",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "        if (b >= e) {",
+   "replace": "        if (b > e) {",
+   "target": "gyo_text_tests",
+   "cases": "text range: one rectangle per line*",
+   "expect": "CHECK\\( rects\\.empty\\(\\) \\)"
+  },
+  {
+   "id": "tx3-every-code-point-a-boundary",
+   "what": "TX-3: every code point is a grapheme boundary (a mark could be split from its base)",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "        if (data.graphemeEnds[i] != 0) {",
+   "replace": "        if (true) {",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a combining mark stays in its base's cluster and grapheme",
+   "expect": "CHECK\\( layout\\.graphemeBoundaries == std::vector<std::uint32_t>\\{0, 3, 4\\} \\)"
+  },
+  {
+   "id": "tx3-caret-off-boundary",
+   "what": "TX-3: CaretAt accepts an offset that is not a grapheme boundary",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "    GYO_ASSERT(IsBoundary(layout, caret.byteOffset));\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text caret: only on grapheme boundaries",
+   "expect": "expected GYO_ASSERT to fail: Text::CaretAt\\(layout, Caret\\{1\\}\\)"
+  },
+  {
+   "id": "tx5-utf8-second-byte-range",
+   "what": "TX-3/TX-5: the decoder takes any continuation byte second (a UTF-8 surrogate decodes to one code point)",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/Utf8.cpp",
+   "find": "const unsigned char lo = used == 1 ? low : 0x80;",
+   "replace": "const unsigned char lo = 0x80;",
+   "target": "gyo_text_adapter_tests",
+   "cases": "text adapter: UTF-8 decoding*",
+   "expect": "CHECK\\( cps == std::vector<char32_t>\\(3, 0xFFFD\\) \\)"
+  },
+  {
+   "id": "tx5-utf8-subpart-per-byte",
+   "what": "TX-5: a truncated sequence becomes one U+FFFD per byte, not one per maximal subpart",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/Utf8.cpp",
+   "find": "        codePoints.push_back(complete ? cp : U'\\uFFFD');\n        i += used;",
+   "replace": "        codePoints.push_back(complete ? cp : U'\\uFFFD');\n        i += complete ? used : 1;",
+   "target": "gyo_text_tests",
+   "cases": "text shape: ill-formed UTF-8 is U+FFFD per maximal subpart*",
+   "expect": "REQUIRE\\( layout\\.glyphs\\.size\\(\\) == expected\\.size\\(\\) \\)"
+  },
+  {
+   "id": "tx4-strictness-ignored",
+   "what": "TX-4: the strictness option is ignored (always strict): a small kana can never start a line",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/adapters/libunibreak/Segmentation.cpp",
+   "find": "    if (strict) {\n        lang += \"-strict\";",
+   "replace": "    if (true) {\n        lang += \"-strict\";",
+   "target": "gyo_text_tests",
+   "cases": "text layout: the language and the strictness*",
+   "expect": "CHECK\\( lay\\(small, Text::ShapeOptions\\{\\{\\}, Text::LineBreakStrictness::Normal\\}\\) =="
+  },
+  {
+   "id": "tx4-mandatory-ignored",
+   "what": "TX-4: a mandatory break does not end the line",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "            if (kind == LineBreakAfter::Mandatory) {",
+   "replace": "            if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text layout: mandatory breaks end lines*",
+   "expect": "CHECK\\( Lines\\(layout, text\\) == std::vector<std::string>\\{\\\"A\\\\n\\\", \\\"B\\\\r\\\\n\\\", \\\"C\\\\n\\\", \\\"\\\"\\} \\)"
+  },
+  {
+   "id": "tx4-allowed-ignored",
+   "what": "TX-4: break opportunities are not used for wrapping (every line overflows)",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "            } else if (kind == LineBreakAfter::Allowed) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text layout: lines break at the last opportunity*",
+   "expect": "CHECK\\( Lines\\(layout, text\\) == std::vector<std::string>\\{\\\"AA AA \\\", \\\"AA\\\"\\} \\)"
+  },
+  {
+   "id": "tx4-trailing-space-counted",
+   "what": "TX-4: the line's width counts its trailing spaces",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "        while (end > 0 && IsHangingSpace(data.codePoints[line[end - 1].cpBegin])) {",
+   "replace": "        while (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text layout: lines break at the last opportunity*",
+   "expect": "CHECK\\( layout\\.lines\\[0\\]\\.width == 36\\.0f \\)"
+  },
+  {
+   "id": "tx4-space-triggers-break",
+   "what": "TX-4: a hanging space at the end of the line breaks it",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "if (maxWidth && !hangs(g) && width > *maxWidth",
+   "replace": "if (maxWidth && width > *maxWidth",
+   "target": "gyo_text_tests",
+   "cases": "text layout: lines break at the last opportunity*",
+   "expect": "Width\\(38\\.0f\\)"
+  },
+  {
+   "id": "tx4-unsafe-not-reshaped",
+   "what": "TX-4: a run cut where HarfBuzz says breaking is unsafe is not shaped again",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const bool cutUnsafe = (sb > run.cpBegin && unsafeAt(sb)) || (se < run.cpEnd && unsafeAt(se));",
+   "replace": "const bool cutUnsafe = false;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: a break where shaping is unsafe*",
+   "expect": "CHECK\\( broken\\.glyphs\\[1\\]\\.advance == Units16\\(512\\) \\)"
+  },
+  {
+   "id": "tx4-no-line-after-final-break",
+   "what": "TX-4: a final mandatory break leaves no empty last line",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "if (cpCount > 0 && IsMandatoryBreak(data.codePoints.back())) {",
+   "replace": "if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text layout: mandatory breaks end lines*",
+   "expect": "CHECK\\( Lines\\(layout, text\\)"
+  },
+  {
+   "id": "tx4-center-full-room",
+   "what": "TX-4: centring moves the line by all the room, not half",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "            x = room >= 0 ? room / 2 : -((-room + 1) / 2);",
+   "replace": "            x = room;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: alignment*",
+   "expect": "CHECK\\( center\\.lines\\[0\\]\\.x == 42\\.0f \\)"
+  },
+  {
+   "id": "tx4-basis-zero",
+   "what": "TX-4: without a width, lines align within nothing instead of the widest line",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const std::int64_t basis = maxWidth ? *maxWidth : widest;",
+   "replace": "const std::int64_t basis = maxWidth ? *maxWidth : 0;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: alignment*",
+   "expect": "CHECK\\( widest\\.lines\\[1\\]\\.x == 24\\.0f \\)"
+  },
+  {
+   "id": "tx4-leading-all-above",
+   "what": "TX-4: the whole leading goes above the text instead of half",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const std::int32_t halfTop = FloorDiv2(leading);",
+   "replace": "const std::int32_t halfTop = leading;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: one line*",
+   "expect": "CHECK\\( relative\\.lines\\[0\\]\\.baseline == Units16\\(820 \\+ 102\\) \\)"
+  },
+  {
+   "id": "tx5-fallback-off",
+   "what": "TX-5: no fallback: every grapheme takes the primary font",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "                    chosen = font;\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text shape: fallback takes the first font*",
+   "expect": "CHECK\\( layout\\.glyphs\\[1\\]\\.font == f\\.kana \\)"
+  },
+  {
+   "id": "tx5-ignorable-counted",
+   "what": "TX-5: default-ignorable characters count when a font's coverage is checked",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "                    if (!IsDefaultIgnorable(data->codePoints[k])) {",
+   "replace": "                    if (true) {",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a default-ignorable character does not decide the font",
+   "expect": "CHECK\\( layout\\.glyphs\\[0\\]\\.font == f\\.kana \\)"
+  },
+  {
+   "id": "tx5-notdef-last-font",
+   "what": "TX-5: a character no font has takes the last font's .notdef, not the primary's",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "            FontId chosen = span.fonts.front();",
+   "replace": "            FontId chosen = span.fonts.back();",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a character no font has*",
+   "expect": "CHECK\\( layout\\.glyphs\\[0\\]\\.font == f\\.kana \\)"
+  },
+  {
+   "id": "tx6-cache-ignored",
+   "what": "TX-6: the atlas never finds a glyph it has: the same glyph is drawn again",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "auto found = atlasState.glyphs.find(key);",
+   "replace": "auto found = atlasState.glyphs.end();",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a glyph is drawn once*",
+   "expect": "CHECK\\( first\\.newGlyphs == 2 \\)"
+  },
+  {
+   "id": "tx6-size-not-in-key",
+   "what": "TX-6: the size is left out of the glyph key: another size reuses the bitmap",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "const GlyphKey key{glyph.font.value, glyph.glyph, ToFixed26(glyph.sizePx), 0};",
+   "replace": "const GlyphKey key{glyph.font.value, glyph.glyph, 0, 0};",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a glyph is drawn once*",
+   "expect": "CHECK\\( big\\.newGlyphs == 1 \\)"
+  },
+  {
+   "id": "tx6-revision-without-change",
+   "what": "TX-6: Rasterize that changes nothing still raises the revision",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "        if (changes.empty()) {\n            return;\n        }\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a glyph is drawn once*",
+   "expect": "CHECK\\( atlas\\.Revision\\(\\) == 1 \\)"
+  },
+  {
+   "id": "tx6-log-base-kept",
+   "what": "TX-6: dropping old changes does not move the log's base: a reader that far behind gets only the newer rectangles",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "            logBase = oldest;\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a reader the change log no longer reaches*",
+   "expect": "CHECK\\( (change\\.rect == Text::AtlasRect\\{0, 0, 64, 64\\}|early\\.Matches\\(atlas\\)) \\)"
+  },
+  {
+   "id": "tx6-no-padding",
+   "what": "TX-6: glyphs are placed without their padding",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "placement.rect = AtlasRect{x + padding, y + padding, width, height};",
+   "replace": "placement.rect = AtlasRect{x, y, width, height};",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: Alpha8 pages*",
+   "expect": "CHECK\\( rect\\.x == 1 \\)"
+  },
+  {
+   "id": "tx6-too-large-empty",
+   "what": "TX-6: a glyph larger than a page is reported Empty instead of TooLarge",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "                placement.status = GlyphRasterStatus::TooLarge;",
+   "replace": "                placement.status = GlyphRasterStatus::Empty;",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a glyph larger than a page*",
+   "expect": "CHECK\\( result\\.placements\\[0\\]\\.status == Text::GlyphRasterStatus::TooLarge \\)"
+  },
+  {
+   "id": "tx6-any-context",
+   "what": "TX-6: an atlas accepts glyphs from a second context",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "    GYO_ASSERT(!atlasState.owner.owner_before(state_->identity) && !state_->identity.owner_before(atlasState.owner));\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: an atlas serves one context*",
+   "expect": "expected GYO_ASSERT to fail: other\\.context\\.Rasterize\\(layout, atlas\\)"
+  },
+  {
+   "id": "tx7-harfbuzz-reads-environment",
+   "what": "TX-7/TX-8: HarfBuzz reads its environment variables (HB_SHAPER_LIST=fallback drops the ligature and the kerning)",
+   "guards": [
+    "text TX-7",
+    "text TX-8"
+   ],
+   "file": "third_party/harfbuzz/CMakeLists.txt",
+   "find": "target_compile_definitions(gyo_harfbuzz PUBLIC HB_NO_GETENV)",
+   "replace": "",
+   "target": "gyo_text_environment_tests",
+   "command": [
+    "{python}",
+    "-B",
+    "-I",
+    "tests/common/text/run_with_environment.py",
+    "{exe:gyo_text_environment_tests}"
+   ],
+   "expect": "REQUIRE\\( layout\\.glyphs\\.size\\(\\) == 3 \\)"
+  },
+  {
+   "id": "tx8-full-hinting",
+   "what": "TX-8: glyphs are drawn with full hinting instead of light (the golden bitmaps change)",
+   "guards": [
+    "text TX-8",
+    "text-declaration 判定 4"
+   ],
+   "file": "engine/modules/text/src/adapters/freetype/FreeTypeRaster.cpp",
+   "find": "FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP | FT_LOAD_RENDER",
+   "replace": "FT_LOAD_TARGET_NORMAL | FT_LOAD_NO_BITMAP | FT_LOAD_RENDER",
+   "target": "gyo_text_tests",
+   "cases": "text golden: BIZ UDPGothic*",
+   "expect": "CHECK\\( golden\\.atlas == std::string\\(e\\.atlas\\) \\)"
+  },
+  {
+   "id": "tx9-component-public",
+   "what": "TX-1/TX-9: the Module hands its external components to its users (PUBLIC link)",
+   "guards": [
+    "text TX-1",
+    "text TX-9"
+   ],
+   "file": "engine/modules/text/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_text PRIVATE gyo_freetype gyo_harfbuzz gyo_libunibreak)",
+   "replace": "target_link_libraries(gyo_text PUBLIC gyo_freetype gyo_harfbuzz gyo_libunibreak)",
+   "target": "gyo_text_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_text exposes gyo_freetype to its users"
+  },
+  {
+   "id": "tx10-sfnt-unchecked",
+   "what": "TX-10 rule 1: the sfnt tag is not checked (WOFF reaches HarfBuzz and fails as unreadable)",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontData.cpp",
+   "find": "        if (!IsSfnt(bytes)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text font: rule 1*",
+   "expect": "CHECK\\( Rejected\\(Tagged\\(\\\"wOFF\\\"\\)\\) == TextFailureCode::NotSfnt \\)"
+  },
+  {
+   "id": "tx10-empty-collection-unreadable",
+   "what": "TX-10 rule 2: an empty collection is reported as an unreadable face",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontData.cpp",
+   "find": "            if (IsCollection(bytes)) {",
+   "replace": "            if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text font: rule 2* collection with no face",
+   "expect": "TextFailureCode::EmptyCollection"
+  },
+  {
+   "id": "tx10-glyphs-unchecked",
+   "what": "TX-10 rule 2: a face without glyphs is taken",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontData.cpp",
+   "find": "            if (!check.hasGlyphs) {",
+   "replace": "            if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text font: rule 2* face with no glyph",
+   "expect": "TextFailureCode::NoGlyphs"
+  },
+  {
+   "id": "tx10-cmap-unchecked",
+   "what": "TX-10 rule 2: a face without a Unicode character map is taken",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontData.cpp",
+   "find": "            if (!check.hasUnicodeCmap) {",
+   "replace": "            if (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text font: rule 2* without a Unicode character map",
+   "expect": "TextFailureCode::NoUnicodeCmap"
+  },
+  {
+   "id": "tx10-face-index-off-by-one",
+   "what": "TX-10: AddFont accepts a face index equal to the face count (and fails later as unreadable)",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "    if (faceIndex >= data.FaceCount()) {",
+   "replace": "    if (faceIndex > data.FaceCount()) {",
+   "target": "gyo_text_tests",
+   "cases": "text font: AddFont opens a face*",
+   "expect": "TextFailureCode::FaceIndexOutOfRange"
+  },
+  {
+   "id": "tx10-loader-loses-entry",
+   "what": "TX-10: the loader's failure does not name the catalog entry and path",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontLoader.cpp",
+   "find": "std::string detail = context.Id().Text() + \" (\" + context.Path() + \")\";",
+   "replace": "std::string detail;",
+   "target": "gyo_text_tests",
+   "cases": "text font: the loader takes the Data Contract*",
+   "expect": "CHECK\\( rejected\\.error\\(\\)\\.detail\\.find\\(\\\"test\\.font\\\"\\) != std::string::npos \\)"
+  },
+  {
+   "id": "tg-harfbuzz-home-wrong",
+   "what": "TX-1 guard on the real tree: the HarfBuzz adapter's directory is mistyped",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "HARFBUZZ_HOME = ADAPTERS + \"harfbuzz/\"",
+   "replace": "HARFBUZZ_HOME = ADAPTERS + \"harf_buzz/\"",
+   "command": [
+    "{python}",
+    "-B",
+    "-I",
+    "tests/common/text/text_guard.py",
+    "--root",
+    "."
+   ],
+   "expect": "TX1-HARFBUZZ: nothing allowed found"
+  },
+  {
+   "id": "tg-libunibreak-home-wrong",
+   "what": "TX-1 guard on the real tree: the libunibreak adapter's directory is mistyped",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "LIBUNIBREAK_HOME = ADAPTERS + \"libunibreak/\"",
+   "replace": "LIBUNIBREAK_HOME = ADAPTERS + \"unibreak/\"",
+   "command": [
+    "{python}",
+    "-B",
+    "-I",
+    "tests/common/text/text_guard.py",
+    "--root",
+    "."
+   ],
+   "expect": "TX1-LIBUNIBREAK: nothing allowed found"
+  },
+  {
+   "id": "tg-link-not-counted",
+   "what": "TX-1 guard on the real tree: the allowed CMake links are not counted, so the link rule's positive control sees nothing",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "                allowed[\"TX1-LINK\"] += 1\n",
+   "replace": "                pass\n",
+   "command": [
+    "{python}",
+    "-B",
+    "-I",
+    "tests/common/text/text_guard.py",
+    "--root",
+    "."
+   ],
+   "expect": "TX1-LINK: nothing allowed found"
+  },
+  {
+   "id": "tg-build-cmake-not-scanned",
+   "what": "TX-1 guard: build/cmake/ is not scanned for component links",
+   "guards": [
+    "text TX-1"
+   ],
+   "file": "tests/common/text/text_guard.py",
+   "find": "CMAKE_EXTRA = (\"build/cmake\",)",
+   "replace": "CMAKE_EXTRA = ()",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/text",
+    "-p",
+    "test_text_guard.py"
+   ],
+   "expect": "FAIL: test_link_in_build_cmake_and_the_root\\b"
+  },
+  {
+   "id": "tx2-x-offset-dropped",
+   "what": "TX-2: a glyph is drawn at the pen without HarfBuzz's x placement",
+   "guards": [
+    "text TX-2"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "out.x = FromFixed26(pen + glyph.xOffset);",
+   "replace": "out.x = FromFixed26(pen);",
+   "target": "gyo_text_tests",
+   "cases": "text layout: a break where shaping is unsafe*",
+   "expect": "CHECK\\( whole\\.glyphs\\[2\\]\\.x == whole\\.glyphs\\[2\\]\\.penX \\+ Units16\\(64\\) \\)"
+  },
+  {
+   "id": "tx2-y-offset-sign",
+   "what": "TX-2: HarfBuzz's y placement (up) is added to the baseline (down) instead of subtracted",
+   "guards": [
+    "text TX-2"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "out.y = FromFixed26(baseline - glyph.yOffset);",
+   "replace": "out.y = FromFixed26(baseline + glyph.yOffset);",
+   "target": "gyo_text_tests",
+   "cases": "text layout: a break where shaping is unsafe*",
+   "expect": "CHECK\\( whole\\.glyphs\\[2\\]\\.y == whole\\.lines\\[0\\]\\.baseline - Units16\\(128\\) \\)"
+  },
+  {
+   "id": "tx2-span-metrics",
+   "what": "TX-2: a line box uses the span's primary font's metrics, not the run's own font",
+   "guards": [
+    "text TX-2"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "                    add(run.metrics, data.spans[run.span].lineHeight26);",
+   "replace": "                    add(data.spans[run.span].metrics, data.spans[run.span].lineHeight26);",
+   "target": "gyo_text_tests",
+   "cases": "text layout: the fallback font's metrics*",
+   "expect": "CHECK\\( layout\\.lines\\[0\\]\\.baseline == std::max\\(latinBaseline, bizBaseline\\) \\)"
+  },
+  {
+   "id": "tx4-ideographic-space-not-hanging",
+   "what": "TX-4: U+3000 at the end of a line counts and breaks the line",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "return cp == 0x20 || cp == 0x3000 || IsLineBreakOrTab(cp);",
+   "replace": "return cp == 0x20 || IsLineBreakOrTab(cp);",
+   "target": "gyo_text_tests",
+   "cases": "text layout: other mandatory breaks*",
+   "expect": "CHECK\\( Lines\\(f\\.Lay\\(kana"
+  },
+  {
+   "id": "tx4-line-separator-not-a-break",
+   "what": "TX-4: U+2028 is not treated as a line break character (shaped and drawn as itself)",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "|| cp == 0x2028 ",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text layout: other mandatory breaks*",
+   "expect": "CHECK_FALSE\\( layout\\.glyphs\\[1\\]\\.visible \\)"
+  },
+  {
+   "id": "tx4-break-inside-cluster",
+   "what": "TX-3/TX-4: a line may end between the glyphs of one cluster",
+   "guards": [
+    "text TX-3",
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "if (!firstOfCluster(g) || glyphs[g].cpBegin == 0) {",
+   "replace": "if (glyphs[g].cpBegin == 0) {",
+   "target": "gyo_text_tests",
+   "cases": "text shape: clusters cover the text*",
+   "expect": "CHECK\\( glyph\\.(byteBegin >= line\\.byteBegin|byteEnd <= line\\.byteEnd) \\)"
+  },
+  {
+   "id": "tx4-reshape-after-break-only",
+   "what": "TX-4: only the side before an unsafe break is shaped again (the side after keeps the pair's placement)",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const bool cutUnsafe = (sb > run.cpBegin && unsafeAt(sb)) || (se < run.cpEnd && unsafeAt(se));",
+   "replace": "const bool cutUnsafe = (se < run.cpEnd && unsafeAt(se));",
+   "target": "gyo_text_tests",
+   "cases": "text layout: a break where shaping is unsafe*",
+   "expect": "CHECK\\( broken\\.glyphs\\[2\\]\\.(x == broken\\.glyphs\\[2\\]\\.penX|y == broken\\.lines\\[1\\]\\.baseline) \\)"
+  },
+  {
+   "id": "tx4-final-line-first-span",
+   "what": "TX-4: the empty line after a final break takes the first span's line height",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const StoredSpan& span = cpCount == 0 ? data.spans.front() : data.spans.back();",
+   "replace": "const StoredSpan& span = data.spans.front();",
+   "target": "gyo_text_tests",
+   "cases": "text layout: the empty line after a final break*",
+   "expect": "CHECK\\( layout\\.lines\\[1\\]\\.height == 32\\.0f \\)"
+  },
+  {
+   "id": "tx4-leading-truncates",
+   "what": "TX-4: half the leading is truncated toward zero, not floored (a negative odd leading)",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "    return value >= 0 ? value / 2 : -((-value + 1) / 2);",
+   "replace": "    return value / 2;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: a negative odd leading*",
+   "expect": "CHECK\\( layout\\.lines\\[0\\]\\.baseline == Units16\\(819\\) \\)"
+  },
+  {
+   "id": "tx4-width-after-break",
+   "what": "TX-4: after a break the new line's width leaves out the glyph that overflowed",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "for (std::uint32_t k = lineStart; k <= g; ++k) {",
+   "replace": "for (std::uint32_t k = lineStart; k < g; ++k) {",
+   "target": "gyo_text_tests",
+   "cases": "text layout: one shaped text*",
+   "expect": "CHECK\\( Lines\\(two, kana\\) =="
+  },
+  {
+   "id": "tx4-exact-fill-breaks",
+   "what": "TX-4: a line exactly as wide as the width breaks (>= instead of >)",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "width > *maxWidth && lastBreak",
+   "replace": "width >= *maxWidth && lastBreak",
+   "target": "gyo_text_tests",
+   "cases": "text layout: Japanese line breaking*",
+   "expect": "CHECK\\( Lines\\(f\\.Lay\\(plain"
+  },
+  {
+   "id": "tx5-script-not-backfilled",
+   "what": "TX-5: neutral characters at the start keep Common instead of the script after them (a leading hyphen loses its kerning)",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "            it->script = firstStrong->script;",
+   "replace": "            static_cast<void>(it);",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a neutral character at the start*",
+   "expect": "CHECK\\( layout\\.glyphs\\[0\\]\\.advance == Units16\\(512 - 64\\) \\)"
+  },
+  {
+   "id": "tx5-coverage-of-the-tab",
+   "what": "TX-5: a tab's font is chosen for the tab itself, not for the space it is shaped as",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "covers = face.HasGlyph(data->shapingCodePoints[k]);",
+   "replace": "covers = face.HasGlyph(data->codePoints[k]);",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a tab or line break*",
+   "expect": "CHECK\\( layout\\.glyphs\\[1\\]\\.font == f\\.latin \\)"
+  },
+  {
+   "id": "tx5-font-per-character",
+   "what": "TX-5: the font is chosen per code point instead of per grapheme",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "while (j < span.cpEnd && data->graphemeEnds[j - 1] == 0) {",
+   "replace": "while (false) {",
+   "target": "gyo_text_tests",
+   "cases": "text shape: the font is chosen per grapheme*",
+   "expect": "CHECK\\( glyph\\.font == f\\.latin \\)"
+  },
+  {
+   "id": "tx5-utf8-f0-range",
+   "what": "TX-5: the decoder takes 80..8F after F0 (an overlong four-byte sequence decodes)",
+   "guards": [
+    "text TX-5"
+   ],
+   "file": "engine/modules/text/src/Utf8.cpp",
+   "find": "            if (lead == 0xF0) low = 0x90;\n",
+   "replace": "",
+   "target": "gyo_text_adapter_tests",
+   "cases": "text adapter: UTF-8 decoding*",
+   "expect": "CHECK\\( cps == std::vector<char32_t>\\(4, 0xFFFD\\) \\)"
+  },
+  {
+   "id": "tx6-hidden-glyph-visible",
+   "what": "TX-6: HarfBuzz's invisible glyph (a hidden default-ignorable character) is marked visible",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "const bool visible = raw[t].glyph != kInvisibleGlyph && visibleCluster(clusterBegin, end);",
+   "replace": "const bool visible = visibleCluster(clusterBegin, end);",
+   "target": "gyo_text_tests",
+   "cases": "text shape: a hidden default-ignorable*",
+   "expect": "CHECK_FALSE\\( layout\\.glyphs\\[1\\]\\.visible \\)"
+  },
+  {
+   "id": "tx3-empty-line-not-aligned",
+   "what": "TX-3: a caret on an empty line ignores the line's alignment",
+   "guards": [
+    "text TX-3"
+   ],
+   "file": "engine/modules/text/src/Caret.cpp",
+   "find": "        return line.x;",
+   "replace": "        return 0.0f;",
+   "target": "gyo_text_tests",
+   "cases": "text layout: alignment*",
+   "expect": "CHECK\\( Text::CaretAt\\(empty, Text::Caret\\{2\\}\\)\\.x == 50\\.0f \\)"
+  },
+  {
+   "id": "tx6-log-base-boundary",
+   "what": "TX-6: a reader exactly one revision behind the log's base gets only the newer rectangles",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/GlyphAtlas.cpp",
+   "find": "    if (revision < state_->logBase) {",
+   "replace": "    if (revision + 1 < state_->logBase) {",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: a reader one revision behind*",
+   "expect": "CHECK\\( reader\\.Matches\\(atlas\\) \\)"
+  },
+  {
+   "id": "tx6-layout-any-context",
+   "what": "TX-6: Layout accepts a shaped text from another context",
+   "guards": [
+    "text TX-6"
+   ],
+   "file": "engine/modules/text/src/TextContext.cpp",
+   "find": "    GYO_ASSERT(SameOwner(data.owner, state_->identity));\n",
+   "replace": "",
+   "target": "gyo_text_tests",
+   "cases": "text atlas: an atlas serves one context*",
+   "expect": "expected GYO_ASSERT to fail: other\\.context\\.Layout\\(shaped, \\{\\}\\)"
+  },
+  {
+   "id": "tx10-true-tag-rejected",
+   "what": "TX-10 rule 1: the 'true' sfnt tag is not taken",
+   "guards": [
+    "text TX-10"
+   ],
+   "file": "engine/modules/text/src/FontData.cpp",
+   "find": "{'t', 'r', 'u', 'e'}",
+   "replace": "{'t', 'r', 'u', 'x'}",
+   "target": "gyo_text_tests",
+   "cases": "text font: rule 1* 'true' tag*",
+   "expect": "CHECK\\( font\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "tx4-language-not-passed",
+   "what": "TX-4: the language is not given to libunibreak: ambiguous characters (AI) never break like ideographs in Japanese",
+   "guards": [
+    "text TX-4"
+   ],
+   "file": "engine/modules/text/src/adapters/libunibreak/Segmentation.cpp",
+   "find": "    std::string lang(language);\n",
+   "replace": "    std::string lang;\n",
+   "target": "gyo_text_tests",
+   "cases": "text layout: the language and the strictness*",
+   "expect": "CHECK\\( lay\\(circled, Text::ShapeOptions\\{\"ja\", Text::LineBreakStrictness::Strict\\}\\)\\.size\\(\\) == 2 \\)"
+  }
+ ]
+}
