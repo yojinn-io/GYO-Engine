@@ -108,6 +108,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | HarfBuzz 單檔彙整 `harfbuzz.cc` 本機編譯 172.6 s（T 的停止門檻 180 s，只差 4%；FreeType 35.4 s，合計 208 s／門檻 300 s）：單一編譯單位不能並行、可能成為建置的關鍵路徑；起因是 SDL 總宣告第 9.1 節「third_party 無條件加入、每個組態（含 Match）都建」。改法候選：改編上游個別 `hb-*.cc` 讓它並行／HarfBuzz 精簡組態／third_party 跟著有人用才建（建置圖的 Architecture Delta） | T #297（主 checkout `build/evidence/gyo2-sdl-text/build-time/measurements.md`、design-review 第 3 條） | 下一個加 third_party 的批之前看；或 L1 時間明顯變長時 |
+| Object_Connect 盤點的 Engine 缺口（`games/object_connect/docs/porting-inventory.zh-Hant.md`，#302）：G3 游標 warp、G4 滑鼠相對移動量、G5 游標進出視窗、G6 視窗不可改大小 | Object_Connect 移植準備 #302 | 子批 W（開卡時寫進 brief） |
+| Object_Connect 盤點的 Engine 缺口：G1 播放中改音量、G2 循環播放 | Object_Connect 移植準備 #302 | audio 小批（Object_Connect 要聲音前） |
 | examples 只有一個 `examples/CMakeLists.txt`：第一個帶 `sdl*` 的 example 要能被 `plugin_removal.py` 拿掉（例：每個 example 一個目錄、照目錄加入），否則 CI 的 core 步驟報「still names the removed Plugin」；Plugin 自己的測試可用 `gyo_product_units(... PLUGINS <自己>)` | P #300 | 子批 W |
 | master 留下的 SDL「component」機制是死碼、沒接上 `plugins/sdl`：`GyoComponents.cmake` 的 `SDL_*`、`GYO_ENABLE_SDL3`（無人讀）、`GyoRuntimeDeployment.cmake` 的 `TARGET SDL3-shared`（在 Plugin 加入前查，永遠 false）、core preset 的 `GYO_BUILD_SDL_*`；寫在 `sdl.zh-Hant.md` 範囲の限界 | P #300 | 重審產品登記機制那批（Object_Connect 移植時） |
 | SDL 升到 3.4.20（使用者已同意另開；補丁要在新版重現缺陷再移植，步驟在 `sdl.zh-Hant.md`「升版」） | P #300 | 小批，W／R2a 之後 |
