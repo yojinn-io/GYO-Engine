@@ -108,6 +108,12 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | HarfBuzz 單檔彙整 `harfbuzz.cc` 本機編譯 172.6 s（T 的停止門檻 180 s，只差 4%；FreeType 35.4 s，合計 208 s／門檻 300 s）：單一編譯單位不能並行、可能成為建置的關鍵路徑；起因是 SDL 總宣告第 9.1 節「third_party 無條件加入、每個組態（含 Match）都建」。改法候選：改編上游個別 `hb-*.cc` 讓它並行／HarfBuzz 精簡組態／third_party 跟著有人用才建（建置圖的 Architecture Delta） | T #297（主 checkout `build/evidence/gyo2-sdl-text/build-time/measurements.md`、design-review 第 3 條） | 下一個加 third_party 的批之前看；或 L1 時間明顯變長時 |
+| examples 只有一個 `examples/CMakeLists.txt`：第一個帶 `sdl*` 的 example 要能被 `plugin_removal.py` 拿掉（例：每個 example 一個目錄、照目錄加入），否則 CI 的 core 步驟報「still names the removed Plugin」；Plugin 自己的測試可用 `gyo_product_units(... PLUGINS <自己>)` | P #300 | 子批 W |
+| master 留下的 SDL「component」機制是死碼、沒接上 `plugins/sdl`：`GyoComponents.cmake` 的 `SDL_*`、`GYO_ENABLE_SDL3`（無人讀）、`GyoRuntimeDeployment.cmake` 的 `TARGET SDL3-shared`（在 Plugin 加入前查，永遠 false）、core preset 的 `GYO_BUILD_SDL_*`；寫在 `sdl.zh-Hant.md` 範囲の限界 | P #300 | 重審產品登記機制那批（Object_Connect 移植時） |
+| SDL 升到 3.4.20（使用者已同意另開；補丁要在新版重現缺陷再移植，步驟在 `sdl.zh-Hant.md`「升版」） | P #300 | 小批，W／R2a 之後 |
+| SDL-1 的原始碼掃描與「SDL 只被 `sdl*` PRIVATE 連結」的設定時檢查（總宣告 9.1） | P #300 | K 之後 |
+| SDL 目前靜態建置（master 是動態）；改回動態要和 K 的打包一起，並處理上一列的順序問題 | P #300（卡片判斷，可推翻） | K 的打包 |
+| CI 在「另一棵原始碼樹」上建置時，Windows（sccache＋MSVC）疑似把 checkout 的 object 給副本用（`std::source_location` 是原路徑，`authority.authority_sources` 失敗；本機無 MSVC 未證實）：之後這類建置不該和 checkout 共用編譯快取；工作流程政策規定 launcher 只由 native-setup 設 | P #300 第三輪 CI | 下一次動 CI 的批 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
