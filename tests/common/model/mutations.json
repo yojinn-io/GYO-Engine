@@ -386,11 +386,11 @@
     "model MD-6"
    ],
    "file": "engine/modules/model/src/FbxLoader.cpp",
-   "find": "if (member.key != \"meshes\") return BadSettings",
-   "replace": "if (false) return BadSettings",
+   "find": "            return BadSettings(\"unknown member \\\"\" + std::string(member.key) + \"\\\"\");",
+   "replace": "            continue;",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader settings: meshes and nothing else",
-   "expect": "textures"
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "materials"
   },
   {
    "id": "mf-not-fbx",
@@ -404,6 +404,45 @@
    "target": "gyo_model_fbx_tests",
    "cases": "FbxLoader rule 1: NotFbx",
    "expect": "NotFbx"
+  },
+  {
+   "id": "mf-textures-not-declared",
+   "what": "MD-6: a material's texture is not declared as a reference (asset decision 11)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "            material.baseColorImage = context.ReferencePath<Image::ImageData>(material.baseColorTexture);\n",
+   "replace": "",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "declared\\.size\\(\\) == 1"
+  },
+  {
+   "id": "mf-textures-setting-ignored",
+   "what": "MD-6: textures false still declares the textures",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "    if (settings.textures) {",
+   "replace": "    if (true) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "FbxSettings\\{true, false\\}\\)\\.empty\\(\\)"
+  },
+  {
+   "id": "mf-textures-setting-unread",
+   "what": "MD-6: the textures member of the settings is refused",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "        } else if (member.key == \"textures\") {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "noTextures\\.has_value\\(\\)"
   },
   {
    "id": "mf-uv-not-flipped",

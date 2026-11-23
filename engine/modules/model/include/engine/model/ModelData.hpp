@@ -9,9 +9,11 @@
 #include <string_view>
 #include <vector>
 
+#include "engine/asset/AssetRef.hpp"
 #include "engine/asset/AssetTypeName.hpp"
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
+#include "engine/image/ImageData.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec2.hpp"
@@ -57,15 +59,22 @@ struct Node final {
     LocalTransform rest{};
 };
 
-// A material is data a renderer reads; textures are named, never decoded.
+// A material is data a renderer reads. Textures are never read or decoded
+// here: the loader declares each one as a reference, and the asset store
+// loads it as an image (asset decision 11: the Engine infers the
+// dependencies).
 struct Material final {
     std::string name;
     // Linear RGB with straight alpha; white when the file gives none.
     std::array<float, 4> baseColor{1.0F, 1.0F, 1.0F, 1.0F};
     // The base colour texture's file name as written in the file (relative
-    // when the file has a relative one); empty when there is none. A product
-    // maps it, or the material's name, to a catalog id.
+    // when the file has a relative one); empty when there is none.
     std::string baseColorTexture;
+    // The image the loader declared for that file name, by path relative to
+    // the model's file: its id once the store maps the path to a catalog
+    // entry; an empty id when the loader declared none (no texture, or the
+    // entry's settings turn textures off) or the path maps to no entry.
+    Asset::AssetRef<Image::ImageData> baseColorImage;
 
     [[nodiscard]] friend bool operator==(const Material&, const Material&) = default;
 };

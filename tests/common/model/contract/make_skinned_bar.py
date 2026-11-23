@@ -19,8 +19,8 @@
 # - a mesh "Pair": two triangles at x = -1 with materials "Left" and "Right",
 #   both following Lower (two material parts of one skinned mesh);
 # - a material "Paint", base colour (0.8, 0.1, 0.1, 1), its base colour from an
-#   image named textures/paint.png (the file is not written: a loader only
-#   names it);
+#   image at textures/paint.png beside the FBX file (the file is not written:
+#   the loader only declares it as a reference);
 # - UVs: the bottom face's corners at v = 0, the top face's at v = 1;
 # - two actions as separate stacks, 30 frames a second: "Bend", Upper turning
 #   90 degrees about its own X from frame 1 to frame 31 (1 second); "Hold",
@@ -28,7 +28,14 @@
 import bpy
 import os
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skinned_bar.fbx")
+import shutil
+
+DEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skinned_bar.fbx")
+# Blender writes the texture's absolute path into the file too. Exporting from
+# a fixed neutral directory keeps the machine's own paths (the user's name)
+# out of the committed file; the result is then copied beside this script.
+OUT = "/tmp/gyo_model_contract/skinned_bar.fbx"
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -83,7 +90,9 @@ for poly in mesh_data.polygons:
         uv.data[loop_index].uv = (0.0 if x < 0 else 1.0, z / 2.0)
 
 image = bpy.data.images.new("paint", 4, 4)
-image.filepath_raw = "//textures/paint.png"
+# An absolute path beside the output, so the exporter's relative path (from
+# the FBX file) is textures/paint.png. The file itself is never written.
+image.filepath_raw = os.path.join(os.path.dirname(OUT), "textures", "paint.png")
 image.source = 'FILE'
 material = bpy.data.materials.new("Paint")
 material.use_nodes = True
@@ -179,4 +188,5 @@ bpy.ops.export_scene.fbx(
     embed_textures=False,
     use_mesh_modifiers=False,
 )
-print("wrote", OUT)
+shutil.copyfile(OUT, DEST)
+print("wrote", DEST)

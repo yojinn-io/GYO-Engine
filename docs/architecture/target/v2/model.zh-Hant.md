@@ -2,21 +2,21 @@
 
 更新：2026-11-24（`v8-arch-gyo2-model`：新建；照使用者 2026-11-23 的兩個決定——model 現在就開、做成不依賴 render／GPU／SDL 的函式庫（HANDOFF `v8-arch-gyo2-model-now`），骨骼動畫第 1 層放 model、第 2 層先不做、第 3 層歸 render（HANDOFF `v8-arch-gyo2-skeletal-animation-layers`）；ufbx 走 Module 這一側（`v8-arch-gyo2-sdl-q2-ufbx-stb-module`）。需求來源：PvP 移植盤點 `games/object_fps_pvp/docs/porting-inventory.zh-Hant.md` 第 4 節。新 AGENTS（#296）下不另寫事前宣告；卡片自己判的取捨在第 6 節，**最終文字在合併前核准時定稿**）。
 
-2026-11-24 修訂 1（合併後的設計審查，`build/evidence/v8-arch-gyo2-model/design-review.md`）：skin 的共用資料移到 `ModelData::skins`（M-13）；retarget 的參考姿勢可由呼叫者給（M-6）；ufbx 的記憶體上限跟著檔案大小上限（M-14）；材質在 FBX 值是空的時退回 PBR（M-15）；拿掉 adapter 自己的一套錯誤碼。**貼圖要不要宣告 reference 等使用者決定**（第 3 節「材質」）。
+2026-11-24 修訂 1（合併後的設計審查，`build/evidence/v8-arch-gyo2-model/design-review.md`）：skin 的共用資料移到 `ModelData::skins`（M-13）；retarget 的參考姿勢可由呼叫者給（M-6）；ufbx 的記憶體上限跟著檔案大小上限（M-14）；材質在 FBX 值是空的時退回 PBR（M-15）；拿掉 adapter 自己的一套錯誤碼。貼圖照 asset 宣告的使用者決定 11 改成宣告 reference、加 `textures` 設定（M-16；主會話 2026-11-24 判 (a)：改回已核准的決定，不是推翻）。
 
 ## 一個例子
 
-一個 PvP 的 Match（伺服器，沒有視窗）開局：catalog 裡兩個 `type` 為 `model` 的項目——身體（`settings: {"meshes": false}`，只要骨架）與片段來源（同樣不要網格）。Match 經 asset 請求 `Handle<ModelData>`；worker 讀檔、`FbxLoader` 經 ufbx 解成 `ModelData`。遊戲用 `BindByName` 把片段來源的骨頭對上身體的骨頭、拿掉不要的、以 `Retarget` 把要用的片段搬到身體上（載入時一次）。之後每個 tick，遊戲自己算片段時刻與權重，`SampleClip` 取兩個姿勢、`Blend` 混合、`ComputeModelSpace` 得到每根骨頭在模型空間的矩陣，再把命中判定用的形狀擺上去。Client 用同一份資料畫角色：網格與蒙皮資料交給 render（R2b），貼圖由產品照材質名或 `baseColorTexture` 對到 catalog 的 `image` 項目。整個 model 不需要 SDL、GPU 或 World。
+一個 PvP 的 Match（伺服器，沒有視窗）開局：catalog 裡兩個 `type` 為 `model` 的項目——身體（`settings: {"meshes": false}`，只要骨架）與片段來源（同樣不要網格）。Match 經 asset 請求 `Handle<ModelData>`；worker 讀檔、`FbxLoader` 經 ufbx 解成 `ModelData`。遊戲用 `BindByName` 把片段來源的骨頭對上身體的骨頭、拿掉不要的、以 `Retarget` 把要用的片段搬到身體上（載入時一次）。之後每個 tick，遊戲自己算片段時刻與權重，`SampleClip` 取兩個姿勢、`Blend` 混合、`ComputeModelSpace` 得到每根骨頭在模型空間的矩陣，再把命中判定用的形狀擺上去。Client 用同一份資料畫角色：網格與蒙皮資料交給 render（R2b）；loader 把材質的貼圖宣告成依賴，store 照 catalog 把它載成 `image`，材質的 `baseColorImage` 帶著它的 id。Match 沒有登記 image 的 loader，依賴就略過、不去載貼圖。整個 model 不需要 SDL、GPU 或 World。
 
 ## 1. 位置與依賴
 
 ```text
-GYO::Base、GYO::Math ◄── GYO::Model ──► GYO::Asset（loader 介面）
+GYO::Base、GYO::Math ◄── GYO::Model ──► GYO::Asset（loader 介面）、GYO::Image（貼圖引用的型別）
                             │  └─(私有)─► GYO::Json（settings）
                             └─(私有)─► gyo_ufbx（只在 src/adapters/ufbx/）
 ```
 
-- 函式庫（`library_only`、`default=no`），沒有 `ModelModule`、不進 World：連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Json`、`gyo_ufbx`（MD-5）。不認得 SDL、渲染、GPU、World、產品。
+- 函式庫（`library_only`、`default=no`），沒有 `ModelModule`、不進 World：連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Image`、`GYO::Json`、`gyo_ufbx`（MD-5）。依賴 image 只為了材質引用貼圖的型別 `ImageData`（image 不含 SDL，Match 照樣能用；照 Bevy，`bevy_gltf` 依賴 `bevy_image`）。不認得 SDL、渲染、GPU、World、產品。
 - 數學型別用 core 的 `GYO::Math`（`Vec3`、`Quaternion`、`Matrix4`），不依賴 transform Module（它連 Kernel、是 World 的登記單位）；姿勢用自己的 `LocalTransform`（和 transform 的 `Transform` 同一組欄位，沒有 hash 與回滾的語意）。
 - loader（`FbxLoader`）由產品登記：在 `Configure` 經 `AssetLoaderRegistry::Register<FbxLoader>()`，同 image 的 `PngLoader`、audio 的 `WavLoader`。
 - 一個 Module、不拆 `mesh`／`animation`：使用者定了第 1 層放 model 函式庫（`-skeletal-animation-layers`）。Bevy 拆成 `bevy_mesh`、`bevy_animation`、`bevy_gltf` 是因為網格與動畫各自是 ECS 的元件與系統（`bevy_mesh/src/skinning.rs:16` 的 `SkinnedMesh` 是 Component、`bevy_animation/src/lib.rs:748` 的 `AnimationPlayer` 是 Component）；這裡沒有 World 的部分，拆開只多一層依賴。真的出現「只要網格、不要動畫」的使用者（程序產生的網格）、不是模型的取樣／混合使用者（Bevy 的 `bevy_animation` 能對任何屬性做動畫），或第 2 層 `AnimationModule` 時再拆。另外 Bevy 的 `Gltf` 資產本身也把網格與動畫放在一起（`bevy_gltf/src/assets.rs:41-46`，以 feature 開關）。
@@ -63,11 +63,12 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 ```json
 {"id": "game.hero", "type": "model", "path": "characters/hero.fbx"}
-{"id": "game.hero.skeleton", "type": "model", "path": "characters/hero.fbx", "settings": {"meshes": false}}
+{"id": "game.hero.skeleton", "type": "model", "path": "characters/hero.fbx", "settings": {"meshes": false, "textures": false}}
+{"id": "game.hero.skin", "type": "image", "path": "characters/textures/hero_d.png"}
 ```
 
 - `type`：`model`。`format`：`fbx`（副檔名推得出，可省）。
-- `settings`：可以不寫（＝`meshes: true`）。寫的話只能有 `meshes`，值是 `true` 或 `false`；`false` 不讀幾何（`meshes` 空，節點、材質、片段照樣），給只要骨架與動畫的使用者（Match）。其他成員、其他值都是 `BadSettings`。不認得的成員不忽略：之後加設定是放寬（加版本）。
+- `settings`：可以不寫（＝兩個都 `true`）。寫的話只能有 `meshes`、`textures`，值是 `true` 或 `false`：`meshes: false` 不讀幾何（`meshes` 空，節點、材質、片段照樣），給只要骨架與動畫的使用者（Match）；`textures: false` 不宣告貼圖的 reference（檔名照樣留在材質裡），給要自己對貼圖的作者（M-16）。其他成員、其他值都是 `BadSettings`。不認得的成員不忽略：之後加設定是放寬（加版本）。
 
 **大小**（不是 loader 的規則）：預設上限 64 MiB，產品可用 asset 的 `byteLimits` 依（`model`、`fbx`）覆寫；超過是 asset 的 `TooLarge`。ufbx 本身的工作記憶體與結果各限「至少 256 MiB、且是這一項檔案上限的 8 倍」：產品放寬 `byteLimits` 時跟著放寬（超過是 `Undecodable`；M-14）。
 
@@ -86,13 +87,15 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 - **空間**：轉到 Math 的模型空間（公尺、+Y 上、左手系，鏡像軸 Z），換算放進幾何與變換，根節點不帶換算。結果是作者從正面看到的樣子不變：右是 +X、上是 +Y、遠離觀看者是 +Z——Blender 的 (1, −0.3, 0.5)（−Y 是正面圖朝向觀看者那一側）到這裡是 (1, 0.5, −0.3)，Blender 裡面向 −Y 的角色在模型空間面向 −Z（範例檔的 `Tag` 驗這件事；master 用同一組 ufbx 選項）。角色要朝哪個方向是產品的事。幾何變換（FBX 的 geometric transform）放進頂點；非「parent × local」的繼承（例：Maya 的 segment scale compensate）由 ufbx 加 helper 節點表示，所以 `ComputeModelSpace` 的單純連乘就是對的。
 - **節點**：從 ufbx 的根節點（名字空）深度優先、子節點照檔案順序，所以父在子之前。helper 節點也是節點。
 - **材質**：`baseColor` 取 FBX 的 diffuse color 乘 diffuse factor（RGB），alpha 照原樣；材質用自訂 shader、FBX 的這兩個值是空的時，退回 ufbx 的 PBR base color 乘 base factor（ufbx 對每種 shading model 都定義它，`ufbx.h:2646-2652`；M-15）。`baseColorTexture` 取那張貼圖的 relative filename（沒有就 absolute filename）。
-  - **今天不宣告 reference——這和使用者的決定 11 不一致，等使用者決定**。asset 宣告的決定 11（「我認為b」）定的是「Engine 推出：loader 宣告引用」，被否決的 (a) 正是「作者自己列模型與它的貼圖」；F1 的需求原文是「模型引用的貼圖由 Engine 推出」。#313 寫的理由「宣告了反而讓模型載入失敗」不成立：`UnlistedReference` 是邊級失敗，模型自己照樣 `Loaded`，只有「連同依賴」是 `Failed`（asset.zh-Hant.md 第 7 節）。PvP 的 FBX 寫的是 `../textures/Nailer1_D.jpg`，catalog 裡是轉檔後的 PNG，正是 RC-AS6 的情況。2026-11-24 已交主會話請使用者選：(a) 照決定 11，預設對貼圖檔名做 `ReferencePath<ImageData>`、加 setting 讓作者關掉（照 Bevy 的 `load_materials`，`bevy_gltf/src/loader/mod.rs:254`）；(b) 維持不宣告、登記成核准的例外；(c) 宣告、由轉檔工具連 FBX 一起改。
+  - **貼圖是模型的依賴（asset 宣告的使用者決定 11：Engine 推出、loader 宣告引用）**：`textures` 不是 `false` 時，每個有貼圖檔名的材質做一次 `ReferencePath<ImageData>`（相對於模型檔所在的目錄），材質的 `baseColorImage` 帶著 store 對到的 id（沒有 catalog 時是空的）。路徑對不到 catalog 的項目（`UnlistedReference`）、超出內容根目錄或是絕對路徑（`BadReference`），是**依賴**的失敗：模型自己照樣 `Loaded`，只有「連同依賴」是 `Failed`（asset.zh-Hant.md 第 7 節）。沒有登記 image 的 loader（Match）時依賴略過。照 Bevy：glTF 的路徑貼圖宣告成依賴（`bevy_gltf/src/loader/mod.rs:1344-1353`），要不要載材質由 `GltfLoaderSettings::load_materials`（`:254`）控制。
+  - **轉過檔的貼圖**（RC-AS6 的情況）：FBX 寫的是原檔名，catalog 裡是轉過的檔時，引用對不到。PvP 有兩個：viewmodel 寫 `../textures/Nailer1_D.jpg`、第三人稱武器寫 `nailer2_world_v02.fbm/…_basecolor_1k.jpg`，catalog 裡是 PNG。PvP 移植時二選一：重新匯出 FBX 讓它寫 PNG 的路徑，或那兩項設 `textures: false`、產品自己照 `baseColorTexture` 對（記在 PvP 盤點第 4.1 節）。
+  - #313 曾不宣告 reference，理由寫「宣告了會讓模型載入失敗」——不成立（見上），而且等於推翻決定 11；合併後的設計審查找出，修訂 1 改回。
 - **網格**：每個材質分區一個 `Mesh`（名字是節點名）；多邊形照 ufbx 三角化；完全相同的頂點（位置、法線、UV、joint、權重的位元組）合併（`ufbx_generate_indices`）。法線缺的由 ufbx 產生。UV 的 v 翻成 `1 − v`（FBX 的原點在左下）。
 - **蒙皮**：每頂點取權重最大的 4 個（同權重時 joint 小的先），再縮放成和為 1；沒有正權重的頂點四個都是 0。inverse bind＝ufbx 的 `geometry_to_bone`。dual-quaternion 蒙皮照 linear 讀、blend shape（morph）與 cache deformer 不讀（基本形照常）——見 M-7。
 - **片段**：每個 animation stack 一個片段（名字是 stack 名），`ufbx_bake_anim` 以每秒 60 個 key 烘（`kBakeRate`；ufbx 保留原本就是 24／30 Hz 的 key），開頭對齊 0。key 時間轉成 float 後若相同，留後面那個（一個 step 烘成的兩個 key）。`duration`＝stack 的播放長度與最後一個 key 的較大者。
 
 - **Version**：FBX 沒有 GYO 的版本欄，版本記在這一節（今天第 1 版）。放寬（多收：例 morph、多一個設定）時版本加一、`format` 名不變；收窄或改變已收內容的意思，用新的 `format` 名登記另一個 loader（AS-9）。同 image、audio。
-- **範例**：`tests/common/model/contract/skinned_bar.fbx`（107 KB；`make_skinned_bar.py` 用 Blender 4.5 從零做的：5 根骨頭、蒙皮的長方柱（中段權重 0.3／0.3、未正規化）、有 5 個影響的三角形、兩個材質分區的 `Pair`、一個帶貼圖名的材質、兩個片段，場景寫在腳本開頭）。Blender 對骨架的每根骨頭都輸出 cluster，所以長方柱的 skin 有 5 個 joint；每個 FBX 網格有自己的 skin deformer，所以三個網格各一副 skin。PvP 的 4 個 FBX 在本機從 master 取出載過一次（dev_log），**不進 Engine 的測試**：Engine 不讀產品的資產（AGENTS §1-8）。
+- **範例**：`tests/common/model/contract/skinned_bar.fbx`（107 KB；`make_skinned_bar.py` 用 Blender 4.5 從零做的：5 根骨頭、蒙皮的長方柱（中段權重 0.3／0.3、未正規化）、有 5 個影響的三角形、兩個材質分區的 `Pair`、一個帶貼圖名的材質、兩個片段，場景寫在腳本開頭）。貼圖指在 FBX 旁的 `textures/paint.png`（檔案本身不寫）；腳本從中性的 `/tmp/gyo_model_contract/` 匯出再複製進來，FBX 裡的絕對路徑才不帶本機的使用者名稱。Blender 對骨架的每根骨頭都輸出 cluster，所以長方柱的 skin 有 5 個 joint；每個 FBX 網格有自己的 skin deformer，所以三個網格各一副 skin。PvP 的 4 個 FBX 在本機從 master 取出載過一次（dev_log），**不進 Engine 的測試**：Engine 不讀產品的資產（AGENTS §1-8）。
 
 ## 4. 骨骼動畫第 1 層（`Animation.hpp`、`Retarget.hpp`）
 
@@ -162,6 +165,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 | M-13 | skin 的共用資料（joints、inverse bind）放 `ModelData::skins`，網格以索引指它；每頂點的 joint 與權重放在 `Mesh` | 照 Bevy（第 2.1 節）；render 每副 skin 只算一次 joint palette；之後再改 `ModelData` 的形是 RC-MD2 等級的代價，現在改最便宜（審查發現 2） | 每個網格各帶一份 skin（#313 的形） |
 | M-14 | ufbx 的記憶體上限＝max（256 MiB、檔案上限 × 8） | 產品放寬 `byteLimits` 時不必再找第二個旋鈕（§1-10；審查發現 4） | 固定 256 MiB；做成 setting |
 | M-15 | 材質的 FBX diffuse 值是空的時退回 PBR base color | ufbx 寫明自訂 shader 的 FBX 值可能是空的，PBR 對所有 shading model 都有定義（審查發現 5）；FBX 值有的時候照舊（PvP 的檔走這條） | 一律取 PBR（會改 PvP 檔的顏色，未驗證） |
+| M-16 | 貼圖預設宣告 reference，`textures: false` 關掉；模型依賴 image（只為型別） | 使用者決定 11；照 Bevy 的 `load_materials`；關掉的開關給轉過檔、要自己對的作者（§1-10）；主會話 2026-11-24 判 (a) | (b) 不宣告、登記成例外（推翻決定 11）；(c) 宣告、由轉檔工具連 FBX 一起改（工具線，今天沒有） |
 
 ## Design Invariants
 
@@ -171,8 +175,8 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 2. **MD-2 模型是 CPU 的資料。** `ModelData` 是第 2 節的型別與規則：擁有全部的值，沒有渲染的 handle、解碼的貼圖、匯入器的指標；父在子之前；權重和為 1 或全 0；片段帶 `nodeCount`。守衛：`AnimationTests.cpp` 的 `Validate` 各規則各條件、規則的先後。
 3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`、`ComputeModelSpace` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
 4. **MD-4 retarget 搬相對 rest 的動作。** 第 4.4 節的公式與規則；binding 是呼叫者的資料。守衛：`AnimationTests.cpp` 的 retarget 各案（相同節點表、rest 的 key 給 target 的 rest、呼叫者給的參考姿勢、父 rest 不同時模型空間的旋轉變化相同、平移換座標與比例、scale 比例、丟掉沒綁的、三條規則與先後）。
-5. **MD-5 中立、沒有裝置。** `GYO::Model` 的連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Json`、`gyo_ufbx`：沒有 SDL、渲染、GPU、World、產品名。守衛：`gyo_expect_model_links`；中立靠審查。
-6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1（含認成 OBJ 的檔）、2、範例檔的節點／空間的左右手／材質／網格／蒙皮／UV／片段、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）沒有檔案能觸發的測試（要多 skin 的網格，Blender 做不出），靠審查；規則 4（`BadData`）只由突變 `mf-weights-not-scaled`（權重沒正規化→整檔被拒）間接守住。
+5. **MD-5 中立、沒有裝置。** `GYO::Model` 的連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Image`、`GYO::Json`、`gyo_ufbx`：沒有 SDL、渲染、GPU、World、產品名。守衛：`gyo_expect_model_links`；中立靠審查。
+6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1（含認成 OBJ 的檔）、2、範例檔的節點／空間的左右手／材質／貼圖的 reference 與 `textures: false`／網格／材質分區共用 skin／蒙皮／UV／片段、「the texture is the model's dependency and not its failure」（經 store：對到 image 項目、對不到時模型照樣 Loaded、關掉）、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）沒有檔案能觸發的測試（要多 skin 的網格，Blender 做不出），靠審查；規則 4（`BadData`）只由突變 `mf-weights-not-scaled`（權重沒正規化→整檔被拒）間接守住。
 
 ### Replacement Criteria
 

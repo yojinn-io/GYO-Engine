@@ -21,7 +21,8 @@ Base::Err<Failure> Fail(const FbxLoaderCode code, const char* message, const Ass
 
 Base::Err<Failure> BadSettings(const std::string& detail) {
     return Base::Err(
-        Failure::Make(FbxLoaderCode::BadSettings, "the settings of an fbx model are {\"meshes\": true | false}", detail));
+        Failure::Make(FbxLoaderCode::BadSettings, "the settings of an fbx model are {\"meshes\": true | false, \"textures\": true | false}",
+                      detail));
 }
 
 // What ufbx may allocate for one file, for its work and for the scene each:
@@ -48,10 +49,17 @@ Base::Result<FbxSettings, Asset::LoaderFailure<FbxLoaderCode>> FbxLoader::ParseS
     const auto object = document->Root().AsObject();
     if (!object) return BadSettings("not an object");
     for (const Json::Member member : *object) {
-        if (member.key != "meshes") return BadSettings("unknown member \"" + std::string(member.key) + "\"");
+        bool* target = nullptr;
+        if (member.key == "meshes") {
+            target = &settings.meshes;
+        } else if (member.key == "textures") {
+            target = &settings.textures;
+        } else {
+            return BadSettings("unknown member \"" + std::string(member.key) + "\"");
+        }
         const auto value = member.value.AsBool();
-        if (!value) return BadSettings("meshes is not true or false");
-        settings.meshes = *value;
+        if (!value) return BadSettings(std::string(member.key) + " is not true or false");
+        *target = *value;
     }
     return settings;
 }
@@ -71,6 +79,15 @@ Base::Result<ModelData, Asset::LoaderFailure<FbxLoaderCode>> FbxLoader::Load(con
         return Fail(FbxLoaderCode::BadData, "the file's content breaks a rule of model data", context,
                     std::string(ToString(valid.error().code)) + ": " + valid.error().message + " (" +
                         valid.error().detail + ")");
+    }
+    // The textures, as references to images by path from the model's file
+    // (asset 5.17): a path no catalog entry has is the dependency's failure,
+    // not the model's.
+    if (settings.textures) {
+        for (Material& material : imported->materials) {
+            if (material.baseColorTexture.empty()) continue;
+            material.baseColorImage = context.ReferencePath<Image::ImageData>(material.baseColorTexture);
+        }
     }
     return std::move(*imported);
 }

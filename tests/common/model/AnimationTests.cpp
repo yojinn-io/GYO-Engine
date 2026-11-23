@@ -104,7 +104,7 @@ std::vector<LocalTransform> Sample(const std::vector<Node>& nodes, const Animati
 ModelData ValidModel() {
     ModelData model;
     model.nodes = Chain();
-    model.materials.push_back(Model::Material{"skin", {1, 1, 1, 1}, ""});
+    model.materials.push_back(Model::Material{"skin", {1, 1, 1, 1}, "", {}});
     Model::Mesh mesh;
     mesh.name = "body";
     mesh.node = 0;

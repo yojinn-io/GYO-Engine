@@ -62,6 +62,15 @@ Base::Result<ModelData, Asset::LoaderFailure<FbxLoaderCode>> Load(const Bytes& b
     return loader.Load(bytes, settings, context);
 }
 
+// The references the loader declares, through a context with no catalog.
+std::vector<Asset::DeclaredReference> DeclaredBy(const Bytes& bytes, const FbxSettings& settings) {
+    const FbxLoader loader;
+    Asset::LoadContext context(Asset::AssetId("test.model"), "models/test.fbx", bytes.size());
+    const auto loaded = loader.Load(bytes, settings, context);
+    REQUIRE(loaded.has_value());
+    return context.References();
+}
+
 FbxLoaderCode CodeOf(const Bytes& bytes) {
     const auto result = Load(bytes);
     REQUIRE_FALSE(result.has_value());
@@ -205,7 +214,7 @@ std::vector<std::uint32_t> Bits(const ModelData& m) {
 
 } // namespace
 
-TEST_CASE("FbxLoader settings: meshes and nothing else") {
+TEST_CASE("FbxLoader settings: meshes and textures and nothing else") {
     const FbxLoader loader;
     const auto none = loader.ParseSettings(std::nullopt);
     REQUIRE(none.has_value());
@@ -216,10 +225,21 @@ TEST_CASE("FbxLoader settings: meshes and nothing else") {
     const auto on = loader.ParseSettings(R"({"meshes":true})");
     REQUIRE(on.has_value());
     CHECK(on->meshes);
+    CHECK(on->textures);
+    const auto noTextures = loader.ParseSettings(R"({"textures":false})");
+    REQUIRE(noTextures.has_value());
+    CHECK(noTextures->meshes);
+    CHECK_FALSE(noTextures->textures);
+    const auto both = loader.ParseSettings(R"({"meshes":false,"textures":false})");
+    REQUIRE(both.has_value());
+    CHECK_FALSE(both->meshes);
+    CHECK_FALSE(both->textures);
     const auto empty = loader.ParseSettings("{}");
     REQUIRE(empty.has_value());
     CHECK(empty->meshes);
-    for (const std::string bad : {R"({"meshes":1})", R"({"meshes":"false"})", R"({"textures":true})", "[]", "not json"}) {
+    CHECK(empty->textures);
+    for (const std::string bad :
+         {R"({"meshes":1})", R"({"meshes":"false"})", R"({"textures":"no"})", R"({"materials":true})", "[]", "not json"}) {
         CAPTURE(bad);
         const auto result = loader.ParseSettings(bad);
         REQUIRE_FALSE(result.has_value());
@@ -267,6 +287,24 @@ TEST_CASE("FbxLoader reads the contract example: nodes and their rest pose") {
     CHECK(Near(upperAt.z - lowerAt.z, 0.0F));
 }
 
+TEST_CASE("FbxLoader declares each material's texture as an image by path unless textures is false") {
+    // Asset decision 11: the Engine infers the dependencies, the loader
+    // declares them. Only Paint has a texture.
+    const auto declared = DeclaredBy(Bar(), FbxSettings{});
+    REQUIRE(declared.size() == 1);
+    CHECK(declared[0].kind == Asset::ReferenceKind::Path);
+    CHECK(declared[0].typeName == "image");
+    CHECK(declared[0].writtenPath == "textures/paint.png");
+    // Relative to the model's file, models/test.fbx.
+    CHECK(declared[0].path == "models/textures/paint.png");
+    CHECK(DeclaredBy(Bar(), FbxSettings{true, false}).empty());
+    // The file name stays in the material either way.
+    const auto bare = Load(Bar(), FbxSettings{true, false});
+    REQUIRE(bare.has_value());
+    CHECK(std::any_of(bare->materials.begin(), bare->materials.end(),
+                      [](const Model::Material& m) { return m.baseColorTexture == "textures/paint.png"; }));
+}
+
 TEST_CASE("FbxLoader reads the contract example: Blender's front view kept with right +X and up +Y and away +Z") {
     // Tag's corners in Blender: (1, 0, 0.5), (1.2, 0, 0.5) and (1, -0.3, 0.5),
     // the last toward the viewer of the front view. Left-handed model space
@@ -297,8 +335,9 @@ TEST_CASE("FbxLoader reads the contract example: the material is data and the te
     CHECK(Near(paint.baseColor[1], 0.1F, 1.0e-3F));
     CHECK(Near(paint.baseColor[2], 0.1F, 1.0e-3F));
     CHECK(Near(paint.baseColor[3], 1.0F, 1.0e-3F));
-    INFO("texture " << paint.baseColorTexture);
-    CHECK(paint.baseColorTexture.find("paint.png") != std::string::npos);
+    CHECK(paint.baseColorTexture == "textures/paint.png");
+    // Called with no catalog, the reference has no id yet.
+    CHECK(paint.baseColorImage.Id().Text().empty());
 }
 
 TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
@@ -586,11 +625,12 @@ struct Content final {
     }
 };
 
-Asset::CatalogEntry Entry(const std::string& id, std::optional<std::string> settings = std::nullopt) {
+Asset::CatalogEntry Entry(const std::string& id, std::optional<std::string> settings = std::nullopt,
+                          std::string type = "model", std::string path = "models/bar.fbx") {
     Asset::CatalogEntry entry;
     entry.id = Asset::AssetId(id);
-    entry.type = "model";
-    entry.path = "models/bar.fbx";
+    entry.type = std::move(type);
+    entry.path = std::move(path);
     entry.settings = std::move(settings);
     return entry;
 }
@@ -656,4 +696,54 @@ TEST_CASE("FbxLoader through the asset store: a file the loader refuses is Loade
     REQUIRE(record.failure.has_value());
     CHECK(record.failure->code == Asset::AssetLoadFailureCode::LoaderFailed);
     CHECK(record.failure->detail.find("NotFbx") != std::string::npos);
+}
+
+TEST_CASE("FbxLoader through the asset store: the texture is the model's dependency and not its failure") {
+    const Content content(Bar());
+    InlineExecutor executor;
+    Asset::AssetStoreOptions options;
+    options.contentRoot = content.root.string();
+
+    SUBCASE("a catalog entry at the texture's path: the material holds its id") {
+        // No image loader is registered (a Match): the dependency is skipped
+        // and the model is complete.
+        const std::vector<Asset::CatalogEntry> entries{
+            Entry("game.bar"), Entry("game.paint", std::nullopt, "image", "models/textures/paint.png")};
+        Asset::AssetStore store(entries, options, &executor);
+        REQUIRE(store.Loaders().Register<FbxLoader>().has_value());
+        const auto bar = store.Read(store.Request<ModelData>(Asset::AssetId("game.bar")));
+        REQUIRE(bar != nullptr);
+        const auto paint = std::find_if(bar->materials.begin(), bar->materials.end(),
+                                        [](const Model::Material& m) { return m.name == "Paint"; });
+        REQUIRE(paint != bar->materials.end());
+        CHECK(paint->baseColorImage.Id() == Asset::AssetId("game.paint"));
+        const Asset::AssetSnapshot snapshot = store.Snapshot();
+        const Asset::DependencyStatus status = snapshot.WithDependencies(Asset::AssetId("game.bar"));
+        CHECK(status.state == Asset::DependencyState::Complete);
+        CHECK(status.skipped == std::vector<Asset::AssetId>{Asset::AssetId("game.paint")});
+    }
+
+    SUBCASE("no catalog entry at the texture's path: the model loads and only the dependency fails") {
+        const std::vector<Asset::CatalogEntry> entries{Entry("game.bar")};
+        Asset::AssetStore store(entries, options, &executor);
+        REQUIRE(store.Loaders().Register<FbxLoader>().has_value());
+        REQUIRE(store.Read(store.Request<ModelData>(Asset::AssetId("game.bar"))) != nullptr);
+        const Asset::AssetSnapshot snapshot = store.Snapshot();
+        CHECK(snapshot.State(Asset::AssetId("game.bar")) == Asset::AssetState::Loaded);
+        const Asset::DependencyStatus status = snapshot.WithDependencies(Asset::AssetId("game.bar"));
+        CHECK(status.state == Asset::DependencyState::Failed);
+        REQUIRE(status.failures.size() == 1);
+        CHECK(status.failures[0].code == Asset::AssetLoadFailureCode::UnlistedReference);
+        CHECK(status.failures[0].writtenPath == "textures/paint.png");
+    }
+
+    SUBCASE("textures false: no dependency, the model is complete") {
+        const std::vector<Asset::CatalogEntry> entries{Entry("game.bar", R"({"textures":false})")};
+        Asset::AssetStore store(entries, options, &executor);
+        REQUIRE(store.Loaders().Register<FbxLoader>().has_value());
+        REQUIRE(store.Read(store.Request<ModelData>(Asset::AssetId("game.bar"))) != nullptr);
+        const Asset::AssetSnapshot snapshot = store.Snapshot();
+        CHECK(snapshot.WithDependencies(Asset::AssetId("game.bar")).state == Asset::DependencyState::Complete);
+        CHECK(snapshot.Find(Asset::AssetId("game.bar"))->edges.empty());
+    }
 }
