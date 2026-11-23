@@ -17,7 +17,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_app_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_repository_registries_export_for_ci "
     },
@@ -43,7 +43,7 @@
     {
       "id": "ci-second-cxx20-project",
       "what": "another CMake file sets C++20 and does not disable module scanning",
-      "file": "build/cmake/GyoApps.cmake",
+      "file": "build/cmake/GyoGames.cmake",
       "find": "include_guard(GLOBAL)\n",
       "replace": "include_guard(GLOBAL)\nset(CMAKE_CXX_STANDARD 20)\n",
       "command": [
@@ -81,7 +81,7 @@
     {
       "id": "ci-shader-target-without-hash",
       "what": "the shader tool target is defined while the cache key hashes no source",
-      "file": "build/cmake/GyoApps.cmake",
+      "file": "build/cmake/GyoGames.cmake",
       "find": "include_guard(GLOBAL)\n",
       "replace": "include_guard(GLOBAL)\nExternalProject_Add(gyo_shader_host_tools SOURCE_DIR x)\n",
       "command": [
@@ -118,7 +118,7 @@
     },
     {
       "id": "ci-plan-every-row-without-tools",
-      "what": "package_plan skips every row without tools, app rows too",
+      "what": "package_plan skips every row without tools, game rows too",
       "file": ".github/workflows/build-and-validate.yml",
       "find": "if [ \"$GYO_PRODUCT\" = toolchain ] && [ -z \"$GYO_SELECTED_TOOLS\" ]; then",
       "replace": "if [ -z \"$GYO_SELECTED_TOOLS\" ]; then",
@@ -195,7 +195,7 @@
     {
       "id": "ci-python-partial-empty",
       "what": "the Python consumer accepts a selection that is empty on some platforms only",
-      "file": "build/ci/common/app_registry.py",
+      "file": "build/ci/common/product_registry.py",
       "find": "if any(selected.values()) and not all(selected.values()):",
       "replace": "if False:",
       "command": [
@@ -207,14 +207,14 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_app_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_selection_empty_on_only_some_platforms_is_rejected "
     },
     {
       "id": "ci-python-silent-empty",
       "what": "the Python consumer accepts an empty registry without saying so",
-      "file": "build/ci/common/app_registry.py",
+      "file": "build/ci/common/product_registry.py",
       "find": "        print(\"No tool is registered: the toolchain rows select no tool and assemble no package\", file=sys.stderr)",
       "replace": "        pass",
       "command": [
@@ -226,7 +226,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_app_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so "
     },
@@ -245,7 +245,7 @@
         "-s",
         "tests/common/ci",
         "-p",
-        "test_app_registry.py"
+        "test_product_registry.py"
       ],
       "expect": "(FAIL|ERROR): test_registered_tools_without_a_release_selection_are_rejected "
     },
@@ -267,6 +267,155 @@
         "test_release_pipeline.py"
       ],
       "expect": "(FAIL|ERROR): test_cli_refuses_the_tools_train_while_no_tool_is_registered "
+    },
+    {
+      "id": "gdir-tool-owner-check-skipped",
+      "what": "configure stops refusing a game and a tool with one name (the game register data never reaches gyo_configure_tools, as a missed rename would do); only the project-mode case of cmake.ToolRegistry catches it, the direct call does not",
+      "file": "build/cmake/GyoTools.cmake",
+      "find": "        if(DEFINED GYO_GAME_REGISTRY_DATA)\n",
+      "replace": "        if(FALSE)\n",
+      "command": [
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ToolRegistryTests.cmake"
+      ],
+      "expect": "Tool fixture expected 'Game/tool owner collision",
+      "guards": [
+        "AGENTS 7",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-identity-id-prefixed",
+      "what": "the generated GYO_GAME_ID gains a prefix; only the bracketed identity line of cmake.ProjectComposition catches it (a substring match did not)",
+      "file": "build/cmake/GyoGameProject.cmake",
+      "find": "#define GYO_GAME_ID \"@id_cpp@\"",
+      "replace": "#define GYO_GAME_ID \"x@id_cpp@\"",
+      "command": [
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProjectCompositionTests.cmake"
+      ],
+      "expect": "Expected '\\[first\\|Fixture",
+      "guards": [
+        "build-games-dir-declaration 2.1",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-package-foreign-owner-python",
+      "what": "the package contract stops refusing another product's executable in a game package",
+      "file": "build/acceptance/common/package_contract.py",
+      "find": "(kind == \"game\" and owner != product)",
+      "replace": "(kind == \"app\" and owner != product)",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_package_checks.py"
+      ],
+      "expect": "FAIL: test_game_package_holds_only_its_own_executables",
+      "guards": [
+        "AGENTS 7",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-package-foreign-owner-cmake",
+      "what": "the build layer stops refusing another owner's executable in a game product",
+      "file": "build/cmake/GyoRuntimeDeployment.cmake",
+      "find": "    if((P_KIND STREQUAL game AND NOT P_OWNER STREQUAL P_PRODUCT) OR",
+      "replace": "    if((P_KIND STREQUAL app AND NOT P_OWNER STREQUAL P_PRODUCT) OR",
+      "command": [
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProductPackagingTests.cmake"
+      ],
+      "expect": "A game product took another owner's executable",
+      "guards": [
+        "AGENTS 7",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-gates-positive-owner-path",
+      "what": "real-tree positive control: a common CI definition names games/object_connect; the owner guard of test_workflow_gates must refuse it (it would survive if the guard stopped scanning games/ or matching games/<name>)",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "      # One toolchain product per release platform always exists, including an entirely empty game registry.\n",
+      "replace": "      # One toolchain product per release platform always exists, including an entirely empty game registry.\n      # games/object_connect\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "FAIL: test_common_ci_definitions_name_no_product_owner_unless_none_is_registered",
+      "guards": [
+        "AGENTS 7",
+        "AGENTS 9",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-gates-positive-l1-copy",
+      "what": "real-tree positive control: the L1 tests step runs the game copy integration; the L1 guard must refuse it (it would survive if the forbidden name were left at the old script name)",
+      "file": ".github/workflows/cross-platform.yml",
+      "find": "          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n\n      - name: Run host shader reflection and rejection tests\n",
+      "replace": "          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n          python tests/common/ci/game_copy_integration.py --help\n\n      - name: Run host shader reflection and rejection tests\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "FAIL: test_l1_builds_every_registered_product_once_per_platform_without_packaging",
+      "guards": [
+        "AGENTS 7",
+        "build-games-dir-declaration 10.3"
+      ]
+    },
+    {
+      "id": "gdir-mirror-drops-build-cmake",
+      "what": "the game copy mirror stops carrying build/cmake (any carried branch; MirrorTests now places one file per branch)",
+      "file": "tests/common/ci/game_copy_integration.py",
+      "find": "or name.startswith((\"engine/\", \"plugins/\", \"services/\", \"third_party/\", \"build/cmake/\"))",
+      "replace": "or name.startswith((\"engine/\", \"plugins/\", \"services/\", \"third_party/\"))",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_game_copy_integration.py"
+      ],
+      "expect": "FAIL: test_mirror_carries_the_engine_registers_and_plugins_but_no_product_register",
+      "guards": [
+        "build-games-dir-declaration 5.4"
+      ]
     }
   ]
 }

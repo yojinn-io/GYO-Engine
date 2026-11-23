@@ -30,7 +30,7 @@ class ContentLifecycleTests(unittest.TestCase):
             'include(build/cmake/GyoContent.cmake)\n'
             'add_custom_target(game ALL)\ngyo_attach_content(game sample)\n'
             'add_custom_target(preview ALL)\n'
-            f'gyo_stage_app_content(preview sample "{self.preview.as_posix()}")\n', encoding="utf-8")
+            f'gyo_stage_game_content(preview sample "{self.preview.as_posix()}")\n', encoding="utf-8")
         self.assets = self.source / "assets/sample"
 
     def run_command(self, *command, success=True):

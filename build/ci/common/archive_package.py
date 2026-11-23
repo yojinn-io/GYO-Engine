@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_contract import (PLATFORMS, load_manifest, installed_required_files,
                               validate_product_namespace, validate_evidence, package_digest, valid_installed_file)
 from content_contract import decode_json
-from app_registry import CPU_EXECUTION
+from product_registry import CPU_EXECUTION
 
 
 def package_metadata(revision: str, manifest: dict, smoke_report: Path | None = None, *, package_sha256=None,

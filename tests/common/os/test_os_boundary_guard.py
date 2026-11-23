@@ -119,9 +119,9 @@ class Rules(GuardTree):
         self.assertClean()
 
     def test_direct_file_access_in_products_and_tools_is_reported(self):
-        self.write("apps/sample/src/Load.cpp", "void F() { std::ifstream in(\"x\"); }\n")
+        self.write("games/sample/src/Load.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("tools/sample/src/Save.cpp", "void F() { std::filesystem::rename(a, b); }\n")
-        self.assertReported("apps/sample/src/Load.cpp:1: R4 std::ifstream")
+        self.assertReported("games/sample/src/Load.cpp:1: R4 std::ifstream")
         self.assertReported("tools/sample/src/Save.cpp:1: R4 std::filesystem::rename")
 
     def test_os_knowledge_in_product_tests_and_acceptance_programs_is_reported(self):
@@ -191,27 +191,27 @@ class Rules(GuardTree):
         problems = guard.check(self.root, skipped=skipped)
         self.assertEqual(problems, ["engine: no C/C++ source scanned (does not exist); is the root right?",
                                     "tests: no C/C++ source scanned (does not exist); is the root right?"])
-        self.assertEqual(skipped, ["apps (does not exist)", "tools (does not exist)",
+        self.assertEqual(skipped, ["games (does not exist)", "tools (does not exist)",
                                    "build/acceptance (does not exist)"])
 
     def test_product_roots_without_sources_are_skipped_and_named(self):
-        # No product or tool is registered: apps and tools are absent, build/acceptance holds only scripts.
+        # No product or tool is registered: games and tools are absent, build/acceptance holds only scripts.
         self.write("build/acceptance/common/check.py", "print('x')\n")
         skipped = []
         self.assertEqual(guard.check(self.root, skipped=skipped), [])
-        self.assertEqual(skipped, ["apps (does not exist)", "tools (does not exist)",
+        self.assertEqual(skipped, ["games (does not exist)", "tools (does not exist)",
                                    "build/acceptance (holds no C/C++ source)"])
-        self.write("apps/sample/project.json", "{}\n")
+        self.write("games/sample/project.json", "{}\n")
         skipped = []
         self.assertEqual(guard.check(self.root, skipped=skipped), [])
-        self.assertIn("apps (holds no C/C++ source)", skipped)
+        self.assertIn("games (holds no C/C++ source)", skipped)
 
     def test_a_product_root_is_scanned_again_once_it_holds_sources(self):
-        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("games/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
         skipped = []
         problems = guard.check(self.root, skipped=skipped)
-        self.assertIn("apps/sample/src/a.cpp:1: R2 __linux__", problems)
-        self.assertFalse(any(entry.startswith("apps ") for entry in skipped), skipped)
+        self.assertIn("games/sample/src/a.cpp:1: R2 __linux__", problems)
+        self.assertFalse(any(entry.startswith("games ") for entry in skipped), skipped)
 
     def test_render_shader_tool_is_runtime_code_for_r4(self):
         # The host shader tool's exclusion left with engine/render; runtime code under engine/ is covered again.
@@ -220,8 +220,8 @@ class Rules(GuardTree):
 
     def test_roots_name_no_product(self):
         # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
-        self.assertEqual(guard.ROOTS, ("engine", "apps", "tools", "build/acceptance", "tests"))
-        self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "apps", "tools"))
+        self.assertEqual(guard.ROOTS, ("engine", "games", "tools", "build/acceptance", "tests"))
+        self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "games", "tools"))
 
     def test_exclusions_and_required_roots_are_pinned(self):
         # Each of these narrows the guard when it grows (an exclusion, an allowlist scope) or shrinks (a required
@@ -293,7 +293,7 @@ class CommandLine(GuardTree):
     def test_main_names_skipped_roots_and_passes(self):
         status, output = self.run_main()
         self.assertEqual(status, 0)
-        for root in ("apps", "tools", "build/acceptance"):
+        for root in ("games", "tools", "build/acceptance"):
             self.assertIn(f"OS boundary guard: skipped root {root} (does not exist); it is scanned again", output)
         self.assertNotIn("skipped root engine", output)
         self.assertNotIn("skipped root tests", output)
@@ -337,29 +337,29 @@ class Allowlists(GuardTree):
         self.assertReported("expected 'path rule count'")
 
     def test_engine_allowlist_covers_only_engine_and_common_tests(self):
-        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("games/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
         self.write("tests/sample/SampleTests.cpp", "#ifdef __linux__\n#endif\n")
-        for path in ("apps/sample/src/a.cpp", "tests/sample/SampleTests.cpp"):
+        for path in ("games/sample/src/a.cpp", "tests/sample/SampleTests.cpp"):
             with self.subTest(path=path):
                 self.write("tests/common/os/os_boundary_allowlist.txt", f"{path} R2 1\n")
                 self.assertReported(f"{path} is outside this allowlist's directory (engine/, tests/common/)")
 
     def test_product_allowlist_covers_only_its_own_tree(self):
-        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
-        self.write("apps/sample/os_boundary_allowlist.txt", "apps/sample/src/a.cpp R2 1\n")
+        self.write("games/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("games/sample/os_boundary_allowlist.txt", "games/sample/src/a.cpp R2 1\n")
         self.assertClean()
-        self.write("apps/sample/os_boundary_allowlist.txt",
-                   "apps/sample/src/a.cpp R2 1\nengine/base/src/Base.cpp R2 1\n")
+        self.write("games/sample/os_boundary_allowlist.txt",
+                   "games/sample/src/a.cpp R2 1\nengine/base/src/Base.cpp R2 1\n")
         self.assertReported("outside this allowlist's directory")
 
     def test_removing_a_product_needs_no_common_change(self):
-        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
-        self.write("apps/sample/os_boundary_allowlist.txt", "apps/sample/src/a.cpp R2 1\n")
-        self.write("apps/other/src/b.cpp", "int B() { return 0; }\n")
+        self.write("games/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("games/sample/os_boundary_allowlist.txt", "games/sample/src/a.cpp R2 1\n")
+        self.write("games/other/src/b.cpp", "int B() { return 0; }\n")
         self.assertClean()
-        for path in sorted((self.root / "apps/sample").rglob("*"), reverse=True):
+        for path in sorted((self.root / "games/sample").rglob("*"), reverse=True):
             path.unlink() if path.is_file() else path.rmdir()
-        (self.root / "apps/sample").rmdir()
+        (self.root / "games/sample").rmdir()
         self.assertClean()
 
     def test_product_test_and_acceptance_allowlists_cover_their_own_trees(self):
@@ -373,8 +373,8 @@ class Allowlists(GuardTree):
         self.assertReported("outside this allowlist's directory")
 
     def test_unlisted_product_site_is_reported(self):
-        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
-        self.assertReported("apps/sample/src/a.cpp:1: R2 __linux__")
+        self.write("games/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.assertReported("games/sample/src/a.cpp:1: R2 __linux__")
 
 
 if __name__ == "__main__":

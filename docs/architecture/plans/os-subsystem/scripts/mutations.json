@@ -387,9 +387,9 @@
     },
     {
       "id": "os-g11-roots-skip-products",
-      "what": "The guard stops scanning apps, so a new product site goes unseen (Invariant 1, os-guard-wide)",
+      "what": "The guard stops scanning games, so a new product site goes unseen (Invariant 1, os-guard-wide)",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "ROOTS = (\"engine\", \"apps\", \"tools\", \"build/acceptance\", \"tests\")",
+      "find": "ROOTS = (\"engine\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
       "replace": "ROOTS = (\"engine\", \"tools\", \"build/acceptance\", \"tests\")",
       "command": [
         "{python}",
@@ -451,7 +451,7 @@
       "id": "os-g15-runtime-roots",
       "what": "R4 stops covering products and tools (Invariant 2)",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "RUNTIME_ROOTS = (\"engine\", \"apps\", \"tools\")",
+      "find": "RUNTIME_ROOTS = (\"engine\", \"games\", \"tools\")",
       "replace": "RUNTIME_ROOTS = (\"engine\",)",
       "command": [
         "{python}",
@@ -1448,8 +1448,8 @@
       "id": "pu-x8-code-page-walk-skips-tests",
       "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine apps tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine apps tools build/acceptance)",
+      "find": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine games tools build/acceptance)",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
       "expect": "Process code page guard:"
@@ -1570,6 +1570,42 @@
         "tests/common/cmake/ProcessCodePageTests.cmake"
       ],
       "expect": "unrecorded: configuration unexpectedly succeeded"
+    },
+    {
+      "id": "gdir-code-page-walk-skips-games",
+      "what": "The build layer stops applying the UTF-8 code page manifest under games/ (only the games/sample fixture of cmake.ProcessCodePage catches it; pu-x8 drops tests, not a product root)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine tools build/acceptance tests)",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard: sample_game \\(games/sample\\)",
+      "guards": [
+        "os DI 11",
+        "build-games-dir-declaration 5.3"
+      ]
+    },
+    {
+      "id": "gdir-code-page-check-skips-games",
+      "what": "The configure-time check stops walking games/, so a game directory the build layer did not record goes unseen (only the unrecorded_game case catches it)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "    if(relative MATCHES \"^(engine|games|tools|build/acceptance|tests)(/|$)\")",
+      "replace": "    if(relative MATCHES \"^(engine|tools|build/acceptance|tests)(/|$)\")",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "unrecorded_game: configuration unexpectedly succeeded",
+      "guards": [
+        "os DI 11",
+        "build-games-dir-declaration 5.3"
+      ]
     },
     {
       "id": "th-x1-threads-os-public",

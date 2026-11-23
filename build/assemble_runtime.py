@@ -52,7 +52,7 @@ def content_files(assets, shaders):
 
 
 def assemble(product, kind, stage, assets=None, shaders=None, executable=None):
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", product) or kind not in ("app", "toolchain"):
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", product) or kind not in ("game", "toolchain"):
         raise ValueError("Invalid product identity/kind")
     shaders = shaders or {}
     stage = stage.resolve()
@@ -94,7 +94,7 @@ def assemble(product, kind, stage, assets=None, shaders=None, executable=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--product", required=True)
-    parser.add_argument("--kind", choices=("app", "toolchain"), required=True)
+    parser.add_argument("--kind", choices=("game", "toolchain"), required=True)
     parser.add_argument("--stage", type=Path, required=True)
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--shader", action="append", default=[])

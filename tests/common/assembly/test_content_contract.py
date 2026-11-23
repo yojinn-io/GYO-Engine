@@ -24,10 +24,10 @@ class ContentContractTests(unittest.TestCase):
                 document = "catalog.json" if case["kind"] == "catalog" else "content.json"
                 (assets / document).write_text(case["text"], encoding="utf-8")
                 if case["valid"]:
-                    assemble("sample", "app", root / "stage", assets)
+                    assemble("sample", "game", root / "stage", assets)
                 else:
                     with self.assertRaises(ValueError):
-                        assemble("sample", "app", root / "stage", assets)
+                        assemble("sample", "game", root / "stage", assets)
 
     def test_shared_runtime_content_fixtures(self):
         cases = json.loads((ROOT / "tests/common/fixtures/asset_contract/cases.json").read_text(encoding="utf-8"))["cases"]
@@ -49,11 +49,11 @@ class ContentContractTests(unittest.TestCase):
                         (source / "manifest.json").write_text('{"programs":[]}', encoding="utf-8")
                         shaders[bundle["name"]] = source
                 if case["valid"]:
-                    assemble("sample", "app", root / "stage", assets, shaders)
+                    assemble("sample", "game", root / "stage", assets, shaders)
                     self.assertTrue((root / "stage/bin/assets/sample/content.json").is_file())
                 else:
                     with self.assertRaises(ValueError):
-                        assemble("sample", "app", root / "stage", assets, shaders)
+                        assemble("sample", "game", root / "stage", assets, shaders)
 
 
 if __name__ == "__main__":

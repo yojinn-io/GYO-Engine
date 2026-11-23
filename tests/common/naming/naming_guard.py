@@ -36,8 +36,8 @@ N3 (the role suffixes of naming rule 5, DI 3) was removed by v8-arch-gyo2-namesp
 to gyo2 (user 2026-11-14), and the user removed the check on 2026-11-22; names are seen in each batch's design review.
 
 SCAN_ROOTS are the directories the build reads sources from (build/cmake/GyoBuild.cmake): engine/, plugins/,
-apps/ and tools/ (one subdirectory per registered product), tests/ and examples/; framework/ was dropped with the
-framework layer (v8-arch-gyo2-naming-cleanup). A scan root that does not exist is skipped (plugins/, apps/ and
+games/ and tools/ (one subdirectory per registered product), tests/ and examples/; framework/ was dropped with the
+framework layer (v8-arch-gyo2-naming-cleanup). A scan root that does not exist is skipped (plugins/, games/ and
 tools/ have no entry yet), not a finding; engine/ must exist and hold units. spikes/ is not scanned (an
 independent project). Limits (text level, the rest is review): a top-level
 directory outside SCAN_ROOTS is not read; two units deriving the same name are left to CMake's duplicate-target
@@ -60,7 +60,7 @@ ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestra
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
 ACRONYMS = {"io": "IO", "os": "OS"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
-SCAN_ROOTS = ("engine", "apps", "tools", "plugins", "tests", "examples")
+SCAN_ROOTS = ("engine", "games", "tools", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
 SUFFIXES = C_SUFFIXES | {".m", ".mm"}  # the C/C++ files the guards read (source_text), plus Objective-C++
 
@@ -170,7 +170,7 @@ def check_roots(root, unit_directories, problems):
     for scan_root in SCAN_ROOTS:
         base = root / scan_root
         if not base.is_dir():
-            continue  # a scan root that does not exist yet (apps/) is skipped, not a finding
+            continue  # a scan root that does not exist yet (games/) is skipped, not a finding
         for path in source_files(base):
             if any(path.is_relative_to(root / d) for d in unit_directories):
                 continue  # read by the forward check

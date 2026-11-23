@@ -220,7 +220,7 @@ v3 和 v2 的差別：
 | System | (i) AGENTS 的 Subsystem；(ii) 舊 Kernel 設計：一個 System 函式 | (ii) 照程式定義 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞 | 照程式定義 |
 | Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制；(iv) 使用者 2026-11-14：Engine 外、少了遊戲仍成立的部分；(v) 使用者 2026-11-16：第三方官方維護、接進來用的部分（取代 (iv)） | 不加限定指 (v)（它包含 (i) 的套件）。(ii) 寫「`Plugin` 型別」。v2 寫「plugin 套件」，v3 改成以 (iv) 定義，見附錄 B |
-| Product（v2 的 App 列） | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：原本叫 Runtime 的型別，2026-11-13 定名 `App`（`v8-arch-kernel-app-name`），2026-11-14 改叫 `Product`（`v8-arch-gyo2-product-type-name`）。Bevy 的 App 底下有多個 SubApp、每個 SubApp 一個 World，和 gyo2 的 `Product`（一個 World）不同 | 詞條名從 App 改成 Product，見附錄 B |
+| Product（v2 的 App 列） | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄（2026-11-23 `v8-arch-gyo2-build-games-dir` 改成 game 與 `games/`：建置與 CI 用 game／tool 指兩種產品，不用 app；照使用者 2026-11-14「用 Game 就好」）；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：原本叫 Runtime 的型別，2026-11-13 定名 `App`（`v8-arch-kernel-app-name`），2026-11-14 改叫 `Product`（`v8-arch-gyo2-product-type-name`）。Bevy 的 App 底下有多個 SubApp、每個 SubApp 一個 World，和 gyo2 的 `Product`（一個 World）不同 | 詞條名從 App 改成 Product，見附錄 B |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 照程式定義 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 寫一般定義 |
 | Handle | (i) 舊程式的 `AssetHandle`：id 加世代的記號，不讓資產保持存活；(ii) audio 的 `SoundHandle`（`Mixer.hpp:50`）；(iii) OS 的 handle；(iv) 舊 Kernel 設計的「句柄」：System 參數的基底，也拿來說實體的鍵（gyo2 的 `engine/ecs/kernel` 裡是內部的 `Detail::Handle`）；(v) Bevy 的 `Handle<A>`（`bevy_asset/src/handle.rs:115`）：強參照會讓資產保持存活，和 (i) 不同 | 寫一般定義；(iv) 不叫句柄 |
@@ -244,7 +244,7 @@ v3 和 v2 的差別：
 |---|---|---|
 | Event | (i) `AnimationEvent`、`InputEvent`、`FileChangeEvent`；(ii) 舊 Kernel 設計：World 裡的事件緩衝；(iii) 這一版 Bevy：緩衝的叫 `Message`（`bevy_ecs/src/message/mod.rs:100`），`Event` 留給觸發式的（`bevy_ecs/src/event/mod.rs:89`） | 不加限定指 (ii)，照程式定義 |
 | Snapshot | (i) PvP wire 的 `WorldSnapshot`、`SnapshotFrame`；(ii) 舊 Kernel 設計：回滾用、驗證用的快照 | 寫法同 v2，定義改成用途 |
-| Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
+| Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoGameRegistry.cmake`、共用解析 `GyoRegistryCsv.cmake`、`games.csv`（2026-11-23 前叫 `GyoAppRegistry.cmake`、`projects.csv`，`v8-arch-gyo2-build-games-dir`）；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」；(iii) `CompositeLayer`（`RenderTypes.hpp:98`） | 同 v2 |
 | Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節）；2026-11-16 改成「誰維護、介面是誰的」（第 0 節末） | 照第 0 節末的定義 |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 寫「stage（舊）」 |

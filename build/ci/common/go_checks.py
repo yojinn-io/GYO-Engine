@@ -53,7 +53,7 @@ STEPS = {
 DEPENDENCY_DELIMITER = "GYO_GO_DEPENDENCY_FILES_EOF"
 # Per go command; the CTest TIMEOUT in GyoGo.cmake must stay above it.
 COMMAND_TIMEOUT = 900
-# Only Linux rows provision Go (GyoAppProject.cmake requires a service owner to
+# Only Linux rows provision Go (GyoGameProject.cmake requires a service owner to
 # be Linux-enabled), so a product's service record comes from its Linux row.
 SERVICE_BUILD_PLATFORM = "linux-x64"
 SERVICE_RECORD_NAME = "go-services.json"
