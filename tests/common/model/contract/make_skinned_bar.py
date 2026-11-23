@@ -16,6 +16,8 @@
 #   vertex has
 #   five influences, Lower 0.4, Upper 0.3, Aux1 0.2, Aux2 0.2, Aux3 0.1, the
 #   other two Lower alone;
+# - a mesh "Pair": two triangles at x = -1 with materials "Left" and "Right",
+#   both following Lower (two material parts of one skinned mesh);
 # - a material "Paint", base colour (0.8, 0.1, 0.1, 1), its base colour from an
 #   image named textures/paint.png (the file is not written: a loader only
 #   names it);
@@ -117,6 +119,20 @@ tag.vertex_groups["Lower"].add([1, 2], 1.0, 'REPLACE')
 tag.parent = rig
 tag_modifier = tag.modifiers.new("Armature", 'ARMATURE')
 tag_modifier.object = rig
+
+pair_data = bpy.data.meshes.new("Pair")
+pair_data.from_pydata([(-1.0, 0.0, 0.0), (-1.2, 0.0, 0.0), (-1.0, 0.0, 0.2), (-1.2, 0.0, 0.2)], [],
+                      [(0, 1, 2), (1, 3, 2)])
+pair_data.update()
+for name in ["Left", "Right"]:
+    pair_data.materials.append(bpy.data.materials.new(name))
+pair_data.polygons[1].material_index = 1
+pair = bpy.data.objects.new("Pair", pair_data)
+scene.collection.objects.link(pair)
+pair.vertex_groups.new(name="Lower").add([0, 1, 2, 3], 1.0, 'REPLACE')
+pair.parent = rig
+pair_modifier = pair.modifiers.new("Armature", 'ARMATURE')
+pair_modifier.object = rig
 
 # Actions.
 rig.animation_data_create()

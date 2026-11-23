@@ -96,10 +96,11 @@ std::vector<Vec3> Skinned(const ModelData& model, const Model::Mesh& mesh, const
     for (std::size_t v = 0; v < mesh.positions.size(); ++v) {
         Vec3 sum{};
         for (std::size_t k = 0; k < 4; ++k) {
-            const float w = mesh.skin.vertexWeights[v][k];
+            const float w = mesh.vertexWeights[v][k];
             if (w == 0.0F) continue;
-            const std::uint16_t j = mesh.skin.vertexJoints[v][k];
-            const Math::Matrix4 m = Math::Multiply(global[mesh.skin.joints[j]], mesh.skin.inverseBindMatrices[j]);
+            const std::uint16_t j = mesh.vertexJoints[v][k];
+            const Model::Skin& skin = model.skins[mesh.skin];
+            const Math::Matrix4 m = Math::Multiply(global[skin.joints[j]], skin.inverseBindMatrices[j]);
             sum = sum + Math::TransformPoint(m, mesh.positions[v]) * w;
         }
         out.push_back(sum);
@@ -176,6 +177,12 @@ std::vector<std::uint32_t> NodesAndClips(const ModelData& m) {
 }
 std::vector<std::uint32_t> Bits(const ModelData& m) {
     std::vector<std::uint32_t> out = NodesAndClips(m);
+    for (const auto& skin : m.skins) {
+        out.insert(out.end(), skin.joints.begin(), skin.joints.end());
+        for (const auto& m4 : skin.inverseBindMatrices) {
+            for (const float f : m4.values) Append(out, f);
+        }
+    }
     for (const auto& mesh : m.meshes) {
         Append(out, mesh.name);
         out.push_back(mesh.node);
@@ -187,12 +194,9 @@ std::vector<std::uint32_t> Bits(const ModelData& m) {
             Append(out, uv.y);
         }
         out.insert(out.end(), mesh.indices.begin(), mesh.indices.end());
-        out.insert(out.end(), mesh.skin.joints.begin(), mesh.skin.joints.end());
-        for (const auto& m4 : mesh.skin.inverseBindMatrices) {
-            for (const float f : m4.values) Append(out, f);
-        }
-        for (const auto& j : mesh.skin.vertexJoints) out.insert(out.end(), j.begin(), j.end());
-        for (const auto& w : mesh.skin.vertexWeights) {
+        out.push_back(mesh.skin);
+        for (const auto& j : mesh.vertexJoints) out.insert(out.end(), j.begin(), j.end());
+        for (const auto& w : mesh.vertexWeights) {
             for (const float f : w) Append(out, f);
         }
     }
@@ -283,8 +287,11 @@ TEST_CASE("FbxLoader reads the contract example: Blender's front view kept with 
 TEST_CASE("FbxLoader reads the contract example: the material is data and the texture only named") {
     const auto loaded = Load(Bar());
     REQUIRE(loaded.has_value());
-    REQUIRE(loaded->materials.size() == 1);
-    const Model::Material& paint = loaded->materials[0];
+    REQUIRE(loaded->materials.size() == 3);
+    const auto found = std::find_if(loaded->materials.begin(), loaded->materials.end(),
+                                    [](const Model::Material& m) { return m.name == "Paint"; });
+    REQUIRE(found != loaded->materials.end());
+    const Model::Material& paint = *found;
     CHECK(paint.name == "Paint");
     CHECK(Near(paint.baseColor[0], 0.8F, 1.0e-3F));
     CHECK(Near(paint.baseColor[1], 0.1F, 1.0e-3F));
@@ -298,10 +305,11 @@ TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
     const auto loaded = Load(Bar());
     REQUIRE(loaded.has_value());
     const ModelData& model = *loaded;
-    REQUIRE(model.meshes.size() == 2);
+    // Bar, Tag, and Pair's two material parts.
+    REQUIRE(model.meshes.size() == 4);
     const Model::Mesh& bar = MeshNamed(model, "Bar");
     CHECK(bar.node == NodeNamed(model, "Bar"));
-    CHECK(bar.material == 0);
+    CHECK(model.materials.at(bar.material).name == "Paint");
     // Ten quads, two triangles each.
     CHECK(bar.indices.size() == 60);
     REQUIRE(bar.uvs.size() == bar.positions.size());
@@ -309,10 +317,15 @@ TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
     // lists all five, each once.
     const std::uint32_t lower = NodeNamed(model, "Lower");
     const std::uint32_t upper = NodeNamed(model, "Upper");
-    REQUIRE(bar.skin.joints.size() == 5);
-    for (const char* name : {"Lower", "Upper", "Aux1", "Aux2", "Aux3"}) {
+    // Bar, Tag and Pair are moved by one armature, but each FBX mesh has its
+    // own skin deformer, so each has its own skin.
+    REQUIRE(model.skins.size() == 3);
+    REQUIRE(bar.skin < model.skins.size());
+    const Model::Skin& barSkin = model.skins[bar.skin];
+    REQUIRE(barSkin.joints.size() == 5);
+    for (const std::string name : {"Lower", "Upper", "Aux1", "Aux2", "Aux3"}) {
         CAPTURE(name);
-        CHECK(std::count(bar.skin.joints.begin(), bar.skin.joints.end(), NodeNamed(model, name)) == 1);
+        CHECK(std::count(barSkin.joints.begin(), barSkin.joints.end(), NodeNamed(model, name)) == 1);
     }
 
     // At rest the skin puts the box where Blender had it: 0.2 wide and deep,
@@ -332,8 +345,8 @@ TEST_CASE("FbxLoader reads the contract example: the skinned mesh") {
         highY = std::max(highY, p.y);
         // Weights by height: below the cut Lower alone, above it Upper alone,
         // at the cut 0.3 each in the file, scaled to sum to 1.
-        const auto& w = bar.skin.vertexWeights[v];
-        const std::uint32_t first = bar.skin.joints[bar.skin.vertexJoints[v][0]];
+        const auto& w = bar.vertexWeights[v];
+        const std::uint32_t first = model.skins[bar.skin].joints[bar.vertexJoints[v][0]];
         if (p.y < 0.5F) {
             CHECK(Near(w[0], 1.0F));
             CHECK(first == lower);
@@ -372,12 +385,12 @@ TEST_CASE("FbxLoader reads the contract example: the four largest weights scaled
     // (1, 0, 0.5), the lowest and nearest to x = 1 of the three.
     std::size_t five = tag.positions.size();
     for (std::size_t v = 0; v < tag.positions.size(); ++v) {
-        if (tag.skin.vertexWeights[v][1] > 0.0F) five = v;
+        if (tag.vertexWeights[v][1] > 0.0F) five = v;
     }
     REQUIRE(five < tag.positions.size());
-    const auto& joints = tag.skin.vertexJoints[five];
-    const auto& weights = tag.skin.vertexWeights[five];
-    const auto node = [&](const std::size_t k) { return tag.skin.joints[joints[k]]; };
+    const auto& joints = tag.vertexJoints[five];
+    const auto& weights = tag.vertexWeights[five];
+    const auto node = [&](const std::size_t k) { return model.skins[tag.skin].joints[joints[k]]; };
     // 0.4, 0.3, 0.2, 0.2 of 1.1; Aux3's 0.1 is dropped.
     CHECK(node(0) == lower);
     CHECK(node(1) == upper);
@@ -392,9 +405,36 @@ TEST_CASE("FbxLoader reads the contract example: the four largest weights scaled
     for (std::size_t v = 0; v < tag.positions.size(); ++v) {
         if (v == five) continue;
         CAPTURE(v);
-        CHECK(tag.skin.joints[tag.skin.vertexJoints[v][0]] == lower);
-        CHECK(Near(tag.skin.vertexWeights[v][0], 1.0F));
-        CHECK(tag.skin.vertexWeights[v][1] == 0.0F);
+        CHECK(model.skins[tag.skin].joints[tag.vertexJoints[v][0]] == lower);
+        CHECK(Near(tag.vertexWeights[v][0], 1.0F));
+        CHECK(tag.vertexWeights[v][1] == 0.0F);
+    }
+}
+
+TEST_CASE("FbxLoader reads the contract example: material parts are meshes that share one skin") {
+    const auto loaded = Load(Bar());
+    REQUIRE(loaded.has_value());
+    const ModelData& model = *loaded;
+    std::vector<const Model::Mesh*> pair;
+    for (const Model::Mesh& mesh : model.meshes) {
+        if (mesh.name == "Pair") pair.push_back(&mesh);
+    }
+    REQUIRE(pair.size() == 2);
+    std::vector<std::string> materials;
+    for (const Model::Mesh* mesh : pair) {
+        CHECK(mesh->indices.size() == 3);
+        materials.push_back(model.materials.at(mesh->material).name);
+    }
+    std::sort(materials.begin(), materials.end());
+    CHECK(materials == std::vector<std::string>{"Left", "Right"});
+    REQUIRE(pair[0]->skin != Model::kNoSkin);
+    CHECK(pair[0]->skin == pair[1]->skin);
+    const Model::Skin& skin = model.skins.at(pair[0]->skin);
+    for (const Model::Mesh* mesh : pair) {
+        for (std::size_t v = 0; v < mesh->positions.size(); ++v) {
+            CHECK(skin.joints[mesh->vertexJoints[v][0]] == NodeNamed(model, "Lower"));
+            CHECK(Near(mesh->vertexWeights[v][0], 1.0F));
+        }
     }
 }
 
@@ -434,7 +474,7 @@ TEST_CASE("FbxLoader reads the contract example: the clips baked to keys") {
     const auto bent = Skinned(model, bar, pose);
     std::size_t checked = 0;
     for (std::size_t v = 0; v < rest.size(); ++v) {
-        if (bar.skin.vertexWeights[v][0] < 0.99F || bar.skin.joints[bar.skin.vertexJoints[v][0]] != upper) continue;
+        if (bar.vertexWeights[v][0] < 0.99F || model.skins[bar.skin].joints[bar.vertexJoints[v][0]] != upper) continue;
         const Vec3 before = rest[v] - joint;
         const Vec3 after = bent[v] - joint;
         CAPTURE(v);
@@ -456,7 +496,7 @@ TEST_CASE("FbxLoader reads the contract example: the clips baked to keys") {
     Model::SampleClip(model.nodes, bend, bend.duration / 2.0F, Wrap::Clamp, pose);
     const auto halfway = Skinned(model, bar, pose);
     for (std::size_t v = 0; v < rest.size(); ++v) {
-        if (bar.skin.vertexWeights[v][0] < 0.99F || bar.skin.joints[bar.skin.vertexJoints[v][0]] != upper) continue;
+        if (bar.vertexWeights[v][0] < 0.99F || model.skins[bar.skin].joints[bar.vertexJoints[v][0]] != upper) continue;
         const Vec3 before = rest[v] - joint;
         const Vec3 after = halfway[v] - joint;
         if (before.y <= 0.9F) continue;
@@ -576,7 +616,7 @@ TEST_CASE("FbxLoader through the asset store: loaded with its settings and bad s
         REQUIRE(store.Loaders().Register<FbxLoader>().has_value());
         const auto bar = store.Read(store.Request<ModelData>(Asset::AssetId("game.bar")));
         REQUIRE(bar != nullptr);
-        CHECK(bar->meshes.size() == 2);
+        CHECK(bar->meshes.size() == 4);
         const auto skeleton = store.Read(store.Request<ModelData>(Asset::AssetId("game.bar_skeleton")));
         REQUIRE(skeleton != nullptr);
         CHECK(skeleton->meshes.empty());

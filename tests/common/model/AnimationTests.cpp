@@ -113,10 +113,10 @@ ModelData ValidModel() {
     mesh.normals = {{0, 0, -1}, {0, 0, -1}, {0, 0, -1}};
     mesh.uvs = {{0, 0}, {1, 0}, {0, 1}};
     mesh.indices = {0, 1, 2};
-    mesh.skin.joints = {1, 2};
-    mesh.skin.inverseBindMatrices = {Math::Matrix4{}, Math::Matrix4{}};
-    mesh.skin.vertexJoints = {{0, 0, 0, 0}, {0, 1, 0, 0}, {1, 0, 0, 0}};
-    mesh.skin.vertexWeights = {{1, 0, 0, 0}, {0.75F, 0.25F, 0, 0}, {0, 0, 0, 0}};
+    model.skins.push_back(Model::Skin{{1, 2}, {Math::Matrix4{}, Math::Matrix4{}}});
+    mesh.skin = 0;
+    mesh.vertexJoints = {{0, 0, 0, 0}, {0, 1, 0, 0}, {1, 0, 0, 0}};
+    mesh.vertexWeights = {{1, 0, 0, 0}, {0.75F, 0.25F, 0, 0}, {0, 0, 0, 0}};
     model.meshes.push_back(mesh);
     model.clips.push_back(ArmClip());
     return model;
@@ -177,22 +177,22 @@ TEST_CASE("Validate: a mesh with no material and no uvs is valid") {
 
 TEST_CASE("Validate rule 3: BadSkin") {
     ModelData model = ValidModel();
-    SUBCASE("a joint out of range") { model.meshes[0].skin.joints[1] = 3; }
-    SUBCASE("inverse bind matrices not one per joint") { model.meshes[0].skin.inverseBindMatrices.pop_back(); }
+    SUBCASE("a joint out of range") { model.skins[0].joints[1] = 3; }
+    SUBCASE("inverse bind matrices not one per joint") { model.skins[0].inverseBindMatrices.pop_back(); }
     SUBCASE("an inverse bind matrix not finite") {
-        model.meshes[0].skin.inverseBindMatrices[0].values[5] = std::numeric_limits<float>::quiet_NaN();
+        model.skins[0].inverseBindMatrices[0].values[5] = std::numeric_limits<float>::quiet_NaN();
     }
-    SUBCASE("joints not one per vertex") { model.meshes[0].skin.vertexJoints.pop_back(); }
-    SUBCASE("weights not one per vertex") { model.meshes[0].skin.vertexWeights.pop_back(); }
-    SUBCASE("a vertex names a joint the skin does not have") { model.meshes[0].skin.vertexJoints[1][1] = 2; }
-    SUBCASE("a negative weight") { model.meshes[0].skin.vertexWeights[1] = {1.25F, -0.25F, 0, 0}; }
+    SUBCASE("joints not one per vertex") { model.meshes[0].vertexJoints.pop_back(); }
+    SUBCASE("weights not one per vertex") { model.meshes[0].vertexWeights.pop_back(); }
+    SUBCASE("a vertex names a joint the skin does not have") { model.meshes[0].vertexJoints[1][1] = 2; }
+    SUBCASE("a negative weight") { model.meshes[0].vertexWeights[1] = {1.25F, -0.25F, 0, 0}; }
     SUBCASE("a weight not finite") {
-        model.meshes[0].skin.vertexWeights[0][0] = std::numeric_limits<float>::quiet_NaN();
+        model.meshes[0].vertexWeights[0][0] = std::numeric_limits<float>::quiet_NaN();
     }
-    SUBCASE("weights summing to neither 1 nor 0") { model.meshes[0].skin.vertexWeights[1] = {0.5F, 0.25F, 0, 0}; }
-    SUBCASE("skin data without joints") {
-        model.meshes[0].skin.joints.clear();
-        model.meshes[0].skin.inverseBindMatrices.clear();
+    SUBCASE("weights summing to neither 1 nor 0") { model.meshes[0].vertexWeights[1] = {0.5F, 0.25F, 0, 0}; }
+    SUBCASE("a mesh's skin out of range") { model.meshes[0].skin = 1; }
+    SUBCASE("joints and weights on a mesh without a skin") {
+        model.meshes[0].skin = Model::kNoSkin;
     }
     CHECK(CodeOf(model) == ModelDataCode::BadSkin);
 }
@@ -223,7 +223,7 @@ TEST_CASE("Validate rule 4: BadClip") {
 TEST_CASE("Validate checks in order: nodes then each mesh then the clips") {
     ModelData model = ValidModel();
     model.clips[0].nodeCount = 2;
-    model.meshes[0].skin.vertexWeights[1] = {0.5F, 0.25F, 0, 0};
+    model.meshes[0].vertexWeights[1] = {0.5F, 0.25F, 0, 0};
     CHECK(CodeOf(model) == ModelDataCode::BadSkin);
     model.meshes[0].indices.push_back(0);
     CHECK(CodeOf(model) == ModelDataCode::BadMesh);
@@ -635,6 +635,35 @@ TEST_CASE("Retarget orders the tracks by the target's nodes") {
     CHECK(out.tracks[0].node == 0);
     CHECK(out.tracks[1].node == 1);
     CHECK(out.tracks[2].node == 2);
+}
+
+TEST_CASE("Retarget measures motion from the reference poses the caller gives") {
+    // Rest poses equal, but the caller says the source's reference holds the
+    // arm turned 30 degrees about X and 2 above the root, the target's turned
+    // -45 degrees about Z: a key equal to the source reference gives the
+    // target reference, and a turn over it carries over.
+    const auto nodes = Chain();
+    std::vector<LocalTransform> sourceReference(3), targetReference(3);
+    Model::RestPose(nodes, sourceReference);
+    Model::RestPose(nodes, targetReference);
+    sourceReference[1] = {{0, 2, 0}, AboutX(30), {1, 1, 1}};
+    targetReference[1] = {{0, 1, 0}, AboutZ(-45), {1, 1, 1}};
+    AnimationClip clip = ArmClip();
+    clip.tracks[0].rotation = Keys<Quaternion>{{0.0F, 2.0F}, {AboutX(30), Math::Multiply(AboutY(40), AboutX(30))}};
+    clip.tracks[0].translation = Keys<Vec3>{{0.0F}, {{0, 2, 0}}};
+    const std::vector<JointBinding> bindings{{1, 1}};
+    const auto out = Model::Retarget(nodes, nodes, clip, bindings, {}, sourceReference, targetReference);
+    REQUIRE(out.has_value());
+    CHECK(SameRotation(out->tracks[0].rotation.values[0], AboutZ(-45)));
+    CHECK(SameRotation(out->tracks[0].rotation.values[1], Math::Multiply(AboutY(40), AboutZ(-45))));
+    CHECK(Near(out->tracks[0].translation.values[0], {0, 1, 0}));
+    // Without them the rest is the reference, and the same keys move the arm.
+    const auto byRest = Model::Retarget(nodes, nodes, clip, bindings);
+    REQUIRE(byRest.has_value());
+    CHECK(SameRotation(byRest->tracks[0].rotation.values[0], AboutX(30)));
+    // A reference pose of another size is a Programmer Error.
+    const std::vector<LocalTransform> wrong(2);
+    GYO_CHECK_ASSERTS((void)Model::Retarget(nodes, nodes, clip, bindings, {}, wrong));
 }
 
 TEST_CASE("Retarget rule 1: BadTranslationScale") {
