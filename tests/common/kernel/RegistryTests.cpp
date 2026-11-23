@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "9:69c89c11e062761528543db4408f9d94e0f3e83217feed3828698a7b4c77c5be";
+    "9:861f304b48c918a4f3517820aacb849ff263c8f8363eb79032a0bc81cd49c829";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {
@@ -48,9 +48,9 @@ TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each pl
                           }}});
     KERNEL_REQUIRE_OK(built);
     const FrozenRegistry& frozen = built.registry->Frozen();
-    CHECK(frozen.ComponentIdOf<TestPos>() == 0U);
-    CHECK(frozen.ComponentIdOf<TestVel>() == 1U);
-    CHECK(frozen.ComponentIdOf<TestHealth>() == 2U);
+    CHECK(frozen.ComponentIdOf<TestPos>() == kFirstOwnerComponent + 0U);
+    CHECK(frozen.ComponentIdOf<TestVel>() == kFirstOwnerComponent + 1U);
+    CHECK(frozen.ComponentIdOf<TestHealth>() == kFirstOwnerComponent + 2U);
     // ResourceId 0 is the kernel's KernelSettings, registered before any plugin.
     CHECK(frozen.ResourceIdOf<KernelSettings>() == 0U);
     CHECK(frozen.ResourceIdOf<TestRes>() == 1U);
@@ -69,9 +69,9 @@ TEST_CASE("J-18: swapping two plugins gives ids in the new order") {
     Built swapped = Finish({{"life", Life}, {"movement", Movement}, {"host", Schedules}});
     KERNEL_REQUIRE_OK(swapped);
     const FrozenRegistry& frozen = swapped.registry->Frozen();
-    CHECK(frozen.ComponentIdOf<TestHealth>() == 0U);
-    CHECK(frozen.ComponentIdOf<TestPos>() == 1U);
-    CHECK(frozen.ComponentIdOf<TestVel>() == 2U);
+    CHECK(frozen.ComponentIdOf<TestHealth>() == kFirstOwnerComponent + 0U);
+    CHECK(frozen.ComponentIdOf<TestPos>() == kFirstOwnerComponent + 1U);
+    CHECK(frozen.ComponentIdOf<TestVel>() == kFirstOwnerComponent + 2U);
     CHECK(frozen.ResourceIdOf<TestOtherRes>() == 1U);
     CHECK(frozen.ResourceIdOf<TestRes>() == 2U);
     CHECK(frozen.MessageIdOf<TestOtherEvent>() == 0U);
@@ -87,8 +87,8 @@ TEST_CASE("J-18: a type key used before registration does not change ids") {
     CHECK(first != second);
     Built built = Finish({{"movement", Movement}, {"host", Schedules}});
     KERNEL_REQUIRE_OK(built);
-    CHECK(built.registry->Frozen().ComponentIdOf<TestPos>() == 0U);
-    CHECK(built.registry->Frozen().ComponentIdOf<TestVel>() == 1U);
+    CHECK(built.registry->Frozen().ComponentIdOf<TestPos>() == kFirstOwnerComponent + 0U);
+    CHECK(built.registry->Frozen().ComponentIdOf<TestVel>() == kFirstOwnerComponent + 1U);
 }
 
 TEST_CASE("J-18: two Finishes of the same plugin list give the same fingerprint") {
@@ -145,9 +145,9 @@ TEST_CASE("J-19: lookup creates no id; the view after BuildPlans has final ids")
     Registry registry;
     const auto result = RegisterAll(registry, {{"first", Movement}, {"second", [](Registrar& r) { Life(r); Schedules(r); }}});
     REQUIRE(static_cast<bool>(result));
-    CHECK(registry.Frozen().ComponentIdOf<TestHealth>() == 2U);
+    CHECK(registry.Frozen().ComponentIdOf<TestHealth>() == kFirstOwnerComponent + 2U);
     CHECK_FALSE(registry.Frozen().ComponentIdOf<TestMarker>().has_value());
-    CHECK(registry.Frozen().Components().size() == 3);
+    CHECK(registry.Frozen().Components().size() == kFirstOwnerComponent + 3);
     CHECK(registry.IsFrozen());
 }
 

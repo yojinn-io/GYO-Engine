@@ -18,6 +18,7 @@
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Plan.hpp"
 #include "engine/kernel/Registry.hpp"
+#include "engine/kernel/Relationship.hpp"
 #include "engine/kernel/SystemTraits.hpp"
 #include "engine/kernel/TypeKey.hpp"
 #include "engine/kernel/TypeList.hpp"

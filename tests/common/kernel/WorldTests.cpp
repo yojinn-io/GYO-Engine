@@ -516,7 +516,7 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(9)->t == 200);
         const std::string summary = SummaryOf(rig->world()).Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "4:5f5fc699806710d5d4921bae5c5b098c33358968d2024b420194dc8d895b9dcc");
+        CHECK(summary == "4:31a810e4e8580d803e43834f7a66afc0d55c6ae795c5fecc8e1f6984686e4a9a");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
@@ -752,11 +752,11 @@ TEST_CASE("J-32: a despawn runs every OnRemove in ascending ComponentId before a
     REQUIRE(world.Alive(6));
     Log().clear();
     KERNEL_REQUIRE_RUN_OK(rig->Run());
-    CHECK_MESSAGE(CallOrder(Log()) == "tag-removed:1/2 tag-removed-second:1/2 mode-removed:1/3 badge-removed:1/7",
+    CHECK_MESSAGE(CallOrder(Log()) == "tag-removed:1/4 tag-removed-second:1/4 mode-removed:1/5 badge-removed:1/9",
                   "J-32: a despawn calls the OnRemove hooks of each component the entity has, once, in ascending "
                   "ComponentId, a component's hooks in registration order");
-    CHECK_MESSAGE(Join(Log()) == "tag-removed:1/2(mode=1,badge=6) tag-removed-second:1/2(tag=7) "
-                                 "mode-removed:1/3(tag=7,badge=6) badge-removed:1/7(tag=7,mode=1)",
+    CHECK_MESSAGE(Join(Log()) == "tag-removed:1/4(mode=1,badge=6) tag-removed-second:1/4(tag=7) "
+                                 "mode-removed:1/5(tag=7,badge=6) badge-removed:1/9(tag=7,mode=1)",
                   "J-32: every OnRemove of a despawn reads the whole entity (no cell destroyed before the last OnRemove)");
     CHECK_FALSE(world.Alive(1));
     CHECK_MESSAGE((world.Get<Tag>(1) == nullptr && world.Get<Mode>(1) == nullptr && world.Get<Badge>(1) == nullptr),
@@ -833,7 +833,7 @@ TEST_CASE("J-32: an Err from a despawn's OnRemove hook is the Run's Err") {
     Log().clear();
     const auto result = rig->Run();
     REQUIRE_MESSAGE(!static_cast<bool>(result), "J-32: an Err from a despawn's OnRemove hook is not swallowed");
-    CHECK(Join(Log()) == "mode-removed-fails:1/3");
+    CHECK(Join(Log()) == "mode-removed-fails:1/5");
     CHECK_MESSAGE(result.error().Text().find("ModeRemovedFails") != std::string::npos,
                   "J-32: the Err of a despawn's OnRemove names the hook: " << result.error().Text());
 }
