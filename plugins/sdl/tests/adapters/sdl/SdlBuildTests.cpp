@@ -5,6 +5,9 @@
 
 #include <doctest/doctest.h>
 
+// doctest only declares std::basic_ostream; printing a std::string_view in a
+// failed CHECK needs the whole <ostream> (MSVC does not bring it in otherwise).
+#include <ostream>
 #include <string_view>
 
 TEST_CASE("build: the linked SDL is the pinned 3.4.0") {

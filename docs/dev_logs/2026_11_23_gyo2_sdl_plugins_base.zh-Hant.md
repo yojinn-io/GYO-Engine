@@ -30,6 +30,8 @@ Owner：架構（`plugins/sdl*`）。GYO2 主會話開的任務卡（使用者�
 - 帶 SDL 的產品也看它在 `tests/`、`build/acceptance/`、`assets/` 底下同名目錄的 CMake。`cmake.PluginSelection` 的逾時放寬到 600 秒（整個 repo 的 configure，同 `cmake.ProjectComposition`）、註解更正。
 - master 留下的 SDL「component」機制（`GyoComponents.cmake`、`GyoRuntimeDeployment.cmake` 的 `SDL3-shared`）沒有接上 `plugins/sdl`，寫進 sdl.zh-Hant.md 範囲の限界，留給重審產品登記機制的那批。
 
+- **L1 第二輪 windows-x64 建置失敗**（run 45151811686，job 137615082067）：補丁已上、configure 通過、`SDL3-static.lib` 在 MSVC 上連結成功（GYO 的編譯選項下 SDL 建得起）；失敗的只有 `SdlBuildTests.cpp:20` 的 `CHECK(std::string_view(...) == "dummy")`——doctest 只前置宣告 `std::basic_ostream`，MSVC 不會間接帶進 `<ostream>`（macOS 的 libc++ 會）。照 repo 其他測試加 `#include <ostream>`。
+
 ## SDL-2 的本機實跑
 
 `plugin_removal.py copy` → `cmake -S <副本> --preset core -DGYO_PLUGINS=ALL` → build → ctest 198/198 → `check` 通過（`plugins: []`，`_deps` 只有 doctest、fast_float、yyjson）。合併 gyo2（X1）後再 `copy` 一次，也拿得乾淨。
