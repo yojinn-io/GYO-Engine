@@ -1,1 +1,2 @@
 name,description,version,enabled,windows,linux,macos
+object_fps_pvp,"Object_FPS_PVP: a networked first-person shooter, ported from master apps/object_fps_pvp",0.1.0,1,1,1,1
