@@ -1,1 +1,2 @@
 name,dir,target,description,library_only,default,depends,private_depends,unit,header
+sdl,sdl,GYO::Sdl,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,

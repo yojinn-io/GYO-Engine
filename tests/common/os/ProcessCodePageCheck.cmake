@@ -1,5 +1,5 @@
 # Design Invariant 11 (docs/architecture/os.md): every executable target under
-# engine, games, tools, build/acceptance and tests carries the UTF-8 code page
+# engine, plugins, games, tools, build/acceptance and tests carries the UTF-8 code page
 # manifest that the build layer applies (build/cmake/GyoCodePage.cmake), or an
 # exemption with its reason. The build layer marks the targets on every
 # platform, so a target the walk misses fails the configuration on any OS.
@@ -16,7 +16,7 @@ function(_gyo_os_check_code_pages directory)
     list(APPEND ancestors "${directory}")
     get_property(source DIRECTORY "${directory}" PROPERTY SOURCE_DIR)
     file(RELATIVE_PATH relative "${GYO_REPOSITORY_ROOT}" "${source}")
-    if(relative MATCHES "^(engine|games|tools|build/acceptance|tests)(/|$)")
+    if(relative MATCHES "^(engine|plugins|games|tools|build/acceptance|tests)(/|$)")
         get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
         foreach(target IN LISTS targets)
             get_target_property(type ${target} TYPE)

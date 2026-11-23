@@ -4,7 +4,9 @@ cmake_minimum_required(VERSION 3.30)
 # every executable under the repository roots, also through a standalone tool
 # wrapper that reuses the tool's source directory, and leaves other programs
 # alone; the check (tests/common/os/ProcessCodePageCheck.cmake) refuses an
-# executable the walk missed and lists an exemption.
+# executable the walk missed and lists an exemption. The same tree runs the OS
+# definition check of Design Invariant 1 (tests/common/os/OsDefinitionCheck.cmake)
+# on a root that no OS's real build reaches yet (plugins/).
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 string(RANDOM LENGTH 8 ALPHABET abcdef0123456789 run_id)
 # WORK_ROOT: where to put the synthetic trees when run outside a build tree
@@ -14,7 +16,7 @@ if(NOT DEFINED WORK_ROOT)
 endif()
 set(work "${WORK_ROOT}/process-code-page-${run_id}")
 set(source "${work}/source")
-foreach(directory engine/core games/sample tools/editor tests/unit vendor/lib)
+foreach(directory engine/core plugins/sample games/sample tools/editor tests/unit vendor/lib)
     file(MAKE_DIRECTORY "${source}/${directory}")
     file(WRITE "${source}/${directory}/main.cpp" "int main() { return 0; }\n")
 endforeach()
@@ -24,24 +26,29 @@ project(ProcessCodePageFixture LANGUAGES CXX)
 set(GYO_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 include("${GYO_TEST_REPOSITORY}/build/cmake/GyoCodePage.cmake")
 include("${GYO_TEST_REPOSITORY}/tests/common/os/ProcessCodePageCheck.cmake")
+include("${GYO_TEST_REPOSITORY}/tests/common/os/OsDefinitionCheck.cmake")
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_apply_process_code_page)
 set(GYO_CURRENT_TOOL editor)
-foreach(directory engine/core games/sample tools/editor tests/unit vendor/lib)
+foreach(directory engine/core plugins/sample games/sample tools/editor tests/unit vendor/lib)
     add_subdirectory(${directory})
     if(NOT (TEST_CASE STREQUAL "unrecorded" AND directory STREQUAL "tests/unit") AND
-       NOT (TEST_CASE STREQUAL "unrecorded_game" AND directory STREQUAL "games/sample"))
+       NOT (TEST_CASE STREQUAL "unrecorded_game" AND directory STREQUAL "games/sample") AND
+       NOT (TEST_CASE STREQUAL "unrecorded_plugin" AND directory STREQUAL "plugins/sample"))
         gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/${directory}")
     endif()
 endforeach()
 if(TEST_CASE STREQUAL "exempt")
     set_property(TARGET unit_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT "fixture reason")
+elseif(TEST_CASE STREQUAL "plugin_definition")
+    target_compile_definitions(sample_plugin_tool PRIVATE GYO_SAMPLE_LINUX=1)
 endif()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_process_code_pages)
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_no_os_definitions)
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_fixture_report)
 # What the deferred calls left: each target's mark and how the manifest went in.
 function(gyo_fixture_report)
     set(report "")
-    foreach(target IN ITEMS core_tool sample_game editor unit_tests vendor_tool)
+    foreach(target IN ITEMS core_tool sample_plugin_tool sample_game editor unit_tests vendor_tool)
         get_target_property(mark ${target} GYO_PROCESS_CODE_PAGE)
         if(NOT mark)
             set(mark unmarked)
@@ -59,6 +66,9 @@ function(gyo_fixture_report)
 endfunction()
 ]=])
 file(WRITE "${source}/engine/core/CMakeLists.txt" "add_executable(core_tool main.cpp)\n")
+# A Plugin directory (plugins/<plugin>/), as the build layer adds each selected
+# Plugin; a Plugin may build a program (sdl_gpu's shader compiler, for one).
+file(WRITE "${source}/plugins/sample/CMakeLists.txt" "add_executable(sample_plugin_tool main.cpp)\n")
 # A game directory (games/<game>/), as the build layer adds each selected game.
 file(WRITE "${source}/games/sample/CMakeLists.txt" "add_executable(sample_game main.cpp)\n")
 file(WRITE "${source}/tests/unit/CMakeLists.txt" "add_executable(unit_tests main.cpp)\n")
@@ -131,8 +141,8 @@ elseif(NOT CMAKE_HOST_WIN32 AND NOT embedded STREQUAL "none")
     message(FATAL_ERROR "plain: a non-Windows build embedded a manifest\n${lines}")
 endif()
 expect_report(plain "${work}/plain/report.txt"
-    "core_tool=UTF-8 ${embedded}" "sample_game=UTF-8 ${embedded}" "editor=UTF-8 ${embedded}" "unit_tests=UTF-8 ${embedded}"
-    "vendor_tool=unmarked none")
+    "core_tool=UTF-8 ${embedded}" "sample_plugin_tool=UTF-8 ${embedded}" "sample_game=UTF-8 ${embedded}"
+    "editor=UTF-8 ${embedded}" "unit_tests=UTF-8 ${embedded}" "vendor_tool=unmarked none")
 
 # The wrapper's top directory has no languages; the tool added again below it
 # still gets the manifest, embedded the same way as in the plain build.
@@ -144,6 +154,10 @@ expect_report(wrapper "${work}/wrapper/report.txt"
 configure(unrecorded FALSE "Process code page guard: unit_tests (tests/unit)" "${source}" -DTEST_CASE=unrecorded)
 # The check walks games/ on its own too: a game directory the build layer did not record is refused.
 configure(unrecorded_game FALSE "Process code page guard: sample_game (games/sample)" "${source}" -DTEST_CASE=unrecorded_game)
+# And plugins/: a Plugin directory the build layer did not record is refused.
+configure(unrecorded_plugin FALSE "Process code page guard: sample_plugin_tool (plugins/sample)" "${source}" -DTEST_CASE=unrecorded_plugin)
+# Design Invariant 1 covers plugins/ too: a Plugin target that identifies the OS through a definition is refused.
+configure(plugin_definition FALSE "OS definition guard: sample_plugin_tool COMPILE_DEFINITIONS has 'GYO_SAMPLE_LINUX=1'" "${source}" -DTEST_CASE=plugin_definition)
 configure(exempt TRUE "runs without the UTF-8 manifest: unit_tests: fixture reason" "${source}" -DTEST_CASE=exempt)
 expect_report(exempt "${work}/exempt/report.txt" "unit_tests=unmarked none" "editor=UTF-8 ${embedded}")
 file(REMOVE_RECURSE "${work}")
