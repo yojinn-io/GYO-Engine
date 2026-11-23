@@ -339,6 +339,8 @@
 
 ### 5.5 時間的取樣（維持過渡，到第一個需要的 runner 那批定）
 
+**後記（2026-11-23，SDL 線子批 W）**：那一批定了——取樣**留在 World 的 System**、照 Bevy，不移給 runner（使用者「這個照你建議就好。」，HANDOFF `v8-arch-gyo2-time-sampling-in-system`；比過交換函式「進」）。本節下面「方向（取樣歸 runner）不變」與「交換函式的登記讓那時有地方接」是當時的判斷，已被推翻；現行的文字在 [world-time](world-time.zh-Hant.md) 第 3 節、WT-6 第 (2) 項。「那一批要一起定的」三件：等待零件在 runner 自己（要對準 tick 格點時讀時間基準）；渲染 World 不帶 world_time、經 Extract 讀來源的時間（SDL 總宣告第 6.1 節第 7 點）；WT-2 的「每幀只取一次樣」對每個帶 world_time 的 World 成立。
+
 **現況**（world-time 第 3 節、WT-6 第 (2) 項，使用者 2026-11-19 核准）：照 Bevy `TimeUpdateStrategy`，`AdvanceTime` 在 World 裡依 `TimeSampling` 取樣；標成「過渡」，寫明「交換點做出來後這一項移給 runner」。**原形**（時間設計決定 1，使用者 11-14）：runner 每輪取樣一次、寫進 World。
 
 **本卡照 L17 判：這一批不移、維持過渡，到第一個需要的 runner 那批定**（有視窗的是 SDL 那批；沒畫面的 Match 的 runner 若先來就是它那批；檢查 B7）。方向（取樣歸 runner）不變，**退出條件從「交換點做出來」改成「第一個需要的 runner 那批」**：world-time 第 3 節與 WT-6 第 (2) 項（使用者 2026-11-19 核准）的文字照這樣改，列在第 7 節，合併前核准時給使用者看（檢查 A3）。理由：
