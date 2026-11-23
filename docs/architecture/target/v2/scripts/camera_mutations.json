@@ -1,0 +1,457 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the camera Module and of MakeOrthographic (docs/architecture/target/v2/transform-camera-declaration.zh-Hant.md, section 6.3; Design Invariants CM-1 to CM-5 in docs/architecture/target/v2/camera.zh-Hant.md; ids cm- and math-). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "cm-camera2d-perspective",
+   "what": "Camera2d's initial Projection is the perspective one",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "Projection ProjectionFrom2d(const Camera2d&) { return Projection{OrthographicProjection::Default2d()}; }",
+   "replace": "Projection ProjectionFrom2d(const Camera2d&) { return Projection{PerspectiveProjection{}}; }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Camera2d brings*",
+   "expect": "\\[cm\\-camera2d\\-ortho\\] Camera2d brought a perspective Projection"
+  },
+  {
+   "id": "cm-default2d-not-swapped",
+   "what": "Default2d keeps near -1000, far 1000 (a smaller z in front) instead of the user's choice (b): near and far swapped",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 13"
+   ],
+   "file": "engine/modules/camera/include/engine/camera/Camera.hpp",
+   "find": "        projection.nearClip = 1000.0F;\n        projection.farClip = -1000.0F;",
+   "replace": "        projection.nearClip = -1000.0F;\n        projection.farClip = 1000.0F;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Camera2d brings*",
+   "expect": "\\[cm\\-camera2d\\-ortho\\] near and far are not swapped"
+  },
+  {
+   "id": "cm-valid-without-size",
+   "what": "a camera without a target size is valid",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    if (size == nullptr) return out;",
+   "replace": "    if (size == nullptr) {\n        out.valid = true;\n        return out;\n    }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: without a target size*",
+   "expect": "\\[cm\\-valid\\-without\\-size\\]"
+  },
+  {
+   "id": "cm-perspective-aspect-inverted",
+   "what": "the perspective aspect is height over width",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "logicalWidth / logicalHeight, perspective->nearClip",
+   "replace": "logicalHeight / logicalWidth, perspective->nearClip",
+   "target": "gyo_camera_tests",
+   "cases": "camera: without a target size*",
+   "expect": "\\[cm\\-perspective\\-aspect\\]"
+  },
+  {
+   "id": "cm-writes-when-equal",
+   "what": "UpdateCameras writes ComputedCamera every frame: Changed<ComputedCamera> holds when nothing changed",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "        if (!SameComputed(computed.Read(), next)) *computed = std::move(next);",
+   "replace": "        *computed = std::move(next);",
+   "target": "gyo_camera_tests",
+   "cases": "camera: without a target size*",
+   "expect": "\\[cm\\-writes\\-when\\-equal\\]"
+  },
+  {
+   "id": "cm-windowsize-physical",
+   "what": "WindowSize uses the physical size instead of the logical one",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    const float logicalWidth = static_cast<float>(viewport.size.x) / size->scaleFactor;\n    const float logicalHeight = static_cast<float>(viewport.size.y) / size->scaleFactor;",
+   "replace": "    const float logicalWidth = static_cast<float>(viewport.size.x);\n    const float logicalHeight = static_cast<float>(viewport.size.y);",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the orthographic area*",
+   "expect": "\\[cm\\-windowsize\\-logical\\]"
+  },
+  {
+   "id": "cm-origin-ignored",
+   "what": "the orthographic area is always centred, whatever viewportOrigin says",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    const float originX = width * orthographic.viewportOrigin.x;\n    const float originY = height * orthographic.viewportOrigin.y;",
+   "replace": "    const float originX = width * 0.5F;\n    const float originY = height * 0.5F;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the orthographic area*",
+   "expect": "\\[cm\\-origin\\]"
+  },
+  {
+   "id": "cm-scale-ignored",
+   "what": "the orthographic projection ignores scale",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    return Math::MakeOrthographic(orthographic.scale * -originX, orthographic.scale * (width - originX),\n                                  orthographic.scale * -originY, orthographic.scale * (height - originY),",
+   "replace": "    return Math::MakeOrthographic(-originX, width - originX,\n                                  -originY, height - originY,",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the orthographic area*",
+   "expect": "\\[cm\\-scale\\]"
+  },
+  {
+   "id": "cm-target-always-zero",
+   "what": "every camera reads the size of target 0",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target));",
+   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(CameraTarget{}));\n        (void)target;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: each camera uses*",
+   "expect": "\\[cm\\-target\\-own\\]"
+  },
+  {
+   "id": "cm-viewport-ignored",
+   "what": "the camera's viewport is ignored: the aspect comes from the whole target",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    Viewport viewport = camera.viewport.value_or(Viewport{{0, 0}, size->physicalSize, 0.0F, 1.0F});",
+   "replace": "    Viewport viewport{{0, 0}, size->physicalSize, 0.0F, 1.0F};",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a viewport sets*",
+   "expect": "\\[cm\\-viewport\\-aspect\\]"
+  },
+  {
+   "id": "cm-viewport-not-clamped",
+   "what": "the viewport is not clamped into the target",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    ClampAxis(viewport.position.x, viewport.size.x, size->physicalSize.x);\n    ClampAxis(viewport.position.y, viewport.size.y, size->physicalSize.y);\n",
+   "replace": "",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a viewport sets*",
+   "expect": "\\[cm\\-viewport\\-clamp\\]"
+  },
+  {
+   "id": "cm-ndc-reverse-z",
+   "what": "ViewportToWorld takes Bevy's reversed depth: the ray starts at the far plane",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    auto nearPoint = NdcToView(camera, ndc, 0.0F);\n    if (!nearPoint) return Base::Err(std::move(nearPoint).error());\n    auto farPoint = NdcToView(camera, ndc, 1.0F);",
+   "replace": "    auto nearPoint = NdcToView(camera, ndc, 1.0F);\n    if (!nearPoint) return Base::Err(std::move(nearPoint).error());\n    auto farPoint = NdcToView(camera, ndc, 0.0F);",
+   "target": "gyo_camera_tests",
+   "cases": "camera: WorldToViewport and ViewportToWorld*",
+   "expect": "\\[cm\\-ray\\-near\\]"
+  },
+  {
+   "id": "cm-ndc-y-not-flipped",
+   "what": "a viewport position goes to NDC without flipping y (viewport +Y is down, NDC +Y is up)",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    return {x, -y};",
+   "replace": "    return {x, y};",
+   "target": "gyo_camera_tests",
+   "cases": "camera: ViewportToWorld2d maps*",
+   "expect": "\\[cm\\-to\\-world\\-2d\\-y\\]"
+  },
+  {
+   "id": "cm-viewport-offset-ignored",
+   "what": "the conversions take the position inside the viewport, not the target's (Bevy subtracts the viewport's corner)",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    const float x = (position.x - rect.minimum.x) / rect.size.x * 2.0F - 1.0F;\n    const float y = (position.y - rect.minimum.y) / rect.size.y * 2.0F - 1.0F;",
+   "replace": "    const float x = position.x / rect.size.x * 2.0F - 1.0F;\n    const float y = position.y / rect.size.y * 2.0F - 1.0F;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: with a letterbox viewport*",
+   "expect": "\\[cm\\-viewport\\-offset\\]"
+  },
+  {
+   "id": "cm-past-planes-swapped",
+   "what": "a depth below 0 is reported past the far plane (Bevy's reversed reading)",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    if (ndc.z < 0.0F) return Base::Err(Fail(Code::PastNearPlane));",
+   "replace": "    if (ndc.z < 0.0F) return Base::Err(Fail(Code::PastFarPlane));",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the conversions report*",
+   "expect": "\\[cm\\-past\\-planes\\]"
+  },
+  {
+   "id": "cm-hash-computed-nonempty",
+   "what": "ComputedCamera's hash writes valid: a derived value changes the summary",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/include/engine/camera/Camera.hpp",
+   "find": "inline void HashValue(Kernel::Hasher&, const ComputedCamera&) {}",
+   "replace": "inline void HashValue(Kernel::Hasher& h, const ComputedCamera& v) { Kernel::HashValue(h, v.valid); }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the summary hashes*",
+   "expect": "\\[cm\\-hash\\-computed\\-empty\\]"
+  },
+  {
+   "id": "cm-hash-target-sizes-nonempty",
+   "what": "CameraTargetSizes' hash writes whether target 0 has a size: a machine's window size changes the summary",
+   "guards": [
+    "camera CM-5"
+   ],
+   "file": "engine/modules/camera/include/engine/camera/Camera.hpp",
+   "find": "inline void HashValue(Kernel::Hasher&, const CameraTargetSizes&) {}",
+   "replace": "inline void HashValue(Kernel::Hasher& h, const CameraTargetSizes& v) { Kernel::HashValue(h, v.Find(CameraTarget{}) != nullptr); }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the summary hashes*",
+   "expect": "\\[cm\\-hash\\-target\\-sizes\\-empty\\]"
+  },
+  {
+   "id": "math-ortho-depth-flipped",
+   "what": "MakeOrthographic maps nearClip to depth 1 and farClip to 0 (the reversed depth of Bevy) instead of the math.md clip convention",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.4"
+   ],
+   "file": "engine/core/math/include/engine/math/linear/Matrix4.hpp",
+   "find": "    result.values[10] = 1.0F / depth;\n    result.values[12] = -(right + left) / width;\n    result.values[13] = -(top + bottom) / height;\n    result.values[14] = -nearClip / depth;",
+   "replace": "    result.values[10] = -1.0F / depth;\n    result.values[12] = -(right + left) / width;\n    result.values[13] = -(top + bottom) / height;\n    result.values[14] = farClip / depth;",
+   "target": "gyo_math_tests",
+   "cases": "MakeOrthographic maps the box corners*",
+   "expect": "\\[math\\-ortho\\-low\\]"
+  },
+  {
+   "id": "cm-camera-no-target",
+   "what": "Camera does not bring CameraTarget: a Camera2d entity has no target and UpdateCameras skips it",
+   "guards": [
+    "camera CM-1",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "    r.InitialValue<CameraTarget, &TargetFromCamera>();\n",
+   "replace": "",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Camera2d brings*",
+   "expect": "\\[cm\\-camera\\-chain\\] no CameraTarget"
+  },
+  {
+   "id": "cm-options-ignored",
+   "what": "CameraOptions is not read: a World with the skeleton off cannot name where UpdateCameras runs",
+   "guards": [
+    "camera CM-1",
+    "transform-camera-declaration 4.3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "    const CameraOptions options = given != nullptr ? *given : CameraOptions{};",
+   "replace": "    const CameraOptions options{};\n    (void)given;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a World with the skeleton off*",
+   "expect": "\\[cm\\-options\\]"
+  },
+  {
+   "id": "cm-update-set-missing",
+   "what": "UpdateCameras is not put in the public set CameraUpdate: a System ordered after the set runs before the update. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too",
+   "guards": [
+    "camera CM-1"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "    mount.sets.push_back(std::string(kUpdateSet));\n",
+   "replace": "",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a System ordered after CameraUpdate*",
+   "expect": "\\[cm\\-update\\-set\\]"
+  },
+  {
+   "id": "cm-sizes-set-no-update",
+   "what": "a second Set of one id keeps the old size (a resized window is never seen)",
+   "guards": [
+    "camera CM-5"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        at->second = size;",
+   "replace": "        (void)at;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: CameraTargetSizes keeps*",
+   "expect": "\\[cm\\-sizes\\] a second Set"
+  },
+  {
+   "id": "cm-sizes-remove-noop",
+   "what": "Remove leaves the size",
+   "guards": [
+    "camera CM-5"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    if (at != sizes_.end() && at->first == target.id) sizes_.erase(at);",
+   "replace": "    (void)at;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: CameraTargetSizes keeps*",
+   "expect": "\\[cm\\-sizes\\] Remove left"
+  },
+  {
+   "id": "cm-sizes-find-any",
+   "what": "Find returns the next larger id's size for an id that was never set",
+   "guards": [
+    "camera CM-5"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    return at != sizes_.end() && at->first == target.id ? &at->second : nullptr;",
+   "replace": "    return at != sizes_.end() ? &at->second : nullptr;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: CameraTargetSizes keeps*",
+   "expect": "\\[cm\\-sizes\\] found an id"
+  },
+  {
+   "id": "cm-samecomputed-valid-only",
+   "what": "the comparison before writing looks at valid only: a resize of a valid camera is never written (cm-writes-when-equal catches the opposite, writing when equal)",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "bool SameComputed(const ComputedCamera& a, const ComputedCamera& b) noexcept {\n",
+   "replace": "bool SameComputed(const ComputedCamera& a, const ComputedCamera& b) noexcept {\n    if (a.valid == b.valid) return true;\n",
+   "target": "gyo_camera_tests",
+   "cases": "camera: without a target size*",
+   "expect": "\\[cm\\-recompute\\]"
+  },
+  {
+   "id": "cm-zero-scale-valid",
+   "what": "a scale factor that is not positive leaves the camera valid (infinite logical sizes)",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": " || !(size->scaleFactor > 0.0F)) return out;",
+   "replace": ") return out;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a viewport sets*",
+   "expect": "\\[cm\\-zero\\-scale\\]"
+  },
+  {
+   "id": "cm-clamp-outside",
+   "what": "a viewport entirely past the target keeps no pixel (Bevy keeps the last one)",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "            position = target - 1;\n            size = 1;",
+   "replace": "            size = 0;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a viewport sets*",
+   "expect": "\\[cm\\-viewport\\-clamp\\] outside"
+  },
+  {
+   "id": "cm-clamp-zero-target",
+   "what": "a 0 x 0 target (a minimized window) keeps the author's viewport: the camera is valid",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        } else {\n            position = 0;\n            size = 0;\n        }",
+   "replace": "        }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: a viewport sets*",
+   "expect": "\\[cm\\-zero\\-target\\]"
+  },
+  {
+   "id": "cm-ray-direction-reversed",
+   "what": "the ray points from the far plane back to the near plane",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "Math::TransformVector(view.matrix, *farPoint - *nearPoint)",
+   "replace": "Math::TransformVector(view.matrix, *nearPoint - *farPoint)",
+   "target": "gyo_camera_tests",
+   "cases": "camera: WorldToViewport and ViewportToWorld*",
+   "expect": "\\[cm\\-ray\\-direction\\]"
+  },
+  {
+   "id": "cm-ray-not-rotated",
+   "what": "the ray's direction is not turned by the camera's GlobalTransform (only translated cameras pass)",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "const Math::Vec3 direction = Math::TransformVector(view.matrix, *farPoint - *nearPoint);",
+   "replace": "const Math::Vec3 direction = *farPoint - *nearPoint;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the ray of a turned camera*",
+   "expect": "\\[cm\\-ray\\-rotated\\]"
+  },
+  {
+   "id": "cm-convert-physical",
+   "what": "the conversions take physical pixels: wrong on a HiDPI target",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    const float s = camera.scaleFactor;",
+   "replace": "    const float s = 1.0F;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the conversions take logical pixels*",
+   "expect": "\\[cm\\-convert\\-logical\\]"
+  },
+  {
+   "id": "cm-world-to-viewport-offset",
+   "what": "WorldToViewport drops the viewport's x offset (cm-viewport-offset-ignored is the other direction, ToNdc)",
+   "guards": [
+    "camera CM-4"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    return Math::Vec2{(ndc.x + 1.0F) / 2.0F * rect.size.x + rect.minimum.x,",
+   "replace": "    return Math::Vec2{(ndc.x + 1.0F) / 2.0F * rect.size.x,",
+   "target": "gyo_camera_tests",
+   "cases": "camera: WorldToViewport adds*",
+   "expect": "\\[cm\\-world\\-to\\-viewport\\-offset\\]"
+  },
+  {
+   "id": "cm-2d-valid-unchecked",
+   "what": "ViewportToWorld2d does not check valid: a camera without a size reports InvalidData instead of NoViewportSize",
+   "guards": [
+    "camera CM-4",
+    "transform-camera-declaration 4.2"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    if (!camera.valid) return Base::Err(Fail(Code::NoViewportSize));\n    auto nearPoint = NdcToView(camera, ToNdc(",
+   "replace": "    auto nearPoint = NdcToView(camera, ToNdc(",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the conversions report*",
+   "expect": "\\[cm\\-errors\\] ViewportToWorld2d"
+  },
+  {
+   "id": "cm-links-more",
+   "what": "camera link set on the real tree (README rule 4: positive control): the camera row depends on one more Module (json). Only gyo_expect_links on gyo_camera stops it",
+   "guards": [
+    "camera CM-2"
+   ],
+   "file": "config/modules.csv",
+   "find": "the derived values and the target sizes\",no,yes,transform,,",
+   "replace": "the derived values and the target sizes\",no,yes,transform;json,,",
+   "target": "gyo_camera_tests",
+   "expect_build_failure": true,
+   "expect": "gyo_camera\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
+  }
+ ]
+}

@@ -49,7 +49,7 @@
 - TX-6：不畫的字形回 `Empty`；`FT_LOAD_NO_BITMAP`。
 - TX-7、TX-8：環境變數不改行為（`HB_NO_GETENV`、關掉 FreeType 的環境變數選項）；HarfBuzz 的語言明定。
 - RC-TX2 加「HarfBuzz 已設字級字型快取沒有上限」；新增 RC-TX7（tab stop）。
-- 使用的一方要照做的四件登記為 CCR-12～14（`docs/cross-component-rules.md`）；CCR-12 補「用乘過顯示縮放的字級排版，座標是最終像素」（設計審查第 4 條）。
+- 使用的一方要照做的四件登記為 CCR-14～16（`docs/cross-component-rules.md`）；CCR-14 補「用乘過顯示縮放的字級排版，座標是最終像素」（設計審查第 4 條）。
 
 ## 4. 突變的數目（基準 8：超過「變的條文數 × 5＝50」）
 

@@ -11,7 +11,7 @@
 | 設計段 | 8bc5c17d、7ff583ab、af779f23 | 事前宣告修訂 0、修訂 1、動工前核准的紀錄 |
 | 第 1～6 步 | 6e323779 | `third_party/freetype`（2.15.0）、`harfbuzz`（15.2.0）、`libunibreak`（8.0.1）：官方 release tarball＋`URL_HASH SHA256`、GYO 自建 target、FreeType 用自己的模組表與選項標頭（關掉環境變數、zlib 等）、HarfBuzz 以 `HB_NO_GETENV` 建單檔彙整；`engine/modules/text`（三個 adapter、`FontData`／`FontLoader`、`TextContext`、`ShapedText`、`TextLayout`、`Caret`、`GlyphAtlas`、`Default_Ignorable` 的生成表）；測試字型（fontTools 生成的合成字型三個、BIZ UDPGothic 子集）；`gyo_text_tests`、`gyo_text_adapter_tests` |
 | 第 7 步 | 451824c3、0cd5a435 | golden（TX-8）、情境（HUD 1,000 幀、量寬縮字級、文字框、說明文字換行）、多執行緒、每幀成本的量測程式；TX-1 的含入與連結掃描與自我測試；環境變數的測試；突變清單；`Utf8.cpp` 的 U+FFFD 改成 ASCII 跳脫（MSVC C2015） |
-| 第 8 步 | （本提交） | 突變的修正與完整執行、`IsCollection` 的長度檢查、環境變數改由 CTest 給、文件（`text.zh-Hant.md`、CCR-12～14、v2 README、本頁、合併前核准頁） |
+| 第 8 步 | （本提交） | 突變的修正與完整執行、`IsCollection` 的長度檢查、環境變數改由 CTest 給、文件（`text.zh-Hant.md`、CCR-14～16、v2 README、本頁、合併前核准頁） |
 
 和宣告不同的地方（照實記）：
 
@@ -42,7 +42,7 @@
 ## 下一步
 
 - 合併前核准（使用者）。
-- U、R2a、R2b 照 CCR-12～14 用 `text`；R2a 的 CPU 貼圖局部更新吃 `ChangesSince`。
+- U、R2a、R2b 照 CCR-14～16 用 `text`；R2a 的 CPU 貼圖局部更新吃 `ChangesSince`。
 - 授權告示收進打包（K）。
 
 ## 證據
