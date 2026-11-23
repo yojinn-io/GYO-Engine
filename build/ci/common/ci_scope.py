@@ -153,7 +153,8 @@ def select_scope(event_name: str, event, changed_paths, live_draft: bool | None 
     if event_name == "workflow_dispatch" and open_pull_requests:
         return Scope(run_l1=True, run_quick=False, reason="pull-request-dispatch")
     if event_name in ("push", "workflow_dispatch"):
-        # Integration runs keep a complete record for every commit they see.
+        # Pushes keep a complete record for every commit; a manual run keeps
+        # one unless a newer manual run on its ref supersedes it.
         return Scope(run_l1=True, run_quick=True, reason="integration")
     if event_name == "pull_request":
         if not isinstance(event, dict) or not isinstance(event.get("pull_request"), dict):

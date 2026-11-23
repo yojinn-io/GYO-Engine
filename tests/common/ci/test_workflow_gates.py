@@ -548,7 +548,7 @@ xvfb-run() {
         # No paths/draft/branch filters: a filtered pull request event would
         # leave the required gate check unreported.
         self.assertEqual(trigger, ["push:", "branches: [master]", "pull_request:",
-                                   "types: [opened, synchronize, reopened, ready_for_review, closed]",
+                                   "types: [opened, synchronize, reopened, ready_for_review]",
                                    "workflow_dispatch:"])
         self.assertNotRegex(self.quick, r"paths(-ignore)?:|branches-ignore:|tags(-ignore)?:")
         self.assertNotIn("pull_request.draft", self.quick)
@@ -556,16 +556,13 @@ xvfb-run() {
     def test_pull_request_and_manual_runs_supersede_each_other_but_pushes_never_do(self):
         concurrency = top_level_block(self.quick, "concurrency")
         group = re.search(r"(?m)^  group:\s*(.+)$", concurrency).group(1)
-        # One group per pull request (its closed event cancels the run still in
-        # progress), one per manually run ref, and one per push run.
+        # One group per pull request, one per manually run ref, and one per push run.
         self.assertTrue(group.endswith(
             "${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || "
             "github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.ref) || github.run_id }}"), group)
         self.assertRegex(concurrency, r"(?m)^  cancel-in-progress: \$\{\{ github\.event_name != 'push' \}\}$")
-        # A closed event cancels and runs no job of its own.
-        self.assertRegex(job_block(self.quick, "scope"), r"(?m)^    if: github\.event\.action != 'closed'$")
-        for name in ("l1", "quick"):
-            self.assertRegex(job_block(self.quick, name), r"(?m)^    needs: scope$")
+        # Every pull request event runs the scope job, so the gate always has a verdict.
+        self.assertNotRegex(job_block(self.quick, "scope"), r"(?m)^    if:")
 
     def test_scope_job_alone_selects_tiers_through_the_tested_helper(self):
         scope = job_block(self.quick, "scope")
@@ -696,9 +693,8 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             "QUICK_RESULT": "${{ needs.quick.result }}",
         })
         # A skipped job counts as passing a required check, so the gate must
-        # never be skippable by a failed or cancelled dependency; only a
-        # closed pull request, which nothing merges on, skips it.
-        self.assertRegex(gate, r"(?m)^    if: always\(\) && github\.event\.action != 'closed'$")
+        # never be skippable by a failed or cancelled dependency.
+        self.assertRegex(gate, r"(?m)^    if: always\(\)$")
         self.assertNotRegex(gate, r"continue-on-error:\s*true")
         runs = list(re.finditer(r"(?m)^        run: \|\s*$", gate))
         self.assertEqual(len(runs), 1, "The gate job must have one executable policy block")

@@ -61,7 +61,6 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | Open な PR に `package` label | Package trial | Quick パッケージング（全製品）を Actions artifacts として upload。Label がある間は push のたびに再 build | `Trial packages / ...`（required ではない） |
 | **Package trial** の手動実行 | Package trial | 選んだ branch で同じ Quick パッケージング | — |
 | master への push（merge） | Cross-platform CI | L1 + Quick + `CI gate`。成功すれば `Snapshot / <train>` が train ごとに snapshot を公開。L1 が compiler cache を保存 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| PR の close／merge | Cross-platform CI | 同じ PR の実行中の run を取り消すだけで、job は実行しません（下記の concurrency） | — |
 | Open な PR のある branch での **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + `CI gate`（理由 `pull-request-dispatch`）。Draft PR の L1 の代わりで、Quick とパッケージングはしません。`Report dispatched L1` は次の行と同じ | `Select CI scope`、`L1 / ...`、`Quick acceptance`（skip）、`CI gate`、`Report dispatched L1` |
 | Open な PR のない branch（または tag）での **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）。Snapshot は公開しません。master で実行した場合だけ compiler cache を保存します。L1 の終了後、`Report dispatched L1` が検証した commit に commit status `L1 (dispatch)`（その実行へのリンク）を設定し、その branch の open な PR ごとに目印付きのコメント（commit SHA、platform ごとの L1 結論、実行 URL）を作成または更新します。PR のない branch は status だけです | 同上（snapshot なし）＋`Report dispatched L1`。PR の checks は pull_request event の実行しか表示しないため、Draft PR では `L1 (dispatch)` status とコメントが記録になります |
 | **Prepare Release** | Prepare Release | 1 train の Release 検証、tag、Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
@@ -77,7 +76,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
   - `Select CI scope` の Summary に、再利用した commit または再利用しなかった理由が表示されます。
   - Check run の読み取りに `checks: read`、履歴をたどるために完全な履歴（checkout の `fetch-depth: 0`）が必要です。master の履歴を書き換えない（force push しない）ことが前提です。
 - Draft の判定には実行開始時に読む PR の現在の状態を使います。古い Draft 実行を re-run した場合、PR がすでに Ready なら L1 を実行し、まだ Draft なら再び skip します。
-- 同じ PR の新しい event（push、Ready への変更、close、merge）は古い実行を取り消します。同じ ref の手動実行は新しいものが古いものを取り消し、取り消された実行は `L1 (dispatch)` status もコメントも書きません。master への push の実行は互いに取り消しません。
+- 同じ PR の新しい event（push、Ready への変更、reopen）は古い実行を取り消します。同じ ref の手動実行は新しいものが古いものを取り消し、取り消された実行は `L1 (dispatch)` status もコメントも書きません。master への push の実行は互いに取り消しません。
 - Base branch の変更（`edited`）では再実行しません。Merge queue（`merge_group`）は未対応で、有効化する前にその trigger と範囲判定を追加します。
 - Package trial は close／merge 済みの PR では build せず、`package` 以外の label を追加しても実行中の trial を取り消しません。
 

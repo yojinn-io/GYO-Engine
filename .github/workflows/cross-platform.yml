@@ -3,14 +3,12 @@ run-name: ${{ github.event_name }} / ${{ github.ref_name }}
 
 # Mainline development: only master pushes integrate. Pull requests carry no
 # path or draft filters here; the scope job decides what runs, so the single
-# required "CI gate" check reports for every pull request event. Closing or
-# merging a pull request only cancels its run still in progress (see
-# concurrency); a closed event runs no job.
+# required "CI gate" check reports for every pull request event.
 on:
   push:
     branches: [master]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, closed]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
@@ -28,8 +26,6 @@ concurrency:
 jobs:
   scope:
     name: Select CI scope
-    # A closed pull request needs no verdict; its event exists to cancel.
-    if: github.event.action != 'closed'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Reading the live draft state and a manual run's open pull requests needs
@@ -293,12 +289,10 @@ jobs:
 
   # The only required check. It always runs (a skipped job would count as
   # passing) and accepts exactly a selected success or an unselected skip.
-  # Only a closed pull request skips it: no merge waits on that verdict, and
-  # reopening the pull request runs the gate again.
   gate:
     name: CI gate
     needs: [scope, l1, quick]
-    if: always() && github.event.action != 'closed'
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

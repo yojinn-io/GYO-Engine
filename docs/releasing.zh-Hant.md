@@ -61,7 +61,6 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 開啟中的 PR 加上 `package` 標籤 | Package trial | 以 Quick 封裝全部產品並上傳 Actions artifacts；標籤存在期間，每次推送都重新建置 | `Trial packages / ...`（不是必要檢查） |
 | 手動執行 **Package trial** | Package trial | 在所選分支執行相同的 Quick 封裝 | — |
 | 推送 master（合併） | Cross-platform CI | L1 + Quick + `CI gate`；通過後 `Snapshot / <train>` 為每條 train 發佈 snapshot；L1 儲存編譯快取 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| 關閉或合併 PR | Cross-platform CI | 只取消同一 PR 執行中的 run（見下方 concurrency），不執行任何 job | — |
 | 在有 open PR 的分支手動執行 **Cross-platform CI** | Cross-platform CI | L1 + `CI gate`（理由 `pull-request-dispatch`），代替 Draft PR 的 L1；不跑 Quick，也不封裝。`Report dispatched L1` 與下一列相同 | `Select CI scope`、`L1 / ...`、`Quick acceptance`（略過）、`CI gate`、`Report dispatched L1` |
 | 在沒有 open PR 的分支（或 tag）手動執行 **Cross-platform CI** | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）；不發佈 snapshot；只有在 master 上執行時才儲存編譯快取。L1 結束後 `Report dispatched L1` 在受測 commit 設定 commit status `L1 (dispatch)`（連到該次執行），並在該分支每個 open PR 建立或更新一則帶標記的留言（commit SHA、各平台 L1 結論、執行 URL）；沒有 PR 的分支只設定 status | 同上（沒有 snapshot）＋`Report dispatched L1`。PR 的 checks 只列 pull_request 事件的執行，所以 Draft PR 上以 `L1 (dispatch)` status 與留言為紀錄 |
 | **Prepare Release** | Prepare Release | 一條 train 的 Release 驗收、tag 與 Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
@@ -77,7 +76,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
   - `Select CI scope` 的 Summary 會寫出沿用的 commit，或不沿用的原因。
   - 讀取 check run 需要 `checks: read`，往回找需要完整歷史（checkout 的 `fetch-depth: 0`）。前提是 master 不改寫歷史（不 force push）。
 - Draft 判定使用執行開始時讀取的 PR 目前狀態；重新執行舊的 Draft 執行時，若 PR 已改為 Ready 就會跑 L1，仍是 Draft 則再次略過。
-- 同一 PR 的新事件（推送、改為 Ready、關閉、合併）會取消舊執行；同一 ref 的手動執行，新的會取消舊的，被取消的執行不寫 `L1 (dispatch)` status 與留言；推送 master 的執行彼此不取消。
+- 同一 PR 的新事件（推送、改為 Ready、重新開啟）會取消舊執行；同一 ref 的手動執行，新的會取消舊的，被取消的執行不寫 `L1 (dispatch)` status 與留言；推送 master 的執行彼此不取消。
 - 只改 PR 目標分支（`edited`）不會重新執行。目前未支援 merge queue（`merge_group`）；啟用前須先加入該觸發與範圍判定。
 - Package trial 不建置已關閉或已合併的 PR；加上 `package` 以外的標籤也不會取消執行中的 trial。
 
