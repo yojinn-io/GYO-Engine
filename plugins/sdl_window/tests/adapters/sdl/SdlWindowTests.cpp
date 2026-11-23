@@ -9,6 +9,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cstddef>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -41,7 +42,11 @@ namespace W = GYO::Engine::Window;
 
 namespace {
 
+// SDL's dummy video driver, set before SDL starts (ctest also sets SDL_VIDEODRIVER; the mutation runner does not).
+const bool dummyDriver = SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+
 W::WindowSettings Hidden() {
+    static_cast<void>(dummyDriver);
     W::WindowSettings settings;
     settings.title = "sdl_window test";
     settings.size = {320, 240};
@@ -244,11 +249,12 @@ O::RegisteredUnits Units() {
     return units;
 }
 
-std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings = Hidden()) {
+std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings = Hidden(), std::size_t queueCapacity = 1024) {
     O::ProductDescription d;
     d.name = "game";
     S::SdlWindowOptions options;
     options.installRunner = runner;
+    options.queueCapacity = queueCapacity;
     d.options.Set(options);
     d.options.Set(settings);
     O::WorldDescription w;
@@ -307,6 +313,28 @@ TEST_CASE("sdl_window: a key pushed before a frame is in input's state that fram
                   "[sw-order-window-same-frame] the size is in window's state the same frame (before kWindowSet)");
 }
 
+TEST_CASE("sdl_window: dropped events reach input, which releases what was held") {
+    auto p = Make(false, Hidden(), 2);
+    Frame(*p);
+    const SDL_WindowID id = SDL_GetWindowID(WindowOf(*p));
+    Push(Key(id, SDL_SCANCODE_A, true));
+    Push(Key(id, SDL_SCANCODE_B, true));
+    Push(Key(id, SDL_SCANCODE_C, true));  // does not fit: dropped and counted
+    Frame(*p);
+    CHECK_MESSAGE(PumpOf(*p).DroppedEvents() == 1, "[sw-dropped-total] the pump counts the drop");
+    CHECK_MESSAGE(!Res<I::ButtonInput<I::KeyCode>>(*p).AnyPressed(),
+                  "[sw-dropped-reaches-input] InputEventsDropped makes input release every key");
+}
+
+TEST_CASE("sdl_window: the close request is applied at the end of the frame") {
+    auto p = Make();
+    Frame(*p);
+    CHECK_MESSAGE(!PumpOf(*p).Closed(), "[sw-close-not-yet] open until the game asks");
+    ResMut<W::WindowRequest>(*p).close = true;
+    Frame(*p);
+    CHECK_MESSAGE(PumpOf(*p).Closed(), "[sw-close-applied] WindowRequest::close closes the window");
+}
+
 TEST_CASE("sdl_window: a new World's first round writes the window's present state (SDL-7 exception (2))") {
     auto p = Make();
     Frame(*p);
@@ -348,7 +376,7 @@ TEST_CASE("sdl_window: a window made not resizable (G6)") {
     CHECK_MESSAGE((SDL_GetWindowFlags(WindowOf(*p)) & SDL_WINDOW_RESIZABLE) == 0, "[sw-settings-not-resizable] made without resizing");
 }
 
-TEST_CASE("sdl_window: the clipboard both ways") {
+TEST_CASE("sdl_window: the clipboard both ways, and a warp") {
     auto p = Make();
     Frame(*p);
     SDL_Event update{};
@@ -372,10 +400,26 @@ TEST_CASE("sdl_window: the clipboard both ways") {
         o.mounts.push_back(std::move(m));
         r.AddSystem<&Copy::Send>(std::move(o));
     })));
+    struct Warp {
+        static K::SystemResult Send(K::MessageWriter<W::WarpCursor> warp) {
+            warp.Send(W::WarpCursor{{5.0F, 6.0F}});
+            return {};
+        }
+    };
+    REQUIRE(static_cast<bool>(p->InsertSystems("Main", "test", [](K::Registrar& r) {
+        K::SystemOptions o;
+        o.name = "TestWarp";
+        K::Mount m;
+        m.schedule = std::string(O::DefaultSchedules::frame);
+        m.stage = std::string(O::DefaultSchedules::update);
+        o.mounts.push_back(std::move(m));
+        r.AddSystem<&Warp::Send>(std::move(o));
+    })));
     Frame(*p);
     char* text = SDL_GetClipboardText();
     CHECK_MESSAGE(std::string(text) == "from the game", "[sw-clipboard-out] a copy request reaches SDL's clipboard");
     SDL_free(text);
+    CHECK_MESSAGE(PumpOf(*p).RefusedRequests() == 0, "[sw-warp-accepted] the warp (not observable on the dummy driver) was not refused");
 }
 
 TEST_CASE("sdl_window: the runner ends with Success when the game's close was applied") {
