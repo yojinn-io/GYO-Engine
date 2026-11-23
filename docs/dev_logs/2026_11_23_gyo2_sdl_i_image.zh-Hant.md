@@ -34,7 +34,7 @@ stb_image 的版本、來源、hash 經主會話交使用者，使用者 2026-11
 - 突變 `tests/common/image/mutations.json`（19 條）：第一輪 11/19 killed，其餘 8 條是 `wrong_failure`（測試失敗了、expect 沒對上，原因見上）；改 `Expect` 與 `ib-extra-link` 的 expect（CMake 的訊息會換行，改成跨行比對）後 8/8 killed。完整重跑 19/19 killed。之後 `ctest -R "gyo_image|naming|cmake"` 13/13 通過。
 - 突變的數與理由（tests/common/mutation/README.md 第 8 條）：本批新的 DI 4 條，19 條 ≤ 4×5。每條守一個獨立會錯的決定（每條規則的每個條件、上限的等號與常數、stb 的上限、settings 的四種、色空間傳到圖、不翻轉、長度斷言、連結的兩件）。沒加的與理由寫在清單的 `description`（讀過頭的未定義行為三種、規則 3／4 的先後是結構、stb 內部的轉換不突變第三方檔）。
 - merge `origin/gyo2`（c916f31a，X1 #298 合併後；`tests/common/CMakeLists.txt` 的衝突是兩邊各加一行，保留兩邊）之後重建，全量 `ctest -L "cpu|shader" -j6`：198/200；`gyo_os_tests`、`os.wake_fallback` 逾時（60 s）。單獨重跑也逾時；不設 CTest 的時限直接跑 `gyo_os_tests`：80/80 通過，其中「OS wake signal loses no signal sent while the waiter checks its flag」花了 56.4 s。當時同一台 Mac 上別的會話在編譯（load average 32）。這一案在這台 Mac 上拖延是已知的（[2026_11_23_gyo2_os_wake_test_backoff](2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：CI 與 Linux 上沒有，使用者決定不改）；本批不碰 os。判讀交 L1。
-- L1 三平台：（PR 上手動 dispatch 後填）。
+- L1 三平台（手動 dispatch）：merge T 之前的 head（29d7d810＋dev_log）run 45150564597 三平台與 CI gate 全綠。merge `origin/gyo2`（5b9bc43c，T #297、網路 PR-2 #290 合併後；`third_party/CMakeLists.txt` 兩邊並列保留）之後本機 `ctest -L "cpu|shader"` 206/206（排除上面兩個 os 逾時），run 45159856574 的 windows-x64、macos-arm64 綠，linux-x64 卡在「Provision the pinned toolchain and compiler cache」100 分鐘後被取消、後面的步驟都沒跑（同一時段別的 run 這一步 1～6 分鐘）；判斷是 runner 那一側，取消後在本 commit 重新 dispatch，結果記在 PR #301。
 
 ## 給主會話（記 HANDOFF 用）
 
