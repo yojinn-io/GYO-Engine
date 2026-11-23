@@ -2,9 +2,11 @@
 
 件數の突き合わせ：該当なし（本批的判定沒有送出與收到的件數）。
 
-日期：2026-11-23。分支 `claude/quirky-sinoussi-6065a7`（PR 見下，base `gyo2`）。事前宣告：[sdl-extract-declaration.zh-Hant.md](sdl-extract-declaration.zh-Hant.md)（修訂 1；使用者 2026-11-23 動工前核准「Q1、Q2 照建議，開始」）。dev_log：[`2026_11_23_gyo2_sdl_extract`](../../../dev_logs/2026_11_23_gyo2_sdl_extract.zh-Hant.md)。流程照開卡時的舊規則（主會話 2026-11-23 轉達 `v8-arch-gyo2-core-agents-transition`）。
+日期：2026-11-23。分支 `claude/quirky-sinoussi-6065a7`（PR #299，base `gyo2`）。事前宣告：[sdl-extract-declaration.zh-Hant.md](sdl-extract-declaration.zh-Hant.md)（修訂 1；使用者 2026-11-23 動工前核准「Q1、Q2 照建議，開始」）。dev_log：[`2026_11_23_gyo2_sdl_extract`](../../../dev_logs/2026_11_23_gyo2_sdl_extract.zh-Hant.md)。流程照開卡時的舊規則（主會話 2026-11-23 轉達 `v8-arch-gyo2-core-agents-transition`）。
 
-**請你核准的**：第 2 節（Design Invariants 的最終文字）、第 3 節（§14.4：守衛的判定）、第 4 節（突變的數目）、第 5 節（和宣告不同的地方）、第 6 節（新的公開介面與碼）。核准後由你說「合併」才合併。
+**合併前核准（2026-11-23）**：使用者在本卡「核准」——第 2～6 節照本頁（Design Invariants 的最終文字、§14.4 的判定含 DI-KS 13 守衛欄、突變的數目、和宣告不同的地方、新的公開介面與碼）。合併等使用者明說「合併」。
+
+**請你核准的**（已核准）：第 2 節（Design Invariants 的最終文字）、第 3 節（§14.4：守衛的判定）、第 4 節（突變的數目）、第 5 節（和宣告不同的地方）、第 6 節（新的公開介面與碼）。核准後由你說「合併」才合併。
 
 ## 1. 判定的結果（宣告第 2.6 節）
 
@@ -15,7 +17,7 @@
 | 3 | 相關突變（D184）：Kernel 19/19、編排層 15/15 killed | dev_log「檢驗」 |
 | 4 | 實作審查（Opus／high，同模型）：可合併，B0 S4 N8，S 全採用、N 採用 5 | `build/evidence/gyo2-sdl-extract/review-r0.md` |
 | 5 | 突變清單的敵對式檢查（Opus／high，同模型）：值得加 8、清單要修 1、不值得 12；採用 7＋合併 1，不採 M-3（理由在第 4 節） | `build/evidence/gyo2-sdl-extract/mutant-list-check-r0.md` |
-| 6 | L1 三平台 | PR 上手動 dispatch（結果見 PR） |
+| 6 | L1 三平台全綠（b116760c，KR 合併之後；linux-x64、windows-x64、macos-arm64 與 CI gate） | PR #299，run 45146771727 |
 
 所有「同模型」：Fable 用量不足期間，主會話轉達使用者「暫時用Opus」。
 
