@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 14）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 15）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 15**：使用者（本卡）「先參考bevy」——Q7、Q8 照 Bevy 的原始碼重查，各加「Bevy 實際怎麼做」與照 Bevy 的建議（Q8：`window`、`input` 自己的 System，分兩步；Q7：(a)）。
 - **修訂 14**：(1) 修訂 13 送 Fable／high 窄複查：blocker 2、should 12、nit 9（`build/evidence/gyo2-sdl-declaration/declaration-r13-narrow-check.md`），卡片能改的全部採用（對照在第 29 節）；**交換函式「進」在 Run 之外寫不了 `Message`，而 Kernel 卡已定外部事件用 `Message`**——這一題連同「`input` 自己的套用 System」列成 **Q8** 交主會話／使用者。(2) 使用者在 side chat 定核准清單第 3 件：不採薄起步。(3) 使用者在 side chat 定：刪掉 Q1 比過的其中一個選項（11-18 保留、不放正式文件的那一個），文首那一段、前提表那一列與各處提到它的字都拿掉。
 - **修訂 13**：核准清單第 2 件由主會話重新評審，使用者「照建議」（HANDOFF `v8-arch-gyo2-sdl-input-via-exchange`）：**Plugin 只在 World 外讀寫資料；進出 World 一律由擁有資料的 Module 在交換點做**。照它改寫：OS 事件經 `input`、`window` 的交換函式「進」取進 World（狀態邏輯在 `input` 裡跑），請求經它們的交換函式「出」放到共用處；`sdl_window` 改成只做 `Configure` 的單位、不放進任何 World；L-12 重判。渲染那一側（`GpuSubmit` 維持渲染 World 的 System，或改成 `render_world` 的交換函式「出」）比過兩個做法、列成 **Q7** 交使用者。第 3 件（Q6 的薄起步）照 side chat 對照 Bevy 的結果改成建議「不採薄起步」。
 - **修訂 12 之後**：使用者在 side chat 確認第 14 節末「核准時一併確認的」第 1 件（拆成一組 `sdl*`）；第 2、3 件與另一句等使用者回覆（修訂 13、14 已處理）。
@@ -678,7 +679,9 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 
 （修訂 13 的 (b) 混了兩個做法：在交換函式「出」裡直接送的那一種，要嘛 `render_world` 經 Module 定型別、Plugin 填的回呼呼叫 `sdl_gpu`——那是 B'（P27）拿掉的注入；要嘛 `sdl_gpu` 自己登記，那就是 (c)。所以只留 (b1) 與 (c)。）
 
-**卡片不給傾向**（修訂 13 傾向 (b) 的理由之一「測試不必帶 SDL」三個做法都一樣，不成立）。各自真正的好處與代價：(a) 近 Bevy、回饋與上傳最直接，代價是 SDL-6 的例外、主執行緒靠 Kernel 的執行方式；(b1) 原則沒有例外、主執行緒不靠 Kernel、多個渲染 World 集中送出，代價是每個 runner 要接、回饋與上傳全走共用處、離 Bevy 最遠；(c) `RunFrame` 叫、O-E3 保留、錯誤不壞 World，代價是 Plugin 拿 `World&`、渲染 World 必須在主執行緒。**請使用者定**；定了之後第 3.3、6.2、6.6（行「`render` 產出 `RenderCommands`」「Plugin 之間的共用」）、9.1（`SDL_Window*` 的交接、KeepTool 的表）、9.2 節、第 10.1 節（「R2a 自己用一個 World 加『出』的 System 驗」）、L-12 的 `Check`、SDL-4、SDL-6、R2a 照它改（現在寫的是 (a)）。
+**Bevy 實際怎麼做**（修訂 15）：`render_system` 是 RenderApp 的 `Render` schedule 裡的一個獨占 System（拿 `&mut World`），跑 render graph、submit、在同一個 System 裡 present（`bevy_render/src/renderer/mod.rs:82-135`，`:111` 起 `present_frames`；登記在 `lib.rs:469-471`）；建 surface 的 System 靠 `NonSendMarker` 釘在主執行緒（`view/window/mod.rs:789`）。也就是 **(a)**。
+
+**照 Bevy 的建議：(a)**——代價是 SDL-6 的例外（`sdl_gpu` 的 `GpuSubmit` 在渲染 World 裡，寫進那一條）、主執行緒今天靠 Kernel 的序列執行（將來平行化時照 Bevy 用綁執行緒的 Resource，DI-KS 14）。修訂 14 的「不給傾向」改成這個建議。以下是三個做法各自的好處與代價（修訂 14）：各自真正的好處與代價：(a) 近 Bevy、回饋與上傳最直接，代價是 SDL-6 的例外、主執行緒靠 Kernel 的執行方式；(b1) 原則沒有例外、主執行緒不靠 Kernel、多個渲染 World 集中送出，代價是每個 runner 要接、回饋與上傳全走共用處、離 Bevy 最遠；(c) `RunFrame` 叫、O-E3 保留、錯誤不壞 World，代價是 Plugin 拿 `World&`、渲染 World 必須在主執行緒。**請使用者確認**；定了之後第 3.3、6.2、6.6（行「`render` 產出 `RenderCommands`」「Plugin 之間的共用」）、9.1（`SDL_Window*` 的交接、KeepTool 的表）、9.2 節、第 10.1 節（「R2a 自己用一個 World 加『出』的 System 驗」）、L-12 的 `Check`、SDL-4、SDL-6、R2a 照它改（現在寫的是 (a)）。
 
 ### Q8：`input`、`window` 怎麼把事件寫進 World（修訂 14 新增；窄複查 B-1、S-1；交主會話／使用者）
 
@@ -693,7 +696,15 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 | (iii) 不用 `Message`、只用 Resource | 不改 Kernel；交換函式照 HANDOFF | 和 Kernel 卡的結論相反、偏離 Bevy；固定步跑 0 次或多次會漏或重讀（作者要累積） |
 | **(iv) `input`、`window` 在 `Main`／`First` 放自己的套用 System，讀共用處的緩衝、用 `MessageWriter` 寫** ← 卡片傾向 | 最像 Bevy（`keyboard_input_system` 是 `bevy_input` 的 System）；不改 Kernel；O-12 的預設規則指向它；存取由 Kernel 檢查、錯誤走 O-11；`RunSchedule` 也看得到；Plugin 照樣不在 World 裡（System 屬於擁有資料的 Module，合使用者的原則） | 和 HANDOFF 記的形（交換函式）不同，要使用者再確認；骨架關掉的 World 要作者指定掛哪裡（同 world_time）；請求「出」那一側同理改成 `Main`／`Last` 的套用 System |
 
-**卡片的傾向：(iv)**——使用者原則的兩句（Plugin 只在 World 外、由擁有資料的 Module 做）都成立，又不必改 Kernel、照 O-12 的預設規則、和 Kernel 卡的 `Message` 接得上。**卡片不能自己換形**（HANDOFF 記的是交換函式），請主會話與使用者定；定了之後第 3.3、6.2、6.3、6.6、9.1、9.2 節、W 照它改（現在寫的是交換函式）。
+**Bevy 實際怎麼做**（修訂 15，使用者「先參考bevy」；本機 6a911653）：分三步，後兩步都是擁有資料的 crate 自己的 System——
+1. winit 的 runner 在 `app.update()` 之前，把這一輪收到的事件整批寫成**一種總的訊息** `Messages<WindowEvent>`（`bevy_winit/src/state.rs:779-785` 的 `run_app_update` → `forward_bevy_events`，`:908-926` 的 `write_batch`）。
+2. `bevy_window` 的 System `send_typed_window_events` 在 `PreUpdate` 把總訊息拆成各型別的訊息（`KeyboardInput`、`MouseButtonInput`、`WindowResized`、`Ime`……，`bevy_window/src/system.rs:60-130` 的 `world.write_message(e)`；登記在 `lib.rs:168-171`，`WindowEventSystems` 排在 `InputSystems` 之前）。
+3. `bevy_input` 的 System `keyboard_input_system` 等在 `PreUpdate` 讀這些訊息、更新 `ButtonInput` 的狀態（`bevy_input/src/keyboard.rs:170-202`；登記在 `lib.rs:117`，`InputSystems`）。
+手把（`bevy_gilrs`）是另一種：`gilrs_event_system` 在 `PreUpdate`、`InputSystems` 之前，從 World 裡的 `Gilrs` 取事件寫成訊息（`bevy_gilrs/src/lib.rs:110`）。請求出去（`ime_enabled`、`ime_position`、改視窗）：`bevy_winit` 的 System 在 `Last` 讀 `Window` 元件、呼叫 winit（`bevy_winit/src/lib.rs:159-165`）。
+
+**照 Bevy、套上使用者的原則（Plugin 只在 World 外）**：只有第 1 步要改——Bevy 的 runner 直接寫進 World，GYO 的 runner（`sdl_window`）改成放進共用處的緩衝（型別與物件屬於 `window`、`input`）。第 2、3 步照 Bevy：`window` 的 System 在 `Main`／`PreUpdate` 讀緩衝、寫各型別的 `Message`（同 `send_typed_window_events`）；`input` 的 System 在同一個 stage、排在後面，讀這些 `Message`、跑狀態邏輯（同 `keyboard_input_system`）。請求出去：`window`、`input` 的 System 在 `Main`／`Last` 把請求放到共用處（Bevy 的這一步是 `bevy_winit` 的 System，GYO 照原則改成擁有資料的 Module 的 System），runner 在 World 外讀。也就是**做法 (iv)，照 Bevy 分兩步**；不改 Kernel，和 Kernel 卡的 `Message` 接得上。
+
+**建議：(iv)，照上面 Bevy 的兩步**——使用者原則的兩句（Plugin 只在 World 外、由擁有資料的 Module 做）都成立，又不必改 Kernel、照 O-12 的預設規則、和 Kernel 卡的 `Message` 接得上。HANDOFF 記的形是交換函式，請使用者確認換成 System；定了之後第 3.3、6.2、6.3、6.6、9.1、9.2 節、W 照它改（現在寫的是交換函式）。
 
 ### 核准時一併確認的（不另開題；修訂 12 依窄複查加）
 
