@@ -104,7 +104,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | os.md DI 2 字面仍寫「the host shader tool」豁免，gyo2 的程式已拿掉（`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`） | SDL 宣告修訂 20 第 14 節 | 子批 P 或 R2a 的宣告一起改 |
 | 建置層內「遊戲目錄」的規則手寫 4 處；KIND 集合有 3 個讀者；4 個只寫不讀的值 | apps→games #294 設計審查 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
 | `MirrorTests` 的瘦身；`ProjectComposition` 測試對產生器敏感；測試資料仍叫 `sample_app` | apps→games #294 | 下一次動建置層測試的批 |
-| README 三語版、`docs/architecture.md`、`docs/creating_apps.md` 大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
+| README 三語版、`docs/architecture.md`、`docs/creating_games.md`（#294 由 `creating_apps.md` 改名）大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
