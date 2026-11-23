@@ -79,8 +79,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 
 | 項目 | 來源 | 什麼時候做 |
 |---|---|---|
-| 9 個本來就壞的突變退役或重寫（`ks-k6-calls-off`、`ks-k6-every-file-exempt`、`ks-k8-skips-executor-files` 找的 `executor_file` 已在 #254 拿掉；`os-g8-link`、`os-g13`、`os-g14`、`ti-x1`、`ti-x2`、`th-x1` 的 find 在基準就已過時） | Engine 分層（#257）的 dev_log | 下一次動到那些清單的批，或單獨一個小 PR |
-| 日誌測試把 `logging-test-files/` 寫進工作目錄，改寫到建置目錄 | Engine 分層時誤 commit 98 MB | 同上 |
+| 9 個本來就壞的突變退役或重寫（`ks-k6-calls-off`、`ks-k6-every-file-exempt`、`ks-k8-skips-executor-files` 找的 `executor_file` 已在 #254 拿掉；`os-g8-link`、`os-g13`、`os-g14`、`ti-x1`、`ti-x2`、`th-x1` 的 find 在基準就已過時） | Engine 分層（#257）的 dev_log | **已完成**：Kernel 3 個由 #265 處理（2 退役、`ks-k6-calls-off` 改寫）、os 6 個由 #260 改寫；機械清理卡（`v8-arch-gyo2-mech-cleanup`）實跑確認 |
+| 日誌測試把 `logging-test-files/` 寫進工作目錄，改寫到建置目錄 | Engine 分層時誤 commit 98 MB | **已完成**：trace 批 db83c6ef（`GYO_LOGGING_TEST_BINARY_DIR`）；機械清理卡（`v8-arch-gyo2-mech-cleanup`）從 repo 根跑測試後確認根目錄沒有殘留 |
 | Windows 上非 Install 的執行緒走到 `std::terminate` 時沒有致命紀錄（日誌 S1） | 日誌批合併前核准頁 | 另開 |
 | Parallel 下 trace 段的父子、段在別的執行緒結束（RC-T1） | trace 批合併前核准頁 | Kernel 解除 LIM-2 時重看 |
 | `bs-` 開頭的突變搬到 Base 的清單 | 突變清點卡（#247） | 下一次動 Base 的批 |
@@ -101,7 +101,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
-| 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認。2026-11-22 交換點卡的靜態掃描：所有清單裡 find 指向 gyo2 已刪檔案的共 103 條（master 時代舊計畫的清單） | #269、#270 | 小批清理 |
+| 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認。2026-11-22 交換點卡的靜態掃描：所有清單裡 find 指向 gyo2 已刪檔案的共 103 條（master 時代舊計畫的清單） | #269、#270 | **已完成**（`v8-arch-gyo2-mech-cleanup`）：engine_format 整份刪除（68 退役）、time-threads-trace 的 `tt2-*` 6 退役（`TraceSink` 不在 gyo2；傳輸決定搬到 logging LG-6，逐條比對後 `tt2-flush-no-wait` 改寫成 logging 清單的 `lg-file-flush-no-wait`，另 2 條列下一列）；audio 已被 audio 重審、#288 跟上；authority_scan 的 `file` 以清單所在目錄為基準，18/18 killed。掃描後全部清單的 `find` 都恰好命中一次 |
+| logging LG-6 的兩個決定沒有突變守：「推進空佇列才喚醒寫者」（`JsonLinesFileSink.cpp` 的 `if (wake) writer->Notify();`；現有案例都 Hold 住 output，突變只會 timeout）、「Close 寫完停止後取到的那一批、再寫結尾行」（沒有決定性的案例）。都要先動測試再加突變 | 機械清理卡（`v8-arch-gyo2-mech-cleanup`）退役 `tt2-no-wake`、`tt2-final-batch-unwritten` 時的比對 | 下一次動 logging 的批 |
 | 實樹陽性對照重疊：`wt-guard-real` 與 `nm-real-acronym` | #269 | 下一次碰 naming 的批 |
 | 作者寫 `WorldGeneration` 就能結束或重新進入生成，`Product::Regenerate` 不必做 | 生成世界 PR #272 的設計審查 | 有產品需要重新生成時再看 |
 | 預設都帶 `entity_ids` 與回滾時，配發器沒有登記成可回滾 | 同上 | 回滾與 entity_ids 一起動的批 |
@@ -112,7 +113,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 入口寫 **Component** 的決策輸入時沒有輸入歷史，預測的 World 重跑時讀到最新值；61d6f72c 只替 Resource 解掉（代為登記 `rollback.Input<T>()`），Component 那邊還在。機制層問題（`v8-arch-gyo2-component-input-history-gap`） | au-z6 卡（PR #273）| 已含在網路宣告第 3 步（已核准），網路卡做 |
 | N13 條文補兩條判斷、兩個例外：2026-11-22 使用者「照建議補」，PR #274 已合併（8e894776，`v8-arch-gyo2-n13-rule-text`）。剩 tests/、examples/ 的 493 處全名（89 檔）與 `GYO::Test` 裡的寫法；過時註解 `BufferedStream.cpp:10`、`MountPoint.hpp:7` | N13 短名卡（#271） | 493 處：下一次碰測試命名的批 |
 | 生成世界的文件遺留：dev_log 開頭改已合併（PR #272，879350d4）、CI 補 run 45019227814；核准頁第 5 節補 16a3b0d9 的 L1；README 索引兩行改已合併；宣告「三家讀檔都重新配號」改正（flecs 是混合型，`deserialize.c:129-168`；讀檔卡 2026-11-22 指出） | 生成世界卡（#272 合併後） | 下一批一起改（第 1 批先例） |
-| 已合併批次的 dev_log 開頭補「已合併」：threads／io（PR #277，0f3be2cc）、狀態機（PR #281，1df88fe7；L1 run 45042604998） | threads／io 卡、狀態機卡 | 下一批一起改 |
+| 已合併批次的 dev_log 開頭補「已合併」：threads／io（PR #277，0f3be2cc）、狀態機（PR #281，1df88fe7；L1 run 45042604998） | threads／io 卡、狀態機卡 | **已完成**（`v8-arch-gyo2-mech-cleanup`） |
 | loader 失敗訊息裡的 id 由每個 loader 各拼一次、store 又加一次（設計審查 S-2） | audio 小批 #288 | owner asset；第三個 loader 出現前定 |
 | `Mixer.cpp` 裡兩份手寫的 SPSC 環（設計審查 S-3） | audio 小批 #288 | SDL 後端接上 `Render` 之前整理 |
 | 突變 `au-ctl-stress-reassign-every-block` 在 gyo2 上兩次存活（時序偶發，未改的程式上也存活） | audio 重審、audio 小批 | 下一次動 audio 時重看這條突變 |
@@ -130,7 +131,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | io 裡還有沒人用、但不在重審宣告清單裡的介面：`IOFwd.hpp`、`IFileSystem::Name()`、`FileInfo` 的 ctime／atime／permissions、`NormalizeOptions` 的旗標；`OS::Files::DefaultCaseSensitivePaths` 留不留未定（threads／io dev_log「後續」） | threads／io 卡（#277） | 下一次動 io 的批照同一判準（該不該存在）處理 |
 | `gyo_os_tests`／`os.wake_fallback` 在本機負載下偶爾逾時：**原因已切分**（os 逾時卡 PR #289，`v8-arch-gyo2-os-test-timeout-cause`）——屬「測試」：`WakeSignalTests.cpp`「loses no signal」的 signaller 自旋 4096 次後 yield，負載下每次讓出 CPU 最多約 10 ms，案例時間≈進 Block 的回合數×反應延遲（16363×1.695 ms≈27.7 s，實測 27.9 s）；觸發條件屬「環境」（機器的 CPU 負載）；「實作」沒有證據（WakeSignal 喚醒延遲負載下約 10 µs）。60 秒本身沒重現；負載下這個案例的檢出力變弱（進 Block 的回合 2.5～19% → 26～88%）。**範圍の限界**：網路卡那一次 `os.wake_fallback` 失敗的輸出沒存到，分不出失敗或逾時 | os 逾時卡 | #289 只加觀測（使用者選 (d)），2026-11-23 已合併（3dd3c272；使用者「你把需要合併的，按順序合併掉。」）；改退避的 (e) 另開卡（`local_3ef794a9`，量測中） |
 | `target/v2/README.md` 的 dev_log 清單：每合一個 PR，其他開著的 PR 就在這裡撞一次 | 2026-11-23 合併順序 | 待使用者決定要不要改寫法 |
-| `orchestration_mutations.json` 約第 3521～3532 行留著 `or-exch-round-after-failed-in` 的舊副本（find 是 C19 之前的寫法，少了收尾 `},` 而和 `wg-held-not-cleared` 黏成一個物件，鍵重複被後面那組蓋掉）。同 id 的現行版（find 對 `RunRound`）在後面另一個物件，已執行並 killed（`build/evidence/gyo2-exchange/c19-mutants.log`）。刪掉舊副本後解析結果完全相同（282 條、無重複鍵、find 各命中一次），不必重跑。threads／io 卡發現（它判成「從沒執行過」，實際只是殘留文字） | 7b4cf2e9（交換點補回突變時）；threads／io 卡 2026-11-22 | 下一個改這份清單的批順手刪（第 1 批先例，不單開 PR） |
+| `orchestration_mutations.json` 約第 3521～3532 行留著 `or-exch-round-after-failed-in` 的舊副本（find 是 C19 之前的寫法，少了收尾 `},` 而和 `wg-held-not-cleared` 黏成一個物件，鍵重複被後面那組蓋掉）。同 id 的現行版（find 對 `RunRound`）在後面另一個物件，已執行並 killed（`build/evidence/gyo2-exchange/c19-mutants.log`）。刪掉舊副本後解析結果完全相同（282 條、無重複鍵、find 各命中一次），不必重跑。threads／io 卡發現（它判成「從沒執行過」，實際只是殘留文字） | 7b4cf2e9（交換點補回突變時）；threads／io 卡 2026-11-22 | **已完成**：讀檔實作 d7c0dd74 時已正規化（`2026_11_22_gyo2_restore_impl` dev_log）；機械清理卡確認 288 條、無重複鍵與 id |
 | 游標宣告第 3.2 節引的 lightyear 行號漂移（現在 `receive.rs:54、:105-110、:153-160、:447-456`） | 狀態機卡交叉比對 | 圖書管理員 |
 | 「送進 World 外服務的時刻都是時間基準」要不要成跨 Component 規則（對照 `docs/cross-component-rules.md`） | audio 重審宣告 DI 3 | 圖書管理員 |
 | asset 宣告第 140、994 行仍寫 SDL adapter／ufbx「未定」，已由 `v8-arch-gyo2-sdl-q1-b-prime`、`-sdl-q2-ufbx-stb-module` 定 | SDL 宣告卡 | 圖書管理員 |
