@@ -90,7 +90,11 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | entity_store、trace、logging 三個 include 守衛的 `..` 路徑：照 O4 先例補 | #265 設計審查 | 2026-11-22 開卡（`v8-arch-gyo2-stale-cleanup-start`） |
 | kernel_guard K6 的標頭分支（守的是寫法）值不值得留 | #265 設計審查 | 下一次設計審查一起看 |
 | world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試；**同時把 O-3 與 O-12 對診斷紀錄的例子改成一致**（Design Invariant 條文，改前給使用者看） | 交換點實作 PR #270 的設計審查；2026-11-23 代碼審計後使用者選 (a) 留交換函式、接上（`v8-arch-gyo2-forwarding-audit-exchange-keep`） | **要開卡**（使用者已定方向） |
-| `LogWorldLabel<D>`：System 拿不到 World 名，每個描述器各抄一份 Resource（`LogWorldLabel.hpp:10-21`、`Forward.hpp:147-155`）；Bevy 的 `WorldId` 是 SystemParam（`bevy_ecs/src/world/identifier.rs:65`）。只有 Kernel 能補 | 2026-11-23 代碼審計（Fable 檢查 N2） | 下一次動 Kernel 的批（KR）一起看 |
+| `LogWorldLabel<D>`：System 拿不到 World 名，每個描述器各抄一份 Resource（`LogWorldLabel.hpp:10-21`、`Forward.hpp:147-155`）；Bevy 的 `WorldId` 是 SystemParam（`bevy_ecs/src/world/identifier.rs:65`）。只有 Kernel 能補 | 2026-11-23 代碼審計（Fable 檢查 N2） | 另開小批，不併進 KR（KR 卡建議、主會話判，2026-11-23） |
+| 「原始碼在哪些頂層目錄」手寫在 6 處（`GyoBuild.cmake` 的 `add_subdirectory`、`GyoCodePage.cmake:27`、`os_boundary_guard.py:31-32`、`tests/common/os/CMakeLists.txt:158`、`naming_guard.py:63`、`test_workflow_gates.py:1162`），AGENTS §9「同一事實一處」；收成一處時要保留「各守衛把清單釘死」 | apps→games 宣告 §6 第 1 項 | apps→games 合併後另開一批 |
+| `plugins/` 不在 code page 的根（`GyoCodePage.cmake:27`），也不在 os 守衛的根 | apps→games 宣告 §6 第 2 項 | 已轉 SDL 宣告卡：第一個 Plugin 進來前補 |
+| `examples/` 有執行檔，卻不在 DI 11（`ProcessCodePageCheck`）的 manifest 根裡（現存缺口） | apps→games 宣告修訂 1 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
+| asset 在建置側的鏡像（`content_contract.py`）和 C++ 契約不一致（例：`shader_bundles` 一邊必填、一邊可省） | apps→games 宣告修訂 1 | owner asset；搬產品、打包回來前對齊 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
