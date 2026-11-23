@@ -83,8 +83,8 @@ class GuardTree(unittest.TestCase):
         self.assertEqual(guard.camel_case("entity_store", guard.ACRONYMS), "EntityStore")
         self.assertEqual(guard.camel_case("base", guard.ACRONYMS), "Base")
 
-    def test_acronyms_are_io_and_os(self):
-        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "sdl": "SDL"})
+    def test_acronym_table(self):
+        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC"})
         self.assertEqual(guard.camel_case("io", guard.ACRONYMS), "IO")
         self.assertEqual(guard.camel_case("sdl_audio", guard.ACRONYMS), "SDLAudio")
         self.assertEqual(guard.camel_case("os", guard.ACRONYMS), "OS")

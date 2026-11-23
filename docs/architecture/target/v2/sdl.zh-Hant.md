@@ -35,6 +35,7 @@ plugins/<名>/
 
 - adapter 給 System 用的介面標頭放在 `src/adapters/sdl/` 外（例：`plugins/sdl_gpu/src/GpuDevice.hpp`），由 adapter 的 `.cpp` 實作（SDL-1）。
 - **名字**（命名規範 N17 的「`GYO::Plugins::<plugin>` 由第一個 plugin 批定」，A 定）：SDL 是縮寫，照縮寫表寫 `SDL`（一大一小不准；`Json` 是唯一的例外）。目錄 `plugins/<名>` ↔ namespace `GYO::Plugins::<從目錄名推>`（同 Engine 的單位：以 `_` 分段、首字母大寫、縮寫段照表）↔ target `gyo_<名>`／`GYO::<推出的名>`：`sdl_audio` ↔ `GYO::Plugins::SDLAudio` ↔ `GYO::SDLAudio`；單位型別 `<推出的名>Plugin`（N20）；含入路徑 `plugins/<名>/…`。Plugin 的測試也在它的 namespace 裡（測試在 Plugin 的目錄，守衛照目錄判）。守衛：`naming.guard` 把 `plugins/` 底下每個目錄當一個單位查（`ACRONYMS` 加 `sdl`）。
+- **SDL 的全域狀態**（`sdl*` 共用；A 定，設計審查 S6）：SDL 是行程全域的。(1) 每個 `sdl*` 只用 `SDL_InitSubSystem`／`SDL_QuitSubSystem` 管自己用的子系統（參照計數），**不呼叫 `SDL_Quit`**：`SDL_Quit` 會把所有子系統一起收掉（例：音訊的 `SDL_QuitAudio` 會 `SDL_DestroyAudioStream` 所有裝置 stream，`SDL_audio.c:1110-1116`），之後 `sdl_audio` 停裝置時就是對已釋放的 stream 操作。(2) 第一次 `SDL_InitSubSystem` 的執行緒被 SDL 記成主執行緒（`SDL.c:289-290`；AUDIO 隱含 EVENTS）：`Configure` 在呼叫 `Product::Build` 的執行緒上跑，所以那條執行緒就是 SDL 的主執行緒，有視窗的 runner 要在同一條執行緒（SDL-4）。(3) hint 是行程全域的：設了要在用完時還原，環境變數優先於程式設的值。
 - Plugin 的測試放在自己的目錄、跟著列走；名字以 Plugin 名開頭（例：`sdl.build`）。`plugins/` 是執行時的程式：os 守衛的 R1～R4 都管它，它的測試也受 R4（os.md DI 1、2；`tests/` 底下的豁免不延伸到 `plugins/<名>/tests/`）；Windows 上它的執行檔套 UTF-8 的 code page（os.md DI 11）。
 
 ## 3. 選擇：只建被選的 Plugin
@@ -118,12 +119,15 @@ plugins/<名>/
 - 只有預設的播放裝置；選裝置、裝置清單、錄音不做（沒有點名的 Feature）。預設裝置被拔掉時，SDL 的 stream 自己跟到新的預設裝置；跟不上時（沒有裝置了）不出聲，`AudioOutput` 不改狀態（不輪詢）。
 - `AudioOutput` 不隨裝置中途的狀況改變；`Stats()` 只供顯示與量測。
 - 回呼統計是 relaxed 原子、一個一個讀，期間的快照不一致；不拿來相減。
+- `sound`／`wav` 由 `sdl_audio` 登記 `WavLoader`，在產品的 `configure` 之前；asset 對同一組（型別、格式）拒絕第二個 loader（`FormatTaken`），所以帶 `sdl_audio` 的產品不能換成自己的 `wav` loader（Bevy 允許重複登記、只警告，`bevy_asset/src/server/loaders.rs:65-67`）。沒有點名的 Feature 要換；要換時在 `AudioOutputOptions` 加一個不登記的選項。
+- `OnDestroy` 停裝置和共用處的反序解構今天給出同一個先後（`AudioOutput` 在 `Mixer` 之後 Create、先解構），測試分不出拿掉 `OnDestroy` 的差別，沒有守衛；留著是因為停的先後不該依賴 Create 的順序（總宣告第 7 節、audio 頁第 4 節）。
+- `scheduleDelay` 的 Windows、Linux 量測未做；合併前要不要先量，由使用者定。
 
 ## Design Invariants
 
 - **SDL-1 SDL 只在 `plugins/sdl*` 的 adapter 目錄**：`SDL3/` 的標頭只被 `plugins/sdl*` 的 `src/adapters/sdl/` 與 `tests/adapters/sdl/` 底下的檔案 include（adapter 目錄裡可以有私有標頭，給 adapter 的幾個 `.cpp` 共用 SDL 的型別）；adapter 目錄外的檔案不 include adapter 目錄裡的任何檔案——adapter 給 System 用的介面標頭（我們的詞，不含 SDL）放在 adapter 目錄外，由 adapter 的 `.cpp` 實作；所以 SDL 不會經遞移的 include 漏到 System。System、runner、單位的 `Configure`／`Build`／`Check` 的程式裡沒有 SDL（建視窗、開裝置、claim 視窗也呼叫 adapter）；`engine/` 底下沒有 SDL。Plugin 之間的交接（視窗登錄表）用不透明的把手，型別定在 `sdl` 函式庫、不露 SDL 的型別（收窄使用者 11-13 的 (iii)，總宣告第 14 節核准清單第 6 件）。SDL3 對 `sdl*` 的 target 都是 PRIVATE 連結；`GYO::SDL` 本身不帶 SDL。守衛：原始碼掃描在子批 K 的 scenario 通過後立（總宣告第 9.1 節）；在那之前、以及 adapter 目錄外前置宣告 SDL 型別這種掃描判不了的，由每批的設計審查看。
 - **SDL-2 沒有 SDL 也成立**：拿掉 `sdl*` 的 Plugin 與登記檔的列（與帶它們的產品），Engine、所有 Module、headless 的測試仍 configure、build、通過，SDL 不被下載、不被建。沒有產品選 `sdl*`、`GYO_PLUGINS` 也沒點名時，同樣不下載、不建。守衛：CI 的 core 步驟（L1 的 Linux 列、打包工作流程的 toolchain 列）——checkout 自己的建置與測試跑完之後，`build/ci/common/plugin_removal.py remove` 在 checkout 裡拿掉 `sdl*` 的列與目錄與帶它們的產品（暫存區刪除，經 git 列檔的測試照樣能跑），以 `core` preset、`GYO_PLUGINS=ALL` configure、build、ctest，`plugin_removal.py check` 確認 `gyo-build.json` 的 `plugins` 沒有 `sdl*`、`_deps` 沒有抓 SDL、CMakeCache 沒有 SDL 自己的選項（`SDL_*`，抓 vendored 或 ExternalProject 加進來的 SDL），最後 `restore` 把 checkout 還原成 HEAD。在 checkout 本身做、不在副本做：編譯快取的命中若跨兩棵原始碼樹，object 裡的 `std::source_location` 會是另一棵樹的路徑（L1 第二輪在 Windows 的 sccache＋MSVC 上碰到，`authority.authority_sources` 失敗）；同一個路徑編譯，快取的 key 也和以前一樣。本機要不動自己的樹時用 `copy`（HEAD 的 git 工作樹）；`cmake.PluginSelection`（整個 repo 什麼都沒選時不加任何 Plugin 目錄；configure 而已，沿用父建置抓好的來源、不連網）；`cmake.UnitRegistry`（選擇：依賴補齊、`ALL`、拒絕非 Plugin 的名字、產品登記）；`build.ci` 的 `test_plugin_removal.py`。突變：`docs/architecture/target/v2/scripts/sdl_mutations.json`。
-- **SDL-3 一條時間線**（A 寫音訊這一半；輸入事件的時刻、runner 的取樣由 W 補）：送進混音器的時刻是 `Time::TimePoint`（audio DI 3）；`sdl_audio` 的回呼在每個裝置 block 開頭讀一次 `Time::Now()` 當 anchor，一個 block 分幾次算時，後一次的 anchor 是前一次的 anchor 加上已算的 frame 數換成的時間；SDL 的時刻（`SDL_GetTicksNS` 等）不出 adapter、不進混音器。守衛：`sdl_audio.dummy` 的「maps a play from the anchor of the block that takes it」（只在開裝置時讀一次 anchor 的寫法，起播會晚上一秒）；審查。
+- **SDL-3 一條時間線**（A 寫音訊這一半；輸入事件的時刻、runner 的取樣由 W 補）：送進混音器的時刻是 `Time::TimePoint`（audio DI 3）；`sdl_audio` 的回呼在每個裝置 block 開頭讀一次 `Time::Now()` 當 anchor，一個 block 分幾次算時，後一次的 anchor 是前一次的 anchor 加上已算的 frame 數換成的時間；SDL 的時刻（`SDL_GetTicksNS` 等）不出 adapter、不進混音器。守衛：`sdl_audio.dummy` 的「maps a play from the anchor of the block that takes it」（只在開裝置時讀一次 anchor 的寫法，起播會晚上一秒）；「分幾次算時後一次的 anchor」由審查守（dummy、disk 的 block 都小於一次的 4096 frame，測試走不到；命令在第一次 `Render` 就取完，後幾次的 anchor 幾乎不影響結果）。
 - SDL-4、SDL-5、SDL-7 的草案在總宣告第 12 節，由 W、R2a 寫進本頁。SDL-6 已撤，號碼不重用。
 
 ## Replacement Criteria

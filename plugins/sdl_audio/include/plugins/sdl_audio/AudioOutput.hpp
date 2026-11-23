@@ -22,6 +22,8 @@ struct AudioOutputOptions final {
     Engine::Audio::MixerConfig mixer{};
     // Frames per device block asked of the device; 0 keeps the platform's choice.
     // A hint: the device may choose another size (AudioOutput::DeviceSampleFrames).
+    // Set process-wide while the device opens, and reset after; the environment
+    // variable SDL_AUDIO_DEVICE_SAMPLE_FRAMES, when set, wins over it.
     std::uint32_t deviceSampleFrames = 0;
 };
 
@@ -70,11 +72,13 @@ struct AudioOutputStats final {
 };
 
 class AudioDevice;
+class SDLAudioPlugin;
 
 // What sdl_audio puts in the Product's buffer: whether the device plays, read by
 // the author, who decides what follows (a silent game is still a game). Created
 // in the Plugin's Configure; the device stops in its OnDestroy, before the
-// Product's buffer, so the mixer outlives every callback (audio DI 7).
+// Product's buffer, so the mixer outlives every callback (audio DI 7). Being
+// destroyed stops it too.
 class AudioOutput final {
 public:
     // Made by the Plugin only (AudioDevice is the Plugin's own type).
@@ -83,9 +87,9 @@ public:
     AudioOutput& operator=(const AudioOutput&) = delete;
     ~AudioOutput();
 
-    // Null while the device plays or after it stopped; why it never played otherwise.
+    // Null while the device plays and after it stopped; why it never played otherwise.
     [[nodiscard]] const AudioOutputFailure* Failure() const noexcept { return failure_ ? &*failure_ : nullptr; }
-    // Whether the device plays now: false when it failed and after Stop.
+    // Whether the device plays now: false when it failed and once the Product's OnDestroy ran.
     [[nodiscard]] bool Playing() const noexcept { return device_ != nullptr; }
     // The platform's audio driver name, for diagnostics only, never for branching;
     // empty when the device does not play.
@@ -94,11 +98,12 @@ public:
     [[nodiscard]] std::uint32_t DeviceSampleFrames() const noexcept;
     // Zeros when the device does not play.
     [[nodiscard]] AudioOutputStats Stats() const noexcept;
-    // Stops the device: no callback runs once it returns. The Plugin calls it in
-    // its OnDestroy; calling it again does nothing.
-    void Stop() noexcept;
 
 private:
+    friend class SDLAudioPlugin;
+    // Stops the device: no callback runs once it returns. The Plugin's OnDestroy.
+    void Stop() noexcept;
+
     std::unique_ptr<AudioDevice> device_;
     std::optional<AudioOutputFailure> failure_;
 };

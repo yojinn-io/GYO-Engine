@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "PlayheadBoard.hpp"
-#include "SpscRing.hpp"
+#include "SPSCRing.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
@@ -36,14 +36,14 @@ struct Command final {
 };
 static_assert(std::is_trivially_copyable_v<Command>);
 
-// One submitter's state: its command ring (SpscRing: the producer is whoever
+// One submitter's state: its command ring (SPSCRing: the producer is whoever
 // uses the submitter, the consumer the audio thread) and its table.
 //
 // The table holds a reference to the clip of every play queued or sounding
 // (Design Invariant 7): only the producer (whoever uses the submitter, one at a
 // time) touches it and the stack of free entries. The audio thread holds views
 // and entry numbers, never a reference; it hands an entry back through the
-// returned ring (an SpscRing the other way: the audio thread produces, the
+// returned ring (an SPSCRing the other way: the audio thread produces, the
 // submitter's user consumes). An entry is in exactly one place at a time (free, in the ring,
 // in a voice or its ended list, in the returned ring, or in the producer's hands
 // while it lets go of it), and the returned ring has one slot per entry, so it
@@ -58,7 +58,7 @@ struct SubmitterSlot final {
         for (std::uint32_t i = entries; i > 0; --i) freeEntries.push_back(i - 1);
     }
 
-    SpscRing<Command> ring;
+    SPSCRing<Command> ring;
     const std::uint64_t handlePrefix; // (index + 1) << kSequenceBits
     // The producer's own: the last handle sequence issued. 2^57 plays
     // would overflow it, which no mixer reaches.
@@ -71,7 +71,7 @@ struct SubmitterSlot final {
     std::vector<Clip> held;
     std::vector<std::uint32_t> freeEntries;
     // Entries handed back by the audio thread.
-    SpscRing<std::uint32_t> returned;
+    SPSCRing<std::uint32_t> returned;
 };
 
 // Handles: the submitter's index plus one in the top 7 bits (1 to 64), a

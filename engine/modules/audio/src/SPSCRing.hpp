@@ -14,11 +14,11 @@ namespace GYO::Engine::Audio::Detail {
 // reuses it. Indices only grow; the slot is the index modulo the capacity.
 // Neither side allocates, locks or waits.
 template <class T>
-class SpscRing final {
+class SPSCRing final {
     static_assert(std::is_trivially_copyable_v<T>);
 
 public:
-    explicit SpscRing(const std::uint32_t capacity) : slots_(capacity) {}
+    explicit SPSCRing(const std::uint32_t capacity) : slots_(capacity) {}
 
     // The producer. False, with nothing written, when the ring is full.
     bool TryPush(const T& value) noexcept {

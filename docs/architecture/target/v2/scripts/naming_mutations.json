@@ -4,13 +4,13 @@
  "mutants": [
   {
    "id": "nm-acronyms-off",
-   "what": "the acronym table is empty, so io and os are expected as Io and Os. Only it catches the acronym list (each item is pinned by test_acronyms_are_io_and_os)",
+   "what": "the acronym table is empty, so io and os are expected as Io and Os. Only it catches the acronym list (each item is pinned by test_acronym_table)",
    "guards": [
     "rebuild-naming N17",
     "naming DI 1"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\"}",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\"}",
    "replace": "ACRONYMS = {}",
    "expect": "FAIL: test_n1_acronym_unit_spelled_otherwise_is_reported",
    "command": [
@@ -671,8 +671,8 @@
     "rebuild-naming N17 縮寫表"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\"}",
-   "replace": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\"}",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\"}",
+   "replace": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"spsc\": \"SPSC\"}",
    "expect": "FAIL: test_n1_plugin_unit_namespace_is_derived_from_its_directory",
    "command": [
     "{python}",

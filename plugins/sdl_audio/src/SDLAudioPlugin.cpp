@@ -55,7 +55,9 @@ void SDLAudioPlugin::Configure(Engine::Orchestration::ProductSetup& setup) {
     AudioOutput& output = setup.Buffer().Create<AudioOutput>(std::move(playing), std::move(failure));
 
     // 4. The device stops before the Product's buffer (the mixer this unit created) and the options (the
-    //    product's mixer) go: OnDestroy runs after every World and before the buffer (O-15).
+    //    product's mixer) go: OnDestroy runs after every World and before the buffer (O-15). The buffer's
+    //    reverse order would stop it first today as well; stopping here does not rest on the order of the
+    //    Creates above (SDL declaration section 7, audio page section 4).
     setup.OnDestroy([&output] { output.Stop(); });
 }
 

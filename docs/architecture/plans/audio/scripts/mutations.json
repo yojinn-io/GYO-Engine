@@ -161,7 +161,7 @@
     {
       "id": "au-sched-full-off-by-one",
       "what": "A full ring accepts one more request, overwriting the oldest",
-      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "file": "engine/modules/audio/src/SPSCRing.hpp",
       "find": "        if (tail - head >= capacity) return false;",
       "replace": "        if (tail - head > capacity) return false;",
       "target": "gyo_audio_tests",
@@ -181,7 +181,7 @@
     {
       "id": "au-sched-head-not-published",
       "what": "The audio thread never frees the ring",
-      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "file": "engine/modules/audio/src/SPSCRing.hpp",
       "find": "        head_.store(head, std::memory_order_release);\n",
       "replace": "",
       "target": "gyo_audio_tests",

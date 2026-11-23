@@ -104,11 +104,13 @@ TEST_CASE("dummy: creates the mixer, registers the sound loader and plays the mi
     CHECK(output->DriverName() == "dummy");
     CHECK(output->DeviceSampleFrames() > 0);
     CHECK(Advances(*mixer));
+    // The callback renders, then counts its frames: read the mixer first.
+    const std::uint64_t rendered = mixer->Stats().renderedFrames;
     const auto stats = output->Stats();
     CHECK(stats.callbacks > 0);
     CHECK(stats.minCallbackFrames > 0);
     CHECK(stats.maxCallbackFrames >= stats.minCallbackFrames);
-    CHECK(stats.frames + stats.maxCallbackFrames >= mixer->Stats().renderedFrames);
+    CHECK(stats.frames + stats.maxCallbackFrames >= rendered);
 
     const auto* registry = std::as_const(product->Buffer()).Find<Engine::Asset::AssetLoaderRegistry>();
     REQUIRE(registry != nullptr);

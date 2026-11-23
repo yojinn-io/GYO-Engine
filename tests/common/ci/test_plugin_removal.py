@@ -40,8 +40,8 @@ class PluginRemovalTests(unittest.TestCase):
         self.files = {
             "config/plugins.csv": HEADER
             + "sdl,sdl,GYO::SDL,SDL3,yes,no,,,,\n"
-            + "sdl_window,sdl_window,GYO::SdlWindow,The window,no,no,sdl,,A::W,a/W.hpp\n"
-            + "imgui,imgui,GYO::Imgui,Not of the family; sdl in prose is not a name,yes,no,,,,\n",
+            + "sdl_window,sdl_window,GYO::SDLWindow,The window,no,no,sdl,,A::W,a/W.hpp\n"
+            + "imgui,imgui,GYO::ImGui,Not of the family; sdl in prose is not a name,yes,no,,,,\n",
             "config/games.csv": PRODUCTS + "keep,Uses SDL,,1,1,1,1\nmatch,Headless,,1,1,1,1\n",
             "plugins/sdl/CMakeLists.txt": "add_library(gyo_sdl INTERFACE)\n",
             "plugins/sdl_window/CMakeLists.txt": "add_library(gyo_sdl_window STATIC)\n",
@@ -74,7 +74,7 @@ class PluginRemovalTests(unittest.TestCase):
         self.assertEqual(removed, ["sdl", "sdl_window"])
         self.assertEqual(products, ["games/keep"])
         self.assertEqual((self.copy / "config/plugins.csv").read_text(encoding="utf-8"),
-                         HEADER + "imgui,imgui,GYO::Imgui,Not of the family; sdl in prose is not a name,yes,no,,,,\n")
+                         HEADER + "imgui,imgui,GYO::ImGui,Not of the family; sdl in prose is not a name,yes,no,,,,\n")
         self.assertEqual((self.copy / "config/games.csv").read_text(encoding="utf-8"),
                          PRODUCTS + "match,Headless,,1,1,1,1\n")
         listed = self.listed(self.copy)

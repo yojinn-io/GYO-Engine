@@ -537,7 +537,8 @@ TEST_CASE("Audio Mixer playheads stay consistent under a polling thread (ThreadS
 TEST_CASE("Audio Mixer never reports a sounding sound as not playing under a polling thread (long sounds)") {
     // Runs with the stress case above (its CTest, gyo_audio_playhead_stress).
     // Every voice plays one long sound for the whole run; the renderer renders
-    // 16-frame blocks as fast as it can, short of the clips' end, while the
+    // 16-frame blocks as fast as it can, short of the clips' end (it keeps
+    // going until the reader has kMinReads, within the bound), while the
     // reader polls those sounds in a tight loop. Every sound is read Playing
     // before the reader starts, so every read must be Playing. A board slot
     // assigned anew while its sound keeps playing (the tag cleared, the state
@@ -573,20 +574,26 @@ TEST_CASE("Audio Mixer never reports a sounding sound as not playing under a pol
     for (const SoundHandle sound : sounds) REQUIRE(mixer.PlayheadOf(sound).status == Playhead::Status::Playing);
 
     std::atomic<bool> done{false};
-    std::uint64_t reads = 0;
+    std::atomic<std::uint64_t> reads{0}; // read by the renderer, which waits for kMinReads
     std::uint64_t gaps = 0;
     std::thread reader([&] {
         while (!done.load(std::memory_order_acquire)) {
             for (const SoundHandle sound : sounds) {
                 if (mixer.PlayheadOf(sound).status != Playhead::Status::Playing) ++gaps;
-                ++reads;
+                reads.fetch_add(1, std::memory_order_relaxed);
             }
         }
     });
     const auto started = std::chrono::steady_clock::now();
     const auto deadline = started + kStressRunBound;
+    // While it waits for the reader, the renderer still stops short of the clips' end.
+    constexpr std::uint64_t kMostBlocks = kClipFrames / kBlockFrames - 1;
+    static_assert(kBlocks < kMostBlocks);
     std::uint64_t block = 1;
-    for (; block < kBlocks && (block % 256 != 0 || std::chrono::steady_clock::now() < deadline); ++block) {
+    for (; block < kMostBlocks &&
+           (block < kBlocks || reads.load(std::memory_order_relaxed) < kMinReads) &&
+           (block % 256 != 0 || std::chrono::steady_clock::now() < deadline);
+         ++block) {
         anchor += Ns(333'333);
         mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     }
@@ -595,8 +602,8 @@ TEST_CASE("Audio Mixer never reports a sounding sound as not playing under a pol
     std::printf("playhead long sounds: %llu blocks in %.1f ms (bound %lld s), reads %llu, not playing %llu\n",
                 static_cast<unsigned long long>(block),
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(),
-                static_cast<long long>(kStressRunBound.count()), static_cast<unsigned long long>(reads),
+                static_cast<long long>(kStressRunBound.count()), static_cast<unsigned long long>(reads.load()),
                 static_cast<unsigned long long>(gaps));
-    CHECK(reads >= kMinReads);
+    CHECK(reads.load() >= kMinReads);
     CHECK(gaps == 0);
 }

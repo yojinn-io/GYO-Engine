@@ -54,7 +54,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ──► GYO::Asset（loader
 ## 4. 後端要求的介面（`sdl_audio` 照這裡接）
 
 1. **給**：`Mixer::Render(Span<int16_t>, TimePoint anchor) noexcept`，在後端的音訊執行緒上、一次一個 block；格式常數（`AudioFormat.hpp`）；`Stats()`。
-2. **要求**：每個 block 用時間基準取一次 anchor（DI 3）；只有一條執行緒呼叫 `Render`；後端只持不擁有的參照（若它和別人共用所有權、而音訊執行緒的回呼握著最後一份，混音器的狀態會在音訊執行緒上解構，破 DI 7）；混音器放在 Product 的共用處，持有者在後端停之前不搬、不銷毀它；後端在自己登記的 `OnDestroy` 回呼裡停（編排層 O-15：回呼照登記的反序、在所有 World 之後、共用處之前），後端的登記排在建混音器的單位之後，它的 `OnDestroy` 才會先跑。
+2. **要求**：每個 block 用時間基準取一次 anchor（DI 3）；只有一條執行緒呼叫 `Render`；後端只持不擁有的參照（若它和別人共用所有權、而音訊執行緒的回呼握著最後一份，混音器的狀態會在音訊執行緒上解構，破 DI 7）；混音器的持有者在後端停之前不搬、不銷毀它；後端在自己登記的 `OnDestroy` 回呼裡停（編排層 O-15：回呼照登記的反序、在所有 World 之後、共用處之前）。`sdl_audio`〔`v8-arch-gyo2-sdl-a`〕：建混音器與開裝置是同一個單位，混音器放在 Product 的共用處；產品經選項給混音器（`AudioOutputMixer`）時，混音器在選項裡，選項比共用處活得久——兩種都在裝置停之後才銷毀。
 3. 後端的錯誤（例：裝置開不了）是後端自己的錯誤碼；`AudioErrorCode` 的 4（舊的 `DeviceUnavailable`）不再用、不重編。
 
 ## 5. 把 World 接到混音器：作者的寫法
