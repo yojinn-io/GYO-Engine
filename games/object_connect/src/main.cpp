@@ -28,6 +28,7 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -76,10 +77,12 @@ void HashValue(K::Hasher&, const Shown&) {}
 constexpr const char* kIconNames[] = {"Normal", "Interactive", "Holding"};
 
 K::SystemResult LogDecisions(K::Res<object_connect::world::ScreenState> screen,
+                             K::Res<object_connect::world::ScreenRequest> request,
                              K::Res<object_connect::runtime::CursorAppearance> cursor,
                              K::Res<object_connect::world::Session> session,
                              K::MessageReader<W::WarpCursor> warps, K::ResMut<Shown> shown) {
-    const std::optional<object_connect::GameScreen> current = screen->Current();
+    // The screen the frame ends on (a request made this frame is applied next frame).
+    const std::optional<object_connect::GameScreen> current = object_connect::world::EffectiveScreen(*screen, *request);
     if (current != shown.Read().screen && current) {
         LogInfo(std::string("screen ") +
                 std::string(GYO::Engine::StateMachine::StateMachineTraits<object_connect::GameScreen>::values
@@ -119,8 +122,7 @@ std::optional<std::string> ContentRoot() {
 }
 
 O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExecutor& executor,
-                               const std::int64_t frames, const bool verbose,
-                               std::shared_ptr<std::string> configureError) {
+                               const std::int64_t frames, const bool verbose) {
     O::WorldDescription world;
     world.name = "Main";
     world.build = [frames, verbose](O::WorldSetup& setup) {
@@ -158,14 +160,15 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     description.worlds.push_back(std::move(world));
-    description.configure = [configureError](O::ProductSetup& setup) {
+    // The game's loaders join the Product's store; a refusal stops the build before any World is made.
+    description.configure = [](O::ProductSetup& setup) {
         const auto* registry = setup.Buffer().Find<GYO::Engine::Asset::AssetLoaderRegistry>();
         if (registry == nullptr) {
-            *configureError = "the asset store is not there (world_asset is not carried)";
+            setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried)");
             return;
         }
         if (std::optional<std::string> refused = object_connect::runtime::RegisterLoaders(*registry)) {
-            *configureError = std::move(*refused);
+            setup.Report("LoaderRefused", std::move(*refused));
         }
     };
 
@@ -196,7 +199,12 @@ int main(int argc, char** argv) {
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--frames" && index + 1 < argc) {
-            frames = std::stoll(argv[++index]);
+            const std::string_view value(argv[++index]);
+            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), frames);
+            if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || frames <= 0) {
+                LogError("--frames takes a positive whole number, not '" + std::string(value) + "'");
+                return 2;
+            }
         } else if (argument == "--verbose") {
             verbose = true;
         } else {
@@ -217,21 +225,20 @@ int main(int argc, char** argv) {
     }
     WA::WorkerPoolExecutor executor(*pool);
 
-    auto configureError = std::make_shared<std::string>();
-    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose, configureError), O::MakeRegisteredUnits());
+    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose), O::MakeRegisteredUnits());
     if (!built) {
         const O::ProductStartupReport& report = built.error();
-        LogError("the game did not start: " + report.message + (report.detail.empty() ? "" : "\n" + report.detail));
+        std::string text = "the game did not start: " + report.message + (report.detail.empty() ? "" : "\n" + report.detail);
+        for (const O::UnitReportedError& unit : report.unitErrors) {
+            text += "\n" + unit.unit + ": " + unit.code + ": " + unit.message;
+        }
+        LogError(text);
         return 1;
     }
     O::RunnerExit exit;
     {
         // The Product and its Worlds go before the pool they submit jobs to.
         std::unique_ptr<O::Product> product = std::move(built).value();
-        if (!configureError->empty()) {
-            LogError("the game did not start: " + *configureError);
-            return 1;
-        }
         exit = product->Run();
     }
     if (exit.code == O::RunnerExitCode::Failure) {

@@ -65,12 +65,26 @@ void TestPushAgainstAStoppedEdge(TestContext& context) {
                    "the bottom edge wraps to the top");
 }
 
+void TestWarpNotApplied(TestContext& context) {
+    PointerWrap wrap;
+    static_cast<void>(At(wrap, {100.0f, 100.0f}));
+    const PointerWrapResult crossed = At(wrap, {0.0f, 100.0f});
+    context.Expect(crossed.warpTo.has_value(), "the crossing asks for a warp");
+    const PointerWrapResult ignored = At(wrap, {0.0f, 100.0f});
+    context.Expect(!ignored.warpTo && ignored.unwrappedPosition && NearlyEqual(ignored.unwrappedPosition->x, -1.0f),
+                   "a warp the window did not apply is neither movement nor a second crossing");
+    const PointerWrapResult moved = At(wrap, {0.0f, 110.0f});
+    context.Expect(!moved.warpTo && moved.unwrappedPosition && NearlyEqual(moved.unwrappedPosition->y, 110.0f),
+                   "after it, motion counts from where the cursor really is");
+}
+
 } // namespace
 
 void RunPointerWrapTests(TestContext& context) {
     TestMapping(context);
     TestCrossingAnEdge(context);
     TestPushAgainstAStoppedEdge(context);
+    TestWarpNotApplied(context);
 }
 
 } // namespace object_connect::tests

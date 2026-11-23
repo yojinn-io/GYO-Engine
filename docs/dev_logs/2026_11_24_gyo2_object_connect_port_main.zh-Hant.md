@@ -14,9 +14,21 @@ Owner：產品（Object_Connect）。GYO2 主會話開的任務卡（使用者�
 
 ## 驗證
 
-- 本機（Intel Mac）：`object_connect.*` 4/4 過；全量 `ctest -L cpu` 結果見 PR。
+- 本機（Intel Mac）：`object_connect.*` 4/4 過；全量 `ctest -L cpu` 220/220（審查前）。
 - 實機：真的 Cocoa 視窗 `--frames 180 --verbose` 開窗、取得焦點、載入、進主選單、自己關窗，結束碼 0。
 - **沒驗**：滑鼠與鍵盤的實際操作、穿邊、W 留給實機的三項（執行中改「能不能改大小」、`ResizeWindow`、游標）。這個會話沒有桌面操作的工具；遊戲本身也還沒用到後兩項。交使用者照 PR 的步驟跑。
+
+## 設計審查（Opus／high，作者同為 Opus；Fable 暫停）
+
+blocker 0、should 7、nit 7。處理：
+
+- should：warp 沒被套用時會每幀重複穿邊 → `PointerWrap` 在 warp 後把「超過半個視窗、往原處的跳動」當成沒套用（新測試 2 個）。
+- should：按住左鍵時「在視窗內」判錯 → 照原版 `PtInRect` 用範圍判斷。
+- should：游標離開視窗後選單仍被懸停拉住 → 不在視窗內時不做命中。
+- should：configure 的錯誤繞過 `ProductSetup::Report` → 改用 `Report`，Build 失敗時印出 unitErrors。
+- should：穿邊測試沒模擬後端、分頁沒被測、`Present` 拿掉也會過 → 測試補後端的 `CursorMoved`、箭頭、滾輪、游標外觀、Esc、離開視窗；手動突變 4 個（拿掉 `Present`、拿掉 warp 防護、`insideClient` 只看有無、離窗仍命中）全被抓到。
+- nit 處理：失焦那一幀照原版走 UI（清滾輪零頭）；`--frames` 不丟例外、拒收 0 與負數；等不到 loader 的內容直接失敗；`--verbose` 的畫面改用這一幀結束時的值。
+- nit 不處理：失焦期間沒收到放開時，回來的第一幀會變成按下（原版讀裝置狀態；SDL 實際是否會漏放開未確認，保留原版的「失焦清掉上一幀的按住」）；未列出的引用在訊息裡印的是換算後的路徑；讀檔失敗（表指到的檔壞掉）的測試只測到請求層的失敗。
 
 ## 已知限制
 

@@ -21,6 +21,7 @@
 #include "engine/world_asset/AssetView.hpp"
 
 #include <cmath>
+#include <limits>
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -78,6 +79,14 @@ K::SystemResult LoadGameData(K::Res<WA::AssetRequests> requests, K::Res<WA::Asse
         view->Ready({c.levels, c.nodes, c.uiFont, c.cursors[0], c.cursors[1], c.cursors[2]});
     if (!ready.failures.empty()) {
         return Failed("the game's content did not load: " + Describe(ready.failures));
+    }
+    // Every loader is registered in the product's configure, before any request: a wait for one never ends.
+    if (!ready.waitingForLoader.empty() || !ready.skipped.empty()) {
+        std::string ids;
+        for (const auto* list : {&ready.waitingForLoader, &ready.skipped}) {
+            for (const A::AssetId& id : *list) ids += (ids.empty() ? "" : ", ") + id.Text();
+        }
+        return Failed("the game's content has no loader for: " + ids);
     }
     if (!ready.complete) {
         generation->Hold();
@@ -148,40 +157,41 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     const bool wrapPointer = session->board && screenBeforeInput == GameScreen::Playing &&
                              session->board->GetDefinition().wrapEdges && session->board->IsDragging();
 
-    state.focused = window->focused;
-    state.insideClient = cursor->position.has_value();
-    const bool focusLost = state.previousFocused && !state.focused;
-    state.previousFocused = state.focused;
-    if (cursor->position) {
-        state.lastClient = {cursor->position->x, cursor->position->y};
-    }
-
-    world::FrameInput input;
-    if (!state.focused) {
-        // The original read nothing but the focus while unfocused.
-        state.previousLeftHeld = false;
-        state.wrap.Reset();
-        input.menu.focusLost = focusLost;
-        frame.Get() = input;
-        return {};
-    }
-
-    const Keys pressed = ReadKeys(*keys);
     const AxisAlignedBox& bounds = playfield->bounds;
     const Vec2 clientSize = window->known
                                 ? Vec2{window->LogicalSize().x, window->LogicalSize().y}
                                 : Vec2{bounds.maximum.x - bounds.minimum.x, bounds.maximum.y - bounds.minimum.y};
+    state.focused = window->focused;
+    if (cursor->position) {
+        state.lastClient = {cursor->position->x, cursor->position->y};
+    }
+    // Inside the client as the original's PtInRect: a held button keeps reporting places outside the window.
+    state.insideClient = cursor->position.has_value() && state.lastClient.x >= 0.0f &&
+                         state.lastClient.y >= 0.0f && state.lastClient.x < clientSize.x &&
+                         state.lastClient.y < clientSize.y;
+    const bool focusLost = state.previousFocused && !state.focused;
+    state.previousFocused = state.focused;
+
+    // Unfocused, the original read nothing but the focus (InputSystem::Sample),
+    // and the frame still went through the UI with that (Game::Impl::Update).
+    const Keys pressed = state.focused ? ReadKeys(*keys) : Keys{};
     const bool mapped = input::CanMapPointer(bounds, clientSize);
     Vec2 position = mapped ? input::ClientToPlayfield(state.lastClient, bounds, clientSize) : state.lastClient;
     std::optional<Vec2> unwrapped;
 
-    const bool leftHeld = mouse->Pressed(I::MouseButton::Left);
-    const bool leftPressed = mouse->JustPressed(I::MouseButton::Left) || (leftHeld && !state.previousLeftHeld);
-    const bool leftReleased = mouse->JustReleased(I::MouseButton::Left) || (!leftHeld && state.previousLeftHeld);
+    bool leftHeld = false;
+    bool leftPressed = false;
+    bool leftReleased = false;
+    int wheelDelta = 0;
+    if (state.focused) {
+        leftHeld = mouse->Pressed(I::MouseButton::Left);
+        leftPressed = mouse->JustPressed(I::MouseButton::Left) || (leftHeld && !state.previousLeftHeld);
+        leftReleased = mouse->JustReleased(I::MouseButton::Left) || (!leftHeld && state.previousLeftHeld);
+        wheelDelta = static_cast<int>(std::lround(scroll->delta.y * static_cast<float>(ui::kWheelDeltaPerPage)));
+    }
     state.previousLeftHeld = leftHeld;
-    const int wheelDelta = static_cast<int>(std::lround(scroll->delta.y * static_cast<float>(ui::kWheelDeltaPerPage)));
 
-    if (wrapPointer && mapped) {
+    if (state.focused && wrapPointer && mapped) {
         const input::PointerWrapResult wrapped = state.wrap.Sample(
             {state.lastClient, clientSize, Vec2{motion->delta.x, motion->delta.y}}, bounds);
         position = wrapped.position;
@@ -197,7 +207,11 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     const std::size_t puzzleCount = catalog->puzzles.GetPuzzles().size();
     const bool hasNext = world::HasNextPuzzle(*catalog, *session);
     const bool solvedMenuReady = session->solvedElapsedSeconds >= world::kSolvedMenuDelaySeconds;
-    const ui::UiPoint point{position.x, position.y};
+    // The menus see the cursor only over the window (the original's mouse place followed the cursor outside it).
+    const ui::UiPoint point = state.focused && state.insideClient
+                                  ? ui::UiPoint{position.x, position.y}
+                                  : ui::UiPoint{std::numeric_limits<float>::quiet_NaN(),
+                                                std::numeric_limits<float>::quiet_NaN()};
     ui::MenuPages& menuPages = pages->pages;
     const std::optional<std::size_t> hoveredItem =
         menuPages.HitTest(screenBeforeInput, point, puzzleCount, hasNext, solvedMenuReady);
@@ -210,6 +224,7 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
         point, leftPressed, wheelDelta, keyboardNavigated, activationRequested, screenBeforeInput);
     const bool pageNavigationHandled = pageSelection.has_value() || finalResultsPageChanged;
 
+    world::FrameInput input;
     input.menu.previousPressed = pressed.previous && !pageNavigationHandled;
     input.menu.nextPressed = pressed.next && !pageNavigationHandled;
     input.menu.confirmPressed = pressed.enter && !pageNavigationHandled;
@@ -246,7 +261,8 @@ K::SystemResult PresentMenus(K::Res<world::ScreenState> screen, K::Res<world::Sc
     }
 
     const ui::UiPoint point{frame->pointer.position.x, frame->pointer.position.y};
-    const bool overAction = pages.Read().pages.IsPointerOverAction(shown, point, puzzleCount, hasNext, solvedMenuReady);
+    const bool overAction = pointer.Read().insideClient &&
+                            pages.Read().pages.IsPointerOverAction(shown, point, puzzleCount, hasNext, solvedMenuReady);
     CursorAppearance next{ResolveMouseCursorIcon(shown, dragging, overAction),
                           ShouldUseCustomMouseCursor(pointer.Read().focused, pointer.Read().insideClient)};
     if (cursor.Read().icon != next.icon || cursor.Read().custom != next.custom) {

@@ -75,18 +75,6 @@ PointerWrapResult PointerWrap::Sample(const PointerWrapSample& sample, const Axi
     const Vec2 pointer = ClientToPlayfield(client, playfield, clientSize);
     result.position = pointer;
 
-    Vec2 clientDelta{};
-    if (!tracking_) {
-        tracking_ = true;
-        unwrapped_ = pointer;
-        previousClient_ = client;
-        winding_ = {};
-    } else {
-        clientDelta = client - previousClient_;
-        unwrapped_ += ClientToPlayfieldDelta(clientDelta, playfield, clientSize);
-        previousClient_ = client;
-    }
-
     // A warp can come back as one relative sample although the absolute
     // baseline already starts at the destination: ignore the relative motion
     // for exactly one sample after a warp, then take it again so a later real
@@ -95,6 +83,29 @@ PointerWrapResult PointerWrap::Sample(const PointerWrapSample& sample, const Axi
     const bool suppressY = suppressRelativeY_;
     suppressRelativeX_ = false;
     suppressRelativeY_ = false;
+
+    Vec2 clientDelta{};
+    if (!tracking_) {
+        tracking_ = true;
+        unwrapped_ = pointer;
+        previousClient_ = client;
+        winding_ = {};
+    } else {
+        clientDelta = client - previousClient_;
+        // The original's SetCursorPos said whether the cursor moved; a warp
+        // request does not. Right after a warp on an axis, a jump of more than
+        // half the client back toward where the cursor was is the warp not
+        // applied (the cursor is still at the old place), not the player's
+        // motion: the baseline moves to the cursor and the pointer stays.
+        if (suppressX && std::abs(clientDelta.x) > clientSize.x * 0.5f) {
+            clientDelta.x = 0.0f;
+        }
+        if (suppressY && std::abs(clientDelta.y) > clientSize.y * 0.5f) {
+            clientDelta.y = 0.0f;
+        }
+        unwrapped_ += ClientToPlayfieldDelta(clientDelta, playfield, clientSize);
+        previousClient_ = client;
+    }
 
     CanonicalWrappedPoint canonical = CanonicalizeWrappedPoint(unwrapped_, playfield);
     if (!canonical.valid) {
