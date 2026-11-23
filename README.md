@@ -8,11 +8,11 @@ GYO は C++20 のゲームエンジンです。Base、Runtime、Asset、Math、T
 
 | ディレクトリ | 責務 |
 |---|---|
-| `apps/` | ゲームのコードと最小限のプロジェクト宣言 |
+| `games/` | ゲームのコードと最小限のプロジェクト宣言 |
 | `assets/<game>/` | 準備済み runtime コンテンツ、catalog、`content.json` |
-| `engine/` | エンジン全モジュール、adapter、`config/projects.csv` と `config/tools.csv` |
+| `engine/` | エンジン全モジュール、adapter、`config/games.csv` と `config/tools.csv` |
 | `tools/` | 設計支援。UI editor とローカル専用のゲーム preview（現在は無効） |
-| `services/` | エンジンが所有する再利用可能な Go service 機構（`gyo_gateway`）。ゲーム固有の service は `apps/<game>/` に置く |
+| `services/` | エンジンが所有する再利用可能な Go service 機構（`gyo_gateway`）。ゲーム固有の service は `games/<game>/` に置く |
 | `tests/common`、`tests/<project>` | エンジン共通とプロジェクト固有の検証 |
 | `build/cmake`、`build/ci` | ビルド、統合、パッケージ、受け入れ検証の支援 |
 | `build/acceptance/` | 製品の外側から実行する共通およびプロジェクト固有の受け入れ検証ツール |
@@ -26,10 +26,10 @@ Shader compiler は `engine/render/shaders/pipeline` が所有します。ルー
 
 CMake 3.30 以降、C++20 compiler、Ninja を使用します。Windows は x64 MSVC 開発環境を初期化してください。アセットの組み立てには Python 3、shader にはエンジン管理の native host compiler を使用します。依存ソースは build tree に取得し、既存 source cache は明示的に再利用できます。
 
-`config/projects.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
+`config/games.csv` でゲームと対象 OS を有効にし、リポジトリのルートから実行します。
 
 ```sh
-cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --preset dev -DGYO_GAMES=object_fps_pvp -DGYO_TOOLS=
 cmake --build --preset dev --target gyo_object_fps_pvp
 ```
 
@@ -48,17 +48,17 @@ ctest --preset core
 ## 設計ツールとアセット
 
 ```sh
-cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
+cmake --preset dev -DGYO_GAMES= -DGYO_TOOLS=ui_editor
 cmake --build --preset dev --target gyo_ui_editor
 ```
 
 GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り専用 catalog を使って `gyo.ui` JSON を編集します。利用者が選択したソースアセットをゲームアセットに準備・登録し、その後は共通 build hook が `content.json` に従ってアセットの組み立てと shader compile を自動実行します。ローカルと CI は同じ経路を使い、ゲーム CMake にアセットのルールを書きません。
 
-派生ゲームは `apps/<game>` と `assets/<game>` を手動コピーして CSV 行を追加します。CI、tests、editor、元の art archive はゲームに含めません。[作成／コピー手順](docs/creating_apps.md)を参照してください。
+派生ゲームは `games/<game>` と `assets/<game>` を手動コピーして CSV 行を追加します。CI、tests、editor、元の art archive はゲームに含めません。[作成／コピー手順](docs/creating_games.md)を参照してください。
 
 ## 統合と公開
 
-ゲーム選択は `projects.csv`、ツール選択は `tools.csv` に従い、ディレクトリ数から推測しません。各対応プラットフォームは release 選択されたツール（現在は UI Editor GUI）の toolchain archive を生成し、有効なゲームは別 archive を生成します。選択されたゲーム、ツール、必須検証の失敗は Engine 統合全体を失敗させます。ゲーム 0 件でも公開できます。配布物は実行ファイルと必要な依存物であり、Engine SDK やソースコードのパッケージではありません。
+ゲーム選択は `games.csv`、ツール選択は `tools.csv` に従い、ディレクトリ数から推測しません。各対応プラットフォームは release 選択されたツール（現在は UI Editor GUI）の toolchain archive を生成し、有効なゲームは別 archive を生成します。選択されたゲーム、ツール、必須検証の失敗は Engine 統合全体を失敗させます。ゲーム 0 件でも公開できます。配布物は実行ファイルと必要な依存物であり、Engine SDK やソースコードのパッケージではありません。
 
 `Prepare Release` は公開ライン（`tools` または各ゲーム）を一つ選んで commit を固定し、その製品をビルド・検証して tag と Draft Release を準備します。Draft の公開は利用者の別操作です。ゲームパッケージに入るのはゲーム、アセット、runtime 依存物だけで、検証ツールは外側から実行します。
 
@@ -77,4 +77,4 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [公開手順](docs/releasing.ja.md)
 
-`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。旧 `object_fps` と `object_fps_v2` は削除済みです（2026-11-12、`v8-arch-remove-object-fps`。必要なら git 履歴 `56b8dda3` を参照）。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。
+`games/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。旧 `object_fps` と `object_fps_v2` は削除済みです（2026-11-12、`v8-arch-remove-object-fps`。必要なら git 履歴 `56b8dda3` を参照）。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。

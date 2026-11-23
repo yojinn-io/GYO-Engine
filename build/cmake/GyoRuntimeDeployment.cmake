@@ -27,7 +27,7 @@ function(gyo_install_product_target)
     list(REMOVE_ITEM P_KEYWORDS_MISSING_VALUES COMPONENTS)
     if(P_UNPARSED_ARGUMENTS OR P_KEYWORDS_MISSING_VALUES OR NOT TARGET "${P_TARGET}" OR
         NOT P_PRODUCT MATCHES "^[a-z][a-z0-9_]*$" OR NOT P_OWNER MATCHES "^[a-z][a-z0-9_]*$" OR
-        NOT P_ROLE MATCHES "^[a-z][a-z0-9_]*$" OR NOT P_KIND MATCHES "^(app|toolchain)$")
+        NOT P_ROLE MATCHES "^[a-z][a-z0-9_]*$" OR NOT P_KIND MATCHES "^(game|toolchain)$")
         message(FATAL_ERROR "Invalid product target declaration")
     endif()
     get_target_property(type ${P_TARGET} TYPE)
@@ -40,7 +40,7 @@ function(gyo_install_product_target)
     if(registered OR role_target OR (kind AND NOT kind STREQUAL P_KIND))
         message(FATAL_ERROR "Duplicate product target/role or conflicting kind: ${P_PRODUCT}/${P_OWNER}.${P_ROLE}")
     endif()
-    if((P_KIND STREQUAL app AND NOT P_OWNER STREQUAL P_PRODUCT) OR
+    if((P_KIND STREQUAL game AND NOT P_OWNER STREQUAL P_PRODUCT) OR
         (P_KIND STREQUAL toolchain AND NOT P_PRODUCT STREQUAL toolchain))
         message(FATAL_ERROR "Product identity does not match its owner/kind")
     endif()

@@ -62,7 +62,7 @@ def prepare_draft(*args):
 def manifest(platform="windows-x64", product=APP):
     executable = "bin/sample" + (".exe" if platform == "windows-x64" else "")
     return {
-        "schema_version": 3, "configuration": "Release", "product": product, "kind": "toolchain" if product == "toolchain" else "app", "platform": platform,
+        "schema_version": 4, "configuration": "Release", "product": product, "kind": "toolchain" if product == "toolchain" else "game", "platform": platform,
         "executables": {f"{product}.main": {"owner": product, "role": "main", "path": executable, "runtime_dependencies": []}},
         "required_files": ["bin/data/config.json"], "native_files": [],
         "checks": [
@@ -345,7 +345,7 @@ class PackageTests(unittest.TestCase):
                             "sample_tool,,,true,false,true,true,true,true\n", encoding="utf-8")
         descriptor = self.work / "tool-sources/tools/sample_tool/project.json"
         descriptor.parent.mkdir(parents=True)
-        descriptor.write_text(json.dumps({"version": 1, "default_variant": "native", "requires_apps": {},
+        descriptor.write_text(json.dumps({"version": 2, "default_variant": "native", "requires_games": {},
                                           "variants": {"native": {"components": [], "packageable": True}}}),
                               encoding="utf-8")
         return ["--tool-registry", str(registry), "--repository-root", str(self.work / "tool-sources")]
@@ -397,7 +397,7 @@ class PackageTests(unittest.TestCase):
         # Exercise the real subprocess entry point, including embedded Python's isolated path.
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
-        registry = self.work / "projects.csv"
+        registry = self.work / "games.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
         event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
@@ -418,7 +418,7 @@ class PackageTests(unittest.TestCase):
         # job, and a draft or snapshot stops before reading any archive, each
         # with the reason. A registered release tool lifts the refusal.
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        registry, tools = self.work / "projects.csv", self.work / "tools.csv"
+        registry, tools = self.work / "games.csv", self.work / "tools.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n", encoding="utf-8")
         tools.write_text("name,description,version,enabled,default,release,windows,linux,macos\n", encoding="utf-8")
         event = self.work / "event.json"
@@ -448,7 +448,7 @@ class PackageTests(unittest.TestCase):
 
     def test_prepare_cli_requires_the_declared_release_evidence(self):
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-        registry, contracts = self.work / "projects.csv", self.work / "contracts"
+        registry, contracts = self.work / "games.csv", self.work / "contracts"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
         tool_registry = self.tool_registry_arguments()
@@ -490,7 +490,7 @@ class PackageTests(unittest.TestCase):
     def test_draft_cli_reads_a_dash_value_in_the_workflow_form(self):
         # The workflow passes --l4-evidence=VALUE, which argparse never reads
         # as another option; the mismatched commit stops before any API call.
-        registry = self.work / "projects.csv"
+        registry = self.work / "games.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
         result = subprocess.run([

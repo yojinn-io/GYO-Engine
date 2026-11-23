@@ -16,7 +16,7 @@ from validate_package import validate_linkage
 
 
 def tools_manifest():
-    return {"schema_version": 3, "configuration": "Release", "product": "toolchain", "kind": "toolchain",
+    return {"schema_version": 4, "configuration": "Release", "product": "toolchain", "kind": "toolchain",
             "platform": "linux-x64", "executables": {
                 "canvas.main": {"owner": "canvas", "role": "main", "path": "bin/canvas",
                                 "runtime_dependencies": ["SDL3"]},

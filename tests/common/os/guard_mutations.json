@@ -292,7 +292,7 @@
       "what": "the Engine allowlist may list product files",
       "file": "tests/common/os/os_boundary_guard.py",
       "find": "ENGINE_ALLOWLIST_SCOPE = (\"engine/\", \"tests/common/\")",
-      "replace": "ENGINE_ALLOWLIST_SCOPE = (\"engine/\", \"tests/common/\", \"apps/\", \"tests/\")",
+      "replace": "ENGINE_ALLOWLIST_SCOPE = (\"engine/\", \"tests/common/\", \"games/\", \"tests/\")",
       "command": [
         "{python}",
         "-B",

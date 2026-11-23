@@ -155,7 +155,7 @@ endfunction()
 function(gyo_expect_no_os_definitions)
     # Set here, not at file scope: the deferred call runs in the top directory's
     # scope, and the helpers above see their caller's variables.
-    set(GYO_OS_DEFINITION_ROOTS engine apps tools build/acceptance tests)
+    set(GYO_OS_DEFINITION_ROOTS engine games tools build/acceptance tests)
     # engine/core/os identifies the OS in its sources (the compiler's own macros), never through a build
     # definition, so it is not exempt here; the entry for its old path engine/os was dead (it exempted nothing).
     set(GYO_OS_DEFINITION_EXEMPT tests/common/os)

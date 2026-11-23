@@ -102,6 +102,12 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 「loses no signal」的掃描：遺失只落在 `round % 64` 的頭 0～3 格，縮小掃描範圍檢出力可能提高好幾倍（宣告 Q3） | os 退避卡 PR #293 | 要研究時另開一批（使用者未定） |
 | os Invariant 8 寫「cleared under its mutex」，但把後備實作的 `pending = false` 移到鎖外任何案例都抓不到（只剩 data race） | os 退避卡的驗證者 | 交設計審查，不加突變（`no-guards-against-misuse`） |
 | os.md DI 2 字面仍寫「the host shader tool」豁免，gyo2 的程式已拿掉（`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`） | SDL 宣告修訂 20 第 14 節 | 子批 P 或 R2a 的宣告一起改 |
+| 建置層內「遊戲目錄」的規則手寫 4 處；KIND 集合有 3 個讀者；4 個只寫不讀的值 | apps→games #294 設計審查 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
+| `MirrorTests` 的瘦身；`ProjectComposition` 測試對產生器敏感；測試資料仍叫 `sample_app` | apps→games #294 | 下一次動建置層測試的批 |
+| README 三語版、`docs/architecture.md`、`docs/creating_games.md`（#294 由 `creating_apps.md` 改名）大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
+| `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
+| Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
+| HarfBuzz 單檔彙整 `harfbuzz.cc` 本機編譯 172.6 s（T 的停止門檻 180 s，只差 4%；FreeType 35.4 s，合計 208 s／門檻 300 s）：單一編譯單位不能並行、可能成為建置的關鍵路徑；起因是 SDL 總宣告第 9.1 節「third_party 無條件加入、每個組態（含 Match）都建」。改法候選：改編上游個別 `hb-*.cc` 讓它並行／HarfBuzz 精簡組態／third_party 跟著有人用才建（建置圖的 Architecture Delta） | T #297（主 checkout `build/evidence/gyo2-sdl-text/build-time/measurements.md`、design-review 第 3 條） | 下一個加 third_party 的批之前看；或 L1 時間明顯變長時 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
 | naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
@@ -121,7 +127,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | loader 失敗訊息裡的 id 由每個 loader 各拼一次、store 又加一次（設計審查 S-2） | audio 小批 #288 | owner asset；第三個 loader 出現前定 |
 | `Mixer.cpp` 裡兩份手寫的 SPSC 環（設計審查 S-3） | audio 小批 #288 | SDL 後端接上 `Render` 之前整理 |
 | 突變 `au-ctl-stress-reassign-every-block` 在 gyo2 上兩次存活（時序偶發，未改的程式上也存活） | audio 重審、audio 小批 | 下一次動 audio 時重看這條突變 |
-| 建置層仍寫死 master 的 `apps/`（`build/cmake/GyoAppRegistry.cmake:261`、`GyoApps.cmake:38`、`GyoBuild.cmake:68-91`、`tests/common/ci` 的 app 測試）；頂層已定為 `games/`（`v8-arch-gyo2-top-dirs-games-assets-tools`） | 主會話 2026-11-23 | 移植第一個遊戲（Object_Connect）那一批一起改 |
+| 建置層仍寫死 master 的 `apps/`（`build/cmake/GyoAppRegistry.cmake:261`、`GyoApps.cmake:38`、`GyoBuild.cmake:68-91`、`tests/common/ci` 的 app 測試）；頂層已定為 `games/`（`v8-arch-gyo2-top-dirs-games-assets-tools`） | 主會話 2026-11-23 | **2026-11-23 完成**（PR #294 併入 `gyo2`，92d398b5；使用者「ci 綠了就合併」）（`v8-arch-gyo2-build-games-dir`，任務卡；方案 B：目錄與用詞 app→game、四個守衛的掃描根、複製整合的 mirror；dev_log `2026_11_23_gyo2_build_games_dir`；LIM-9） |
 | gyo2 上狀態機的測試有一個編譯警告（網路卡的實作者跟上 gyo2 時看到；Windows 若把警告當錯誤會擋住） | 網路卡 2026-11-23 | 看 #275 的 L1（run 45056638255）；擋住就交網路卡在同一 PR 修，否則下一次動狀態機的批 |
 | **Kernel 的 `Message` 與 `Summary`**：`Summary` 雜湊每個訊息緩衝的序號與游標，依完成時序或外部事件發訊息的 Module（網路、輸入）會讓摘要依時序變；asset 用 Resource 繞開。要不要給訊息型別「不進摘要」的選項 | asset 宣告第 15 節第 8 項 | 2026-11-23 開卡（`local_b3d28b59`）；宣告修訂 1（分支 `claude/gyo2-kernel-summary-messages-decl`）建議 (b) 回到摘要版本 1（只收每種訊息的筆數與內容，拿掉序號與游標表）；權威 digest 本來不收訊息、受影響的是用 `World::Summary` 判相同的測試；使用者選 (b)（`v8-arch-gyo2-kernel-summary-messages`）；實作完成 PR #287，合併前核准（`v8-arch-gyo2-kernel-summary-messages-merge-approved`）；2026-11-23 使用者「合併 #287」，已合併（72b664fb） |
 | **Kernel 負向編譯樣本可能空過**：`tests/common/kernel/CMakeLists.txt:231` 只在輸出裡找標記，同一行有無關硬錯誤時編譯器印出原始碼行、標記就在裡面，樣本永遠通過；asset 改用「靜態斷言失敗＋標記同一行」 | asset 宣告第 15 節第 12 項 | 2026-11-23 開卡（`local_b3d28b59`）；PR #286：重現空過、判法收成共用函式 `tests/common/support/ExpectStaticAssert.cmake`（Kernel、world_logging、world_asset 三處）、27/27；§14.4 已核准，**PR #286 已合併**（94ca1517，`v8-arch-gyo2-compile-fail-judgement-merged`） |

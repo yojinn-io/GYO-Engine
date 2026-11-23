@@ -87,7 +87,7 @@ expect_components(runtime "SDL_RENDERER;SDL_PLATFORM" ON)
 gyo_resolve_components()
 expect_components(cleared "" OFF)
 
-# Explicit module options compose with app requests, without becoming sticky
+# Explicit module options compose with game requests, without becoming sticky
 # effective flags when those options are disabled on a later resolve.
 set(GYO_BUILD_SDL_IMAGE_LOADER ON)
 set(GYO_BUILD_SDL_TTF_ADAPTER ON)

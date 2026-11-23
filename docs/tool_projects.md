@@ -16,14 +16,14 @@ Boolean columns accept `true`, `false`, `1` or `0`. The description/version fiel
 
 ```sh
 # Games only; no tool sources are required.
-cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
+cmake --preset dev -DGYO_GAMES=object_fps_pvp -DGYO_TOOLS=
 # GUI editor; no game is needed.
-cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
+cmake --preset dev -DGYO_GAMES= -DGYO_TOOLS=ui_editor
 # Local CLI-only mode.
-cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor:cli
+cmake --preset dev -DGYO_GAMES= -DGYO_TOOLS=ui_editor:cli
 # A game-specific preview requires that game to be selected separately
 # (pvp_preview is a hypothetical tool id).
-cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=pvp_preview
+cmake --preset dev -DGYO_GAMES=object_fps_pvp -DGYO_TOOLS=pvp_preview
 ```
 
 An explicit list uses semicolons, for example `-DGYO_TOOLS=ui_editor;model_viewer` (quote the entire argument in the shell). `GYO_TOOLS=AUTO` selects enabled default tools on the current platform. `dev` and `core` default to no tools, while `test` selects `AUTO`. Use separate build trees and output roots for concurrent configurations.
@@ -37,10 +37,10 @@ Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `bu
 
    ```json
    {
-     "version": 1,
+     "version": 2,
      "display_name": "Example design tool",
      "default_variant": "native",
-     "requires_apps": {},
+     "requires_games": {},
      "variants": {
        "native": { "components": [], "packageable": true }
      }
@@ -57,11 +57,11 @@ Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `bu
 
    For multiple executables with different native requirements, the variant may add `"role_components": {"cli": []}` alongside its `components`. Each role's array must be a subset of that variant's components; an empty array declares no optional components. Unspecified roles inherit the variant's full component list. For example, a variant with `"components": ["SDL_RENDERER"]` and `"role_components": {"cli": []}` deploys SDL for `ROLE main`, while `ROLE cli` has no SDL requirement. Keep these differences in the descriptor rather than repeating component literals in CMake.
 
-4. Add an enabled CSV row with the intended platform/default/release flags. A local tool sets `release=0` and `packageable=false`. Release tools must be packageable and have no app dependencies.
+4. Add an enabled CSV row with the intended platform/default/release flags. A local tool sets `release=0` and `packageable=false`. Release tools must be packageable and have no game dependencies.
 5. Add owner tests under `tests/<id>` and release checks under `build/acceptance/<id>/checks.json`. Every release tool must execute one of its registered executable or probe roles in both `quick` and `release` on each selected release platform. Missing coverage fails configuration.
 6. Build, run from the assembled directory, install into a separate stage, and run declared acceptance. Only after the manual sequence is clear should a script automate those same operations.
 
-Game-specific local tools declare dependencies as aliases, such as `"requires_apps": {"game": "object_fps_pvp"}`. Tool code resolves the alias with `gyo_tool_app_dependency(game app)` and uses the existing app target/config helpers. A missing selected app is an error, not a request to silently enable it. No shared Build, runner or workflow edits are needed for a new tool.
+Game-specific local tools declare dependencies as aliases, such as `"requires_games": {"game": "object_connect"}`. Tool code resolves the alias with `gyo_tool_game_dependency(game target_game)` and uses the existing game target/config helpers. A missing selected game is an error, not a request to silently enable it. Version 2 of the descriptor renamed `requires_apps` to `requires_games` (`v8-arch-gyo2-build-games-dir`); a version 1 descriptor is refused. No shared Build, runner or workflow edits are needed for a new tool.
 
 ## Acceptance and package roles
 

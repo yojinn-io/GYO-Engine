@@ -353,8 +353,8 @@
     "naming DI 1"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"plugins\", \"tests\", \"examples\")",
-   "replace": "SCAN_ROOTS = (\"engine\", \"apps\", \"tools\", \"plugins\", \"tests\")",
+   "find": "SCAN_ROOTS = (\"engine\", \"games\", \"tools\", \"plugins\", \"tests\", \"examples\")",
+   "replace": "SCAN_ROOTS = (\"engine\", \"games\", \"tools\", \"plugins\", \"tests\")",
    "expect": "FAIL: test_n1_test_root_outside_tests_is_reported",
    "command": [
     "{python}",
