@@ -98,6 +98,19 @@ class TextGuard(unittest.TestCase):
         self.expect("games/x/CMakeLists.txt", 'include_directories("${harfbuzz_SOURCE_DIR}/src")\n',
                     "games/x/CMakeLists.txt:1: TX1-LINK")
 
+    def test_link_in_build_cmake_and_the_root(self):
+        self.expect("build/cmake/GyoText.cmake", "target_link_libraries(x PRIVATE gyo_libunibreak)\n",
+                    "build/cmake/GyoText.cmake:1: TX1-LINK")
+        self.expect("CMakeLists.txt", "project(x)\nlink_libraries(gyo_freetype)\n", "CMakeLists.txt:2: TX1-LINK")
+
+    def test_link_nothing_allowed_fails_closed(self):
+        (self.root / "engine/modules/text/CMakeLists.txt").write_text("add_library(gyo_text STATIC a.cpp)\n",
+                                                                       encoding="utf-8")
+        (self.root / "tests/common/text/CMakeLists.txt").write_text("add_executable(t t.cpp)\n", encoding="utf-8")
+        status, output = run(self.root)
+        self.assertEqual(status, 1)
+        self.assertIn("TX1-LINK: nothing allowed found", output)
+
     def test_missing_required_root_fails(self):
         import shutil
         shutil.rmtree(self.root / "tests")

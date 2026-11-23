@@ -126,7 +126,7 @@ TEST_CASE("text golden: BIZ UDPGothic at 12, 17, 24 and 45 px") {
 TEST_CASE("text golden: the synthetic fonts, TrueType and CFF outlines") {
     const Golden latin = Run("GyoTextTestLatin.ttf", "Affix AV-V A\xC3\xA4" "e\xCC\x81 Press Start", 17.0f, 80.0f);
     MESSAGE("Latin layout " << latin.layout << " atlas " << latin.atlas);
-    CHECK(latin.layout == "f1b2cb076c3df75b85bdba6610555549ad388883700562b01e63e77f376fe938");
+    CHECK(latin.layout == "bd284d6e051372594011ac4edc659eccd47d8b9d70e398534a8c1a554427a2b6");
     CHECK(latin.atlas == "304742344d9d27b781b480792f5c13b365cc8056a29e259a93fa81e38a08d4a5");
     const Golden kana = Run("GyoTextTestKana.otf", "あいうえおかきくけこ。「がっこう」", 23.0f, 160.0f);
     MESSAGE("Kana layout " << kana.layout << " atlas " << kana.atlas);

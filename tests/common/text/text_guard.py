@@ -32,7 +32,8 @@ they use the adapters' own interfaces. Includes are read from code lines (block 
 names from code with comments and string literals blanked; CMake comments are ignored.
 
 Positive control: each adapter must contain at least one allowed include and one allowed name of
-its component; none means the scan cannot see what it looks for, and the guard fails. A missing
+its component, and the allowed CMake files at least one component link; none means the scan
+cannot see what it looks for, and the guard fails. A missing
 required root fails too.
 
 Usage: python3 text_guard.py [--root REPOSITORY]
@@ -118,6 +119,7 @@ def scan(root):
     findings = []
     errors = []
     allowed = {rule: 0 for rule, _, home in INCLUDE_RULES + NAME_RULES if home is not NOWHERE}
+    allowed["TX1-LINK"] = 0
     bases = roots(root, errors)
     for base in bases:
         for path in sorted(base.rglob("*")):
@@ -141,11 +143,11 @@ def scan(root):
     cmake_paths += [root / name for name in CMAKE_FILES if (root / name).is_file()]
     for path in cmake_paths:
         relative = path.relative_to(root).as_posix()
-        if relative in LINK_ALLOWED:
-            continue
         for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             match = LINK.search(line.split("#", 1)[0])
-            if match:
+            if match and relative in LINK_ALLOWED:
+                allowed["TX1-LINK"] += 1
+            elif match:
                 findings.append(f"{relative}:{number}: TX1-LINK: {match.group(0)} outside "
                                 + " and ".join(LINK_ALLOWED))
     return findings, allowed, errors

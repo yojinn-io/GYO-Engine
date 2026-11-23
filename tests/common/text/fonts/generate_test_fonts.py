@@ -13,7 +13,8 @@ Outputs, all with unitsPerEm 1024 (a power of two, so HarfBuzz's scaling at
 16 px and 32 px is exact):
 - GyoTextTestLatin.ttf  TrueType outlines: ASCII, U+00E4, two combining marks,
                         U+FFFD; GSUB 'liga' f+i, 'ccmp' U+00E4 -> a + U+0308;
-                        GPOS 'kern' A V = -128, hyphen V = -64.
+                        GPOS 'kern' A V = -128; hyphen V: the hyphen's
+                        advance -64, V placed +64 right and +128 up.
 - GyoTextTestKana.otf   CFF outlines: the kana, kanji and CJK punctuation the
                         tests use, all 1024 wide; U+3099 combining dakuten.
 - GyoTextTestPair.ttc   a collection of the two fonts above (face 0 Latin,
@@ -110,7 +111,7 @@ languagesystem latn dflt;
 table GDEF {{ GlyphClassDef , , @MARKS, ; }} GDEF;
 feature ccmp {{ sub adieresis by a dieresiscomb; }} ccmp;
 feature liga {{ sub f i by f_i; }} liga;
-feature kern {{ pos A V -128; pos hyphen V -64; }} kern;
+feature kern {{ pos A V -128; pos hyphen <0 0 -64 0> V <64 128 0 0>; }} kern;
 """)
     return fb.font
 

@@ -1,8 +1,10 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <string>
 
 #include "TextTestSupport.hpp"
+#include "engine/text/Caret.hpp"
 
 // Line breaking and placement (Design Invariant TX-4; declaration 5.5). At
 // 16 px: Latin A, V, hyphen 8 px, space 4 px; every kana and CJK
@@ -132,6 +134,53 @@ TEST_CASE("text layout: mixed Japanese and English breaks between words, not ins
     CHECK(Lines(layout, text) == std::vector<std::string>{"あいPress ", "Start"});
 }
 
+TEST_CASE("text layout: other mandatory breaks, and the ideographic space hangs") {
+    Fixture f;
+    // U+2028 LINE SEPARATOR, U+0085 NEXT LINE, VT and FF all end a line.
+    const std::string text = "A\xE2\x80\xA8" "B\xC2\x85" "C\x0B" "D\x0C" "E";
+    const Text::TextLayout layout = f.Lay(text, f.Style(f.latinFirst));
+    CHECK(Lines(layout, text) == std::vector<std::string>{"A\xE2\x80\xA8", "B\xC2\x85", "C\x0B", "D\x0C", "E"});
+    CHECK_FALSE(layout.glyphs[1].visible);
+    // U+3000 at the end of a full line hangs: it does not push the line over.
+    const std::string kana = "あいうえおかきくけこ　さ";
+    CHECK(Lines(f.Lay(kana, f.Style(f.kanaFirst), Width(160.0f)), kana) ==
+          std::vector<std::string>{"あいうえおかきくけこ　", "さ"});
+}
+
+TEST_CASE("text layout: the empty line after a final break takes the last span's line height") {
+    Fixture f;
+    const std::string text = "A\n";
+    const Text::TextSpan spans[] = {{0, 1, f.Style(f.latinFirst, 16.0f, Text::LineHeight::Pixels(16.0f))},
+                                    {1, 2, f.Style(f.latinFirst, 16.0f, Text::LineHeight::Pixels(32.0f))}};
+    const Text::TextLayout layout = f.context.Layout(f.context.Shape(text, spans), {});
+    REQUIRE(layout.lines.size() == 2);
+    CHECK(layout.lines[1].height == 32.0f);
+}
+
+TEST_CASE("text layout: a negative odd leading puts the extra unit above") {
+    Fixture f;
+    // Line height 1023 units: leading -1, floor(-1 / 2) = -1 above, 0 below.
+    const Text::TextLayout layout =
+        f.Lay("A", f.Style(f.latinFirst, 16.0f, Text::LineHeight::Pixels(1023.0f / 64.0f)));
+    CHECK(layout.lines[0].baseline == Units16(819));
+    CHECK(layout.lines[0].height == Units16(1023));
+}
+
+TEST_CASE("text layout: the fallback font's metrics count in the line box") {
+    Fixture f;
+    const Text::FontId biz = f.context.AddFont(GYO::Test::Text::LoadFont("BIZUDPGothic-Subset.ttf"), 0).value();
+    const std::vector<Text::FontId> mixed{f.latin, biz};
+    const std::vector<Text::FontId> bizOnly{biz};
+    const auto relative = Text::LineHeight::Relative(1.0f);
+    const float latinBaseline = f.Lay("A", f.Style(f.latinFirst, 16.0f, relative)).lines[0].baseline;
+    const float bizBaseline = f.Lay("\xE3\x81\x86", f.Style(bizOnly, 16.0f, relative)).lines[0].baseline;
+    REQUIRE(latinBaseline != bizBaseline);
+    // う (in the BIZ subset, not in the Latin font).
+    const Text::TextLayout layout = f.Lay("A\xE3\x81\x86", f.Style(mixed, 16.0f, relative));
+    CHECK(layout.glyphs[1].font == biz);
+    CHECK(layout.lines[0].baseline == std::max(latinBaseline, bizBaseline));
+}
+
 TEST_CASE("text layout: a break where shaping is unsafe shapes each side again") {
     Fixture f;
     // hyphen V kerns by -64 units; a line may break after the hyphen.
@@ -144,6 +193,11 @@ TEST_CASE("text layout: a break where shaping is unsafe shapes each side again")
     // Without V after it, the hyphen does not kern.
     CHECK(broken.glyphs[1].advance == Units16(512));
     CHECK(broken.lines[0].width == 16.0f);
+    // Together, V is placed 64 units right and 128 up; alone on its line it is not.
+    CHECK(whole.glyphs[2].x == whole.glyphs[2].penX + Units16(64));
+    CHECK(whole.glyphs[2].y == whole.lines[0].baseline - Units16(128));
+    CHECK(broken.glyphs[2].x == broken.glyphs[2].penX);
+    CHECK(broken.glyphs[2].y == broken.lines[1].baseline);
 }
 
 TEST_CASE("text layout: alignment within the width, or within the widest line") {
@@ -158,4 +212,7 @@ TEST_CASE("text layout: alignment within the width, or within the widest line") 
     const Text::TextLayout widest = f.Lay(text, f.Style(f.latinFirst), {std::nullopt, Text::HorizontalAlign::Right});
     CHECK(widest.lines[1].x == 24.0f);
     CHECK(widest.width == 32.0f);
+    // An empty last line is aligned too: the caret sits in the middle.
+    const Text::TextLayout empty = f.Lay("A\n", f.Style(f.latinFirst), Width(100.0f, Text::HorizontalAlign::Center));
+    CHECK(Text::CaretAt(empty, Text::Caret{2}).x == 50.0f);
 }

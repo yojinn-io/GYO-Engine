@@ -71,6 +71,13 @@ TEST_CASE("text font: rule 1, only sfnt fonts and collections") {
     CHECK(Rejected(Tagged("%!PS")) == TextFailureCode::NotSfnt);
 }
 
+TEST_CASE("text font: rule 1, the 'true' tag of old Apple TrueType fonts is an sfnt") {
+    Bytes bytes = ReadFont("GyoTextTestLatin.ttf");
+    std::memcpy(bytes.data(), "true", 4);
+    const auto font = FontData::FromBytes(std::move(bytes));
+    CHECK(font.has_value());
+}
+
 TEST_CASE("text font: rule 2, a collection with no face") {
     Bytes bytes = Tagged("ttcf", 16);
     bytes[5] = std::byte{1}; // version 1.0, numFonts 0

@@ -113,6 +113,43 @@ TEST_CASE("text shape: fallback takes the first font with the glyph, per graphem
     CHECK(kanaFirst.glyphs[1].font == f.kana);
 }
 
+TEST_CASE("text shape: a neutral character at the start takes the script after it") {
+    Fixture f;
+    // "-V": the hyphen (Common) joins V's Latin run, so the pair still kerns.
+    const Text::TextLayout layout = f.Lay("-V", f.Style(f.latinFirst));
+    REQUIRE(layout.glyphs.size() == 2);
+    CHECK(layout.glyphs[0].advance == Units16(512 - 64));
+}
+
+TEST_CASE("text shape: a tab or line break picks its font as a space") {
+    Fixture f;
+    // The Kana font has no space: the tab falls back to the Latin space (256 units).
+    const Text::TextLayout layout = f.Lay("\xE3\x81\x82\t\xE3\x81\x82", f.Style(f.kanaFirst));
+    REQUIRE(layout.glyphs.size() == 3);
+    CHECK(layout.glyphs[1].font == f.latin);
+    CHECK(layout.glyphs[1].advance == Units16(256));
+}
+
+TEST_CASE("text shape: the font is chosen per grapheme, not per character") {
+    Fixture f;
+    // A + U+3099: Latin has A, Kana has U+3099, neither has both: the primary font for the whole grapheme.
+    const Text::TextLayout layout = f.Lay("A\xE3\x82\x99", f.Style(f.latinFirst));
+    for (const Text::PositionedGlyph& glyph : layout.glyphs) {
+        CHECK(glyph.font == f.latin);
+    }
+}
+
+TEST_CASE("text shape: a hidden default-ignorable character is laid out but not visible") {
+    Fixture f;
+    // A + ZWJ + B: the ZWJ is in A's grapheme and becomes HarfBuzz's invisible glyph.
+    const Text::TextLayout layout = f.Lay("A\xE2\x80\x8D" "B", f.Style(f.latinFirst));
+    REQUIRE(layout.glyphs.size() == 3);
+    CHECK(layout.glyphs[0].visible);
+    CHECK_FALSE(layout.glyphs[1].visible);
+    CHECK(layout.glyphs[1].advance == 0.0f);
+    CHECK(layout.glyphs[2].visible);
+}
+
 TEST_CASE("text shape: a character no font has is the primary font's .notdef") {
     Fixture f;
     // U+20AC is in neither font.
@@ -186,6 +223,12 @@ TEST_CASE("text shape: clusters cover the text in order for any input") {
         CheckCover(layout);
         CHECK(layout.graphemeBoundaries.front() == 0);
         CHECK(layout.graphemeBoundaries.back() == text.size());
+        // Every glyph's cluster lies inside its line (no line ends inside a cluster).
+        for (const Text::PositionedGlyph& glyph : layout.glyphs) {
+            const Text::LayoutLine& line = layout.lines[glyph.line];
+            CHECK(glyph.byteBegin >= line.byteBegin);
+            CHECK(glyph.byteEnd <= line.byteEnd);
+        }
         // Lines touch and cover the text.
         CHECK(layout.lines.front().byteBegin == 0);
         CHECK(layout.lines.back().byteEnd == text.size());

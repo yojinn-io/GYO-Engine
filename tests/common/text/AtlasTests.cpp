@@ -169,6 +169,29 @@ TEST_CASE("text atlas: a reader the change log no longer reaches gets whole page
     CHECK(late.Matches(atlas));
 }
 
+TEST_CASE("text atlas: a reader one revision behind the log's base gets whole pages") {
+    Fixture f;
+    // A log of one change: the first Rasterize (a page and a glyph) is dropped at once.
+    Text::GlyphAtlas atlas(Text::AtlasOptions{64, 1, 1});
+    Reader reader;
+    static_cast<void>(f.context.Rasterize(f.Lay("A", f.Style(f.latinFirst)), atlas));
+    static_cast<void>(f.context.Rasterize(f.Lay("B", f.Style(f.latinFirst)), atlas));
+    reader.Follow(atlas);
+    CHECK(reader.Matches(atlas));
+}
+
+TEST_CASE("text atlas: the padding counts when a glyph is too large; a cached TooLarge counts again") {
+    Fixture f;
+    // An 8 x 11 bitmap with 1 pixel of padding needs 13 pixels: a 12-pixel page is too small.
+    Text::GlyphAtlas atlas(Text::AtlasOptions{12, 1, 4096});
+    const Text::TextLayout layout = f.Lay("A", f.Style(f.latinFirst));
+    const Text::RasterResult first = f.context.Rasterize(layout, atlas);
+    CHECK(first.placements[0].status == Text::GlyphRasterStatus::TooLarge);
+    const Text::RasterResult again = f.context.Rasterize(layout, atlas);
+    CHECK(again.tooLarge == 1);
+    CHECK(atlas.PageCount() == 0);
+}
+
 TEST_CASE("text atlas: an atlas serves one context; a shaped text is laid out by its own context") {
     Fixture f;
     Fixture other;
