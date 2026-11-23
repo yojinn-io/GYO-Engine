@@ -27,12 +27,12 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | `Tentacle/BloodTentacle` | 血管的 Verlet 粒子鏈（固定步 1/120 s 的累加器、約束迭代、跟隨延遲） | 遊戲（`src/tentacle/`）。不是物理 Module 的事：一條鏈的模擬是遊戲的表現規則（SDL 總宣告第 6.4 節也這樣寫） | **PR 1 已搬** |
 | `Tentacle/RibbonStrip` | 把中心線轉成三角形帶的頂點（寬度變化、像素格對齊、顏色） | 遊戲（`src/tentacle/`）；輸出的頂點之後交 R2b 的「來源側每幀給頂點的 2D 形狀」 | **PR 1 已搬**（頂點怎麼送進渲染等 R2b） |
 | `Data/Csv`、`Data/PuzzleCatalogLoader`、`Data/PuzzleData.hpp` | 嚴格的 CSV 讀取；`levels.csv`／`nodes.csv`／`maps/*.csv` 三種表組成關卡目錄；欄位驗證、預設值、舊欄位相容與警告 | 遊戲（`src/data/`）。只留從字串解析（`Parse`）；讀檔改走 asset（2.2 的 `asset` 列）。原本的 `Load`、`Csv::Load`、「貼圖檔存在嗎」的檢查碰檔案系統，違反 os 守衛 R4（runtime 程式不直接開檔），拿掉。浮點欄位原本用 `std::from_chars`（浮點版在 macOS 13.3 的 deployment target 沒有），改經遊戲自己的 adapter `src/adapters/fast_float/` 呼叫 fast_float（`third_party/` 已有，json Module 也用；json 的 J-1 只管 Engine，守衛不掃產品目錄），語意同 `chars_format::general` | **PR 1 已搬**（`Parse` 部分）；讀檔的接法在 PR 2 |
-| `Game/GameFlow` | 選單狀態（主選單、選關、遊玩、暫停、解開、最終結果）、選項移動、確認後的命令 | 遊戲。畫面的值改用 Engine 的 `state_machine`（`StateMachine<GameScreen>`，請求在下一次 apply 生效），選項與命令留在遊戲的 System | **PR 1 先原樣搬**（純邏輯與原測試）；PR 2 改寫成 state machine＋System |
+| `Game/GameFlow` | 選單狀態（主選單、選關、遊玩、暫停、解開、最終結果）、選項移動、確認後的命令 | 遊戲。畫面的值改用 Engine 的 `state_machine`（`StateMachine<GameScreen>`，請求在下一次 apply 生效）；選項在 Resource `MenuSelection`；`GameFlow` 只加一個「從畫面與選項接著跑」的建構子，System 每幀用它跑一次選單（原測試不動） | **PR 1 原樣搬**；**PR 2 接上 state machine** |
 | `Game/FinalResults` | 一輪遊玩的通關紀錄、結果卡的頁數 | 遊戲（`src/game/`）；PR 2 成為 Resource | **PR 1 已搬** |
 | `Game/MusicSequencePolicy.hpp` | 什麼時候重播 BGM 的規則 | 遊戲 | **PR 1 已搬** |
 | `MouseCursorRenderer.hpp` 裡的 `ResolveMouseCursorIcon`、`ShouldUseCustomMouseCursor` | 游標要用哪張圖、什麼時候換掉系統游標 | 遊戲（`game/MouseCursorPolicy.hpp`，從 renderer 標頭拆出、內容不變） | **PR 1 已搬** |
 | `Math/Vec2`、`Math/Color` | 2D 向量、RGBA | 遊戲（`include/object_connect/math/`）。Engine 的 `core/math` 有 `Vec2`／`Vec4`（`Color` 可對 `Vec4`），但 PuzzleBoard 等大量程式用原型別；換型別是之後 World 層的事，不在搬邏輯時一起改 | **PR 1 已搬** |
-| `Game/Game`（`Game::Impl`） | 一幀的流程：讀輸入 → 失焦／Esc 取消拖曳 → UI 命中 → GameFlow → 套用命令（開關卡、重試、下一關）→ 更新 PuzzleBoard → 音效事件 → 游標 | 拆成遊戲的 System 與 Resource（目錄、目前的 PuzzleBoard、通關紀錄、`StateMachine<GameScreen>`）；一幀的時間從 `world_time` 拿 | PR 2 |
+| `Game/Game`（`Game::Impl`） | 一幀的流程：讀輸入 → 失焦／Esc 取消拖曳 → UI 命中 → GameFlow → 套用命令（開關卡、重試、下一關）→ 更新 PuzzleBoard → 音效事件 → 游標 | `world` 函式庫（`include/object_connect/world/`）：Resource `Catalog`、`Playfield`（固定 1280×720）、`FrameInput`、`MenuSelection`、`Session`、`RunResults`；Message `MenuStepped`、`LineHoldStarted`／`LineHoldEnded`、`MusicRestarted`、`QuitChosen`；`Main`／`Update` 依序五個 System（CancelDragOnLeave → StepMenu → ApplyMenuCommand → SimulateBoard → TickSolvedTimer）；一幀的時間是 `world_time` 的 `ActiveTime::delta`。輸入取樣、UI 命中、翻頁、游標、音效呼叫留在外面：`FrameInput` 進、Message 出 | **PR 2 已寫**，headless 測試 `object_connect.world`（9 個情境） |
 | `Rendering/GameUiRenderer` 的命中判定與翻頁 | 選單、選關（5×2 一頁）、結果卡的版面與滑鼠命中 | 遊戲。版面與命中是遊戲的規則；畫字用 `text`、畫矩形用 R2a／R2b。**不需要 U**（沒有文字框、沒有通用控件）；U 來了可以改用、不是前提 | 等 R2a／R2b（命中判定的純邏輯可先搬，PR 2 判） |
 | `Rendering/PuzzleRenderer` | 背景、血管三角形帶、節點 sprite（含光暈、脈動、inactive 55% 亮度）、dead 節點的程序化外觀 | 遊戲的「每幀產生畫面資料」System；接 R2b 的可畫元件 | 等 R2b |
 | `Core/Application`、`Core/FrameTimer` | `WinMain`、KamataEngine 的初始化與主迴圈、幀時間 | 產品的 `main` 建 `Product`（例：`examples/orchestration/product_main.cpp`）、runner 由 `sdl_window` 給；幀時間由 `world_time` | 等 W |
@@ -42,10 +42,10 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | 需要的能力 | 原本 | GYO2 | 狀態 |
 |---|---|---|---|
 | ECS、System、Resource、Message | 沒有（手寫一幀的流程） | Kernel（`engine/ecs/kernel`）、`orchestration` 的 `Product` | 已有 |
-| 畫面狀態 | `GameFlow::screen_` | `state_machine`（`StateMachine<S>`＋`StateMachineRequest<S>`、enter／exit schedule） | 已有（PR 2 用） |
+| 畫面狀態 | `GameFlow::screen_` | `state_machine`（`StateMachine<S>`＋`StateMachineRequest<S>`、enter／exit schedule） | PR 2 用了（只用值與請求；enter／exit schedule 等畫面與音效接上再看要不要用） |
 | 一幀的時間 | `FrameTimer`（`QueryPerformanceCounter`） | `world_time`（`VirtualTime` 等 Resource） | 已有 |
 | 讀資料檔 | `std::ifstream` | `asset`（catalog Data Contract、`TextLoader`）＋`world_asset`（`AssetRequests`／`AssetView`）；`assets/object_connect/content.json`（建置層生成的 `GYO_GAME_CONTENT_MANIFEST`） | 已有；關卡目錄跨三種檔、`levels.csv` 用路徑指向 `maps/*.csv`，PR 2 判「每個 CSV 一個 text asset、System 組目錄」或「遊戲自己的 loader 經 `LoadContext::Reference` 宣告引用」 |
-| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | 等 I 合併；資產要先過授權（第 4 節） |
+| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | 等 I 合併；PNG 已放進 `assets/object_connect/`（第 4 節） |
 | 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
 | 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | 部分已有，缺口見第 3 節 G1、G2 |
 | 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；縮放模式與換算是 R2b（第 3 節核對） |
@@ -81,22 +81,25 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 
 ## 4. 資產
 
-| 檔 | 大小 | 授權 | 狀態 |
+使用者 2026-11-23 確認（經主會話）：美術、關卡資料、音訊都是使用者本人做的，可以放進 repo；`k025g1030-design` 是使用者的學校帳號；音訊選 (a)，4 個 wav 原樣進 git。授權說明在 `assets/object_connect/LICENSES/README.md`。
+
+| 檔（`assets/object_connect/` 下，相對路徑照原本） | 大小 | 授權 | 狀態 |
 |---|---|---|---|
-| `fonts/BIZUDPGothic-Regular.ttf` | 4.3 MB | SIL OFL 1.1（原專案 `LICENSES/README.md`、`BIZUDPGothic-OFL.txt`） | 可放；要一起帶授權文字 |
-| `assets/textures/node/*.png`（7）、`assets/textures/mouse/*.png`（3） | 40 KB | 原專案 `LICENSES/README.md` 寫明「None of these notices grants additional rights to the game's code, artwork or audio」，沒有寫作者與授權 | **待使用者確認**（已轉主會話） |
-| `audio/*.wav`（4） | 25 MB | 同上 | **待使用者確認**；也要定 25 MB 的 WAV 要不要原樣進 git |
-| `data/levels.csv`、`data/nodes.csv`、`data/maps/stage_01..20.csv` | 96 KB | 同上 | **待使用者確認** |
+| `fonts/BIZUDPGothic-Regular.ttf` | 4.3 MB | SIL OFL 1.1（`LICENSES/BIZUDPGothic-OFL.txt`）；SHA-256 與原專案記錄的相同 | **已放（PR 2）** |
+| `assets/textures/node/*.png`（7）、`assets/textures/mouse/*.png`（3） | 40 KB | 使用者本人 | **已放（PR 2）** |
+| `audio/*.wav`（4） | 25 MB | 使用者本人 | **已放（PR 2）**，原樣 |
+| `data/levels.csv`、`data/nodes.csv`、`data/maps/stage_01..20.csv` | 96 KB | 使用者本人 | **已放（PR 2）** |
+| `data/maps/archive/prototype_0{1,2}.csv` | — | 使用者本人 | 不放（沒有關卡引用的原型） |
 | `white1x1.png`、`kamata.ico`、`axis/*`、`shaders/*.hlsl` | — | KamataEngine 的範本資源 | **不搬**（GYO2 的 render 自己有 shader；`axis` 是 3D 範本） |
 
-格式：PNG 經 `image`（I）、WAV 經 `audio` 的 `WavLoader`、CSV 經 `asset` 的 `TextLoader`，都登記在 `assets/object_connect/` 的 catalog。
+路徑照原本，所以 CSV 不改（`nodes.csv` 寫的是 `assets/textures/node/heart.png`，以 `assets/object_connect/` 為根）。格式：PNG 經 `image`（I）、WAV 經 `audio` 的 `WavLoader`、CSV 經 `asset` 的 `TextLoader`。`content.json`（asset catalog）在掛 main 執行檔時才需要（`GyoContent.cmake`），W 那段一起寫。
 
-## 5. PR 1 拿掉的測試（之後會回來）
+## 5. PR 1 拿掉的測試
 
-| 測試 | 原因 | 何時回來 |
+| 測試 | 原因 | 現況 |
 |---|---|---|
-| `PuzzleCatalogTests` 的 `TestIndependentDiskLoad`、`TestBundledCatalogs` | 讀磁碟上的關卡資料（`Load` 已拿掉；資料待授權） | 資產搬進來、讀檔接上 asset 之後（PR 2 或之後），改用 asset 讀同一份資料、斷言照原本 |
-| `PuzzleBoardTests` 的 `TestBundledStageOneIntegration` | 同上 | 同上 |
+| `PuzzleCatalogTests` 的 `TestBundledCatalogs`、`PuzzleBoardTests` 的 `TestBundledStageOneIntegration` | 讀磁碟上的關卡資料（`Load` 已拿掉） | **PR 2 接回**：測試自己讀 `assets/object_connect/` 的檔（`tests/object_connect/BundledData.cpp`；tests 不受 R4 限制），交給 `Parse`，斷言照原本 |
+| `PuzzleCatalogTests` 的 `TestIndependentDiskLoad` | 測的是 `Load` 本身 | 不回來（`Load` 不存在了；讀檔之後經 asset） |
 | `Text/*`、`FontSystemLifecycleTests` | 原 `Text/*` 不搬（GYO2 `text`） | 不回來 |
 | `GameAudioTests` | `GameAudio` 要改寫在 `audio` 上，且有 G1、G2 | audio 那一段移植時，依新寫法重寫 |
 
@@ -106,3 +109,10 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 - **錯誤的回報方式**：遊戲函式庫內照原本（`bool`＋`std::string& error`、內部用例外）。AGENTS §1-9 的 `Result` 是 Engine 的設計根；遊戲內部的寫法是作者的（§1-1）。PR 2 的 World 層（System 的回傳）照 Kernel 的 `SystemResult`。
 - **測試框架**：沿用原本的 `TestContext`（遊戲自己的），不改寫成 doctest；ctest 名 `object_connect.logic`，標籤 `cpu`。
 - **先搬純邏輯、再寫成 System**：純邏輯原樣搬、原測試全過，確認移植沒有改壞規則；PR 2 才把 `Game::Impl` 的一幀拆成 System／Resource，差異只在接線。
+
+## 7. PR 2：World 層的時序差（卡片自己判的）
+
+- 原本 `GameFlow` 立刻換畫面；state machine 在下一幀的 apply（`Main`／`PreUpdate` 之後）才換。每個 System 在原本讀「換過的畫面」的地方讀「這一幀結束時的畫面」（`EffectiveScreen`：這一幀的請求，沒有就是目前值），所以一幀內決定的事和原本相同；新畫面從下一幀起才是目前值。例：Esc 暫停的那一幀，原本與現在都不再更新 PuzzleBoard。
+- `Session::solvedElapsedSeconds` 的累加照原本（解開的那一幀從 0 加上那一幀的時間）。
+- `StartPuzzle` 等原本丟例外的地方，改成 System 回 `KernelError`（`SystemFailed`）：World 壞掉、Product 結束，由 `main` 決定怎麼報（AGENTS §1-9：只告訴外面發生了什麼）。
+- 測試把 `TimeSampling` 設成 `ManualDelta` 0.1 s，每幀時間固定；Message 由 `Main`／`Last` 的記錄 System 讀。

@@ -2,9 +2,10 @@
 # The porting inventory is docs/porting-inventory.zh-Hant.md in this directory.
 #
 # logic: the game's rules and simulation, with no window, input, renderer or audio
-# device (the original object_connect_core). It links no Engine unit: the World
-# layer that turns it into Systems and Resources comes in the next batch, and the
-# main executable waits for the window, input and render batches.
+# device (the original object_connect_core). It links no Engine unit.
+# world: the game in a GYO World (the screen state, Resources, Messages and the
+# Systems of one frame; include/object_connect/world/ObjectConnectWorld.hpp).
+# The main executable waits for the window, input and render batches.
 gyo_game_project()
 
 #
@@ -23,3 +24,8 @@ gyo_game_add_library(logic OUT_TARGET object_connect_logic
     src/puzzle/PuzzleBoard.cpp
     src/tentacle/BloodTentacle.cpp
     src/tentacle/RibbonStrip.cpp)
+
+gyo_game_add_library(world OUT_TARGET object_connect_world
+    PUBLIC_LIBRARIES ${object_connect_logic} GYO::Kernel GYO::Orchestration GYO::StateMachine GYO::WorldTime
+    SOURCES
+    src/world/ObjectConnectWorld.cpp)
