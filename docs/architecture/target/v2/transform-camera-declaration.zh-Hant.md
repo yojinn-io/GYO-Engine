@@ -1,6 +1,6 @@
 # 事前宣告：`transform` 與 `camera` Module（SDL 線子批 X1，`v8-arch-gyo2-sdl-transform-camera`）
 
-更新：2026-11-23（修訂 1）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：交主會話轉使用者做動工前核准；核准前不動程式。** 要使用者定的一題在第 13 節。
+更新：2026-11-23（修訂 1）。Owner：架構（GYO2 主會話開的任務卡）。**狀態：動工前核准（2026-11-23）**——使用者在本卡：「照建議，第 1 題選乙，同意副本」。即第 13 節第 1 題選 (乙)（`Default2d()` 對調 near／far：near 1000、far −1000，z 大的在前面）、同意第 7 節第 3 項 (a)（`camera` 持有目標大小的副本 `CameraTargetSizes`）、其餘照建議。照第 10 節實作，合併前做合併前核准。
 
 **經過**：修訂 0（8b092f1f）送 Opus／high 敵對式檢查（**作者與檢查者同為 Opus**：Fable 用量不足），blocker 1、should 9、nit 12，全部採用或寫明處置（對照在第 14 節）。修訂 1 沒有再送檢查。
 
@@ -120,7 +120,7 @@ struct OrthographicProjection final {
     Math::Vec2 viewportOrigin{0.5F, 0.5F};
     ScalingMode scalingMode = ScalingWindowSize{};
     float scale = 1.0F;
-    static OrthographicProjection Default2d() noexcept;   // 近遠的取法交使用者（第 13 節）
+    static OrthographicProjection Default2d() noexcept;   // nearClip = 1000、farClip = -1000（對調；z 大的在前面，第 13 節 (乙)）
 };
 using Projection = std::variant<PerspectiveProjection, OrthographicProjection>;   // 預設透視（Bevy Projection::default）
 struct Camera2d final { };          // 標記：InitialValue 給 Camera 與正交的 Projection
@@ -189,7 +189,7 @@ class CameraModule final : public Orchestration::Module { void Build(Orchestrati
 
 | 項 | Bevy | GYO（X1） | 衝突點 | 膠水量 | 處置 |
 |---|---|---|---|---|---|
-| 座標慣例 | 右手、+Y 上、−Z 前；反向 Z（透視是無限遠，正交也在投影裡對調 near／far，`projection.rs:637-647`） | 左手、+Z 前、深度 0～1、不反向（math.md，已核准的 Math 統一） | 2D 的「z 大的在前面」在 Bevy 是 −Z 前加反向深度的結果；GYO 的正交相機看 +Z，照 near −1000／far 1000 取，深度隨 z 增加（z 小的在前面） | 無（Math 現成） | **`Default2d` 的近遠交使用者**（第 13 節）：對調就和 Bevy 的作者體驗一樣 |
+| 座標慣例 | 右手、+Y 上、−Z 前；反向 Z（透視是無限遠，正交也在投影裡對調 near／far，`projection.rs:637-647`） | 左手、+Z 前、深度 0～1、不反向（math.md，已核准的 Math 統一） | 2D 的「z 大的在前面」在 Bevy 是 −Z 前加反向深度的結果；GYO 的正交相機看 +Z，照 near −1000／far 1000 取，深度隨 z 增加（z 小的在前面） | 無（Math 現成） | **使用者選 (乙)**（第 13 節）：`Default2d` 對調 near／far，z 大的在前面，同 Bevy 的作者體驗 |
 | 相等 | glam 的 `==`（float 比較）；Bevy 沒有逐位元的摘要 | `Transform` 的逐位元 `==` | GYO 的 `Restore` 用 eq、摘要逐位元（R-2） | 一個 `operator==` | 檢查 B1；第 4.1 節 |
 | `GlobalTransform` 的存法 | `Affine3A`（48 bytes） | `Math::Matrix4`（64 bytes；Math 沒有仿射型別） | 無 | 無 | 照 Math 現有型別 |
 | 「有 `Transform` 就有 `GlobalTransform`」 | `require`，任何插入的路都補 | `InitialValue`＋OnAdd hook（`Restore` 不補初始值，DI-KS 12） | Kernel 把「推導資料」交給呼叫者，`Restore` 只跑通知 | 一個 hook（約 10 行） | 寫明兩條路各管哪裡；第三條路出現時 RC-TF 2 |
@@ -358,7 +358,7 @@ class CameraModule final : public Orchestration::Module { void Build(Orchestrati
 | 做法 | 內容 | 代價 |
 |---|---|---|
 | (甲) 照 GYO 的座標：near −1000、far 1000 | z 小的離相機近、在前面（同 Unity 的 2D 相機看 +Z） | 和 3D 相機同一個慣例；和 Bevy 的 2D 作者體驗相反，從 Bevy 的教學搬過來的寫法 z 要反 |
-| **(乙) 照 Bevy 的作者體驗：near 1000、far −1000（對調）** ←傾向 | z 大的在前面；相機在原點看得到 z −1000～1000 | 2D 相機的深度方向和 3D 相機相反（同一個相機混畫 3D 模型時要注意，R2b 的說明頁寫）；程式膠水沒有，只是預設的兩個數字 |
+| **(乙) 照 Bevy 的作者體驗：near 1000、far −1000（對調）** ←**使用者選（2026-11-23）** | z 大的在前面；相機在原點看得到 z −1000～1000 | 2D 相機的深度方向和 3D 相機相反（同一個相機混畫 3D 模型時要注意，R2b 的說明頁寫）；程式膠水沒有，只是預設的兩個數字 |
 
 **傾向 (乙)**：使用者定 Bevy 為主參考的理由是不當縫合怪、作者面對的語意少衝突；「數字大的在上面」也是 Godot 的 `z_index`、Unity 的 sorting order 共通的直覺。(甲) 的好處（和 3D 相機同一個慣例）只在同一個相機混畫 3D 時看得到，本線沒有這樣的 Feature。**證據**：Bevy `projection.rs:637-647`、`:771-791`；math.md Conventions；Object_Connect 的畫的先後（總宣告第 6.4 節）。
 
