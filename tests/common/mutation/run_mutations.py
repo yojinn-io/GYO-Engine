@@ -6,7 +6,8 @@ and counts as killed only when the run fails AND its output matches the mutant's
 expected message. A mutant with "expect_build_failure": true is killed instead
 when its build fails with the expected message (a configure-time guard). A
 mutant with "command" (a list; "{python}" stands for this interpreter, "{cmake}"
-for the --cmake executable and "{exe:NAME}" for the built executable NAME) runs that command from the
+for the --cmake executable, "{exe:NAME}" for the built executable NAME and "{build}", anywhere in a part,
+for the --build-dir) runs that command from the
 repository root instead of the target's executable, for checks that are
 scripts (a source guard, or a script that drives a built probe); with a
 "target" as well, that target is built first. A mutant with "platforms" (prefixes
@@ -67,7 +68,7 @@ def command_part(part, build_dir, cmake):
         return cmake
     if part.startswith("{exe:") and part.endswith("}"):
         return str(executable(build_dir, part[len("{exe:"):-1]))
-    return part
+    return part.replace("{build}", build_dir.as_posix())
 
 
 def check(mutant, build_dir, cmake):

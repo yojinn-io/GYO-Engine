@@ -13,6 +13,9 @@ if(DEFINED GYO_UNIT_REGISTRY_TEST_CASE)
     elseif(GYO_UNIT_REGISTRY_TEST_CASE STREQUAL "select")
         gyo_load_unit_registers(T "${TEST_MODULES}" "${TEST_PLUGINS}")
         gyo_unit_selection(T selected ${TEST_EXTRA} DISABLE_MODULES ${TEST_DISABLE} MODULES ${TEST_MODULE_LIST} PLUGINS ${TEST_PLUGIN_LIST})
+    elseif(GYO_UNIT_REGISTRY_TEST_CASE STREQUAL "plugins")
+        gyo_load_unit_registers(T "${TEST_MODULES}" "${TEST_PLUGINS}")
+        gyo_plugin_selection(T selected ${TEST_PLUGIN_LIST})
     else()
         message(FATAL_ERROR "Unknown unit register test case")
     endif()
@@ -112,13 +115,14 @@ endforeach()
 
 # --- A valid pair: reading and the stored row --------------------------------
 # Cells with two names (extra, aux, gadget), an in-World private dependency (aux on
-# extra), a Plugin on a Plugin (gadget on tool) and two carried Plugins.
+# extra), a Plugin on a Plugin (gadget on tool), a Plugin on a library-only Plugin
+# (kit on lib) and two carried Plugins.
 write_registers(good
     "core,core,GYO::Core,\"The core, with a comma\",yes,no,,,,\nutil,util,GYO::Util,A second library row,yes,no,core,,,\nwalk,walk,T::Walk,Walking,no,yes,core,,Test::Walk,test/Walk.hpp\nextra,extra,T::Extra,Extra,no,no,walk,core;util,Test::Extra,test/Extra.hpp\naux,aux,T::Aux,Two dependencies and an in-World private one,no,no,core;walk,extra,Test::Aux,test/Aux.hpp\noff,off,T::Off,Off by default,no,YES,,,Test::Off,test/Off.hpp\n"
-    "tool,tool,T::Tool,A third-party tool,no,no,walk,,Test::Tool,test/Tool.hpp\ngadget,gadget,T::Gadget,A Plugin on a Plugin,no,no,tool;walk,,Test::Gadget,test/Gadget.hpp\nspare,spare,T::Spare,Not carried,no,no,,,Test::Spare,test/Spare.hpp\nlib,lib,T::Lib,A library-only plugin,yes,no,core,,,\n")
+    "tool,tool,T::Tool,A third-party tool,no,no,walk,,Test::Tool,test/Tool.hpp\ngadget,gadget,T::Gadget,A Plugin on a Plugin,no,no,tool;walk,,Test::Gadget,test/Gadget.hpp\nspare,spare,T::Spare,Not carried,no,no,,,Test::Spare,test/Spare.hpp\nlib,lib,T::Lib,A library-only plugin,yes,no,core,,,\nkit,kit,T::Kit,A Plugin on a library-only Plugin,no,no,lib,,Test::Kit,test/Kit.hpp\n")
 gyo_load_unit_registers(G "${work}/good.modules.csv" "${work}/good.plugins.csv")
 get_property(order GLOBAL PROPERTY G_ORDER)
-expect_equal("${order}" "core;util;walk;extra;aux;off;tool;gadget;spare;lib" "register order")
+expect_equal("${order}" "core;util;walk;extra;aux;off;tool;gadget;spare;lib;kit" "register order")
 get_property(value GLOBAL PROPERTY G_extra_DEPENDS)
 expect_equal("${value}" "walk" "extra depends")
 get_property(value GLOBAL PROPERTY G_extra_PRIVATE)
@@ -146,6 +150,20 @@ gyo_unit_selection(G selected DISABLE_MODULES off MODULES extra PLUGINS tool)
 expect_equal("${selected}" "walk;extra;tool" "disable, add a default-no Module and a Plugin")
 gyo_unit_selection(G selected PLUGINS gadget tool MODULES aux extra)
 expect_equal("${selected}" "walk;extra;aux;off;tool;gadget" "register order, not argument order")
+
+# --- The Plugins a build adds (only those selected, SDL-2) --------------------
+gyo_plugin_selection(G plugins)
+expect_equal("${plugins}" "" "no Plugin requested: none added")
+gyo_plugin_selection(G plugins gadget)
+expect_equal("${plugins}" "tool;gadget" "a Plugin brings the Plugins it depends on")
+gyo_plugin_selection(G plugins kit)
+expect_equal("${plugins}" "lib;kit" "a library-only Plugin comes with the Plugin that needs it (not the Module core)")
+gyo_plugin_selection(G plugins kit spare gadget kit)
+expect_equal("${plugins}" "tool;gadget;spare;lib;kit" "register order, each once")
+gyo_plugin_selection(G plugins lib)
+expect_equal("${plugins}" "lib" "a library-only Plugin named by itself")
+gyo_plugin_selection(G plugins ALL)
+expect_equal("${plugins}" "tool;gadget;spare;lib;kit" "ALL: every Plugin row")
 
 # --- Invalid files ----------------------------------------------------------
 expect_bad_registers(header_name "!name,dir,target,description,library_only,default,depends,private,unit,header\n" "" "must be 'private_depends'")
@@ -200,6 +218,13 @@ expect_bad_selection(disable_needed "'tool' depends on 'walk', which the product
 expect_bad_selection(private_needed_not_listed "'aux' depends on 'extra', which the product does not carry" "-DTEST_MODULE_LIST=aux")
 expect_bad_selection(plugin_needed_not_listed "'gadget' depends on 'tool', which the product does not carry" "-DTEST_PLUGIN_LIST=gadget")
 expect_bad_selection(unknown_argument "unknown arguments 'DISABLE_MODULE'" "-DTEST_EXTRA=DISABLE_MODULE")
+function(expect_bad_plugins name expected)
+    expect_failure("${name}" "${expected}" -DGYO_UNIT_REGISTRY_TEST_CASE=plugins
+        "-DTEST_MODULES=${work}/good.modules.csv" "-DTEST_PLUGINS=${work}/good.plugins.csv" ${ARGN})
+endfunction()
+expect_bad_plugins(plugins_unknown "GYO_PLUGINS names 'ghost', which is no Plugin of config/plugins.csv" "-DTEST_PLUGIN_LIST=ghost")
+expect_bad_plugins(plugins_module "GYO_PLUGINS names 'walk', which is no Plugin of config/plugins.csv" "-DTEST_PLUGIN_LIST=walk")
+expect_bad_plugins(plugins_library_module "GYO_PLUGINS names 'core', which is no Plugin of config/plugins.csv" "-DTEST_PLUGIN_LIST=core")
 
 # --- gyo_product_units in a configured project --------------------------------
 # PROBE_ARGS separates with commas (a semicolon would split the -D argument).
@@ -222,7 +247,7 @@ endif()
 set(probe_prelude
     "cmake_minimum_required(VERSION 3.30)\n"
     "include(\"${repository}/build/cmake/GyoUnitRegistry.cmake\")\n"
-    "foreach(name IN ITEMS Orchestration Core Util Walk Extra Aux Off Tool Gadget Spare Lib)\n"
+    "foreach(name IN ITEMS Orchestration Core Util Walk Extra Aux Off Tool Gadget Spare Lib Kit)\n"
     "    add_library(probe_\${name} INTERFACE)\n"
     "    add_library(GYO::\${name} ALIAS probe_\${name})\n"
     "    add_library(T::\${name} ALIAS probe_\${name})\n"
@@ -242,9 +267,17 @@ string(CONCAT project_text
     "message(STATUS \"PROBE_LINKS=\${links}\")\n"
     "get_property(before GLOBAL PROPERTY GYO_UNITS_ORDER)\n"
     "message(STATUS \"PROBE_UNITS_BEFORE=[\${before}]\")\n"
+    "get_property(requested GLOBAL PROPERTY GYO_PLUGINS_REQUESTED)\n"
+    "message(STATUS \"PROBE_REQUESTED_REGISTERS=[\${requested}]\")\n"
     "gyo_load_unit_registers(GYO_UNITS \"${work}/good.modules.csv\" \"${work}/good.plugins.csv\")\n"
     "add_library(product_default STATIC)\n"
     "gyo_product_units(product_default)\n"
+    "add_library(product_kit STATIC)\n"
+    "gyo_product_units(product_kit PLUGINS kit tool)\n"
+    "add_library(product_gadget STATIC)\n"
+    "gyo_product_units(product_gadget PLUGINS gadget tool)\n"
+    "get_property(requested GLOBAL PROPERTY GYO_PLUGINS_REQUESTED)\n"
+    "message(STATUS \"PROBE_REQUESTED=[\${requested}]\")\n"
     "get_target_property(links product_default LINK_LIBRARIES)\n"
     "message(STATUS \"PROBE_DEFAULT_LINKS=\${links}\")\n"
     "file(WRITE \"\${CMAKE_BINARY_DIR}/empty.cpp\" \"\")\n"
@@ -335,6 +368,14 @@ foreach(expected IN ITEMS "UnitEntry<Module>{\"walk\"" "UnitEntry<Module>{\"off\
 endforeach()
 probe_line("${output}" PROBE_DEFAULT_LINKS links)
 expect_equal("${links}" "PROBE_DEFAULT_LINKS=GYO::Orchestration;T::Walk;T::Off" "the default product's links")
+
+# The Plugins the products carry are recorded for the build layer, which adds
+# their directories after every product; a product on synthetic REGISTERS
+# records nothing (its Plugins are not the repository's).
+probe_line("${output}" PROBE_REQUESTED_REGISTERS requested)
+expect_equal("${requested}" "PROBE_REQUESTED_REGISTERS=[]" "a product on synthetic registers requests no Plugin")
+probe_line("${output}" PROBE_REQUESTED requested)
+expect_equal("${requested}" "PROBE_REQUESTED=[kit;tool;gadget;tool]" "the Plugins the products carry")
 
 # gyo_link_registered_dependencies: depends PUBLIC, private_depends PRIVATE
 # (seen as $<LINK_ONLY:...> in the interface), INTERFACE for an interface library.

@@ -175,13 +175,13 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     MinGW-w64's default manifest is to be verified on a MinGW machine (open decision 23). The way is decided when
     the module is included, in the scope that enabled the compilers.
   - The build layer (`build/cmake/GyoCodePage.cmake`, included by `GyoBuild.cmake`) chooses the executables. It
-    records each directory it adds (engine, every game and tool, their tests and acceptance programs,
-    tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source directory, and
-    once every target exists applies the manifest to every executable target there and below whose source
-    directory is under engine, games, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
+    records each directory it adds (engine, every selected Plugin, every game and tool, their tests and acceptance
+    programs, tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source
+    directory, and once every target exists applies the manifest to every executable target there and below whose
+    source directory is under engine, plugins, games, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
     on every platform. No product is named: a new, cloned or removed product needs no common change. A target
     that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
-    programs that FetchContent adds (protoc) are outside the roots and keep their own manifests; Go services are
+    programs that FetchContent adds (protoc, and SDL's own) are outside the roots and keep their own manifests; Go services are
     not CMake executables. The separately configured host shader tool includes the engine/core/os module and applies it
     itself.
   - Windows 10 1903 and later honour the declaration; earlier versions ignore it and the process takes the system
@@ -303,7 +303,7 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, games and tools), fstream, `fopen`
+- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, plugins, games and tools), fstream, `fopen`
   and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
 - **R5**: in engine/core/os, an include of anything but the standard library, OS headers, `engine/core/base` and
@@ -315,9 +315,11 @@ Invariants 1–3 as text, so the result is the same on every platform:
   name without its suffix resolves to the wide entry point.
 
 engine/core/os/src is scanned for R5 and R6 only; engine/core/os/include is scanned for everything. Comments, string literals and
-character literals are ignored; `#include` lines are matched as written. The scan covers engine, games, tools,
-build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
-yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
+character literals are ignored; `#include` lines are matched as written. The scan covers engine, plugins, games,
+tools, build/acceptance and tests (except tests/common/os, third_party and build/target). engine and tests must yield
+at least one source; the other roots are skipped, and reported as skipped, while they hold none (removing the SDL
+Plugins may leave plugins/ empty, Design Invariant SDL-2 of `target/v2/sdl.zh-Hant.md`). The roots name no product or
+Plugin, so adding or removing one changes no guard file.
 
 Existing sites are frozen in ratchet allowlists named `os_boundary_allowlist.txt`. A line is
 `path rule count  # reason`. The count must equal the file's findings for that rule: more fails (a new site), fewer
@@ -334,7 +336,10 @@ tests/common/os has an OS-identifying compile definition (Invariant 1). A defini
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
 value is not read, since paths may contain any word. `COMPILE_DEFINITIONS`, `INTERFACE_COMPILE_DEFINITIONS` and
-the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike. The third
+the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike. The check is a module
+(`tests/common/os/OsDefinitionCheck.cmake`), so `cmake.ProcessCodePage` also runs it on its synthetic tree, where a
+target under plugins/ is refused on every OS before any real Plugin carries one (`v8-arch-gyo2-sdl-p`); like the
+code page walks it follows each directory once along its ancestry. The third
 (`tests/common/os/ProcessCodePageCheck.cmake`) checks Invariant 11: every executable target under the scanned roots
 carries the `GYO_PROCESS_CODE_PAGE` mark the build layer sets, or an exemption with its reason, which is listed. It
 is written apart from the walk that applies the manifest, walks from the top directory by source path as well as
@@ -384,18 +389,19 @@ Known blind spots, left to review:
 
 ## Design Invariants
 
-1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, games, tools,
-   build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
+1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, plugins, games,
+   tools, build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
    preprocessor condition (R2) and call no listed OS or CRT-split API (R3). A non-os target gets no
    OS-identifying compile definition from CMake. Compiler and architecture macros are not OS branches. Exceptions
    live only in an owner's ratchet allowlist.
 2. **Native file access goes through engine/core/os only** (R4). Runtime code in engine (outside engine/core/os and the host
-   shader tool, engine/core/io included), games and tools uses no fstream, `fopen` or `_wfopen` and no
+   shader tool, engine/core/io included), plugins, games and tools uses no fstream, `fopen` or `_wfopen` and no
    `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
    go through engine/core/io's abstraction, whose native backend calls engine/core/os; process facts come from engine/core/os
    directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
-   controls.
+   controls. A Plugin's own tests (plugins/<name>/tests/) are bound by it like the rest of plugins/: there is no
+   exclusion inside a runtime root (`v8-arch-gyo2-sdl-p`).
 3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
    and OS system libraries (`shell32` and, for `DatagramSocket`, `ws2_32` on Windows (v8-arch-gyo2-net-module step 0); `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
@@ -448,7 +454,8 @@ Known blind spots, left to review:
     resource and checks `GetACP()` ("OS files run with UTF-8 as the process ANSI code page"); the source guard
     refuses the ANSI code page constants and ANSI Win32 entry points in engine/core/os (R6); `cmake.ProcessCodePage`.
     Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6, pu-x5, gdir-code-page-walk-skips-games and
-    gdir-code-page-check-skips-games (the games/ root, `v8-arch-gyo2-build-games-dir`).
+    gdir-code-page-check-skips-games (the games/ root, `v8-arch-gyo2-build-games-dir`), sdlp-code-page-walk-skips-plugins
+    and sdlp-code-page-check-skips-plugins (the plugins/ root, `v8-arch-gyo2-sdl-p`).
 
 ### Replacement Criteria
 

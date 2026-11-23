@@ -243,6 +243,59 @@ function(gyo_unit_selection prefix output)
     set(${output} "${selected}" PARENT_SCOPE)
 endfunction()
 
+# The Plugins a build adds (plugins/<name>), in register order: the requested
+# names (what the configured products carry, and the cache variable GYO_PLUGINS)
+# and, transitively, the Plugins they depend on, so a library-only Plugin such
+# as sdl comes with the Plugins that need it. ALL requests every Plugin row. A
+# Plugin nobody requests is not added: its directory is never configured and
+# what it fetches is never downloaded (Design Invariant SDL-2 of
+# docs/architecture/target/v2/sdl.zh-Hant.md). A name that is not a Plugin row
+# is a FATAL_ERROR.
+function(gyo_plugin_selection prefix output)
+    get_property(order GLOBAL PROPERTY ${prefix}_ORDER)
+    set(wanted "")
+    foreach(name IN LISTS ARGN)
+        if(name STREQUAL "ALL")
+            foreach(row IN LISTS order)
+                get_property(kind GLOBAL PROPERTY ${prefix}_${row}_KIND)
+                if(kind STREQUAL "Plugin")
+                    list(APPEND wanted "${row}")
+                endif()
+            endforeach()
+            continue()
+        endif()
+        get_property(kind GLOBAL PROPERTY ${prefix}_${name}_KIND)
+        if(NOT name IN_LIST order OR NOT kind STREQUAL "Plugin")
+            message(FATAL_ERROR "GYO_PLUGINS names '${name}', which is no Plugin of config/plugins.csv")
+        endif()
+        list(APPEND wanted "${name}")
+    endforeach()
+    # Dependencies come earlier in the register, so one pass from the end
+    # reaches every transitive one.
+    set(reversed "${order}")
+    list(REVERSE reversed)
+    foreach(name IN LISTS reversed)
+        if(NOT name IN_LIST wanted)
+            continue()
+        endif()
+        get_property(depends GLOBAL PROPERTY ${prefix}_${name}_DEPENDS)
+        get_property(private GLOBAL PROPERTY ${prefix}_${name}_PRIVATE)
+        foreach(dep IN LISTS depends private)
+            get_property(dep_kind GLOBAL PROPERTY ${prefix}_${dep}_KIND)
+            if(dep_kind STREQUAL "Plugin")
+                list(APPEND wanted "${dep}")
+            endif()
+        endforeach()
+    endforeach()
+    set(selected "")
+    foreach(name IN LISTS order)
+        if(name IN_LIST wanted)
+            list(APPEND selected "${name}")
+        endif()
+    endforeach()
+    set(${output} "${selected}" PARENT_SCOPE)
+endfunction()
+
 # The engine Module <name> (target gyo_<name>) links its registered
 # dependencies: depends PUBLIC (INTERFACE for an interface library),
 # private_depends PRIVATE. Third-party links stay in the module's CMakeLists.
@@ -313,6 +366,12 @@ function(gyo_product_units target)
         gyo_load_unit_registers(${prefix} "${modules_csv}" "${plugins_csv}")
     endif()
     gyo_unit_selection(${prefix} selected DISABLE_MODULES ${ARG_DISABLE_MODULES} MODULES ${ARG_MODULES} PLUGINS ${ARG_PLUGINS})
+    if(prefix STREQUAL "GYO_UNITS" AND ARG_PLUGINS)
+        # The build layer adds the Plugins the products carry once every product
+        # is configured (build/cmake/GyoBuild.cmake). A product in a Plugin's own
+        # directory (its tests) records it too, which changes nothing then.
+        set_property(GLOBAL APPEND PROPERTY GYO_PLUGINS_REQUESTED ${ARG_PLUGINS})
+    endif()
     get_property(order GLOBAL PROPERTY ${prefix}_ORDER)
     set(includes "")
     set(rows "")

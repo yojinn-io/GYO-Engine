@@ -1,10 +1,11 @@
 # Design Invariant 11 of docs/architecture/os.md: every Windows executable of
 # the repository's own sources declares UTF-8 as its ANSI code page. engine/os
 # owns the manifest and its embedding; the build layer decides which targets
-# get it: every executable under engine, games, tools, build/acceptance and
-# tests, without naming a product (AGENTS.md sections 7 and 9). Third-party
-# programs that FetchContent adds (protoc, for one) live outside those roots
-# and keep their own manifests. tests/common/os checks the result.
+# get it: every executable under engine, plugins, games, tools,
+# build/acceptance and tests, without naming a product (AGENTS.md sections 7
+# and 9). Third-party programs that FetchContent adds (protoc, SDL's own, for
+# example) live in the binary tree, outside those roots, and keep their own
+# manifests. tests/common/os checks the result.
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/../../engine/core/os/cmake/GyoProcessCodePage.cmake")
 
@@ -24,7 +25,7 @@ function(_gyo_code_page_walk directory)
     list(APPEND ancestors "${directory}")
     get_property(source DIRECTORY "${directory}" PROPERTY SOURCE_DIR)
     file(RELATIVE_PATH relative "${GYO_REPOSITORY_ROOT}" "${source}")
-    foreach(root IN ITEMS engine games tools build/acceptance tests)
+    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)
         if(relative STREQUAL root OR relative MATCHES "^${root}/")
             get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
             foreach(target IN LISTS targets)
