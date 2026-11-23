@@ -131,7 +131,12 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 
 ## 4. model 與骨骼動畫：PvP 的實際需求（只列事實，給使用者定 model Module 與動畫分層用）
 
-「model Module 選哪一案」與「骨骼動畫怎麼分三層」是使用者還沒定的兩題，這張卡不定。題目的原文在 repo 的文件裡查不到（已問主會話），所以這一節不對應案名，只列 PvP 實際用到什麼、誰做的。
+「model Module 選 (A) 還是 (B)」與「骨骼動畫怎麼分三層」是使用者還沒定的兩題，這張卡不定。題目是主會話 2026-11-23 提的（原文經主會話轉來，批次表由主會話補）：
+
+- **model 的前提**：model 放 Engine，做成 `engine/modules/model` 的函式庫（同 `audio`、`json`：不登記進 World），內容是節點階層、材質、蒙皮網格、動畫片段、取樣出 Pose，加 ufbx loader。**(A)** 照 11-19，model 跟著用它的產品（PvP、model_viewer）回來；**(B)** 現在就當基礎做，排在 SDL 之後或併進 SDL 的畫面子批。
+- **三層**：1 資料與取樣（骨架、片段、「片段在時刻 t 的姿勢」的純函式；model 函式庫）；2 播放（每個實體播哪個片段、播到哪裡，照 World 的時間前進並取樣出 Pose；登記單位 `animation`，要能登記進回滾、取樣照 tick）；3 蒙皮顯示（網格照 Pose 變形，render 經 Extract 拿 Pose）。hitbox、何時切片段、混合規則是遊戲規則，產品讀第 2 層的 Pose。
+
+4.1～4.4 是 PvP 實際用到什麼、誰做的；4.5、4.6 把它們對上兩題。
 
 ### 4.1 格式
 
@@ -173,6 +178,42 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 - **Match（伺服器）也取樣**：`match_main.cpp:125-151` 用 ufbx 讀 FBX（不解碼貼圖），每 tick 第一次有人開槍時，對每個活著的目標合成一次整副骨架的姿勢（一次 `SamplePose` 4～7 次），把 hitbox 擺上去（PV2）。Client 與 Match 共用 `ComposeBody`（`PlayerPose.cpp:497`）。
 - 量測（同 dev_log）：Match 取 12 次樣 0.44 ms（linux）；載入 0.23 s、93 MB。
 - 動畫狀態（步態相位、權重、跳躍階段）在 master 是 Match 的權威、量化後送給 Client（⚠W）。GYO2 的伺服器權威下這是遊戲的判定資料，要不要複製、Client 能不能自己推，搬產品時定（PV6）。
+- **進了權威摘要，沒進預測**：master 的權威摘要從 v4 起把每位玩家的動畫狀態接在每個 tick 的紀錄後面（`tests/object_fps_pvp/AuthorityDigest.cpp:52-53,222-225`）；Client 的預測（`LocalPlayerPrediction.cpp`）完全不碰動畫——自己的身體在第一人稱看不到，遠端玩家的姿勢只是呈現，呈現不回流到判定（`docs/object_fps_pvp/player-presentation.zh-Hant.md` DI 4）。
+- **內容摘要另一件**：`PlayerAnimationDigest`（SHA-256：影響姿勢的數值、16 個 clip 轉換後的 key、骨架）由 Match 送、Client 比對，不同就斷線（`runtime_v9.proto:28`、`ClientConnection.cpp:308-316`）。它比的是「載入＋retarget 的結果」，不是每幀的 Pose。
+
+### 4.5 對上 model 的 (A)／(B)：PvP 需要什麼、什麼時候要
+
+| 事實 | 出處 |
+|---|---|
+| PvP 的模型全是 FBX（4 個執行時用的檔：身體、UAL1 片段來源、viewmodel、第三人稱武器），要 ufbx | 4.1、4.2 |
+| **Match 沒有畫面也要 model**：載入骨架與片段（不解碼貼圖）、取樣整副骨架，給 hitbox 用。所以 model 函式庫要能不連 render、不連 GPU、不碰 SDL 地在伺服器上用 | `match_main.cpp:125-151`、`PlayerAnimationContent.cpp:74-98`（只登記 TextLoader 與 ufbx loader） |
+| Client 畫第三人稱身體、手持武器、viewmodel 都要 model（＋R2b 的 3D 管線） | 2.1 的 `PlayerPresentation`、`WeaponViewModel` |
+| 在 PvP 移植的路上，model 擋住的是：命中的部位（PV2）、Match 的判定、Client 的 3D 角色。不擋的是：移動（等物理）、HUD、聲音、大廳 | 第 2、3 節 |
+| Object_Connect（另一個點名的移植）不用 model | `games/object_connect/docs/porting-inventory.zh-Hant.md`（PR #302） |
+| master 的 model 在 Engine 提供的：`ModelAsset`（節點、材質、網格、片段）、`SamplePose`、`BlendPoses`、`MakeDefaultPose`、`TransferCompatibleAnimation`、`SkinMesh`、動畫事件的 parse／bind；載入用 nlohmann、和 asset 耦合（R0 帶不動的理由，`rebuild-r0-carry-list.zh-Hant.md:264`） | 4.3 |
+
+### 4.6 對上骨骼動畫的三層：PvP 用到的每一項落在哪一層
+
+| PvP 用到的 | 第 1 層（資料與取樣） | 第 2 層（播放） | 第 3 層（蒙皮顯示） | 遊戲規則 |
+|---|---|---|---|---|
+| 骨架：身體 77、viewmodel 53、UAL1 65（4.2） | ● | | | |
+| 片段：身體 16（全部 retarget 自 UAL1）、viewmodel 5 | ● | | | 選哪些片段（animset 資料） |
+| retarget（依名字一對一、`translation_scale`、忽略節點） | ● 載入時做 | | | 設定是遊戲的資料（`character.json`） |
+| 取樣（Loop、Clamp）、兩個姿勢的混合 | ● 純函式（master 的 `SamplePose`、`BlendPoses`） | | | 權重怎麼算 |
+| 播哪個片段、播到哪裡 | | master **沒有**每個實體的播放器：Match 每 tick 由移動狀態推出步態相位、權重、跳躍階段（`AdvancePlayerAnimation`），片段時刻由 tick 推（例：跳躍階段的零點 `jumpPhaseTick`），不讀真實時間 | | ● 推法是遊戲的（`PlayerAnimation.cpp`） |
+| 遠端玩家的播放 | | Client 對兩份權威值內插（`InterpolatePlayerAnimation`），照呈現的時間 | | ● |
+| viewmodel 的播放 | | 單一片段、依動作時長算時刻，只在本機 | | ● |
+| 上下半身分層（`spine_01` 子樹）、additive、aim 混合、附掛到 `hand_r` | | | | ● master 全在遊戲（`PlayerPose.cpp`） |
+| 動畫事件（換彈的 `magazine_in`） | ● 事件資料與區間穿越 | | | 事件 → 聲音的對照與排程 |
+| hitbox 擺上骨頭（Match） | 讀整副骨架的全域變換 | | | ● 形狀、部位（`hitbox.json`） |
+| 蒙皮：每頂點最多 4 權重；同時最多 4 個身體＋1 個 viewmodel | | | ● master 是 CPU 蒙皮、每幀重傳頂點；GPU 是 GYO2 的新設計 | |
+
+**和「進回滾、進摘要」有關的事實**（給第 2 層定「要能登記進回滾、取樣照 tick」用）：
+
+- master 的 Match 每 tick 推動畫狀態，那份狀態進權威摘要（4.4）；取樣只在 Match 判定時做、結果每 tick 快取（`PvpMatch.cpp:632-656`），姿勢本身不存、不進摘要。
+- Client 不預測動畫、不用姿勢做任何判定；命中只在 Match 算。所以在 master 的設計裡，**Client 的回滾不需要動畫**。GYO2 的 PvP 要是改成 Client 也預測命中、或動畫狀態成為 K3 會回滾的複製元件，才會需要。
+- 跨平台：載入的 hash 四平台相同，**取樣結果跨平台不同**（PV6）。Match（Linux）與 Client（Windows）的姿勢不會逐位元相同；master 因為只有 Match 判定，所以沒有出問題，含動畫的命中 golden 只做同平台比對。
+- 量：Match 合成一次姿勢 `SamplePose` 4～7 次；12 次取樣 0.44 ms（linux）。
 
 ## 5. 從 master 的協議推出的遊戲需求（語意，不是 wire）
 
