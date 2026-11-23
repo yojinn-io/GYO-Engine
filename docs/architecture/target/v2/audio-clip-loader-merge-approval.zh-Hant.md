@@ -1,6 +1,8 @@
 # 合併前核准：audio 那一側的小批（`v8-arch-gyo2-audio-clip-loader`）
 
-更新：2026-11-23（草稿）。**狀態：交使用者合併前核准。合併要使用者另外說「合併」。** 宣告：[audio-clip-loader-declaration.zh-Hant.md](audio-clip-loader-declaration.zh-Hant.md)（修訂 2，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)。
+更新：2026-11-23。**狀態：合併前核准進行中（第 1 件已核准；第 2～4 件待定）。合併要使用者另外說「合併」。** 宣告：[audio-clip-loader-declaration.zh-Hant.md](audio-clip-loader-declaration.zh-Hant.md)（修訂 2，使用者 2026-11-23 動工前核准）。dev_log：[2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)。
+
+> **第 1 件核准**（使用者，2026-11-23，side chat 經轉達）：原話「核准」。核准的是第 1 節（被拿掉或改寫的 DI 守衛測試，§14.4 的 1～5；33203a6e 的版本）。比過的選項：核准／不核准。理由：使用者沒有另外說（side chat 的說明：性質還在的由新判定接手、各有突變；隨機制消失的不接手；幾條判定比以前嚴）。
 
 **這一頁請你定四件**：
 1. 第 1 節：被拿掉或改寫的 Design Invariants 守衛測試（AGENTS §14.4：DI 的守衛不論有沒有緩的面都要你核准）。
