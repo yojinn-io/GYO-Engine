@@ -1,0 +1,26 @@
+#pragma once
+
+#include "engine/json/Document.hpp"
+
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+namespace object_fps_pvp::data {
+
+// Reading the members of the game's JSON data contracts. Each function throws
+// std::runtime_error naming what was wrong; a parser catches it once and turns
+// it into its error text, so a contract's reader stays a straight list of the
+// members it takes.
+
+[[nodiscard]] GYO::Engine::Json::Document ParseDocument(std::string_view text);
+[[nodiscard]] GYO::Engine::Json::ObjectView AsObject(const GYO::Engine::Json::Value& value, std::string_view what);
+// The member key of object; missing is an error.
+[[nodiscard]] GYO::Engine::Json::Value Member(const GYO::Engine::Json::ObjectView& object, std::string_view key);
+[[nodiscard]] bool HasMember(const GYO::Engine::Json::ObjectView& object, std::string_view key);
+[[nodiscard]] double Number(const GYO::Engine::Json::Value& value, std::string_view what);
+[[nodiscard]] std::int64_t Integer(const GYO::Engine::Json::Value& value, std::string_view what);
+[[nodiscard]] std::uint64_t Unsigned(const GYO::Engine::Json::Value& value, std::string_view what);
+[[nodiscard]] std::string String(const GYO::Engine::Json::Value& value, std::string_view what);
+
+} // namespace object_fps_pvp::data
