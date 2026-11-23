@@ -122,6 +122,7 @@
 - [2026_11_22_gyo2_state_machine.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_state_machine.zh-Hant.md)：狀態機 Module（第 5 批，宣告修訂 8）。
 - [2026_11_22_gyo2_restore_impl.zh-Hant.md](../../../dev_logs/2026_11_22_gyo2_restore_impl.zh-Hant.md)：第 5 批 讀檔的實作（讀檔宣告修訂 12：沿用既有案例、補四個生成期間的讀檔案例、說明頁第 15 節）與存檔版本 `save_version`（純程式庫、預設不帶）。
 - [2026_11_23_gyo2_kernel_res_changed.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_res_changed.zh-Hant.md)：Resource 的變更偵測——`Res`／`ResMut` 的 `Changed()`、Kernel DI-KS 28、System 契約說明頁第 18 節、CCR-8。
+- [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 等 CPU，不在 WakeSignal；改不改判定交使用者）。
 
 ## 沒有搬過來的
 
