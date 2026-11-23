@@ -932,7 +932,7 @@ TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 
     const Built t8 = build(tick8);
     CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "8:9e9f1eeabb8adadea081c9b457fba880ca1fa9df1b956783177576323485e1c6",
                   "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
-    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "9:1067fa129f74f435a46566ebf1db292facfc893c5b54f0a205e3f5936a918b64",
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "9:c00dc0102d9f5363fa97b85e8997b4759c73aadda1c5ef63e09028a22ae8435f",
                   "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
     const std::string report = t5.registry->Frozen().ExportPlans();
     CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 8:") != std::string::npos,

@@ -71,6 +71,13 @@ enum class Derive : std::uint8_t {
     Nothing,        // a restore: the records are put back as given (DI-KS 12)
 };
 
+// How an application keeps relationships (Relationship.hpp; DI-KS 30 to 33).
+enum class Relationships : std::uint8_t {
+    Change,        // keeps the targets (Children) and expands linked despawns
+    Restore,       // keeps the targets; no linked expansion (a restore gives the whole alive set)
+    RestoreGiven,  // the restore names the target type: put back as given, no upkeep, no linked expansion
+};
+
 enum class RecordKind : std::uint8_t {
     Spawn,
     Insert,
@@ -285,8 +292,9 @@ struct ImmediateOutcome {
 // initial values, then OnAdd: a hook sees every cell put back), then the hook
 // rounds, as ApplyImmediate; refused and failing as ApplyImmediate. Its Spawn
 // records carry restore (no allotter range check) and an empty bundle.
+// targetsGiven: the RestoreSet names Children (Relationships::RestoreGiven).
 [[nodiscard]] Engine::Base::Result<void, KernelError> ApplyRestore(SystemContext& call, std::vector<Record> records,
-                                                                   ChangeStamp stamp, bool inClosure);
+                                                                   ChangeStamp stamp, bool inClosure, bool targetsGiven);
 
 // Event cursor declaration 3.3 (time-events declaration 4.2): ExclusiveWorld::
 // Trigger. Runs the observers of event id now, each like one nested System

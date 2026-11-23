@@ -50,6 +50,11 @@ struct DigestTag {};
 
 inline SystemResult Ok() { return {}; }
 
+// The kernel registers its own components before any owner (ChildOf and
+// Children: kernel DI-KS 29; declaration v8-arch-gyo2-kernel-relationship 5.1),
+// so an owner's n-th component is ComponentId kFirstOwnerComponent + n.
+inline constexpr ComponentId kFirstOwnerComponent = 2;
+
 // The kernel's two registration steps over functions, in list order: one
 // Register per (owner name, build), then BuildPlans. Registration units and
 // their lifecycle are the orchestration layer's (v8-arch-gyo2-orchestration-skeleton).
