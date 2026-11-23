@@ -1,5 +1,5 @@
 # The sdl Plugin (config/plugins.csv, library_only): SDL3 for the sdl* Plugins,
-# fetched with GYO's patches, and the target GYO::Sdl they depend on
+# fetched with GYO's patches, and the target GYO::SDL they depend on
 # (docs/architecture/target/v2/sdl.zh-Hant.md). The build layer adds this
 # directory only when a configured product carries an sdl* Plugin or
 # GYO_PLUGINS names one (Design Invariant SDL-2); without it SDL is neither
@@ -7,7 +7,7 @@
 #
 # SDL is linked by each sdl* Plugin's own target, PRIVATE, and only that
 # Plugin's src/adapters/sdl/ and tests/adapters/sdl/ include SDL3/ (Design
-# Invariant SDL-1). GYO::Sdl itself carries no SDL: what the sdl* Plugins share
+# Invariant SDL-1). GYO::SDL itself carries no SDL: what the sdl* Plugins share
 # (the window register, the clock pairing) is written in GYO's own words.
 include(FetchContent)
 find_package(Git REQUIRED)
@@ -50,7 +50,7 @@ if(NOT gyo_sdl3_patched)
 endif()
 
 add_library(gyo_sdl INTERFACE)
-add_library(GYO::Sdl ALIAS gyo_sdl)
+add_library(GYO::SDL ALIAS gyo_sdl)
 target_compile_features(gyo_sdl INTERFACE cxx_std_20)
 
 if(BUILD_TESTING)

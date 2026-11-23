@@ -39,7 +39,7 @@ class PluginRemovalTests(unittest.TestCase):
         self.copy = self.base / "copy"
         self.files = {
             "config/plugins.csv": HEADER
-            + "sdl,sdl,GYO::Sdl,SDL3,yes,no,,,,\n"
+            + "sdl,sdl,GYO::SDL,SDL3,yes,no,,,,\n"
             + "sdl_window,sdl_window,GYO::SdlWindow,The window,no,no,sdl,,A::W,a/W.hpp\n"
             + "imgui,imgui,GYO::Imgui,Not of the family; sdl in prose is not a name,yes,no,,,,\n",
             "config/games.csv": PRODUCTS + "keep,Uses SDL,,1,1,1,1\nmatch,Headless,,1,1,1,1\n",

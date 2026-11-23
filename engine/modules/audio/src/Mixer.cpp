@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "PlayheadBoard.hpp"
+#include "SpscRing.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
@@ -35,17 +36,15 @@ struct Command final {
 };
 static_assert(std::is_trivially_copyable_v<Command>);
 
-// One bounded SPSC ring. The producer owns tail, the audio thread owns head;
-// each publishes its index with release and reads the other's with acquire, so
-// a slot is written before the consumer sees it and read before the producer
-// reuses it. Indices only grow; the ring index is the index modulo capacity.
+// One submitter's state: its command ring (SpscRing: the producer is whoever
+// uses the submitter, the consumer the audio thread) and its table.
 //
 // The table holds a reference to the clip of every play queued or sounding
 // (Design Invariant 7): only the producer (whoever uses the submitter, one at a
 // time) touches it and the stack of free entries. The audio thread holds views
 // and entry numbers, never a reference; it hands an entry back through the
-// returned ring (the audio thread owns returnedTail, the producer
-// returnedHead). An entry is in exactly one place at a time (free, in the ring,
+// returned ring (an SpscRing the other way: the audio thread produces, the
+// submitter's user consumes). An entry is in exactly one place at a time (free, in the ring,
 // in a voice or its ended list, in the returned ring, or in the producer's hands
 // while it lets go of it), and the returned ring has one slot per entry, so it
 // never fills. The table never runs out: every Play first takes back what was
@@ -59,10 +58,8 @@ struct SubmitterSlot final {
         for (std::uint32_t i = entries; i > 0; --i) freeEntries.push_back(i - 1);
     }
 
-    std::vector<Command> ring;
+    SpscRing<Command> ring;
     const std::uint64_t handlePrefix; // (index + 1) << kSequenceBits
-    alignas(64) std::atomic<std::uint64_t> tail{0};
-    alignas(64) std::atomic<std::uint64_t> head{0};
     // The producer's own: the last handle sequence issued. 2^57 plays
     // would overflow it, which no mixer reaches.
     std::uint64_t lastSequence = 0;
@@ -74,9 +71,7 @@ struct SubmitterSlot final {
     std::vector<Clip> held;
     std::vector<std::uint32_t> freeEntries;
     // Entries handed back by the audio thread.
-    std::vector<std::uint32_t> returned;
-    alignas(64) std::atomic<std::uint64_t> returnedTail{0};
-    alignas(64) std::atomic<std::uint64_t> returnedHead{0};
+    SpscRing<std::uint32_t> returned;
 };
 
 // Handles: the submitter's index plus one in the top 7 bits (1 to 64), a
@@ -164,19 +159,14 @@ std::int64_t ClampedOffset(const std::int64_t a, const std::int64_t b) noexcept 
     return std::clamp(a - b, -kMaxOffsetNs, kMaxOffsetNs);
 }
 
-// The audio thread. Hands a table entry back to its submitter: the release
-// orders every read of the clip's samples before the producer lets go of it.
-// The ring has one slot per entry and an entry is in it at most once, so it is
-// never full; the acquire orders the producer's read of the slot before this
-// write.
+// The audio thread. Hands a table entry back to its submitter: the ring's
+// release orders every read of the clip's samples before the producer lets go
+// of it. The ring has one slot per entry and an entry is in it at most once, so
+// it is never full (a refusal cannot happen; the entry would stay held until the
+// state goes).
 void HandBack(MixerState& state, const std::uint64_t mark) noexcept {
     SubmitterSlot& slot = *state.slots[(mark >> 32) - 1];
-    const std::uint64_t tail = slot.returnedTail.load(std::memory_order_relaxed);
-    const std::uint64_t head = slot.returnedHead.load(std::memory_order_acquire);
-    const std::uint64_t capacity = slot.returned.size();
-    if (tail - head >= capacity) return; // cannot happen; the entry would stay held until the state goes
-    slot.returned[tail % capacity] = static_cast<std::uint32_t>(mark & 0xFFFF'FFFFu);
-    slot.returnedTail.store(tail + 1, std::memory_order_release);
+    static_cast<void>(slot.returned.TryPush(static_cast<std::uint32_t>(mark & 0xFFFF'FFFFu)));
 }
 
 // The audio thread, after each Render. Publishes every voice's sound and
@@ -233,26 +223,15 @@ Submitter::~Submitter() {
 }
 
 void Submitter::Reclaim() noexcept {
-    std::uint64_t head = slot_->returnedHead.load(std::memory_order_relaxed);
-    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_acquire);
-    if (head == tail) return;
-    const std::uint64_t capacity = slot_->returned.size();
-    for (; head != tail; ++head) {
-        const std::uint32_t entry = slot_->returned[head % capacity];
-        slot_->held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread
-        slot_->freeEntries.push_back(entry); // reserved for every entry: allocates nothing
-    }
-    slot_->returnedHead.store(head, std::memory_order_release);
+    SubmitterSlot& slot = *slot_;
+    slot.returned.Drain([&slot](const std::uint32_t entry) noexcept {
+        slot.held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread
+        slot.freeEntries.push_back(entry); // reserved for every entry: allocates nothing
+    });
 }
 
 bool Submitter::Enqueue(const Detail::Command& command) {
-    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);
-    const std::uint64_t head = slot_->head.load(std::memory_order_acquire);
-    const std::uint64_t capacity = slot_->ring.size();
-    if (tail - head >= capacity) return false;
-    slot_->ring[tail % capacity] = command;
-    slot_->tail.store(tail + 1, std::memory_order_release);
-    return true;
+    return slot_->ring.TryPush(command);
 }
 
 SoundHandle Submitter::Play(const PlayRequest& request) {
@@ -399,13 +378,7 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
     const std::uint32_t claimed = std::min<std::uint32_t>(state.claimed.load(std::memory_order_relaxed),
                                                           static_cast<std::uint32_t>(state.slots.size()));
     for (std::uint32_t i = 0; i < claimed; ++i) {
-        SubmitterSlot& slot = *state.slots[i];
-        std::uint64_t head = slot.head.load(std::memory_order_relaxed);
-        const std::uint64_t tail = slot.tail.load(std::memory_order_acquire);
-        if (head == tail) continue;
-        const std::uint64_t capacity = slot.ring.size();
-        for (; head != tail; ++head) {
-            const Command& command = slot.ring[head % capacity];
+        state.slots[i]->ring.Drain([&state, i, blockStart, anchorNs](const Command& command) noexcept {
             if (command.kind == CommandKind::Play) {
                 const std::int64_t offset = NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs));
                 const std::uint64_t lease = Detail::LeaseMark(i + 1, command.entry);
@@ -413,7 +386,7 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
                     Detail::ScheduledPlay{command.view, blockStart + offset + state.delayFrames, command.gainLeft,
                                           command.gainRight, command.handle, lease});
                 if (outcome == Detail::StartOutcome::NoVoice) HandBack(state, lease);
-                continue;
+                return;
             }
             // A stop maps its time like a play (Design Invariant 3), on its own line.
             const std::int64_t stopFrame =
@@ -423,12 +396,11 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
             ReleaseEnded(state);
             if (result.stopped == 0) {
                 state.stopsUnmatched.fetch_add(1, std::memory_order_relaxed);
-                continue;
+                return;
             }
             state.stopsMatched.fetch_add(1, std::memory_order_relaxed);
             if (result.late) state.stopsLate.fetch_add(1, std::memory_order_relaxed);
-        }
-        slot.head.store(head, std::memory_order_release);
+        });
     }
     state.voices.Render(interleavedOut);
     ReleaseEnded(state);

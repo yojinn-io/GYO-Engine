@@ -161,9 +161,9 @@
     {
       "id": "au-sched-full-off-by-one",
       "what": "A full ring accepts one more request, overwriting the oldest",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    if (tail - head >= capacity) return false;",
-      "replace": "    if (tail - head > capacity) return false;",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        if (tail - head >= capacity) return false;",
+      "replace": "        if (tail - head > capacity) return false;",
       "target": "gyo_audio_tests",
       "cases": "*queue is full*",
       "expect": "CHECK_FALSE\\( rig.submitter.Play"
@@ -181,8 +181,8 @@
     {
       "id": "au-sched-head-not-published",
       "what": "The audio thread never frees the ring",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        slot.head.store(head, std::memory_order_release);\n",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        head_.store(head, std::memory_order_release);\n",
       "replace": "",
       "target": "gyo_audio_tests",
       "cases": "*wraparound*",
@@ -202,8 +202,8 @@
       "id": "au-review-handoff-rebound",
       "what": "A thread binding is put back into Submitter::Enqueue, which Play, Stop and StopAll share (the first thread to queue through a submitter claims it, another thread then asserts): the hand-over contract (one user at a time, ordered by happens-before) no longer holds. Only the three hand-over cases catch it.",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
-      "replace": "    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);\n",
+      "find": "    return slot_->ring.TryPush(command);\n",
+      "replace": "    {\n        static std::atomic<const void*> claimed{nullptr};\n        thread_local const void* mine = nullptr;\n        const void* expected = nullptr;\n        if (claimed.compare_exchange_strong(expected, slot_)) mine = slot_;\n        else if (expected == slot_) GYO_ASSERT(mine == slot_);\n    }\n    return slot_->ring.TryPush(command);\n",
       "target": "gyo_audio_tests",
       "cases": "*plays on another thread after a hand-over*,*stops on another thread after a hand-over*,*plays on one thread and lets go on another after a hand-over*",
       "expect": "GYO_ASSERT failed: mine == slot_",
@@ -711,13 +711,13 @@
     },
     {
       "id": "au-ctl-stress-reassign-every-block",
-      "what": "The audio thread reassigns every voice's board slot every block, so a concurrent reader can briefly see a playing sound as not playing (Fable check, place 4; concurrent only)",
+      "what": "The audio thread reassigns every voice's board slot every block, so a concurrent reader can briefly see a playing sound as not playing (Fable check, place 4; concurrent only); v8-arch-gyo2-sdl-a added the long-sounds case, which polls only sounding sounds in a tight loop",
       "file": "engine/modules/audio/src/Mixer.cpp",
       "find": "        if (state.published[i] != voice.cookie) {",
       "replace": "        if (true) {",
       "target": "gyo_audio_tests",
       "cases": "*under a polling thread*",
-      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+      "expect": "CHECK\\( (track\\.bad|gaps) == 0 \\) is NOT correct"
     },
     {
       "id": "au-clip-empty-counts-before-assert",
@@ -778,7 +778,7 @@
       "id": "au-clip-reclaim-keeps-clip",
       "what": "Taking back an entry does not let go of its clip: the mixer holds every clip it ever played until its state goes.",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        slot_->held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread\n",
+      "find": "        slot.held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread\n",
       "replace": "",
       "target": "gyo_audio_alloc_tests",
       "cases": "*lets go of the clips handed back on each of its calls*",

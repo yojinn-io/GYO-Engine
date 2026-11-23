@@ -1,72 +1,46 @@
 {
   "version": 1,
-  "description": "Memory-order mutants of the audio plan's SPSC rings. Killed only by a ThreadSanitizer build of gyo_audio_tests (configure with -fsanitize=thread) run with TSAN_OPTIONS=ignore_interceptors_accesses=0, which macOS needs to check the ring's memcpy writes; an ordinary build cannot see them. Run with tests/common/mutation/run_mutations.py --catalog this file --build-dir <the TSan build>.",
+  "description": "Memory-order mutants of the audio plan's SPSC rings. Killed only by a ThreadSanitizer build of gyo_audio_tests (configure with -fsanitize=thread) run with TSAN_OPTIONS=ignore_interceptors_accesses=0, which macOS needs to check the ring's memcpy writes; an ordinary build cannot see them. Run with tests/common/mutation/run_mutations.py --catalog this file --build-dir <the TSan build>. v8-arch-gyo2-sdl-a folded the two hand-written rings of Mixer.cpp into SpscRing.hpp: au-ctl-clip-handback-relaxed and au-ctl-clip-reclaim-relaxed retired (the same lines as au-sched-play-tail-relaxed and au-sched-render-tail-relaxed now, which cover both rings).",
   "mutants": [
     {
       "id": "au-sched-play-head-relaxed",
-      "what": "The producer reads head without acquire",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    const std::uint64_t head = slot_->head.load(std::memory_order_acquire);",
-      "replace": "    const std::uint64_t head = slot_->head.load(std::memory_order_relaxed);",
+      "what": "The producer reads head without acquire (v8-arch-gyo2-sdl-a: both rings share SpscRing, so this covers the returned ring too)",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        const std::uint64_t head = head_.load(std::memory_order_acquire);",
+      "replace": "        const std::uint64_t head = head_.load(std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
       "cases": "*concurrent producers*",
       "expect": "ThreadSanitizer: data race"
     },
     {
       "id": "au-sched-play-tail-relaxed",
-      "what": "The producer publishes tail without release",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    slot_->tail.store(tail + 1, std::memory_order_release);",
-      "replace": "    slot_->tail.store(tail + 1, std::memory_order_relaxed);",
+      "what": "The producer publishes tail without release (v8-arch-gyo2-sdl-a: both rings share SpscRing, so this covers the returned ring too)",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        tail_.store(tail + 1, std::memory_order_release);",
+      "replace": "        tail_.store(tail + 1, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
       "cases": "*concurrent producers*",
       "expect": "ThreadSanitizer: data race"
     },
     {
       "id": "au-sched-render-tail-relaxed",
-      "what": "The audio thread reads tail without acquire",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        const std::uint64_t tail = slot.tail.load(std::memory_order_acquire);",
-      "replace": "        const std::uint64_t tail = slot.tail.load(std::memory_order_relaxed);",
+      "what": "The audio thread reads tail without acquire (v8-arch-gyo2-sdl-a: both rings share SpscRing, so this covers the returned ring too)",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        const std::uint64_t tail = tail_.load(std::memory_order_acquire);",
+      "replace": "        const std::uint64_t tail = tail_.load(std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
       "cases": "*concurrent producers*",
       "expect": "ThreadSanitizer: data race"
     },
     {
       "id": "au-sched-render-head-relaxed",
-      "what": "The audio thread publishes head without release",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "        slot.head.store(head, std::memory_order_release);",
-      "replace": "        slot.head.store(head, std::memory_order_relaxed);",
+      "what": "The audio thread publishes head without release (v8-arch-gyo2-sdl-a: both rings share SpscRing, so this covers the returned ring too)",
+      "file": "engine/modules/audio/src/SpscRing.hpp",
+      "find": "        head_.store(head, std::memory_order_release);",
+      "replace": "        head_.store(head, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
       "cases": "*concurrent producers*",
       "expect": "ThreadSanitizer: data race"
-    },
-    {
-      "id": "au-ctl-clip-handback-relaxed",
-      "what": "The audio thread hands an entry back without release",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    slot.returnedTail.store(tail + 1, std::memory_order_release);",
-      "replace": "    slot.returnedTail.store(tail + 1, std::memory_order_relaxed);",
-      "target": "gyo_audio_tests",
-      "cases": "*plays and lets go of clips while another thread renders*",
-      "expect": "ThreadSanitizer",
-      "guards": [
-        "audio DI 7"
-      ]
-    },
-    {
-      "id": "au-ctl-clip-reclaim-relaxed",
-      "what": "The producer takes back handed-back entries without acquire",
-      "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_acquire);",
-      "replace": "    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_relaxed);",
-      "target": "gyo_audio_tests",
-      "cases": "*plays and lets go of clips while another thread renders*",
-      "expect": "ThreadSanitizer",
-      "guards": [
-        "audio DI 7"
-      ]
     },
     {
       "id": "au-ctl-stress-reader-reads-audio-state",

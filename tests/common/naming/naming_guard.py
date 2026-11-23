@@ -10,8 +10,9 @@ added later is checked without changing this script.
   (camel_case of tests/common/support/source_text.py with ACRONYMS: each "_" part capitalized, a part in ACRONYMS
   written as listed); UNIT_OVERRIDES is the exception table of DI 1 (a unit whose namespace is not the derived
   one; engine/ecs/kernel is GYO::Kernel). A directory under engine/ that is not a listed layer is a finding (fail
-  closed). plugins/ has no units yet: only its root is kept (each
-  plugin's spelling is set by the first plugin batch, AGENTS section 3).
+  closed). Each subdirectory of plugins/ is one Plugin unit, GYO::Plugins::<Name>, Name derived the same way
+  (v8-arch-gyo2-sdl-a, the first Plugin with code: "sdl" is an acronym, so plugins/sdl_audio is
+  GYO::Plugins::SDLAudio).
 
   N1  namespace <-> directory.
         forward  every named namespace a C/C++ file in a unit opens outside any named namespace (at file scope,
@@ -58,7 +59,7 @@ from source_text import SUFFIXES as C_SUFFIXES, camel_case, line_of, strip_comme
 
 ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestration": "unit"}
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
-ACRONYMS = {"io": "IO", "os": "OS"}
+ACRONYMS = {"io": "IO", "os": "OS", "sdl": "SDL"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
 SCAN_ROOTS = ("engine", "games", "tools", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
@@ -142,6 +143,10 @@ def units(root, problems):
     for base in found:
         relative = base.relative_to(root).as_posix()
         result.append((relative, UNIT_OVERRIDES.get(relative, f"GYO::Engine::{camel_case(base.name, ACRONYMS)}")))
+    plugins = root / "plugins"
+    if plugins.is_dir():
+        for base in sorted(p for p in plugins.iterdir() if p.is_dir()):
+            result.append((base.relative_to(root).as_posix(), f"GYO::Plugins::{camel_case(base.name, ACRONYMS)}"))
     return result
 
 

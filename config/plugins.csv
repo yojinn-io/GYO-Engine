@@ -1,2 +1,3 @@
 name,dir,target,description,library_only,default,depends,private_depends,unit,header
-sdl,sdl,GYO::Sdl,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,
+sdl,sdl,GYO::SDL,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,
+sdl_audio,sdl_audio,GYO::SDLAudio,"The audio output on SDL: creates the mixer or plays the product's, registers the sound loader, opens the default playback device and stops it in OnDestroy; put into no World",no,no,sdl;audio,,GYO::Plugins::SDLAudio::SDLAudioPlugin,plugins/sdl_audio/SDLAudioPlugin.hpp

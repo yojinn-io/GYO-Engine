@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <functional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "PlayheadBoard.hpp"
@@ -531,4 +532,71 @@ TEST_CASE("Audio Mixer playheads stay consistent under a polling thread (ThreadS
         CHECK(track.playingReads >= kPlayingReads);
         CHECK(track.bad == 0);
     }
+}
+
+TEST_CASE("Audio Mixer never reports a sounding sound as not playing under a polling thread (long sounds)") {
+    // Runs with the stress case above (its CTest, gyo_audio_playhead_stress).
+    // Every voice plays one long sound for the whole run; the renderer renders
+    // 16-frame blocks as fast as it can, short of the clips' end, while the
+    // reader polls those sounds in a tight loop. Every sound is read Playing
+    // before the reader starts, so every read must be Playing. A board slot
+    // assigned anew while its sound keeps playing (the tag cleared, the state
+    // written, the tag written again) opens a window in every block for every
+    // voice in which a read is NotPlaying; the case above, which polls many
+    // sounds that mostly ended, landed in it only now and then
+    // (au-ctl-stress-reassign-every-block survived twice on gyo2).
+    constexpr std::uint32_t kVoices = 32;
+    constexpr std::uint32_t kBlockFrames = 16;
+    constexpr std::uint64_t kBlocks = 100000; // 1.6 million frames
+    constexpr std::uint32_t kClipFrames = 2'000'000;
+    constexpr std::uint64_t kMinReads = 100000;
+    static_assert(kBlocks * kBlockFrames < kClipFrames);
+    auto clip = Clip::Make(std::vector<std::int16_t>(kClipFrames, 100), 1, kSampleRate);
+    REQUIRE(clip.has_value());
+    MixerConfig config;
+    config.scheduleDelay = Duration::zero();
+    config.maxVoices = kVoices;
+    config.queueCapacity = kVoices;
+    auto created = Mixer::Create(config);
+    REQUIRE(created.has_value());
+    Mixer mixer = std::move(created).value();
+    auto submitter = mixer.CreateSubmitter();
+    REQUIRE(submitter.has_value());
+    std::vector<SoundHandle> sounds;
+    for (std::uint32_t i = 0; i < kVoices; ++i) {
+        sounds.push_back(submitter->Play({*clip, kAnchor}));
+        REQUIRE(sounds.back());
+    }
+    std::vector<std::int16_t> out(std::size_t{kBlockFrames} * kChannels);
+    TimePoint anchor = kAnchor;
+    mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    for (const SoundHandle sound : sounds) REQUIRE(mixer.PlayheadOf(sound).status == Playhead::Status::Playing);
+
+    std::atomic<bool> done{false};
+    std::uint64_t reads = 0;
+    std::uint64_t gaps = 0;
+    std::thread reader([&] {
+        while (!done.load(std::memory_order_acquire)) {
+            for (const SoundHandle sound : sounds) {
+                if (mixer.PlayheadOf(sound).status != Playhead::Status::Playing) ++gaps;
+                ++reads;
+            }
+        }
+    });
+    const auto started = std::chrono::steady_clock::now();
+    const auto deadline = started + kStressRunBound;
+    std::uint64_t block = 1;
+    for (; block < kBlocks && (block % 256 != 0 || std::chrono::steady_clock::now() < deadline); ++block) {
+        anchor += Ns(333'333);
+        mixer.Render(GYO::Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+    }
+    done.store(true, std::memory_order_release);
+    reader.join();
+    std::printf("playhead long sounds: %llu blocks in %.1f ms (bound %lld s), reads %llu, not playing %llu\n",
+                static_cast<unsigned long long>(block),
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count(),
+                static_cast<long long>(kStressRunBound.count()), static_cast<unsigned long long>(reads),
+                static_cast<unsigned long long>(gaps));
+    CHECK(reads >= kMinReads);
+    CHECK(gaps == 0);
 }

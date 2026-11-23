@@ -27,7 +27,8 @@ struct MixerConfig final {
     // 1 s. The default covers a consumer at 30 FPS (a request up to 33 ms late)
     // with SDL's default device block on macOS (callbacks up to 21.5 ms apart);
     // a consumer with a higher frame rate or smaller blocks may lower it
-    // (v8-engine-audio-delay-default).
+    // (v8-engine-audio-delay-default; derived again with the sdl_audio Plugin,
+    // docs/architecture/target/v2/sdl.zh-Hant.md section 5).
     Time::Duration scheduleDelay = std::chrono::duration_cast<Time::Duration>(std::chrono::milliseconds(60));
 };
 

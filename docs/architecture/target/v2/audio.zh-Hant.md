@@ -1,6 +1,6 @@
 # 混音器 Module（`engine/modules/audio`）
 
-更新：2026-11-22（`v8-arch-gyo2-audio-review`：從 master 時代的英文頁 [`audio.md`](../../audio.md) 搬來、改寫；最終文字使用者 2026-11-22 合併前核准「照建議，全部核准」）；2026-11-23（`v8-arch-gyo2-audio-clip-loader`：clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、加音效 loader 與第 6 節的 Data Contract；照[事前宣告](audio-clip-loader-declaration.zh-Hant.md)，使用者 2026-11-23 動工前核准，**最終文字在合併前核准時定稿**）。
+更新：2026-11-22（`v8-arch-gyo2-audio-review`：從 master 時代的英文頁 [`audio.md`](../../audio.md) 搬來、改寫；最終文字使用者 2026-11-22 合併前核准「照建議，全部核准」）；2026-11-23（`v8-arch-gyo2-audio-clip-loader`：clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、加音效 loader 與第 6 節的 Data Contract；照[事前宣告](audio-clip-loader-declaration.zh-Hant.md)，使用者 2026-11-23 動工前核准，**最終文字在合併前核准時定稿**）；2026-11-23（`v8-arch-gyo2-sdl-a`：輸出後端 `sdl_audio` 接上——第 1、4 節與第 5.2 節的例子改成「`sdl_audio` 建混音器、登記 loader」，DI 不動）。
 
 由來：[重審報告與事前宣告](audio-review-declaration.zh-Hant.md)（使用者 2026-11-22 動工前核准，HANDOFF `v8-arch-gyo2-audio-review-approved`）。改了的條文：DI 1、DI 2、DI 3、DI 4、DI 7、DI 10；Contract 的 `Submitter` 執行緒契約、時間點的限界、搬動與銷毀 `Mixer` 的責任（從後端換成混音器的持有者，取代 `audio.md` 的「the backend stops output first」）；新的第 4 節（後端要求的介面，取代 `audio.md` 的 SDL 段落）；RC 1、RC 2、RC 5、RC 9。其餘照 `audio.md` 譯過來、不改語意；條號沿用，方便突變的 `guards` 追蹤（`docs/architecture/plans/audio/scripts/mutations.json`）。master 時代的批次名（`v8-engine-audio-*`）是條文與守衛的出處，計畫在 `docs/architecture/plans/audio/`，只當歷史。
 
@@ -17,8 +17,8 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ──► GYO::Asset（loader
 ```
 
 - 連結恰好是 `GYO::Base`、`GYO::Time` 與 `GYO::Asset`（DI 2）；不認得 SDL、World、產品。認得 asset 的 loader 介面：`sound` 型別、它的格式與 loader 歸 audio（asset 頁第 5 節「擁有型別的 Module」）。
-- 音效 loader（`WavLoader`）由產品登記：在 `Configure` 經 `AssetLoaderRegistry::Register<WavLoader>()`。忘了登記不是啟動錯誤，是請求時的 `Failed(NoLoader)`（asset 頁第 3 節 (B) 第 3 列）。SDL 那一批有建混音器的登記單位時，改由它登記（宣告第 3 題第 4 處）。
-- 輸出後端（SDL 那一批）接在 `Mixer::Render` 上，在 audio 外面（第 4 節）。
+- 音效 loader（`WavLoader`）：帶 `sdl_audio` 的產品由它在 `Configure` 登記（共用處有 asset 的 loader 登記處時；宣告第 3 題第 4 處，`v8-arch-gyo2-sdl-a`）；不帶的產品（只離線處理、測試）自己在 `Configure` 經 `AssetLoaderRegistry::Register<WavLoader>()` 登記（同一個 loader 再登記不變）。忘了登記不是啟動錯誤，是請求時的 `Failed(NoLoader)`（asset 頁第 3 節 (B) 第 3 列）。
+- 輸出後端是 Plugin `sdl_audio`（[`sdl.zh-Hant.md`](sdl.zh-Hant.md) 第 5 節），接在 `Mixer::Render` 上，在 audio 外面（第 4 節）。
 
 ## 2. 它是什麼
 
@@ -32,7 +32,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ──► GYO::Asset（loader
 - **取空**：使用提交口的一方在每個成員呼叫（`Play`、`Stop`——含無效 handle、`StopAll`）的開頭、與 `~Submitter` 裡，把回收環取空：那幾格清掉（最後一份參照可能在這裡放掉）、格號放回堆疊。所以**混音器握的參照最晚在那個提交口下一次被呼叫時放掉**；不再被呼叫的提交口，它的格留到混音器的狀態解構（上限：表的大小）；沒有 `Render`（後端沒開）時，排著的請求的格留在環裡，直到混音器的狀態解構。`Play`、`Stop` 可能在呼叫的執行緒上釋放大塊記憶體。要混音器放掉而不送任何命令，就呼叫 `Stop(SoundHandle{}, at)`：無效的 handle 不停任何聲音、不記數，只取空（第 5.2 節的寫法；〔`v8-arch-gyo2-audio-clip-loader` 合併前核准 A-1，使用者選 (a)：不另加入口〕）。
 - **handle 與停止（`Submitter::Stop`、`StopAll`）**：`Play` 回 `SoundHandle`——高 7 位元是提交口序號加一，下面是那個提交口的序號，只在播放排進環時前進，所以 handle 不重用；因為環滿而丟掉的播放回無效的 handle 0。停止和播放走同一個環，所以音訊執行緒取到停止時，它指的播放都已取過；提交口只能停自己的聲音。停止的時間點照起播的規則換成 frame。還沒開始的 voice，停止 frame 在它的起點或之前就立刻釋放（從不出聲）；否則在停止 frame 結束，或者它已開始、而那個 frame 已經算過時，在取到停止的那個 block 的第一個 frame 結束（記成晚）。多個停止時最早的 frame 勝。`StopAll` 對它的提交口在呼叫前送出的每個聲音做同樣的事。voice 那一層只保存每個 voice 的停止 frame、不透明的 cookie（handle）、不透明的租約標記與 clip 的 view；handle、參照表與回收環是 `Mixer` 的。
 - **播放位置（`Mixer::PlayheadOf`）**：每次 `Render` 之後，音訊執行緒把每個 voice 播的 handle 與位置（已混的 clip frame 數、有沒有開始）發布到一塊建立時配好的原子看板；換了聲音的 voice 重新指派（先清 tag、再寫狀態、再寫 tag），閒下來的 voice 清掉。任何執行緒都可以無等待地讀一個 handle 的項：tag、狀態、再讀一次 tag，回 Scheduled、Playing（帶 frame）或 NotPlaying（還沒取、結束、停止、丟掉、無效 handle、被搬走的混音器）。值最多舊一個 block，比聽到的聲音超前輸出的延遲。只供顯示（DI 4）。
-- **時間點的換算（`Mixer::Render(block, anchor)`）**：後端在每個 block 開頭讀一次時間基準當 `anchor`。每個排著的請求從 `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` 開始（一半往 +∞，負的偏移也一樣），`at - anchor` 夾在正負一小時內，`delayFrames` 是 `scheduleDelay` 照同樣規則取整。請求在音訊執行緒取到時記成準時或晚，所以記準時的請求可能還在未來（最多到延遲，未來的時間點最多一小時）。`scheduleDelay`（0～1 s，預設 60 ms）讓稍晚送出的請求仍準時開始，也是「現在」播放的最小延遲。預設值來自 master 在 SDL macOS 的量測，SDL 那一批重新推導。
+- **時間點的換算（`Mixer::Render(block, anchor)`）**：後端在每個 block 開頭讀一次時間基準當 `anchor`。每個排著的請求從 `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` 開始（一半往 +∞，負的偏移也一樣），`at - anchor` 夾在正負一小時內，`delayFrames` 是 `scheduleDelay` 照同樣規則取整。請求在音訊執行緒取到時記成準時或晚，所以記準時的請求可能還在未來（最多到延遲，未來的時間點最多一小時）。`scheduleDelay`（0～1 s，預設 60 ms）讓稍晚送出的請求仍準時開始，也是「現在」播放的最小延遲。預設值的推導在 [`sdl.zh-Hant.md`](sdl.zh-Hant.md) 第 5 節（`v8-arch-gyo2-sdl-a`：30 FPS 的消費者＋回呼的最長間隔＋5 ms；macOS 量到 54.8 ms → 60 ms 不變；Windows、Linux 未量）。
 - **計數**：`accepted`、`onTime`、`late`、`noVoice`、`maxLateFrames`、`renderedFrames`、`clippedSamples`；relaxed 原子，任何執行緒可讀，只供顯示與驗收。
 - **音效 loader（`WavLoader`）**：型別名 `sound`、格式 `wav`，把 WAV PCM16 的位元組變成 `Clip`（只複製一次：位元組→取樣，交給 `Clip::Make(vector&&)`）。格式與規則在第 6 節。
 
@@ -51,7 +51,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ──► GYO::Asset（loader
 - `Render` 填任何長度的 block，`renderedFrames` 前進它的 frame 數。內部每次最多 256 frame，用建立時配好的累加器。
 - 主增益每次內部處理讀一次；改了從下一次生效。
 
-## 4. 後端要求的介面（SDL 那一批照這裡接）
+## 4. 後端要求的介面（`sdl_audio` 照這裡接）
 
 1. **給**：`Mixer::Render(Span<int16_t>, TimePoint anchor) noexcept`，在後端的音訊執行緒上、一次一個 block；格式常數（`AudioFormat.hpp`）；`Stats()`。
 2. **要求**：每個 block 用時間基準取一次 anchor（DI 3）；只有一條執行緒呼叫 `Render`；後端只持不擁有的參照（若它和別人共用所有權、而音訊執行緒的回呼握著最後一份，混音器的狀態會在音訊執行緒上解構，破 DI 7）；混音器放在 Product 的共用處，持有者在後端停之前不搬、不銷毀它；後端在自己登記的 `OnDestroy` 回呼裡停（編排層 O-15：回呼照登記的反序、在所有 World 之後、共用處之前），後端的登記排在建混音器的單位之後，它的 `OnDestroy` 才會先跑。
@@ -89,16 +89,16 @@ struct ShotSound { std::uint64_t tick; GYO::Kernel::EntityId shooter; };
 
 ### 5.2 提交口：照 World 名字建一次，放在 Product 一份的共用處
 
-混音器與提交口都放在 Product 的共用處（O-15），不放進 World。建混音器的是誰（一個登記單位，或產品自己）由產品定；輸出後端要找到它，後端的登記要排在建混音器的單位之後（第 4 節），所以混音器通常由一個登記單位在它的 `Configure` 建，產品自己的 `configure` 在所有單位之後跑、建在那裡後端找不到。哪一種由 SDL 那一批定。
+混音器與提交口都放在 Product 的共用處（O-15），不放進 World。混音器預設由 `sdl_audio` 在它的 `Configure` 建（建混音器與開裝置是同一個單位，裝置先停的先後自動成立；[`sdl.zh-Hant.md`](sdl.zh-Hant.md) 第 5 節）；產品要自己建，就經 `ProductDescription::options` 給 `AudioOutputMixer`（`sdl_audio` 播它、不建）。產品自己的 `configure` 在所有單位之後跑，建在那裡輸出找不到，所以要給就經選項給。不帶 `sdl_audio` 的產品（測試、離線處理）自己建（`Mixer::Create`，三行）。
 
 ```cpp
-struct GameAudio {                       // 產品自己的型別（示意）
-    GYO::Engine::Audio::Mixer mixer;
+struct GameAudio {                       // 產品自己的型別（示意）：只持提交口
     std::map<std::string, GYO::Engine::Audio::Submitter> submitters;   // 鍵：World 名
 };
-// 建混音器的單位的 Configure：setup.Buffer().Create<GameAudio>(...)
+// 產品的 configure：setup.Buffer().Create<GameAudio>()
 // 每個 World 的 build：auto* audio = world.ProductBuffer().Find<GameAudio>();
-//   同名的提交口沒有才 CreateSubmitter()；有就沿用
+//   auto* mixer = world.ProductBuffer().Find<GYO::Engine::Audio::Mixer>();   // sdl_audio 建的
+//   同名的提交口沒有才 mixer->CreateSubmitter()；有就沿用
 // world.Prepare(...)：在 World 裡放一個指向那個提交口的 Resource（例：AudioOut）
 ```
 
