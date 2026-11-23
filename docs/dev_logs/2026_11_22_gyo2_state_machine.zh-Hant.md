@@ -1,5 +1,7 @@
 # 2026-11-22 GYO2：狀態機 Module（`v8-arch-gyo2-state-machine`，第 5 批）
 
+**狀態：已合併（PR #281，merge 1df88fe7；L1 run 45042604998）。**（本行由 `v8-arch-gyo2-mech-cleanup` 補上。）
+
 Owner：架構（GYO2 主會話開出的任務卡 gyo2-state-machine-r8）。宣告：[state-machine-declaration.zh-Hant.md](../architecture/target/v2/state-machine-declaration.zh-Hant.md)（修訂 8）；條文頁：[state-machine.zh-Hant.md](../architecture/target/v2/state-machine.zh-Hant.md)。分支 `claude/gyo2-state-machine-r8-2afaeb`。
 
 ## 做了什麼
