@@ -287,20 +287,27 @@ K::SystemResult TickSolvedTimer(K::Res<WT::ActiveTime> time, K::Res<ScreenState>
     return {};
 }
 
-K::SystemOptions InUpdate(std::string name, std::vector<std::string> after) {
+K::SystemOptions InUpdate(std::string name, std::vector<std::string> after,
+                          const std::vector<K::ConditionRef>& conditions) {
     K::SystemOptions options;
     options.name = std::move(name);
     K::Mount mount;
     mount.schedule = std::string(O::DefaultSchedules::frame);
     mount.stage = std::string(O::DefaultSchedules::update);
     mount.after = std::move(after);
+    mount.conditions = conditions;
     options.mounts.push_back(std::move(mount));
     return options;
 }
 
 } // namespace
 
-void BuildWorld(O::WorldSetup& setup) {
+bool HasNextPuzzle(const Catalog& catalog, const Session& session) noexcept {
+    return NextPuzzleIndex(catalog, session).has_value();
+}
+
+void BuildWorld(O::WorldSetup& setup, WorldOptions options) {
+    const std::vector<K::ConditionRef>& when = options.conditions;
     SM::RegisterStateMachine<GameScreen>(setup);
     K::Registrar& r = setup.Registrar();
     r.Resource<Catalog>({.name = "object_connect.Catalog"});
@@ -314,11 +321,11 @@ void BuildWorld(O::WorldSetup& setup) {
     r.Message<LineHoldEnded>({.name = "object_connect.LineHoldEnded"});
     r.Message<MusicRestarted>({.name = "object_connect.MusicRestarted"});
     r.Message<QuitChosen>({.name = "object_connect.QuitChosen"});
-    r.AddSystem<&CancelDragOnLeave>(InUpdate("object_connect.CancelDragOnLeave", {}));
-    r.AddSystem<&StepMenu>(InUpdate("object_connect.StepMenu", {"object_connect.CancelDragOnLeave"}));
-    r.AddSystem<&ApplyMenuCommand>(InUpdate("object_connect.ApplyMenuCommand", {"object_connect.StepMenu"}));
-    r.AddSystem<&SimulateBoard>(InUpdate("object_connect.SimulateBoard", {"object_connect.ApplyMenuCommand"}));
-    r.AddSystem<&TickSolvedTimer>(InUpdate("object_connect.TickSolvedTimer", {"object_connect.SimulateBoard"}));
+    r.AddSystem<&CancelDragOnLeave>(InUpdate("object_connect.CancelDragOnLeave", {}, when));
+    r.AddSystem<&StepMenu>(InUpdate("object_connect.StepMenu", {"object_connect.CancelDragOnLeave"}, when));
+    r.AddSystem<&ApplyMenuCommand>(InUpdate("object_connect.ApplyMenuCommand", {"object_connect.StepMenu"}, when));
+    r.AddSystem<&SimulateBoard>(InUpdate("object_connect.SimulateBoard", {"object_connect.ApplyMenuCommand"}, when));
+    r.AddSystem<&TickSolvedTimer>(InUpdate("object_connect.TickSolvedTimer", {"object_connect.SimulateBoard"}, when));
     setup.Prepare([](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(Catalog{});
         world.SetResource(Playfield{});

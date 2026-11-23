@@ -33,9 +33,9 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | `MouseCursorRenderer.hpp` 裡的 `ResolveMouseCursorIcon`、`ShouldUseCustomMouseCursor` | 游標要用哪張圖、什麼時候換掉系統游標 | 遊戲（`game/MouseCursorPolicy.hpp`，從 renderer 標頭拆出、內容不變） | **PR 1 已搬** |
 | `Math/Vec2`、`Math/Color` | 2D 向量、RGBA | 遊戲（`include/object_connect/math/`）。Engine 的 `core/math` 有 `Vec2`／`Vec4`（`Color` 可對 `Vec4`），但 PuzzleBoard 等大量程式用原型別；換型別是之後 World 層的事，不在搬邏輯時一起改 | **PR 1 已搬** |
 | `Game/Game`（`Game::Impl`） | 一幀的流程：讀輸入 → 失焦／Esc 取消拖曳 → UI 命中 → GameFlow → 套用命令（開關卡、重試、下一關）→ 更新 PuzzleBoard → 音效事件 → 游標 | `world` 函式庫（`include/object_connect/world/`）：Resource `Catalog`、`Playfield`（固定 1280×720）、`FrameInput`、`MenuSelection`、`Session`、`RunResults`；Message `MenuStepped`、`LineHoldStarted`／`LineHoldEnded`、`MusicRestarted`、`QuitChosen`；`Main`／`Update` 依序五個 System（CancelDragOnLeave → StepMenu → ApplyMenuCommand → SimulateBoard → TickSolvedTimer）；一幀的時間是 `world_time` 的 `ActiveTime::delta`。輸入取樣、UI 命中、翻頁、游標、音效呼叫留在外面：`FrameInput` 進、Message 出 | **PR 2 已寫**，headless 測試 `object_connect.world`（9 個情境） |
-| `Rendering/GameUiRenderer` 的命中判定與翻頁 | 選單、選關（5×2 一頁）、結果卡的版面與滑鼠命中 | 遊戲。版面與命中是遊戲的規則；畫字用 `text`、畫矩形用 R2a／R2b。**不需要 U**（沒有文字框、沒有通用控件）；U 來了可以改用、不是前提 | 等 R2a／R2b（命中判定的純邏輯可先搬，PR 2 判） |
+| `Rendering/GameUiRenderer` 的命中判定與翻頁 | 選單、選關（5×2 一頁）、結果卡的版面與滑鼠命中 | 遊戲。版面與命中是遊戲的規則；畫字用 `text`、畫矩形用 R2a／R2b。**不需要 U**（沒有文字框、沒有通用控件）；U 來了可以改用、不是前提 | **移植實作第 1 段已搬**：版面、命中、選關與結果的翻頁搬成 `logic` 的 `ui/MenuLayout`（`MenuPages`；原 `Draw` 裡移動頁數的部分成為 `Present`，每幀結束時呼叫）；畫的部分等 R2a／R2b |
 | `Rendering/PuzzleRenderer` | 背景、血管三角形帶、節點 sprite（含光暈、脈動、inactive 55% 亮度）、dead 節點的程序化外觀 | 遊戲的「每幀產生畫面資料」System；接 R2b 的可畫元件 | 等 R2b |
-| `Core/Application`、`Core/FrameTimer` | `WinMain`、KamataEngine 的初始化與主迴圈、幀時間 | 產品的 `main` 建 `Product`（例：`examples/orchestration/product_main.cpp`）、runner 由 `sdl_window` 給；幀時間由 `world_time` | 等 W |
+| `Core/Application`、`Core/FrameTimer` | `WinMain`、KamataEngine 的初始化與主迴圈、幀時間 | 產品的 `main` 建 `Product`、runner 由 `sdl_window` 給；幀時間由 `world_time` | **移植實作第 1 段已做**：`src/main.cpp`（第 8 節） |
 
 ### 2.2 對到 GYO2 已有的單位
 
@@ -44,9 +44,9 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | ECS、System、Resource、Message | 沒有（手寫一幀的流程） | Kernel（`engine/ecs/kernel`）、`orchestration` 的 `Product` | 已有 |
 | 畫面狀態 | `GameFlow::screen_` | `state_machine`（`StateMachine<S>`＋`StateMachineRequest<S>`、enter／exit schedule） | PR 2 用了（只用值與請求；enter／exit schedule 等畫面與音效接上再看要不要用） |
 | 一幀的時間 | `FrameTimer`（`QueryPerformanceCounter`） | `world_time`（`VirtualTime` 等 Resource） | 已有 |
-| 讀資料檔 | `std::ifstream` | `asset`（catalog Data Contract、`TextLoader`）＋`world_asset`（`AssetRequests`／`AssetView`）；`assets/object_connect/content.json`（建置層生成的 `GYO_GAME_CONTENT_MANIFEST`） | 已有；關卡目錄跨三種檔、`levels.csv` 用路徑指向 `maps/*.csv`，PR 2 判「每個 CSV 一個 text asset、System 組目錄」或「遊戲自己的 loader 經 `LoadContext::Reference` 宣告引用」 |
-| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | 等 I 合併；PNG 已放進 `assets/object_connect/`（第 4 節） |
-| 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
+| 讀資料檔 | `std::ifstream` | `asset`（catalog Data Contract、`TextLoader`）＋`world_asset`（`AssetRequests`／`AssetView`）；`assets/object_connect/content.json`（建置層生成的 `GYO_GAME_CONTENT_MANIFEST`） | **移植實作第 1 段已接**：遊戲自己的 loader 經 `LoadContext::ReferencePath` 宣告引用（第 8 節） |
+| 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | **移植實作第 1 段已接**：產品的 `configure` 登記 `PngLoader`；節點圖經 `nodes.csv` 的 loader 宣告引用，游標 3 張直接請求 |
+| 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有；**移植實作第 1 段已接**字型（`FontLoader`、`UiText` 的 `TextContext`）。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
 | 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | 部分已有，缺口見第 3 節 G1、G2 |
 | 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；縮放模式與換算是 R2b（第 3 節核對） |
 | 記錄 | `OutputDebugStringA` | `logging` | 已有 |
@@ -116,3 +116,20 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 - `Session::solvedElapsedSeconds` 的累加照原本（解開的那一幀從 0 加上那一幀的時間）。
 - `StartPuzzle` 等原本丟例外的地方，改成 System 回 `KernelError`（`SystemFailed`）：World 壞掉、Product 結束，由 `main` 決定怎麼報（AGENTS §1-9：只告訴外面發生了什麼）。
 - 測試把 `TimeSampling` 設成 `ManualDelta` 0.1 s，每幀時間固定；Message 由 `Main`／`Last` 的記錄 System 讀。
+
+## 8. 移植實作第 1 段：主程式、輸入、資產（卡片自己判的）
+
+PR：移植實作第 1 段（W、T、I 合併後）。畫面要等 R2a，聲音要等 A。
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| 主程式 | `src/main.cpp`：預設 Module＋`sdl_window`（`gyo_product_units(... PLUGINS sdl_window)`）；`WindowSettings` 1280×720、`resizable=false`（G6）；`AssetOptions` 的內容根＝執行檔旁的 `assets/object_connect`（`GyoContent.cmake` 放的位置）；asset 的執行緒是產品自己開的 `WorkerPool`（2 條）；`--frames N`（CI 用）與 `--verbose`（還沒有畫面時，把畫面、游標、拖曳、warp 的變化寫進 log） | 照產品登記的 `games/` 形（#294）與 `examples/sdl_window` |
+| 資料的載入 | 兩個遊戲自己的 loader：`levels.csv` → `LevelTable`（宣告 `map_path` 欄的檔為 text 的引用）、`nodes.csv` → `NodeTable`（宣告 `texture_path` 欄的檔為 image 的引用）；表裡的路徑是從內容根算的（原版的 `resourceRoot`），loader 換成相對於表本身的引用（`ReferenceFromTable`）。`asset_catalog.json` 列出全部檔；CSV 的地圖用 `"format": "txt"` 交給 `TextLoader` | 比「System 讀 levels 再照命名規則拼 id」少一個命名約定；表與它指的檔一起 Complete（asset 宣告 5.17，同 glTF 宣告貼圖） |
+| 什麼時候開始玩 | 載入放在 World 生成期間（`WhileGenerating`，沒好就 `Hold()`）；遊戲的 System 加 `AfterGenerating()`（`BuildWorld` 新增 `WorldOptions`，測試不帶條件時照舊）；任何一個檔失敗或關卡是空的 → System 回 `SystemFailed`，`main` 記一行、結束碼 1 | 原版 `Game::Initialize` 失敗就不開始；GYO 的「先載完再開始」機制是 world-gen（O-14），不另做載入畫面 |
+| 輸入 | `ReadPlayerInput`（`Update`，在 `CancelDragOnLeave` 前）：`input` 的 `ButtonInput`／`CursorPosition`／`AccumulatedMouse*` 與 `window` 的 `WindowState` → `FrameInput`。鍵：W/↑、S/↓、Enter/NumpadEnter、Esc 的「剛按下」；左鍵三態；滾輪一格＝120（原版的 `WHEEL_DELTA`）；失焦的那一幀只送 `focusLost`（原版失焦時什麼都不讀） | 原版 `InputSystem::Sample` 與 `Game::Impl::Update` 開頭照搬 |
+| 座標 | 視窗的邏輯像素 → 遊戲座標（1280×720）：照比例換算（`ClientToPlayfield`）。視窗不可改大小，所以一般是 1:1；HiDPI 由 `window` 的邏輯像素吸收 | 原版 `ToLogicalPosition` |
+| 穿邊（G3、G4） | `input/PointerWrap`（`logic`，不碰視窗）：原版 `InputSystem` 的穿邊整段；要 warp 時送 `window` 的 `WarpCursor`（邏輯像素）。相對移動只看正負號（游標停在邊上時判斷「還在往外推」） | 原版行為照搬，視窗呼叫換成請求資料 |
+| 游標（G5） | `PresentMenus` 算 `CursorAppearance`（哪張圖、要不要換掉系統游標＝有焦點且在視窗內）；**系統游標先不隱藏**：遊戲的游標要 R2a 才畫得出來，現在隱藏會看不到游標 | R2a 那段改 `WindowRequest::cursorVisible` |
+| 選單分頁 | `PresentMenus`（`Update`，在 `TickSolvedTimer` 後）以這一幀結束時的畫面呼叫 `MenuPages::Present`；`QuitChosen` → `WindowRequest::close` | 原版 `Draw` 在 `Update` 之後移動頁數，下一幀的翻頁看「上次畫的畫面」 |
+
+**已知的限制**：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked` 並由遊戲畫游標——R2a 那段（遊戲游標畫得出來後）再改。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
