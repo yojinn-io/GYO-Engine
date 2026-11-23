@@ -1,6 +1,6 @@
 # 姿態（`engine/modules/transform`）
 
-更新：2026-11-23（新頁，`v8-arch-gyo2-sdl-transform-camera`）。由來：[事前宣告](transform-camera-declaration.zh-Hant.md)（SDL 線子批 X1，2026-11-23 動工前核准）第 4.1、8 節。**Design Invariants 的最終文字：合併前核准時定**（草稿）。
+更新：2026-11-23（新頁，`v8-arch-gyo2-sdl-transform-camera`）。由來：[事前宣告](transform-camera-declaration.zh-Hant.md)（SDL 線子批 X1，2026-11-23 動工前核准）第 4.1、8 節。**Design Invariants 的最終文字：使用者 2026-11-23 合併前核准**（[合併前核准頁](transform-camera-merge-approval.zh-Hant.md)）。
 
 Owner：架構。程式：`engine/modules/transform/`（`GYO::Engine::Transform`，target `GYO::Transform`，登記單位 `TransformModule`）。行為測試：`tests/common/transform/`。
 

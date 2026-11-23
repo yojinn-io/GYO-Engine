@@ -1,6 +1,6 @@
 # 合併前核准：`transform` 與 `camera` Module（SDL 線子批 X1，`v8-arch-gyo2-sdl-transform-camera`）
 
-更新：2026-11-23。Owner：架構（GYO2 主會話開的任務卡）。**狀態：等使用者合併前核准。** 宣告：[transform-camera-declaration.zh-Hant.md](transform-camera-declaration.zh-Hant.md)（修訂 1，2026-11-23 動工前核准）。紀錄：[dev_log](../../../dev_logs/2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md)。
+更新：2026-11-23。Owner：架構（GYO2 主會話開的任務卡）。**狀態：合併前核准（2026-11-23）**——使用者「KR 合併；X1 照建議核准，跟上 KR 後 L1 過了就合併」（主會話轉達，HANDOFF `v8-arch-gyo2-sdl-transform-camera-merge-approved`）：第 3 節第 1 題選 (a)（CCR-13＋各型別自己寫逐位元的 `==`）、第 2 題照建議（各 Module 自己補）、第 2 節和宣告不同的三處與第 4 節 DI 的最終文字一起確認；跟上 KR（#295）、L1 三平台通過後合併。 宣告：[transform-camera-declaration.zh-Hant.md](transform-camera-declaration.zh-Hant.md)（修訂 1，2026-11-23 動工前核准）。紀錄：[dev_log](../../../dev_logs/2026_11_23_gyo2_sdl_transform_camera.zh-Hant.md)。
 
 ## 1. 判定（宣告第 11 節，先宣告、不放寬）
 
@@ -27,7 +27,7 @@
 
 | 做法 | 內容 | 代價 |
 |---|---|---|
-| **(a) 照現況：CCR-13 登記，各型別自己寫逐位元的 `==`** ←建議 | 不改回滾 | 每個含 float 的作者型別都要記得；寫錯時沒有守衛（審查看） |
+| **(a) 照現況：CCR-13 登記，各型別自己寫逐位元的 `==`** ←**使用者選（2026-11-23）** | 不改回滾 | 每個含 float 的作者型別都要記得；寫錯時沒有守衛（審查看） |
 | (b) 回滾預設改用逐位元比較（或用 `HashValue` 的位元比），成唯一出口 | 回滾那一批改 `Registrations.hpp:234` 的預設比較 | 改回滾 Module 的已核准契約（R-2 的比較），另開一批；`Transform` 的逐位元 `==` 之後可以拿掉 |
 
 **建議 (a)**：本批不碰回滾；(b) 是回滾那一側的機制改動，若要做交主會話另排一批。

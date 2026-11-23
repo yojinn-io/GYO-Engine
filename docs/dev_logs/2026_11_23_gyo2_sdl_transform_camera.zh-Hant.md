@@ -19,7 +19,8 @@ Owner：架構（GYO2 主會話開的任務卡）。分支 `claude/youthful-mcnu
   - 第一輪 25 個：24 killed，`tf-initial-identity` 存活——T-1 生成在 `Update`，套用之後 `PostUpdate` 的 `SyncTransforms` 把值蓋對了，T-1 沒有隔離出初始值。把 T-1 的同步掛到 `First`（第一幀它在生成之前跑），重跑 killed。
   - 敵對式檢查之後加 20 個、修 3 個的 expect／guards，45 個重跑：42 killed、3 個 `wrong_failure`（`tf-set-membership-missing`、`tf-default-stage-last`、`cm-update-set-missing`）：set 沒有成員時 Kernel 在啟動就報 D-E4，Product 建不起來，失敗訊息裡沒有案例的標籤。讓這兩個案例在建置失敗時也印標籤，三個重跑 killed。最後 45/45。
   - 兩次都是測試的寫法（隔離、標籤），判定沒有改。
-- L1 三平台：draft PR 手動 dispatch 後補記。
+- L1 三平台：合 KR 之前的 dispatch（run 45132779186）linux-x64、windows-x64、macos-arm64 全部通過。
+- 合併前核准（使用者 2026-11-23「KR 合併；X1 照建議核准，跟上 KR 後 L1 過了就合併」）之後跟上 gyo2（KR #295，d02e60f4）：只有 README 的衝突；X1 的測試沒有寫死 ComponentId 或 golden，不用改；本機 `ctest -L cpu` 199/199。合併前的 L1 與突變重跑見合併前核准頁。
 
 ## 經過與判斷
 
