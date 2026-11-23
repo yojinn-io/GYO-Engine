@@ -103,6 +103,10 @@ TEST_CASE("text layout: one shaped text, laid out at several widths") {
     CHECK(f.context.Layout(shaped, Width(100.0f)).lines.size() == 1);
     CHECK(f.context.Layout(shaped, Width(40.0f)).lines.size() == 2);
     CHECK(f.context.Layout(shaped, Width(10.0f)).lines.size() == 3);
+    // After a break the new line already holds the kana that did not fit: every line is two kana wide.
+    const std::string kana = "あいうえお";
+    const Text::TextLayout two = f.Lay(kana, f.Style(f.kanaFirst), Width(32.0f));
+    CHECK(Lines(two, kana) == std::vector<std::string>{"あい", "うえ", "お"});
 }
 
 TEST_CASE("text layout: Japanese line breaking keeps closing marks and small kana off the line start") {

@@ -1041,7 +1041,7 @@
    "replace": "for (std::uint32_t k = lineStart; k < g; ++k) {",
    "target": "gyo_text_tests",
    "cases": "text layout: one shaped text*",
-   "expect": "CHECK\\( f\\.context\\.Layout\\(shaped, Width\\(10\\.0f\\)\\)\\.lines\\.size\\(\\) == 3 \\)"
+   "expect": "CHECK\\( Lines\\(two, kana\\) =="
   },
   {
    "id": "tx4-exact-fill-breaks",
