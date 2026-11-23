@@ -116,4 +116,14 @@ struct ShapeCastOptions final {
                                                                               const Shape& shape2, const Pose& pose2,
                                                                               const ShapeCastOptions& options = {});
 
+// The single-box cast of the BoxSet contract (P3-3) for box `box` of the set: shape 1 against that box alone, with
+// the box's build data (its flush neighbours under FixInternalEdges), as CastShape against the set tests each box.
+// box < boxes.Size().
+[[nodiscard]] Base::Result<std::optional<ShapeHit>, Physics3dError> CastShapeOnBox(const Shape& shape1,
+                                                                                   const Pose& pose1,
+                                                                                   const Math::Vec3& motion,
+                                                                                   const BoxSet& boxes, std::uint32_t box,
+                                                                                   const Pose& pose2,
+                                                                                   const ShapeCastOptions& options = {});
+
 } // namespace GYO::Engine::Physics3d

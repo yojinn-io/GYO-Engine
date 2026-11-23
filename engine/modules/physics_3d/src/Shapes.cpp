@@ -86,12 +86,71 @@ void BuildNode(Detail::BoxSetData& data, const std::uint32_t first, const std::u
     BuildNode(data, middle, last);
 }
 
+float Lower(const Math::Aabb& box, const int axis) {
+    return axis == 0 ? box.minimum.x : axis == 1 ? box.minimum.y : box.minimum.z;
+}
+float Upper(const Math::Aabb& box, const int axis) {
+    return axis == 0 ? box.maximum.x : axis == 1 ? box.maximum.y : box.maximum.z;
+}
+
+// FixInternalEdges' one-off pass (parry's Compound::compute_pseudo_normals, for axis-aligned boxes): for every box,
+// the boxes flush against each of its faces (BoxSetData::faceStart). Candidates come from the hierarchy (the boxes
+// whose bounds touch the box's, closed); the test is exact: the touching bounds are equal floats and the extents
+// overlap (closed) on both other axes.
+void FindFaceNeighbours(Detail::BoxSetData& data) {
+    const auto count = static_cast<std::uint32_t>(data.boxes.size());
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> pairs;  // (box * 6 + face, neighbour)
+    std::vector<std::uint32_t> stack;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const Math::Aabb& box = data.boxes[i];
+        stack.assign(1, 0U);
+        while (!stack.empty()) {
+            const std::uint32_t index = stack.back();
+            stack.pop_back();
+            const Detail::BoxNode& node = data.nodes[index];
+            if (!Math::Overlaps(node.bounds, box)) continue;
+            if (node.count == 0) {
+                stack.push_back(node.right);
+                stack.push_back(index + 1);
+                continue;
+            }
+            for (std::uint32_t k = node.first; k < node.first + node.count; ++k) {
+                const std::uint32_t j = data.order[k];
+                if (j == i) continue;
+                const Math::Aabb& other = data.boxes[j];
+                for (int axis = 0; axis < 3; ++axis) {
+                    const int b = (axis + 1) % 3;
+                    const int c = (axis + 2) % 3;
+                    const bool overlaps = Lower(other, b) <= Upper(box, b) && Lower(box, b) <= Upper(other, b) &&
+                                          Lower(other, c) <= Upper(box, c) && Lower(box, c) <= Upper(other, c);
+                    if (!overlaps) continue;
+                    if (Upper(other, axis) == Lower(box, axis)) pairs.emplace_back(i * 6U + axis * 2U, j);
+                    if (Lower(other, axis) == Upper(box, axis)) pairs.emplace_back(i * 6U + axis * 2U + 1U, j);
+                }
+            }
+        }
+    }
+    std::sort(pairs.begin(), pairs.end());
+    data.faceStart.assign(static_cast<std::size_t>(count) * 6U + 1U, 0U);
+    data.faceNeighbours.reserve(pairs.size());
+    std::size_t next = 0;
+    for (std::uint32_t face = 0; face < count * 6U; ++face) {
+        data.faceStart[face] = static_cast<std::uint32_t>(data.faceNeighbours.size());
+        while (next < pairs.size() && pairs[next].first == face) data.faceNeighbours.push_back(pairs[next++].second);
+    }
+    data.faceStart[static_cast<std::size_t>(count) * 6U] = static_cast<std::uint32_t>(data.faceNeighbours.size());
+}
+
 bool FiniteNonNegative(const float value) { return std::isfinite(value) && value >= 0.0F; }
 bool FinitePositive(const float value) { return std::isfinite(value) && value > 0.0F; }
 
 } // namespace
 
 Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::Aabb> boxes) {
+    return Build(boxes, BoxSetFlags::FixInternalEdges);
+}
+
+Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::Aabb> boxes, const BoxSetFlags flags) {
     if (boxes.size() > std::numeric_limits<std::uint32_t>::max()) {
         return Base::Err(Physics3dError::Make(Physics3dErrorCode::TooManyBoxes,
                                               "a BoxSet holds at most 2^32 - 1 boxes",
@@ -115,11 +174,17 @@ Base::Result<BoxSet, Physics3dError> BoxSet::Build(const std::span<const Math::A
         DigestFloat(digest, box.maximum.y);
         DigestFloat(digest, box.maximum.z);
     }
+    if (flags != BoxSetFlags::None) {
+        digest ^= static_cast<std::uint64_t>(flags);
+        digest *= kFnvPrime;
+    }
     data->digest = digest;
+    data->flags = flags;
     const auto count = static_cast<std::uint32_t>(data->boxes.size());
     data->order.resize(count);
     for (std::uint32_t i = 0; i < count; ++i) data->order[i] = i;
     if (count > 0) BuildNode(*data, 0, count);
+    if (HasFlag(flags, BoxSetFlags::FixInternalEdges) && count > 0) FindFaceNeighbours(*data);
     return BoxSet(std::shared_ptr<const Detail::BoxSetData>(std::move(data)));
 }
 
@@ -134,9 +199,11 @@ std::uint32_t BoxSet::Size() const noexcept {
 
 std::uint64_t BoxSet::Digest() const noexcept { return data_ ? data_->digest : kFnvOffsetBasis; }
 
+BoxSetFlags BoxSet::Flags() const noexcept { return data_ ? data_->flags : BoxSetFlags::None; }
+
 bool operator==(const BoxSet& a, const BoxSet& b) noexcept {
     if (a.data_ == b.data_) return true;
-    if (a.Size() != b.Size() || a.Digest() != b.Digest()) return false;
+    if (a.Size() != b.Size() || a.Digest() != b.Digest() || a.Flags() != b.Flags()) return false;
     const std::span<const Math::Aabb> left = a.Boxes();
     const std::span<const Math::Aabb> right = b.Boxes();
     const auto same = [](const float x, const float y) {

@@ -247,6 +247,39 @@ TEST_CASE("Audio Mixer lets go of a clip on the submitter's next call after its 
     }
 }
 
+TEST_CASE("Audio Mixer changes gains and loops without allocating, and lets go of a loop on the call after its stop") {
+    // Replacement Criterion 6 for SetGain and loop (v8-arch-gyo2-sdl-a): Render
+    // allocates and frees nothing while gains ramp and a clip loops; a looping
+    // clip is held while it loops (every call before its stop lets go of
+    // nothing) and let go on the first call after its stop was taken.
+    const std::uint64_t one = FreesOfOneClip();
+    Rig rig = MakeRig(4, 16);
+    SoundHandle sound;
+    {
+        Clip clip = Constant(100, 300); // looped about five times a block
+        sound = rig.submitter.Play({std::move(clip), kAnchor, 1.0f, 1.0f, true});
+        REQUIRE(sound);
+    } // the caller holds no reference any more
+    Counted counted;
+    for (int block = 0; block < 6; ++block) {
+        const Counted call = Count([&] {
+            CHECK(rig.submitter.SetGain(sound, block % 2 == 0 ? 0.5f : 1.5f, 1.0f, kAnchor + Ms(block * 10), Ms(3)));
+        });
+        CHECK(call.allocations == 0);
+        CHECK(call.frees == 0);
+        const auto left = RenderCounted(rig.mixer, counted, kAnchor + Ms(block * 10));
+        CHECK(counted.allocations == 0);
+        CHECK(counted.frees == 0);
+        CHECK(std::count(left.begin(), left.end(), std::int16_t{0}) == 0); // it loops all block long
+    }
+    REQUIRE(rig.submitter.Stop(sound, kAnchor + Ms(60)));
+    static_cast<void>(RenderCounted(rig.mixer, counted, kAnchor + Ms(60)));
+    CHECK(counted.frees == 0);
+    const Counted next = Count([&] { CHECK(rig.submitter.Stop(SoundHandle{}, kAnchor)); });
+    CHECK(next.frees == one);
+    CHECK(rig.mixer.Stats().gainsMatched == 6);
+}
+
 TEST_CASE("Audio Submitter lets go of the clips handed back on each of its calls") {
     // Declaration 10.3 (b): Play, Stop with a valid handle, Stop with an invalid
     // one, StopAll and the destructor each first let go of what came back.

@@ -56,9 +56,11 @@ std::vector<std::uint32_t> Results() {
     ray(P3::CastRay(P3::CapsuleY(0.9F, 0.45F), P3::Pose{{0.3F, 1.2F, 0.6F}, kTilt}, slanted, 100.0F));
     ray(P3::CastRay(P3::Cuboid{{0.7F, 1.9F, 0.4F}}, P3::Pose{{0.2F, 1.0F, 0.5F}, kTilt}, slanted, 100.0F));
     ray(P3::CastRay(P3::Capsule{{0.1F, -0.6F, 0.2F}, {0.7F, 2.3F, 0.9F}, 0.35F}, P3::Pose{}, slanted, 100.0F));
+    // Pinned to the flag-off behaviour (declaration section 12, case 5): the golden's bits predate the flag.
     auto boxes = P3::BoxSet::Build(std::vector<M::Aabb>{{{-1.0F, -1.0F, -1.0F}, {0.5F, 3.0F, 0.75F}},
                                                          {{0.25F, -2.0F, 0.1F}, {1.5F, 0.3F, 1.2F}},
-                                                         {{-3.0F, 0.0F, -0.5F}, {-2.0F, 1.0F, 0.5F}}});
+                                                         {{-3.0F, 0.0F, -0.5F}, {-2.0F, 1.0F, 0.5F}}},
+                                   P3::BoxSetFlags::None);
     REQUIRE(static_cast<bool>(boxes));
     const P3::Pose setPose{{0.4F, 0.3F, -0.2F}, kTilt};
     ray(P3::CastRay(*boxes, setPose, slanted, 100.0F));
