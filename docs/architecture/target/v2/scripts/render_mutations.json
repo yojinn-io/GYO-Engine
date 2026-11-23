@@ -1,0 +1,424 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the render Module, render_world and sdl_gpu (batch R2a, v8-arch-gyo2-sdl-r2a; Design Invariants RD-1 to RD-4 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-). The gp- mutants need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
+ "mutants": [
+  {
+   "id": "rd-clip-y-not-turned",
+   "what": "ViewToClip keeps y down (no turn)",
+   "guards": [
+    "render RD-1",
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const float sy = -2.0F / view.height;",
+   "replace": "    const float sy = 2.0F / view.height;",
+   "target": "gyo_render_tests",
+   "cases": "render: the view*",
+   "expect": "\\[rd\\-clip\\-top\\-left\\]"
+  },
+  {
+   "id": "rd-clip-origin-ignored",
+   "what": "ViewToClip forgets the view origin",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "return ViewTransform{{sx, sy}, {-1.0F - view.x * sx, 1.0F - view.y * sy}};",
+   "replace": "return ViewTransform{{sx, sy}, {-1.0F, 1.0F}};",
+   "target": "gyo_render_tests",
+   "cases": "render: the view*",
+   "expect": "\\[rd\\-clip\\-origin\\]"
+  },
+  {
+   "id": "rd-view-default-unit",
+   "what": "a pass without a view gets a 1 by 1 view",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "return Math::Rect{0.0F, 0.0F, static_cast<float>(target.width), static_cast<float>(target.height)};",
+   "replace": "return Math::Rect{0.0F, 0.0F, 1.0F, 1.0F};",
+   "target": "gyo_render_tests",
+   "cases": "render: a pass without*",
+   "expect": "\\[rd\\-view\\-default\\]"
+  },
+  {
+   "id": "rd-clip-none-empty",
+   "what": "no clip lets nothing through",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    if (!clip) return PixelRect{0, 0, target.width, target.height};",
+   "replace": "    if (!clip) return PixelRect{};",
+   "target": "gyo_render_tests",
+   "cases": "render: no clip*",
+   "expect": "\\[rd\\-clip\\-none\\]"
+  },
+  {
+   "id": "rd-clip-floor",
+   "what": "the clip takes every pixel it touches (rounds outward)",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const double first = std::ceil(edge - 0.5);",
+   "replace": "    const double first = std::floor(edge);",
+   "target": "gyo_render_tests",
+   "cases": "render: a clip on whole*",
+   "expect": "\\[rd\\-clip\\-centre\\-out\\]"
+  },
+  {
+   "id": "rd-clip-round",
+   "what": "a centre on the left edge is outside",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const double first = std::ceil(edge - 0.5);",
+   "replace": "    const double first = std::floor(edge + 0.5);",
+   "target": "gyo_render_tests",
+   "cases": "render: a clip on whole*",
+   "expect": "\\[rd\\-clip\\-edge\\-rule\\]"
+  },
+  {
+   "id": "rd-clip-no-scale",
+   "what": "the clip ignores the view scale",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const double sx = static_cast<double>(target.width) / view.width;",
+   "replace": "    const double sx = 1.0;",
+   "target": "gyo_render_tests",
+   "cases": "render: a clip follows*",
+   "expect": "\\[rd\\-clip\\-scale\\]"
+  },
+  {
+   "id": "rd-clip-no-view-origin",
+   "what": "the clip is measured from the target origin",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const double left = (static_cast<double>(clip->x) - view.x) * sx;",
+   "replace": "    const double left = static_cast<double>(clip->x) * sx;",
+   "target": "gyo_render_tests",
+   "cases": "render: a clip follows*",
+   "expect": "\\[rd\\-clip\\-view\\-origin\\]"
+  },
+  {
+   "id": "rd-clip-uncut",
+   "what": "the clip is not cut to the target",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    if (first >= static_cast<double>(limit)) return limit;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: a clip follows*",
+   "expect": "\\[rd\\-clip\\-cut\\]"
+  },
+  {
+   "id": "rd-tex-ids-from-0",
+   "what": "texture ids start at 0 (the white texture)",
+   "guards": [
+    "render RD-3"
+   ],
+   "file": "engine/modules/render/include/engine/render/RenderTextures.hpp",
+   "find": "    std::uint32_t next_ = 1;",
+   "replace": "    std::uint32_t next_ = 0;",
+   "target": "gyo_render_tests",
+   "cases": "render: texture ids*",
+   "expect": "\\[rd\\-tex\\-first\\-id\\]"
+  },
+  {
+   "id": "rd-tex-reuse",
+   "what": "a released id is given again",
+   "guards": [
+    "render RD-3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    live_.erase(it);\n    pending_.emplace_back(TextureRelease{id});",
+   "replace": "    live_.erase(it);\n    next_ = id.value;\n    pending_.emplace_back(TextureRelease{id});",
+   "target": "gyo_render_tests",
+   "cases": "render: texture ids*",
+   "expect": "\\[rd\\-tex\\-no\\-reuse\\]"
+  },
+  {
+   "id": "rd-tex-release-kept-live",
+   "what": "a released texture stays live",
+   "guards": [
+    "render RD-3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    live_.erase(it);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: texture ids*",
+   "expect": "\\[rd\\-tex\\-released\\-gone\\]"
+  },
+  {
+   "id": "rd-tex-create-no-ask",
+   "what": "a make ask is not recorded",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    pending_.emplace_back(TextureCreate{id, desc, std::move(pixels)});\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: the asks*",
+   "expect": "REQUIRE\\( pending\\.size\\(\\) == 3 \\)"
+  },
+  {
+   "id": "rd-tex-clear-forgets",
+   "what": "clearing the asks forgets the textures",
+   "guards": [
+    "render RD-2"
+   ],
+   "file": "engine/modules/render/include/engine/render/RenderTextures.hpp",
+   "find": "    void ClearPending() noexcept { pending_.clear(); }",
+   "replace": "    void ClearPending() noexcept {\n        pending_.clear();\n        live_.clear();\n    }",
+   "target": "gyo_render_tests",
+   "cases": "render: the asks*",
+   "expect": "\\[rd\\-tex\\-clear\\-keeps\\-live\\]"
+  },
+  {
+   "id": "rd-tex-region-unchecked",
+   "what": "an update outside the texture is accepted",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    GYO_ASSERT(region.x <= desc->width && region.width <= desc->width - region.x && \"an update outside the texture\");\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: wrong texture*",
+   "expect": "expected GYO_ASSERT to fail: textures\\.Update\\(id, R::TextureRegion\\{3, 0, 2, 1\\}"
+  },
+  {
+   "id": "rd-tex-region-edge-refused",
+   "what": "a region on the far edge is refused",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "region.width <= desc->width - region.x && \"an update outside",
+   "replace": "region.width < desc->width - region.x && \"an update outside",
+   "target": "gyo_render_tests",
+   "cases": "render: wrong texture*",
+   "expect": "GYO_ASSERT failed: .*an update outside the texture"
+  },
+  {
+   "id": "rw-submit-before-last",
+   "what": "Submit is inserted before the last stage",
+   "guards": [
+    "render RD-2"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "r.InsertStage(options.schedule, options.after, Kernel::StagePlace::After, std::string(kSubmitStage));",
+   "replace": "r.InsertStage(options.schedule, options.after, Kernel::StagePlace::Before, std::string(kSubmitStage));",
+   "target": "gyo_render_tests",
+   "cases": "render_world: Submit*",
+   "expect": "\\[rw\\-submit\\-after\\-last\\]"
+  },
+  {
+   "id": "rw-no-cleanup-passes",
+   "what": "the passes are not cleared",
+   "guards": [
+    "render RD-2"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "    commands.Get().passes.clear();\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_world: Submit*",
+   "expect": "\\[rw\\-cleanup\\-passes\\]"
+  },
+  {
+   "id": "rw-no-cleanup-asks",
+   "what": "the texture asks are not cleared",
+   "guards": [
+    "render RD-2"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "    textures.Get().ClearPending();\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_world: Submit*",
+   "expect": "\\[rw\\-cleanup\\-asks\\]"
+  },
+  {
+   "id": "rw-clear-first",
+   "what": "the frame data is cleared in First (before the producers)",
+   "guards": [
+    "render RD-2"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "    mount.stage = std::string(kCleanupStage);",
+   "replace": "    mount.stage = std::string(Orchestration::DefaultSchedules::first);",
+   "target": "gyo_render_tests",
+   "cases": "render_world: an ask made*",
+   "expect": "\\[rw\\-prepare\\-ask\\-kept\\]"
+  },
+  {
+   "id": "sg-e2-not-reported",
+   "what": "no window is not reported",
+   "guards": [
+    "sdl SDL-E2"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "        setup.Report(\"SDL-E2\", \"sdl_gpu has no window to draw to: the product carries no sdl_window, or sdl_window could not make the window\");\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu startup:*",
+   "expect": "\\[sg\\-e2\\-refused\\]"
+  },
+  {
+   "id": "sg-abi-uniform-count",
+   "what": "the ABI says the vertex stage has no uniform buffer",
+   "guards": [
+    "render RD-4"
+   ],
+   "file": "engine/modules/render/include/engine/render/ShaderAbi.hpp",
+   "find": "inline constexpr std::uint32_t kPass2DVertexUniformBuffers = 1;",
+   "replace": "inline constexpr std::uint32_t kPass2DVertexUniformBuffers = 0;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu shaders:*",
+   "expect": "\\[sg\\-abi\\-vertex\\-uniforms\\]"
+  },
+  {
+   "id": "sg-abi-hlsl-sampler-drift",
+   "what": "the fragment shader samples nothing (HLSL drifts from the ABI)",
+   "guards": [
+    "render RD-4"
+   ],
+   "file": "engine/modules/render/shaders/pass2d.frag.hlsl",
+   "find": "    return passTexture.Sample(passSampler, input.uv) * input.color;",
+   "replace": "    return input.color;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu shaders:*",
+   "expect": "\\[sg\\-abi\\-fragment\\-samplers\\]"
+  },
+  {
+   "id": "gp-load-always",
+   "what": "every pass clears (later passes do not keep the picture)",
+   "guards": [
+    "sdl sdl_gpu",
+    "render section 2"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            target.load_op = (first || clear) ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;",
+   "replace": "            target.load_op = SDL_GPU_LOADOP_CLEAR;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a view*",
+   "expect": "\\[gp\\-pass\\-load\\]"
+  },
+  {
+   "id": "gp-no-scissor",
+   "what": "the clip is not applied",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                SDL_SetGPUScissor(render, &rect);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a clip*",
+   "expect": "\\[gp\\-clip\\-above\\]"
+  },
+  {
+   "id": "gp-blend-opaque-too",
+   "what": "Opaque blends like Alpha",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        if (blend == R::BlendMode::Alpha) {\n            target.blend_state.enable_blend = true;",
+   "replace": "        if (true) {\n            target.blend_state.enable_blend = true;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: Alpha*",
+   "expect": "\\[gp\\-blend\\-opaque\\]"
+  },
+  {
+   "id": "gp-vertex-offset-ignored",
+   "what": "vertexOffset is not applied",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, static_cast<std::int32_t>(draw.vertexOffset), 0);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, 0, 0);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: draws*",
+   "expect": "\\[gp\\-vertex\\-offset\\]"
+  },
+  {
+   "id": "gp-filter-linear-always",
+   "what": "a Nearest texture is sampled linearly",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "t->filter == R::TextureFilter::Nearest ? nearest : linear",
+   "replace": "linear",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a texture*",
+   "expect": "\\[gp\\-tex\\-"
+  },
+  {
+   "id": "gp-update-ignored",
+   "what": "a texture update is not uploaded",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                frame.textureCopies.push_back({place(update->pixels), it->second.texture, update->region});\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a texture*",
+   "expect": "\\[gp\\-tex\\-update\\]"
+  },
+  {
+   "id": "gp-release-kept",
+   "what": "a released texture keeps its GPU texture",
+   "guards": [
+    "render section 3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                SDL_ReleaseGPUTexture(device, it->second.texture);\n                textures.erase(it);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a texture*",
+   "expect": "\\[gp\\-tex\\-released\\-"
+  },
+  {
+   "id": "gp-unmapped-drawn",
+   "what": "a pass on another target is drawn on the window",
+   "guards": [
+    "sdl sdl_gpu"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            if (pass.target != 0) continue;\n            SDL_GPURenderPass* render",
+   "replace": "            SDL_GPURenderPass* render",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a view*",
+   "expect": "\\[gp\\-"
+  },
+  {
+   "id": "gp-clear-ignored",
+   "what": "the pass clear colour is ignored",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            const R::Color8 colour = clear.value_or(R::Color8{0, 0, 0, 0});",
+   "replace": "            const R::Color8 colour = R::Color8{0, 0, 0, 0};",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a pass clears*",
+   "expect": "\\[gp\\-clear\\]"
+  }
+ ]
+}

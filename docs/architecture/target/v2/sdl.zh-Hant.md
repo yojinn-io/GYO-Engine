@@ -1,6 +1,6 @@
 # SDL 的 Plugin（`plugins/sdl*`）
 
-更新：2026-11-23（子批 W `v8-arch-gyo2-sdl-w`：`sdl` 函式庫的共用型別、第 5 節 `sdl_window`、SDL-3、SDL-4、SDL-7 與對應表、examples 的拿法；**最終文字在 W 的合併前核准**）；2026-11-23（新頁，子批 P `v8-arch-gyo2-sdl-p`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 9.1、10.2、12 節。本頁是 `plugins/sdl*` 的 owner 文件：子批 P 開頁、寫目錄的形、取得、選擇與 SDL-1、SDL-2；W（`sdl_window`）、A（`sdl_audio`）、R2a（`sdl_gpu`）各自補自己那一列與 SDL-3～SDL-7（草案在總宣告第 12 節）。
+更新：2026-11-24（子批 R2a `v8-arch-gyo2-sdl-r2a`：第 1 節 `sdl_gpu` 列、第 7 節 `sdl_gpu` 與 shader 工具（第 6 節留給 A 的 `sdl_audio`）、SDL-4 的 `GPUSubmit`、SDL-5；**最終文字在 R2a 的合併前核准**）；2026-11-23（子批 W `v8-arch-gyo2-sdl-w`：`sdl` 函式庫的共用型別、第 5 節 `sdl_window`、SDL-3、SDL-4、SDL-7 與對應表、examples 的拿法；**最終文字在 W 的合併前核准**）；2026-11-23（新頁，子批 P `v8-arch-gyo2-sdl-p`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 9.1、10.2、12 節。本頁是 `plugins/sdl*` 的 owner 文件：子批 P 開頁、寫目錄的形、取得、選擇與 SDL-1、SDL-2；W（`sdl_window`）、A（`sdl_audio`）、R2a（`sdl_gpu`）各自補自己那一列與 SDL-3～SDL-7（草案在總宣告第 12 節）。
 
 Owner：架構。
 
@@ -16,7 +16,7 @@ Match（伺服器）不帶任何 `sdl*` 的列：configure 不加 `plugins/sdl`�
 |---|---|---|---|
 | `sdl` | 函式庫（`library_only`）：抓 SDL3、上補丁；`sdl*` 之間共用的、我們的詞寫的型別：不透明的視窗把手 `NativeWindows`、時鐘配對 `ClockPair`（`plugins/sdl/include/plugins/sdl/`） | P、W | 有（target `GYO::SDL`，連 `GYO::Time`，不連 SDL） |
 | `sdl_window` | 來源側：Runner、Window、InputEvents、Ime、剪貼簿（第 5 節） | W | 有（target `GYO::SDLWindow`） |
-| `sdl_gpu` | 渲染側：Gpu、GpuSubmit | R2a | 還沒有 |
+| `sdl_gpu` | 渲染側：GPU、GPUSubmit、建置時的 shader 工具（第 7 節） | R2a | 有（target `GYO::SDLGPU`） |
 | `sdl_audio` | `Configure`：AudioOutput | A | 還沒有 |
 
 各列的內容、依賴與兩個 World 的接法見總宣告第 9.1、9.2 節。一列的依賴在登記檔寫：例 `sdl_window` 的 `depends` 是 `sdl;input;window`。
@@ -33,7 +33,7 @@ plugins/<名>/
   tests/adapters/sdl/…    # 直接呼叫 SDL 的測試
 ```
 
-- adapter 給 System 用的介面標頭放在 `src/adapters/sdl/` 外（例：`plugins/sdl_gpu/src/GpuDevice.hpp`），由 adapter 的 `.cpp` 實作（SDL-1）。
+- adapter 給 System 用的介面標頭放在 `src/adapters/sdl/` 外（例：`plugins/sdl_gpu/src/GPUDevice.hpp`），由 adapter 的 `.cpp` 實作（SDL-1）。
 - Plugin 的測試放在自己的目錄、跟著列走；名字以 Plugin 名開頭（例：`sdl.build`）。`plugins/` 是執行時的程式：os 守衛的 R1～R4 都管它，它的測試也受 R4（os.md DI 1、2；`tests/` 底下的豁免不延伸到 `plugins/<名>/tests/`）；Windows 上它的執行檔套 UTF-8 的 code page（os.md DI 11）。
 
 ## 3. 選擇：只建被選的 Plugin
@@ -109,13 +109,45 @@ plugins/<名>/
 
 `WINDOW_RESIZED`（視窗座標的大小）不寫：邏輯大小由像素大小與縮放算出，和 `PIXEL_SIZE_CHANGED` 重複。
 
+## 7. `sdl_gpu`
+
+`plugins/sdl_gpu/`（`GYO::Plugins::SDLGPU`，登記單位 `SDLGPUPlugin`，標頭 `plugins/sdl_gpu/SDLGPUPlugin.hpp`）。依賴 `sdl;render;render_world`（不寫 `sdl_window`：它常在另一個 World，O-E3 逐 World 檢查會要求渲染 World 也列它；視窗經 Product 的共用處交接）。SDL 只在 `src/adapters/sdl/GPUDevice.cpp` 與 shader 工具 `src/adapters/sdl/ShaderTool.cpp`；給單位與 System 用的介面是 `src/GPUDevice.hpp`、`src/EmbeddedShaders.hpp`（我們的詞）。資料的格式在 [render 頁](render.zh-Hant.md)。
+
+- **`Configure`**（產品一次）：從 Product 的 buffer 找 `SDL::NativeWindows`（`sdl_window` 放的不透明把手），經 adapter 建 GPU 裝置（照嵌進來的 shader 格式選 driver）、claim 視窗、建 2D pass 的 shader、sampler、白貼圖。**裝置在 `Configure` 建**（總宣告第 10.2 節：替換 World 時 `Build` 重跑、不重建裝置）。沒有視窗（產品沒帶 `sdl_window`，或它建窗失敗）是啟動錯誤 `SDL-E2`；裝置建不起來是 `SDL-E3`（訊息帶 `VideoFailed`／`DeviceFailed`／`ClaimFailed`／`SetupFailed` 與 SDL 的文字）。放 `SDLGPUStatus` 進 Product 的 buffer。`OnDestroy` 放掉裝置——登記在 `sdl_window` 之後、所以先跑（反序），視窗還在時就放開它。
+- **`Build`**（要畫的那個 World；在主執行緒）：登記把手 Resource `SDLGPUHandle`（`threadBound`，雜湊不寫）、把 `GPUSubmit` 掛在 `render_world` 的 `Submit` stage（`RenderWorldOptions::schedule`）。準備函式給每個 World 一個號碼：換了一個 World 在送出時，先放掉前一個 World 的貼圖（新 World 的貼圖 id 從 1 重來）；替換失敗、舊 World 繼續畫時號碼沒變，什麼都不放。
+- **`GPUSubmit`**（照 Bevy 的 `render_system`，`bevy_render/src/renderer/mod.rs:82`；Q7＝(a)、讀法 2）：只讀渲染 World（SDL-5）；經 adapter 依序：套用這一幀的貼圖要求（建、局部更新、放掉）、上傳頂點與索引（一個 copy pass）、拿 swapchain 的畫面（`SDL_WaitAndAcquireGPUSwapchainTexture`，等垂直同步）、每個 `Pass2D` 一個 render pass（每個 draw 設裁切、綁貼圖與 sampler）、送出。
+- **錯誤怎麼出去**（總宣告第 10.2 節的題；照「告訴外面發生了什麼」，`errors-inform-not-prescribe`）：**沒有一種是 System 的錯誤**——System 回錯誤會讓 World 壞、Product 結束（O-11），而視窗縮小、某張貼圖建不起來都不是結束的理由。`SDLGPUStatus` 計數：送出的幀、跳過的幀（視窗沒給畫面：縮小、隱藏、被蓋住；貼圖要求照樣套用）、失敗的幀（SDL 拒絕某一步，`LastFailure()` 是最後一次的文字）、被拒的貼圖要求、因此跳過的 draw、目標沒有對應的 pass。SDL_GPU 沒有「裝置遺失」的事件或復原介面；裝置壞了會表現成每幀失敗，產品看 `FramesFailed()` 決定怎麼辦。
+- **一個 Product 只有一個 World 列 `sdl_gpu`**（不加守衛）：一個視窗、一張貼圖表。
+
+### shader 工具
+
+總宣告第 10.2 節 R2a 列「最小的 shader 管線（HLSL 在 `render`、host 工具在 `sdl_gpu`、ABI、共通管線找編譯器）」。照 master 的 `engine/render/shaders/pipeline`（三平台 CI 跑過）搬進 `sdl_gpu`、縮成最小：
+
+- **流程**：建置時，`plugins/sdl_gpu/CMakeLists.txt` 以 ExternalProject 另建一個**主機**專案 `plugins/sdl_gpu/shader_tool/`（不進交叉編譯的圖；交叉編譯時用 `GYO_SHADER_TOOL_EXECUTABLE` 指定現成的工具），得到 `gyo_sdl_gpu_shader_tool`；它把 `render` 的 HLSL（`GYO::Render` 的 `GYO_RENDER_SHADER_DIR`）編成這個平台的格式、從 SPIR-V 讀出資源數，寫成一個 C++ 原始碼（建置目錄裡的 `generated/EmbeddedShaders.cpp`），`sdl_gpu` 把它編進去（Dear ImGui 的 SDL_GPU 後端也是把 shader 的 bytes 放在原始碼裡）。執行時不讀 shader 檔、不需要資產路徑。
+- **格式**（`GYO_SHADER_FORMATS=AUTO`，同 master）：Windows＝DXIL＋SPIR-V（Direct3D 12 或 Vulkan）、Linux＝SPIR-V、macOS＝Metal library（MSL 經 Apple 的 `xcrun metal`／`metallib` 離線編譯；有 `CMAKE_OSX_DEPLOYMENT_TARGET` 時帶 `-mmacosx-version-min`）。
+- **編譯器**：HLSL → SPIR-V、SPIR-V → DXIL 用 DXC，SPIR-V → MSL 用 SPIRV-Cross，都經 SDL_shadercross（照 SDL_GPU 的 register 慣例對位）。
+- **相對 master 拿掉的**：bundle 的 spec 與 manifest、nlohmann_json、執行時讀 shader 檔、遊戲的 shader bundle（`gyo_add_shader_bundle`）——R2a 只有內建的一組；遊戲自己的 shader 在需要它的子批（R2b）再加。
+- **os 守衛的地位**：工具在 `plugins/` 底下，是執行時的程式（os.md DI 2 的 R1～R4 全管，沒有豁免）：讀寫檔、開行程都經 SDL（`SDL_LoadFile`、`SDL_SaveFile`、`SDL_CreateProcess`），不用 fstream 與 `std::filesystem` 的檔案操作；它的執行檔在 Windows 套 UTF-8 的 code page（主機專案自己呼叫 `gyo_os_process_code_page`，同 master）。os.md DI 2 字面裡的「the host shader tool」豁免已經沒有對象（P 的交接、總宣告第 16 節 (5)）——改字面交主會話。
+- **測試**：主機專案的 `sdl_gpu.shader_tool.*`（label `shader`；L1 在 Linux 從主機建置目錄跑）：編得過 `render` 的 2D pass、編不過的 shader 與未知的格式都回 1、不寫輸出。主建置的 `sdl_gpu.shaders`（label `cpu`）比嵌進來的資源數與 `render` 的 ABI（RD-4）。
+
+| 外部組件 | 版本（同 master 的 pin） | 來源與驗證 |
+|---|---|---|
+| DXC（Windows） | v1.9.2602 預建版 | `https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/dxc_2026_02_20.zip`，SHA256 `a1e89031421cf3c1fca6627766ab3020ca4f962ac7e2caa7fab2b33a8436151e` |
+| DXC（x86-64 Linux） | v1.9.2602 預建版 | `…/v1.9.2602/linux_dxc_2026_02_20.x86_64.tar.gz`，SHA256 `a1d3e3b5e1c5685b3eb27d5e8890e41d87df45def05112a2d6f1a63a931f7d60` |
+| DXC（macOS） | libsdl-org fork commit `2c84a1c5ab7091608c97df6ba5ccf46e71c322eb`（含 submodule），從原始碼建 | git（官方沒有 Apple 的預建版） |
+| SPIRV-Cross | commit `1a6169566c73d3da552748fc372fe2bbb856e46e` | codeload tarball，SHA256 `0f295b214b164e42a1d21537c8da7b44569806c16220dda9798558edfaacd11e` |
+| SDL_shadercross | commit `e55cf5e31ced6f3d1be5cc6d0c50e99384f9f4ba` | codeload tarball，SHA256 `342bb6a8e734745eb5951f25c87fa7aad62f46b3736def8681d9fa7ad046887f`（只編 `src/SDL_shadercross.c`，不跑上游會抓浮動依賴的安裝程式） |
+| SDL | 3.4.0 | 同第 4 節的 release archive 與 SHA-256（主機專案自己的一份：關掉 video、audio、GPU，不上補丁） |
+
+全部放在主機建置目錄（`GYO_SHADER_HOST_BUILD_DIR`，預設 `<build>/host-tools`）；`FETCHCONTENT_SOURCE_DIR_<名>`（`SDL3`、`GYO_SPIRVCROSS`、`GYO_SHADERCROSS`、`GYO_DXC`、`GYO_DXC_SOURCE`）指定現成的原始碼時照用。CI 的快取（`shader-tools-v4-…`）存整個主機建置目錄：key 先是 pin（`Dependencies.cmake` 的 hash）、再是工具自己的原始碼；只改工具時以 `restore-keys` 取回同一組 pin 的建置，DXC 等已經是新的、只重建工具；pin 改了才全部重建（macOS 從原始碼建 DXC 很久）。**下載這些是使用者同意的**（2026-11-24，經主會話，原話「照建議」：選 (A) 照 master、同意 DXC 兩個預建版、macOS 的 DXC 原始碼、SPIRV-Cross、SDL_shadercross 五項；比過的 (B) 是把編好的 shader 當產生檔放進 repo）。
+
 ## Design Invariants
 
 - **SDL-1 SDL 只在 `plugins/sdl*` 的 adapter 目錄**：`SDL3/` 的標頭只被 `plugins/sdl*` 的 `src/adapters/sdl/` 與 `tests/adapters/sdl/` 底下的檔案 include（adapter 目錄裡可以有私有標頭，給 adapter 的幾個 `.cpp` 共用 SDL 的型別）；adapter 目錄外的檔案不 include adapter 目錄裡的任何檔案——adapter 給 System 用的介面標頭（我們的詞，不含 SDL）放在 adapter 目錄外，由 adapter 的 `.cpp` 實作；所以 SDL 不會經遞移的 include 漏到 System。System、runner、單位的 `Configure`／`Build`／`Check` 的程式裡沒有 SDL（建視窗、開裝置、claim 視窗也呼叫 adapter）；`engine/` 底下沒有 SDL。Plugin 之間的交接（視窗登錄表）用不透明的把手，型別定在 `sdl` 函式庫、不露 SDL 的型別（收窄使用者 11-13 的 (iii)，總宣告第 14 節核准清單第 6 件）。SDL3 對 `sdl*` 的 target 都是 PRIVATE 連結；`GYO::SDL` 本身不帶 SDL。守衛：原始碼掃描在子批 K 的 scenario 通過後立（總宣告第 9.1 節）；在那之前、以及 adapter 目錄外前置宣告 SDL 型別這種掃描判不了的，由每批的設計審查看。
 - **SDL-2 沒有 SDL 也成立**：拿掉 `sdl*` 的 Plugin 與登記檔的列（與帶它們的產品），Engine、所有 Module、headless 的測試仍 configure、build、通過，SDL 不被下載、不被建。沒有產品選 `sdl*`、`GYO_PLUGINS` 也沒點名時，同樣不下載、不建。守衛：CI 的 core 步驟（L1 的 Linux 列、打包工作流程的 toolchain 列）——checkout 自己的建置與測試跑完之後，`build/ci/common/plugin_removal.py remove` 在 checkout 裡拿掉 `sdl*` 的列與目錄與帶它們的產品（暫存區刪除，經 git 列檔的測試照樣能跑），以 `core` preset、`GYO_PLUGINS=ALL` configure、build、ctest，`plugin_removal.py check` 確認 `gyo-build.json` 的 `plugins` 沒有 `sdl*`、`_deps` 沒有抓 SDL、CMakeCache 沒有 SDL 自己的選項（`SDL_*`，抓 vendored 或 ExternalProject 加進來的 SDL），最後 `restore` 把 checkout 還原成 HEAD。在 checkout 本身做、不在副本做：編譯快取的命中若跨兩棵原始碼樹，object 裡的 `std::source_location` 會是另一棵樹的路徑（L1 第二輪在 Windows 的 sccache＋MSVC 上碰到，`authority.authority_sources` 失敗）；同一個路徑編譯，快取的 key 也和以前一樣。本機要不動自己的樹時用 `copy`（HEAD 的 git 工作樹）；`cmake.PluginSelection`（整個 repo 什麼都沒選時不加任何 Plugin 目錄；configure 而已，沿用父建置抓好的來源、不連網）；`cmake.UnitRegistry`（選擇：依賴補齊、`ALL`、拒絕非 Plugin 的名字、產品登記）；`build.ci` 的 `test_plugin_removal.py`。突變：`docs/architecture/target/v2/scripts/sdl_mutations.json`。
 - **SDL-3 一條時間線**：輸入事件的時刻是 `Time::TimePoint`；SDL 的時刻不出 adapter。每次泵取一組配對（依序讀 engine 鐘、SDL 鐘、engine 鐘，engine 取中點；`plugins/sdl/include/plugins/sdl/ClockPair.hpp`），事件的 SDL 時刻 `t` 換成 `min(中點 + (t − SDL 讀數), 送達時的 Now())`，`t == 0` 是送達時刻；差以 2^64 取模（master `SdlPlatform.cpp:645-674`、坑 8、9 修過的版本）。保證：(1) 不晚於送達；(2) 同一次泵裡非零且不遞減的 SDL 時刻換算後不遞減；(3) `t == 0` → 送達時刻。不保證全序與跨兩次泵的先後（誤差約 ±bracket/2）。送進混音器的時刻（A）也在這條時間線；World 時間的取樣由 world_time 的 `AdvanceTime` 讀時間基準（使用者 2026-11-23 選照 Bevy 留在 System，`v8-arch-gyo2-time-sampling-in-system`；runner 不取樣）。守衛：`sdl.clock`（假讀取函式、精確等式）、`sdl_window.events`「an event's time…」；突變 `sc-*`。
-- **SDL-4 主執行緒**：視窗、事件泵，以及 World 裡經 adapter 呼叫 SDL 的 System（輸入法、剪貼簿、改視窗；R2a 的 `GpuSubmit`）只在建視窗的執行緒；adapter 每個進入點斷言 `SDL_IsMainThread`，把手 Resource 標 `threadBound`（DI-KS 14）。由 runner 安排，不由 Kernel 的啟動檢查（P19）。守衛：adapter 的斷言；審查。
-- SDL-5（渲染只讀）由 R2a 寫進本頁。SDL-6 已撤，號碼不重用。
+- **SDL-4 主執行緒**：視窗、事件泵、swapchain 的取得與送出，以及 World 裡經 adapter 呼叫 SDL 的 System（輸入法、剪貼簿、改視窗、`GPUSubmit`）只在建視窗的執行緒；adapter 每個進入點斷言 `SDL_IsMainThread`（`sdl_window` 的 `WindowBackend`、`sdl_gpu` 的 `GPUDevice`），把手 Resource（`SDLWindowHandle`、`SDLGPUHandle`）標 `threadBound`（DI-KS 14）。由 runner 安排，不由 Kernel 的啟動檢查（P19）。守衛：adapter 的斷言；審查。
+- **SDL-5 渲染只讀**：`sdl_gpu` 的 `GPUSubmit` 只讀渲染 World（`Res<RenderCommands>`、`Res<RenderTextures>`、自己的把手），不寫回任何 World；它在 GPU 那一側做的事（貼圖、緩衝、送出）都在 World 外的 `Service`。渲染 World 讀來源 World 受 DI-KS 13 約束（全文只在 Kernel 頁；R2a 沒有 Extract）。守衛：`GPUSubmit` 的參數只有 `Res`（Kernel 的存取宣告；寫的參數會出現在 System 的簽名，審查看）。SDL-6 已撤，號碼不重用。
 - **SDL-7 `sdl_window` 只翻譯、不持狀態**：整個 `sdl_window`（單位、runner、adapter、System）把 SDL 事件照第 5 節的對應表翻成 `input`、`window` 的 `Message`，把請求翻成 adapter 的呼叫。事件的方向不持有按鍵、焦點、組字的狀態，不合成對應表以外的 `Message`，不做失焦清鍵、去重、合併；鍵盤事件照帶 SDL 的 `mod`（和按鍵事件同一個來源，SDL 3.4 的平台後端自己對齊修飾鍵，總宣告第 6.6 節）；runner 不看事件的內容。**兩個例外**：(1) 佇列滿了丟棄並計數（`InputEventsDropped`）；(2) 新建或替換的 World 的第一輪先寫目前的狀態（對應表末兩列）。請求的方向記的「上次 SDL 接受的值」是自己輸出側的快取、不算副本；向 SDL 查目前的值（大小、縮放、剪貼簿、游標）不算持有。守衛：`sdl_window.events`——在 SDL 的 dummy 驅動用 `SDL_PushEvent` 餵一串事件，比寫出的 `Message` 序列與對應表（合成、丟事件〔沒計數〕、合併都會讓序列不同）、佇列上限設小時丟棄的數與計數；「持有但不輸出」的狀態與「runner 看事件內容」序列抓不到，由設計審查看。突變 `sw-*`。
 
 ## Replacement Criteria
@@ -124,6 +156,7 @@ plugins/<名>/
 
 ## 範囲の限界
 
+- **`sdl_gpu`（R2a）**：GPU 的測試（label `gpu`：`sdl_gpu.pass2d`、`sdl_gpu.frames`）在 L1 只在 Linux 的 Lavapipe 跑；Windows（Direct3D 12）與 macOS（Metal）的 L1 列只建不跑，本機在 macOS（Metal）跑過，Windows 的實機沒跑。半透明混合的像素允許差 1（各 GPU 的捨入）；其他像素比確切的值。隱藏的視窗可能不給 swapchain 的畫面，所以 `sdl_gpu.frames` 只確認每幀「送出或跳過、沒有失敗」，視窗上的像素沒有比（swapchain 讀不回來；畫法和 `Capture` 共用同一段程式）。垂直同步之外的 present mode、HDR、多視窗、render to texture 沒有做。
 - **`sdl_window`（W）**：SDL 的 dummy 驅動沒有 `SetWindowResizable`（`SDL_video.c:3126`），執行中改「能不能改大小」在 CI 看不到（建窗時不能改大小有測）；`ResizeWindow`、`cursorGrab` 在 dummy 驅動上同樣看不到效果；「值不同才呼叫」沒有計呼叫次數的測試；輸入法的組字、候選窗只能實機驗（K）；三平台的修飾鍵卡住（Bevy 點名的三種情形）沒有實測，SDL 3.4 的平台後端自己對齊（總宣告第 6.6、15 節），實機場次時一起測。`WarpCursor` 在 dummy 驅動上不可觀測（只確認不被拒）。live frame（OS 的 modal 迴圈中畫圖）不在本批。
 
 - `remove` 要 checkout 的追蹤檔沒有改動（否則拒絕、請用 `copy`），`restore` 把所有追蹤檔放回 HEAD；中途失敗時 checkout 停在拿掉的狀態（CI 的那個 job 已經失敗）。`copy` 建的是 HEAD 的工作樹：本機還沒 commit 的改動不在裡面。

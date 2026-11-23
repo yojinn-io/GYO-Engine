@@ -125,9 +125,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.GYO_HOST_TOOLS }}
-          # No source hash while the shader tool sources are absent (gyo2 has no
-          # render module); hash the tool's sources again when they return.
-          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}
+          # sdl_gpu's shader tool host build (docs/architecture/target/v2/sdl.zh-Hant.md,
+          # sdl_gpu). The key has the pins (Dependencies.cmake), then the tool's own
+          # sources. A change of the tool alone restores the build of the same pins
+          # (restore-keys): DXC and the rest are up to date there and only the tool
+          # is built again; new pins build everything.
+          key: shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/**', 'plugins/sdl_gpu/src/adapters/sdl/ShaderTool.cpp', 'plugins/sdl_gpu/CMakeLists.txt') }}
+          restore-keys: |
+            shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-
 
       - name: Build the selected graph and its tests
         id: build
