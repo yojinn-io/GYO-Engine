@@ -1,7 +1,6 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
-#include "CaseTiming.hpp"
 #include "engine/os/WakeSignal.hpp"
 
 #include <algorithm>
@@ -280,22 +279,7 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
     });
     int lost = 0;
     int rounds = 0;
-    // Observation only (v8-arch-gyo2-os-test-timeout): how the case's time is
-    // spent, noted every NoteEvery rounds and at the end. No check reads it.
-    // A round's time is from the waiter's check to its flag (the clock read the
-    // lost check already takes), so it leaves out a round's trailing take.
-    constexpr int NoteEvery = 2000;
-    const auto caseStart = Clock::now();
-    int blockedRounds = 0;
-    int slowRounds = 0;
-    auto longestRound = Clock::duration::zero();
-    const auto note = [&](const char* when) {
-        GYO::Test::CaseTiming::Note("lost-wakeup %s rounds=%d blocked=%d slow(>=10ms)=%d longest=%.3fs elapsed=%.3fs",
-            when, rounds, blockedRounds, slowRounds, std::chrono::duration<double>(longestRound).count(),
-            std::chrono::duration<double>(Clock::now() - caseStart).count());
-    };
     for (; rounds < Rounds && lost < StopAfterLost; ++rounds) {
-        if (rounds > 0 && rounds % NoteEvery == 0) note("progress");
         started.store(rounds, std::memory_order_release);
         for (int read = 0; read < rounds % 64; ++read) static_cast<void>(Clock::now());
         const auto start = Clock::now();
@@ -304,21 +288,14 @@ TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag"
             wake.Block(std::chrono::seconds(2));
             blocked = true;
         }
-        // The observation below reuses this clock read, so it adds no work
-        // between the rounds' phases.
-        const auto waited = Clock::now() - start;
-        if (waited >= std::chrono::milliseconds(1500)) ++lost;
+        if (Clock::now() - start >= std::chrono::milliseconds(1500)) ++lost;
         if (!blocked) {
             for (int spins = 0; signalled.load(std::memory_order_acquire) != rounds; ++spins)
                 if (spins > SpinsBeforeYield) std::this_thread::yield();
             wake.Block(std::chrono::seconds(2));
         }
         consumed.store(rounds, std::memory_order_release);
-        if (blocked) ++blockedRounds;
-        if (waited >= std::chrono::milliseconds(10)) ++slowRounds;
-        longestRound = std::max(longestRound, waited);
     }
-    note("end");
     stop.store(true, std::memory_order_release);
     signaller.join();
     CAPTURE(rounds);
