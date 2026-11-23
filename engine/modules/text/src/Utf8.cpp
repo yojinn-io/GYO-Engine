@@ -36,7 +36,7 @@ void DecodeUtf8(const std::string_view text, std::vector<char32_t>& codePoints, 
             if (lead == 0xF4) high = 0x8F;
         } else {
             // C0, C1, F5..FF or a lone continuation byte.
-            codePoints.push_back(U'�');
+            codePoints.push_back(U'\uFFFD');
             ++i;
             continue;
         }
@@ -56,7 +56,7 @@ void DecodeUtf8(const std::string_view text, std::vector<char32_t>& codePoints, 
             }
             cp = (cp << 6) | (next & 0x3Fu);
         }
-        codePoints.push_back(complete ? cp : U'�');
+        codePoints.push_back(complete ? cp : U'\uFFFD');
         i += used;
     }
     offsets.push_back(static_cast<std::uint32_t>(text.size()));

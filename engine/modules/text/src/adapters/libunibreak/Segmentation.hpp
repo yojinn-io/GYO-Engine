@@ -6,7 +6,7 @@
 
 // The libunibreak adapter's interface, in the text Module's words (Design
 // Invariant TX-1: libunibreak's headers, types and calls stay in
-// src/adapters/libunibreak/; decision v8-arch-gyo2-sdl-t, choice (丁)).
+// src/adapters/libunibreak/; decision v8-arch-gyo2-sdl-t, the user's choice (d)).
 namespace GYO::Engine::Text::Detail {
 
 enum class LineBreakAfter : std::uint8_t {

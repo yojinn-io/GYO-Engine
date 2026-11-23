@@ -81,6 +81,8 @@ TEST_CASE("text layout: lines break at the last opportunity that fits; trailing 
     CHECK_FALSE(layout.lines[0].hardBreak);
     CHECK(layout.lines[1].width == 16.0f);
     CHECK(layout.width == 36.0f);
+    // At 38 px the space after "AA AA" reaches 40: it hangs and does not break the line.
+    CHECK(Lines(f.Lay(text, f.Style(f.latinFirst), Width(38.0f)), text) == std::vector<std::string>{"AA AA ", "AA"});
     // No width: only the mandatory breaks.
     CHECK(f.Lay(text, f.Style(f.latinFirst)).lines.size() == 1);
 }

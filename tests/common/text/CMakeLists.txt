@@ -25,6 +25,21 @@ endif()
 add_test(NAME gyo_text_tests COMMAND gyo_text_tests)
 set_tests_properties(gyo_text_tests PROPERTIES LABELS "cpu" TIMEOUT 120)
 
+# Design Invariants TX-7 and TX-8: its own process, which sets variables that
+# would change HarfBuzz's shaping and FreeType's hinting if they were read,
+# before it uses either. The atlas digest is the one the case gets without the
+# variables (computed 2026-11-23).
+add_executable(gyo_text_environment_tests test_main.cpp EnvironmentTests.cpp)
+target_link_libraries(gyo_text_environment_tests PRIVATE GYO::Text GYO::Base doctest::doctest)
+target_compile_definitions(gyo_text_environment_tests PRIVATE
+    GYO_TEXT_TEST_FONTS="${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+    GYO_TEXT_ENVIRONMENT_ATLAS="3d0e7ca59978c28fcddffd6f279b11d0ee5c9429205e6d9bd50cc2d60be91cec")
+if(MSVC)
+    target_compile_options(gyo_text_environment_tests PRIVATE /utf-8)
+endif()
+add_test(NAME gyo_text_environment COMMAND gyo_text_environment_tests)
+set_tests_properties(gyo_text_environment PROPERTIES LABELS "cpu" TIMEOUT 60)
+
 # The adapters' interfaces (engine/modules/text/src): Unicode's conformance
 # tests through the libunibreak adapter, the two adapters' advances compared
 # (Design Invariant TX-2) and the UTF-8 decoder. Only the adapters' own
@@ -65,3 +80,14 @@ function(gyo_expect_text_links)
     endforeach()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_text_links)
+
+# Design Invariant TX-1: FreeType, HarfBuzz and libunibreak appear only in their
+# adapter directories (engine/modules/text/src/adapters/<component>/), hb-ft
+# nowhere; set up after the scenario tests passed (declaration 8.6, AGENTS §3 on
+# when to set up guards).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME text.adapter_guard
+    COMMAND Python3::Interpreter -I "${CMAKE_CURRENT_SOURCE_DIR}/text_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME text.adapter_guard_selftest
+    COMMAND Python3::Interpreter -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_text_guard.py" -v)
+set_tests_properties(text.adapter_guard text.adapter_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)

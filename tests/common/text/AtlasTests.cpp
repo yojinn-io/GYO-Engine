@@ -114,6 +114,10 @@ TEST_CASE("text atlas: line breaks and invisible glyphs are not drawn") {
     CHECK(result.placements[2].status == Text::GlyphRasterStatus::Empty);
     CHECK(result.placements[3].status == Text::GlyphRasterStatus::Empty);
     CHECK(result.newGlyphs == 2);
+    // The Kana font alone has no space: a line break would be its .notdef, and is still not drawn.
+    const std::vector<Text::FontId> kanaOnly{f.kana};
+    const Text::RasterResult kana = f.context.Rasterize(f.Lay("\n\t", f.Style(kanaOnly)), atlas);
+    CHECK(kana.newGlyphs == 0);
 }
 
 TEST_CASE("text atlas: a glyph larger than a page is TooLarge, not an error") {
