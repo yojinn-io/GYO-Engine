@@ -1,6 +1,6 @@
 # The naming guard (docs/architecture/target/v2/rebuild-naming.zh-Hant.md N17, target/naming Design Invariant 1):
 # every Engine unit's namespace is the one derived from its directory, and the roots under GYO are a closed table.
-# It reads engine/, plugins/, apps/, tools/, tests/ and examples/ as text, so it owns no unit and sits apart from
+# It reads engine/, plugins/, games/, tools/, tests/ and examples/ as text, so it owns no unit and sits apart from
 # the unit tests (v8-arch-gyo2-naming-cleanup; it was kernel.naming_guard). Its mutants are
 # docs/architecture/target/v2/scripts/naming_mutations.json. -B: no bytecode is written into the source tree.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

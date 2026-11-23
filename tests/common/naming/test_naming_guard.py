@@ -271,13 +271,13 @@ class GuardTree(unittest.TestCase):
 
     def test_n1_test_root_outside_tests_is_reported(self):
         self.write("examples/demo/Probe.cpp", "namespace GYO::Test {\n}\n")
-        self.write("apps/demo/src/Probe.cpp", "namespace GYO::Test::Demo {\n}\n")
+        self.write("games/demo/src/Probe.cpp", "namespace GYO::Test::Demo {\n}\n")
         self.assertReported("N1", "examples/demo/Probe.cpp:1: N1 namespace GYO::Test opened outside tests/")
-        self.assertReported("N1", "apps/demo/src/Probe.cpp:1: N1 namespace GYO::Test::Demo opened outside tests/")
+        self.assertReported("N1", "games/demo/src/Probe.cpp:1: N1 namespace GYO::Test::Demo opened outside tests/")
 
     def test_n1_product_root_passes(self):
         self.write("examples/demo/main.cpp", "namespace Demo {\nnamespace Sim {\n}\n}\n")
-        self.write("apps/demo/src/Use.cpp", "using namespace GYO::Kernel;\nnamespace Demo {\n}\n")
+        self.write("games/demo/src/Use.cpp", "using namespace GYO::Kernel;\nnamespace Demo {\n}\n")
         self.assertClean()
 
     def test_missing_scan_root_is_skipped_not_reported(self):
@@ -310,7 +310,7 @@ class GuardTree(unittest.TestCase):
                 shutil.rmtree(self.root / f"{root}/sample")
 
     def test_n1_scan_roots_are_pinned(self):
-        self.assertEqual(guard.SCAN_ROOTS, ("engine", "apps", "tools", "plugins", "tests", "examples"))
+        self.assertEqual(guard.SCAN_ROOTS, ("engine", "games", "tools", "plugins", "tests", "examples"))
 
     def test_n1_every_source_type_is_scanned(self):
         # A fixed list, not guard.SUFFIXES: shrinking the guard's set must fail here.

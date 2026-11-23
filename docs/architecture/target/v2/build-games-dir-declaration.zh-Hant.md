@@ -1,7 +1,7 @@
 # 建置層認 `games/`：事前宣告
 
 - 批次代號：`v8-arch-gyo2-build-games-dir`（批次表〈後續小事〉「建置層仍寫死 master 的 `apps/`」那一列）
-- 狀態：**修訂 2，等動工前核准**。核准前不動程式。
+- 狀態：**動工前核准（2026-11-23）**：使用者「照建議，選 B，守衛核准」（經主會話；HANDOFF `v8-arch-gyo2-build-games-dir-approved`）。核准的是修訂 2（e182968d）：Q1＝B；第 5.1 節五處守衛的掃描根與 os.md DI 1、DI 2 的改字照 §14.4 核准；第 5.4 節的範囲の限界由主會話判定登記成 LIM-9。
 - 基準：`gyo2` 0ed6ea10
 - 依據的決定：`v8-arch-gyo2-top-dirs-games-assets-tools`（頂層 `games/<遊戲>/`、`assets/<產品>/`、`tools/<工具>/`）、`v8-arch-gyo2-object-connect-dirs-now`（Object_Connect 的目錄已用 `.gitkeep` 建好）
 - 為什麼單獨一批：批次表那一列與 `-object-connect-dirs-now` 原寫「移植 Object_Connect 那一批一起改」；主會話 2026-11-23 依使用者「開 1、2、3」把它開成這張任務卡，先做。好處是 Object_Connect 的程式進來時，建置層與守衛已經認得 `games/`，產品的 CMake 也照新名字寫。

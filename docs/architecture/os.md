@@ -175,10 +175,10 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     MinGW-w64's default manifest is to be verified on a MinGW machine (open decision 23). The way is decided when
     the module is included, in the scope that enabled the compilers.
   - The build layer (`build/cmake/GyoCodePage.cmake`, included by `GyoBuild.cmake`) chooses the executables. It
-    records each directory it adds (engine, every app and tool, their tests and acceptance programs,
+    records each directory it adds (engine, every game and tool, their tests and acceptance programs,
     tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source directory, and
     once every target exists applies the manifest to every executable target there and below whose source
-    directory is under engine, apps, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
+    directory is under engine, games, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
     on every platform. No product is named: a new, cloned or removed product needs no common change. A target
     that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
     programs that FetchContent adds (protoc) are outside the roots and keep their own manifests; Go services are
@@ -303,7 +303,7 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, apps and tools), fstream, `fopen`
+- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, games and tools), fstream, `fopen`
   and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
 - **R5**: in engine/core/os, an include of anything but the standard library, OS headers, `engine/core/base` and
@@ -315,7 +315,7 @@ Invariants 1–3 as text, so the result is the same on every platform:
   name without its suffix resolves to the wide entry point.
 
 engine/core/os/src is scanned for R5 and R6 only; engine/core/os/include is scanned for everything. Comments, string literals and
-character literals are ignored; `#include` lines are matched as written. The scan covers engine, apps, tools,
+character literals are ignored; `#include` lines are matched as written. The scan covers engine, games, tools,
 build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
 yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
 
@@ -384,13 +384,13 @@ Known blind spots, left to review:
 
 ## Design Invariants
 
-1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, apps, tools,
+1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, games, tools,
    build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
    preprocessor condition (R2) and call no listed OS or CRT-split API (R3). A non-os target gets no
    OS-identifying compile definition from CMake. Compiler and architecture macros are not OS branches. Exceptions
    live only in an owner's ratchet allowlist.
 2. **Native file access goes through engine/core/os only** (R4). Runtime code in engine (outside engine/core/os and the host
-   shader tool, engine/core/io included), apps and tools uses no fstream, `fopen` or `_wfopen` and no
+   shader tool, engine/core/io included), games and tools uses no fstream, `fopen` or `_wfopen` and no
    `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
    go through engine/core/io's abstraction, whose native backend calls engine/core/os; process facts come from engine/core/os
    directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,

@@ -385,7 +385,7 @@ class WorkflowGateTests(unittest.TestCase):
         native = job_block(self.shared, "native")
         self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
         self.assertIn('"-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS"', native)
-        self.assertIn('"-DGYO_APPS=$apps"', native)
+        self.assertIn('"-DGYO_GAMES=$games"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.kind == 'toolchain'", native)
         for step in re.split(r"(?m)^      - ", native):
             if "cmake --install" in step or "python build/ci/common/archive_package.py" in step:
@@ -432,13 +432,13 @@ class WorkflowGateTests(unittest.TestCase):
         for tool in tools:
             self.assertNotRegex(native, rf"GYO_BUILD_{tool}\b|GYO_{tool}_BUILD_GUI\b")
 
-    def test_real_app_copy_is_a_fatal_windows_release_baseline_check(self):
+    def test_real_game_copy_is_a_fatal_windows_release_baseline_check(self):
         native = job_block(self.shared, "native")
         step = next(step for step in re.split(r"(?m)^      - ", native)
-                    if "python tests/common/ci/app_copy_integration.py" in step)
+                    if "python tests/common/ci/game_copy_integration.py" in step)
         self.assertIn("if: runner.os == 'Windows' && matrix.kind == 'toolchain' && inputs.profile == 'release'", step)
         self.assertIn('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }', step)
-        self.assertIn('--logs "build/target/_build/$env:PRESET/logs/app-copy"', step)
+        self.assertIn('--logs "build/target/_build/$env:PRESET/logs/game-copy"', step)
         self.assertNotIn("continue-on-error", step)
         upload = step_using(native, "actions/upload-artifact")
         self.assertNotIn("product-copy", upload)
@@ -698,7 +698,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertTrue(configure.startswith("cmake --preset $env:PRESET 2>&1 | Tee-Object"), configure)
         self.assertNotRegex(configure, r"-D")
         for forbidden in ("cmake --install", "run_package_checks", "validate_package", "archive_package",
-                          "app_copy_integration", "gyo-package-", "matrix.product", "matrix.kind"):
+                          "game_copy_integration", "gyo-package-", "matrix.product", "matrix.kind"):
             self.assertNotIn(forbidden, l1)
         tests = step_with(l1, "id: tests")
         self.assertNotRegex(tests, r"(?m)^        if:")
@@ -1159,12 +1159,12 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         # CI definitions or helpers would make removing that owner edit CI.
         # Registered games and tools require their directories, so directories
         # also cover disabled owners that the registry export leaves out.
-        owners = {entry.name for folder in ("apps", "tools", "services") if (ROOT / folder).is_dir()
+        owners = {entry.name for folder in ("games", "tools", "services") if (ROOT / folder).is_dir()
                   for entry in (ROOT / folder).iterdir() if entry.is_dir() and not entry.name.startswith((".", "_"))}
         if not owners:
             # Not a pass: with no owner the list of names to look for is empty. The check resumes as soon as an
-            # owner directory exists under apps/, tools/ or services/.
-            self.skipTest("no product, tool or service owner directory under apps/, tools/ or services/: "
+            # owner directory exists under games/, tools/ or services/.
+            self.skipTest("no product, tool or service owner directory under games/, tools/ or services/: "
                           "no owner name to look for")
         sources = [*sorted(WORKFLOWS.glob("*.yml")), NATIVE_SETUP, *sorted((ROOT / "build/ci/common").glob("*.py"))]
         common = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in sources}
@@ -1174,7 +1174,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             # CI prose (quick, core, engine) does not collide: an owner path, a
             # quoted literal, an assignment or comparison value, or a product,
             # app, tool or game key.
-            usage = re.compile(rf"(?:apps|tools|services)/{name}(?![A-Za-z0-9_])"
+            usage = re.compile(rf"(?:games|tools|services)/{name}(?![A-Za-z0-9_])"
                                rf"|(['\"]){name}\1"
                                rf"|(?<![=!<>])=\s?{name}(?![A-Za-z0-9_./-])"
                                rf"|\b(?:products?|apps?|tools?|games?)\s*:\s*\[?\s*{name}(?![A-Za-z0-9_])")

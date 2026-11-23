@@ -25,7 +25,7 @@ class AssemblyTests(unittest.TestCase):
         (self.assets / "asset_catalog.json").write_text(json.dumps(self.catalog))
     def run_assembly(self, shaders=None):
         self.write_documents()
-        assemble("sample", "app", self.stage, self.assets, shaders)
+        assemble("sample", "game", self.stage, self.assets, shaders)
         return self.stage / "bin/assets/sample"
     def test_catalog_driven_copy_and_updates_do_not_require_compilation(self):
         (self.assets / "private-source.blend").write_text("not runtime")

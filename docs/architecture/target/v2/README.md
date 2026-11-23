@@ -128,6 +128,7 @@
 - [2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_compile_fail_judgement.zh-Hant.md)：負向編譯樣本的判法——「靜態斷言失敗＋標記在同一行」做成共用函式 `tests/common/support/ExpectStaticAssert.cmake`，Kernel、world_logging、world_asset 三處改用（asset 宣告第 15 節第 12 項）。
 - [2026_11_23_gyo2_audio_clip_loader.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_audio_clip_loader.zh-Hant.md)：audio 那一側的小批（clip 改成共用的不可變值、拿掉 `ClipBank` 與 clip 格、參照表與回收環；`WavLoader` 與 `sound`／`wav` 的 Data Contract；`GYO::Audio` 連 `GYO::Asset`）。
 - [2026_11_23_gyo2_os_test_timeout.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_test_timeout.zh-Hant.md)：os 測試在本機偶爾跑很久或逾時的原因（`v8-arch-gyo2-os-test-timeout`；加逐案計時的觀測；時間花在「loses no signal」案例自己的 signaller 每回合 yield、負載下讓出 CPU，不在 WakeSignal；改不改測試交使用者）。
+- [2026_11_23_gyo2_build_games_dir.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_build_games_dir.zh-Hant.md)：建置層認 `games/`，建置與 CI 的 app 改叫 game（`projects.csv`→`games.csv`、`GYO_GAMES`、KIND game、打包清單 4、工具描述 2、身分標頭改巨集）；四個守衛的掃描根；複製整合的 mirror 修正；LIM-9。
 
 ## 沒有搬過來的
 

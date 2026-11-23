@@ -49,7 +49,7 @@ jobs:
         id: registry
         env:
           TRAIN_PRODUCT: ${{ inputs.product }}
-        run: python build/ci/common/app_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
+        run: python build/ci/common/game_registry.py --output "$GITHUB_OUTPUT" --product "$TRAIN_PRODUCT"
       - name: Test package, draft preparation and smoke failure policies
         run: python -m unittest discover -s tests/common/ci -v
 
@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       fail-fast: false
-      # One toolchain product per release platform always exists, including an entirely empty app registry.
+      # One toolchain product per release platform always exists, including an entirely empty game registry.
       matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     defaults:
       run:
@@ -99,8 +99,8 @@ jobs:
       - name: Configure the selected product and engine verification
         id: configure
         run: |
-          $apps = if ($env:GYO_PRODUCT -eq 'toolchain') { '' } else { $env:GYO_PRODUCT }
-          cmake --preset $env:PRESET "-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS" "-DGYO_APPS=$apps" "-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
+          $games = if ($env:GYO_PRODUCT -eq 'toolchain') { '' } else { $env:GYO_PRODUCT }
+          cmake --preset $env:PRESET "-DGYO_SHADER_HOST_BUILD_DIR=$($env:GITHUB_WORKSPACE.Replace('\', '/'))/$env:GYO_HOST_TOOLS" "-DGYO_GAMES=$games" "-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS" -DBUILD_TESTING=ON -DGYO_ENABLE_PACKAGING=ON 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/configure.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $build = Get-Content "build/target/_build/$env:PRESET/gyo-build.json" -Raw | ConvertFrom-Json
           "GYO_BUILD_CONFIG=$($build.configuration)" >> $env:GITHUB_ENV
@@ -164,17 +164,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify independent copied game fixtures
-        id: app_copy
+        id: game_copy
         if: runner.os == 'Windows' && matrix.kind == 'toolchain' && inputs.profile == 'release'
         timeout-minutes: 60
         run: |
-          python tests/common/ci/app_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/target/_build/$env:PRESET-app-copy" --reuse-cache "build/target/_build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/target/_build/$env:PRESET/logs/app-copy" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/app-copy.log"
+          python tests/common/ci/game_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/target/_build/$env:PRESET-game-copy" --reuse-cache "build/target/_build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/target/_build/$env:PRESET/logs/game-copy" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/game-copy.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # A toolchain package holds the selected tools. With no tool registered
       # (the tool registry export selects none on every platform) the row still
       # builds and tests the engine, but has nothing to assemble: the package
-      # steps below are skipped and this step says so. Every app row, and every
+      # steps below are skipped and this step says so. Every game row, and every
       # toolchain row with a tool, assembles its package as before.
       - name: Decide whether this row has a package to assemble
         id: package_plan
@@ -349,7 +349,7 @@ jobs:
           BUILD_RESULT: ${{ steps.build.outcome }}
           TEST_RESULT: ${{ steps.tests.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
-          APP_COPY_RESULT: ${{ steps.app_copy.outcome }}
+          GAME_COPY_RESULT: ${{ steps.game_copy.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outcome }}
           GPU_RESULT: ${{ steps.gpu_smoke.outcome }}
           ARCHIVE_RESULT: ${{ steps.archive.outcome }}
@@ -367,7 +367,7 @@ jobs:
           | Build | $env:BUILD_RESULT |
           | CPU / shader tests | $env:TEST_RESULT |
           | Core baseline | $env:CORE_RESULT |
-          | Independent app copy (Windows release baseline) | $env:APP_COPY_RESULT |
+          | Independent game copy (Windows release baseline) | $env:GAME_COPY_RESULT |
           | Installed product acceptance | $env:SMOKE_RESULT |
           | Linux software GPU (declared product checks) | $env:GPU_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
@@ -386,7 +386,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require every baseline and configured app/platform job to pass
+      - name: Require every baseline and configured game/platform job to pass
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
@@ -395,5 +395,5 @@ jobs:
             echo '::error::Event checks and every platform build/test/smoke/package must succeed; skipped or cancelled jobs do not pass.'
             exit 1
           fi
-          echo 'All baseline jobs and configured app/platform packages passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'All baseline jobs and configured game/platform packages passed.' >> "$GITHUB_STEP_SUMMARY"
 

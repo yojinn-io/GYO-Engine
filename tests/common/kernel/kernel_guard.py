@@ -10,7 +10,7 @@ docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md section 3.
 Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
 
   K1  a product or tool name, or a connection-role word, in code or comments (CMakeLists.txt included):
-        (i)   the ids registered in config/projects.csv and config/tools.csv, as words:
+        (i)   the ids registered in config/games.csv and config/tools.csv, as words:
               - as written (snake form), ignoring case, bounded by the start or end of the text or by a character
                 that is not a letter or digit ("_" is a boundary): id arena matches arena, ARENA_SIZE, k_arena;
               - in CamelCase, case-sensitive, from the start of a word (no uppercase letter before it, so an
@@ -102,7 +102,7 @@ from source_text import (  # noqa: E402  (the C/C++ text reading shared by the g
     DIRECTIVE, STANDARD_HEADERS, SUFFIXES, TARGET, camel_case, line_of, strip_comments_and_strings)
 
 SCANNED = "engine/ecs/kernel"
-REGISTRIES = ("config/projects.csv", "config/tools.csv")
+REGISTRIES = ("config/games.csv", "config/tools.csv")
 # CMakeLists.txt: K1 only. Any other file under engine/kernel/ is K0.
 
 # (ii) Connection-role words; source: entity_store guard W1 (tests/common/entity_store/entity_store_guard.py).

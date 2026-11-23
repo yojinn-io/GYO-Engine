@@ -47,11 +47,11 @@ def quick_package(platform, product=APP, commit=COMMIT):
 
 def write_services(directory: Path, *, product=APP, commit=COMMIT, services=None, record=None):
     """Real go_checks archives (fake compiler) plus the row's service record."""
-    services = [Service(APP, ROLE, f"apps/{APP}", "./cmd/relay", SERVICE_PLATFORMS)] if services is None else services
+    services = [Service(APP, ROLE, f"games/{APP}", "./cmd/relay", SERVICE_PLATFORMS)] if services is None else services
     directory.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory() as temporary:
         work = Path(temporary)
-        (work / f"apps/{APP}").mkdir(parents=True)
+        (work / f"games/{APP}").mkdir(parents=True)
 
         def run(command, cwd, env):
             output = Path(command[command.index("-o") + 1])
@@ -98,7 +98,7 @@ class TrainDerivationTests(unittest.TestCase):
 
     def test_trains_cli_reads_the_cmake_registry(self):
         with TemporaryDirectory() as temporary:
-            registry = Path(temporary) / "projects.csv"
+            registry = Path(temporary) / "games.csv"
             registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                                 f"{APP},,,true,false,true,false\nunused_app,,,false,true,true,true\n", encoding="utf-8")
             output = Path(temporary) / "outputs.txt"
@@ -114,19 +114,19 @@ class TrainDerivationTests(unittest.TestCase):
     def test_build_matrix_narrows_to_one_train_beside_the_toolchain_baseline(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            registry = root / "projects.csv"
+            registry = root / "games.csv"
             registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                                 f"{APP},,,true,false,true,false\n{SECOND},,,true,true,false,false\n", encoding="utf-8")
             tools = root / "tools.csv"
             tools.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
                              "alpha,Fixture,,1,0,1,1,1,1\n", encoding="utf-8")
             (root / "tools/alpha").mkdir(parents=True)
-            (root / "tools/alpha/project.json").write_text(json.dumps({"version": 1, "default_variant": "native",
-                "requires_apps": {}, "variants": {"native": {"components": [], "packageable": True}}}))
+            (root / "tools/alpha/project.json").write_text(json.dumps({"version": 2, "default_variant": "native",
+                "requires_games": {}, "variants": {"native": {"components": [], "packageable": True}}}))
 
             def products(selection):
                 output = root / f"outputs-{selection or 'all'}.txt"
-                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/app_registry.py"),
+                result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
                                          "--registry", str(registry), "--tool-registry", str(tools),
                                          "--repository-root", str(root), "--output", str(output),
                                          "--product", selection], capture_output=True, text=True, timeout=60)
@@ -405,7 +405,7 @@ class TrainArchiveTests(unittest.TestCase):
         cases["bad checksum"] = self.root / "checksum"
         shutil.copytree(base, cases["bad checksum"])
         (cases["bad checksum"] / f"gyo-{APP}-{ROLE}-linux-x64.tar.gz.sha256").write_text("0" * 64)
-        record = go_checks.service_record(APP, [Service(APP, ROLE, f"apps/{APP}", "./cmd/relay", SERVICE_PLATFORMS)], COMMIT)
+        record = go_checks.service_record(APP, [Service(APP, ROLE, f"games/{APP}", "./cmd/relay", SERVICE_PLATFORMS)], COMMIT)
         for label, changes in (("other commit", {"source_revision": OTHER_COMMIT}), ("other product", {"product": SECOND}),
                                ("version", {"version": 2})):
             cases[label] = write_services(self.root / label.replace(" ", "-"), record={**record, **changes})

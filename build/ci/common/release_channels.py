@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from release_support import (RELEASE_PLATFORMS, EvidenceItem, ReleaseError, git, load_release_evidence, single_line_text,
                              validate_commit, validate_product, parse_boolean)
-from app_registry import export_registry
+from game_registry import export_registry
 from go_checks import TOOLCHAIN_PRODUCT
 
 

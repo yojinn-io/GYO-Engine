@@ -35,7 +35,7 @@ set_target_properties(sample PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURC
     GYO_PRODUCT_OWNER sample GYO_PRODUCT_ROLE main GYO_PRODUCT_COMPONENTS SDL_GPU
     GYO_PRODUCT_REQUIRED_FILES "bin/assets/sample/content.json")
 set_property(GLOBAL PROPERTY GYO_PRODUCTS sample)
-set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_KIND app)
+set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_KIND game)
 set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_TARGETS sample)
 set_property(GLOBAL PROPERTY GYO_PRODUCT_sample_OWNERS sample)
 add_executable(probe IMPORTED GLOBAL)
@@ -90,7 +90,7 @@ foreach(case "Windows|AMD64||windows-x64" "Linux|x86_64||linux-x64" "Darwin|arm6
     file(READ "${binary}/packages/sample/Debug/acceptance-context.json" context)
     string(JSON probe_path GET "${context}" owners sample probes main path)
     string(JSON configuration GET "${context}" configuration)
-    if(NOT version EQUAL 3 OR NOT platform STREQUAL expected OR NOT executable STREQUAL "bin/game-binary" OR
+    if(NOT version EQUAL 4 OR NOT platform STREQUAL expected OR NOT executable STREQUAL "bin/game-binary" OR
         NOT required STREQUAL "bin/assets/sample/content.json" OR NOT name STREQUAL content OR
         NOT command STREQUAL "@PROBE:main@" OR NOT dependency STREQUAL SDL3 OR NOT owner STREQUAL sample OR
         NOT probe_path MATCHES "/unusual-diagnostic$" OR NOT configuration STREQUAL Debug)

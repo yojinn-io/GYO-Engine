@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from app_registry import RELEASE_PLATFORMS, ROOT, export_registry
-import app_registry
+from game_registry import RELEASE_PLATFORMS, ROOT, export_registry
+import game_registry
 
 
 class RegistryMatrixTests(unittest.TestCase):
@@ -23,14 +23,14 @@ class RegistryMatrixTests(unittest.TestCase):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
-        self.registry = self.root / "projects.csv"
+        self.registry = self.root / "games.csv"
         self.tool_registry = self.root / "tools.csv"
         self.tool_registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
                                      "alpha,Fixture,,1,0,1,1,1,1\n", encoding="utf-8")
         directory = self.root / "tools/alpha"
         directory.mkdir(parents=True)
-        (directory / "project.json").write_text(json.dumps({"version": 1,
-            "default_variant": "native", "requires_apps": {},
+        (directory / "project.json").write_text(json.dumps({"version": 2,
+            "default_variant": "native", "requires_games": {},
             "variants": {"native": {"components": [], "packageable": True}}}))
 
     def write_registry(self, rows):
@@ -49,7 +49,7 @@ class RegistryMatrixTests(unittest.TestCase):
     def test_empty_registry_still_builds_every_core_tool_baseline(self):
         self.write_registry("")
         output = self.root / "outputs.txt"
-        command = [sys.executable, str(ROOT / "build/ci/common/app_registry.py"),
+        command = [sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
                    "--registry", str(self.registry), "--tool-registry", str(self.tool_registry),
                    "--repository-root", str(self.root), "--output", str(output)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
@@ -59,7 +59,7 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertEqual([row["platform"] for row in matrix], list(RELEASE_PLATFORMS))
         self.assertTrue(all(row["product"] == "toolchain" for row in matrix))
         self.assertTrue(all(row["tools"] for row in matrix))
-        self.assertEqual(outputs["has_apps"], "false")
+        self.assertEqual(outputs["has_games"], "false")
 
     def test_tool_export_uses_data_owned_modes_and_platform_selection(self):
         registry = self.root / "tools.csv"
@@ -70,10 +70,10 @@ class RegistryMatrixTests(unittest.TestCase):
         for owner in ("alpha", "beta", "local"):
             directory = self.root / "tools" / owner
             directory.mkdir(parents=True, exist_ok=True)
-            (directory / "project.json").write_text(json.dumps({"version": 1,
-                "default_variant": "native", "requires_apps": {},
+            (directory / "project.json").write_text(json.dumps({"version": 2,
+                "default_variant": "native", "requires_games": {},
                 "variants": {"native": {"components": [], "packageable": owner != "local"}}}))
-        tools = app_registry.export_tools(registry, repository_root=self.root)
+        tools = game_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {"windows-x64": ["alpha:native"],
             "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"]})
 
@@ -82,14 +82,14 @@ class RegistryMatrixTests(unittest.TestCase):
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
                             "local,Local,,1,1,0,1,1,1\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "registry export failed"):
-            app_registry.export_tools(registry, repository_root=self.root)
+            game_registry.export_tools(registry, repository_root=self.root)
 
     def test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so(self):
         registry = self.root / "tools.csv"
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n",
                             encoding="utf-8")
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            tools = app_registry.export_tools(registry, repository_root=self.root)
+            tools = game_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {platform: [] for platform in RELEASE_PLATFORMS})
         self.assertIn("No tool is registered", stderr.getvalue())
 
@@ -103,9 +103,9 @@ class RegistryMatrixTests(unittest.TestCase):
                     for index, platform in enumerate(RELEASE_PLATFORMS)]
             output.write_text(json.dumps({"include": rows}), encoding="utf-8")
             return subprocess.CompletedProcess(command, 0, "", "")
-        with mock.patch.object(app_registry.subprocess, "run", side_effect=fake_export), \
+        with mock.patch.object(game_registry.subprocess, "run", side_effect=fake_export), \
                 self.assertRaisesRegex(ValueError, "invalid tool selection"):
-            app_registry.export_tools(self.tool_registry, repository_root=self.root)
+            game_registry.export_tools(self.tool_registry, repository_root=self.root)
 
     def test_repository_registries_export_for_ci(self):
         # The registries of this checkout, whatever they hold. The release
@@ -116,7 +116,7 @@ class RegistryMatrixTests(unittest.TestCase):
         with (ROOT / "config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
             registered = [row["name"] for row in csv.DictReader(rows)]
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
-            tools = app_registry.export_tools()
+            tools = game_registry.export_tools()
             pairs = export_registry()
         self.assertEqual(list(tools), list(RELEASE_PLATFORMS))
         self.assertEqual(all(tools.values()), bool(registered), tools)

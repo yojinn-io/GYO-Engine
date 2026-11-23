@@ -275,9 +275,9 @@ The normal `dev` product configuration disables `BUILD_TESTING`, `GYO_ENABLE_PAC
 
 Game executables and their complete runnable content are assembled under `build/target/<game>/bin`. Packageable design tools are assembled under `build/target/toolchain/bin`. Non-packageable variants and game-dependent tools are local tools under `build/target/_tools/<owner>/bin` and never join a release archive. CMake cache, object files, host tools and transient validation state remain under `build/target/_build/` or other generated target subdirectories. The generated output root may be overridden for isolated validation.
 
-Game support obtains generated app configuration through `gyo_use_app_config(target app)`, privately for exactly one app per target. It does not construct another owner's generated directory or publish every game's same-named `gyo/AppConfig.hpp` to consumers. See [tool registration](tool_projects.md) for data and manual steps.
+Game support obtains generated game configuration through `gyo_use_game_config(target game)`, privately for exactly one game per target. It does not construct another owner's generated directory or publish every game's same-named `gyo/GameConfig.hpp` to consumers. See [tool registration](tool_projects.md) for data and manual steps.
 
-See [creating and copying games](creating_apps.md) for commands and the minimum project files.
+See [creating and copying games](creating_games.md) for commands and the minimum project files.
 
 ## Asset preparation and assembly
 
