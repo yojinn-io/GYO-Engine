@@ -145,6 +145,8 @@ Owner：OS 層的測試（`tests/common/os`）。GYO2 主會話開的任務卡�
 
 建議：(d) 先合這個 PR；(e) 另開一批，因為它改 Design Invariant 8 守衛測試的機制，要照 §14.4 走完整流程。(a)、(f) 對觀測到的逾時沒有證據，不建議。
 
+**使用者的決定（2026-11-23）**：選「(d)＋另開 (e)（建議）」（本卡對話的提問卡片）。這個 PR 只留觀測；(e) 另開一批，開卡與 HANDOFF 由主會話處理（本卡把決定照原話、比過的選項、理由、出處轉給主會話）。(a) 不做。
+
 ## 合併前的設計審查
 
 Fable 5.2／high（唯讀），報告：主 checkout `build/evidence/gyo2-os-test-timeout/merge-review-fable.md`。結論「改了再合併」：must 2、should 8、nit 7。審查時 L1（run 45095143633，d41b4c1d）三平台通過。
