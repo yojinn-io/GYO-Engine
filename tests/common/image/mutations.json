@@ -1,0 +1,254 @@
+{
+ "version": 1,
+ "description": "Declared mutants of SDL line sub-batch I, the image Module (docs/architecture/target/v2/image.zh-Hant.md; ids im- the loader and the pixel layout, ib- build-time link checks). One per independently wrong decision of Design Invariants IM-1 to IM-4 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): the signature length check and the header length check (removing either reads past the end, undefined behaviour); requesting fewer than 4 channels from stb_image (the copy then reads past stb's buffer, undefined behaviour); the order of rules 3 and 4 (structural: rule 3 returns before the decoder is called, shown by the TooLarge cases without image data); the conversions inside stb_image (rule 4's conversions are stb_image's code, guarded by the colour type cases, not by mutants of a third-party file).",
+ "mutants": [
+  {
+   "id": "im-signature-unchecked",
+   "what": "IM-4 rule 1: a file without the PNG signature is not NotPng",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "    if (!signature) {",
+   "replace": "    if (false) {",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 1: NotPng",
+   "expect": "== \"?NotPng"
+  },
+  {
+   "id": "im-ihdr-length-unchecked",
+   "what": "IM-4 rule 2: an IHDR whose length is not 13 passes the header check",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "U32BigEndian(p + 8) != 13 || ",
+   "replace": "",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 2: BadHeader",
+   "expect": "== \"?BadHeader"
+  },
+  {
+   "id": "im-ihdr-type-unchecked",
+   "what": "IM-4 rule 2: a first chunk other than IHDR passes the header check",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "std::to_integer<char>(p[12]) != 'I' ||",
+   "replace": "false ||",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 2: BadHeader",
+   "expect": "== \"?BadHeader"
+  },
+  {
+   "id": "im-header-crc-not-required",
+   "what": "IM-4 rule 2: an IHDR cut inside its CRC passes the header check",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "constexpr std::size_t kHeaderEnd = 8 + 4 + 4 + 13 + 4;",
+   "replace": "constexpr std::size_t kHeaderEnd = 8 + 4 + 4 + 13;",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 2: BadHeader",
+   "expect": "== \"?BadHeader"
+  },
+  {
+   "id": "im-zero-width-unchecked",
+   "what": "IM-4 rule 2: a width of 0 is left to the decoder (Undecodable)",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "    if (width == 0 || height == 0) {",
+   "replace": "    if (height == 0) {",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 2: BadHeader,PngLoader checks its rules in their order",
+   "expect": "== \"?BadHeader"
+  },
+  {
+   "id": "im-zero-height-unchecked",
+   "what": "IM-4 rule 2: a height of 0 is left to the decoder (Undecodable)",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "    if (width == 0 || height == 0) {",
+   "replace": "    if (width == 0) {",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 2: BadHeader",
+   "expect": "== \"?BadHeader"
+  },
+  {
+   "id": "im-max-inclusive-off",
+   "what": "IM-4 rule 3: a side of exactly 16384 is refused",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "if (width > kMaxDimension || height > kMaxDimension) {",
+   "replace": "if (width >= kMaxDimension || height > kMaxDimension) {",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 3: TooLarge*",
+   "expect": "loaded\\.has_value\\(\\)"
+  },
+  {
+   "id": "im-max-height-unchecked",
+   "what": "IM-4 rule 3: a height above 16384 is not TooLarge",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "if (width > kMaxDimension || height > kMaxDimension) {",
+   "replace": "if (width > kMaxDimension) {",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 3: TooLarge*",
+   "expect": "== \"?TooLarge"
+  },
+  {
+   "id": "im-max-constant",
+   "what": "IM-4 rule 3: the largest side (format constant)",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/include/engine/image/PngLoader.hpp",
+   "find": "static constexpr std::uint32_t kMaxDimension = 16384;",
+   "replace": "static constexpr std::uint32_t kMaxDimension = 16385;",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 3: TooLarge*",
+   "expect": "kMaxDimension == 16384"
+  },
+  {
+   "id": "im-stb-max-dimension",
+   "what": "IM-1: stb_image is built with a smaller largest side than the loader",
+   "guards": [
+    "image IM-1"
+   ],
+   "file": "third_party/stb_image/CMakeLists.txt",
+   "find": "    STBI_MAX_DIMENSIONS=16384",
+   "replace": "    STBI_MAX_DIMENSIONS=16383",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader rule 3: TooLarge*",
+   "expect": "loaded\\.has_value\\(\\)"
+  },
+  {
+   "id": "im-colorspace-dropped",
+   "what": "IM-2 / IM-4: the settings' colour space does not reach the image",
+   "guards": [
+    "image IM-2",
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "return ImageData(width, height, settings.colorSpace, std::move(decoded->pixels));",
+   "replace": "return ImageData(width, height, ColorSpace::Srgb, std::move(decoded->pixels));",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader settings: the colour space,PngLoader through the asset store: loaded*",
+   "expect": "ColorSpace::Linear"
+  },
+  {
+   "id": "im-linear-read-as-srgb",
+   "what": "IM-4 settings: \"linear\" is read as sRGB",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "            settings.colorSpace = ColorSpace::Linear;",
+   "replace": "            settings.colorSpace = ColorSpace::Srgb;",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader settings: the colour space",
+   "expect": "ColorSpace::Linear"
+  },
+  {
+   "id": "im-unknown-member-accepted",
+   "what": "IM-4 settings: a member other than colorSpace is accepted",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "        if (member.key != \"colorSpace\") return BadSettings(",
+   "replace": "        if (false) return BadSettings(",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader settings: the colour space",
+   "expect": "parsed\\.has_value\\(\\)"
+  },
+  {
+   "id": "im-bad-value-accepted",
+   "what": "IM-4 settings: a colorSpace other than \"srgb\" or \"linear\" is taken as sRGB",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "            return BadSettings(\"colorSpace is not \\\"srgb\\\" or \\\"linear\\\"\");",
+   "replace": "            settings.colorSpace = ColorSpace::Srgb;",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader settings: the colour space,PngLoader through the asset store: loaded*",
+   "expect": "(?=[\\s\\S]*(?:parsed\\.has_value\\(\\)))[\\s\\S]*(?:AssetLoadFailureCode::BadSettings|bad\\.failure\\.has_value)"
+  },
+  {
+   "id": "im-not-object-accepted",
+   "what": "IM-4 settings: settings that are not an object give the default",
+   "guards": [
+    "image IM-4"
+   ],
+   "file": "engine/modules/image/src/PngLoader.cpp",
+   "find": "    if (!object) return BadSettings(\"not an object\");",
+   "replace": "    if (!object) return settings;",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader settings: the colour space",
+   "expect": "parsed\\.has_value\\(\\)"
+  },
+  {
+   "id": "im-flipped-on-load",
+   "what": "IM-2: rows are flipped on load (the bottom row first)",
+   "guards": [
+    "image IM-2"
+   ],
+   "file": "engine/modules/image/src/adapters/stb_image/StbPngDecode.cpp",
+   "find": "    const std::unique_ptr<stbi_uc, StbFree> pixels(",
+   "replace": "    stbi_set_flip_vertically_on_load(1);\n    const std::unique_ptr<stbi_uc, StbFree> pixels(",
+   "target": "gyo_image_tests",
+   "cases": "PngLoader gives RGBA8*,PngLoader reads a file from a real encoder*",
+   "expect": "(?=[\\s\\S]*(?:Flatten\\(rows\\)))[\\s\\S]*(?:32 \\* y)"
+  },
+  {
+   "id": "im-size-unchecked",
+   "what": "IM-2: ImageData takes pixels that do not fill width by height by 4",
+   "guards": [
+    "image IM-2"
+   ],
+   "file": "engine/modules/image/src/ImageData.cpp",
+   "find": "    GYO_ASSERT(pixels_.size() == std::size_t{width} * height * kBytesPerPixel);",
+   "replace": "",
+   "target": "gyo_image_tests",
+   "cases": "ImageData: pixels that do not fill*",
+   "expect": "CHECK_THROWS_AS"
+  },
+  {
+   "id": "ib-stb-public",
+   "what": "IM-1: gyo_image hands stb_image to its users",
+   "guards": [
+    "image IM-1"
+   ],
+   "file": "engine/modules/image/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_image PRIVATE gyo_stb_image)",
+   "replace": "target_link_libraries(gyo_image PUBLIC gyo_stb_image)",
+   "target": "gyo_image_tests",
+   "expect": "gyo_image exposes gyo_stb_image",
+   "expect_build_failure": true
+  },
+  {
+   "id": "ib-extra-link",
+   "what": "IM-3: gyo_image links something besides its four",
+   "guards": [
+    "image IM-3"
+   ],
+   "file": "engine/modules/image/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_image PRIVATE gyo_stb_image)",
+   "replace": "target_link_libraries(gyo_image PRIVATE gyo_stb_image GYO::Time)",
+   "target": "gyo_image_tests",
+   "expect": "gyo_image links[\\s\\S]*GYO::Time[\\s\\S]*expected exactly",
+   "expect_build_failure": true
+  }
+ ]
+}

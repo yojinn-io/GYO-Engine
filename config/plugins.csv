@@ -1,2 +1,3 @@
 name,dir,target,description,library_only,default,depends,private_depends,unit,header
-sdl,sdl,GYO::Sdl,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,
+sdl,sdl,GYO::SDL,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,
+sdl_window,sdl_window,GYO::SDLWindow,"The window, the OS events as input and window Messages, the requests and the window runner, through SDL",no,no,sdl;input;window,,GYO::Plugins::SDLWindow::SDLWindowPlugin,plugins/sdl_window/SDLWindowPlugin.hpp

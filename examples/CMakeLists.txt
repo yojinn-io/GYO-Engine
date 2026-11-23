@@ -12,4 +12,12 @@ function(gyo_add_example name source)
     endif()
 endfunction()
 
-gyo_add_example(gyo_example_product_main orchestration/product_main.cpp GYO::Orchestration)
+# One directory per example, each with its own CMakeLists.txt, added here without naming it: removing a Plugin
+# removes the examples that carry it (build/ci/common/plugin_removal.py, Design Invariant SDL-2).
+file(GLOB _gyo_example_dirs LIST_DIRECTORIES true CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*")
+list(SORT _gyo_example_dirs)
+foreach(_gyo_example_dir IN LISTS _gyo_example_dirs)
+    if(IS_DIRECTORY "${_gyo_example_dir}" AND EXISTS "${_gyo_example_dir}/CMakeLists.txt")
+        add_subdirectory("${_gyo_example_dir}")
+    endif()
+endforeach()
