@@ -229,7 +229,7 @@ function(gyo_get_game_target id role output)
 endfunction()
 
 # Consumers explicitly choose one game identity. The identically named header
-# must never escape through an game library's public include directories.
+# must never escape through a game library's public include directories.
 function(gyo_use_game_config target game)
     get_property(directory GLOBAL PROPERTY GYO_GAME_${game}_GENERATED_INCLUDE_DIR)
     if(NOT TARGET "${target}" OR NOT directory)

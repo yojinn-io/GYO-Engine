@@ -114,7 +114,7 @@ function(_gyo_registry_csv_records path output)
     set(${output} "${records}" PARENT_SCOPE)
 endfunction()
 
-# JSON result: {"projects":[{"name":...,"description":...,"version":...,
+# JSON result: {"<collection>":[{"name":...,"description":...,"version":...,
 #                           "enabled":bool,"windows":bool,"linux":bool,"macos":bool}]}
 # Description and version remain opaque strings and never affect selection.
 function(_gyo_read_registry csv kind collection columns output)

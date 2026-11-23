@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.30)
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
-set(work "${CMAKE_CURRENT_BINARY_DIR}/product-packaging")
+# WORK_ROOT: where to put the synthetic trees when run outside a build tree
+# (the mutation runner starts it from the repository root).
+if(NOT DEFINED WORK_ROOT)
+    set(WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+set(work "${WORK_ROOT}/product-packaging")
 set(source "${work}/source")
 set(generator_args "")
 if(GENERATOR)
@@ -114,4 +119,21 @@ foreach(policy missing empty partial unrelated)
         message(FATAL_ERROR "Toolchain without a complete acceptance contract was allowed: ${stdout}${stderr}")
     endif()
 endforeach()
-message(STATUS "Product packaging: manifest v3, owner-scoped checks, registered probes and release coverage passed")
+# A game product's executable is owned by that game (GyoRuntimeDeployment.cmake): declaring another
+# owner's target in it fails the configure.
+file(WRITE "${work}/foreign-owner/CMakeLists.txt" [=[
+cmake_minimum_required(VERSION 3.30)
+project(ForeignOwnerFixture NONE)
+set(GYO_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(GYO_OUTPUT_ROOT "${CMAKE_CURRENT_BINARY_DIR}/target")
+include("${GYO_TEST_REPOSITORY}/build/cmake/GyoRuntimeDeployment.cmake")
+add_executable(foreign IMPORTED GLOBAL)
+gyo_install_product_target(TARGET foreign PRODUCT sample KIND game OWNER other ROLE main)
+]=])
+execute_process(COMMAND "${CMAKE_COMMAND}" -S "${work}/foreign-owner" -B "${work}/foreign-owner-build"
+    ${generator_args} "-DGYO_TEST_REPOSITORY=${repository}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 30)
+if(result EQUAL 0 OR NOT "${stdout}${stderr}" MATCHES "Product identity does not match its owner/kind")
+    message(FATAL_ERROR "A game product took another owner's executable: ${stdout}${stderr}")
+endif()
+message(STATUS "Product packaging: manifest v4, owner-scoped checks, registered probes and release coverage passed")

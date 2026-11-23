@@ -61,6 +61,20 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertTrue(all(row["tools"] for row in matrix))
         self.assertEqual(outputs["has_games"], "false")
 
+    def test_game_rows_are_marked_as_games(self):
+        self.write_registry("sample_game,,,true,false,true,false\r\n")
+        output = self.root / "outputs.txt"
+        command = [sys.executable, str(ROOT / "build/ci/common/game_registry.py"),
+                   "--registry", str(self.registry), "--tool-registry", str(self.tool_registry),
+                   "--repository-root", str(self.root), "--output", str(output)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        outputs = dict(line.split("=", 1) for line in output.read_text().splitlines())
+        games = json.loads(outputs["matrix"])["include"]
+        self.assertEqual([(row["product"], row["kind"], row["platform"]) for row in games],
+                         [("sample_game", "game", "linux-x64")])
+        self.assertEqual(outputs["has_games"], "true")
+
     def test_tool_export_uses_data_owned_modes_and_platform_selection(self):
         registry = self.root / "tools.csv"
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"

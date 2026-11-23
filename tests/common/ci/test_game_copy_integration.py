@@ -32,15 +32,18 @@ class MirrorTests(unittest.TestCase):
     def test_mirror_carries_the_engine_registers_and_plugins_but_no_product_register(self):
         with TemporaryDirectory() as work:
             repository, destination = Path(work) / "repository", Path(work) / "copy"
-            for name in ("CMakeLists.txt", "config/modules.csv", "config/plugins.csv", "config/games.csv",
-                         "config/tools.csv", "plugins/sample/CMakeLists.txt", "games/real/CMakeLists.txt",
-                         "tools/real/CMakeLists.txt", "tests/common/CMakeLists.txt"):
+            carried = ("CMakeLists.txt", "CMakePresets.json", "config/modules.csv", "config/plugins.csv",
+                       "plugins/sample/CMakeLists.txt", "engine/core/CMakeLists.txt", "services/sample/go.mod",
+                       "third_party/sample/CMakeLists.txt", "build/cmake/GyoBuild.cmake", "build/assemble_runtime.py",
+                       "build/content_contract.py", "build/workspace.py")
+            left = ("config/games.csv", "config/tools.csv", "games/real/CMakeLists.txt",
+                    "tools/real/CMakeLists.txt", "tests/common/CMakeLists.txt", "build/ci/common/ci_scope.py")
+            for name in carried + left:
                 (repository / name).parent.mkdir(parents=True, exist_ok=True)
                 (repository / name).write_text("# fixture\n", encoding="utf-8")
             subprocess.run(["git", "init", "-q", str(repository)], check=True)
             copied = set(mirror_sources(repository, destination))
-            for name in ("CMakeLists.txt", "config/modules.csv", "config/plugins.csv", "plugins/sample/CMakeLists.txt"):
+            for name in carried:
                 self.assertIn(name, copied)
-            for name in ("config/games.csv", "config/tools.csv", "games/real/CMakeLists.txt",
-                         "tools/real/CMakeLists.txt", "tests/common/CMakeLists.txt"):
+            for name in left:
                 self.assertNotIn(name, copied)

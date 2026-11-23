@@ -1572,7 +1572,7 @@
       "expect": "unrecorded: configuration unexpectedly succeeded"
     },
     {
-      "id": "bg-code-page-walk-skips-games",
+      "id": "gdir-code-page-walk-skips-games",
       "what": "The build layer stops applying the UTF-8 code page manifest under games/ (only the games/sample fixture of cmake.ProcessCodePage catches it; pu-x8 drops tests, not a product root)",
       "file": "build/cmake/GyoCodePage.cmake",
       "find": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
@@ -1590,7 +1590,7 @@
       ]
     },
     {
-      "id": "bg-code-page-check-skips-games",
+      "id": "gdir-code-page-check-skips-games",
       "what": "The configure-time check stops walking games/, so a game directory the build layer did not record goes unseen (only the unrecorded_game case catches it)",
       "file": "tests/common/os/ProcessCodePageCheck.cmake",
       "find": "    if(relative MATCHES \"^(engine|games|tools|build/acceptance|tests)(/|$)\")",

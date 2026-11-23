@@ -65,7 +65,7 @@ if(TEST_CASE STREQUAL "duplicate_role")
     gyo_game_add_go_service(gateway PACKAGE ./cmd/service PLATFORMS linux-x64)
 endif()
 ]=])
-# An game without a go.mod cannot declare a Go service; a plain game records nothing.
+# A game without a go.mod cannot declare a Go service; a plain game records nothing.
 file(WRITE "${source}/games/plain/CMakeLists.txt" [=[
 gyo_game_project()
 if(TEST_CASE STREQUAL "missing_module")

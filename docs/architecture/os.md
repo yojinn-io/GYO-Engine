@@ -447,7 +447,8 @@ Known blind spots, left to review:
     that every executable target carries the manifest or a reasoned exemption; `gyo_os_tests` reads its own manifest
     resource and checks `GetACP()` ("OS files run with UTF-8 as the process ANSI code page"); the source guard
     refuses the ANSI code page constants and ANSI Win32 entry points in engine/core/os (R6); `cmake.ProcessCodePage`.
-    Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6 and pu-x5.
+    Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6, pu-x5, gdir-code-page-walk-skips-games and
+    gdir-code-page-check-skips-games (the games/ root, `v8-arch-gyo2-build-games-dir`).
 
 ### Replacement Criteria
 

@@ -15,7 +15,12 @@ if(DEFINED CASE)
     endif()
     return()
 endif()
-set(work "${CMAKE_CURRENT_BINARY_DIR}/tool-registry-tests")
+# WORK_ROOT: where to put the synthetic trees when run outside a build tree
+# (the mutation runner starts it from the repository root).
+if(NOT DEFINED WORK_ROOT)
+    set(WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+set(work "${WORK_ROOT}/tool-registry-tests")
 file(MAKE_DIRECTORY "${work}")
 set(header "name,description,version,enabled,default,release,windows,linux,macos")
 set(csv "${work}/tools.csv")
@@ -243,4 +248,11 @@ configure(TRUE "" -DGYO_GAMES= -DGYO_TOOLS=)
 file(READ "${work}/fixture-build/configured.txt" configured)
 equal("${configured}" "" "No tools executes no tool code")
 configure(TRUE "" -DGYO_GAMES=demo -DGYO_TOOLS= "-DGYO_TOOL_REGISTRY_FILE=${fixture}/absent.csv")
+# A game and a tool with one name fail the configure, through the game register
+# data gyo_configure_games() leaves for gyo_configure_tools() (not only the direct call above).
+file(WRITE "${fixture}/config/games.csv"
+    "name,description,version,enabled,windows,linux,macos\ndemo,,,true,true,true,true\ncanvas,,,false,false,false,false\n")
+configure(FALSE "Game/tool owner collision: 'canvas'" -DGYO_GAMES= -DGYO_TOOLS=)
+file(WRITE "${fixture}/config/games.csv"
+    "name,description,version,enabled,windows,linux,macos\ndemo,,,true,true,true,true\n")
 message(STATUS "Tool registry: selection, ownership, metadata and release export checks passed")

@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.30)
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 string(RANDOM LENGTH 8 ALPHABET abcdef0123456789 run_id)
-set(work "${CMAKE_CURRENT_BINARY_DIR}/project-composition-${run_id}")
+# WORK_ROOT: where to put the synthetic trees when run outside a build tree
+# (the mutation runner starts it from the repository root).
+if(NOT DEFINED WORK_ROOT)
+    set(WORK_ROOT "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+set(work "${WORK_ROOT}/project-composition-${run_id}")
 set(source "${work}/source")
 set(binary "${work}/binary")
 file(MAKE_DIRECTORY "${source}/config" "${source}/games/first"
@@ -45,7 +50,8 @@ foreach(GYO_CURRENT_TOOL IN LISTS GYO_ACTIVE_TOOLS)
 endforeach()
 gyo_finalize_product_packages()
 ]=])
-set(project_json "{\"version\":1,\"display_name\":\"Fixture game\",\"components\":[]}\n")
+# The display name carries a quote: the generated header must escape it.
+set(project_json "{\"version\":1,\"display_name\":\"Fixture \\\"game\\\"\",\"components\":[]}\n")
 set(app_cmake [=[
 file(APPEND "${PROJECT_BINARY_DIR}/configured.txt" "${GYO_CURRENT_GAME}\n")
 gyo_game_project()
@@ -67,7 +73,7 @@ foreach(game first second)
     file(WRITE "${source}/games/${game}/domain.cpp"
         "#include <gyo/GameConfig.hpp>\nconst char* identity() { return GYO_GAME_ID; }\n")
     file(WRITE "${source}/games/${game}/main.cpp"
-        "#include <gyo/GameConfig.hpp>\n#include <iostream>\nconst char* identity();\nint main() { std::cout << identity() << ' ' << GYO_GAME_ASSETS; }\n")
+        "#include <gyo/GameConfig.hpp>\n#include <iostream>\nconst char* identity();\nint main() { std::cout << '[' << identity() << '|' << GYO_GAME_DISPLAY_NAME << '|' << GYO_GAME_ASSETS << '|' << GYO_GAME_CONTENT_MANIFEST << ']'; }\n")
 endforeach()
 
 set(configure_args "-DGYO_TEST_REPOSITORY=${repository}" -DCMAKE_BUILD_TYPE=Debug)
@@ -108,7 +114,8 @@ endif()
 run(TRUE "" "${CMAKE_COMMAND}" --build "${binary}" --config Debug --parallel 2)
 foreach(game first second)
     file(READ "${binary}/${game}-Debug.txt" executable)
-    run(TRUE "${game} assets/${game}" "${executable}")
+    # Every identity macro, bracketed so a prefix or suffix on any value is seen.
+    run(TRUE "[${game}|Fixture \"game\"|assets/${game}|assets/${game}/content.json]" "${executable}")
     set(stage "${work}/stage-${game}")
     run(TRUE "" "${CMAKE_COMMAND}" --install "${binary}" --config Debug --component "${game}" --prefix "${stage}")
     file(READ "${stage}/share/gyo/products/${game}/manifest.json" manifest)
@@ -171,7 +178,7 @@ endif()
 {"version":1,"checks":[{"name":"startup","command":["@EXECUTABLE:main@"],"environment":[],"profiles":["quick","release"],"platforms":["windows-x64","linux-x64","macos-arm64","macos-x64"],"gpu":false,"timeout":10}]}
 ]=])
 endforeach()
-# An game config is private and cannot be mixed with another game on one target.
+# A game config is private and cannot be mixed with another game on one target.
 file(WRITE "${registry}" "${header}first,,,1,1,1,1\nsecond,,,1,1,1,1\n")
 run(FALSE "multiple game configurations" "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -DGYO_GAMES=AUTO -DTEST_MIXED_GAME_CONFIG=ON)
 file(WRITE "${registry}" "${header}")

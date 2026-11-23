@@ -51,9 +51,22 @@ Owner：建置層的產品登記（`build/cmake`、`build/ci/common`、`config/`
 | `tests/common/json/mutations.json` | 15/15 |
 | `tests/common/os/guard_mutations.json` | 26/26 |
 
-**加入的突變**（§14.5，2 個，都在 `plans/os-subsystem/scripts/mutations.json`，`guards`：os DI 11、宣告 5.3）：
-- `bg-code-page-walk-skips-games`：`GyoCodePage.cmake` 的根拿掉 `games`。只有 `games/sample` 這個合成目錄抓得到；`pu-x8` 拿掉的是 `tests`，不是產品根。
-- `bg-code-page-check-skips-games`：`ProcessCodePageCheck.cmake` 的根拿掉 `games`。只有 `unrecorded_game` 一案抓得到。
+**加入的突變**（§14.5，9 個；一批的上限是「改的 DI 條文數 × 5」＝10，沒超過）。每個只抓一種別的突變抓不到的錯，各有專屬的 expect：
+
+| id（清單） | 抓的錯 | 為什麼只有它抓得到 | `guards` |
+|---|---|---|---|
+| `gdir-code-page-walk-skips-games`（os-subsystem） | `GyoCodePage.cmake` 的根拿掉 `games` | 只有 `cmake.ProcessCodePage` 的 `games/sample` 合成目錄；`pu-x8` 拿掉的是 `tests` | os DI 11、宣告 5.3 |
+| `gdir-code-page-check-skips-games`（os-subsystem） | `ProcessCodePageCheck.cmake` 的根拿掉 `games` | 只有 `unrecorded_game` 一案 | os DI 11、宣告 5.3 |
+| `gdir-tool-owner-check-skipped`（r0b3） | configure 時不再拒絕同名的遊戲與工具（遊戲登記的資料沒傳到 `gyo_configure_tools`，改名漏網就是這個樣子） | 只有 `cmake.ToolRegistry` 新加的 project 模式案例；原本的直接呼叫抓不到 | AGENTS 7、宣告 10.3 |
+| `gdir-identity-id-prefixed`（r0b3） | 生成的 `GYO_GAME_ID` 多了前綴 | 只有 `cmake.ProjectComposition` 新的括號整行比對；原本的子字串比對抓不到 | 宣告 2.1、10.3 |
+| `gdir-package-foreign-owner-python`（r0b3） | 打包契約不再拒絕遊戲套件裡別的產品的執行檔 | 只有 `test_game_package_holds_only_its_own_executables`（以錯誤訊息比對） | AGENTS 7、宣告 10.3 |
+| `gdir-package-foreign-owner-cmake`（r0b3） | 建置層不再拒絕遊戲產品裡別的 owner 的執行檔 | 只有 `cmake.ProductPackaging` 新加的 foreign-owner fixture | AGENTS 7、宣告 10.3 |
+| `gdir-gates-positive-owner-path`（r0b3） | 實樹陽性對照：共通 CI 定義寫 `games/object_connect` | 守衛不再掃 `games/` 或不再比對 `games/<名>` 時，這個會 survived（README 規則 4） | AGENTS 7、9，宣告 10.3 |
+| `gdir-gates-positive-l1-copy`（r0b3） | 實樹陽性對照：L1 的 tests 步驟跑複製整合 | `:701` 的禁止字串留在舊檔名時，這個會 survived | AGENTS 7、宣告 10.3 |
+| `gdir-mirror-drops-build-cmake`（r0b3） | 複製整合的 mirror 不再帶 `build/cmake/` | `MirrorTests` 每個 include 分支各放一個檔 | 宣告 5.4 |
+
+`gdir-` 前綴：檢查者指出 `bg-` 已在 os 守衛清單指 boundary guard，本批的改用 `gdir-`。結果：第一輪 2/2、第二輪 7/7 killed（`mutations/round2-*.log`）。
+第二輪第一次跑時，`cmake.ProjectComposition` 的基準從 repo 根以 `-P` 執行會失敗（預設產生器下，`#error` 那一案的增量建置沒有失敗），而且在 repo 根留下工作目錄。所以 `ProjectComposition`、`ToolRegistry`、`ProductPackaging` 三個測試照 `ProcessCodePageTests` 加 `WORK_ROOT`（預設照舊是建置目錄），新突變傳 `-DGENERATOR=Ninja -DWORK_ROOT=build/target`；留下的兩個工作目錄已刪。
 
 改字串的突變（意思不變）：naming 1、os guard 1、os-subsystem 3（`what`、`find`、`replace`）、r0b3 的 `file` 與測試名。
 
@@ -63,4 +76,18 @@ LIM-9：L1（quick）不經過建置層的遊戲路徑，os 定義守衛的 `gam
 
 ## 檢查
 
-- 事前宣告的敵對式檢查 r0、窄複查 r1：Opus／high，和作者同一個模型（Fable 用量不足，使用者經主會話指示「暫時用Opus」）。
+都是 Opus／high，和作者同一個模型（Fable 用量不足，使用者經主會話指示「暫時用Opus」）；同一模型的盲點可能重疊。紀錄在 evidence。
+
+- 事前宣告的敵對式檢查 r0（B5 S11 N6）、窄複查 r1（B3 S7 N8）：全部採用，對照在宣告第 10 節。
+- **§14.4 驗證者**（`verifier-14-4.md`）：第 5.1 節五欄的 1、2、3、5 屬實（在 base／HEAD 兩份副本實測緩與緊的面；workflow gates 從 skip 變成實際執行並通過；`:701` 等價）。兩處更正：
+  - workflow gates 第 4 欄：除了 `apps/` 底下的目錄名，還有一個窄的緩面——CI 文字寫 `apps/<已登記的遊戲或工具名>` 不再被抓。`apps/` 已不是有效路徑，那種寫法是死參照，由 review 看（合併前核准頁列出）。
+  - `kernel_guard` 第 5 欄：`ks-k1-registry-ignored` 的 `find` 和路徑無關，不能當路徑的證據；守住路徑的是 fail-closed（`REGISTRIES` 指向不存在的檔時實樹與自測都失敗，驗證者臨時改回 `projects.csv` 實測）。
+  - 另補：probe 的腳本、臨時遊戲的 CMakeLists、對照組帶 `GYO_WINDOWS` 的證據存進 `probe/`；os.md DI 11 的 Guards 列加上兩個 code page 突變。
+- **突變清單的敵對式檢查**（`mutation-adversarial.md`）：新加的兩個與改字串的突變合格；找到 6 類壞了沒人抓的地方，本批照「契約要補／誤用不補」分：
+  - 補測試與突變：C1 遊戲與工具同名（project 模式）、C2 身分標頭四個巨集與跳脫、C3 遊戲套件的 owner（Python 與 CMake）、C4 workflow gates 的兩個陽性對照、C5 mirror 的每個分支（上表）。
+  - 一行斷言、不立突變：C6 game 列的 `kind`（`test_game_rows_are_marked_as_games`）。
+  - 已在 LIM-9：C7（`GyoBuild.cmake` 的遊戲路徑、os 定義根）。
+  - 不補：C8 讓 KIND 多接受 `app`（schema 4 已擋掉所有舊 manifest，只剩手寫的，算誤用）、`GyoUnitRegistry` 改回 include `GyoGameRegistry`（行為不變，交 review）。
+  - 順手修：改名留下的「an game」錯字三處、`GyoRegistryCsv.cmake` 的舊註解、`GameRegistryTests` 的 `*_apps` 區域變數。
+- 補完後本機 ctest 196/196（`after/ctest3.log`）。
+
