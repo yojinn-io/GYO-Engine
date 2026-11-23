@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "engine/audio/AudioError.hpp"
-#include "engine/audio/ClipBank.hpp"
+#include "engine/audio/Clip.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/base/Span.hpp"
 
@@ -15,15 +15,14 @@ namespace GYO::Engine::Audio::Detail {
 // One play whose start is already a sample position of the output. Signed, so
 // a time before the first rendered frame is a position too (and is late).
 struct ScheduledPlay final {
-    ClipId clip;
+    // The clip's samples, which the caller keeps valid until the voice ends
+    // (reported in Ended() under a nonzero lease mark).
+    ClipView clip;
     std::int64_t startFrame = 0;
     float gainLeft = 1.0f;
     float gainRight = 1.0f;
     std::uint64_t cookie = 0; // opaque to the voice mixer; Stop matches it
-    // A clip outside the bank: its samples, which stay valid while the voice
-    // plays, and a nonzero lease mark reported in Ended() when the voice ends.
-    const ClipView* view = nullptr;
-    std::uint64_t lease = 0;
+    std::uint64_t lease = 0;  // opaque to the voice mixer; 0 is reported nowhere
 };
 
 enum class StartOutcome : std::uint8_t { OnTime, Late, NoVoice };
@@ -64,7 +63,7 @@ struct VoiceMixerStats final {
 class VoiceMixer final {
 public:
     // Fails with InvalidConfig when maxVoices is zero or above 1024.
-    [[nodiscard]] static Base::Result<VoiceMixer, AudioError> Create(std::uint32_t maxVoices, ClipBank&& clips);
+    [[nodiscard]] static Base::Result<VoiceMixer, AudioError> Create(std::uint32_t maxVoices);
 
     VoiceMixer(VoiceMixer&& other) noexcept;
     VoiceMixer& operator=(VoiceMixer&&) = delete;
@@ -72,8 +71,8 @@ public:
     VoiceMixer& operator=(const VoiceMixer&) = delete;
     ~VoiceMixer() = default;
 
-    // A clip outside the bank (without a view) and a gain outside [0, kMaxGain]
-    // are Programmer Errors. A start before the next frame to render is late: the voice starts
+    // A clip without frames and a gain outside [0, kMaxGain] are Programmer
+    // Errors. A start before the next frame to render is late: the voice starts
     // at that frame instead. Allocates nothing.
     StartOutcome Schedule(const ScheduledPlay& play);
     // The same without the checks, for the audio thread: the caller has already
@@ -115,7 +114,6 @@ public:
         const Voice& v = voices_[voice];
         return VoiceState{v.active, v.startFrame < nextFrame_, v.cookie, v.position};
     }
-    [[nodiscard]] const ClipBank& Clips() const noexcept { return clips_; }
 
 private:
     struct Voice final {
@@ -134,12 +132,10 @@ private:
         std::atomic<std::uint64_t> renderedFrames{0}, clippedSamples{0};
     };
 
-    VoiceMixer(std::uint32_t maxVoices, ClipBank&& clips);
+    explicit VoiceMixer(std::uint32_t maxVoices);
     void RenderChunk(std::int16_t* out, std::uint32_t frames) noexcept;
     void End(Voice& voice) noexcept;
 
-    ClipBank clips_;
-    std::vector<ClipView> views_; // one per clip, indexed by ClipId::value - 1
     std::vector<Voice> voices_;
     std::vector<std::int64_t> accumulator_; // kChunkFrames * kChannels, allocated once
     std::vector<std::uint64_t> ended_;      // maxVoices lease marks, allocated once

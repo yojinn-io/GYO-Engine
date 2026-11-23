@@ -89,7 +89,10 @@ void HashValue(Kernel::Hasher& h, const RollbackRegistry& registry) {
         HashValue(h, record.stepSchedule);
     }
     h.U64(registry.inputs.size());
-    for (const InputRecord& record : registry.inputs) HashValue(h, record.capacity);
+    for (const InputRecord& record : registry.inputs) {
+        HashValue(h, record.capacity);
+        HashValue(h, record.kind);
+    }
 }
 
 void RollbackRegistrations::Open() const {

@@ -25,20 +25,19 @@ const TimePoint kAnchor = TimePoint{} + std::chrono::duration_cast<Duration>(10s
 struct Rig final {
     Mixer mixer;
     Submitter submitter;
-    ClipId impulse;
+    Clip impulse;
 };
 
 Rig MakeRig(const Duration delay = Duration::zero(), const std::uint32_t capacity = 256,
             const std::uint32_t voices = 64) {
-    ClipBank bank;
     const std::vector<std::int16_t> one{kImpulse};
-    auto clip = bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
+    auto clip = Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
     config.scheduleDelay = delay;
     config.queueCapacity = capacity;
     config.maxVoices = voices;
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     auto submitter = mixer->CreateSubmitter();
     REQUIRE(submitter.has_value());
@@ -86,7 +85,7 @@ TEST_CASE("Audio Mixer delays every start by 60 ms by default") {
 
 TEST_CASE("Audio Mixer rejects a configuration outside its limits") {
     const auto expectInvalid = [](const MixerConfig& config) {
-        auto mixer = Mixer::Create(config, ClipBank{});
+        auto mixer = Mixer::Create(config);
         REQUIRE_FALSE(mixer.has_value());
         CHECK(mixer.error().code == AudioErrorCode::InvalidConfig);
     };
@@ -113,13 +112,13 @@ TEST_CASE("Audio Mixer rejects a configuration outside its limits") {
     config.maxSubmitters = 64;
     config.queueCapacity = 65536;
     config.scheduleDelay = std::chrono::duration_cast<Duration>(1s);
-    CHECK(Mixer::Create(config, ClipBank{}).has_value());
+    CHECK(Mixer::Create(config).has_value());
 }
 
 TEST_CASE("Audio Mixer hands out each submitter once, also to concurrent callers") {
     MixerConfig config;
     config.maxSubmitters = 8;
-    auto mixer = Mixer::Create(config, ClipBank{});
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     std::atomic<int> created{0};
     std::atomic<int> refused{0};
@@ -142,14 +141,13 @@ TEST_CASE("Audio Mixer hands out each submitter once, also to concurrent callers
 }
 
 TEST_CASE("Audio Mixer gives each submitter its own queue") {
-    ClipBank bank;
     const std::vector<std::int16_t> one{kImpulse};
-    const auto clip = *bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
+    const auto clip = *Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate);
     MixerConfig config;
     config.maxSubmitters = 3;
     config.queueCapacity = 1;
     config.scheduleDelay = Duration::zero();
-    auto mixer = Mixer::Create(config, std::move(bank));
+    auto mixer = Mixer::Create(config);
     REQUIRE(mixer.has_value());
     std::vector<Submitter> submitters;
     for (int i = 0; i < 3; ++i) submitters.push_back(std::move(mixer->CreateSubmitter()).value());
@@ -319,18 +317,17 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     // saturation).
     constexpr int kProducers = 4;
     constexpr int kEach = 5000;
-    ClipBank bank;
-    std::vector<ClipId> clips;
+    std::vector<Clip> clips;
     for (int p = 0; p < kProducers; ++p) {
         const std::vector<std::int16_t> one{static_cast<std::int16_t>(8 * (p + 1))};
-        clips.push_back(*bank.Add(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate));
+        clips.push_back(*Clip::Make(GYO::Engine::Base::ConstSpan<std::int16_t>(one.data(), one.size()), 1, kSampleRate));
     }
     MixerConfig config;
     config.maxSubmitters = kProducers;
     config.queueCapacity = 64;
     config.maxVoices = 1024; // above kProducers * queueCapacity
     config.scheduleDelay = Duration::zero(); // every request starts in the block that takes it
-    auto created = Mixer::Create(config, std::move(bank));
+    auto created = Mixer::Create(config);
     REQUIRE(created.has_value());
     Mixer mixer = std::move(created).value();
 
@@ -398,9 +395,9 @@ TEST_CASE("Audio Submitter plays on another thread after a hand-over") {
     CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
 }
 
-TEST_CASE("Audio Submitter treats a foreign clip, a bad gain and a moved-from handle as Programmer Errors") {
+TEST_CASE("Audio Submitter treats an empty clip, a bad gain and a moved-from handle as Programmer Errors") {
     Rig rig = MakeRig();
-    GYO_CHECK_ASSERTS(rig.submitter.Play({ClipId{2}, kAnchor}));
+    GYO_CHECK_ASSERTS(rig.submitter.Play({Clip{}, kAnchor}));
     GYO_CHECK_ASSERTS(rig.submitter.Play({rig.impulse, kAnchor, -1.0f, 1.0f}));
     GYO_CHECK_ASSERTS(rig.submitter.Play({rig.impulse, kAnchor, 1.0f, kMaxGain + 1.0f}));
     Submitter moved(std::move(rig.submitter));

@@ -101,6 +101,13 @@ struct TimeControl final {
     std::uint8_t paused = 0;
 };
 
+// The clock sync's speed (net Module declaration D-9, section 18 (A)): AdvanceTime scales virtual time by
+// TimeControl.scale x TimeSyncScale.scale. Registered in every World (like Resimulation: written by another Module,
+// always there, 1 unless written), put to 1 whenever a World is prepared; written only by the net Module's clock sync.
+struct TimeSyncScale final {
+    double scale = 1.0;
+};
+
 // The fixed steps started so far: during the n-th step and after it, n.
 struct Tick final {
     std::uint64_t value = 0;
@@ -208,6 +215,7 @@ inline void HashValue(Kernel::Hasher& h, const TimeControl& v) {
     HashValue(h, v.scale);
     HashValue(h, v.paused);
 }
+inline void HashValue(Kernel::Hasher& h, const TimeSyncScale& v) { HashValue(h, v.scale); }
 inline void HashValue(Kernel::Hasher& h, const Tick& v) { HashValue(h, v.value); }
 inline void HashValue(Kernel::Hasher& h, const Resimulation& v) { HashValue(h, v.active); }
 inline void HashValue(Kernel::Hasher& h, const TimeSampling& v) {

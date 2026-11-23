@@ -262,8 +262,8 @@ public:
 // One reader's cursor in one message type (event cursor declaration 3.2): the
 // highest seq the reader has read. A reader is a System's mount (slot 0) or
 // the mount's run condition number slot (from 1, in evaluation order). Kept in
-// the World, sorted by (message, system, mount, slot), and in the World summary,
-// which hashes it field by field.
+// the World, sorted by (message, system, mount, slot); not in the World summary
+// (version 4).
 struct MessageCursor {
     std::uint32_t message;
     std::uint32_t system;

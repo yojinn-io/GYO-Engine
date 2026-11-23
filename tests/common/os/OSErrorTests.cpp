@@ -14,6 +14,10 @@ TEST_CASE("OS error codes start at 1 and have names") {
     CHECK(std::string(ToString(OSErrorCode::NotFound)) == "NotFound");
     CHECK(std::string(ToString(OSErrorCode::InvalidEncoding)) == "InvalidEncoding");
     CHECK(std::string(ToString(OSErrorCode::Unsupported)) == "Unsupported");
+    CHECK(std::string(ToString(OSErrorCode::InvalidAddress)) == "InvalidAddress");
+    CHECK(std::string(ToString(OSErrorCode::AddressInUse)) == "AddressInUse");
+    CHECK(std::string(ToString(OSErrorCode::Unreachable)) == "Unreachable");
+    CHECK(std::string(ToString(OSErrorCode::WouldBlock)) == "WouldBlock");
 }
 
 TEST_CASE("OS error detail keeps the native code in one fixed form") {

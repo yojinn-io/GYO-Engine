@@ -67,6 +67,21 @@ void RewindFixedSteps(ExclusiveWorldType& world, std::uint64_t k) {
     }));
 }
 
+// Jumps k fixed steps (k may be negative): Tick + k and FixedTime::elapsed + k steps, as one change; no fixed-step
+// schedule runs and the accumulator does not move (net Module declaration D-9, section 18 (A): the clock sync's
+// snap when the error is too large to follow by speed; lightyear snaps beyond 10 ticks, Unity jumps). Only the net
+// Module's clock sync calls it (a System registered with AddTickWriter). Tick may not go below 0 (GYO_ASSERT).
+template <class ExclusiveWorldType>
+void JumpFixedSteps(ExclusiveWorldType& world, std::int64_t k) {
+    Detail::Called(world.template Modify<Tick>([k](Tick& tick) {
+        GYO_ASSERT(k >= 0 || static_cast<std::uint64_t>(-k) <= tick.value);
+        tick.value = static_cast<std::uint64_t>(static_cast<std::int64_t>(tick.value) + k);
+    }));
+    Detail::Called(world.template Modify<FixedTime>([k](FixedTime& time) {
+        time.elapsed += static_cast<Nanoseconds>(k) * time.accumulator.Step();
+    }));
+}
+
 namespace Detail {
 
 // A saved fixed-step state under this World's step length (declaration 3.5, world-time section 4): the steps run so

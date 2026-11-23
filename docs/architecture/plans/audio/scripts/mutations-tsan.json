@@ -44,23 +44,29 @@
     },
     {
       "id": "au-ctl-clip-handback-relaxed",
-      "what": "The audio thread hands a slot back without release",
+      "what": "The audio thread hands an entry back without release",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "    slot.handedBack.store(true, std::memory_order_release);",
-      "replace": "    slot.handedBack.store(true, std::memory_order_relaxed);",
+      "find": "    slot.returnedTail.store(tail + 1, std::memory_order_release);",
+      "replace": "    slot.returnedTail.store(tail + 1, std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
-      "cases": "*while another thread renders*",
-      "expect": "ThreadSanitizer"
+      "cases": "*plays and lets go of clips while another thread renders*",
+      "expect": "ThreadSanitizer",
+      "guards": [
+        "audio DI 7"
+      ]
     },
     {
       "id": "au-ctl-clip-reclaim-relaxed",
-      "what": "LoadClip sees a handed-back slot without acquire",
+      "what": "The producer takes back handed-back entries without acquire",
       "file": "engine/modules/audio/src/Mixer.cpp",
-      "find": "!entry.handedBack.load(std::memory_order_acquire)) continue;",
-      "replace": "!entry.handedBack.load(std::memory_order_relaxed)) continue;",
+      "find": "    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_acquire);",
+      "replace": "    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_relaxed);",
       "target": "gyo_audio_tests",
-      "cases": "*while another thread renders*",
-      "expect": "ThreadSanitizer"
+      "cases": "*plays and lets go of clips while another thread renders*",
+      "expect": "ThreadSanitizer",
+      "guards": [
+        "audio DI 7"
+      ]
     },
     {
       "id": "au-ctl-stress-reader-reads-audio-state",

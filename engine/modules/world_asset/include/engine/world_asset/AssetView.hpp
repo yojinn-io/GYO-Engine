@@ -153,8 +153,8 @@ private:
     Asset::AssetSnapshot snapshot_;
 };
 
-// Not hashed (declaration 5.9.1): it changes with the order jobs finish in, and it is told by polling, not by
-// the Kernel's messages, so no sequence number goes into World::Summary.
+// Not hashed (declaration 5.9.1): it changes with the order jobs finish in, so the same World state could give
+// two summaries.
 inline void HashValue(Kernel::Hasher&, const AssetView&) {}
 
 } // namespace GYO::Engine::WorldAsset

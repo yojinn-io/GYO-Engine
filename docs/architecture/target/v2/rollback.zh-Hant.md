@@ -1,6 +1,6 @@
 # 回滾 Module（`engine/modules/rollback`）
 
-更新：2026-11-22（`v8-arch-gyo2-batch4-followups`：R-3 本文改成「不依賴」的寫法（使用者核准）與常設守衛）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 4 步）。Owner：架構。程式：`engine/modules/rollback/`（`GYO::Engine::Rollback`，target `GYO::Rollback`，登記單位 `RollbackModule`）。行為測試：`tests/common/rollback/`（ctest `rollback.rollback_registrations`、`rollback.rollback_strategy`、`rollback.rollback_checks`，標籤 `cpu`）；突變清單 [`scripts/rollback_mutations.json`](scripts/rollback_mutations.json)（`rb-`）。
+更新：2026-11-23（`v8-arch-gyo2-net-module` 第 3 步前半：`Input<T>` 也收元件，R-6 多一種登記；網路宣告第 5 節，使用者已核准；**實作，最終文字在合併前核准定稿**）；2026-11-22（`v8-arch-gyo2-batch4-followups`：R-3 本文改成「不依賴」的寫法（使用者核准）與常設守衛）；2026-11-21（新頁，`v8-arch-gyo2-authority-rollback` 第 4 步）。Owner：架構。程式：`engine/modules/rollback/`（`GYO::Engine::Rollback`，target `GYO::Rollback`，登記單位 `RollbackModule`）。行為測試：`tests/common/rollback/`（ctest `rollback.rollback_registrations`、`rollback.rollback_strategy`、`rollback.rollback_checks`，標籤 `cpu`）；突變清單 [`scripts/rollback_mutations.json`](scripts/rollback_mutations.json)（`rb-`）。
 
 由來：[回滾份](rollback-module-declaration.zh-Hant.md)（修訂 6，已核准）第 5、9 節；[第 4 批宣告](authority-rollback-declaration.zh-Hant.md)第 5、6 節與第 11.3 節（方向使用者 2026-11-20 核准：「DI 文字方向照建議」）。Design Invariants 的最終文字使用者 2026-11-22 核准（[合併前核准](authority-rollback-merge-approval.zh-Hant.md)）；和回滾份字面不同的地方在條末標「實作」。
 
@@ -29,7 +29,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 | `StepSchedule(name, recordStage)`、`StepSchedule()` | 回滾的單位；有策略的 World 在登記當下把記錄 System 掛到那個 stage。預設跟著時間 Module（回滾份 2.3）：不帶參數＝`WorldTimeOptions::fixedSchedule`，`recordStage` 預設 `Last`。選了官方策略卻沒有步的 schedule 是 RB-E10（什麼都不記、權威值永遠不採用） |
 | `NestedSchedule(name, stepSchedule)` | 從步的 schedule 巢狀跑的 schedule；重跑時會跑到，只進檢查的範圍 |
 | `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`）。「重跑時跑不跑」逐個掛載看條件（`RunsWhileResimulating`）：之後才加的掛載會重跑 |
-| `Input<T>(length)` | 官方策略替 `T` 保留按 tick 的紀錄，重跑每一步前寫回（不是回滾狀態）；不登記 `T`。長度用檔位 `InputHistoryLength`（`StrategyDepth`＝策略的深度、預設；`Short` 20、`Medium` 32、`Long` 64）或直接寫步數，不攔。檔位的系譜：`Short` 是預算 P1、P3 的深度與 lightyear 的預設回滾深度，`Medium` 是 P2 的深度，`Long` 是時間 Module 預設 64 Hz 的一秒。容量小於深度照舊是 RB-E9；預設長度不會小於深度。伺服器權威的判定輸入（`authority.Resource<T>({.input = true})`）由權威代為登記（預設長度），作者不必寫這行（2026-11-22 使用者選 (c)）；只有選了回滾策略的 World 才建紀錄，沒選的零成本（R-4） |
+| `Input<T>(length, kind)` | 官方策略替 `T` 保留按 tick 的紀錄，重跑每一步前寫回（不是回滾狀態）；不登記 `T`。`kind`：`DataKind::Resource`（預設）或 `DataKind::Component`——元件的輸入每個實體按 tick 一份（玩家實體上的輸入元件，網路宣告 D-11；照 lightyear 的 `InputBuffer`），重跑每一步前逐格寫回，那一步沒有這個元件的實體不寫；保留與放回（`Keep`／`PutBack`）也逐格〔實作，合併前核准定稿〕。長度用檔位 `InputHistoryLength`（`StrategyDepth`＝策略的深度、預設；`Short` 20、`Medium` 32、`Long` 64）或直接寫步數，不攔。檔位的系譜：`Short` 是預算 P1、P3 的深度與 lightyear 的預設回滾深度，`Medium` 是 P2 的深度，`Long` 是時間 Module 預設 64 Hz 的一秒。容量小於深度照舊是 RB-E9；預設長度不會小於深度。伺服器權威的判定輸入（`authority.Resource<T>({.input = true})`、`authority.Component<T>({.input = true})`）由權威代為登記（預設長度），作者不必寫這行（2026-11-22 使用者選 (c)）；只有選了回滾策略的 World 才建紀錄，沒選的零成本（R-4） |
 
 同一型別同時登記成可回滾與 `Derived`：作者的蓋過代為的（跨兩種也一樣）；兩筆都是作者的是 RB-E1。
 
@@ -56,7 +56,7 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 
 Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；第 8 步審查 A3 發現它原本會補、等價破掉，使用者選 (a2) 從源頭修），所以「請求在、目標當時不在」也照樣等價，不必當成前提。守衛：`rollback strategy: R-2: a restore puts back a request…`、`…an entity a predicted death took comes back…`。
 
-前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
+前提是作者的責任，回滾 Module 不加檢查；只有輸入歷史的長度由官方策略在啟動時查（容量小於深度是 RB-E9；實作）。守衛：等價測試（`rollback strategy: R-2…`，兩案：只有寫值、有生成刪除與副作用；`rollbacks every frame at the depth's edge…`：每幀在深度邊界回滾一次、連續 18 幀，讀前幾次重跑改寫過的歷史；`R-2: a message written and read within the step leaves the summary of running straight`：前提 4 的訊息，重跑再寫一次，比的時候已經修剪掉，摘要和直跑相同（還有讀者拉著重跑寫的紀錄時，R-2 成立、摘要仍不同：kernel DI-KS 10，使用者選 (b) 時連帶接受）〔`v8-arch-gyo2-kernel-summary-messages`，摘要版本 4〕；比 World 摘要）；突變：漏退 tick、漏退存活集合、漏退 Resource（配發器）、「重跑中」沒立、「重跑中」在還原之後才立、重跑完沒放下、輸入沒寫回、重跑後輸入沒放回這一幀的值、只記新出現的格、不記被拿掉的格、重跑時不丟被取代的歷史（欄與存活集合各一）、修剪連窗口起點也丟、永不修剪、深度邊界差一。
 
 <a id="r-3"></a>
 **R-3 不認得權威、網路、狀態機**：回滾 Module 不依賴它們：不連結，也不用它們的型別與名字。守衛：「不連結」由 `gyo_rollback` 的連結集（`tests/common/rollback/CMakeLists.txt` 的 `gyo_expect_links`，整個專案 configure 完才查，別的目錄後來加的連結也看得到）。它釘的是整個集合，比本條嚴：加的依賴不屬權威、網路、狀態機時，改登記列與那一行，本條不變。權威另有登記檔的順序（authority 排在 rollback 之後）與 O6（`engine/` 裡手寫連結登記的 target）。「不用它們的型別與名字」沒有機械守衛，交每批的設計審查（`v8-arch-gyo2-include-bypass-to-review`）：不經連結的 include（相對路徑、另加標頭目錄）、在回滾裡抄一份它們的型別或欄位表、用名字字串去找它們的東西，都是違反。突變：`rb-r3-links-more`、`rb-r3-authority-from-later-directory`。
@@ -68,7 +68,7 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 **R-5 歷史不跨世代**：歷史在 World 的 Resource 裡；換 World 之後新 World 沒有舊歷史。守衛：`rollback strategy: R-5`。
 
 <a id="r-6"></a>
-**R-6 公開的登記可讀、穩定**：六種登記經 `RollbackRegistry` 讀得到，啟動檢查之後不變。`Build` 時追加、帶來源（作者或代為）；凍結後由擁有者對紀錄的純函式 `Resolve` 裁決：作者的蓋過代為的、不論先後，同一來源的兩筆 options 不同是 RB-E1。裁決結果在準備函式裡放進那個 World 的 Resource `RollbackRegistry`（實作：宣告 5.1）。守衛：`rollback registrations:` 各案。
+**R-6 公開的登記可讀、穩定**：七種登記（〔實作，合併前核准定稿〕元件的輸入紀錄是第七種：`InputRecord` 多一欄 `kind`，Resource 照舊；R-1 的掛點不改）經 `RollbackRegistry` 讀得到，啟動檢查之後不變。`Build` 時追加、帶來源（作者或代為）；凍結後由擁有者對紀錄的純函式 `Resolve` 裁決：作者的蓋過代為的、不論先後，同一來源的兩筆 options 不同是 RB-E1。裁決結果在準備函式裡放進那個 World 的 Resource `RollbackRegistry`（實作：宣告 5.1）。守衛：`rollback registrations:` 各案；元件的輸入：`rollback strategy: R-2 with a component input…`（`[rb-component-input-r2]`、`[rb-component-input-kind]`）、`…a component input's entry that runs before the rollback…`（`[rb-component-input-put-back]`），突變 `rb-component-input-not-written-back`、`rb-component-input-not-put-back`、`rb-component-input-as-resource`。
 
 <a id="r-7"></a>
 **R-7 Derived 的順序條件**（取代 Kernel 的 D-E16）：步的 schedule 與巢狀 schedule 裡，讀 Derived 元件的每個 System 之前，唯讀登記表的順序圖上有同一張 schedule 的立即寫者（階段、宣告、同步點的邊；登記先後的平手不算）；違反是 RB-E7。hook 與 observer 讀 Derived、以及獨占 System（`ExclusiveWorld`）的讀寫，不在啟動時看得到的範圍：作者負責（用獨占 System 重算 Derived 的作者，讀者要宣告在它之後的順序，或改用一般 System；實作）。守衛：`rollback checks: R-7…` 四案；突變：不檢查、把延後寫算成立即寫、不看先後、每張 schedule 都查、只看直接邊、登記先後的平手算順序、漏掉巢狀 schedule。
