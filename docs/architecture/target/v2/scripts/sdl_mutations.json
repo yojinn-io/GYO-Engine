@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the SDL line (docs/architecture/target/v2/sdl-declaration.zh-Hant.md; Design Invariants in docs/architecture/target/v2/sdl.zh-Hant.md). Sub-batch P (v8-arch-gyo2-sdl-p): only selected Plugins are added. The plugins/ roots of the OS guards are in docs/architecture/plans/os-subsystem/scripts/mutations.json (sdlp-*). A mutant is killed only when its check fails with the expected message. Run with tests/common/mutation/run_mutations.py --build-dir <a test build> --catalog docs/architecture/target/v2/scripts/sdl_mutations.json.",
+ "description": "Declared mutants of the SDL line (docs/architecture/target/v2/sdl-declaration.zh-Hant.md; Design Invariants in docs/architecture/target/v2/sdl.zh-Hant.md). Sub-batch P (v8-arch-gyo2-sdl-p): only selected Plugins are added. The plugins/ roots of the OS guards are in docs/architecture/plans/os-subsystem/scripts/mutations.json (sdlp-*). A mutant is killed only when its check fails with the expected message. Run with tests/common/mutation/run_mutations.py --build-dir <a test build> --catalog docs/architecture/target/v2/scripts/sdl_mutations.json. Sub-batch A (v8-arch-gyo2-sdl-a): sdla-* run gyo_sdl_audio_tests with SDL's audio driver set in the environment.",
  "mutants": [
   {
    "id": "sdlp-selection-no-closure",
@@ -97,6 +97,143 @@
    ],
    "expect": "Plugins added with none selected: \\[ \"sdl\" \\]|did not configure with no Plugin selected",
    "timeout": 600
+  },
+  {
+   "id": "sdla-not-resumed",
+   "what": "The device stream is opened but never resumed (SDL opens it paused): nothing is rendered",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節"
+   ],
+   "file": "plugins/sdl_audio/src/adapters/sdl/AudioDevice.cpp",
+   "find": "    if (!SDL_ResumeAudioStreamDevice(self.stream)) {",
+   "replace": "    if (false) {",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=*registers the sound loader*"
+   ],
+   "expect": "CHECK\\( Advances\\(\\*mixer\\) \\) is NOT correct"
+  },
+  {
+   "id": "sdla-anchor-once",
+   "what": "The callback reads the time base once, at its first call, and maps every later block from that old anchor (SDL-3, audio DI 3)",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節",
+    "SDL-3",
+    "audio DI 3"
+   ],
+   "file": "plugins/sdl_audio/src/adapters/sdl/AudioDevice.cpp",
+   "find": "        const Time::TimePoint anchor = Time::Now();",
+   "replace": "        static const Time::TimePoint anchor = Time::Now();",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=dummy: maps a play*"
+   ],
+   "expect": "CHECK\\( offset < 4800 \\+ 16000 \\) is NOT correct"
+  },
+  {
+   "id": "sdla-subsystem-quit-twice",
+   "what": "Stopping one device releases SDL's audio subsystem twice, so another Product's device stops with it",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節"
+   ],
+   "file": "plugins/sdl_audio/src/adapters/sdl/AudioDevice.cpp",
+   "find": "    if (state_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
+   "replace": "    if (state_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);\n    if (state_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=dummy: two Products*"
+   ],
+   "expect": "CHECK\\( Advances\\(\\*first->Buffer"
+  },
+  {
+   "id": "sdla-failure-is-startup-error",
+   "what": "A device that does not open is reported as a startup error, so a machine without sound cannot run the game",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節"
+   ],
+   "file": "plugins/sdl_audio/src/SDLAudioPlugin.cpp",
+   "find": "        failure = std::move(device).error();\n",
+   "replace": "        failure = std::move(device).error();\n        setup.Report(\"SA-E3\", failure->message);\n",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='gyo-no-such-driver'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=unavailable:*"
+   ],
+   "expect": "REQUIRE\\( product.has_value\\(\\) \\) is NOT correct"
+  },
+  {
+   "id": "sdla-loader-not-registered",
+   "what": "The sound loader is not registered although the Product has an asset store",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節",
+    "audio 第 1 節"
+   ],
+   "file": "plugins/sdl_audio/src/SDLAudioPlugin.cpp",
+   "find": "        if (auto registered = registry->Register<Audio::WavLoader>(); !registered) {",
+   "replace": "        if (auto registered = Engine::Asset::LoaderRegistrationResult{}; !registered) {",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=*registers the sound loader*"
+   ],
+   "expect": "REQUIRE_FALSE\\( other.has_value\\(\\) \\) is NOT correct"
+  },
+  {
+   "id": "sdla-product-mixer-ignored",
+   "what": "The product's mixer (AudioOutputMixer) is ignored: the output creates its own and plays that",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節",
+    "sdl-declaration 第 7 節 (ii)"
+   ],
+   "file": "plugins/sdl_audio/src/SDLAudioPlugin.cpp",
+   "find": "    if (const AudioOutputMixer* own = setup.Options<AudioOutputMixer>(); own != nullptr && own->mixer != nullptr) {",
+   "replace": "    if (const AudioOutputMixer* own = nullptr; own != nullptr) {",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=dummy: plays the product's mixer*"
+   ],
+   "expect": "CHECK\\( product->Buffer\\(\\).Find<Audio::Mixer>\\(\\) == nullptr \\) is NOT correct"
+  },
+  {
+   "id": "sdla-options-ignored",
+   "what": "AudioOutputOptions is not read: the mixer is always made from the defaults, and a configuration outside the limits passes",
+   "guards": [
+    "sdl.zh-Hant.md 第 5 節"
+   ],
+   "file": "plugins/sdl_audio/src/SDLAudioPlugin.cpp",
+   "find": "    const AudioOutputOptions& options = given != nullptr ? *given : defaults;",
+   "replace": "    const AudioOutputOptions& options = defaults;",
+   "target": "gyo_sdl_audio_tests",
+   "command": [
+    "{python}",
+    "-c",
+    "import os,subprocess,sys; os.environ['SDL_AUDIO_DRIVER']='dummy'; sys.exit(subprocess.call(sys.argv[1:]))",
+    "{exe:gyo_sdl_audio_tests}",
+    "--test-case=dummy: a mixer configuration*"
+   ],
+   "expect": "REQUIRE_FALSE\\( product.has_value\\(\\) \\) is NOT correct"
   }
  ]
 }

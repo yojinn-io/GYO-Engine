@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "PlayheadBoard.hpp"
+#include "SPSCRing.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
@@ -18,34 +19,35 @@ namespace GYO::Engine::Audio {
 
 namespace Detail {
 
-enum class CommandKind : std::uint8_t { Play, Stop, StopAll };
+enum class CommandKind : std::uint8_t { Play, Stop, StopAll, SetGain };
 
 // One entry of a submitter's ring, trivially copyable: a play carries its clip's
 // view (the samples stay valid while its table entry holds the clip), its table
 // entry and its handle as the voice's cookie; a stop names a handle; a stop-all
-// names the submitter's handle prefix.
+// names the submitter's handle prefix; a gain change names a handle and carries
+// its gains and ramp.
 struct Command final {
     CommandKind kind = CommandKind::Play;
     Time::TimePoint at{};
-    float gainLeft = 1.0f;
+    float gainLeft = 1.0f;       // Play and SetGain
     float gainRight = 1.0f;
     ClipView view;               // Play only
     std::uint64_t handle = 0;
     std::uint32_t entry = 0;     // Play only: the table entry holding the clip
+    std::uint32_t rampFrames = 0; // SetGain only
+    bool loop = false;           // Play only
 };
 static_assert(std::is_trivially_copyable_v<Command>);
 
-// One bounded SPSC ring. The producer owns tail, the audio thread owns head;
-// each publishes its index with release and reads the other's with acquire, so
-// a slot is written before the consumer sees it and read before the producer
-// reuses it. Indices only grow; the ring index is the index modulo capacity.
+// One submitter's state: its command ring (SPSCRing: the producer is whoever
+// uses the submitter, the consumer the audio thread) and its table.
 //
 // The table holds a reference to the clip of every play queued or sounding
 // (Design Invariant 7): only the producer (whoever uses the submitter, one at a
 // time) touches it and the stack of free entries. The audio thread holds views
 // and entry numbers, never a reference; it hands an entry back through the
-// returned ring (the audio thread owns returnedTail, the producer
-// returnedHead). An entry is in exactly one place at a time (free, in the ring,
+// returned ring (an SPSCRing the other way: the audio thread produces, the
+// submitter's user consumes). An entry is in exactly one place at a time (free, in the ring,
 // in a voice or its ended list, in the returned ring, or in the producer's hands
 // while it lets go of it), and the returned ring has one slot per entry, so it
 // never fills. The table never runs out: every Play first takes back what was
@@ -59,10 +61,8 @@ struct SubmitterSlot final {
         for (std::uint32_t i = entries; i > 0; --i) freeEntries.push_back(i - 1);
     }
 
-    std::vector<Command> ring;
+    SPSCRing<Command> ring;
     const std::uint64_t handlePrefix; // (index + 1) << kSequenceBits
-    alignas(64) std::atomic<std::uint64_t> tail{0};
-    alignas(64) std::atomic<std::uint64_t> head{0};
     // The producer's own: the last handle sequence issued. 2^57 plays
     // would overflow it, which no mixer reaches.
     std::uint64_t lastSequence = 0;
@@ -70,13 +70,13 @@ struct SubmitterSlot final {
     std::atomic<std::uint64_t> droppedQueueFull{0};
     std::atomic<std::uint64_t> stopsSubmitted{0};
     std::atomic<std::uint64_t> stopsDroppedQueueFull{0};
+    std::atomic<std::uint64_t> gainsSubmitted{0};
+    std::atomic<std::uint64_t> gainsDroppedQueueFull{0};
     // The producer's own: the clip references and the free entries.
     std::vector<Clip> held;
     std::vector<std::uint32_t> freeEntries;
     // Entries handed back by the audio thread.
-    std::vector<std::uint32_t> returned;
-    alignas(64) std::atomic<std::uint64_t> returnedTail{0};
-    alignas(64) std::atomic<std::uint64_t> returnedHead{0};
+    SPSCRing<std::uint32_t> returned;
 };
 
 // Handles: the submitter's index plus one in the top 7 bits (1 to 64), a
@@ -109,6 +109,10 @@ struct MixerState final {
     std::atomic<std::uint64_t> stopsMatched{0};
     std::atomic<std::uint64_t> stopsUnmatched{0};
     std::atomic<std::uint64_t> stopsLate{0};
+    // Gain change outcomes, written by the audio thread only.
+    std::atomic<std::uint64_t> gainsMatched{0};
+    std::atomic<std::uint64_t> gainsUnmatched{0};
+    std::atomic<std::uint64_t> gainsLate{0};
     // Where each voice is, for PlayheadOf. The audio thread writes it and keeps
     // its own copy of the tags it published, so it never reads the board.
     PlayheadBoard<> board;
@@ -164,19 +168,14 @@ std::int64_t ClampedOffset(const std::int64_t a, const std::int64_t b) noexcept 
     return std::clamp(a - b, -kMaxOffsetNs, kMaxOffsetNs);
 }
 
-// The audio thread. Hands a table entry back to its submitter: the release
-// orders every read of the clip's samples before the producer lets go of it.
-// The ring has one slot per entry and an entry is in it at most once, so it is
-// never full; the acquire orders the producer's read of the slot before this
-// write.
+// The audio thread. Hands a table entry back to its submitter: the ring's
+// release orders every read of the clip's samples before the producer lets go
+// of it. The ring has one slot per entry and an entry is in it at most once, so
+// it is never full (a refusal cannot happen; the entry would stay held until the
+// state goes).
 void HandBack(MixerState& state, const std::uint64_t mark) noexcept {
     SubmitterSlot& slot = *state.slots[(mark >> 32) - 1];
-    const std::uint64_t tail = slot.returnedTail.load(std::memory_order_relaxed);
-    const std::uint64_t head = slot.returnedHead.load(std::memory_order_acquire);
-    const std::uint64_t capacity = slot.returned.size();
-    if (tail - head >= capacity) return; // cannot happen; the entry would stay held until the state goes
-    slot.returned[tail % capacity] = static_cast<std::uint32_t>(mark & 0xFFFF'FFFFu);
-    slot.returnedTail.store(tail + 1, std::memory_order_release);
+    static_cast<void>(slot.returned.TryPush(static_cast<std::uint32_t>(mark & 0xFFFF'FFFFu)));
 }
 
 // The audio thread, after each Render. Publishes every voice's sound and
@@ -233,26 +232,15 @@ Submitter::~Submitter() {
 }
 
 void Submitter::Reclaim() noexcept {
-    std::uint64_t head = slot_->returnedHead.load(std::memory_order_relaxed);
-    const std::uint64_t tail = slot_->returnedTail.load(std::memory_order_acquire);
-    if (head == tail) return;
-    const std::uint64_t capacity = slot_->returned.size();
-    for (; head != tail; ++head) {
-        const std::uint32_t entry = slot_->returned[head % capacity];
-        slot_->held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread
-        slot_->freeEntries.push_back(entry); // reserved for every entry: allocates nothing
-    }
-    slot_->returnedHead.store(head, std::memory_order_release);
+    SubmitterSlot& slot = *slot_;
+    slot.returned.Drain([&slot](const std::uint32_t entry) noexcept {
+        slot.held[entry] = Clip{}; // may let go of the last reference, here and never on the audio thread
+        slot.freeEntries.push_back(entry); // reserved for every entry: allocates nothing
+    });
 }
 
 bool Submitter::Enqueue(const Detail::Command& command) {
-    const std::uint64_t tail = slot_->tail.load(std::memory_order_relaxed);
-    const std::uint64_t head = slot_->head.load(std::memory_order_acquire);
-    const std::uint64_t capacity = slot_->ring.size();
-    if (tail - head >= capacity) return false;
-    slot_->ring[tail % capacity] = command;
-    slot_->tail.store(tail + 1, std::memory_order_release);
-    return true;
+    return slot_->ring.TryPush(command);
 }
 
 SoundHandle Submitter::Play(const PlayRequest& request) {
@@ -269,7 +257,7 @@ SoundHandle Submitter::Play(const PlayRequest& request) {
     slot_->held[entry] = request.clip;
     const std::uint64_t handle = slot_->handlePrefix | (slot_->lastSequence + 1);
     if (!Enqueue(Command{CommandKind::Play, request.at, request.gainLeft, request.gainRight, request.clip.View(),
-                         handle, entry})) {
+                         handle, entry, 0, request.loop})) {
         slot_->held[entry] = Clip{};
         slot_->freeEntries.push_back(entry);
         slot_->droppedQueueFull.fetch_add(1, std::memory_order_relaxed);
@@ -279,15 +267,20 @@ SoundHandle Submitter::Play(const PlayRequest& request) {
     return SoundHandle{handle};
 }
 
-bool Submitter::Stop(const SoundHandle sound, const Time::TimePoint at) {
-    GYO_ASSERT(slot_ != nullptr);
-    if (!sound.Valid()) {
-        Reclaim();
-        return true;
-    }
+bool Submitter::CheckOwnHandle(const SoundHandle sound) const {
+    if (!sound.Valid()) return false;
     GYO_ASSERT((sound.value & ~Detail::kSequenceMask) == slot_->handlePrefix);
     const std::uint64_t sequence = sound.value & Detail::kSequenceMask;
     GYO_ASSERT(sequence != 0 && sequence <= slot_->lastSequence);
+    return true;
+}
+
+bool Submitter::Stop(const SoundHandle sound, const Time::TimePoint at) {
+    GYO_ASSERT(slot_ != nullptr);
+    if (!CheckOwnHandle(sound)) {
+        Reclaim();
+        return true;
+    }
     Reclaim();
     Command command;
     command.kind = CommandKind::Stop;
@@ -304,6 +297,33 @@ bool Submitter::StopAll(const Time::TimePoint at) {
     command.at = at;
     command.handle = slot_->handlePrefix;
     return SendStop(command);
+}
+
+bool Submitter::SetGain(const SoundHandle sound, const float gainLeft, const float gainRight,
+                        const Time::TimePoint at, const Time::Duration ramp) {
+    GYO_ASSERT(slot_ != nullptr);
+    GYO_ASSERT(IsValidGain(gainLeft) && IsValidGain(gainRight));
+    GYO_ASSERT(ramp >= Time::Duration::zero());
+    if (!CheckOwnHandle(sound)) {
+        Reclaim();
+        return true;
+    }
+    Reclaim();
+    slot_->gainsSubmitted.fetch_add(1, std::memory_order_relaxed);
+    Command command;
+    command.kind = CommandKind::SetGain;
+    command.at = at;
+    command.gainLeft = gainLeft;
+    command.gainRight = gainRight;
+    command.handle = sound.value;
+    const std::int64_t rampNs =
+        std::min(std::chrono::duration_cast<std::chrono::nanoseconds>(ramp).count(), kMaxOffsetNs);
+    command.rampFrames = static_cast<std::uint32_t>(NsToFrames(rampNs));
+    if (!Enqueue(command)) {
+        slot_->gainsDroppedQueueFull.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+    return true;
 }
 
 bool Submitter::SendStop(const Detail::Command& command) {
@@ -372,11 +392,16 @@ MixerStats Mixer::Stats() const noexcept {
     stats.stopsMatched = state_->stopsMatched.load(std::memory_order_relaxed);
     stats.stopsUnmatched = state_->stopsUnmatched.load(std::memory_order_relaxed);
     stats.stopsLate = state_->stopsLate.load(std::memory_order_relaxed);
+    stats.gainsMatched = state_->gainsMatched.load(std::memory_order_relaxed);
+    stats.gainsUnmatched = state_->gainsUnmatched.load(std::memory_order_relaxed);
+    stats.gainsLate = state_->gainsLate.load(std::memory_order_relaxed);
     for (const auto& slot : state_->slots) {
         stats.droppedQueueFull += slot->droppedQueueFull.load(std::memory_order_relaxed);
         stats.submitted += slot->submitted.load(std::memory_order_relaxed);
         stats.stopsDroppedQueueFull += slot->stopsDroppedQueueFull.load(std::memory_order_relaxed);
         stats.stopsSubmitted += slot->stopsSubmitted.load(std::memory_order_relaxed);
+        stats.gainsDroppedQueueFull += slot->gainsDroppedQueueFull.load(std::memory_order_relaxed);
+        stats.gainsSubmitted += slot->gainsSubmitted.load(std::memory_order_relaxed);
     }
     stats.playedOnTime = voices.onTime;
     stats.playedLate = voices.late;
@@ -399,21 +424,29 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
     const std::uint32_t claimed = std::min<std::uint32_t>(state.claimed.load(std::memory_order_relaxed),
                                                           static_cast<std::uint32_t>(state.slots.size()));
     for (std::uint32_t i = 0; i < claimed; ++i) {
-        SubmitterSlot& slot = *state.slots[i];
-        std::uint64_t head = slot.head.load(std::memory_order_relaxed);
-        const std::uint64_t tail = slot.tail.load(std::memory_order_acquire);
-        if (head == tail) continue;
-        const std::uint64_t capacity = slot.ring.size();
-        for (; head != tail; ++head) {
-            const Command& command = slot.ring[head % capacity];
+        state.slots[i]->ring.Drain([&state, i, blockStart, anchorNs](const Command& command) noexcept {
             if (command.kind == CommandKind::Play) {
                 const std::int64_t offset = NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs));
                 const std::uint64_t lease = Detail::LeaseMark(i + 1, command.entry);
                 const Detail::StartOutcome outcome = state.voices.ScheduleChecked(
                     Detail::ScheduledPlay{command.view, blockStart + offset + state.delayFrames, command.gainLeft,
-                                          command.gainRight, command.handle, lease});
+                                          command.gainRight, command.handle, lease, command.loop});
                 if (outcome == Detail::StartOutcome::NoVoice) HandBack(state, lease);
-                continue;
+                return;
+            }
+            if (command.kind == CommandKind::SetGain) {
+                // Mapped like a play and a stop (Design Invariant 3), on its own line.
+                const std::int64_t gainFrame =
+                    blockStart + NsToFrames(ClampedOffset(Nanoseconds(command.at), anchorNs)) + state.delayFrames;
+                const Detail::GainResult result = state.voices.SetGain(command.handle, gainFrame, command.rampFrames,
+                                                                       command.gainLeft, command.gainRight);
+                if (result.changed == 0) {
+                    state.gainsUnmatched.fetch_add(1, std::memory_order_relaxed);
+                    return;
+                }
+                state.gainsMatched.fetch_add(1, std::memory_order_relaxed);
+                if (result.late) state.gainsLate.fetch_add(1, std::memory_order_relaxed);
+                return;
             }
             // A stop maps its time like a play (Design Invariant 3), on its own line.
             const std::int64_t stopFrame =
@@ -423,12 +456,11 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
             ReleaseEnded(state);
             if (result.stopped == 0) {
                 state.stopsUnmatched.fetch_add(1, std::memory_order_relaxed);
-                continue;
+                return;
             }
             state.stopsMatched.fetch_add(1, std::memory_order_relaxed);
             if (result.late) state.stopsLate.fetch_add(1, std::memory_order_relaxed);
-        }
-        slot.head.store(head, std::memory_order_release);
+        });
     }
     state.voices.Render(interleavedOut);
     ReleaseEnded(state);
