@@ -5,6 +5,9 @@
 この文書には、設計の根と、作業の進め方だけを書く。
 詳しい設計と現況は書かない。
 
+@agents/effort-gearbox.md
+@agents/navigator.md
+
 ---
 
 ## 1. 設計の根
