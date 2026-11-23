@@ -246,12 +246,19 @@ TEST_CASE("OS wake signal ends a block by its relative timeout") {
 // round's first block at once and move it off the sweep, so such a round takes
 // it once the signaller has sent it.
 // This is the lost wakeup the fallback avoids by setting and reading its
-// pending flag under its mutex (Design Invariant 8). The spin falls back to
-// yielding, so one CPU still makes progress.
+// pending flag under its mutex (Design Invariant 8).
+// Each wait spins longer than the other thread takes to wake from its block
+// (some 10 us), so a thread yields only when the other is really not running.
+// A spin as short as that wake made the signaller yield almost every round
+// that blocked: under load on macOS each yield gave up the CPU for up to a
+// time slice and the case took tens of seconds, and on Linux the two threads
+// fell into taking turns on one CPU, so no round's check met its signal
+// (v8-arch-gyo2-os-wake-test-backoff). The spin still falls back to yielding,
+// so one CPU makes progress.
 TEST_CASE("OS wake signal loses no signal sent while the waiter checks its flag") {
     constexpr int Rounds = 20000;
     constexpr int StopAfterLost = 3;
-    constexpr int SpinsBeforeYield = 4096;
+    constexpr int SpinsBeforeYield = 65536;
     auto wake = MakeWakeSignal();
     std::atomic<bool> flag{false};
     std::atomic<int> started{-1};
