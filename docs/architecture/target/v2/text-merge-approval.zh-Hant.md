@@ -19,10 +19,10 @@
 
 | 判定 | 結果 |
 |---|---|
-| 1 通過 | 本機：text 相關 ctest 全過（`gyo_text_tests` 64 case、`gyo_text_adapter_tests`、`gyo_text_environment`、`text.adapter_guard`、`text.adapter_guard_selftest`）；全量 ctest 見第 7 節（`build.ci` 的環境因素）。L1 三平台：run 45136146149（ff52d410）linux-x64／windows-x64／macos-arm64 的 `L1 /` job 全部 success；merge `gyo2` 之後的 HEAD 再跑一次（結果補在這裡） |
+| 1 通過 | 本機：text 相關 ctest 全過（`gyo_text_tests` 64 case、`gyo_text_adapter_tests`、`gyo_text_environment`、`text.adapter_guard`、`text.adapter_guard_selftest`）；全量 ctest 見第 7 節（`build.ci` 的環境因素）。L1 三平台：run 45136146149（ff52d410）linux-x64／windows-x64／macos-arm64 的 `L1 /` job 全部 success；第 A、B 題與兩次 merge `gyo2`（含 #296、#295）之後：run 45145909517（c92c9d2f）三平台的 `L1 /` job、Quick acceptance、CI gate 全部 success |
 | 2 精確值 | 量字、原文範圍、偏移、行高的精確等式全部成立（三平台） |
 | 3 換行與字素的一致性 | `LineBreakTest.txt` 19,338 件、`GraphemeBreakTest.txt` 766 件全部通過、不跳過；兩個檔的 SHA-256 等於 unicode.org 17.0.0 的 |
-| 4 跨平台 | golden（BIZ UDPGothic 12／17／24／45 px、合成 TrueType 與 CFF 字型）在 L1 三平台 0 不一致（run 45136146149） |
+| 4 跨平台 | golden（BIZ UDPGothic 12／17／24／45 px、合成 TrueType 與 CFF 字型）在 L1 三平台 0 不一致（run 45136146149；測試字型改過之後 run 45145909517 再確認） |
 | 5 檢出力 | 突變 79／79 killed（預期的那個失敗；第 A、B 題之後完整重跑，`mutations-run7.log`）；清單交 Opus／high 敵對式檢查並補過（第 4 節） |
 | 6 建置時間（停止條件） | `harfbuzz.cc` 172.6 s（門檻 180 s）、FreeType＋HarfBuzz 208.0 s（門檻 300 s）：沒觸發，但 HarfBuzz 只差 4%；已報主會話，記在批次表後續小事（`e4d62c50`） |
 | 7 每幀成本（停止條件） | 中位數 8.94～9.11 µs（門檻 50 µs） |
@@ -32,7 +32,7 @@
 
 本批的測試都是本批新寫的，沒有改既有的判定。本批內有兩處期望值在寫好之後改過，記在這裡：
 
-- **Latin golden 的排版 digest**（`GoldenTests.cpp`）：測試字型加了「連字號＋V」的位置調整（為了驗 shaping 偏移與斷點兩側的重新 shaping），輸入變了，排版 digest 跟著變（`f1b2cb07…` → `bd284d6e…`）；點陣 digest 不變。判定（逐位元相等）沒有放寬。L1 三平台在 merge 後的 HEAD 驗。
+- **Latin golden 的排版 digest**（`GoldenTests.cpp`）：測試字型加了「連字號＋V」的位置調整（為了驗 shaping 偏移與斷點兩側的重新 shaping），輸入變了，排版 digest 跟著變（`f1b2cb07…` → `bd284d6e…`）；點陣 digest 不變。判定（逐位元相等）沒有放寬。L1 三平台在 run 45145909517 驗過。
 - **環境變數測試的圖集 digest**：測試多點陣化一個 CFF 字型，期望值改成沒有環境變數時的 digest（`5e0b19f6…`，在沒有 FreeType 變數的情形下算出）。判定沒有放寬。
 
 ## 3. Design Invariants 的最終文字
