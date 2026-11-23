@@ -32,7 +32,7 @@ SDL 總宣告（`sdl-declaration.zh-Hant.md` 修訂 21，HANDOFF `v8-arch-gyo2-s
 
 ## 檢驗
 
-- 本機（macOS Intel，Apple clang，preset `test`）：整個建置成功；`ctest -L cpu` 197/197 通過（實作完成後一次）；之後依審查與突變清單檢查改了測試與 `Product.cpp` 的小處，`gyo_kernel_tests` 410 案、`gyo_orchestration_tests` 134 案重跑全過，合併前再跑一次 `ctest -L cpu`（結果見 PR）。
+- 本機（macOS Intel，Apple clang，preset `test`）：整個建置成功；`ctest -L cpu` 197/197 通過（實作完成後一次）；之後依審查與突變清單檢查改了測試與 `Product.cpp` 的小處，`gyo_kernel_tests` 410 案、`gyo_orchestration_tests` 134 案重跑全過，merge `origin/gyo2` a3cb107e 之後（077cc127）重新 configure、全量建置、`ctest -L cpu` 197/197。合併前核准頁：[`sdl-extract-merge-approval.zh-Hant.md`](../architecture/target/v2/sdl-extract-merge-approval.zh-Hant.md)。
 - 新測試：
   - Kernel `tests/common/kernel/ExtractTests.cpp`（`kernel.others`）：XK-1 讀到來源的值（兩邊放不同值）、XK-2 來源不被動（摘要與 stamp）、XK-3 讀法（逐項 CHECK）、XK-4 run 條件讀來源、XK-5 來源接上新版本、XK-6 修剪／`KernelSettings`／`DroppedMessages` 每次一份、XK-7 D-E7 擋條件（與在 extract schedule 上不報）、XK-8 型別照來源的 Registry 查（讀者反序登記）、斷言（`GYO_CHECK_ASSERTS`）。
   - 編排層 `tests/common/orchestration/ExtractTests.cpp`（新 ctest 組 `orchestration.extract`）：每幀（含來源的「出」之後、讀者的「進」在前）、O-E9 五種、讀者沒檢查（Kernel 錯、O-E6）、被略過的 World 之後的讀者仍拿到自己的來源、`RunSchedule`、替換讀者（兩種先後、`beforeSwap`）、銷毀先後、兩個讀者與鏈、斷言四案（各自一個 TEST_CASE）。
