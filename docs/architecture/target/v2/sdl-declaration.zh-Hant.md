@@ -1,8 +1,9 @@
 # 事前宣告：SDL（第一個 Plugin 批）與 platform 的拆法（`v8-arch-gyo2-sdl`）
 
-更新：2026-11-23（修訂 12）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
+更新：2026-11-23（修訂 12；核准時一併確認的第 1 件已由使用者確認）。Owner：架構（GYO2 主會話開的任務卡 `gyo2-sdl-declaration`，`local_2cc7e494`）。**狀態：草稿，等使用者的動工前核准。這張卡只寫宣告與分批計畫，不寫實作。**
 
 **經過**：
+- **修訂 12 之後**：使用者在 side chat 確認第 14 節末「核准時一併確認的」第 1 件（拆成一組 `sdl*`）；第 2、3 件與 A' 那一句等使用者回覆。
 - **修訂 12**：修訂 9～11 送 Fable／high 窄複查：blocker 1、should 9、nit 12（`build/evidence/gyo2-sdl-declaration/declaration-r11-narrow-check.md`），全部採用，對照在第 27 節。最大的改動：Q6 分開「使用者定的」與「side chat／卡片補的」，預設不用 hb-ft、ImGui 不走 imgui_freetype（要走時是 AGENTS §6 的例外、到時交使用者）；`text` 的狀態、圖集上 GPU 的路、`ui` 量字的依賴寫明；相機的目標大小、Object_Connect 的兩件放對位置；`window`、`camera` 都不依賴別的列；第 14 節末加「核准時一併確認的」三件。
 - **修訂 11**：使用者在 side chat 定了 Q6——字型的量字、排版、點陣化用 FreeType＋HarfBuzz、放在 `text` Module，不用 SDL_ttf（第 14 節 Q6 記成已定）；`sdl_ttf` 那一列拿掉；子批 T 不再等 P。**交使用者的題目全部定了**。另依頂層目錄的決定補 KeepTool、Object_Connect 的位置（0ccc90c5）。
 - **修訂 10**：使用者在 side chat 定了 Q5——要移植的 2D 遊戲是 Object_Connect，需求併進 R2b、不另開 R2d（第 14 節 Q5 記成已定、第 6.4 節改寫）。交使用者的只剩 Q6。
@@ -656,7 +657,7 @@ v8-arch-gyo2-sdl（本宣告：統合）── Opus／high；敵對式檢查 Fab
 ### 核准時一併確認的（不另開題；修訂 12 依窄複查加）
 
 六題都已定。下面三件是卡片照 L17 判、但碰到使用者說過的話，核准本宣告時請一併看：
-1. **`plugins/sdl` 拆成一組 `sdl*`**（第 9.1 節 (二)）：改了使用者 11-13（P22）的「SDL 是一個 `sdl` plugin、內含多個後端 target；整個 repo 的 SDL 呼叫只在 `sdl` plugin」。不同意就選 (三)（改登記檔的格式，照原句）。
+1. **`plugins/sdl` 拆成一組 `sdl*`**（第 9.1 節 (二)）：改了使用者 11-13（P22）的「SDL 是一個 `sdl` plugin、內含多個後端 target；整個 repo 的 SDL 呼叫只在 `sdl` plugin」。**使用者 2026-11-23 確認（side chat）**：「第 1 件：沒問題，本身我認為也要分開。」比過 (二) 照角色拆列／(三) 保留一個 `sdl`、改登記檔格式；理由：一列放不進兩個 World（O-E3 逐 World 檢查依賴）、產品只帶要的那幾列（Match 一列都不帶、只測音訊只帶 `sdl_audio`）、和 Bevy 一致（`bevy_winit`〔含 runner，`bevy_winit/src/lib.rs:158`〕、`bevy_render`、`bevy_audio`、`bevy_gilrs` 各一個 crate／Plugin），使用者本身也認為要分開。（side chat 的附帶觀察，不是決定：Bevy 另有 `DefaultPlugins` 把這些包成一組，`bevy_internal/src/default_plugins.rs:14-83`；GYO 沒有「組」，產品逐列寫，等真的不方便時再議。）
 2. **B' 的「Module 只有資料」的讀法**（第 3.3 節）：讀成「沒有 SDL、沒有後端介面、注入、持有者型別」；輸入的中性邏輯（雙軌的算法、失焦清鍵）留在 `input` 做成函式，由 `sdl_window` 的套用 System 呼叫（同 Bevy 的 `keyboard_input_system` 在 `bevy_input`）。
 3. **Q6 的薄起步**（第 14 節 Q6）：本線的 T 可能只實作 FreeType，HarfBuzz 的 adapter 先定形；使用者定的是兩個都用。
 
