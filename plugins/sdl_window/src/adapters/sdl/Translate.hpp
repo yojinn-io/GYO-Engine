@@ -31,6 +31,15 @@ namespace GYO::Plugins::SDLWindow::Adapter {
 }
 [[nodiscard]] float LogicalPerWindowCoordinate(SDL_Window* window) noexcept;
 
+// The unit MouseMotion is written in (the Plugin's MouseMotionUnit as it reaches the adapter).
+enum class MotionUnit : std::uint8_t { Device = 1, Logical = 2 };
+// SDL's xrel, yrel in that unit: as they are, or times the logical pixels per window coordinate.
+[[nodiscard]] constexpr Engine::Math::Vec2 MotionDelta(const float xrel, const float yrel, const float logicalPerCoordinate,
+                                                       const MotionUnit unit) noexcept {
+    return unit == MotionUnit::Logical ? Engine::Math::Vec2{xrel * logicalPerCoordinate, yrel * logicalPerCoordinate}
+                                       : Engine::Math::Vec2{xrel, yrel};
+}
+
 // The unit of SDL_TextEditingEvent's start and length. SDL documents "UTF-8 characters" (code points,
 // SDL_events.h:378-380) and its Cocoa, Wayland, X11, IBus and Fcitx back ends give code points
 // (SDL_cocoakeyboard.m:145-147, SDL_waylandevents.c:3074-3077, SDL_x11keyboard.c:562-580, SDL_ibus.c:160-161,
@@ -47,9 +56,10 @@ enum class EditingUnit : std::uint8_t { CodePoint = 1, Utf16 = 2 };
 
 // The Messages event becomes (SDL-7's table); every Message carries the event's time converted with pair, no later
 // than ceiling. window is the program's window: window events of another window become nothing. editingUnit: the
-// unit of the input method's positions (EditingUnitOf the running video driver).
+// unit of the input method's positions (EditingUnitOf the running video driver). motionUnit: MouseMotion's unit.
 [[nodiscard]] Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, Engine::Time::TimePoint ceiling,
-                                   SDL_Window* window, std::size_t clipboardLimit, EditingUnit editingUnit);
+                                   SDL_Window* window, std::size_t clipboardLimit, EditingUnit editingUnit,
+                                   MotionUnit motionUnit = MotionUnit::Device);
 
 // Within one pump the times strictly increase in the order SDL delivered the events: an event's time is raised to
 // 1 ns after the one before when it is not later. SDL stamps some events with the OS's time and others when it
