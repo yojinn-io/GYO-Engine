@@ -452,6 +452,76 @@
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: logical pixels*",
    "expect": "\\[sw\\-coord\\-windows\\-150\\]"
+  },
+  {
+   "id": "sw-ime-units-as-bytes",
+   "what": "SDL's positions passed on as they are, not as bytes",
+   "guards": [
+    "input TextComposition",
+    "sdl SDL-7"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "        m.cursorByte = EditingByteOffset(m.text, event.edit.start, editingUnit);",
+   "replace": "        m.cursorByte = event.edit.start;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a text editing*",
+   "expect": "\\[sw\\-ime\\-cursor\\-bytes\\]"
+  },
+  {
+   "id": "sw-ime-selection-as-length",
+   "what": "the selection passed on in SDL units",
+   "guards": [
+    "input TextComposition",
+    "sdl SDL-7"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "            m.selectionBytes = EditingByteOffset(m.text, static_cast<std::int32_t>(end), editingUnit) - m.cursorByte;",
+   "replace": "            m.selectionBytes = event.edit.length;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a text editing*",
+   "expect": "\\[sw\\-ime\\-selection\\-bytes\\]"
+  },
+  {
+   "id": "sw-ime-length-not-given",
+   "what": "a length of -1 converted as a position",
+   "guards": [
+    "input TextComposition",
+    "sdl SDL-7"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "        if (event.edit.start >= 0 && event.edit.length >= 0) {",
+   "replace": "        if (event.edit.start >= 0) {",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a text editing*",
+   "expect": "\\[sw\\-ime\\-length\\-not\\-given\\]"
+  },
+  {
+   "id": "sw-ime-utf16-single",
+   "what": "a UTF-16 surrogate pair counted as one unit",
+   "guards": [
+    "input TextComposition",
+    "sdl SDL-7"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "const std::int32_t width = unit == EditingUnit::Utf16 && next - offset == 4 ? 2 : 1;",
+   "replace": "const std::int32_t width = 1;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the input method*",
+   "expect": "\\[sw\\-ime\\-utf16\\]"
+  },
+  {
+   "id": "sw-ime-windows-codepoints",
+   "what": "the Windows driver read as code points",
+   "guards": [
+    "input TextComposition",
+    "sdl SDL-7"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "return videoDriver != nullptr && std::string_view(videoDriver) == \"windows\" ? EditingUnit::Utf16 : EditingUnit::CodePoint;",
+   "replace": "return EditingUnit::CodePoint;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the input method*",
+   "expect": "\\[sw\\-ime\\-unit\\-windows\\]"
   }
  ]
 }

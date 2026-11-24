@@ -254,7 +254,7 @@ TEST_CASE("input: the cursor's place, and nothing once it left (told apart by ti
 
 TEST_CASE("input: the composition in progress, cleared by a later commit") {
     auto p = Make();
-    pending.composition.push_back(I::TextComposition{"にほ", 2, 0, At(1)});
+    pending.composition.push_back(I::TextComposition{"にほ", 3, 0, At(1)});
     Frame(*p);
     CHECK_MESSAGE(Res<I::TextInput>(*p).composition == "にほ", "[in-composition] the composition in progress");
     pending.committed.push_back(I::TextCommitted{"日本", At(2)});
