@@ -691,10 +691,24 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     for (const std::uint32_t index : pass.indices) {
         REQUIRE(index < pass.vertices.size());
     }
-    // The node pictures (7), the cursors (3) and the atlas's page are textures.
-    CHECK(asked.texturesLive >= 11);
-    // The menu's texts and the cursor are drawn from textures.
+    // The node pictures (nodes.csv's 3 and the maps' 4), the cursors (3) and the atlas's page are textures.
+    const OR::DrawResources& resources = *game.World().Resource<OR::DrawResources>();
+    CHECK(resources.nodeTextures.size() == 7);
+    CHECK(asked.texturesLive == 7 + 3 + resources.atlasPages.size());
+    REQUIRE_FALSE(resources.atlasPages.empty());
     CHECK(TexturedDraws(pass) >= 2);
+    // The order: the rectangles, then the texts (from the atlas), the cursor last (the original's Game::Impl::Draw).
+    REQUIRE_FALSE(pass.draws.empty());
+    CHECK(pass.draws.back().texture == resources.cursors[static_cast<std::size_t>(OC::MouseCursorIcon::Interactive)]);
+    std::size_t lastWhite = 0;
+    std::size_t firstAtlas = pass.draws.size();
+    for (std::size_t index = 0; index < pass.draws.size(); ++index) {
+        const auto texture = pass.draws[index].texture;
+        if (texture.value == 0) lastWhite = index;
+        if (texture == resources.atlasPages.front() && firstAtlas == pass.draws.size()) firstAtlas = index;
+    }
+    CHECK(lastWhite < firstAtlas);
+    CHECK(firstAtlas < pass.draws.size() - 1);
     CHECK(game.World().Resource<W::WindowRequest>()->cursorVisible == false); // the game draws its own
 
     // In the first level the board is drawn too: more vertices than the menu.
@@ -707,6 +721,14 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     for (float x = 400.0f; x <= 600.0f; x += 40.0f) game.MoveTo(x, 360.0f);
     const GYO::Engine::Render::Pass2D& playing = game.World().Resource<Asked>()->picture.passes.front();
     CHECK(playing.vertices.size() > menuVertices);
+    // stage_01's heart and brain are drawn as their pictures (not as placeholder rectangles).
+    std::size_t pictureDraws = 0;
+    for (const auto& draw : playing.draws) {
+        for (const auto& [path, id] : resources.nodeTextures) {
+            if (draw.texture == id && (path.ends_with("heart.png") || path.ends_with("brain.png"))) ++pictureDraws;
+        }
+    }
+    CHECK(pictureDraws >= 2);
 }
 
 TEST_CASE("runtime: the colours are the original's linear values encoded as its sRGB target stored them") {

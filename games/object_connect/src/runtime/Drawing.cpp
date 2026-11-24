@@ -76,9 +76,13 @@ struct GlyphQuad final {
     R::Color8 color{};
 };
 
+// The original's line height was the font's ascent minus descent plus line gap (FontSystem.cpp:774): 1.0 of the size
+// for this font (ascent 1802, descent 246, gap 0, 2048 units per em); the Engine's default 1.2 would put a Top-aligned
+// text 0.1 of its size lower.
 [[nodiscard]] TX::TextLayout LayOut(UiText& text, const std::string_view utf8, const float pixelSize) {
     const TX::FontId fonts[] = {*text.font};
-    const TX::TextSpan spans[] = {{0, static_cast<std::uint32_t>(utf8.size()), {fonts, pixelSize, {}}}};
+    const TX::TextSpan spans[] = {
+        {0, static_cast<std::uint32_t>(utf8.size()), {fonts, pixelSize, TX::LineHeight::Relative(1.0f)}}};
     const TX::ShapedText shaped = text.context.Shape(utf8, spans, {.language = "ja"});
     return text.context.Layout(shaped, {});
 }
@@ -96,12 +100,16 @@ void PaintTexts(Canvas& canvas, UiText& text, DrawResources& resources, R::Rende
         }
         const TX::TextLayout layout = LayOut(text, request.text, request.pixelSize);
         const TX::RasterResult raster = text.context.Rasterize(layout, resources.atlas);
-        float left = request.position.x;
-        if (request.alignH == TextAlignH::Center) left -= layout.width * 0.5f;
-        if (request.alignH == TextAlignH::Right) left -= layout.width;
+        // Each line is aligned by its own width (TextLayout.cpp:64-75).
+        const auto lineLeft = [&](const std::uint32_t line) {
+            const float width = line < layout.lines.size() ? layout.lines[line].width : layout.width;
+            float left = request.position.x;
+            if (request.alignH == TextAlignH::Center) left -= width * 0.5f;
+            if (request.alignH == TextAlignH::Right) left -= width;
+            return std::round(left);
+        };
         float top = request.position.y;
         if (request.alignV == TextAlignV::Middle) top -= layout.height * 0.5f;
-        left = std::round(left);
         top = std::round(top);
         const R::Color8 color = ToColor8(request.color);
         for (std::size_t index = 0; index < layout.glyphs.size() && index < raster.placements.size(); ++index) {
@@ -114,7 +122,9 @@ void PaintTexts(Canvas& canvas, UiText& text, DrawResources& resources, R::Rende
             const auto pageWidth = static_cast<float>(page.width);
             const auto pageHeight = static_cast<float>(page.height);
             const TX::AtlasRect& r = placement.rect;
-            quads.push_back({placement.page, left + std::round(glyph.x) + static_cast<float>(placement.left),
+            const float lineX = glyph.line < layout.lines.size() ? layout.lines[glyph.line].x : 0.0f;
+            quads.push_back({placement.page,
+                             lineLeft(glyph.line) + std::round(glyph.x - lineX) + static_cast<float>(placement.left),
                              top + std::round(glyph.y) - static_cast<float>(placement.top),
                              static_cast<float>(r.width), static_cast<float>(r.height),
                              {static_cast<float>(r.x) / pageWidth, static_cast<float>(r.y) / pageHeight},
@@ -159,7 +169,7 @@ void MakeTextures(DrawResources& resources, R::RenderTextures& textures, const G
                   const WA::AssetView& view) {
     const auto add = [&](const NamedFile<GYO::Engine::Image::ImageData>& file) {
         if (resources.NodeTexture(file.path)) return;
-        if (const auto* image = view.Get(file.asset); image != nullptr && image->Width() > 0) {
+        if (const auto* image = view.Get(file.asset); image != nullptr && image->Width() > 0 && image->Height() > 0) {
             resources.nodeTextures.emplace_back(file.path, MakeTexture(textures, *image));
         }
     };
@@ -174,7 +184,8 @@ void MakeTextures(DrawResources& resources, R::RenderTextures& textures, const G
         }
     }
     for (std::size_t index = 0; index < content.cursors.size(); ++index) {
-        if (const auto* image = view.Get(content.cursors[index]); image != nullptr && image->Width() > 0) {
+        if (const auto* image = view.Get(content.cursors[index]);
+            image != nullptr && image->Width() > 0 && image->Height() > 0) {
             resources.cursors[index] = MakeTexture(textures, *image);
         }
     }

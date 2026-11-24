@@ -28,8 +28,10 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "plugins/sdl_audio/AudioOutput.hpp"
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
+#include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
 #include <charconv>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -172,6 +174,12 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     window.hidden = hidden;
     description.options.Set(window);
 
+    // Presenting waits for the display; a minimized window gives no picture and does not wait, so a small floor
+    // keeps the loop from spinning then.
+    GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
+    sdl.minFrameInterval = std::chrono::milliseconds(4);
+    description.options.Set(sdl);
+
     WA::AssetOptions assets;
     assets.contentRoot = contentRoot;
     assets.executor = &executor;
@@ -245,13 +253,26 @@ int main(int argc, char** argv) {
             LogInfo("drawing on the " + gpu->DriverName() + " GPU driver");
         }
         exit = product->Run();
-        // What did not draw is told, not fatal (sdl_gpu): one line when frames or draws failed.
-        if (gpu != nullptr && (gpu->FramesFailed() > 0 || gpu->SkippedDraws() > 0 || gpu->RefusedTextureAsks() > 0)) {
+        // What did not draw is told, not fatal (sdl_gpu): one line when frames or draws failed. A run with --frames
+        // (the tests) fails then, and when no frame reached the window at all.
+        const bool drawingFailed =
+            gpu != nullptr && (gpu->FramesFailed() > 0 || gpu->SkippedDraws() > 0 || gpu->RefusedTextureAsks() > 0);
+        if (drawingFailed) {
             ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Warning, GYO_GAME_ID,
                                      "drawing: " + std::to_string(gpu->FramesFailed()) + " frames failed, " +
                                          std::to_string(gpu->SkippedDraws()) + " draws skipped, " +
                                          std::to_string(gpu->RefusedTextureAsks()) + " textures refused; last: " +
                                          gpu->LastFailure());
+        }
+        if (frames > 0 && exit.code != O::RunnerExitCode::Failure) {
+            if (gpu == nullptr || gpu->FramesShown() == 0) {
+                LogError("no frame was shown (" + std::to_string(gpu != nullptr ? gpu->FramesSkipped() : 0) +
+                         " skipped)");
+                return 1;
+            }
+            if (drawingFailed) {
+                return 1;
+            }
         }
     }
     if (exit.code == O::RunnerExitCode::Failure) {
