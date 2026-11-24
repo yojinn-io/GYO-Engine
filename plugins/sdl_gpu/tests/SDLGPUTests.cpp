@@ -1,5 +1,6 @@
 // sdl_gpu without a GPU (docs/architecture/target/v2/sdl.zh-Hant.md, "sdl_gpu"): the startup error without a window
-// and the embedded shaders against render's shader ABI (RD-4). Tags "[sg-...]" are the mutants' expectations.
+// and the embedded shaders against render's shader ABI (RD-4). Tags "[sg-...]" and "[g3-...]" are the mutants'
+// expectations.
 #include <doctest/doctest.h>
 
 #include <memory>
@@ -75,6 +76,30 @@ TEST_CASE("sdl_gpu shaders: the 2D pass's shaders use what render's ABI says, in
             CHECK_MESSAGE(!compiled.code.empty(), "[sg-compiled-code] each format has code");
             CHECK_MESSAGE(compiled.entryPoint == (compiled.format == G::ShaderFormat::Metallib ? "main0" : "main"),
                           "[sg-entry] the entry point of the format (SPIRV-Cross renames main in Metal)");
+        }
+    }
+}
+
+TEST_CASE("sdl_gpu shaders: the 3D pass's shaders use what render's ABI says, in every embedded format") {
+    const G::EmbeddedShader* vertex = G::FindEmbeddedShader("mesh3d.vert");
+    const G::EmbeddedShader* fragment = G::FindEmbeddedShader("mesh3d.frag");
+    REQUIRE_MESSAGE(vertex != nullptr, "[g3-abi-embedded] the 3D vertex shader is embedded");
+    REQUIRE_MESSAGE(fragment != nullptr, "[g3-abi-embedded] the 3D fragment shader is embedded");
+    CHECK_MESSAGE(vertex->stage == G::ShaderStage::Vertex, "[g3-abi-vertex-stage] the vertex shader is a vertex stage");
+    CHECK_MESSAGE(fragment->stage == G::ShaderStage::Fragment, "[g3-abi-fragment-stage] the fragment shader is a fragment stage");
+    CHECK_MESSAGE(vertex->resources.uniformBuffers == Abi::kMesh3DVertexUniformBuffers, "[g3-abi-vertex-uniforms] one vertex uniform buffer");
+    CHECK_MESSAGE(vertex->resources.samplers == Abi::kMesh3DVertexSamplers, "[g3-abi-vertex-samplers] no vertex sampler");
+    CHECK_MESSAGE(fragment->resources.samplers == Abi::kMesh3DFragmentSamplers, "[g3-abi-fragment-samplers] one fragment sampler");
+    CHECK_MESSAGE(fragment->resources.uniformBuffers == Abi::kMesh3DFragmentUniformBuffers,
+                  "[g3-abi-fragment-uniforms] one fragment uniform buffer (the colour)");
+    for (const G::EmbeddedShader* shader : {vertex, fragment}) {
+        CHECK_MESSAGE(shader->resources.storageTextures == 0, "[g3-abi-no-storage] no storage textures");
+        CHECK_MESSAGE(shader->resources.storageBuffers == 0, "[g3-abi-no-storage] no storage buffers");
+        REQUIRE_MESSAGE(!shader->compiled.empty(), "[g3-abi-compiled] at least one format is embedded");
+        for (const G::CompiledShader& compiled : shader->compiled) {
+            CHECK_MESSAGE(!compiled.code.empty(), "[g3-abi-compiled-code] each format has code");
+            CHECK_MESSAGE(compiled.entryPoint == (compiled.format == G::ShaderFormat::Metallib ? "main0" : "main"),
+                          "[g3-abi-entry] the entry point of the format (SPIRV-Cross renames main in Metal)");
         }
     }
 }

@@ -1,5 +1,8 @@
 #include "engine/model/FbxLoader.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -18,16 +21,21 @@ Base::Err<Failure> Fail(const FbxLoaderCode code, const char* message, const Ass
 
 Base::Err<Failure> BadSettings(const std::string& detail) {
     return Base::Err(
-        Failure::Make(FbxLoaderCode::BadSettings, "the settings of an fbx model are {\"meshes\": true | false}", detail));
+        Failure::Make(FbxLoaderCode::BadSettings, "the settings of an fbx model are {\"meshes\": true | false, \"textures\": true | false}",
+                      detail));
 }
 
-FbxLoaderCode CodeOf(const Detail::ImportProblem problem) noexcept {
-    switch (problem) {
-    case Detail::ImportProblem::NotFbx: return FbxLoaderCode::NotFbx;
-    case Detail::ImportProblem::Undecodable: return FbxLoaderCode::Undecodable;
-    case Detail::ImportProblem::Unsupported: return FbxLoaderCode::Unsupported;
-    }
-    return FbxLoaderCode::Undecodable;
+// What ufbx may allocate for one file, for its work and for the scene each:
+// at least 256 MiB, and 8 times the entry's byte limit, so a product that
+// raises the limit for a larger file raises this with it.
+constexpr std::size_t kMinMemoryLimit = std::size_t{256} * 1024u * 1024u;
+constexpr std::size_t kMemoryPerFileByte = 8;
+
+std::size_t MemoryLimit(const std::size_t maxBytes) noexcept {
+    const std::size_t scaled = maxBytes > std::numeric_limits<std::size_t>::max() / kMemoryPerFileByte
+                                   ? std::numeric_limits<std::size_t>::max()
+                                   : maxBytes * kMemoryPerFileByte;
+    return std::max(kMinMemoryLimit, scaled);
 }
 
 } // namespace
@@ -41,10 +49,17 @@ Base::Result<FbxSettings, Asset::LoaderFailure<FbxLoaderCode>> FbxLoader::ParseS
     const auto object = document->Root().AsObject();
     if (!object) return BadSettings("not an object");
     for (const Json::Member member : *object) {
-        if (member.key != "meshes") return BadSettings("unknown member \"" + std::string(member.key) + "\"");
+        bool* target = nullptr;
+        if (member.key == "meshes") {
+            target = &settings.meshes;
+        } else if (member.key == "textures") {
+            target = &settings.textures;
+        } else {
+            return BadSettings("unknown member \"" + std::string(member.key) + "\"");
+        }
         const auto value = member.value.AsBool();
-        if (!value) return BadSettings("meshes is not true or false");
-        settings.meshes = *value;
+        if (!value) return BadSettings(std::string(member.key) + " is not true or false");
+        *target = *value;
     }
     return settings;
 }
@@ -53,16 +68,26 @@ Base::Result<ModelData, Asset::LoaderFailure<FbxLoaderCode>> FbxLoader::Load(con
                                                                             const FbxSettings& settings,
                                                                             Asset::LoadContext& context) const {
     // 1 to 3
-    auto imported = Detail::ImportFbx(bytes, Detail::ImportOptions{settings.meshes, kBakeRate});
+    auto imported =
+        Detail::ImportFbx(bytes, Detail::ImportOptions{settings.meshes, kBakeRate, MemoryLimit(context.MaxBytes())});
     if (!imported) {
         const Detail::ImportFailure& failure = imported.error();
-        return Fail(CodeOf(failure.code), failure.message.c_str(), context, failure.detail);
+        return Fail(failure.code, failure.message.c_str(), context, failure.detail);
     }
     // 4
     if (auto valid = Validate(*imported); !valid) {
         return Fail(FbxLoaderCode::BadData, "the file's content breaks a rule of model data", context,
                     std::string(ToString(valid.error().code)) + ": " + valid.error().message + " (" +
                         valid.error().detail + ")");
+    }
+    // The textures, as references to images by path from the model's file
+    // (asset 5.17): a path no catalog entry has is the dependency's failure,
+    // not the model's.
+    if (settings.textures) {
+        for (Material& material : imported->materials) {
+            if (material.baseColorTexture.empty()) continue;
+            material.baseColorImage = context.ReferencePath<Image::ImageData>(material.baseColorTexture);
+        }
     }
     return std::move(*imported);
 }

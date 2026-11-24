@@ -30,6 +30,25 @@ void ClampAxis(std::int32_t& position, std::int32_t& size, const std::int32_t ta
     }
 }
 
+// The largest rectangle of this aspect (width / height) centred in viewport, in whole pixels: the side that fits is
+// kept, the other is rounded to the nearest pixel; the bars split the rest, the extra pixel of an odd rest on the
+// right or bottom.
+void FitAspect(Viewport& viewport, const double aspect) {
+    const double width = viewport.size.x;
+    const double height = viewport.size.y;
+    if (width <= 0.0 || height <= 0.0) return;
+    std::int32_t fitWidth = viewport.size.x;
+    std::int32_t fitHeight = viewport.size.y;
+    if (width > height * aspect) {
+        fitWidth = std::clamp(static_cast<std::int32_t>(std::lround(height * aspect)), 1, viewport.size.x);
+    } else {
+        fitHeight = std::clamp(static_cast<std::int32_t>(std::lround(width / aspect)), 1, viewport.size.y);
+    }
+    viewport.position.x += (viewport.size.x - fitWidth) / 2;
+    viewport.position.y += (viewport.size.y - fitHeight) / 2;
+    viewport.size = {fitWidth, fitHeight};
+}
+
 Math::Matrix4 ProjectionMatrix(const Projection& projection, const float logicalWidth, const float logicalHeight) {
     if (const auto* perspective = std::get_if<PerspectiveProjection>(&projection)) {
         return Math::MakePerspective(perspective->verticalFov, logicalWidth / logicalHeight, perspective->nearClip,
@@ -111,7 +130,7 @@ const TargetSize* CameraTargetSizes::Find(const CameraTarget target) const {
     return at != sizes_.end() && at->first == target.id ? &at->second : nullptr;
 }
 
-ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size) {
+ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size, const Letterbox* letterbox) {
     ComputedCamera out;
     if (size == nullptr) return out;
     out.targetPhysicalSize = size->physicalSize;
@@ -119,6 +138,14 @@ ComputedCamera Compute(const Camera& camera, const Projection& projection, const
     Viewport viewport = camera.viewport.value_or(Viewport{{0, 0}, size->physicalSize, 0.0F, 1.0F});
     ClampAxis(viewport.position.x, viewport.size.x, size->physicalSize.x);
     ClampAxis(viewport.position.y, viewport.size.y, size->physicalSize.y);
+    if (letterbox != nullptr) {
+        if (!(std::isfinite(letterbox->width) && std::isfinite(letterbox->height) && letterbox->width > 0.0F &&
+              letterbox->height > 0.0F)) {
+            out.viewport = viewport;
+            return out;
+        }
+        FitAspect(viewport, static_cast<double>(letterbox->width) / letterbox->height);
+    }
     out.viewport = viewport;
     if (viewport.size.x <= 0 || viewport.size.y <= 0 || !(size->scaleFactor > 0.0F)) return out;
     const float logicalWidth = static_cast<float>(viewport.size.x) / size->scaleFactor;

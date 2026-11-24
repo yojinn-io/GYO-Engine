@@ -301,6 +301,49 @@ TEST_CASE("camera: with a letterbox viewport the window position includes the vi
     CHECK_MESSAGE((Near(back->x, 0.0F) && Near(back->y, 80.0F)), "[cm-viewport-offset] back " << back->x << ", " << back->y);
 }
 
+TEST_CASE("camera: Letterbox cuts the viewport to its aspect, centred, and the conversions follow it") {
+    const C::Letterbox box{1280.0F, 720.0F};
+    // A 2560 x 1600 window (16:10): bars of 80 pixels above and below.
+    const C::TargetSize tall = Size(2560, 1600);
+    const C::ComputedCamera computed = C::Compute(C::Camera{}, Ortho(C::ScalingFixed{1280, 720}), &tall, &box);
+    CHECK_MESSAGE((computed.valid && computed.viewport.position.x == 0 && computed.viewport.position.y == 80 &&
+                   computed.viewport.size.x == 2560 && computed.viewport.size.y == 1440),
+                  "[cm-letterbox-bars] " << computed.viewport.position.x << "," << computed.viewport.position.y << " "
+                                         << computed.viewport.size.x << "x" << computed.viewport.size.y);
+    CHECK_MESSAGE(SameMatrix(computed.clipFromView, ExpectedOrtho(-640, 640, -360, 360)), "[cm-letterbox-projection]");
+    auto corner = C::ViewportToWorld2d(computed, At({}), {2560.0F, 1520.0F});
+    REQUIRE(static_cast<bool>(corner));
+    CHECK_MESSAGE((Near(corner->x, 640.0F) && Near(corner->y, -360.0F)), "[cm-letterbox-convert] " << corner->x << ", " << corner->y);
+    // A 2001 x 720 window (wider): bars left and right, the odd pixel on the right.
+    const C::TargetSize wide = Size(2001, 720);
+    const C::ComputedCamera pillar = C::Compute(C::Camera{}, Ortho(C::ScalingFixed{1280, 720}), &wide, &box);
+    CHECK_MESSAGE((pillar.viewport.position.x == 360 && pillar.viewport.position.y == 0 && pillar.viewport.size.x == 1280 &&
+                   pillar.viewport.size.y == 720),
+                  "[cm-letterbox-pillar] " << pillar.viewport.position.x << " " << pillar.viewport.size.x);
+    // Inside the author's viewport, not the whole target.
+    C::Camera inViewport;
+    inViewport.viewport = C::Viewport{{100, 0}, {1600, 1600}};
+    const C::ComputedCamera nested = C::Compute(inViewport, Ortho(C::ScalingFixed{1280, 720}), &tall, &box);
+    CHECK_MESSAGE((nested.viewport.position.x == 100 && nested.viewport.position.y == 350 && nested.viewport.size.x == 1600 &&
+                   nested.viewport.size.y == 900),
+                  "[cm-letterbox-in-viewport] " << nested.viewport.position.y << " " << nested.viewport.size.y);
+    CHECK_MESSAGE((inViewport.viewport->position.y == 0), "the author's viewport is not changed");
+    const C::Letterbox broken{0.0F, 720.0F};
+    CHECK_MESSAGE(!C::Compute(C::Camera{}, Ortho(), &tall, &broken).valid, "[cm-letterbox-invalid] a zero width must leave the camera not valid");
+}
+
+TEST_CASE("camera: UpdateCameras uses a camera's Letterbox") {
+    auto p = Make([](O::WorldSetup& s) { s.Registrar().AddSystem<&Spawn2d>(In("Spawn2d", "Main", "Update")); });
+    Frames(*p);
+    const K::EntityId id = WorldOf(*p).Keys<C::Camera2d>().at(0);
+    WorldOf(*p).Insert(id, C::Letterbox{4.0F, 3.0F});
+    WorldOf(*p).ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, Size(1600, 900));
+    Frames(*p);
+    const C::ComputedCamera& computed = *WorldOf(*p).Get<C::ComputedCamera>(id);
+    CHECK_MESSAGE((computed.viewport.position.x == 200 && computed.viewport.size.x == 1200 && computed.viewport.size.y == 900),
+                  "[cm-letterbox-system] " << computed.viewport.position.x << " " << computed.viewport.size.x);
+}
+
 TEST_CASE("camera: WorldToViewport and ViewportToWorld go there and back, perspective and orthographic") {
     const C::TargetSize size = Size(1280, 720);
     {
@@ -493,4 +536,10 @@ TEST_CASE("camera: the summary hashes the author's settings and nothing of Compu
     WorldOf(*b).Insert(1, C::CameraTarget{});
     WorldOf(*b).Insert(1, Ortho(C::ScalingFixed{2.0F, 3.0F}));
     CHECK_MESSAGE(text(*a) != text(*b), "[cm-hash-settings] OrthographicProjection");
+    WorldOf(*b).Insert(1, Ortho());
+    WorldOf(*a).Insert(1, C::CameraTarget{});
+    REQUIRE(text(*a) == text(*b));
+    WorldOf(*a).Insert(1, C::Letterbox{16.0F, 9.0F});
+    WorldOf(*b).Insert(1, C::Letterbox{4.0F, 3.0F});
+    CHECK_MESSAGE(text(*a) != text(*b), "[cm-hash-settings] Letterbox");
 }

@@ -57,15 +57,7 @@ Base::Result<void, Failure> CheckKeys(const Keys<T>& keys, const float duration,
     return {};
 }
 
-Base::Result<void, Failure> CheckSkin(const Mesh& mesh, const std::size_t nodeCount, const std::string& where) {
-    const Skin& skin = mesh.skin;
-    const std::size_t vertexCount = mesh.positions.size();
-    if (skin.Empty()) {
-        if (!skin.inverseBindMatrices.empty() || !skin.vertexJoints.empty() || !skin.vertexWeights.empty()) {
-            return Fail(ModelDataCode::BadSkin, "a mesh without skin joints has no skin data", where);
-        }
-        return {};
-    }
+Base::Result<void, Failure> CheckSkin(const Skin& skin, const std::size_t nodeCount, const std::string& where) {
     for (const std::uint32_t joint : skin.joints) {
         if (joint >= nodeCount) {
             return Fail(ModelDataCode::BadSkin, "a skin joint is a node", where + " joint node " + std::to_string(joint));
@@ -77,19 +69,33 @@ Base::Result<void, Failure> CheckSkin(const Mesh& mesh, const std::size_t nodeCo
     if (!AllFinite(skin.inverseBindMatrices)) {
         return Fail(ModelDataCode::BadSkin, "inverse bind matrices are finite", where);
     }
-    if (skin.vertexJoints.size() != vertexCount || skin.vertexWeights.size() != vertexCount) {
-        return Fail(ModelDataCode::BadSkin, "a skin has joints and weights for every vertex", where);
+    return {};
+}
+
+// The per-vertex skinning of a mesh whose own rules hold.
+Base::Result<void, Failure> CheckMeshSkin(const Mesh& mesh, const std::vector<Skin>& skins, const std::string& where) {
+    const std::size_t vertexCount = mesh.positions.size();
+    if (mesh.skin == kNoSkin) {
+        if (!mesh.vertexJoints.empty() || !mesh.vertexWeights.empty()) {
+            return Fail(ModelDataCode::BadSkin, "a mesh without a skin has no joints or weights", where);
+        }
+        return {};
+    }
+    if (mesh.skin >= skins.size()) return Fail(ModelDataCode::BadSkin, "a mesh's skin is a skin of the model", where);
+    const std::size_t jointCount = skins[mesh.skin].joints.size();
+    if (mesh.vertexJoints.size() != vertexCount || mesh.vertexWeights.size() != vertexCount) {
+        return Fail(ModelDataCode::BadSkin, "a skinned mesh has joints and weights for every vertex", where);
     }
     for (std::size_t v = 0; v < vertexCount; ++v) {
         float sum = 0.0F;
         bool allZero = true;
         for (std::size_t k = 0; k < 4; ++k) {
-            const float w = skin.vertexWeights[v][k];
+            const float w = mesh.vertexWeights[v][k];
             if (!Finite(w) || w < 0.0F) {
                 return Fail(ModelDataCode::BadSkin, "a weight is finite and not negative",
                             where + " vertex " + std::to_string(v));
             }
-            if (skin.vertexJoints[v][k] >= skin.joints.size()) {
+            if (mesh.vertexJoints[v][k] >= jointCount) {
                 return Fail(ModelDataCode::BadSkin, "a vertex names joints of its skin",
                             where + " vertex " + std::to_string(v));
             }
@@ -158,6 +164,10 @@ Base::Result<void, ModelDataFailure> Validate(const ModelData& model) {
                         "node " + std::to_string(i) + " \"" + node.name + "\"");
         }
     }
+    // 3 for the skins
+    for (std::size_t k = 0; k < model.skins.size(); ++k) {
+        if (auto r = CheckSkin(model.skins[k], nodeCount, "skin " + std::to_string(k)); !r) return r;
+    }
     // 2, then 3 for the same mesh
     for (std::size_t m = 0; m < model.meshes.size(); ++m) {
         const Mesh& mesh = model.meshes[m];
@@ -179,7 +189,7 @@ Base::Result<void, ModelDataFailure> Validate(const ModelData& model) {
         if (!AllFinite(mesh.positions) || !AllFinite(mesh.normals) || !AllFinite(mesh.uvs)) {
             return Fail(ModelDataCode::BadMesh, "a mesh's vertex values are finite", where);
         }
-        if (auto r = CheckSkin(mesh, nodeCount, where); !r) return r;
+        if (auto r = CheckMeshSkin(mesh, model.skins, where); !r) return r;
     }
     // 4
     for (const AnimationClip& clip : model.clips) {

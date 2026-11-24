@@ -2,7 +2,7 @@
 // sdl_gpu's adapter draws RenderCommands on an 8 by 8 picture and reads it back (GPUDevice::Capture, the same drawing
 // as on the window); each pixel is compared with its exact colour (master pitfall 18: compare the colour, not "something
 // was drawn"). Only a blend of a translucent colour may differ by one step (the GPU's rounding). The frames case runs
-// the Plugin in a Product on a hidden window. Tags "[gp-...]" are the mutants' expectations.
+// the Plugin in a Product on a shown window (at least one frame must reach it). Tags "[gp-...]" are the mutants' expectations.
 #include <doctest/doctest.h>
 
 #include <cstdint>
@@ -15,12 +15,16 @@
 #include <utility>
 #include <vector>
 
+#include "engine/camera/Camera.hpp"
 #include "engine/input/InputModule.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Compose.hpp"
+#include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
+#include "engine/transform/Transform.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
@@ -102,7 +106,7 @@ struct Picture {
 Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* textures = nullptr) {
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
-    auto captured = Device().Capture(asks, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);
@@ -258,6 +262,70 @@ TEST_CASE("sdl_gpu pass2d: a view is stretched over the target; later passes kee
     CHECK_MESSAGE(p.tally.unmappedPasses == 1, "[gp-unmapped] a pass on a target with no picture is counted, not drawn");
 }
 
+TEST_CASE("sdl_gpu pass2d: a viewport takes the view; the clear covers the whole target (letterbox bars)") {
+    R::RenderCommands commands;
+    R::Pass2D pass = Cleared(R::Color8{0, 0, 0, 255});
+    pass.viewport = R::PixelRect{0, 2, 8, 4};  // a 2:1 picture in an 8 by 8 target: bars of 2 rows above and below
+    pass.view = Rect{0, 0, 4, 2};              // one view unit is two pixels of the viewport
+    Quad(pass, Rect{0, 0, 4, 2}, kRed);        // fills the view
+    // View y 0.5 to 1 is row 3 of the target only when the view is stretched over the viewport (over the whole
+    // target it would be rows 2 and 3).
+    Quad(pass, Rect{0, 0.5F, 1, 0.5F}, kYellow);
+    // A clip of view y 0.5 to 1 on the viewport is row 3 only (on the whole target, rows 2 and 3).
+    Quad(pass, Rect{2, 0, 2, 2}, kGreen, {}, R::BlendMode::Alpha, Rect{3, 0.5F, 1, 0.5F});
+    commands.passes.push_back(std::move(pass));
+    const Picture p = Draw(commands);
+    CHECK_MESSAGE(p.All(0, 0, 8, 2, R::Color8{0, 0, 0, 255}), "[gp-viewport-bar-top] above the viewport: the clear colour");
+    CHECK_MESSAGE(p.All(0, 6, 8, 8, R::Color8{0, 0, 0, 255}), "[gp-viewport-bar-bottom] below the viewport: the clear colour");
+    CHECK_MESSAGE(p.All(0, 2, 6, 3, kRed), "[gp-viewport-fill] the viewport's first row is the view's top");
+    CHECK_MESSAGE(p.All(6, 2, 8, 3, kRed), "[gp-viewport-clip-above] the clip lets nothing through above view y 0.5");
+    CHECK_MESSAGE(p.All(0, 3, 2, 4, kYellow), "[gp-viewport-fill] view y 0.5 is row 3");
+    CHECK_MESSAGE(p.All(6, 3, 8, 4, kGreen), "[gp-viewport-clip] a clip is measured in the viewport");
+    CHECK_MESSAGE(p.All(2, 3, 6, 4, kRed), "[gp-viewport-clip-rest] outside the clip the draw below");
+    CHECK_MESSAGE(p.All(0, 4, 8, 6, kRed), "[gp-viewport-rest] the rest of the viewport");
+}
+
+TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end to end") {
+    // A 2D camera showing 4 x 2 world units in the 8 x 8 picture: viewport (0, 2) 8 x 4, two pixels a unit.
+    namespace Cam = GYO::Engine::Camera;
+    Cam::OrthographicProjection o = Cam::OrthographicProjection::Default2d();
+    o.scalingMode = Cam::ScalingFixed{4.0F, 2.0F};
+    const Cam::TargetSize size{{8, 8}, 1.0F};
+    const Cam::Letterbox box{4.0F, 2.0F};
+    R::ExtractedCamera camera;
+    camera.computed = Cam::Compute(Cam::Camera{}, Cam::Projection{o}, &size, &box);
+    camera.is2d = true;
+    camera.clear = R::Color8{0, 0, 0, 255};
+    // A red square over world x -2..0 (z 0) and a green one over -0.5..1.5 (z 1, in front), y up.
+    const auto item = [](std::uint64_t entity, float x, float z, R::Color8 colour) {
+        R::Extracted2dItem i;
+        i.entity = entity;
+        GYO::Engine::Transform::Transform t;
+        t.translation = {x, 0.0F, z};
+        i.world = GYO::Engine::Transform::ToMatrix(t);
+        i.vertices = {{{-1, 1}, {}, colour}, {{1, 1}, {}, colour}, {{1, -1}, {}, colour}, {{-1, -1}, {}, colour}};
+        i.indices = {0, 1, 2, 0, 2, 3};
+        return i;
+    };
+    const std::vector<R::Extracted2dItem> items{item(2, 0.5F, 1.0F, kGreen), item(1, -1.0F, 0.0F, kRed)};
+    std::optional<R::Pass2D> pass = R::Queue2d(camera, items);
+    REQUIRE(pass.has_value());
+    // As camera_render composes a frame: the camera's clear, then its pass.
+    R::ExtractedCameras cameras;
+    cameras.cameras.push_back(camera);
+    R::CameraPasses slots;
+    slots.byCamera.resize(1);
+    slots.byCamera[0].push_back(std::move(*pass));
+    R::RenderCommands commands;
+    R::ComposePasses(cameras, slots, commands);
+    const Picture p = Draw(commands);
+    CHECK_MESSAGE(p.All(0, 0, 8, 2, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-top] the bar above");
+    CHECK_MESSAGE(p.All(0, 6, 8, 8, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-bottom] the bar below");
+    CHECK_MESSAGE(p.All(0, 2, 3, 6, kRed), "[gp-pipe-red] world x -2..-0.5 is pixels 0..3");
+    CHECK_MESSAGE(p.All(3, 2, 7, 6, kGreen), "[gp-pipe-green] the nearer square over the farther one");
+    CHECK_MESSAGE(p.All(7, 2, 8, 6, R::Color8{0, 0, 0, 255}), "[gp-pipe-rest] nothing past x 1.5");
+}
+
 namespace {
 
 int frameProduced = 0;
@@ -304,7 +372,9 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     GYO::Engine::Window::WindowSettings settings;
     settings.title = "sdl_gpu test";
     settings.size = {64, 48};
-    settings.hidden = true;
+    // Shown: a hidden window gives no picture (every frame skipped, which is not an error), and this case checks
+    // that frames reach the window (Xvfb on L1, a desktop elsewhere).
+    settings.hidden = false;
     d.options.Set(settings);
     GYO::Plugins::SDLWindow::SDLWindowOptions windowOptions;
     windowOptions.installRunner = false;
@@ -328,11 +398,18 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     const G::SDLGPUStatus* status = product.Buffer().Find<G::SDLGPUStatus>();
     REQUIRE(status != nullptr);
     MESSAGE("GPU driver: " << status->DriverName());
-    constexpr int kFrames = 4;
-    for (int i = 0; i < kFrames; ++i) {
+    // The window shows up a few frames after it is made (the display maps it): frames until one is shown, at most 120,
+    // pumping the OS events as a runner does.
+    GYO::Plugins::SDLWindow::SDLWindowPump* pump = product.Buffer().Find<GYO::Plugins::SDLWindow::SDLWindowPump>();
+    REQUIRE(pump != nullptr);
+    int kFrames = 0;
+    while (kFrames < 4 || (status->FramesShown() == 0 && kFrames < 120)) {
+        pump->Pump();
         auto ran = product.RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message));
+        ++kFrames;
     }
+    CHECK_MESSAGE(status->FramesShown() >= 1, "[gp-frames-shown] a frame reached the window (" << status->FramesSkipped() << " skipped)");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-frames-none-failed] no frame failed: " << status->LastFailure());
     CHECK_MESSAGE(status->FramesShown() + status->FramesSkipped() == kFrames, "[gp-frames-each] each frame is shown or skipped");
     CHECK_MESSAGE(status->RefusedTextureAsks() == 0, "[gp-frames-asks] the texture ask was applied");
@@ -357,8 +434,8 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
 
 // The frame-time budget declared in render.zh-Hant.md section 2 (batch R2a): measured, not judged (the GPU and the
 // driver decide it; Lavapipe is far slower than any player's GPU). It prints the mean of Capture (asks, uploads, the
-// pass and the read back, waiting for the GPU) of an Object_Connect-sized frame: 1280 by 720, 2,000 quads, one pass.
-TEST_CASE("sdl_gpu budget: an Object_Connect-sized 2D frame") {
+// pass and the read back, waiting for the GPU) of a frame of a common 2D game: 1280 by 720, 2,000 quads, one pass.
+TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     R::RenderCommands commands;
     R::Pass2D pass = Cleared(kBlue);
     pass.view = Rect{0, 0, 1280, 720};
@@ -373,13 +450,47 @@ TEST_CASE("sdl_gpu budget: an Object_Connect-sized 2D frame") {
     REQUIRE(static_cast<bool>(made));
     G::GPUDevice& device = **made;
     G::FrameTally tally;
-    static_cast<void>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally));
+    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally));
     constexpr int kRuns = 20;
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally)));
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally)));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
+
+    // The same frame through the 2D pipeline (render.zh-Hant.md section 7.5): 2,000 extracted items, one camera,
+    // Queue2d (sorting, the vertices through the camera, batching) and then Capture.
+    namespace Cam = GYO::Engine::Camera;
+    Cam::OrthographicProjection o = Cam::OrthographicProjection::Default2d();
+    o.scalingMode = Cam::ScalingFixed{1280.0F, 720.0F};
+    const Cam::TargetSize size{{1280, 720}, 1.0F};
+    R::ExtractedCamera camera;
+    camera.computed = Cam::Compute(Cam::Camera{}, Cam::Projection{o}, &size);
+    camera.is2d = true;
+    camera.clear = kBlue;
+    std::vector<R::Extracted2dItem> items(2000);
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        GYO::Engine::Transform::Transform t;
+        t.translation = {static_cast<float>((i * 37) % 1240) - 620.0F, static_cast<float>((i * 53) % 680) - 340.0F,
+                         static_cast<float>(i % 7)};
+        items[i].entity = i + 1;
+        items[i].world = GYO::Engine::Transform::ToMatrix(t);
+        const R::Color8 c{255, 0, 0, 128};
+        items[i].vertices = {{{-20, 20}, {}, c}, {{20, 20}, {}, c}, {{20, -20}, {}, c}, {{-20, -20}, {}, c}};
+        items[i].indices = {0, 1, 2, 0, 2, 3};
+    }
+    const auto pipeStart = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRuns; ++i) {
+        std::optional<R::Pass2D> queued = R::Queue2d(camera, items);
+        REQUIRE(queued.has_value());
+        R::RenderCommands piped;
+        piped.passes.push_back(std::move(*queued));
+        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally)));
+    }
+    const double pipeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pipeStart).count() / kRuns;
+    MESSAGE("[gp-budget-pipeline] driver " << device.DriverName() << ": " << pipeMs
+                                           << " ms a frame through Queue2d (budget 8 ms, render.zh-Hant.md section 7.5)");
+    CHECK(pipeMs > 0.0);
 }
 
 } // namespace GYO::Plugins::SDLGPU

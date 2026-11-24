@@ -9,9 +9,11 @@
 #include <string_view>
 #include <vector>
 
+#include "engine/asset/AssetRef.hpp"
 #include "engine/asset/AssetTypeName.hpp"
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
+#include "engine/image/ImageData.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec2.hpp"
@@ -57,38 +59,43 @@ struct Node final {
     LocalTransform rest{};
 };
 
-// A material is data a renderer reads; textures are named, never decoded.
+// A material is data a renderer reads. Textures are never read or decoded
+// here: the loader declares each one as a reference, and the asset store
+// loads it as an image (asset decision 11: the Engine infers the
+// dependencies).
 struct Material final {
     std::string name;
     // Linear RGB with straight alpha; white when the file gives none.
     std::array<float, 4> baseColor{1.0F, 1.0F, 1.0F, 1.0F};
     // The base colour texture's file name as written in the file (relative
-    // when the file has a relative one); empty when there is none. A product
-    // maps it, or the material's name, to a catalog id.
+    // when the file has a relative one); empty when there is none.
     std::string baseColorTexture;
+    // The image the loader declared for that file name, by path relative to
+    // the model's file: its id once the store maps the path to a catalog
+    // entry; an empty id when the loader declared none (no texture, or the
+    // entry's settings turn textures off) or the path maps to no entry.
+    Asset::AssetRef<Image::ImageData> baseColorImage;
 
     [[nodiscard]] friend bool operator==(const Material&, const Material&) = default;
 };
 
-// Linear blend skinning data of one mesh (as Bevy's SkinnedMesh with its
-// inverse bindposes and the joint index and weight attributes).
+inline constexpr std::uint32_t kNoSkin = std::numeric_limits<std::uint32_t>::max();
+
+// What a skin shares across the meshes it moves (as Bevy's GltfSkin and the
+// SkinnedMeshInverseBindposes every primitive of it points at): the joints
+// and their inverse bind matrices. A renderer builds one joint palette per
+// skin, not per mesh.
 struct Skin final {
-    // The nodes that move the mesh.
+    // The nodes that move the meshes.
     std::vector<std::uint32_t> joints;
-    // One per joint: from the mesh's space to the joint's space at bind time.
+    // One per joint: from the meshes' space to the joint's space at bind time.
     // A skinned position in model space is the sum over the vertex's four
     // influences of weight * global(joint) * inverseBind(joint) * position.
     std::vector<Math::Matrix4> inverseBindMatrices;
-    // One per vertex: indices into joints, then the weights, largest first.
-    // The weights of a vertex sum to 1, or are all 0 (no influence).
-    std::vector<std::array<std::uint16_t, 4>> vertexJoints;
-    std::vector<std::array<float, 4>> vertexWeights;
-
-    [[nodiscard]] bool Empty() const noexcept { return joints.empty(); }
 };
 
 // A triangle list with one material. A mesh without a skin sits at its node;
-// a skinned mesh's vertices land in model space through the skin.
+// a skinned mesh's vertices land in model space through its skin.
 struct Mesh final {
     std::string name;
     std::uint32_t node = 0;
@@ -100,7 +107,13 @@ struct Mesh final {
     std::vector<Math::Vec2> uvs;
     // Three per triangle.
     std::vector<std::uint32_t> indices;
-    Skin skin;
+    // A skin of the model, or kNoSkin.
+    std::uint32_t skin = kNoSkin;
+    // With a skin, one per vertex (as Bevy's joint index and weight
+    // attributes): indices into the skin's joints, then the weights, largest
+    // first, summing to 1 or all 0 (no influence). Without a skin, empty.
+    std::vector<std::array<std::uint16_t, 4>> vertexJoints;
+    std::vector<std::array<float, 4>> vertexWeights;
 };
 
 // Keys of one channel. Times in seconds, strictly increasing, within the
@@ -137,6 +150,7 @@ struct AnimationClip final {
 struct ModelData final {
     std::vector<Node> nodes;
     std::vector<Material> materials;
+    std::vector<Skin> skins;
     std::vector<Mesh> meshes;
     std::vector<AnimationClip> clips;
 
@@ -154,10 +168,12 @@ enum class ModelDataCode : std::uint8_t {
     // length, an index is out of range, the index count is not a multiple of
     // 3, or a value is not finite.
     BadMesh = 2,
-    // A skin's joint is out of range, the joints and the inverse bind
-    // matrices differ in count, the per-vertex arrays are not one per vertex,
-    // a vertex names a joint the skin does not have, or a weight is negative,
-    // not finite, or the weights neither sum to 1 nor are all 0.
+    // A skin's joint is out of range, or its joints and inverse bind
+    // matrices differ in count or a matrix is not finite; or a mesh's skin is
+    // out of range, its per-vertex joints and weights are not one per vertex
+    // (or not empty without a skin), a vertex names a joint the skin does not
+    // have, or a weight is negative, not finite, or the weights neither sum
+    // to 1 nor are all 0.
     BadSkin = 3,
     // A clip's node count is not the node list's, a track names a node out of
     // range or the same node twice, a channel's times and values differ in
