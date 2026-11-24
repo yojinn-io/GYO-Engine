@@ -246,7 +246,7 @@
         "ui 4.7"
       ],
       "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
-      "find": "queueMount.before.push_back(\"ComposeCameraPasses\");",
+      "find": "queueMount.before.push_back(std::string(CameraRender::kComposeCameraPasses));",
       "replace": "",
       "target": "gyo_ui_tests",
       "cases": "ui_render:*",

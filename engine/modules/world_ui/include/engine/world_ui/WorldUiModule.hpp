@@ -17,8 +17,9 @@
 // UiInput's pointer is in logical pixels of the window (as input's CursorPosition); UpdateUi turns it into each root's
 // viewport pixels. Its writer overwrites it whole every frame (its "pressed" flags are this frame's; UpdateUi does not
 // clear them): an author who turns the default mapping off writes it in PreUpdate, before kUiSet. It goes to every
-// root that accepts input; roots do not occlude each other (routing between roots is the author's, ui.zh-Hant.md 3). A failure of a root goes into its UiRootState; no System returns an error for it (E2: that root,
-// not the World, O-11).
+// root that accepts input; roots do not occlude each other (routing between roots is the author's, ui.zh-Hant.md 3).
+// A failure of a root goes into its UiRootState; no System returns an error for it (E2: that root, not the World,
+// O-11).
 //
 // The World needs input, window, camera and world_asset (all carried by default).
 
