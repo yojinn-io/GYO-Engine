@@ -19,7 +19,7 @@ GYO::Base、GYO::Math、GYO::Time ◄── GYO::Kernel ◄── GYO::Orchestra
 
 ## 2. 用法與後果
 
-- **`Message`**（寫的一方：`sdl_window`、測試、網路注入）：`KeyboardInput`（實體鍵 `KeyCode`＝USB HID 的值、按下／放開、重複、無修飾時這個鍵在目前配置給的字、修飾鍵）、`KeyboardFocusLost`、`InputEventsDropped`（後端丟了幾個事件）、`MouseButtonInput`、`CursorMoved`（視窗的邏輯像素、左上原點、+Y 向下）、`MouseMotion`（相對移動量；`Locked` 時是裝置的量，G4；後端的單位、不換成邏輯像素）、`CursorEntered`／`CursorLeft`（G5）、`MouseWheel`（以「行」為單位）、`TextComposition`（組字中的字串〔UTF-8〕；選取的起點 `cursorByte` 與長度 `selectionBytes` 是字串的**位元組**、落在 code point 的邊界上，後端在自己的邊界換算——單位同 winit 給 Bevy 的（位元組，`bevy_text/src/text_edit.rs:21-25`；形狀是起點＋長度）；起點、長度各自可以是 -1＝沒給（沒給起點時長度也算沒給）。2026-11-24 由「照後端給的單位」改成位元組，HANDOFF `v8-arch-gyo2-sdl-u-three-judgments` 第 3 件）、`TextCommitted`（打出的字或確定的組字，UTF-8）。每個都帶發生的時刻（`Time::TimePoint`，SDL-3）。
+- **`Message`**（寫的一方：`sdl_window`、測試、網路注入）：`KeyboardInput`（實體鍵 `KeyCode`＝USB HID 的值、按下／放開、重複、無修飾時這個鍵在目前配置給的字、修飾鍵）、`KeyboardFocusLost`、`InputEventsDropped`（後端丟了幾個事件）、`MouseButtonInput`、`CursorMoved`（視窗的邏輯像素、左上原點、+Y 向下）、`MouseMotion`（相對移動量；`Locked` 時是裝置的量，G4；預設是後端的單位、不換成邏輯像素；後端可以讓產品選邏輯像素——`sdl_window` 的 `SDLWindowOptions::mouseMotion`＝`LogicalPixels` 時是邏輯像素、`Locked` 時也帶 OS 的指標速度與加速。前提：單位只有後端知道，遊戲換算不了，所以由 Engine 給選項，2026-11-24 `v8-arch-gyo2-relative-mouse-system-scale`）、`CursorEntered`／`CursorLeft`（G5）、`MouseWheel`（以「行」為單位）、`TextComposition`（組字中的字串〔UTF-8〕；選取的起點 `cursorByte` 與長度 `selectionBytes` 是字串的**位元組**、落在 code point 的邊界上，後端在自己的邊界換算——單位同 winit 給 Bevy 的（位元組，`bevy_text/src/text_edit.rs:21-25`；形狀是起點＋長度）；起點、長度各自可以是 -1＝沒給（沒給起點時長度也算沒給）。2026-11-24 由「照後端給的單位」改成位元組，HANDOFF `v8-arch-gyo2-sdl-u-three-judgments` 第 3 件）、`TextCommitted`（打出的字或確定的組字，UTF-8）。每個都帶發生的時刻（`Time::TimePoint`，SDL-3）。
 - **寫的一方**排在 `Main`／`PreUpdate`、`before` `kInputSet`（使用者 `v8-arch-gyo2-sdl-input-writer-preupdate`）。不寫 `before` 不報錯：Kernel 對沒寫先後的照登記序排（Kernel 不對作者承諾這個順序，所以不釘成測試），狀態可能**安靜地晚一幀**。**讀狀態的一方**排在 `kInputSet` 之後（`Update`，或同 stage 寫 `after`）；`First`、`PreUpdate` 裡沒排在後面的 System 可能讀到上一輪的狀態（O-12 改後的「緩的面」(b)）。
 - **狀態**（只由 `input` 的 System 寫，IN-2）：`ButtonInput<KeyCode>`、`ButtonInput<MouseButton>`（`Pressed`／`JustPressed`／`JustReleased`，同 Bevy 的 `ButtonInput<T>`）、`AccumulatedMouseMotion`、`AccumulatedMouseScroll`（這一幀的總和，沒有就是 0）、`CursorPosition`（離開視窗時 nullopt）、`TextInput`（組字中的內容）。五個 System 都在 `kInputSet`，照 Bevy 分開（`keyboard_input_system` 等，`bevy_input/src/lib.rs:117-165`）。
 - **按鍵的規則**（IN-3）：按住的鍵再按（含 OS 的重複）不是新的按下；沒按住的鍵的重複（失焦時按著、回來還按著）照 Bevy 算按下（`keyboard.rs:187-190`）；沒按住的鍵放開什麼都不變（SDL 失焦時先送失焦、再補 key-up，`SDL_keyboard.c:354-356`）；這一幀有 `KeyboardFocusLost` → 放開所有按鍵（同 Bevy `keyboard.rs:199-203`，**滑鼠鍵不放**，同 Bevy）；有 `InputEventsDropped` → 放開所有按鍵與滑鼠鍵（丟了什麼不知道，可能是 key-up）。
@@ -46,6 +46,7 @@ GYO::Base、GYO::Math、GYO::Time ◄── GYO::Kernel ◄── GYO::Orchestra
 | 時刻 | 不保留 | 每個 `Message` 帶 `TimePoint` | 使用者 P11（網路的預測要用） |
 | 丟事件 | 沒有 | `InputEventsDropped` → 全部放開 | 後端的佇列有上限（SDL-7 例外 (1)） |
 | 裝置的相對量 | winit 的 raw `DeviceEvent::MouseMotion`，任何時候都有（`bevy_winit/src/state.rs:459`） | `cursorGrab = Locked` 時才是裝置的量 | SDL 3.4 在非相對模式沒有 raw 的移動 | 一個請求欄位 |
+| 相對量的單位 | winit 沒有選擇：`DeviceEvent::MouseMotion` 永遠是 raw、`CursorMoved` 是游標的位置 | 產品選（`sdl_window` 的 `mouseMotion`）：`Device`（預設，照 SDL 給的；`Locked` 時是 raw，用滑鼠轉視角）或 `LogicalPixels`（邏輯像素、帶 OS 的指標速度，遊戲自己畫游標時用） | 鎖住游標又要自己畫游標的遊戲（推過視窗邊）要的是游標的速度，不是裝置的計數；Windows 的 raw 是滑鼠計數，遊戲不知道單位換算不了 | 一個產品選項（預設不變） |
 
 ## Design Invariants
 

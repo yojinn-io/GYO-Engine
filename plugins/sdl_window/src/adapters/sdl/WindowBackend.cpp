@@ -122,7 +122,8 @@ std::int32_t EditingByteOffset(const std::string_view utf8, const std::int32_t u
 }
 
 Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const Engine::Time::TimePoint ceiling,
-                     SDL_Window* window, const std::size_t clipboardLimit, const EditingUnit editingUnit) {
+                     SDL_Window* window, const std::size_t clipboardLimit, const EditingUnit editingUnit,
+                     const MotionUnit motionUnit) {
     Translated out;
     const Engine::Time::TimePoint time = SDL::ConvertSDLTime(event.common.timestamp, pair, ceiling);
     const auto logical = [window](const float x, const float y) {
@@ -167,7 +168,7 @@ Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const E
         if (!OwnWindow(window, event.motion.windowID)) break;
         const float k = LogicalPerWindowCoordinate(window);
         out.input.emplace_back(In::CursorMoved{{event.motion.x * k, event.motion.y * k}, time});
-        out.input.emplace_back(In::MouseMotion{{event.motion.xrel, event.motion.yrel}, time});
+        out.input.emplace_back(In::MouseMotion{MotionDelta(event.motion.xrel, event.motion.yrel, k, motionUnit), time});
         break;
     }
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -276,6 +277,8 @@ struct WindowBackend::State {
     std::size_t clipboardLimit = 0;
     // The unit of the input method's positions, of the video driver SDL runs (it does not change while the window is).
     Adapter::EditingUnit editingUnit = Adapter::EditingUnit::CodePoint;
+    // MouseMotion's unit; Logical holds SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE set while the window lives.
+    Adapter::MotionUnit motionUnit = Adapter::MotionUnit::Device;
     std::array<SDL_Cursor*, 12> cursors{};
 };
 
@@ -293,6 +296,9 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
     if (settings.drawComposition) static_cast<void>(SDL_ResetHint(SDL_HINT_IME_IMPLEMENTED_UI));
     if (!started) return Engine::Base::Err(BackendFailure::Make(BackendFailureCode::VideoFailed, std::move(startError)));
     static_cast<void>(SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0"));
+    // The OS's pointer speed in relative mode: SDL reads it through a hint callback whenever it changes, so it is
+    // held while the window lives and put back with it.
+    if (settings.logicalMotion) static_cast<void>(SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "1"));
     SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (settings.window.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (settings.window.hidden) flags |= SDL_WINDOW_HIDDEN;
@@ -301,6 +307,7 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
         BackendFailure failure = BackendFailure::Make(BackendFailureCode::WindowFailed, std::string("SDL_CreateWindow: ") + SDL_GetError());
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
         static_cast<void>(SDL_ResetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE));
+        if (settings.logicalMotion) static_cast<void>(SDL_ResetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE));
         return Engine::Base::Err(std::move(failure));
     }
     // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
@@ -314,6 +321,7 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
     state->window = window;
     state->clipboardLimit = settings.clipboardLimit;
     state->editingUnit = Adapter::EditingUnitOf(SDL_GetCurrentVideoDriver());
+    state->motionUnit = settings.logicalMotion ? Adapter::MotionUnit::Logical : Adapter::MotionUnit::Device;
     return std::unique_ptr<WindowBackend>(new WindowBackend(std::move(state)));
 }
 
@@ -329,6 +337,9 @@ WindowBackend::~WindowBackend() {
     // Only its own subsystem, never SDL_Quit (another sdl* Plugin may still use SDL; sdl.zh-Hant.md).
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     static_cast<void>(SDL_ResetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE));
+    if (state_->motionUnit == Adapter::MotionUnit::Logical) {
+        static_cast<void>(SDL_ResetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE));
+    }
 }
 
 void WindowBackend::Pump(EventQueue& queue) {
@@ -340,7 +351,7 @@ void WindowBackend::Pump(EventQueue& queue) {
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
         Translated translated = Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit,
-                                                   state_->editingUnit);
+                                                   state_->editingUnit, state_->motionUnit);
         Adapter::OrderTimes(translated, last);
         static_cast<void>(queue.Accept(std::move(translated)));
     }
