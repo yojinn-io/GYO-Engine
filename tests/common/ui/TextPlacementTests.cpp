@@ -181,11 +181,7 @@ TEST_CASE("ui_text_field: a composition is drawn underlined with the caret in it
     const float caret = frame.value().editArea->caretX;
     // Cursor 2 (UTF-16 units): after "がっ", about half way through the text.
     CHECK_MESSAGE((caret > emptyCaret + 20.0F && caret < emptyCaret + 60.0F), "[ui-composition-caret] " << caret);
-    // Shown only (UI-5): an activate while it composes submits nothing.
-    auto held = runtime.Update(activate, empty, kViewport, text);
-    REQUIRE(held);
-    CHECK_MESSAGE(held.value().empty(), "[ui-activate-while-composing]");
-    // The commit ends the composition; the next activate submits the committed text.
+    // The commit ends the composition and replaces it; the activate submits the committed text (UI-5).
     Ui::UiInput commit;
     commit.text.push_back({Ui::UiTextInputKind::Insert, "学校", -1});
     commit.activatePressed = true;

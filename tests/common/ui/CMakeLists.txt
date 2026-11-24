@@ -1,6 +1,6 @@
 # Tests of ui, world_ui and ui_render (docs/architecture/target/v2/ui.zh-Hant.md, section 6). Data and arithmetic
 # only: no backend, no GPU (render_world's RenderCommands are read and compared).
-add_executable(gyo_ui_tests TestMain.cpp TextPlacementTests.cpp UiPassTests.cpp WorldUiTests.cpp)
+add_executable(gyo_ui_tests TestMain.cpp RuntimeTests.cpp TextFieldTests.cpp TextPlacementTests.cpp UiPassTests.cpp WorldUiTests.cpp)
 target_link_libraries(gyo_ui_tests PRIVATE GYO::Ui GYO::WorldUi GYO::UiRender GYO::Input GYO::Window GYO::Camera
     GYO::Transform GYO::EntityIds GYO::WorldAsset GYO::WorldRender GYO::RenderWorld GYO::CameraRender
     gyo_test_support doctest::doctest)
@@ -14,12 +14,13 @@ if(MSVC)
 else()
     target_compile_options(gyo_ui_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+add_test(NAME ui.runtime COMMAND gyo_ui_tests "--test-case=ui_runtime:*")
 add_test(NAME ui.layout COMMAND gyo_ui_tests "--test-case=ui_layout:*")
 add_test(NAME ui.text_field COMMAND gyo_ui_tests "--test-case=ui_text_field:*")
 add_test(NAME ui.world COMMAND gyo_ui_tests "--test-case=ui_world:*")
 add_test(NAME ui.render COMMAND gyo_ui_tests "--test-case=ui_render:*")
 add_test(NAME ui.lobby COMMAND gyo_ui_tests "--test-case=ui_lobby:*")
-set_tests_properties(ui.layout ui.text_field ui.world ui.render ui.lobby PROPERTIES LABELS "cpu" TIMEOUT 60
+set_tests_properties(ui.runtime ui.layout ui.text_field ui.world ui.render ui.lobby PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")

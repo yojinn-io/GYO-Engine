@@ -1177,9 +1177,9 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
         for (const UiTextInput& entry : input.text) {
             ApplyTextInput(*impl_->edit, entry, *editing, impl_->textFilter);
         }
-        // An activate while the input method composes is the input method's (it commits the composition), not a
-        // submit (UI-5).
-        if (input.activatePressed && impl_->edit->composition.empty()) {
+        // An activate submits the committed text only (UI-5: the composition is shown, never submitted). That the
+        // input method's own Enter is no activate is the input mapping's (world_ui's MapUiInput).
+        if (input.activatePressed) {
             impl_->pressedElement = editing->id;
             events.push_back({editing->action, editing->id, std::move(impl_->edit->text)});
             impl_->EndEdit();

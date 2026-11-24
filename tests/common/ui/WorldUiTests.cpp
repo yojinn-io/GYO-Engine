@@ -432,7 +432,7 @@ TEST_CASE("ui_render: the render World draws a root's UI over its camera, glyphs
     Frames(*p, 2);
     REQUIRE(!drawn.empty());
     const R::RenderCommands& last = drawn.back();
-    REQUIRE(last.passes.size() == 2);
+    REQUIRE_MESSAGE(last.passes.size() == 2, "[ui-render-pass-count] the camera's clear, then the UI");
     const auto* clear = std::get_if<R::Pass2D>(&last.passes[0]);
     const auto* ui = std::get_if<R::Pass2D>(&last.passes[1]);
     REQUIRE((clear != nullptr && ui != nullptr));
