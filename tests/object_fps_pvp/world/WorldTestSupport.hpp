@@ -68,12 +68,12 @@ private:
     std::vector<N::MemoryLink> ends_;
 };
 
-// The World description with one fixed step a frame.
-inline O::WorldDescription Stepped(O::WorldDescription world) {
-    world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
+// The World description with a frame of `frame` nanoseconds whatever the clock (by default one fixed step).
+inline O::WorldDescription Stepped(O::WorldDescription world, const std::int64_t frame = kStep) {
+    world.build = [inner = std::move(world.build), frame](O::WorldSetup& setup) {
         inner(setup);
-        setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-            w.SetResource(WT::TimeSampling{kStep, WT::SamplingMode::ManualDelta});
+        setup.Prepare([frame](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            w.SetResource(WT::TimeSampling{frame, WT::SamplingMode::ManualDelta});
             return {};
         });
     };

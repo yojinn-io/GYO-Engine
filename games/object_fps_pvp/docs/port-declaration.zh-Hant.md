@@ -19,7 +19,7 @@ v8-product-pvp-port
 | 段 | 範圍 | 不做 | 測試 |
 |---|---|---|---|
 | 1 sim | `logic` 加：arena 內容（`pvp_arena.json` 等＋`gyo.voxel_mesh` 的 colliders）、移動規則（站姿、蹲、跳、重力，經 `physics_3d` 的 `MoveAndSlide`）、射擊規則（射線方向、射程、平手、部位；部位只到規則層，判定在第 3 段的骨頭 hitbox 之前只有身體的膠囊，設計審查 N4）、戰鬥規則（HP、傷害、部位倍率、彈匣、冷卻、換彈、重生、選 spawn）。新 `world`：元件、輸入、System、權威與網路的登記、玩家的生成與刪除。新 `match` 執行檔（無畫面、UDP）。資產：maps、rules | 畫面、聲音、模型、動畫 | `object_fps_pvp.logic` 加 arena、移動、射擊、戰鬥；新 `object_fps_pvp.world`（Match＋兩個 Client 經 MemoryLink：連上、生成、移動、開槍、命中、死亡、重生、Client 的預測收斂到 Match）；新 `object_fps_pvp.match`（執行檔 `--ticks N` 自己結束） |
-| 2 client | 新 `client` 函式庫與執行檔：`sdl_window`、`input`（相對滑鼠、鎖游標；`PointerCapture` 的規則）、連線入口 `--connect host:port`（大廳 PV12 的代替）、arena 的網格（quads＋palette）、角色先畫方塊、第一人稱相機、HUD（準星、HP、彈藥、受擊）、聲音（`SoundCues`、`HitFeedback` 已搬的部分接上）。資產：audio、fonts | 大廳的 UI（等 U） | 新 `object_fps_pvp.client`（SDL dummy driver：連上本行程的 Match、跑 N 幀）；本機實際對戰交使用者 |
+| 2 client | 新 `client` 函式庫與執行檔：`sdl_window`、`input`（相對滑鼠、鎖游標；`PointerCapture` 的規則）、連線入口 `--connect host:port`（大廳 PV12 的代替）、arena 的網格（quads＋palette）、角色先畫方塊、第一人稱相機、HUD（準星、HP、彈藥、受擊）、聲音（`SoundCues`、`HitFeedback` 已搬的部分接上）。資產：audio、fonts。〔動工後補〕兩個 World（`Game`＋抽取它的 `Render`，render 頁第 7、8 節）；arena 與替身經遊戲的 voxel model loader（catalog 型別 `model`、格式 `json`）成為 `Mesh3d`；HUD 是第二個相機的 2D 層（`Shape2d`、文字轉成圖的 `Sprite`）；Client 成為產品的 main，Match 是第二個角色 `match` | 大廳的 UI（等 U） | 新 `object_fps_pvp.client`（沒有視窗與 GPU：渲染 World 不帶 `sdl_gpu`、在 Submit stage 讀畫面，注入 input／window 的 Message；連上本行程的 Match）、`object_fps_pvp.main`（gpu：開窗畫 30 幀）；本機實際對戰交使用者 |
 | 3 model | 角色（`Player_V20.fbx`＋UAL1 retarget）、步態與跳躍的動畫規則、分層／additive／aim／附掛、viewmodel（`Nailer1_FPS.fbx`）、第三人稱武器、Match 上骨頭的 hitbox（PV2）、換彈的 `magazine_in` → 換彈聲 | 時間型 crossfade、IK、root motion（master 也沒有） | 動畫規則、姿勢合成、hitbox 的外部測試；Match 讀 FBX 不碰 render |
 | 4 engine | `sdl_window` 的 live frame（R3）、模擬在自己的執行緒（R5） | — | SDL 的測試照總宣告；改 Engine 單獨 commit／PR |
 
@@ -105,7 +105,16 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 | `pvp-respawn-early` | 死了立刻復活 | world：重生時間 |
 | `pvp-room-not-full` | admission 不數人 | world：第 5 個被拒 |
 
-第 2 段起各段在 dev_log 補清單。
+第 2 段（同一份清單）：
+
+| id | 改法 | 誰要殺 |
+|---|---|---|
+| `pvp-press-lost` | 沒跑步的那一幀的按鍵丟掉 | controls：按鍵等到它那一步 |
+| `pvp-focus-loss-kept` | 失焦不放開游標 | controls：Tab、Esc、失焦 |
+| `pvp-cursor-not-locked` | 不要求視窗鎖游標 | client：點一下取得游標 |
+| `pvp-stand-in-not-shown` | 不替別的玩家做替身 | client：畫出地圖與對手 |
+
+第 3 段起各段在 dev_log 補清單。
 
 ## 5. 完成條件
 
