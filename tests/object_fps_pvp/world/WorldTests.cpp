@@ -4,12 +4,15 @@
 // both Clients, the full room). Port declaration, section 3.
 #include <doctest/doctest.h>
 
+#include <map>
+
 #include "WorldTestSupport.hpp"
 
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/physics_3d/Collider.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/physics_3d/Shapes.hpp"
+#include "object_fps_pvp/character/CharacterRig.hpp"
 
 #include <cmath>
 #include <numbers>
@@ -32,6 +35,7 @@ struct LoneMatch {
         Run(1);
     }
     K::World& World() { return GameWorld(*product); }
+    // A seated player as SeatPlayers leaves it (its PlayerMotion carries the pose the shots meet).
     K::EntityId AddPlayer(const Math::Vec3 feet, const float yaw = 0.0F) {
         const K::EntityId id = next++;
         PW::PlayerBody body;
@@ -47,6 +51,7 @@ struct LoneMatch {
         World().Insert(id, PW::HitRecord{});
         World().Insert(id, PW::Owner{id});
         World().Insert(id, PW::PlayerInput{});
+        World().Insert(id, PW::PlayerMotion{});
         return id;
     }
     void Steer(const K::EntityId id, const PW::PlayerInput& input) { *World().GetMut<PW::PlayerInput>(id) = input; }
@@ -162,7 +167,9 @@ TEST_CASE("world: a shot hits the player in front, the cooldown holds the next, 
     // A at (5, 0, 3) looking +Z at B at (5, 0, 8); nothing between them (the pillar is at x 9 to 11).
     const K::EntityId a = match.AddPlayer({5, 0, 3}, 0.0F);
     const K::EntityId b = match.AddPlayer({5, 0, 8}, std::numbers::pi_v<float>);
-    PW::PlayerInput fire = Input(0, 0, 0);
+    // From the eye (1.6) at B's chest (1.2): the bones' body shape.
+    const float chest = -std::atan2(1.2F - 1.6F, 5.0F);
+    PW::PlayerInput fire = Input(0, 0, 0, chest);
     fire.fire = 1;
     match.Steer(a, fire);
     match.Run(1);
@@ -174,7 +181,9 @@ TEST_CASE("world: a shot hits the player in front, the cooldown holds the next, 
     CHECK(shot.target == b);
     CHECK(shot.part == sim::HitPart::Body);
     CHECK(shot.damage == 25'000);
-    CHECK(shot.distance == doctest::Approx(5.0 - 0.25).epsilon(1e-3));
+    // On B's front, short of its feet's line (5 ahead) by less than a body's depth.
+    CHECK(shot.distance > 4.5F);
+    CHECK(shot.distance < 5.0F);
     CHECK(match.Combat(b).hp == rules.maximumHp - 25'000);
     const PW::HitRecord& hits = *match.World().Get<PW::HitRecord>(b);
     CHECK(hits.hits == 1);
@@ -183,12 +192,12 @@ TEST_CASE("world: a shot hits the player in front, the cooldown holds the next, 
     // A press in the cooldown (11 steps at 64 Hz) fires nothing.
     match.Run(1);
     CHECK(match.Combat(a).ammo == rules.magazineCapacity - 1);
-    match.Steer(a, Input(0, 0, 0));
+    match.Steer(a, Input(0, 0, 0, chest));
     match.Run(12);
     for (int shotIndex = 0; shotIndex < 3; ++shotIndex) {
         match.Steer(a, fire);
         match.Run(1);
-        match.Steer(a, Input(0, 0, 0));
+        match.Steer(a, Input(0, 0, 0, chest));
         match.Run(11);
     }
     CHECK(match.Combat(a).ammo == rules.magazineCapacity - 4);
@@ -201,7 +210,7 @@ TEST_CASE("world: a shot hits the player in front, the cooldown holds the next, 
     match.Steer(a, fire);
     match.Run(1);
     CHECK(match.World().Get<PW::ShotRecord>(a)->kind != sim::ShotHitKind::Player);
-    match.Steer(a, Input(0, 0, 0));
+    match.Steer(a, Input(0, 0, 0, chest));
     while (TickOf(match.World()) < respawnTick) match.Run(1);
     CHECK(match.Combat(b).life == sim::LifeState::Alive);
     CHECK(match.Combat(b).hp == rules.maximumHp);
@@ -448,3 +457,133 @@ TEST_CASE("world: a Client follows the Match's arena; one it does not have is a 
         CHECK(session.Client(0).Resource<PW::GameRules>()->arena.id == "pvp_training_v1");
     }
 }
+
+TEST_CASE("world: with the bones' hit shapes a head shot, a body shot and a leg shot each deal their part's damage") {
+    LoneMatch match;
+    REQUIRE(ShippedContent()->character != nullptr);
+    const sim::CombatRules rules;
+    // B stands at (5, 0, 8) facing A; A at (5, 0, 3) aims from its eye (1.6) at a height on B.
+    const K::EntityId b = match.AddPlayer({5, 0, 8}, std::numbers::pi_v<float>);
+    const auto shootAt = [&](const float height, const float side = 0.0F) {
+        const K::EntityId a = match.AddPlayer({5, 0, 3}, 0.0F);
+        const float pitch = -std::atan2(height - 1.6F, 5.0F);
+        PW::PlayerInput aim = Input(0, 0, std::atan2(side, 5.0F), pitch);
+        match.Steer(a, aim);
+        match.Run(2);
+        PW::PlayerInput fire = aim;
+        fire.fire = 1;
+        match.Steer(a, fire);
+        match.Run(1);
+        const PW::ShotRecord shot = *match.World().Get<PW::ShotRecord>(a);
+        match.World().Despawn(a);
+        return shot;
+    };
+    match.Run(4);
+    const PW::ShotRecord head = shootAt(1.68F);
+    CHECK(head.kind == sim::ShotHitKind::Player);
+    CHECK(head.part == sim::HitPart::Head);
+    CHECK(head.damage == 50'000);
+    const PW::ShotRecord body = shootAt(1.2F);
+    CHECK(body.part == sim::HitPart::Body);
+    CHECK(body.damage == 25'000);
+    const PW::ShotRecord leg = shootAt(0.7F, 0.18F);  // a thigh (the legs stand apart: the middle passes between them)
+    CHECK(leg.part == sim::HitPart::Leg);
+    CHECK(leg.damage == 18'750);
+    CHECK(match.Combat(b).hp == rules.maximumHp - 50'000 - 25'000 - 18'750);
+    // Over the head: no part of the body.
+    CHECK(shootAt(2.3F).kind != sim::ShotHitKind::Player);
+}
+
+TEST_CASE("world: a shot a stride ahead of a walking player meets its front leg in some step of the gait") {
+    LoneMatch match;
+    // B walks across A's view (facing +X, from x 2); A keeps aiming 0.45 ahead of B's feet at 0.65 high and fires
+    // every cooldown: the standing pose has nothing there, the front leg of the gait swings through it. The Match
+    // judges on the pose of the step (AnimatePlayers).
+    const K::EntityId a = match.AddPlayer({5, 0, 3}, 0.0F);
+    const K::EntityId b = match.AddPlayer({2, 0, 8}, kHalfPi);
+    std::map<sim::HitPart, int> parts;
+    int misses = 0;
+    for (int frame = 0; frame < 120; ++frame) {
+        match.Steer(b, Input(1, 0, kHalfPi));
+        const Math::Vec3 to = match.Body(b).feet + Math::Vec3{0.45F, 0.0F, 0.0F} - match.Body(a).feet;
+        const float distance = std::sqrt(to.x * to.x + to.z * to.z);
+        PW::PlayerInput aim = Input(0, 0, std::atan2(to.x, to.z), -std::atan2(0.65F - 1.6F, distance));
+        aim.fire = frame % 12 == 11 ? 1 : 0;
+        match.Steer(a, aim);
+        match.Run(1);
+        if (aim.fire == 0) continue;
+        const PW::ShotRecord& shot = *match.World().Get<PW::ShotRecord>(a);
+        if (shot.kind == sim::ShotHitKind::Player) {
+            ++parts[shot.part];
+        } else {
+            ++misses;
+        }
+    }
+    INFO("legs " << parts[sim::HitPart::Leg] << ", body " << parts[sim::HitPart::Body] << ", misses " << misses);
+    CHECK(parts[sim::HitPart::Leg] > 0);
+}
+
+TEST_CASE("world: the character loads with its skeleton, sixteen clips, seven hit shapes and the arenas' body height") {
+    const auto& rig = *ShippedContent()->character;
+    CHECK(rig.body->nodes.size() == 77);
+    for (const auto& clip : rig.clips) CHECK(clip.duration > 0.0F);
+    CHECK(rig.hitShapes.size() == 7);
+    // 1.8 units tall from a model about 0.55 tall.
+    CHECK(rig.scale == doctest::Approx(1.8 / 0.554).epsilon(0.02));
+    // The idle pose's head above the hips, both within the body.
+    std::vector<GYO::Engine::Model::LocalTransform> local;
+    object_fps_pvp::character::ComposeBody(rig, sim::Locomotion{}, sim::ActionPose{}, false, 0.0, local);
+    std::vector<Math::Matrix4> modelSpace;
+    object_fps_pvp::character::ModelSpace(rig, local, modelSpace);
+    const auto shapes = object_fps_pvp::character::PlaceHitShapes(rig, modelSpace, {0, 0, 0}, 0.0F);
+    REQUIRE(shapes.size() == 7);
+    CHECK(shapes[0].part == sim::HitPart::Head);
+    CHECK(shapes[0].a.y > 1.4F);
+    CHECK(shapes[0].a.y < 1.9F);
+    // Crouched (the clip lowers the hips a long way: the retarget's translation scale carries it to this body).
+    object_fps_pvp::character::ComposeBody(rig, sim::Locomotion{}, sim::ActionPose{}, true, 0.0, local);
+    object_fps_pvp::character::ModelSpace(rig, local, modelSpace);
+    const auto crouched = object_fps_pvp::character::PlaceHitShapes(rig, modelSpace, {0, 0, 0}, 0.0F);
+    CHECK(crouched[0].a.y < shapes[0].a.y - 0.2F);
+    CHECK(crouched[0].a.y > 0.7F);
+    CHECK(crouched[2].a.y > 0.2F);
+    for (const auto& shape : shapes) {
+        CHECK(shape.a.y >= -0.1F);
+        CHECK(std::abs(shape.a.x) < 0.5F);
+    }
+}
+
+TEST_CASE("world: the upper body follows the aim and the lower body the gait") {
+    const auto& rig = *ShippedContent()->character;
+    const auto headAt = [&](const sim::ActionPose& actions, const sim::Locomotion& locomotion) {
+        std::vector<GYO::Engine::Model::LocalTransform> local;
+        object_fps_pvp::character::ComposeBody(rig, locomotion, actions, false, 0.0, local);
+        std::vector<Math::Matrix4> modelSpace;
+        object_fps_pvp::character::ModelSpace(rig, local, modelSpace);
+        return object_fps_pvp::character::PlaceHitShapes(rig, modelSpace, {0, 0, 0}, 0.0F);
+    };
+    sim::ActionPose up;
+    up.aim = -1.0F;
+    sim::ActionPose down;
+    down.aim = 1.0F;
+    const auto lookingUp = headAt(up, sim::Locomotion{});
+    const auto lookingDown = headAt(down, sim::Locomotion{});
+    // The head moves with the aim; the legs (the lower body) do not.
+    CHECK_MESSAGE(Math::Length(lookingUp[0].a - lookingDown[0].a) > 0.05F, "[pvp-aim-upper] the head follows the aim");
+    CHECK(Math::Length(lookingUp[4].b - lookingDown[4].b) < 1e-4F);
+    // Shooting (held fire keeps the Shoot clip on): the action adds to the aim, the head still follows it.
+    up.upper = sim::UpperClip::Shoot;
+    up.upperProgress = 0.5;
+    down.upper = sim::UpperClip::Shoot;
+    down.upperProgress = 0.5;
+    CHECK_MESSAGE(Math::Length(headAt(up, sim::Locomotion{})[0].a - headAt(down, sim::Locomotion{})[0].a) > 0.05F,
+                  "[pvp-aim-shooting] the head follows the aim while shooting");
+    // Half a gait cycle on: the legs have moved.
+    sim::Locomotion walking;
+    walking.moveWeight = 1.0;
+    walking.cycles = 0.25;
+    sim::Locomotion later = walking;
+    later.cycles = 0.75;
+    CHECK(Math::Length(headAt({}, walking)[4].b - headAt({}, later)[4].b) > 0.05F);
+}
+
