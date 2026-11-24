@@ -264,7 +264,7 @@ TEST_CASE("ui_text_field: A text field keeps only what the product's check funct
 TEST_CASE("ui_text_field: A text field shows a composition but never submits it") {
     UiRuntime runtime = Runtime();
     const UiBindingTable bindings = Bindings("ab");
-    const UiTextInput composing{UiTextInputKind::Composition, "\xE3\x81\xAB\xE3\x81\xBB", 1};
+    const UiTextInput composing{UiTextInputKind::Composition, "\xE3\x81\xAB\xE3\x81\xBB", 3};
 
     CHECK_MESSAGE(EditAndSubmit(runtime, bindings, {Key(UiTextInputKind::MoveLeft), composing}) == "ab",
                   "Enter during a composition submits only the committed text");

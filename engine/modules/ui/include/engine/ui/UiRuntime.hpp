@@ -66,9 +66,6 @@ using UiTextFilter = std::function<std::string(std::string_view element, std::st
 [[nodiscard]] std::size_t UiNextCodePoint(std::string_view utf8, std::size_t offset) noexcept;
 // Committed text as one line: whole code points only, without control characters.
 [[nodiscard]] std::string UiSingleLineText(std::string_view utf8);
-// The byte offset of the UTF-16 code unit index units in valid UTF-8 (a code point outside the Basic Multilingual
-// Plane counts two), clamped to the end.
-[[nodiscard]] std::size_t UiUtf16Offset(std::string_view utf8, std::size_t units) noexcept;
 
 // The text field being edited this frame, for the input method's candidate window: the field and the caret.
 struct UiEditArea final {

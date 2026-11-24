@@ -157,7 +157,7 @@ SystemResult MapUiInput(Kernel::MessageReader<Input::KeyboardInput> keys,
         if (event.composition != nullptr) {
             composing = !event.composition->text.empty();
             input.text.push_back(Ui::UiTextInput{Ui::UiTextInputKind::Composition, event.composition->text,
-                                                 event.composition->cursor});
+                                                 event.composition->cursorByte});
         } else if (event.commit != nullptr) {
             composing = false;
             input.text.push_back(Ui::UiTextInput{Ui::UiTextInputKind::Insert, event.commit->text, -1});

@@ -620,7 +620,7 @@ TEST_CASE("ui_lobby: the lobby loads through world_asset with its font, and keys
     In::KeyModifiers command;
     command.Add(In::KeyModifier::Super);
     Key(In::KeyCode::A, command, U'a');
-    pending.composition.push_back({"ろーかる", 2, -1, Next()});
+    pending.composition.push_back({"ろーかる", 6, -1, Next()});
     Frames(*p);
     CHECK_MESSAGE(!All<Ui::UiQuadDraw>(state.drawList).empty(), "[ui-lobby-composition-drawn]");
     const TimePoint at = Next();
