@@ -64,6 +64,8 @@ std::string_view ToString(OrchestrationErrorCode code) noexcept {
     case OrchestrationErrorCode::OwnerTaken: return "OwnerTaken";
     case OrchestrationErrorCode::PrepareFailed: return "PrepareFailed";
     case OrchestrationErrorCode::ExchangeFailed: return "ExchangeFailed";
+    case OrchestrationErrorCode::WorldLent: return "WorldLent";
+    case OrchestrationErrorCode::LendRefused: return "LendRefused";
     }
     return "?";
 }
