@@ -83,6 +83,7 @@ constexpr K::EntityId kFlash = 3'000'014;
 constexpr K::EntityId kHpText = 3'000'015;
 constexpr K::EntityId kAmmoText = 3'000'016;
 constexpr K::EntityId kStatusText = 3'000'017;
+constexpr K::EntityId kHitDirection = 3'000'019;
 
 // The 2D layer: 1280 x 720 units, the origin at the centre, y up; drawn by the HUD camera only.
 constexpr float kHudWidth = 1280.0F;
@@ -164,6 +165,8 @@ struct ClientHud final {
     TX::GlyphAtlas atlas{TX::AtlasOptions{}};
     std::map<K::EntityId, HudText> texts;
     present::LocalHitFeedback feedback;
+    // This frame's hit feedback (ShowHud samples it; PlaceCamera shakes the camera by it).
+    present::HitFeedbackSample sample;
 };
 void HashValue(K::Hasher&, const ClientHud&) {}
 
@@ -253,6 +256,23 @@ R::Shape2d Crosshair() {
     Rect(shape.vertices, shape.indices, 4, -1, 12, 1, white);
     Rect(shape.vertices, shape.indices, -1, -12, 1, -4, white);
     Rect(shape.vertices, shape.indices, -1, 4, 1, 12, white);
+    return shape;
+}
+
+// The arc of dots around the crosshair toward the attacker (bearing 0 straight up, positive to the right).
+R::Shape2d HitDirection(const present::HitFeedbackSettings::Direction& direction, const std::optional<float> bearing, const float alpha) {
+    R::Shape2d shape;
+    if (!bearing || alpha <= 0.0F || direction.dots == 0) return shape;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    const R::Color8 color{byte(direction.color[0]), byte(direction.color[1]), byte(direction.color[2]), byte(alpha)};
+    const float half = direction.dotPixels / 2;
+    for (std::uint32_t i = 0; i < direction.dots; ++i) {
+        const float t = direction.dots == 1 ? 0.5F : static_cast<float>(i) / static_cast<float>(direction.dots - 1);
+        const float angle = *bearing + (t - 0.5F) * direction.arcRadians;
+        const float x = direction.radiusPixels * std::sin(angle);
+        const float y = direction.radiusPixels * std::cos(angle);
+        Rect(shape.vertices, shape.indices, x - half, y - half, x + half, y + half, color);
+    }
     return shape;
 }
 
@@ -394,7 +414,7 @@ K::SystemResult ShowArena(K::Res<PW::GameRules> rules, K::Res<WA::AssetRequests>
 
 // The camera at the own player's eye, turned by the Client's own view (the input it sends).
 K::SystemResult PlaceCamera(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
-                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>> players,
+                            K::Res<ClientHud> hud, K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>> players,
                             K::Query<K::Write<T::Transform>, K::With<C::Camera3d>> cameras) {
     players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body) {
         if (owner.userId != user->userId) return;
@@ -402,7 +422,9 @@ K::SystemResult PlaceCamera(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> u
         cameras.ForEach([&](K::EntityId, K::Mut<T::Transform> camera) {
             T::Transform t = camera.Read();
             t.translation = body.feet + Math::Vec3{0.0F, eye, 0.0F};
-            t.rotation = ViewRotation(controls->controls.Yaw(), controls->controls.Pitch());
+            // The hit's shake reaches the camera only: the view the player controls (its input, its shots) stays.
+            t.rotation = Math::Multiply(ViewRotation(controls->controls.Yaw(), controls->controls.Pitch() + hud->sample.shakePitchRadians),
+                                        Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, hud->sample.shakeRollRadians));
             camera.Get() = t;
         });
     });
@@ -662,8 +684,12 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
         (void)h.feedback.Observe(present::LifeHitRecord{combat->lives, hits->hits}, combat->life, body->feet, attacker, now);
         feedback = h.feedback.Sample(now, controls->controls.Yaw(), scene->presentation->hitFeedback);
     }
+    h.sample = feedback;
     if (auto flash = shapes.GetMut<R::Shape2d>(kFlash)) {
         flash.Get() = Flash(scene->presentation->hitFeedback.flash.color, feedback.flashAlpha);
+    }
+    if (auto arc = shapes.GetMut<R::Shape2d>(kHitDirection)) {
+        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);
     }
     // The texts.
     std::string hpText;
@@ -704,6 +730,13 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     setText(kHpText, hpText, 36.0F);
     setText(kAmmoText, ammoText, 36.0F);
     setText(kStatusText, status, 28.0F);
+    // A fresh hit turns the HP red for a while.
+    if (auto sprite = sprites.GetMut<R::Sprite>(kHpText); sprite && h.texts[kHpText].image) {
+        const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+        const auto& red = scene->presentation->hitFeedback.hpHighlight.color;
+        const R::Color8 color = feedback.hpHighlighted ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} : R::Color8{255, 255, 255, 255};
+        if (sprite.Read().color.r != color.r || sprite.Read().color.g != color.g || sprite.Read().color.b != color.b) sprite->color = color;
+    }
     return {};
 }
 
@@ -811,7 +844,7 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     RB::RollbackEntry(setup).SkipDuringResimulation(write);
     r.AddSystem<&WriteStepInput>(std::move(write));
     r.AddSystem<&ShowArena>(InUpdate("object_fps_pvp.ShowArena"));
-    r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera"));
+    r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera", {"object_fps_pvp.ShowHud"}));
     r.AddSystem<&PoseCharacters>(InUpdate("object_fps_pvp.PoseCharacters"));
     r.AddSystem<&AddCharacters>(InUpdate("object_fps_pvp.AddCharacters", {"object_fps_pvp.PoseCharacters", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&PoseViewmodel>(InUpdate("object_fps_pvp.PoseViewmodel", {"object_fps_pvp.PlaceCamera"}));
@@ -886,6 +919,8 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.Insert(kFlash, R::Shape2d{});
         hudThing(kCrosshair, {0, 0, 1});
         world.Insert(kCrosshair, Crosshair());
+        hudThing(kHitDirection, {0, 0, 1});
+        world.Insert(kHitDirection, R::Shape2d{});
         const auto text = [&](const K::EntityId id, const Math::Vec3 at, const Math::Vec2 anchor) {
             hudThing(id, at);
             R::Sprite sprite;

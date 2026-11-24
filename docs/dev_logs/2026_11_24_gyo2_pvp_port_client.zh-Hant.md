@@ -38,3 +38,9 @@ blocker 1、should 5、nit 5。報告在主 checkout 的 `build/evidence/v8-prod
 - S5（測試沒驗的契約）→ 加 HUD 文字、聲音、相機轉向、替身的位置與消失。
 - N5 → 資產來源記錄（`assets/object_fps_pvp/LICENSES/SOURCES.zh-Hant.md`）。
 - 交使用者：S1（net 提供「本機輸入」的唯一寫入點，lightyear 的做法）、S2（`Text2d` 排進 U，兩個產品一起換）、S3（幀內插，和第 1 段 S5 一起決定）。
+
+## 試玩後補（2026-11-24）
+
+- 使用者在第 3 段試玩時指出：被擊中的方向沒有顯示。原因：這一段只把 `HitFeedback` 的紅閃接到畫面，盤點（`Present/HitFeedback` 列）要搬的方向弧、HP 高亮、鏡頭震動，`Sample` 已經算出，HUD 沒畫。
+- 改：`ShowHud` 畫方向弧（`ui/hit_feedback.json` 的 `direction`：半徑 110 px、弧 30°、7 個點，往攻擊者、相對於視角）、HP 文字在 `hp_highlight` 的時間內變紅；`PlaceCamera` 排在 `ShowHud` 後，鏡頭照 `shake` 晃（只動相機，不動玩家控制的視角、輸入與射線）。
+- 測試：`client: a hit shows where it came from…`（Match 記一次受擊後，弧的中點指向攻擊者、HP 變紅、相機有 roll；1.5 秒後都消失）。突變 `pvp-hit-direction-not-drawn`、`pvp-hit-hp-not-red`、`pvp-hit-no-shake` 3/3 killed。`ctest -L "cpu|gpu"` 全過。

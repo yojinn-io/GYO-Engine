@@ -8,10 +8,12 @@
 //   FixedUpdate/First WriteStepInput the input of the step that runs now -> the own Peer's PeerInput slot of this
 //                                   step, before the net Module's ApplyInput (not while resimulating)
 //   Main/Update      ShowArena      the arena's model (render's Mesh3d of the baked voxel file as a model asset)
+//                    ShowHud        the 2D layer: crosshair, HP, ammo, what the player should do; a hit's feedback
+//                                   (present/HitFeedback): the red flash, the arc toward the attacker, the HP in red
 //                    PlaceCamera    the first-person camera at the own player's eye, turned by the Client's view
+//                                   (and shaken by a hit: the camera only, not the view the player controls)
 //                    MoveBodies     a stand-in body for every other living player follows it (or goes)
 //                    AddBodies      ... and is made for one that has none
-//                    ShowHud        the 2D layer: crosshair, HP, ammo, the hit flash, what the player should do
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
 //
 // The pictures are drawn by a second World, "Render", that extracts from this one (render_world, camera_render,

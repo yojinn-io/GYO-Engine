@@ -124,6 +124,9 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 | `pvp-press-lost` | 沒跑步的那一幀的按鍵丟掉 | controls：按鍵等到它那一步 |
 | `pvp-focus-loss-kept` | 失焦不放開游標 | controls：Tab、Esc、失焦 |
 | `pvp-cursor-not-locked` | 不要求視窗鎖游標 | client：點一下取得游標 |
+| `pvp-hit-direction-not-drawn` | 不畫往攻擊者的方向弧 | client：被擊中時的方向弧、HP 變紅、鏡頭晃動（試玩後補：第 2 段只接了紅閃） |
+| `pvp-hit-hp-not-red` | 被擊中後 HP 不變紅 | 同上 |
+| `pvp-hit-no-shake` | 被擊中不晃鏡頭 | 同上 |
 | `pvp-stand-in-not-shown` | 不替別的玩家做替身 | client：畫出地圖與對手（第 3 段替身換成角色，換成下面的 `pvp-character-not-shown`） |
 
 第 3 段（同一份清單）：

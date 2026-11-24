@@ -274,6 +274,45 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the upper body*",
    "expect": "pvp-aim-shooting"
+  },
+  {
+   "id": "pvp-hit-direction-not-drawn",
+   "what": "the arc toward the attacker is never drawn",
+   "find": "        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);",
+   "replace": "        arc.Get() = R::Shape2d{};",
+   "expect": "pvp-hit-direction",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-hp-not-red",
+   "what": "the HP stays white after a hit",
+   "find": "feedback.hpHighlighted ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "replace": "false ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "expect": "the HP turns red",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-no-shake",
+   "what": "the hit does not shake the camera",
+   "find": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, hud->sample.shakeRollRadians)",
+   "replace": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, 0.0F)",
+   "expect": "the camera rolls",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
   }
  ]
 }
