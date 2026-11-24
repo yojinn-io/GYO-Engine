@@ -7,14 +7,28 @@
 // projection, view point, 2D / 3D marker, clear (ClearColorConfig against the source's ClearColor) and RenderLayers,
 // sorted by order, then by source entity.
 //
+// The pipelines (sprite_render, mesh_render) put each camera's passes in its slot of render's CameraPasses (emptied
+// by ExtractCameras); ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after
+// the pipelines' Update), writes them to RenderCommands camera by camera, each camera's clear first (Compose.hpp).
+//
 // A row of its own, not in render_world (SDL declaration section 10.1, R2b): a render World that draws no camera
 // (KeepTool's ImGui) does not need the source to register the cameras' types. The source World needs transform,
 // camera and world_render (else R-E4).
 
+#include <string>
+
 #include "engine/orchestration/Module.hpp"
+#include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 
 namespace GYO::Engine::CameraRender {
+
+// Where ComposeCameraPasses runs (WorldDescription::options; none given: the default skeleton). After the stage the
+// pipelines queue in, before render_world's Submit.
+struct CameraRenderOptions final {
+    std::string schedule = std::string(Orchestration::DefaultSchedules::frame);
+    std::string composeStage = std::string(Orchestration::DefaultSchedules::postUpdate);
+};
 
 class CameraRenderModule final : public Orchestration::Module {
 public:

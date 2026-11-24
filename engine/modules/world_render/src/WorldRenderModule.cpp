@@ -11,6 +11,8 @@ void WorldRenderModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Component<Render::Sprite>({.name = "Sprite"});
     r.Component<Render::Shape2d>({.name = "Shape2d"});
+    r.Component<Render::Mesh3d>({.name = "Mesh3d"});
+    r.Component<Render::SkinPose>({.name = "SkinPose"});
     r.Component<Render::RenderLayers>({.name = "RenderLayers"});
     r.Component<Render::ClearColorConfig>({.name = "ClearColorConfig"});
     r.Resource<Render::ClearColor>({.name = "ClearColor"});

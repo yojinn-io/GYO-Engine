@@ -114,7 +114,7 @@ TEST_CASE("pipeline2d: one camera's pass has its viewport and clear; world units
     const std::optional<R::Pass2D> pass = R::Queue2d(camera, items);
     REQUIRE(pass.has_value());
     CHECK_MESSAGE((pass->viewport == R::PixelRect{0, 80, 2560, 1440}), "[p2-viewport] the camera's viewport (letterbox)");
-    CHECK_MESSAGE((pass->clear == R::Color8{0, 0, 0, 255}), "[p2-clear] the camera's clear");
+    CHECK_MESSAGE(!pass->clear.has_value(), "[p2-clear] the pass clears nothing (the camera's clear is composed before it)");
     CHECK_MESSAGE(!pass->view.has_value(), "[p2-view-pixels] the view is the viewport's pixels");
     REQUIRE(pass->vertices.size() == 4);
     CHECK_MESSAGE((Near(pass->vertices[0].position.x, 0.0F) && Near(pass->vertices[0].position.y, 0.0F)), "[p2-map-top-left] world (-640, 360)");
@@ -215,26 +215,6 @@ TEST_CASE("pipeline2d: a picture's texture is made once; an asset's stays, a hel
     CHECK_MESSAGE(images.Count() == 1, "[p2-image-asset-kept] an asset's texture stays");
     CHECK_MESSAGE(!R::ResolveImage(R::ImageRef{std::shared_ptr<const I::ImageData>{}}, R::TextureFilter::Linear, nullptr).key.asset.empty(),
                   "[p2-image-null-held] a null image is skipped, not white");
-}
-
-TEST_CASE("pipeline2d: a later camera on a target clears its viewport only") {
-    R::ExtractedCamera camera = Camera2d();
-    camera.clear = R::Color8{10, 20, 30, 255};
-    const std::optional<R::Pass2D> first = R::Queue2d(camera, {}, true);
-    REQUIRE(first.has_value());
-    CHECK_MESSAGE((first->clear == R::Color8{10, 20, 30, 255} && first->draws.empty()), "[p2-clear-first] the first camera clears the target");
-    const std::optional<R::Pass2D> later = R::Queue2d(camera, std::vector<R::Extracted2dItem>{Square(1, 0, 0, 0)}, false);
-    REQUIRE(later.has_value());
-    CHECK_MESSAGE(!later->clear.has_value(), "[p2-clear-later] a later camera does not clear the whole target");
-    REQUIRE(later->draws.size() == 2);
-    CHECK_MESSAGE((later->draws[0].blend == R::BlendMode::Opaque && later->draws[0].texture == R::TextureId{} &&
-                   later->vertices[0].color == R::Color8{10, 20, 30, 255} && later->vertices[2].position.x == 2560.0F &&
-                   later->vertices[2].position.y == 1440.0F),
-                  "[p2-clear-viewport] an opaque rectangle of the clear colour over the viewport, first");
-    camera.clear = std::nullopt;
-    const std::optional<R::Pass2D> none = R::Queue2d(camera, {}, false);
-    REQUIRE(none.has_value());
-    CHECK_MESSAGE(none->draws.empty(), "[p2-clear-later-none] a later camera without a clear draws no rectangle");
 }
 
 TEST_CASE("pipeline2d: an asset requested again (a new life) lets the old life's texture go") {

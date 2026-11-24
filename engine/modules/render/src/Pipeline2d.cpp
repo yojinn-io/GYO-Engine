@@ -128,7 +128,7 @@ std::vector<std::uint32_t> TriangleListOf(const Shape2d& shape) {
     return list;
 }
 
-std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items, const bool firstOnTarget) {
+std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items) {
     if (!camera.is2d || !camera.computed.valid) return std::nullopt;
     const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(camera.view);
     if (!viewFromWorld) return std::nullopt;
@@ -141,18 +141,6 @@ std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<con
     pass.target = camera.target;
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
-    if (firstOnTarget) {
-        // The whole target (the letterbox bars), as Bevy clears a window's output on its first use in a frame.
-        pass.clear = camera.clear;
-    } else if (camera.clear) {
-        // A later camera clears its own viewport only (Bevy: each camera's picture is put on the output within its
-        // viewport), so a split screen's second camera keeps the first one's half: an opaque rectangle over it.
-        const Color8 c = *camera.clear;
-        pass.vertices = {{{0.0F, 0.0F}, {}, c}, {{width, 0.0F}, {}, c}, {{width, height}, {}, c}, {{0.0F, height}, {}, c}};
-        pass.indices = {0, 1, 2, 0, 2, 3};
-        pass.draws.push_back(Draw2D{TextureId{}, BlendMode::Opaque, std::nullopt, 0, 6, 0});
-    }
-
     // Back to front: the z of each item's position, ties by source entity.
     std::vector<std::size_t> order;
     order.reserve(items.size());

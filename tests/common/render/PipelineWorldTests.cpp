@@ -31,6 +31,8 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/world_render/WorldRenderModule.hpp"
 #include "engine/image/PngLoader.hpp"
+#include "engine/mesh_render/MeshRenderModule.hpp"
+#include "engine/model/FbxLoader.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 
 #include "StoreSupport.hpp"
@@ -50,7 +52,11 @@ namespace T = GYO::Engine::Transform;
 namespace {
 
 // What the backend would see at Submit, frame by frame.
+// all: every pass; clears: the whole-target clears camera_render composed (a Pass2D with a clear); passes: the other
+// 2D passes (a camera's content, a later camera's viewport clear).
 struct Seen {
+    std::vector<R::RenderPass> all;
+    std::vector<R::Color8> clears;
     std::vector<R::Pass2D> passes;
     std::vector<R::TextureOp> asks;
 };
@@ -59,7 +65,16 @@ std::vector<std::string> trail;
 
 K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures) {
     Seen s;
-    s.passes = commands->passes;
+    s.all = commands->passes;
+    for (const R::RenderPass& pass : commands->passes) {
+        const auto* p2 = std::get_if<R::Pass2D>(&pass);
+        if (p2 == nullptr) continue;
+        if (p2->clear) {
+            s.clears.push_back(*p2->clear);
+        } else {
+            s.passes.push_back(*p2);
+        }
+    }
     s.asks.assign(textures->Pending().begin(), textures->Pending().end());
     seen.push_back(std::move(s));
     return {};
@@ -110,6 +125,7 @@ O::RegisteredUnits Units() {
     Add<RW::RenderWorldModule>(units, "render_world", {"render"});
     Add<GYO::Engine::CameraRender::CameraRenderModule>(units, "camera_render", {"render", "render_world"});
     Add<GYO::Engine::SpriteRender::SpriteRenderModule>(units, "sprite_render", {"render", "render_world", "camera_render"});
+    Add<GYO::Engine::MeshRender::MeshRenderModule>(units, "mesh_render", {"render", "render_world", "camera_render"});
     return units;
 }
 
@@ -250,7 +266,10 @@ TEST_CASE("render_extract: a 2D camera's pass draws the source's sprites and sha
     REQUIRE(seen[1].passes.size() == 1);
     const R::Pass2D& pass = seen[1].passes[0];
     CHECK_MESSAGE((pass.viewport == R::PixelRect{0, 80, 2560, 1440}), "[re-viewport] the camera's letterbox viewport");
-    CHECK_MESSAGE((pass.clear == R::Color8{0, 0, 0, 255}), "[re-clear-default] the source's ClearColor (black)");
+    CHECK_MESSAGE((seen[1].clears.size() == 1 && seen[1].clears[0] == R::Color8{0, 0, 0, 255}), "[re-clear-default] the source's ClearColor (black)");
+    CHECK_MESSAGE((seen[1].all.size() == 2 && std::holds_alternative<R::Pass2D>(seen[1].all[0]) &&
+                   std::get<R::Pass2D>(seen[1].all[0]).clear.has_value()),
+                  "[re-clear-first] the camera's clear comes before its pass");
     REQUIRE(pass.draws.size() == 2);
     CHECK_MESSAGE(pass.draws[0].texture.value == 0, "[re-z-order] the shape (z 0) before the sprite (z 1)");
     CHECK_MESSAGE(pass.draws[0].indexCount == 6, "[re-strip] the strip's two triangles");
@@ -277,7 +296,7 @@ TEST_CASE("render_extract: a HUD camera on another layer draws after, without cl
     Place(game, 3, 0.0F, 0.0F, 0.0F);
     Frames(*p, 2);
     REQUIRE(seen.back().passes.size() == 2);
-    CHECK_MESSAGE((seen.back().passes[0].clear.has_value() && seen.back().passes[0].draws.size() == 1 &&
+    CHECK_MESSAGE((seen.back().clears.size() == 1 && seen.back().passes[0].draws.size() == 1 &&
                    seen.back().passes[0].draws[0].texture.value != 0),
                   "[re-camera-order] the world camera first, with its sprite");
     CHECK_MESSAGE((!seen.back().passes[1].clear.has_value() && seen.back().passes[1].draws.size() == 1 &&
@@ -286,6 +305,8 @@ TEST_CASE("render_extract: a HUD camera on another layer draws after, without cl
     game.Remove<R::Sprite>(2);
     Frames(*p);
     CHECK_MESSAGE(seen.back().passes[0].draws.empty(), "[re-gone] a sprite taken away is not drawn");
+    // The frame no drawable showed it lets it go at its end: the next frame's backend sees the release.
+    Frames(*p);
     CHECK_MESSAGE(Count(seen.back().asks, 2) == 1, "[re-held-released] its held picture's texture is let go");
 }
 
@@ -342,12 +363,14 @@ TEST_CASE("render_extract: a split screen's second camera clears its own half, n
     right.viewport = C::Viewport{{1280, 0}, {1280, 1600}};
     game.Insert(2, right);
     Frames(*p);
-    REQUIRE(seen.back().passes.size() == 2);
-    const R::Pass2D& a = seen.back().passes[0];
-    const R::Pass2D& b = seen.back().passes[1];
-    CHECK_MESSAGE(a.clear.has_value(), "[re-split-first] the first camera clears the window");
-    CHECK_MESSAGE((!b.clear.has_value() && !b.draws.empty() && b.draws[0].blend == R::BlendMode::Opaque &&
-                   b.viewport.has_value() && b.viewport->x >= 1280),
+    // The first camera's clear, its pass, the second camera's viewport clear, its pass.
+    REQUIRE(seen.back().all.size() == 4);
+    const auto* a = std::get_if<R::Pass2D>(&seen.back().all[0]);
+    const auto* b = std::get_if<R::Pass2D>(&seen.back().all[2]);
+    REQUIRE((a != nullptr && b != nullptr));
+    CHECK_MESSAGE(a->clear.has_value(), "[re-split-first] the first camera clears the window");
+    CHECK_MESSAGE((!b->clear.has_value() && b->draws.size() == 1 && b->draws[0].blend == R::BlendMode::Opaque &&
+                   b->viewport.has_value() && b->viewport->x >= 1280),
                   "[re-split-second] the second camera clears only its viewport");
 }
 
@@ -383,4 +406,52 @@ TEST_CASE("render_extract: a sprite of an image asset is skipped until loaded, t
     CHECK_MESSAGE(Count(seen.back().asks, 0) == 1, "[re-asset-texture] its texture made that frame");
     const auto* made = seen.back().asks.empty() ? nullptr : std::get_if<R::TextureCreate>(&seen.back().asks.front());
     CHECK_MESSAGE((made != nullptr && made->desc.width == 16 && made->desc.height == 8), "[re-asset-size] the picture's pixels");
+}
+
+TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: composed in camera order whatever ran first") {
+    WorldAssetTest::Content content("render-mesh-asset");
+    std::ifstream file(GYO_RENDER_TEST_FBX, std::ios::binary);
+    REQUIRE(file.good());
+    const std::string bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    content.Add("model.bar", "model", "model/skinned_bar.fbx", bytes).Write();
+    AssetTest::ControlledExecutor executor;
+    GYO::Engine::WorldAsset::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"}), &options);
+    const auto* registry = std::as_const(p->Buffer()).Find<GYO::Engine::Asset::AssetLoaderRegistry>();
+    REQUIRE(registry != nullptr);
+    REQUIRE(static_cast<bool>(registry->Register<GYO::Engine::Model::FbxLoader>()));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    // The HUD camera has the smaller entity id: only the order puts it after the 3D camera.
+    Camera2dAt(game, 1, 1);
+    game.Insert(1, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    game.Insert(1, R::RenderLayers{2});
+    game.Insert(2, C::Camera{});
+    game.Insert(2, C::Camera3d{});
+    game.Insert(2, C::CameraTarget{});
+    game.Insert(2, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(2, C::ComputedCamera{});
+    Place(game, 2, 0.0F, 0.0F, -5.0F);
+    R::Mesh3d mesh;
+    mesh.model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(GYO::Engine::Asset::AssetId("model.bar"));
+    game.Insert(3, mesh);
+    Place(game, 3, 0.0F, 0.0F, 0.0F);
+    R::Sprite hud;
+    hud.customSize = GYO::Engine::Math::Vec2{10.0F, 10.0F};
+    game.Insert(4, hud);
+    game.Insert(4, R::RenderLayers{2});
+    Place(game, 4, 0.0F, 0.0F, 0.0F);
+    Frames(*p);
+    executor.RunAll();
+    Frames(*p);
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    REQUIRE(all.size() == 3);
+    CHECK_MESSAGE((std::holds_alternative<R::Pass2D>(all[0]) && std::get<R::Pass2D>(all[0]).clear.has_value()), "[re-3d-clear] the 3D camera's clear first");
+    const auto* scene = std::get_if<R::Pass3D>(&all[1]);
+    REQUIRE_MESSAGE(scene != nullptr, "[re-3d-order] then the 3D camera's pass");
+    CHECK_MESSAGE(scene->draws.size() == 1, "[re-3d-mesh] the mesh is drawn");
+    const auto* overlay = std::get_if<R::Pass2D>(&all[2]);
+    CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
 }

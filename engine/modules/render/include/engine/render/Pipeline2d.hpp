@@ -131,16 +131,13 @@ void SpriteGeometry(const Sprite& sprite, Math::Vec2 pictureSize, std::vector<Ve
 // vertices in order.
 [[nodiscard]] std::vector<std::uint32_t> TriangleListOf(const Shape2d& shape);
 
-// The 2D pass one camera draws: its viewport, its clear, and the items whose layers it draws, back to front by the
+// The 2D pass one camera draws: its viewport and the items whose layers it draws, back to front by the
 // z of their position (smaller z first, as Bevy's Transparent2d sort key, bevy_sprite_render/src/render/mod.rs:504;
 // ties by source entity), each vertex taken through the item's world matrix and the camera's clip-from-world matrix
 // to pixels of the viewport. An item whose position lies before the near or past the far plane is not drawn.
-// Consecutive items with the same texture and blend become one draw (Bevy batches such sprites). The clear: the first
-// camera drawing on a target this frame (firstOnTarget) clears the whole target (Pass2D::clear: the letterbox bars);
-// a later one clears only its viewport (an opaque rectangle of the clear colour drawn first), as Bevy clears a window
-// once a frame and puts each camera's picture within its viewport. nullopt: the camera is not valid (no target size)
+// Consecutive items with the same texture and blend become one draw (Bevy batches such sprites). The pass clears
+// nothing: the camera's clear is composed before it (Compose.hpp). nullopt: the camera is not valid (no target size)
 // or not a 2D camera.
-[[nodiscard]] std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, std::span<const Extracted2dItem> items,
-                                            bool firstOnTarget = true);
+[[nodiscard]] std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, std::span<const Extracted2dItem> items);
 
 } // namespace GYO::Engine::Render

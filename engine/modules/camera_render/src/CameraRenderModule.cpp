@@ -9,6 +9,7 @@
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/World.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -28,7 +29,8 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
                             Kernel::Extract<Kernel::Read<Camera::Camera3d>> markers3d,
                             Kernel::Extract<Kernel::Read<Render::ClearColorConfig>> clears,
                             Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
-                            Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::ResMut<Render::ExtractedCameras> out) {
+                            Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::ResMut<Render::ExtractedCameras> out,
+                            Kernel::ResMut<Render::CameraPasses> passes) {
     std::vector<Render::ExtractedCamera> list;
     const Render::Color8 defaultClear = clearColor.Present() ? clearColor->color : Render::ClearColor{}.color;
     cameras.ForEach([&](const Kernel::EntityId id, const Camera::Camera& camera) {
@@ -58,15 +60,29 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     });
     // Entities come in ascending order; a stable sort by order keeps the entity order among equal orders.
     std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order < b.order; });
+    passes.Get().byCamera.assign(list.size(), {});
     out.Get().cameras = std::move(list);
     return {};
+}
+
+SystemResult ComposeCameraPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel::ResMut<Render::CameraPasses> passes,
+                                 Kernel::ResMut<Render::RenderCommands> commands) {
+    Render::ComposePasses(*cameras, passes.Get(), commands.Get());
+    return {};
+}
+
+const CameraRenderOptions& OptionsOf(const CameraRenderOptions* given) {
+    static const CameraRenderOptions defaults{};
+    return given != nullptr ? *given : defaults;
 }
 
 } // namespace
 
 void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
+    const CameraRenderOptions& options = OptionsOf(setup.Options<CameraRenderOptions>());
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::ExtractedCameras>({.name = "ExtractedCameras"});
+    r.Resource<Render::CameraPasses>({.name = "CameraPasses"});
     Kernel::SystemOptions extract;
     extract.name = "ExtractCameras";
     Kernel::Mount mount;
@@ -74,8 +90,16 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     mount.stage = std::string(RenderWorld::kExtractSchedule);
     extract.mounts.push_back(std::move(mount));
     r.AddSystem<&ExtractCameras>(std::move(extract));
+    Kernel::SystemOptions compose;
+    compose.name = "ComposeCameraPasses";
+    Kernel::Mount composeMount;
+    composeMount.schedule = options.schedule;
+    composeMount.stage = options.composeStage;
+    compose.mounts.push_back(std::move(composeMount));
+    r.AddSystem<&ComposeCameraPasses>(std::move(compose));
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         if (world.Resource<Render::ExtractedCameras>() == nullptr) world.SetResource(Render::ExtractedCameras{});
+        if (world.Resource<Render::CameraPasses>() == nullptr) world.SetResource(Render::CameraPasses{});
         return {};
     });
 }
