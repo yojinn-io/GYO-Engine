@@ -179,6 +179,10 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
                                 ? Vec2{window->LogicalSize().x, window->LogicalSize().y}
                                 : Vec2{bounds.maximum.x - bounds.minimum.x, bounds.maximum.y - bounds.minimum.y};
     state.focused = window->focused;
+    // The playfield's rectangle in the window (letterboxed when the window has another shape).
+    state.fit = window->known ? FitPlayfield(window->physicalSize, window->scaleFactor) : std::nullopt;
+    const Vec2 viewOrigin = state.fit ? state.fit->logicalOrigin : Vec2{};
+    const Vec2 viewSize = state.fit ? state.fit->logicalSize : clientSize;
     if (cursor->position) {
         state.lastClient = {cursor->position->x, cursor->position->y};
     }
@@ -192,8 +196,10 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     // Unfocused, the original read nothing but the focus (InputSystem::Sample),
     // and the frame still went through the UI with that (Game::Impl::Update).
     const Keys pressed = state.focused ? ReadKeys(*keys) : Keys{};
-    const bool mapped = input::CanMapPointer(bounds, clientSize);
-    Vec2 position = mapped ? input::ClientToPlayfield(state.lastClient, bounds, clientSize) : state.lastClient;
+    // The pointer relative to the playfield's rectangle (the original mapped the whole client).
+    const Vec2 local = state.lastClient - viewOrigin;
+    const bool mapped = input::CanMapPointer(bounds, viewSize);
+    Vec2 position = mapped ? input::ClientToPlayfield(local, bounds, viewSize) : local;
     std::optional<Vec2> unwrapped;
 
     bool leftHeld = false;
@@ -210,11 +216,11 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
 
     if (state.focused && wrapPointer && mapped) {
         const input::PointerWrapResult wrapped = state.wrap.Sample(
-            {state.lastClient, clientSize, Vec2{motion->delta.x, motion->delta.y}}, bounds);
+            {local, viewSize, Vec2{motion->delta.x, motion->delta.y}}, bounds);
         position = wrapped.position;
         unwrapped = wrapped.unwrappedPosition;
         if (wrapped.warpTo) {
-            warp.Send(W::WarpCursor{{wrapped.warpTo->x, wrapped.warpTo->y}});
+            warp.Send(W::WarpCursor{{wrapped.warpTo->x + viewOrigin.x, wrapped.warpTo->y + viewOrigin.y}});
         }
     } else {
         state.wrap.Reset();
@@ -241,6 +247,7 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
         point, leftPressed, wheelDelta, keyboardNavigated, activationRequested, screenBeforeInput);
     const bool pageNavigationHandled = pageSelection.has_value() || finalResultsPageChanged;
 
+    state.pointer = position;
     world::FrameInput input;
     input.menu.previousPressed = pressed.previous && !pageNavigationHandled;
     input.menu.nextPressed = pressed.next && !pageNavigationHandled;

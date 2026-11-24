@@ -197,7 +197,7 @@ K::SystemResult DrawFrame(K::Res<world::ScreenState> screen, K::Res<world::Scree
                           K::Res<world::MenuSelection> selection, K::Res<world::Catalog> catalog,
                           K::Res<world::Session> session, K::Res<world::RunResults> results,
                           K::Res<MenuPagesState> pages, K::Res<CursorAppearance> cursor,
-                          K::Res<world::FrameInput> input, K::Res<WT::ActiveTime> time, K::Res<GameContent> content,
+                          K::Res<PointerState> pointer, K::Res<WT::ActiveTime> time, K::Res<GameContent> content,
                           K::Res<WA::AssetView> view, K::ResMut<UiText> text, K::ResMut<DrawResources> resources,
                           K::ResMut<R::RenderCommands> commands, K::ResMut<R::RenderTextures> textures) {
     DrawResources& res = resources.Get();
@@ -207,6 +207,10 @@ K::SystemResult DrawFrame(K::Res<world::ScreenState> screen, K::Res<world::Scree
     R::Pass2D pass;
     pass.clear = R::Color8{0, 0, 0, 255};
     pass.view = M::Rect{0.0f, 0.0f, ui::kUiWidth, ui::kUiHeight};
+    // Letterboxed (R2b): the clear covers the whole window, the playfield its centred rectangle.
+    if (pointer->fit) {
+        pass.viewport = pointer->fit->physical;
+    }
     Canvas canvas(pass);
 
     const GameScreen shown = world::EffectiveScreen(*screen, *request);
@@ -242,8 +246,8 @@ K::SystemResult DrawFrame(K::Res<world::ScreenState> screen, K::Res<world::Scree
         const auto icon = static_cast<std::size_t>(cursor->icon);
         if (res.cursors[icon].value != 0) {
             const Vec2 anchor = CursorAnchor(cursor->icon);
-            canvas.Image(res.cursors[icon], input->pointer.position.x - anchor.x * kCursorSize,
-                         input->pointer.position.y - anchor.y * kCursorSize, kCursorSize, kCursorSize);
+            canvas.Image(res.cursors[icon], pointer->pointer.x - anchor.x * kCursorSize,
+                         pointer->pointer.y - anchor.y * kCursorSize, kCursorSize, kCursorSize);
         }
     }
     commands->passes.push_back(std::move(pass));

@@ -4,6 +4,7 @@
 #include "object_connect/input/PointerWrap.hpp"
 #include "object_connect/math/Vec2.hpp"
 #include "object_connect/runtime/GameData.hpp"
+#include "object_connect/runtime/PlayfieldFit.hpp"
 #include "object_connect/ui/MenuLayout.hpp"
 
 #include "engine/asset/Handle.hpp"
@@ -86,6 +87,10 @@ struct PointerState final {
     Vec2 lastClient{};
     bool focused = false;
     bool insideClient = false;
+    // Where the playfield is in the window this frame (nullopt: the size is not known yet) and the pointer in the
+    // playfield, for the picture.
+    std::optional<PlayfieldFit> fit;
+    Vec2 pointer{};
 };
 
 struct MenuPagesState final {
