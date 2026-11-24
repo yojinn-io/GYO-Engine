@@ -15,7 +15,9 @@
 // from master's tests/common/ui/UiTextFieldTests.cpp. The field's text is now glyphs drawn with the test font
 // ("test.font"); the caret and composition marks are checked in TextPlacementTests.cpp. Tags "[ui-...]" are the
 // mutants' expectations.
-namespace GYO::Engine::Ui {
+namespace GYO::Test::Ui {
+using namespace GYO::Engine::Ui;
+namespace Math = GYO::Engine::Math;
 namespace {
 
 // A 100x100 design canvas drawn 1:1: the field is 80x20 at the top left, the
@@ -360,4 +362,4 @@ TEST_CASE("ui_text_field: A text field shows its binding, or its placeholder whe
     CHECK_MESSAGE(shade, "[ui-selection-shade]");
 }
 
-} // namespace GYO::Engine::Ui
+} // namespace GYO::Test::Ui

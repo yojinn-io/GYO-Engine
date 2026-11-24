@@ -53,7 +53,7 @@ struct PlacedText final {
     const Text::TextLayout* layout = text.Layout(fontAsset, sizePx, utf8, ToTextAlign(horizontal));
     if (layout == nullptr) return {};
     const Math::Vec2 aligned = AlignUiText(bounds, {layout->width, layout->height}, horizontal, vertical);
-    return {layout, {std::round(aligned.x), std::round(aligned.y)}};
+    return {layout, aligned};
 }
 
 void AppendGlyphs(UiText& text, const PlacedText& placed, const UiColor color, const Math::Rect clip,

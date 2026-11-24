@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -16,9 +17,12 @@
 #include <vector>
 
 #include "AssertTestSupport.hpp"
+#include "UiLayoutGolden.hpp"
 #include "UiTestSupport.hpp"
 
-namespace GYO::Engine::Ui {
+namespace GYO::Test::Ui {
+using namespace GYO::Engine::Ui;
+namespace Math = GYO::Engine::Math;
 namespace {
 
 constexpr std::string_view kDocument = R"json({
@@ -251,16 +255,18 @@ TEST_CASE("ui_runtime: compose and select text and list items are evaluated with
         if (element.id == "room_row") rows.push_back(GlyphsIn(frame.value().drawList, element.boundsPixels));
         if (element.id == "outcome") outcome = GlyphsIn(frame.value().drawList, element.boundsPixels);
     }
-    // "A 2" and "B 5": two glyphs each (a space draws nothing); "WIN": three.
+    // "A 2" and "B 5": two glyphs each (a space draws nothing).
     REQUIRE(rows.size() == 2);
     CHECK_MESSAGE((rows[0] == 2 && rows[1] == 2), "[ui-list-items] " << rows[0] << " " << rows[1]);
-    CHECK_MESSAGE(outcome == 3, "[ui-select-text] " << outcome);
     UiBindingTable lose = Bindings();
     lose["outcome"] = std::string{"lose"};
     auto losing = runtime.Compose(lose, viewport, text);
     REQUIRE(losing);
+    // The outcome's box also holds part of button_one's centred text; "LOSE" is one glyph more than "WIN".
     for (const UiEvaluatedElement& element : layout.value()) {
-        if (element.id == "outcome") CHECK_MESSAGE(GlyphsIn(losing.value().drawList, element.boundsPixels) == 4, "[ui-select-text] LOSE");
+        if (element.id == "outcome") {
+            CHECK_MESSAGE(GlyphsIn(losing.value().drawList, element.boundsPixels) == outcome + 1, "[ui-select-text]");
+        }
     }
 }
 
@@ -456,7 +462,7 @@ TEST_CASE("ui_runtime: HitTestUiLayout uses half-open bounds and clip rectangles
     }
 }
 
-} // namespace GYO::Engine::Ui
+} // namespace GYO::Test::Ui
 
 TEST_CASE("ui_runtime: shared UI layout rules: canvas fit, half-open containment and text alignment") {
     using namespace GYO::Engine::Ui;
@@ -483,4 +489,102 @@ TEST_CASE("ui_runtime: shared UI layout rules: canvas fit, half-open containment
     const auto far = AlignUiText(bounds, extent, UiHorizontalAlign::Right, UiVerticalAlign::Bottom);
     CHECK(far.x == 260.0F);
     CHECK(far.y == 120.0F);
+}
+
+// ---- master's exact layout (UiLayoutGolden.hpp): the layout and the quad and image draws bit for bit. Text rows are
+// master's text draw commands; here text becomes glyphs, checked above, so they are left out of the comparison.
+
+namespace {
+
+namespace LG = GYO::Test::Ui::LayoutGolden;
+
+template <class Rect>
+LG::Bits4 RectBits(const Rect& rect) noexcept {
+    return {std::bit_cast<std::uint32_t>(rect.x), std::bit_cast<std::uint32_t>(rect.y),
+            std::bit_cast<std::uint32_t>(rect.width), std::bit_cast<std::uint32_t>(rect.height)};
+}
+
+void CheckColor(const GYO::Engine::Ui::UiColor& actual, std::string_view expectedHex) {
+    auto expected = GYO::Engine::Ui::DecodeSrgbHexColor(expectedHex);
+    REQUIRE(expected);
+    CHECK(std::bit_cast<std::uint32_t>(actual.red) == std::bit_cast<std::uint32_t>(expected.value().red));
+    CHECK(std::bit_cast<std::uint32_t>(actual.green) == std::bit_cast<std::uint32_t>(expected.value().green));
+    CHECK(std::bit_cast<std::uint32_t>(actual.blue) == std::bit_cast<std::uint32_t>(expected.value().blue));
+    CHECK(std::bit_cast<std::uint32_t>(actual.alpha) == std::bit_cast<std::uint32_t>(expected.value().alpha));
+}
+
+std::string Contract(const char* name) {
+    return GYO::Test::UiSupport::ReadFile((std::string(GYO_UI_TEST_CONTRACT_DIR) + "/" + name).c_str());
+}
+
+void CheckGolden(const std::string& document, std::string_view canvas, GYO::Engine::Ui::UiViewport viewport,
+                 std::span<const LG::LayoutRow> layoutRows, std::span<const LG::DrawRow> drawRows) {
+    using namespace GYO::Engine::Ui;
+    UiRuntime runtime = GYO::Test::UiSupport::Runtime(document, canvas);
+    auto layout = runtime.EvaluatePreviewLayout(viewport);
+    REQUIRE(layout);
+    REQUIRE(layout.value().size() == layoutRows.size());
+    for (std::size_t i = 0; i < layoutRows.size(); ++i) {
+        CAPTURE(i);
+        const UiEvaluatedElement& actual = layout.value()[i];
+        CHECK(actual.id == layoutRows[i].id);
+        CHECK(actual.drawOrder == layoutRows[i].drawOrder);
+        CHECK(actual.listItemIndex.value_or(LG::kNoItem) == layoutRows[i].listItemIndex);
+        CHECK_MESSAGE(RectBits(actual.boundsPixels) == layoutRows[i].boundsPixels, "[ui-master-layout]");
+        CHECK(RectBits(actual.clipPixels) == layoutRows[i].clipPixels);
+    }
+    UiText noFonts;
+    auto composed = runtime.ComposePreview(viewport, noFonts);
+    REQUIRE(composed);
+    std::vector<const LG::DrawRow*> expected;
+    for (const LG::DrawRow& row : drawRows) {
+        if (row.kind != LG::DrawKind::Text) expected.push_back(&row);
+    }
+    const auto& commands = composed.value().drawList.commands;
+    REQUIRE(commands.size() == expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        CAPTURE(i);
+        const LG::DrawRow& row = *expected[i];
+        if (row.kind == LG::DrawKind::Quad) {
+            const auto* quad = std::get_if<UiQuadDraw>(&commands[i]);
+            REQUIRE(quad != nullptr);
+            CHECK_MESSAGE(RectBits(quad->rect) == row.rect, "[ui-master-draws]");
+            CHECK(RectBits(quad->clip) == row.clipPixels);
+            CheckColor(quad->color, row.colorHex);
+        } else {
+            const auto* image = std::get_if<UiImageDraw>(&commands[i]);
+            REQUIRE(image != nullptr);
+            CHECK(RectBits(image->rect) == row.rect);
+            CHECK(RectBits(image->clip) == row.clipPixels);
+            CHECK(RectBits(image->sourceUv) == row.sourceUv);
+            CHECK(image->textureAsset == row.text);
+            CheckColor(image->tint, row.colorHex);
+        }
+    }
+}
+
+} // namespace
+
+TEST_CASE("ui_runtime: the layout and the quad and image draws match master's geometry bit for bit") {
+    const std::string document = Contract("document_v1.json");
+    const std::string golden = Contract("golden_v1.json");
+    CheckGolden(document, "screen", {200.0F, 100.0F}, LG::kTestDocument200x100Layout, LG::kTestDocument200x100Draws);
+    CheckGolden(document, "screen", {1920.0F, 1080.0F}, LG::kTestDocument1920x1080Layout, LG::kTestDocument1920x1080Draws);
+    CheckGolden(document, "screen", {1000.0F, 333.0F}, LG::kTestDocument1000x333Layout, LG::kTestDocument1000x333Draws);
+    CheckGolden(golden, "main", {200.0F, 100.0F}, LG::kGolden200x100Layout, LG::kGolden200x100Draws);
+    CheckGolden(golden, "main", {1920.0F, 1080.0F}, LG::kGolden1920x1080Layout, LG::kGolden1920x1080Draws);
+    CheckGolden(golden, "main", {1000.0F, 333.0F}, LG::kGolden1000x333Layout, LG::kGolden1000x333Draws);
+}
+
+TEST_CASE("ui_runtime: the focus wraps round the focus order both ways") {
+    GYO::Engine::Ui::UiRuntime runtime = GYO::Test::UiSupport::Runtime(Contract("document_v1.json"), "screen");
+    GYO::Engine::Ui::UiText none;
+    GYO::Engine::Ui::UiInput previous;
+    previous.focusPreviousPressed = true;
+    REQUIRE(runtime.Update(previous, GYO::Test::Ui::Bindings(), {100.0F, 100.0F}, none));
+    CHECK_MESSAGE(runtime.InteractionState().focusedElement == "gamma_slider", "[ui-focus-wrap] back from the first");
+    GYO::Engine::Ui::UiInput next;
+    next.focusNextPressed = true;
+    REQUIRE(runtime.Update(next, GYO::Test::Ui::Bindings(), {100.0F, 100.0F}, none));
+    CHECK_MESSAGE(runtime.InteractionState().focusedElement == "button_one", "[ui-focus-wrap] on from the last");
 }

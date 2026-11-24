@@ -358,6 +358,125 @@
       "target": "gyo_ui_tests",
       "cases": "ui_world:*",
       "expect": "\\[ui\\-world\\-edit\\-keys\\]"
+    },
+    {
+      "id": "ui-focus-no-wrap-forward",
+      "what": "the focus stops at the end of the focus order",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "index = (index + 1U) % impl_->canvas->focusOrder.size();",
+      "replace": "index = Math::Min(index + 1U, impl_->canvas->focusOrder.size() - 1U);",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-focus\\-wrap\\]"
+    },
+    {
+      "id": "ui-slider-not-quantized",
+      "what": "a slider sends its unquantized value",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "const double steps = std::round((value - slider.minimum) / slider.step);",
+      "replace": "const double steps = (value - slider.minimum) / slider.step;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-slider\\-clamp\\]"
+    },
+    {
+      "id": "ui-max-length-ignored",
+      "what": "max_length does not stop insertion",
+      "guards": [
+        "UI-4",
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "const std::size_t room = field.maxLength > used ? field.maxLength - used : 0;",
+      "replace": "const std::size_t room = used + 1000;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "max_length counts code points"
+    },
+    {
+      "id": "ui-binding-change-kept",
+      "what": "an edit survives a change of its binding",
+      "guards": [
+        "UI-4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "if (current.value() != impl_->edit->startValue) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "an edit of a value that changed is not submitted"
+    },
+    {
+      "id": "ui-hit-closed-right",
+      "what": "hit testing includes the right edge",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "point.x < rect.x + rect.width && point.y < rect.y + rect.height;",
+      "replace": "point.x <= rect.x + rect.width && point.y < rect.y + rect.height;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-half\\-open\\]"
+    },
+    {
+      "id": "ui-codec-version-3",
+      "what": "version 3 read as supported",
+      "guards": [
+        "UI-2"
+      ],
+      "file": "engine/modules/ui/src/UiDocumentCodec.cpp",
+      "find": "version > static_cast<std::int64_t>(kUiSchemaVersion)) {",
+      "replace": "version > static_cast<std::int64_t>(kUiSchemaVersion) + 1) {",
+      "target": "gyo_ui_contract_tests",
+      "cases": "ui_contract:*",
+      "expect": "UnsupportedVersion"
+    },
+    {
+      "id": "ui-validate-default-focus",
+      "what": "default_focus outside the focus order accepted",
+      "guards": [
+        "UI-2"
+      ],
+      "file": "engine/modules/ui/src/UiValidation.cpp",
+      "find": "if (canvas.defaultFocus && !focusIds.contains(*canvas.defaultFocus)) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_contract_tests",
+      "cases": "ui_contract:*",
+      "expect": "default focus outside the focus order"
+    },
+    {
+      "id": "ui-validate-max-length",
+      "what": "max_length 0 accepted",
+      "guards": [
+        "UI-2"
+      ],
+      "file": "engine/modules/ui/src/UiValidation.cpp",
+      "find": "if (element.maxLength == 0) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_contract_tests",
+      "cases": "ui_contract:*",
+      "expect": "max_length below 1"
+    },
+    {
+      "id": "ui-master-layout-pivot",
+      "what": "the pivot not subtracted from the anchored position",
+      "guards": [
+        "UI-2",
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "anchorPivotX + transform.position.x - transform.pivot.x * width,",
+      "replace": "anchorPivotX + transform.position.x,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-master\\-layout\\]"
     }
   ]
 }

@@ -233,7 +233,7 @@ constexpr std::string_view kMenu = R"json({
   "design_canvas": {"size": [100, 100], "scale_mode": "fit"},
   "fonts": {"ui": "test.font"}, "default_font": "ui",
   "colors": {"bg": "#00000000", "white": "#FFFFFFFF", "n": "#202020FF", "f": "#404040FF", "p": "#606060FF"},
-  "actions": [{"id": "one", "payload": "none"}, {"id": "two", "payload": "none"}, {"id": "name", "payload": "string"}],
+  "actions": [{"id": "one", "payload": "none"}, {"id": "two", "payload": "none"}, {"id": "submit_name", "payload": "string"}],
   "bindings": [{"id": "name", "type": "string", "preview": ""}],
   "canvases": [{
     "id": "main", "backdrop_color": "bg", "default_focus": "one", "focus_order": ["one", "two", "field"],
@@ -243,7 +243,7 @@ constexpr std::string_view kMenu = R"json({
       {"type": "button", "id": "two", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [50, 0], "size_delta": [50, 20]},
        "text": {"literal": "cd"}, "text_color": {"color": "white"}, "action": "two", "background": {"normal": "n", "focused": "f", "pressed": "p"}},
       {"type": "text_field", "id": "field", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [10, 50], "size_delta": [80, 20]},
-       "binding": "name", "max_length": 16, "point_size": 10, "text_color": {"color": "white"}, "action": "name",
+       "binding": "name", "max_length": 16, "point_size": 10, "text_color": {"color": "white"}, "action": "submit_name",
        "background": {"normal": "n", "focused": "f", "pressed": "p"}}
     ]
   }]
@@ -254,6 +254,9 @@ K::EntityId Menu(K::World& world, const K::EntityId id, std::string name = "") {
     root.document = GYO::Test::UiSupport::Parse(kMenu);
     root.canvas = "main";
     world.Insert(id, root);
+    // A host's World::Insert does not fill initial values (Commands do): the test puts the derived state itself, as
+    // the camera tests put ComputedCamera.
+    world.Insert(id, Ui::UiRootState{});
     world.Insert(id, Ui::UiBindings{{{"name", std::move(name)}}});
     REQUIRE(world.ResourceMut<Ui::UiText>()->AddFont("test.font", GYO::Test::UiSupport::Font()));
     return id;
@@ -357,7 +360,7 @@ TEST_CASE("ui_world: the input method's Enter commits, it does not submit; the n
     Key(In::KeyCode::Enter);
     Frames(*p);
     REQUIRE(LastAction() != nullptr);
-    CHECK(LastAction()->action == "name");
+    CHECK(LastAction()->action == "submit_name");
     CHECK_MESSAGE(std::get<std::string>(LastAction()->payload) == "学校", "[ui-world-ime-commit]");
 }
 
@@ -505,6 +508,7 @@ TEST_CASE("ui_lobby: the lobby loads through world_asset with its font, and keys
     root.canvas = "lobby";
     const K::EntityId lobby = 2;
     game.Insert(lobby, root);
+    game.Insert(lobby, Ui::UiRootState{});
     game.Insert(lobby, Ui::UiBindings{LobbyBindings()});
     Frames(*p);
     CHECK_MESSAGE(!StateOf(game, lobby).runtime, "[ui-lobby-wait] not loaded yet");
