@@ -1091,16 +1091,6 @@ const std::shared_ptr<const UiDocument>& UiRuntime::Document() const noexcept {
     return impl_->document;
 }
 
-void UiRuntime::Reset() noexcept {
-    impl_->document.reset();
-    impl_->canvas = nullptr;
-    impl_->interaction = {};
-    impl_->edit.reset();
-    impl_->pressedElement.clear();
-    impl_->pointerWasAvailable = false;
-    impl_->lastPointerPixels = {};
-}
-
 UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
     // Activating a canvas before Initialize is API misuse.
     GYO_ASSERT(impl_->document != nullptr);

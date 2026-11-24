@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "engine/base/Result.hpp"
+#include "engine/camera_render/CameraRenderModule.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/World.hpp"
@@ -51,7 +52,13 @@ std::vector<std::uint8_t> CoverageToRgba(const Text::AtlasPageView& page, const 
 
 // Uploads what changed in the atlas since the revision last uploaded: a new page is made whole, a known page gets the
 // changed rectangles (render.zh-Hant.md section 3: the data side gives the ids).
-void UploadAtlas(const Text::GlyphAtlas& atlas, UiAtlasTextures& state, Render::RenderTextures& textures) {
+void UploadAtlas(const Ui::UiText& text, UiAtlasTextures& state, Render::RenderTextures& textures) {
+    if (text.Id() != state.atlas) {
+        for (const Render::TextureId page : state.pages) textures.Release(page);
+        state = UiAtlasTextures{};
+        state.atlas = text.Id();
+    }
+    const Text::GlyphAtlas& atlas = text.Atlas();
     if (atlas.Revision() == state.revision) return;
     const Text::AtlasChanges changes = atlas.ChangesSince(state.revision);
     const std::size_t known = state.pages.size();
@@ -76,7 +83,7 @@ SystemResult ExtractUi(Kernel::Extract<Kernel::Read<Ui::UiRoot>> roots, Kernel::
                        Kernel::ResMut<ExtractedUiRoots> out, Kernel::ResMut<UiAtlasTextures> atlas,
                        Kernel::ResMut<Render::RenderImages> images, Kernel::ResMut<Render::RenderTextures> textures) {
     std::vector<ExtractedUiRoot> list;
-    if (text.Present()) UploadAtlas(text->Atlas(), atlas.Get(), textures.Get());
+    if (text.Present()) UploadAtlas(*text, atlas.Get(), textures.Get());
     const WorldAsset::AssetView* view = assets.Present() ? &*assets : nullptr;
     roots.ForEach([&](const Kernel::EntityId id, const Ui::UiRoot& root) {
         const Ui::UiRootState* state = states.Get(id);
@@ -240,7 +247,7 @@ void UiRenderModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Mount queueMount;
     queueMount.schedule = options.schedule;
     queueMount.stage = options.stage;
-    queueMount.before.push_back("ComposeCameraPasses");
+    queueMount.before.push_back(std::string(CameraRender::kComposeCameraPasses));
     queue.mounts.push_back(std::move(queueMount));
     r.AddSystem<&QueueUiPasses>(std::move(queue));
 

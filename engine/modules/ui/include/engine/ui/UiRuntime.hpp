@@ -95,7 +95,6 @@ public:
 
     // Validates the document first (UI-3).
     [[nodiscard]] UiResult<void> Initialize(std::shared_ptr<const UiDocument> document);
-    void Reset() noexcept;
     [[nodiscard]] const std::shared_ptr<const UiDocument>& Document() const noexcept;
 
     [[nodiscard]] UiResult<void> ActivateCanvas(std::string_view canvasId);

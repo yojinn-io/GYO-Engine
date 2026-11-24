@@ -25,25 +25,19 @@
 
 namespace GYO::Engine::WorldUi {
 
-namespace Detail {
+namespace {
 
-// MapUiInput's memory between frames: whether the input method was composing when the last frame ended (a key
-// pressed while it composes is the input method's, UI-5).
+// MapUiInput's memory between frames (a Local: nothing of the World's): whether the input method was composing when
+// the last frame ended (a key pressed while it composes is the input method's, UI-5).
 struct UiInputMapState final {
     bool composing = false;
 };
-inline void HashValue(Kernel::Hasher&, const UiInputMapState&) {}
 
-// ComposeUi's memory: the text input request world_ui last wrote, so it writes only when its own wish changes and
-// does not overwrite another writer's (ImGui's) every frame (IN-4).
+// ComposeUi's memory (a Local): the text input request world_ui last wrote, so it writes only when its own wish
+// changes and does not overwrite another writer's (ImGui's) every frame (IN-4).
 struct UiRequestState final {
     std::optional<Input::TextInputRequest> written;
 };
-inline void HashValue(Kernel::Hasher&, const UiRequestState&) {}
-
-} // namespace Detail
-
-namespace {
 
 using SystemResult = Base::Result<void, Kernel::KernelError>;
 
@@ -142,7 +136,7 @@ SystemResult MapUiInput(Kernel::MessageReader<Input::KeyboardInput> keys,
                         Kernel::MessageReader<Input::TextCommitted> commits,
                         Kernel::Res<Input::ButtonInput<Input::MouseButton>> buttons,
                         Kernel::Res<Input::CursorPosition> cursor, Kernel::Res<Window::Clipboard> clipboard,
-                        Kernel::Query<Kernel::Read<Ui::UiRootState>> states, Kernel::ResMut<Detail::UiInputMapState> memory,
+                        Kernel::Query<Kernel::Read<Ui::UiRootState>> states, Kernel::Local<UiInputMapState> memory,
                         Kernel::ResMut<Ui::UiInput> out) {
     std::vector<TimedEvent> events;
     for (const Input::KeyboardInput* key : keys.Read()) {
@@ -172,7 +166,7 @@ SystemResult MapUiInput(Kernel::MessageReader<Input::KeyboardInput> keys,
             MapKey(*event.key, editing, paste, input);
         }
     }
-    memory.Get().composing = composing;
+    memory->composing = composing;
 
     input.pointerAvailable = cursor->position.has_value();
     if (cursor->position) input.pointerPixels = *cursor->position;
@@ -239,14 +233,13 @@ bool Prepare(const Ui::UiRoot& root, const std::shared_ptr<const Ui::UiDocument>
         return false;
     }
     if (!state.runtime || state.runtime->Document() != document) {
-        auto runtime = std::make_shared<Ui::UiRuntime>();
-        auto initialized = runtime->Initialize(document);
+        state.runtime.emplace();
+        auto initialized = state.runtime->Initialize(document);
         if (!initialized) {
             state.runtime.reset();
             state.failure = std::move(initialized).error();
             return false;
         }
-        state.runtime = std::move(runtime);
     }
     if (state.runtime->InteractionState().activeCanvas != root.canvas) {
         auto activated = state.runtime->ActivateCanvas(root.canvas);
@@ -319,7 +312,7 @@ void AddFonts(const Ui::UiRoot& root, const WorldAsset::AssetView& assets, Ui::U
         auto added = text.AddFont(id, *font);
         if (!added) {
             const Text::TextFailure& failure = added.error();
-            state.failure = Ui::UiFailure(Ui::UiFailureCode::MissingReference, "font '" + id + "' could not be added",
+            state.failure = Ui::UiFailure(Ui::UiFailureCode::FontUnusable, "font '" + id + "' could not be added",
                                           {}, {}, Base::CauseDetail(failure));
         }
     }
@@ -351,7 +344,7 @@ Input::TextInputRequest RequestFor(const Ui::UiRootState& state) {
 SystemResult ComposeUi(Kernel::Query<Kernel::Read<Ui::UiRoot>, Kernel::Write<Ui::UiRootState>> roots,
                        Kernel::Query<Kernel::Read<Ui::UiBindings>> bindings, CameraQuery cameras, TargetQuery targets,
                        Kernel::Res<WorldAsset::AssetView> assets, Kernel::Res<WorldAsset::AssetRequests> requests,
-                       Kernel::ResMut<Ui::UiText> textMut, Kernel::ResMut<Detail::UiRequestState> requestState,
+                       Kernel::ResMut<Ui::UiText> textMut, Kernel::Local<UiRequestState> requestState,
                        Kernel::ResMut<Input::TextInputRequest> textInputRequest) {
     Ui::UiText& text = textMut.Get();
     std::optional<Input::TextInputRequest> wish;
@@ -381,7 +374,7 @@ SystemResult ComposeUi(Kernel::Query<Kernel::Read<Ui::UiRoot>, Kernel::Write<Ui:
     text.EndFrame();
 
     // Written only when world_ui's own wish changes (IN-4: another writer, ImGui, is not overwritten every frame).
-    Detail::UiRequestState& written = requestState.Get();
+    UiRequestState& written = *requestState;
     const Input::TextInputRequest next = wish.value_or(Input::TextInputRequest{});
     if (!written.written ? next.enabled : !(*written.written == next)) {
         textInputRequest.Get() = next;
@@ -420,8 +413,6 @@ void WorldUiModule::Build(Orchestration::WorldSetup& setup) {
     r.Message<Ui::UiAction>({.name = "UiAction"});
     r.Resource<Ui::UiInput>({.name = "UiInput"});
     r.Resource<Ui::UiText>({.name = "UiText"});
-    r.Resource<Detail::UiInputMapState>({.name = "UiInputMapState"});
-    r.Resource<Detail::UiRequestState>({.name = "UiRequestState"});
     r.Set({.name = std::string(kUiSet), .schedule = options.inputSchedule});
     if (options.composeSchedule != options.inputSchedule) {
         r.Set({.name = std::string(kUiSet), .schedule = options.composeSchedule});
@@ -437,8 +428,6 @@ void WorldUiModule::Build(Orchestration::WorldSetup& setup) {
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent(world, Ui::UiInput{});
         PutIfAbsent(world, Ui::UiText{});
-        PutIfAbsent(world, Detail::UiInputMapState{});
-        PutIfAbsent(world, Detail::UiRequestState{});
         return {};
     });
 }

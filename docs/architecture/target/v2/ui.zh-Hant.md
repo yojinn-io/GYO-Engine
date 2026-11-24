@@ -69,7 +69,9 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 | 渲染 | `bevy_ui_render` 在 `ExtractSchedule` 抽節點與字形（`bevy_ui_render/src/lib.rs:246`、`:1628`），每個 view 一個 `TransparentUi` phase，排在主 pass 之後 | — | `ui_render` 在 extract schedule 抽繪製清單與圖集變更；每台相機一個 UI 的 `Pass2D`，排在那台相機的 2D／3D pass 之後 | 同 Bevy 的分法；GYO 沒有 phase，用 `CameraPasses` 的槽（`sprite_render` 同形） |
 | 動作 | `Interaction` 元件、`Activate`／`Pointer<Click>` 的實體事件（observer） | Godot：`pressed` signal | `UiAction`（`Message`：根實體、action、元素 id、payload） | 文件樹沒有逐節點的實體，事件帶元素 id；作者照 action 名分派（同 master） |
 | 文字框與輸入法 | `bevy_ui_widgets` 的文字輸入、`Window.ime_enabled`／`ime_position` | Godot：`LineEdit` 有 `ime_text`、開關輸入法並設位置（`scene/gui/line_edit.cpp:129-150`） | `world_ui` 寫 `TextInputRequest`（W 的請求資料）、讀 `TextComposition`／`TextCommitted` | 同 Bevy／Godot：請求資料、後端下一幀套用 |
-| 焦點 | `InputFocus` Resource、Tab 導覽（`bevy_input_focus`） | Godot：`focus_next`／`focus_neighbor_*` | 文件的 `focus_order`（資料契約） | 照 master 的資料契約 |
+| 焦點 | `InputFocus` Resource、Tab 導覽（`bevy_input_focus`） | Godot：`focus_next`／`focus_neighbor_*` | 文件的 `focus_order`（資料契約）；每個根各有自己的焦點 | 照 master 的資料契約 |
+| 多個根之間的輸入 | picking 擋住下層（`Pickable`／`FocusPolicy`）、鍵盤焦點只有一個 `InputFocus` | — | **偏離**：這一幀的輸入給每個 `acceptsInput` 的根，不遮擋；根之間怎麼分是作者的事（用 `acceptsInput`）。master 一次只有一份文件，這是 GYO2 新的語意，`ui.world` 釘住 | 沒有點名的需求，不加機制；有了再比 Bevy 的 picking（UI-RC3） |
+| 輸入法組字游標的單位 | winit 在後端換成位元組（`bevy_window/src/event.rs:276-284`） | — | **偏離**：`input` 的 `TextComposition.cursor` 是平台的單位（W 定的），`ui` 照 UTF-16 換算（`UiUtf16Offset`） | 外部組件的單位漏出 adapter；轉主會話（第 10 節） |
 
 ### 3.1 節點模型：文件樹（卡片照 L17 判；總宣告第 6.6 節要 U 比）
 
@@ -133,7 +135,7 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 | `UiBindings` | 元件（作者寫） | binding 值的表 |
 | `UiRootState` | 元件（`world_ui` 寫，衍生） | runtime（焦點、編輯中的文字）、這一幀的繪製清單、畫在哪台相機、最後一次的 `UiFailure` |
 | `UiAction` | `Message` | 根實體、action、元素 id、payload |
-| `UiInput` | Resource | 這一幀的中性輸入；預設由 `MapUiInput` 寫 |
+| `UiInput` | Resource | 這一幀的中性輸入；預設由 `MapUiInput` 寫。**寫的一方每幀整個覆寫**（「按下」是這一幀的事；`UpdateUi` 不清它）。給每個 `acceptsInput` 的根（不遮擋，第 3 節） |
 | `UiText` | Resource | 第 4.4 節 |
 | `UiOptions` | `WorldDescription::options` | 各 System 的 schedule／stage、`defaultInputMapping`（預設 true） |
 
@@ -150,6 +152,7 @@ System（都在公開的 set `kUiSet`）：
 
 - `ExtractUi`（extract schedule）：讀來源的 `UiRoot`＋`UiRootState`，抽成 `ExtractedUiRoots`（每份：相機實體、order、繪製清單的複本）；讀來源的 `UiText`（`ExtractRes`），照 `ChangesSince(上次的 revision)` 把圖集的變更寫成 `RenderTextures` 的 `Create`／`Update`（Alpha8 → RGBA：白色、alpha＝覆蓋率，`Nearest`）；圖片元素經 `RenderImages`（同 `sprite_render`）。
 - `QueueUiPasses`（`PostUpdate`，在 `sprite_render`、`mesh_render` 的 `Update` 之後）：每台抽出的相機，把畫到它的 UI 照 `(order, entity)` 排好、做成一個 `Pass2D`（`viewport`＝相機的視區，`view`＝視區自己的像素），放進那台相機的 `CameraPasses` 槽的最後；`camera_render` 合成時就在那台相機的世界畫面之上。
+- 圖集的身分：`UiText::Id()`（每個 `UiText` 不同、移動時跟著走）。換了一個 `UiText`（例：來源 World 被換掉，O-8，渲染 World 不重建）時，`ExtractUi` 放掉舊頁、整個重傳新的圖集，不拿舊的 revision 去讀新的圖集。
 - 顏色：`UiColor` 是線性的（照 master，從 sRGB 的十六進位解出），寫進 `Vertex2D` 時編回 sRGB 的位元組（2D pass 照存的位元組混合，`render.zh-Hant.md` 第 2 節）。**和 master 的差**：master 在線性空間混合半透明，GYO2 的 2D pass 在 sRGB 位元組上混合（同 Dear ImGui），半透明的顏色會略有不同。
 - 裁切：每個基本形的 `clip` 交給 `Draw2D::clip`；同一個貼圖、同一個裁切的連續基本形合成一個 draw。
 
@@ -163,11 +166,13 @@ System（都在公開的 set `kUiSet`）：
 | UI-4 | 編輯中的文字只活到送出、取消、失焦、或它的 binding 被改（master DI 4） | 測試 |
 | UI-5 | 組字只畫、不進文字，確定才進（master DI 6）；Enter 在組字中不送出（組字由輸入法吃掉 Enter，`sdl_window` 不把它當 `KeyboardInput` 送；`world_ui` 這一側：有組字時的 Enter 不算確定） | 測試 |
 | UI-6 | 哪個鍵是什麼操作是 `MapUiInput` 的預設、可關（master DI 7 的「產品的對應」→ 預設＋可換） | 測試 |
-| UI-7 | 渲染 World 只讀：`ui_render` 不寫來源的任何東西，圖集只讀 `ChangesSince` | Kernel 的 `Extract<Read<…>>`（DI-KS 13） |
+| UI-7 | 渲染 World 只讀：`ui_render` 不寫來源的任何東西，圖集只讀 `ChangesSince` | Kernel 的 `Extract<Read<…>>`（DI-KS 13）；`UiRootState` 以值持有 runtime，const 會傳下去 |
 
 ## Replacement Criteria
 
 - **UI-RC1**（節點模型）：Editor 的 `gyo.ui` 不再是 Editor↔Runtime 的資料形式、或出現要在單一 UI 元素上掛作者元件的點名需求時，重比第 3.1 節的 (乙)。
+- **UI-RC3**（根之間的輸入）：出現「上層的 UI 要擋住下層」或「只有一個鍵盤焦點」的點名需求時，照 Bevy 的 picking／`InputFocus` 加。
+- **UI-RC4**（外觀）：游標寬、組字底線粗、選取的透明度、文字框的內縮、slider 的幾何是 Engine 的預設外觀（照 master 的值，寫在 `UiRuntime.cpp`）；有作者要換時，照 Bevy 的 `TextCursorStyle` 做成有預設值的樣式。
 - **UI-RC2**（排字快取）：一幀的排字時間超過幀預算的 10%（量了才算）時，改成以元素為鍵的保留式快取。
 
 ## 6. 測試、突變
@@ -195,6 +200,26 @@ System（都在公開的 set `kUiSet`）：
 - 大廳的情境測試在本機 `ctest -L "cpu|gpu"` 與 L1 三平台都過。
 - 新突變全部 killed（存活的要分「契約要補／誤用不補」，照 classify-gaps 的分法寫進報告）。
 
+## 7.1 設計審查（Opus／high；作者與審查者同為 Opus：Fable 暫停）
+
+blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/design-review.md`。處置：
+
+| # | 指摘 | 處置 |
+|---|---|---|
+| S1 | `UiRootState::runtime` 用 `shared_ptr`，Extract 拿到 const 也能改 runtime（UI-7 守不住） | 改成 `std::optional<UiRuntime>` |
+| S2 | 組字游標的單位漏出 adapter | 第 3 節加一列、第 10 節轉主會話（W 的契約） |
+| S3 | 圖集快取沒有身分，換掉來源 World 會錯 | `UiText::Id()`；`ExtractUi` 看到換了就放掉舊頁重傳；`ui.render` 加一案 |
+| S4 | 多個根之間的輸入路由沒寫 | 第 3 節、第 4.6 節寫明「給每個 `acceptsInput` 的根、不遮擋」；`ui.world` 加兩個根的案；UI-RC3 |
+| S5 | 第 9 節漏了 `window_camera`、大廳測試繞過它 | 第 9 節補 `window_camera`、`transform`；`ui.lobby` 改經 `WindowResized` → `window_camera`；寫明沒驗的範圍 |
+| N1 | 外觀常數釘在 Engine | UI-RC4（Engine 的預設外觀，有作者要換時做成樣式） |
+| N2 | 沒有使用者的 API | 拿掉 `UiRuntime::Reset`、`UiText::CachedLayouts`；`HitTestUiLayout` 等照 master 留在公開介面（工具的預覽用） |
+| N3 | 圖片有兩條路 | 第 9 節第 9 步寫明理由 |
+| N4 | 字型加不進去用 `MissingReference`、每幀重試 | 新碼 `FontUnusable`；重試寫進限界 |
+| N5 | `"ComposeCameraPasses"` 是字串 | `camera_render` 匯出 `kComposeCameraPasses` |
+| N6 | `UiInput` 的「按下」沒人清 | 寫明「寫的一方每幀整個覆寫」與先後（第 4.6 節、第 9 節第 7 步） |
+| N7 | 私有記憶放成 World 的 Resource | 改用 Kernel 的 `Local<T>` |
+| N8 | 圖集無上限成長 | 寫進限界 |
+
 ## 8. 範囲の限界
 
 - IME 只能實機驗；CI 驗的是 `TextComposition`／`TextCommitted` 的路徑（同總宣告第 15 節）。
@@ -202,21 +227,26 @@ System（都在公開的 set `kUiSet`）：
 - 半透明的顏色和 master 略有不同（第 4.7 節）。
 - 文字框不捲動、單行；游標以 code point 移動，組合字元的中間可以停（畫的時候退到字素邊界）。
 - 輸入法組字游標的單位：照 UTF-16 換算；Linux 的輸入法若給 code point，BMP 以外的字會偏。
+- 圖集只增不減：`fit` 的倍率是連續值，拖拉視窗大小時每個中間的字級都會點陣化一批字形，沒有清掉的方法（Bevy 有 `FontAtlasSet::clear`）；有量到的壓力時再加。
+- 字型加不進去、文件驗證不過時，每幀重試一次（文件不可變，結果相同）；成本小，沒有記住失敗。
 
 ## 9. 留給 PvP 卡的接法
 
-大廳（PV12）的接線歸 PvP 移植卡。照下面接，整條路已由 `ui.lobby` 驗過（真的 `pvp_lobby.json`、真的字型、輸入 `Message` → `UiAction`、組字、送出、`RenderCommands`）。
+大廳（PV12）的接線歸 PvP 移植卡。照下面接，`ui.lobby` 驗過的路：catalog → loader → 文件與字型 → `UiRoot`；`window` 的 `WindowResized` → `window_camera` → 相機；輸入 `Message` → `UiAction`、組字、送出；渲染 World 的 `RenderCommands`。沒驗的：`sdl_window`、`sdl_gpu`（真的視窗、IME、GPU），PvP 卡實機。
 
-1. **產品的 Module 列**：客戶端的來源 World 帶 `world_ui`（它要的 `input`、`window`、`camera`、`world_asset` 都是 `default=yes`；明列 `units` 的產品要寫出來），渲染 World 帶 `ui_render`（和 `render_world`、`camera_render` 一起；R2b 的形）。來源 World 也要有 `world_render`（`camera_render` 抽相機的清除設定）。
+1. **產品的 Module 列**：客戶端的來源 World 帶 `world_ui`（它要的 `input`、`window`、`camera`、`world_asset` 與 `transform`、`window_camera` 都是 `default=yes`；明列 `units` 的產品要寫出來——漏了 `window_camera` 時相機一直拿不到目標大小，UI 安靜地不畫，`UiRootState::camera` 是空的），渲染 World 帶 `ui_render`（和 `render_world`、`camera_render` 一起；R2b 的形）。來源 World 也要有 `world_render`（`camera_render` 抽相機的清除設定）。
 2. **loader**：`AssetLoaderRegistry::Register<Ui::UiDocumentLoader>()`、`Register<Text::FontLoader>()`。catalog 裡 `pvp_lobby.json` 的型別寫 `"ui"`、字型 `object_fps_pvp.font.ui` 的型別寫 `"font"`；文件讀好、引用的字型也讀好之後才畫（字型由 `world_ui` 從素材加進 `UiText`）。
 3. **掛上去**：生一個實體，`UiRoot{document = AssetRequests::Load<Ui::UiAsset>(id), canvas = "lobby"}`、`UiBindings{address, room, status, hint}`。相機不必指定（目標 0 上 `(order, entity)` 最大的那台；3D 場景＋HUD 時可以用 `UiRoot::camera` 指 HUD 的相機）。大廳關掉＝拿掉實體或換掉 `canvas`。
 4. **動作**：在 `Update`（或 `after` `WorldUi::kUiSet`）讀 `MessageReader<Ui::UiAction>`，照 `action` 分派（`pvp.submit_address` 的 payload 是字串，`pvp.refresh` 等沒有 payload）；處理完改寫 `UiBindings`（例：送出後把新的位址寫回 `address`；binding 被改時，編輯中的文字會被丟棄，UI-4）。
 5. **位址的字元過濾**（master 的 `Pvp/AddressText`）：放進 `UiRoot::filter`（`std::function<std::string(element, text)>`），只對確定的文字（打字、貼上、組字確定）作用。
 6. **輸入法**：`world_ui` 在文字框編輯時寫 `TextInputRequest`（開、候選窗的矩形，視窗的邏輯像素），編輯結束時寫一次關；`sdl_window` 下一幀套用。同一個 World 還有 ImGui 時，照 IN-4 由作者排先後（`world_ui` 只在自己的意思改變時寫）。
-7. **鍵的對應**：預設的 `MapUiInput` 就是大廳要的（Tab／Shift+Tab、Enter、Escape、編輯鍵、Ctrl 或 ⌘＋A／V）。要換手把或別的鍵：`UiOptions::defaultInputMapping = false`，自己寫 `Ui::UiInput` 這個 Resource（指標是視窗的邏輯像素）。
+7. **鍵的對應**：預設的 `MapUiInput` 就是大廳要的（Tab／Shift+Tab、Enter、Escape、編輯鍵、Ctrl 或 ⌘＋A／V）。要換手把或別的鍵：`UiOptions::defaultInputMapping = false`，自己寫 `Ui::UiInput` 這個 Resource——每幀整個覆寫，在 `PreUpdate`、`before` `WorldUi::kUiSet`；指標是視窗的邏輯像素。
+9. **圖片元素**：文件是素材時，圖片已由 loader 宣告成引用；`world_ui` 再以 id 經 `AssetRequests` 要一次 Handle（`ui_render` 用 Handle 找貼圖，和 `sprite_render` 同一條路），作者持有的文件也一樣自動要。字型則不同：作者持有的文件要自己 `UiText::AddFont`（字型要進 `UiText`，不是 Handle）。
 8. **錯誤**：缺 binding、文件驗證不過等，寫在 `UiRootState::failure`（那一份文件不畫，World 照跑）；要顯示或記 log 由產品讀它。
 
 ## 10. 回報主會話
+
+- **轉 W 的契約（設計審查 S2）**：`input` 的 `TextComposition.cursor` 是平台的單位（Windows、macOS 是 UTF-16），每個消費者（`ui`、之後 K 的 ImGui）都得自己換算，作者自己寫 `UiInput` 時也得懂 UTF-16。建議改成 `text` 裡的位元組偏移、由 `sdl_window` 的 adapter 換算（同 winit 給 Bevy 的形）；改了之後 `ui` 拿掉 `UiUtf16Offset`。本批不改 W。
 
 - 節點模型照 L17 選了文件樹（第 3.1 節）；總宣告第 6.6 節寫的是「U 的宣告比、交使用者」——新 AGENTS 下卡片自己判，請主會話判要不要再交使用者。
 - `gyo.ui` 經 JSON Module 讀的行為與版本不升（第 4.1 節）：JSON 宣告第 452 行寫「交使用者」，同上。

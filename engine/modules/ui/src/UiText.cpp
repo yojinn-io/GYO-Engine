@@ -1,12 +1,17 @@
 #include "engine/ui/UiText.hpp"
 
+#include <atomic>
 #include <bit>
 #include <span>
 #include <utility>
 
 namespace GYO::Engine::Ui {
 
-UiText::UiText(Text::AtlasOptions atlas) : atlas_(atlas) {}
+namespace {
+std::atomic<std::uint64_t> nextId{1};
+} // namespace
+
+UiText::UiText(Text::AtlasOptions atlas) : id_(nextId.fetch_add(1, std::memory_order_relaxed)), atlas_(atlas) {}
 
 Text::TextResult<void> UiText::AddFont(std::string id, const Text::FontData& data, const std::uint32_t faceIndex) {
     if (fonts_.find(id) != fonts_.end()) return {};

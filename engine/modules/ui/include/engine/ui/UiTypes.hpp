@@ -33,6 +33,9 @@ enum class UiFailureCode : std::uint8_t {
     BindingTypeMismatch,
     MissingBinding,
     RuntimeState,
+    // A font the document names was loaded but the text Module could not open it (world_ui; the text's failure
+    // in detail).
+    FontUnusable,
 };
 
 [[nodiscard]] constexpr const char* ToString(const UiFailureCode code) noexcept {
@@ -45,6 +48,7 @@ enum class UiFailureCode : std::uint8_t {
     case UiFailureCode::BindingTypeMismatch: return "BindingTypeMismatch";
     case UiFailureCode::MissingBinding: return "MissingBinding";
     case UiFailureCode::RuntimeState: return "RuntimeState";
+    case UiFailureCode::FontUnusable: return "FontUnusable";
     }
     return "Unknown";
 }

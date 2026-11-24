@@ -16,7 +16,7 @@ set_tests_properties(ui.contract PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR
 
 # The runtime, text, world_ui, ui_render and the lobby (ui.runtime ... ui.lobby).
 add_executable(gyo_ui_tests TestMain.cpp RuntimeTests.cpp TextFieldTests.cpp TextPlacementTests.cpp UiPassTests.cpp WorldUiTests.cpp)
-target_link_libraries(gyo_ui_tests PRIVATE GYO::Ui GYO::WorldUi GYO::UiRender GYO::Input GYO::Window GYO::Camera
+target_link_libraries(gyo_ui_tests PRIVATE GYO::Ui GYO::WorldUi GYO::UiRender GYO::Input GYO::Window GYO::WindowCamera GYO::Camera
     GYO::Transform GYO::EntityIds GYO::WorldAsset GYO::WorldRender GYO::RenderWorld GYO::CameraRender
     gyo_test_support doctest::doctest)
 target_include_directories(gyo_ui_tests PRIVATE "${GYO_REPOSITORY_ROOT}/tests/common/asset" "${GYO_REPOSITORY_ROOT}/tests/common/world_asset")

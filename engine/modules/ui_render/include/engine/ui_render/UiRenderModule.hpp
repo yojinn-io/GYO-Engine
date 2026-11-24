@@ -45,8 +45,10 @@ struct ExtractedUiRoots final {
     std::vector<ExtractedUiRoot> roots;
 };
 
-// ui_render's Resource: the textures of the atlas pages and the atlas revision last uploaded.
+// ui_render's Resource: the textures of the atlas pages, which UiText they are of (UiText::Id; another one, as after
+// the source World is replaced, lets them go and uploads the new atlas whole) and the revision last uploaded.
 struct UiAtlasTextures final {
+    std::uint64_t atlas = 0;
     std::uint64_t revision = 0;
     std::vector<Render::TextureId> pages;
     std::vector<Render::TextureDesc> sizes;

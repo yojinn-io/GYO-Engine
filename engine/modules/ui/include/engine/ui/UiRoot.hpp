@@ -53,8 +53,9 @@ struct UiBindings final {
 
 // What world_ui derives for a root each frame (written only by world_ui).
 struct UiRootState final {
-    // The runtime of the document shown; null until the document is loaded. Shared so the state can be copied.
-    std::shared_ptr<UiRuntime> runtime;
+    // The runtime of the document shown; none until the document is loaded. Held by value, so a reader through
+    // Extract<Read<UiRootState>> gets it const (UI-7).
+    std::optional<UiRuntime> runtime;
     // The camera the root was laid out in this frame; none: no valid camera (nothing is drawn).
     std::optional<Kernel::EntityId> camera;
     // That camera's viewport: its top-left corner on the target and its size, in physical pixels, and the physical

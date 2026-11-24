@@ -32,6 +32,7 @@
 #include "engine/ui_render/UiRenderModule.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
+#include "engine/window_camera/WindowCameraModule.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/world_render/WorldRenderModule.hpp"
@@ -64,6 +65,7 @@ struct Pending {
     std::vector<In::CursorMoved> moved;
     std::vector<In::TextComposition> composition;
     std::vector<In::TextCommitted> committed;
+    std::vector<W::WindowResized> resized;
 };
 Pending pending;
 std::vector<Ui::UiAction> actions;
@@ -90,6 +92,11 @@ K::SystemResult WriteInput(K::MessageWriter<In::KeyboardInput> keys, K::MessageW
     SendAll(pending.keys, keys);
     SendAll(pending.composition, composition);
     SendAll(pending.committed, committed);
+    return {};
+}
+
+K::SystemResult WriteWindow(K::MessageWriter<W::WindowResized> resized) {
+    SendAll(pending.resized, resized);
     return {};
 }
 
@@ -151,6 +158,7 @@ O::RegisteredUnits Units() {
     Add<C::CameraModule>(units, "camera", {"transform"});
     Add<In::InputModule>(units, "input");
     Add<W::WindowModule>(units, "window");
+    Add<GYO::Engine::WindowCamera::WindowCameraModule>(units, "window_camera", {"window", "camera"});
     Add<WU::WorldUiModule>(units, "world_ui", {"ui", "input", "window", "camera", "world_asset"});
     Add<GYO::Engine::WorldRender::WorldRenderModule>(units, "world_render", {"render"});
     Add<RW::RenderWorldModule>(units, "render_world", {"render"});
@@ -181,9 +189,11 @@ std::unique_ptr<O::Product> Make(const bool withRender = true, const GYO::Engine
     O::WorldDescription game;
     game.name = "Game";
     // world_render: camera_render extracts the cameras' clear settings from the source (else R-E4).
-    game.units = {"entity_ids", "world_asset", "transform", "camera", "input", "window", "world_ui", "world_render"};
+    // window_camera: the window's size reaches the camera as a backend's WindowResized would bring it (ui.lobby).
+    game.units = {"entity_ids", "world_asset", "transform", "camera", "input", "window", "window_camera", "world_ui", "world_render"};
     game.build = [](O::WorldSetup& s) {
         s.Registrar().AddSystem<&WriteInput>(In_("TestWriteInput", O::DefaultSchedules::preUpdate, {std::string(In::kInputSet)}));
+        s.Registrar().AddSystem<&WriteWindow>(In_("TestWriteWindow", O::DefaultSchedules::preUpdate, {std::string(W::kWindowSet)}));
         s.Registrar().AddSystem<&RecordActions>(In_("TestRecordActions", O::DefaultSchedules::update));
     };
     d.worlds.push_back(std::move(game));
@@ -474,6 +484,61 @@ TEST_CASE("ui_render: the render World draws a root's UI over its camera, glyphs
     CHECK_MESSAGE((creates == 0 && updates >= 1), "[ui-render-atlas-changes-only] " << creates << " " << updates);
 }
 
+TEST_CASE("ui_render: a replaced UiText is uploaded anew and the old atlas's pages are let go") {
+    auto p = Make(true);
+    K::World& game = GameOf(*p);
+    WindowOf(game, 200, 200, 2.0F);
+    CameraAt(game, 1);
+    Menu(game, 2, "abc");
+    Frames(*p, 2);
+    R::TextureId oldPage{};
+    for (const R::TextureOp& op : asks) {
+        if (const auto* create = std::get_if<R::TextureCreate>(&op); create != nullptr && create->desc.filter == R::TextureFilter::Nearest) {
+            oldPage = create->id;
+        }
+    }
+    REQUIRE(oldPage.value != 0);
+    // A new UiText (as in a replaced source World): its revisions start again from nothing.
+    asks.clear();
+    game.SetResource(Ui::UiText{});
+    REQUIRE(game.ResourceMut<Ui::UiText>()->AddFont("test.font", GYO::Test::UiSupport::Font()));
+    Frames(*p);
+    bool released = false;
+    bool made = false;
+    for (const R::TextureOp& op : asks) {
+        if (const auto* release = std::get_if<R::TextureRelease>(&op)) released = released || release->id == oldPage;
+        if (const auto* create = std::get_if<R::TextureCreate>(&op)) made = made || create->desc.filter == R::TextureFilter::Nearest;
+    }
+    CHECK_MESSAGE((released && made), "[ui-render-atlas-identity] released " << released << " made " << made);
+}
+
+TEST_CASE("ui_world: the frame's input goes to every root that accepts it; roots do not occlude each other") {
+    auto p = Make(false);
+    K::World& game = GameOf(*p);
+    WindowOf(game, 200, 200, 2.0F);
+    CameraAt(game, 1);
+    const K::EntityId under = Menu(game, 2);
+    const K::EntityId over = Menu(game, 3);
+    Ui::UiRoot top = *game.Get<Ui::UiRoot>(over);
+    top.order = 1;
+    game.Insert(over, top);
+    Frames(*p);
+    // A click on button "two" of the root on top reaches the root under it too (the author routes with acceptsInput).
+    Click(75.0F, 10.0F);
+    Frames(*p);
+    REQUIRE(actions.size() == 2);
+    CHECK_MESSAGE(((actions[0].root == under && actions[1].root == over) || (actions[0].root == over && actions[1].root == under)),
+                  "[ui-world-broadcast]");
+    // A root that does not accept input gets none: Tab moves only the other's focus.
+    Ui::UiRoot deaf = *game.Get<Ui::UiRoot>(under);
+    deaf.acceptsInput = false;
+    game.Insert(under, deaf);
+    Key(In::KeyCode::Tab);
+    Frames(*p);
+    CHECK_MESSAGE(StateOf(game, under).runtime->InteractionState().focusedElement == "two", "[ui-world-accepts-input]");
+    CHECK(StateOf(game, over).runtime->InteractionState().focusedElement == "field");
+}
+
 // ---- PvP's lobby (porting inventory PV12).
 
 namespace {
@@ -504,8 +569,9 @@ TEST_CASE("ui_lobby: the lobby loads through world_asset with its font, and keys
     REQUIRE(static_cast<bool>(registry->Register<Ui::UiDocumentLoader>()));
     REQUIRE(static_cast<bool>(registry->Register<GYO::Engine::Text::FontLoader>()));
     K::World& game = GameOf(*p);
-    // A 1280 x 720 window at twice the pixels (Retina).
-    WindowOf(game, 2560, 1440, 2.0F);
+    // A 1280 x 720 window at twice the pixels (Retina), its size written as sdl_window writes it: window -> window_camera
+    // -> the camera's target size.
+    pending.resized.push_back({{2560, 1440}, 2.0F, Next()});
     CameraAt(game, 1);
     Ui::UiRoot root;
     root.document = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<Ui::UiAsset>(
@@ -522,7 +588,7 @@ TEST_CASE("ui_lobby: the lobby loads through world_asset with its font, and keys
         Frames(*p);
     }
     const Ui::UiRootState& state = StateOf(game, lobby);
-    REQUIRE_MESSAGE(state.runtime != nullptr, "[ui-lobby-loaded]");
+    REQUIRE_MESSAGE(state.runtime.has_value(), "[ui-lobby-loaded]");
     CHECK(!state.failure.has_value());
     CHECK_MESSAGE(game.Resource<Ui::UiText>()->HasFont(kLobbyFont), "[ui-lobby-font]");
     CHECK_MESSAGE(!All<Ui::UiGlyphDraw>(state.drawList).empty(), "[ui-lobby-text-drawn]");

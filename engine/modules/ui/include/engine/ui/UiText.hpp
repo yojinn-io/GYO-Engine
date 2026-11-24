@@ -41,7 +41,10 @@ public:
 
     // Forgets the layouts no Layout call asked for since the previous EndFrame.
     void EndFrame();
-    [[nodiscard]] std::size_t CachedLayouts() const noexcept { return layouts_.size(); }
+
+    // Which UiText this is: unique per process, kept by a move. A renderer that caches the atlas's pages keys them by
+    // it, so a UiText replaced (a source World replaced, O-8) is uploaded anew, not read as the old one's revisions.
+    [[nodiscard]] std::uint64_t Id() const noexcept { return id_; }
 
 private:
     struct Key {
@@ -59,6 +62,7 @@ private:
         bool used = true;
     };
 
+    std::uint64_t id_ = 0;
     Text::TextContext context_;
     Text::GlyphAtlas atlas_;
     std::map<std::string, Text::FontId, std::less<>> fonts_;

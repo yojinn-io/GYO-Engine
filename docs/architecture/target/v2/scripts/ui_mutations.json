@@ -464,6 +464,33 @@
       "target": "gyo_ui_tests",
       "cases": "ui_runtime:*",
       "expect": "\\[ui\\-master\\-layout\\]"
+    },
+    {
+      "id": "ui-atlas-identity-ignored",
+      "what": "a replaced UiText read as the old atlas",
+      "guards": [
+        "ui 4.7",
+        "UI-7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (text.Id() != state.atlas) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-render\\-atlas\\-identity\\]"
+    },
+    {
+      "id": "ui-accepts-input-ignored",
+      "what": "a root that does not accept input still gets it",
+      "guards": [
+        "ui 4.6"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "if (root.acceptsInput) {",
+      "replace": "if (true) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-accepts\\-input\\]"
     }
   ]
 }
