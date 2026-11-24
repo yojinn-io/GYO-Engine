@@ -148,6 +148,7 @@ master 的結構：Client ↔ Gateway（Go 行程，外部 protobuf）↔ Match�
 - 只用 **FBX**，經 ufbx（master `engine/model/backend/ufbx/src/UfbxModelLoader.cpp`）。catalog 規定 model 只能是 `.fbx`（`docs/object_fps_pvp/assets.zh-Hant.md` §5）。執行時沒有 glTF、OBJ。
 - 每個頂點只取最大的 4 個權重再正規化（`UfbxModelLoader.cpp:149-159`）；動畫用 `ufbx_bake_anim` 烘成 key（:179-190）。
 - 貼圖只有 PNG；交付的 JPG 先轉 PNG。
+- **搬的時候要處理（model 修訂 1，2026-11-24）**：GYO2 的 `FbxLoader` 照 asset 的使用者決定 11 把材質的貼圖宣告成依賴（相對於 FBX 檔的路徑），但 viewmodel 的 FBX 寫的是 `../textures/Nailer1_D.jpg`、第三人稱武器寫的是 `nailer2_world_v02.fbm/…_basecolor_1k.jpg`，catalog 裡是轉過的 PNG，引用會對不到（模型照樣載入，只有「連同依賴」是 `Failed`）。二選一：重新匯出 FBX 讓它寫 PNG 的路徑，或那兩項設 `"textures": false`、產品照 `baseColorTexture` 自己對（`docs/architecture/target/v2/model.zh-Hant.md` 第 3 節「材質」）。Match 的兩項（身體、UAL1）設 `"meshes": false`。
 
 ### 4.2 各模型
 

@@ -24,10 +24,10 @@ enum class RetargetCode : std::uint8_t {
     BadTranslationScale = 2,
     // Retarget: a binding names a node out of range, or a node is bound twice.
     BadBinding = 3,
-    // Retarget: a bound node's parent chain (in its own list) has a rest scale
-    // that is not uniform and above 0, so its rest frame has no single
-    // rotation and scale; or a bound source node's own rest scale has a
-    // component of 0.
+    // Retarget: a bound node's parent chain (in its own list) has a reference
+    // scale that is not uniform and above 0, so its reference frame has no
+    // single rotation and scale; or a bound source node's own reference scale
+    // has a component of 0.
     BadRestScale = 4,
 };
 
@@ -74,25 +74,31 @@ struct RetargetSettings final {
 // A clip of the target list made from a clip of the source list (made for
 // source.size() nodes; another size is a Programmer Error).
 //
-// Each bound node's motion relative to its rest pose is carried over, not its
-// absolute values, so rest poses may differ in orientation and proportion: a
-// source key equal to the source rest gives the target rest. For source node
-// s bound to target node t, with S and T the model-space rest rotations of
-// their parents (identity for a root):
+// Each bound node's motion relative to a reference pose is carried over, not
+// its absolute values, so the two reference poses may differ in orientation
+// and proportion: a source key equal to the source reference gives the target
+// reference. The reference poses are the author's choice (a T-pose, a bind
+// pose, a clip's first frame); empty spans mean the nodes' rest, and a given
+// span has one transform per node (another size is a Programmer Error). Below,
+// rest_s and rest_t are the reference values. For source node s bound to
+// target node t, with S and T the model-space reference rotations of their
+// parents (identity for a root):
 //
 //     C            = conj(T) * S
 //     rotation'    = C * rotation * conj(rest_s.rotation) * conj(C) * rest_t.rotation
 //     translation' = rest_t.translation + C (translation - rest_s.translation) * k
 //     scale'       = rest_t.scale * scale / rest_s.scale   (per component)
 //
-// where k is translationScale times the source parent's uniform rest scale
-// over the target parent's. Tracks of unbound source nodes are dropped;
+// where k is translationScale times the source parent's uniform reference
+// scale over the target parent's. Tracks of unbound source nodes are dropped;
 // target nodes with no bound source keep their rest pose. Key times and the
 // duration are copied.
 [[nodiscard]] Base::Result<AnimationClip, RetargetFailure> Retarget(std::span<const Node> source,
                                                                     std::span<const Node> target,
                                                                     const AnimationClip& clip,
                                                                     std::span<const JointBinding> bindings,
-                                                                    const RetargetSettings& settings = {});
+                                                                    const RetargetSettings& settings = {},
+                                                                    std::span<const LocalTransform> sourceReference = {},
+                                                                    std::span<const LocalTransform> targetReference = {});
 
 } // namespace GYO::Engine::Model

@@ -16,8 +16,6 @@
 namespace GYO::Engine::Model::Detail {
 namespace {
 
-// What ufbx may allocate for one file, for its work and for the scene.
-constexpr std::size_t kMemoryLimit = std::size_t{256} * 1024u * 1024u;
 
 struct SceneDeleter final {
     void operator()(ufbx_scene* scene) const noexcept { ufbx_free_scene(scene); }
@@ -28,8 +26,8 @@ struct BakeDeleter final {
 using ScenePtr = std::unique_ptr<ufbx_scene, SceneDeleter>;
 using BakePtr = std::unique_ptr<ufbx_baked_anim, BakeDeleter>;
 
-Base::Err<ImportFailure> Fail(const ImportProblem problem, const char* message, std::string detail = {}) {
-    return Base::Err(ImportFailure::Make(problem, message, std::move(detail)));
+Base::Err<ImportFailure> Fail(const FbxLoaderCode code, const char* message, std::string detail = {}) {
+    return Base::Err(ImportFailure::Make(code, message, std::move(detail)));
 }
 
 std::string Text(const ufbx_string value) { return {value.data, value.length}; }
@@ -83,8 +81,8 @@ ufbx_load_opts LoadOptions(const ImportOptions& options) {
     // are told apart from a broken FBX file (a forced FBX format reads any
     // text as a truncated ASCII file); a file it reads as another format is
     // NotFbx too.
-    opts.temp_allocator.memory_limit = kMemoryLimit;
-    opts.result_allocator.memory_limit = kMemoryLimit;
+    opts.temp_allocator.memory_limit = options.memoryLimit;
+    opts.result_allocator.memory_limit = options.memoryLimit;
     return opts;
 }
 
@@ -127,11 +125,15 @@ private:
         for (const ufbx_material* source : scene_.materials) {
             Material material;
             material.name = Text(source->name);
-            const ufbx_material_map& color = source->fbx.diffuse_color;
+            // The FBX diffuse colour and factor; a material on a custom shader
+            // may leave them empty, and then ufbx's PBR base colour and factor,
+            // defined for every shading model, stand in.
+            const bool builtin = source->fbx.diffuse_color.has_value;
+            const ufbx_material_map& color = builtin ? source->fbx.diffuse_color : source->pbr.base_color;
             if (color.has_value) {
-                // ufbx resolves the colour but leaves the diffuse factor apart;
-                // it scales RGB, alpha stays straight.
-                const ufbx_material_map& factorMap = source->fbx.diffuse_factor;
+                // ufbx resolves the colour but leaves the factor apart; it
+                // scales RGB, alpha stays straight.
+                const ufbx_material_map& factorMap = builtin ? source->fbx.diffuse_factor : source->pbr.base_factor;
                 const double factor = factorMap.has_value ? factorMap.value_real : 1.0;
                 material.baseColor = {static_cast<float>(color.value_vec4.x * factor),
                                       static_cast<float>(color.value_vec4.y * factor),
@@ -151,40 +153,54 @@ private:
         if (mesh == nullptr || mesh->num_triangles == 0) return {};
         const std::string where = "mesh at node \"" + Text(node.name) + "\"";
         if (mesh->skin_deformers.count > 1) {
-            return Fail(ImportProblem::Unsupported, "a mesh has at most one skin", where);
+            return Fail(FbxLoaderCode::Unsupported, "a mesh has at most one skin", where);
         }
         const ufbx_skin_deformer* skin = mesh->skin_deformers.count == 1 ? mesh->skin_deformers.data[0] : nullptr;
-        Skin skinTemplate;
+        std::uint32_t skinIndex = kNoSkin;
         if (skin != nullptr) {
-            if (skin->clusters.count > std::size_t{std::numeric_limits<std::uint16_t>::max()} + 1) {
-                return Fail(ImportProblem::Unsupported, "a skin has at most 65536 joints", where);
-            }
-            for (const ufbx_skin_cluster* cluster : skin->clusters) {
-                if (cluster->bone_node == nullptr) {
-                    return Fail(ImportProblem::Undecodable, "a skin cluster has a joint node", where);
-                }
-                skinTemplate.joints.push_back(nodeIndex_[cluster->bone_node->typed_id]);
-                skinTemplate.inverseBindMatrices.push_back(ToMatrix4(cluster->geometry_to_bone));
-            }
+            auto index = MakeSkin(*skin, where);
+            if (!index) return Base::Err(std::move(index.error()));
+            skinIndex = *index;
         }
         if (mesh->material_parts.count > 0) {
             for (const ufbx_mesh_part& part : mesh->material_parts) {
                 if (part.num_triangles == 0) continue;
-                if (auto r = ReadPart(node, *mesh, skin, skinTemplate, &part, where); !r) return r;
+                if (auto r = ReadPart(node, *mesh, skin, skinIndex, &part, where); !r) return r;
             }
             return {};
         }
-        return ReadPart(node, *mesh, skin, skinTemplate, nullptr, where);
+        return ReadPart(node, *mesh, skin, skinIndex, nullptr, where);
+    }
+
+    // The model's skin for the deformer, one per mesh: the mesh's material
+    // parts share it. (A deformer shared by instanced meshes gets one copy per
+    // mesh: the same values.)
+    Base::Result<std::uint32_t, ImportFailure> MakeSkin(const ufbx_skin_deformer& skin, const std::string& where) {
+        if (skin.clusters.count > std::size_t{std::numeric_limits<std::uint16_t>::max()} + 1) {
+            return Fail(FbxLoaderCode::Unsupported, "a skin has at most 65536 joints", where);
+        }
+        Skin out;
+        for (const ufbx_skin_cluster* cluster : skin.clusters) {
+            if (cluster->bone_node == nullptr) {
+                return Fail(FbxLoaderCode::Undecodable, "a skin cluster has a joint node", where);
+            }
+            out.joints.push_back(nodeIndex_[cluster->bone_node->typed_id]);
+            out.inverseBindMatrices.push_back(ToMatrix4(cluster->geometry_to_bone));
+        }
+        const auto index = static_cast<std::uint32_t>(model_.skins.size());
+        model_.skins.push_back(std::move(out));
+        return index;
     }
 
     // One Mesh per material part: the corners of its triangles, then
     // identical vertices merged.
     Base::Result<void, ImportFailure> ReadPart(const ufbx_node& node, const ufbx_mesh& mesh,
-                                               const ufbx_skin_deformer* skin, const Skin& skinTemplate,
+                                               const ufbx_skin_deformer* skin, const std::uint32_t skinIndex,
                                                const ufbx_mesh_part* part, const std::string& where) {
         Mesh out;
         out.name = Text(node.name);
         out.node = nodeIndex_[node.typed_id];
+        out.skin = skinIndex;
         const std::size_t slot = part != nullptr ? part->index : 0;
         if (slot < node.materials.count && node.materials.data[slot] != nullptr) {
             out.material = node.materials.data[slot]->typed_id;
@@ -202,7 +218,7 @@ private:
                     const Math::Vec2 uv = ToVec2(ufbx_get_vertex_vec2(&mesh.vertex_uv, corner));
                     out.uvs.push_back({uv.x, 1.0F - uv.y});
                 }
-                if (skin != nullptr) AddInfluences(*skin, mesh.vertex_indices.data[corner], out.skin);
+                if (skin != nullptr) AddInfluences(*skin, mesh.vertex_indices.data[corner], out);
             }
         };
         if (part != nullptr) {
@@ -211,20 +227,16 @@ private:
             for (const ufbx_face face : mesh.faces) addFace(face);
         }
         if (out.positions.size() >= std::numeric_limits<std::uint32_t>::max()) {
-            return Fail(ImportProblem::Unsupported, "a mesh has fewer than 2^32 vertices", where);
+            return Fail(FbxLoaderCode::Unsupported, "a mesh has fewer than 2^32 vertices", where);
         }
         if (auto r = MergeVertices(out); !r) return r;
-        if (skin != nullptr) {
-            out.skin.joints = skinTemplate.joints;
-            out.skin.inverseBindMatrices = skinTemplate.inverseBindMatrices;
-        }
         model_.meshes.push_back(std::move(out));
         return {};
     }
 
     // The four largest weights of the vertex (ties: the lower joint first),
     // scaled to sum to 1; all 0 when the vertex has no weight above 0.
-    static void AddInfluences(const ufbx_skin_deformer& skin, const std::uint32_t vertex, Skin& out) {
+    static void AddInfluences(const ufbx_skin_deformer& skin, const std::uint32_t vertex, Mesh& out) {
         std::array<std::uint16_t, 4> joints{};
         std::array<float, 4> weights{};
         if (vertex < skin.vertices.count) {
@@ -259,21 +271,21 @@ private:
         add(mesh.positions);
         add(mesh.normals);
         add(mesh.uvs);
-        add(mesh.skin.vertexJoints);
-        add(mesh.skin.vertexWeights);
+        add(mesh.vertexJoints);
+        add(mesh.vertexWeights);
         mesh.indices.resize(corners);
         ufbx_error error{};
         const std::size_t vertices =
             ufbx_generate_indices(streams.data(), streams.size(), mesh.indices.data(), corners, nullptr, &error);
         if (error.type != UFBX_ERROR_NONE) {
-            return Fail(ImportProblem::Undecodable, "the importer could not merge a mesh's vertices", Describe(error));
+            return Fail(FbxLoaderCode::Undecodable, "the importer could not merge a mesh's vertices", Describe(error));
         }
         mesh.positions.resize(vertices);
         mesh.normals.resize(vertices);
         if (!mesh.uvs.empty()) mesh.uvs.resize(vertices);
-        if (!mesh.skin.vertexJoints.empty()) {
-            mesh.skin.vertexJoints.resize(vertices);
-            mesh.skin.vertexWeights.resize(vertices);
+        if (!mesh.vertexJoints.empty()) {
+            mesh.vertexJoints.resize(vertices);
+            mesh.vertexWeights.resize(vertices);
         }
         return {};
     }
@@ -298,12 +310,12 @@ private:
         ufbx_bake_opts opts{};
         opts.trim_start_time = true;
         opts.resample_rate = options_.bakeRate;
-        opts.temp_allocator.memory_limit = kMemoryLimit;
-        opts.result_allocator.memory_limit = kMemoryLimit;
+        opts.temp_allocator.memory_limit = options_.memoryLimit;
+        opts.result_allocator.memory_limit = options_.memoryLimit;
         ufbx_error error{};
         const BakePtr baked(ufbx_bake_anim(&scene_, stack.anim, &opts, &error));
         if (!baked) {
-            return Fail(ImportProblem::Undecodable, "the importer could not bake an animation",
+            return Fail(FbxLoaderCode::Undecodable, "the importer could not bake an animation",
                         "\"" + Text(stack.name) + "\": " + Describe(error));
         }
         AnimationClip clip;
@@ -341,11 +353,11 @@ Base::Result<ModelData, ImportFailure> ImportFbx(const std::span<const std::byte
     if (!scene) {
         const bool notFbx =
             error.type == UFBX_ERROR_UNRECOGNIZED_FILE_FORMAT || error.type == UFBX_ERROR_EMPTY_FILE;
-        if (notFbx) return Fail(ImportProblem::NotFbx, "not an FBX file", Describe(error));
-        return Fail(ImportProblem::Undecodable, "the importer could not read the file", Describe(error));
+        if (notFbx) return Fail(FbxLoaderCode::NotFbx, "not an FBX file", Describe(error));
+        return Fail(FbxLoaderCode::Undecodable, "the importer could not read the file", Describe(error));
     }
     if (scene->metadata.file_format != UFBX_FILE_FORMAT_FBX) {
-        return Fail(ImportProblem::NotFbx, "not an FBX file",
+        return Fail(FbxLoaderCode::NotFbx, "not an FBX file",
                     "read as file format " + std::to_string(static_cast<int>(scene->metadata.file_format)));
     }
     return Importer(*scene, options).Run();

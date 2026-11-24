@@ -96,6 +96,8 @@ add_custom_command(OUTPUT "${gyo_embedded_shaders}"
             --formats "${gyo_shader_format_list}" ${gyo_metal_args}
             --shader pass2d.vert vertex "${gyo_render_shader_dir}/pass2d.vert.hlsl"
             --shader pass2d.frag fragment "${gyo_render_shader_dir}/pass2d.frag.hlsl"
+            --shader mesh3d.vert vertex "${gyo_render_shader_dir}/mesh3d.vert.hlsl"
+            --shader mesh3d.frag fragment "${gyo_render_shader_dir}/mesh3d.frag.hlsl"
     DEPENDS ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
     COMMENT "Compiling render's shaders for sdl_gpu (${gyo_shader_format_list})"
     VERBATIM)

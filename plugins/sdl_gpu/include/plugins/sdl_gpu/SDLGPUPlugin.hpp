@@ -5,21 +5,22 @@
 // draws, beside render_world.
 //
 // - Configure (Product level, once): takes the window sdl_window made (SDL::NativeWindows in the Product's buffer)
-//   and, through its adapter, makes the GPU device, claims the window and makes the 2D pass's shaders and pipelines.
+//   and, through its adapter, makes the GPU device, claims the window and makes the 2D and 3D passes' shaders.
 //   Made here, so a replaced World's Build does not make the device again. No window (sdl_window not carried, or it
 //   could not make one) is the startup error SDL-E2; a device that cannot be made is SDL-E3. Puts SDLGPUStatus in the
 //   Product's buffer. OnDestroy (after every World, before sdl_window's: the reverse order) lets the device go.
 // - Build (the World that draws; on the main thread): registers its handle Resource (bound to the thread) and mounts
 //   GPUSubmit in render_world's Submit stage. Each prepared World gets its own number: when a World other than the
-//   last one that drew submits, the earlier World's textures go first (a new World's texture ids start again at 1).
+//   last one that drew submits, the earlier World's textures and meshes go first (a new World's ids start again at
+//   1).
 // - GPUSubmit, each frame (Bevy's render_system, bevy_render/src/renderer/mod.rs:82): applies this frame's texture
-//   asks, draws the passes on the window and shows the picture, through the adapter
-//   (v8-arch-gyo2-sdl-system-calls-via-adapter). It only reads the render World (SDL-5). What went wrong is told
+//   and mesh asks, draws the passes (2D and 3D, in their order) on the window and shows the picture, through the
+//   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It only reads the render World (SDL-5). What went wrong is told
 //   through SDLGPUStatus and is never the System's error: a System's error would break the World and end the
 //   Product (O-11), and a minimized window or a refused texture is no reason for that.
 //
-// One World of a Product lists sdl_gpu (one window, one texture table): a second World that draws is not named by any
-// Feature yet (SDL declaration section 10.2, R2a).
+// One World of a Product lists sdl_gpu (one window, one texture table, one mesh table): a second World that draws is
+// not named by any Feature yet (SDL declaration section 10.2, R2a).
 
 #include <cstddef>
 #include <cstdint>
@@ -45,15 +46,19 @@ public:
     [[nodiscard]] std::uint64_t FramesFailed() const;
     [[nodiscard]] const std::string& LastFailure() const;
     // Texture asks SDL refused (that texture has no GPU texture; also the textures made in a frame whose uploads
-    // failed), draws skipped (their texture has no GPU texture, or their pipeline could not be made), passes whose
-    // target is not mapped (only target 0, the window, is).
+    // failed), mesh asks SDL refused (the same for meshes), draws skipped (their texture or mesh has no GPU object,
+    // their pipeline could not be made, or a 3D pass's depth texture could not be), passes whose target is not mapped
+    // (only target 0, the window, is).
     [[nodiscard]] std::uint64_t RefusedTextureAsks() const;
+    [[nodiscard]] std::uint64_t RefusedMeshAsks() const;
     [[nodiscard]] std::uint64_t SkippedDraws() const;
     [[nodiscard]] std::uint64_t UnmappedPasses() const;
     // The GPU driver SDL chose ("vulkan", "direct3d12", "metal").
     [[nodiscard]] const std::string& DriverName() const;
     // The textures of render's asks that have a GPU texture now (the white one not counted).
     [[nodiscard]] std::size_t TextureCount() const;
+    // The meshes of render's asks that have GPU buffers now.
+    [[nodiscard]] std::size_t MeshCount() const;
 
 private:
     Service* service_;

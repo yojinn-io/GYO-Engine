@@ -16,11 +16,14 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "engine/kernel/Hash.hpp"
 #include "engine/math/geometry/Rect.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include "engine/render/RenderTextures.hpp"
 
 namespace GYO::Engine::Render {
@@ -74,26 +77,118 @@ struct Draw2D final {
     std::uint32_t vertexOffset = 0;
 };
 
+// A target's size in pixels.
+struct TargetSize final {
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+
+    friend bool operator==(const TargetSize&, const TargetSize&) = default;
+};
+
+// A rectangle of whole pixels on a target.
+struct PixelRect final {
+    std::uint32_t x = 0;
+    std::uint32_t y = 0;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+
+    friend bool operator==(const PixelRect&, const PixelRect&) = default;
+};
+
 // A 2D pass on one target. The vertices and indices of all its draws are in one list each, so a producer such as
 // Dear ImGui hands its draw list over as it is.
 struct Pass2D final {
     // The target, in camera's id space (CameraTarget::id): 0 is the main target, the main window when there is one.
     // What another id names is the backend's to map.
     std::uint32_t target = 0;
-    // Cleared to this colour before the draws. A target's first pass of the frame with no clear starts from
-    // transparent black: a window's picture is undefined when a frame begins.
+    // The whole target (not only the viewport, as a GPU clear does) is cleared to this colour before the draws (the
+    // 2D pipeline gives it to a target's first camera only; Pipeline2d.hpp, Queue2d). A target's first pass of the frame with no clear starts from transparent black: a window's
+    // picture is undefined when a frame begins.
     std::optional<Color8> clear;
-    // The rectangle of view units stretched over the whole target; nullopt: the target's own pixels (view unit =
-    // pixel, origin at the top-left pixel).
+    // The pixels of the target the pass draws on (a camera's viewport; the rest is left as it is, so a letterboxed
+    // picture's bars are what the clear left); nullopt: the whole target. Cut to the target.
+    std::optional<PixelRect> viewport;
+    // The rectangle of view units stretched over the viewport; nullopt: the viewport's own pixels (view unit = pixel,
+    // origin at the viewport's top-left pixel).
     std::optional<Math::Rect> view;
     std::vector<Vertex2D> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<Draw2D> draws;
 };
 
+// One vertex of a 3D mesh: position, normal and uv, 32 bytes (ShaderAbi.hpp: the 3D pass binds position and uv; the
+// normal is kept for lit shading to come). Model space follows math.md (left-handed, +Y up, +Z forward).
+struct Vertex3D final {
+    Math::Vec3 position{};
+    Math::Vec3 normal{};
+    Math::Vec2 uv{};
+};
+static_assert(sizeof(Vertex3D) == 32 && alignof(Vertex3D) == 4);
+static_assert(std::is_trivially_copyable_v<Vertex3D> && std::is_standard_layout_v<Vertex3D>);
+
+// A mesh kept from frame to frame (RenderMeshes). MeshId{} (0): none, the draw takes the pass's own vertices.
+struct MeshId final {
+    std::uint32_t value = 0;
+
+    friend bool operator==(const MeshId&, const MeshId&) = default;
+};
+
+// Which triangles a 3D draw leaves out.
+enum class CullMode : std::uint8_t {
+    // Both faces are drawn.
+    None = 1,
+    // Triangles whose corners go clockwise on the screen are left out (counter-clockwise is the front, as Bevy's
+    // FrontFace::Ccw).
+    Back,
+};
+
+// One draw of a 3D pass: indexCount indices from indexOffset of its mesh's indices (or of the pass's own, mesh {}),
+// each index plus vertexOffset naming a vertex there, as triangles, placed by world.
+struct Draw3D final {
+    MeshId mesh{};
+    std::uint32_t indexOffset = 0;
+    std::uint32_t indexCount = 0;
+    std::uint32_t vertexOffset = 0;
+    // Local to world.
+    Math::Matrix4 world{};
+    // Multiplies the texture's colours (bytes as stored, alpha straight, as the 2D pass).
+    Color8 color{255, 255, 255, 255};
+    TextureId texture{};
+    BlendMode blend = BlendMode::Opaque;
+    // false: drawn over whatever is nearer (an overlay in the world).
+    bool depthTest = true;
+    bool depthWrite = true;
+    CullMode cull = CullMode::None;
+};
+
+// A 3D pass on one target (one camera's 3D scene). Its depth starts cleared unless clearDepth is false (each camera
+// has a depth of its own by default, as in Bevy: a viewmodel camera after the world camera draws over the world); its
+// colour starts as the target is (the camera's clear is a pass of its own before it). Draws are drawn in their order.
+struct Pass3D final {
+    std::uint32_t target = 0;
+    // As Pass2D's: the pixels of the target the pass draws on; nullopt: the whole target.
+    std::optional<PixelRect> viewport;
+    // World to clip space (math.md: depth 0 at near, 1 at far; y up).
+    Math::Matrix4 clipFromWorld{};
+    // false: the depth the passes before it left (Bevy's Camera3dDepthLoadOp::Load); a depth no pass wrote this frame
+    // is undefined, as in Bevy.
+    bool clearDepth = true;
+    // Geometry made for this frame only (a mesh skinned on the CPU, a shape that changes), named by draws with mesh {}.
+    std::vector<Vertex3D> vertices;
+    std::vector<std::uint32_t> indices;
+    std::vector<Draw3D> draws;
+};
+
+using RenderPass = std::variant<Pass2D, Pass3D>;
+
+// The target a pass draws on.
+[[nodiscard]] inline std::uint32_t TargetOf(const RenderPass& pass) noexcept {
+    return std::visit([](const auto& p) { return p.target; }, pass);
+}
+
 // This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
 struct RenderCommands final {
-    std::vector<Pass2D> passes;
+    std::vector<RenderPass> passes;
 };
 
 // The render World is not decided state: nothing of it goes into a consistency fingerprint (as sdl_window's handle).
@@ -109,30 +204,21 @@ struct ViewTransform final {
 // width or height is a Programmer Error.
 [[nodiscard]] ViewTransform ViewToClip(Math::Rect view);
 
-// A target's size in pixels.
-struct TargetSize final {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
+// The pixels a pass draws on: its viewport cut to the target, or the whole target. Empty (zero width or height)
+// when the viewport lies outside the target.
+[[nodiscard]] PixelRect ViewportOf(const Pass2D& pass, TargetSize target);
+// The same for a 3D pass.
+[[nodiscard]] PixelRect ViewportOf(const Pass3D& pass, TargetSize target);
 
-    friend bool operator==(const TargetSize&, const TargetSize&) = default;
-};
-
-// The view of a pass on a target of this size: its own view, or the target's pixels.
+// The view of a pass on a target of this size: its own view, or the pixels of its viewport (ViewportOf).
 [[nodiscard]] Math::Rect ViewOf(const Pass2D& pass, TargetSize target);
 
-// A rectangle of whole pixels on a target.
-struct PixelRect final {
-    std::uint32_t x = 0;
-    std::uint32_t y = 0;
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-
-    friend bool operator==(const PixelRect&, const PixelRect&) = default;
-};
-
-// The pixels a draw's clip lets through: those whose centre lies inside the clip, left and top edges included, right
-// and bottom edges not (the rasterizer's own rule, so a clip on whole pixels is exact), cut to the target; nullopt
-// clip: the whole target. Empty (zero width or height) when nothing is let through.
+// The pixels a draw's clip lets through, the view stretched over viewport: those whose centre lies inside the clip,
+// left and top edges included, right and bottom edges not (the rasterizer's own rule, so a clip on whole pixels is
+// exact), cut to the viewport; nullopt clip: the whole viewport. Empty (zero width or height) when nothing is let
+// through.
+[[nodiscard]] PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, Math::Rect view, PixelRect viewport);
+// The same with the view stretched over the whole target.
 [[nodiscard]] PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, Math::Rect view, TargetSize target);
 
 } // namespace GYO::Engine::Render
