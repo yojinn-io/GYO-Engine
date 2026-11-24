@@ -123,7 +123,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | Bevy `TransformHelper`（從 `Transform`＋`ChildOf` 當場算全域姿態）：目前沒有判定讀姿態，沒加 | X2 #303 | 有 System 在傳播之前要讀全域姿態時 |
 | 3D 物理卡（#309）照新 AGENTS 自判的四件（使用者可在合併前推翻）：(1) `BoxSet` 的加速結構不改結果（等於依索引線性掃描，最近者＋平手規則答案唯一；BVH 而非均勻格）；(2) 內部 double、結果 float（大地圖精度，Jolt DOUBLE_PRECISION、parry f64）；(3) 不另立物理姿態元件，`Transform` 就是判定值（CCR-12），有剛體時重看（RC-P3-3）；(4) World 查詢遇不支援的組合整個回 `Unsupported`（P3-4、§1-9） | 3D 物理 #309（宣告 4.2、4.4、第 5 節；owner 頁 `physics-3d.zh-Hant.md`） | 只記錄；角色控制器在同一張卡另開 PR |
 | I 卡照 L17 自判的六件 I-1～I-6（只有 RGBA8；settings 只收 colorSpace；image 是 library_only、產品自己 `Register<PngLoader>`；型別名 `ImageData`；長寬上限各 16384；stb 只抓單一檔＋SHA-256）在 `image.zh-Hant.md` 第 5 節。照新 AGENTS §2.6 不必逐條核准；使用者想推翻時再開 | I #301 | 只記錄 |
-| **Object_Connect 移植實作**（2026-11-24 開卡 `local_f0c55417`；使用者「我只看到你宣告做完了，實作移植呢？」）：移植準備（#302、#304）只搬了遊戲邏輯與 World 側，沒有主程式、畫面、輸入、聲音、文字。分段：主程式＋W 的輸入＋T 的文字（現在）→ A 合併後接聲音 → R2a 合併後用 2D pass 畫出來、實機可玩 → R2b 合併後補動態頂點與固定解析度縮放 | 主會話 | 進行中 |
+| **Object_Connect 移植實作**（**2026-11-24 四段全部合併**：#314 1d591cd1、#316 a083d2a4、#318 a3757a5f、#321 2376bac7，`v8-arch-gyo2-object-connect-port-merging`；2026-11-24 開卡 `local_f0c55417`；使用者「我只看到你宣告做完了，實作移植呢？」）：移植準備（#302、#304）只搬了遊戲邏輯與 World 側，沒有主程式、畫面、輸入、聲音、文字。分段：主程式＋W 的輸入＋T 的文字（現在）→ A 合併後接聲音 → R2a 合併後用 2D pass 畫出來、實機可玩 → R2b 合併後補動態頂點與固定解析度縮放 | 主會話 | 進行中 |
 | Object_Connect 盤點的 Engine 缺口（`games/object_connect/docs/porting-inventory.zh-Hant.md`，#302）：G3 游標 warp、G4 滑鼠相對移動量、G5 游標進出視窗、G6 視窗不可改大小 | Object_Connect 移植準備 #302 | 子批 W（開卡時寫進 brief） |
 | Object_Connect 盤點的 Engine 缺口：G1 播放中改音量、G2 循環播放 | Object_Connect 移植準備 #302 | audio 小批（Object_Connect 要聲音前） |
 | examples 只有一個 `examples/CMakeLists.txt`：第一個帶 `sdl*` 的 example 要能被 `plugin_removal.py` 拿掉（例：每個 example 一個目錄、照目錄加入），否則 CI 的 core 步驟報「still names the removed Plugin」；Plugin 自己的測試可用 `gyo_product_units(... PLUGINS <自己>)` | P #300 | 子批 W |
@@ -176,7 +176,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **待使用者定**：Object_Connect 直接連 `gyo_fast_float`（`v8-arch-gyo2-oc-separation-review` 3）——(a) 產品自己宣告依賴／(b) 改用 Engine 介面；主會話建議 (a) | 架構師 2026-11-24 | 定了交 Object_Connect 卡 |
 | `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | **已處理**：#320 c862aed1（2D／3D 幀測試改用顯示的視窗、要求至少一幀送到視窗） |
 | `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批（K）順手改 |
-| Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | 不擋移植；實機試玩覺得礙事再排 |
+| Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | **進行中**：使用者在卡裡直接要求，卡已改好未 commit，等使用者實機試 |
 
 ## 不擋路的小事
 
