@@ -501,7 +501,6 @@ namespace {
 struct Lobby final {
     std::unique_ptr<GYO::Engine::Threads::WorkerPool> pool;
     std::unique_ptr<WA::WorkerPoolExecutor> executor;
-    std::shared_ptr<PC::LobbyOutcome> outcome = std::make_shared<PC::LobbyOutcome>();
     std::unique_ptr<O::Product> product;
 
     explicit Lobby(std::string status = {}) {
@@ -509,7 +508,7 @@ struct Lobby final {
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
-        O::WorldDescription game = PC::LobbyGameWorld({"127.0.0.1:40000", std::move(status), outcome}, false);
+        O::WorldDescription game = PC::LobbyGameWorld({"127.0.0.1:40000", std::move(status)}, false);
         game.build = [inner = std::move(game.build)](O::WorldSetup& setup) {
             inner(setup);
             K::Registrar& r = setup.Registrar();
@@ -533,7 +532,17 @@ struct Lobby final {
         O::ProductDescription description;
         description.name = "pvp-lobby";
         description.worlds.push_back(std::move(game));
-        description.worlds.push_back(PC::LobbyRenderWorld(false));
+        O::WorldDescription render = PC::LobbyRenderWorld(false);
+        render.build = [](O::WorldSetup& setup) {
+            K::SystemOptions keep;
+            keep.name = "test.KeepPicture";
+            K::Mount mount;
+            mount.schedule = std::string(O::DefaultSchedules::frame);
+            mount.stage = std::string(GYO::Engine::RenderWorld::kSubmitStage);
+            keep.mounts.push_back(std::move(mount));
+            setup.Registrar().AddSystem<&KeepPicture>(std::move(keep));
+        };
+        description.worlds.push_back(std::move(render));
         description.configure = [](O::ProductSetup& setup) { PC::ConfigureLobby(setup); };
         WA::AssetOptions assets;
         assets.contentRoot = PVP_CONTENT_ROOT;
@@ -546,6 +555,7 @@ struct Lobby final {
     ~Lobby() { product.reset(); }
     K::World& World() { return GameWorld(*product); }
     Pending& Next() { return *World().ResourceMut<Pending>(); }
+    const PC::LobbyOutcome& Outcome() { return *World().Resource<PC::LobbyOutcome>(); }
     void Frames(const int n) {
         for (int i = 0; i < n; ++i) {
             auto ran = product->RunFrame();
@@ -602,22 +612,25 @@ TEST_CASE("client: the lobby shows its document; a valid address closes it with 
     const auto* state = lobby.World().Get<GYO::Engine::Ui::UiRootState>(lobby.Root());
     REQUIRE_MESSAGE((state != nullptr && state->runtime), "[pvp-lobby-loaded] the document and its font load");
     CHECK_MESSAGE(!state->failure, (state->failure ? state->failure->message : std::string()));
-    CHECK_MESSAGE(!state->drawList.commands.empty(), "the lobby is drawn");
+    CHECK_MESSAGE(!state->drawList.commands.empty(), "the lobby is laid out");
+    CHECK_MESSAGE(lobby.Outcome().shown, "[pvp-lobby-shown]");
+    CHECK(lobby.Outcome().failure.empty());
+    CHECK_MESSAGE((lastPicture.passes2d >= 1 && lastPicture.draws2d >= 1), "[pvp-lobby-drawn] the render World draws its UI pass");
     CHECK(lobby.Binding("status").find("アドレス") != std::string::npos);
     CHECK(state->runtime->InteractionState().focusedElement == "address");
 
     // A wrong form: the status says so, the window stays.
     lobby.Submit("192.168.0");
-    CHECK_FALSE(lobby.outcome->server.has_value());
+    CHECK_FALSE(lobby.Outcome().server.has_value());
     CHECK_MESSAGE(lobby.Binding("status").find("形が違います") != std::string::npos, lobby.Binding("status"));
     CHECK_FALSE(lobby.World().Resource<W::WindowRequest>()->close);
 
     // Full-width digits and the ideographic full stop from an input method become ASCII (the game's filter); a valid
     // address closes the window with the server.
     lobby.Submit("１９２。１６８．０．１０：４００００");
-    REQUIRE_MESSAGE(lobby.outcome->server.has_value(), "[pvp-lobby-submit] " << lobby.Binding("status") << " / typed: " << lobby.Binding("address"));
-    CHECK(lobby.outcome->server->ToString() == "192.168.0.10:40000");
-    CHECK(lobby.outcome->address == "192.168.0.10:40000");
+    REQUIRE_MESSAGE(lobby.Outcome().server.has_value(), "[pvp-lobby-submit] " << lobby.Binding("status") << " / typed: " << lobby.Binding("address"));
+    CHECK(lobby.Outcome().server->ToString() == "192.168.0.10:40000");
+    CHECK(lobby.Outcome().address == "192.168.0.10:40000");
     CHECK(lobby.World().Resource<W::WindowRequest>()->close);
 }
 
@@ -630,7 +643,6 @@ TEST_CASE("client: the lobby's Quit closes it with nothing; a reason given to it
     lobby.Frames(1);
     lobby.Next().keys.push_back(Key(I::KeyCode::Enter));
     lobby.Frames(2);
-    CHECK_MESSAGE(lobby.outcome->quit, "[pvp-lobby-quit]");
-    CHECK_FALSE(lobby.outcome->server.has_value());
-    CHECK(lobby.World().Resource<W::WindowRequest>()->close);
+    CHECK_FALSE(lobby.Outcome().server.has_value());
+    CHECK_MESSAGE(lobby.World().Resource<W::WindowRequest>()->close, "[pvp-lobby-quit] the window closes with no server");
 }

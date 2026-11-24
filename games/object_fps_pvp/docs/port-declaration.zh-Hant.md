@@ -170,7 +170,8 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 |---|---|---|
 | `pvp-lobby-filter-off` | 位址欄不用遊戲的字元過濾 | client：全形數字送出後成為有效位址 |
 | `pvp-lobby-any-address` | 任何文字都當位址 | client：形不對的位址不關窗 |
-| `pvp-lobby-quit-ignored` | 「終了」不結束程式 | client：終了 |
+| `pvp-lobby-quit-ignored` | 「終了」不關大廳 | client：終了 |
+| `pvp-lobby-ui-not-drawn` | 大廳的渲染 World 沒有 `ui_render` | client：渲染 World 畫出 UI 的 pass |
 | `pvp-session-end-ignored` | 連線結束沒記下（程式不會回大廳） | client：Match 拒絕時狀態寫明理由 |
 
 第 4 段的清單在它的宣告（`docs/architecture/target/v2/live-frame-sim-thread-declaration.zh-Hant.md` 第 5 節）。

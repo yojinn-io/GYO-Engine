@@ -13,8 +13,11 @@
 // UiRoot::filter; the actions are read after world_ui's set.
 //
 //   Main/Update  LobbyActions   pvp.submit_address -> a valid A.B.C.D:P closes the window with that address; else
-//                               the status says what is wrong. pvp.quit -> closes the window with nothing.
+//                               the status says what is wrong. pvp.quit -> closes the window with nothing (as
+//                               closing it does).
+//                WatchDocument  the document shown, or why not (its asset failed, or world_ui's UiRootState::failure)
 
+#include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/os/DatagramSocket.hpp"
 
@@ -30,17 +33,19 @@ namespace O = GYO::Engine::Orchestration;
 // An address as the lobby and --connect take it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
 [[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
 
-// What the lobby ended with (the program reads it after the runner returns).
+// What the lobby ended with: a Resource of its Game World, written by its Systems; the program reads it after the
+// runner returns. No server: the player closed the window or chose Quit.
 struct LobbyOutcome final {
     std::optional<GYO::Engine::OS::DatagramAddress> server;  // the address the player submitted
     std::string address;                                     // its text, shown again when the lobby comes back
-    bool quit = false;                                       // the player chose to end the program
+    bool shown = false;                                      // the document was loaded and laid out
+    std::string failure;                                     // why it was not shown (empty: no failure seen)
 };
+inline void HashValue(GYO::Kernel::Hasher&, const LobbyOutcome&) {}
 
 struct LobbyOptions final {
     std::string address;  // the field's first text
     std::string status;   // the status line's first text (why the lobby came back; empty: the invitation)
-    std::shared_ptr<LobbyOutcome> outcome;
 };
 
 // The Product's part: the ui and font loaders join the asset store.

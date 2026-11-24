@@ -12,6 +12,7 @@
 #include "engine/ui/UiRoot.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
+#include "engine/world_asset/AssetView.hpp"
 
 #include <charconv>
 #include <cstdint>
@@ -39,26 +40,18 @@ constexpr K::EntityId kLobbyRoot = 3'000'031;
 constexpr std::string_view kInvitation = "Match のアドレスを入力してください";
 constexpr std::string_view kHint = "クリックして入力、Enter で接続（Tab で移動）";
 
-// The lobby's outcome, where its System writes it.
-struct LobbyState final {
-    std::shared_ptr<LobbyOutcome> outcome;
-};
-void HashValue(K::Hasher&, const LobbyState&) {}
-
-K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::Res<LobbyState> state,
+K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<LobbyOutcome> result,
                              K::Query<K::Write<Ui::UiBindings>> bindings, K::ResMut<W::WindowRequest> request) {
-    LobbyOutcome& outcome = *state->outcome;
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action == "pvp.quit") {
-            outcome.quit = true;
             request->close = true;
         } else if (action->action == "pvp.submit_address") {
             const auto* text = std::get_if<std::string>(&action->payload);
             const std::string typed = text != nullptr ? *text : std::string();
             auto root = bindings.GetMut<Ui::UiBindings>(action->root);
             if (const auto server = ParseMatchAddress(typed)) {
-                outcome.server = *server;
-                outcome.address = typed;
+                result->server = *server;
+                result->address = typed;
                 request->close = true;
                 if (root) {
                     root->Set("address", typed);
@@ -71,6 +64,25 @@ K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::Res<Lobb
             }
         }
     }
+    return {};
+}
+
+// Whether the document is shown; when it is not, why (its asset failed, or world_ui wrote the root's failure: a
+// document that does not validate, a missing binding, a font it could not add). Noted once for the program to log.
+K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::Res<WA::AssetView> view,
+                              K::ResMut<LobbyOutcome> result) {
+    roots.ForEach([&](K::EntityId, const Ui::UiRoot& root, const Ui::UiRootState& state) {
+        if (state.runtime && !state.failure && !result.Read().shown) result->shown = true;
+        if (!result.Read().failure.empty()) return;
+        if (state.failure) {
+            result->failure = "the lobby's document: " + state.failure->message;
+        } else if (const auto* handle = std::get_if<A::Handle<Ui::UiAsset>>(&root.document)) {
+            if (view->State(*handle) == A::AssetState::Failed) {
+                const auto* failure = view->Failure(*handle);
+                result->failure = "the lobby's document did not load: " + (failure != nullptr ? Base::Describe(*failure) : std::string("Failed"));
+            }
+        }
+    });
     return {};
 }
 
@@ -116,7 +128,7 @@ O::WorldDescription LobbyGameWorld(LobbyOptions options, const bool window) {
     if (window) world.units.push_back("sdl_window");
     world.build = [options](O::WorldSetup& setup) {
         K::Registrar& r = setup.Registrar();
-        r.Resource<LobbyState>({.name = "object_fps_pvp.LobbyState"});
+        r.Resource<LobbyOutcome>({.name = "object_fps_pvp.LobbyOutcome"});
         K::SystemOptions actions;
         actions.name = "object_fps_pvp.LobbyActions";
         K::Mount mount;
@@ -124,8 +136,15 @@ O::WorldDescription LobbyGameWorld(LobbyOptions options, const bool window) {
         mount.stage = std::string(O::DefaultSchedules::update);
         actions.mounts.push_back(std::move(mount));
         r.AddSystem<&LobbyActions>(std::move(actions));
+        K::SystemOptions watch;
+        watch.name = "object_fps_pvp.WatchDocument";
+        K::Mount after;
+        after.schedule = std::string(O::DefaultSchedules::frame);
+        after.stage = std::string(O::DefaultSchedules::last);
+        watch.mounts.push_back(std::move(after));
+        r.AddSystem<&WatchDocument>(std::move(watch));
         setup.Prepare([options](K::World& w) -> Base::Result<void, O::OrchestrationError> {
-            w.SetResource(LobbyState{options.outcome});
+            w.SetResource(LobbyOutcome{});
             // The camera the document is laid out in (its target is the window: window_camera writes the size).
             w.Insert(kLobbyCamera, C::Camera{});
             w.Insert(kLobbyCamera, C::Camera2d{});

@@ -15,8 +15,22 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（PvP 移植�
 
 - 本機（Intel Mac）：`ctest -L "cpu|gpu"` 253/253；`object_fps_pvp.*` 6 項（新 `object_fps_pvp.main_connect`：`--connect` 的 Client 開窗畫 30 幀；`object_fps_pvp.main` 現在是大廳開窗畫 30 幀）。
 - `object_fps_pvp.client` 加 3 案：大廳的文件與字型載入、畫出來，形不對的位址寫狀態不關窗，全形數字與「。」送出後成為 `192.168.0.10:40000` 並關窗；「終了」；Match 沒有座位時 Client 記下「Match に断られました（the match is full）」並關窗。
-- 突變：`pvp-lobby-filter-off`、`pvp-lobby-any-address`、`pvp-lobby-quit-ignored`、`pvp-session-end-ignored` 4/4 killed。
+- 突變：`pvp-lobby-filter-off`、`pvp-lobby-any-address`、`pvp-lobby-quit-ignored`、`pvp-session-end-ignored` 4/4 killed（審查後 5/5，見下）。
 - **沒驗**：真的視窗裡的大廳（IME、點擊、畫面）、大廳 → Client → 回大廳時視窗的關開。交使用者試玩。
+
+## 設計審查（Opus／high，唯讀；作者同模型，Fable 暫停中）
+
+blocker 0、should 4、nit 5。紀錄：`build/evidence/v8-product-pvp-port/segment5-design-review.zh-Hant.md`（本機）。
+
+- S1（沒讀 `UiRootState::failure`、素材失敗沒 log）→ 新 System `WatchDocument`（`Main`／`Last`）：文件顯示了就記 `shown`，沒顯示時記原因（素材 Failed 經 `AssetView::Failure`，或 world_ui 的 failure）；程式記 log，`--frames` 跑大廳而文件沒顯示就回 1。
+- S2（`quit` 沒人讀、突變碰巧被殺）→ 拿掉 `LobbyOutcome::quit`（「終了」和關窗結果一樣）；突變改成拿掉 quit 分支的關窗。
+- S3（`--frames` 的結束碼悄悄改了）→ `--frames` 時內容不符照舊回 1。
+- N1（經 `shared_ptr` 繞過 System 的存取宣告）→ `LobbyOutcome` 改成大廳 World 的 Resource，`ResMut` 寫、Run 之後讀。
+- N3（沒驗渲染 World 有畫）→ 大廳測試讀渲染 World 的 `RenderCommands`（2D pass 有 draw），突變 `pvp-lobby-ui-not-drawn`。
+- 不改、記下：S4（程式層的「大廳 → Client → 回大廳」與同行程重建 Product 沒有自動驗證：交實機）、N2（Client 的 Product 建不起來時直接結束，不回大廳：產品的決定）、N4（`UiRootState` 手動插入可能多餘，沒確認 InitialValue 的語意，照 ui 測試的寫法留著）、N5（重連沿用同一個 userId，Match 若還留著舊連線會有兩個同 Owner 的玩家：net 宣告 P15 歸產品，很少發生，試玩看）。
+- 交使用者：長期要不要「大廳與對局同一個視窗」（要改 Engine：Client 的連線位址改成每個 client World 準備時給，或 `ReplaceWorld` 允許換描述；公開介面）。
+
+修正後：`ctest -L "cpu|gpu"` 253/253，第 5 段突變 5/5 killed（加 `pvp-lobby-ui-not-drawn`）。
 
 ## 已知的代價
 

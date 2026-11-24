@@ -342,13 +342,13 @@
   },
   {
    "id": "pvp-lobby-quit-ignored",
-   "what": "Quit does not end the program",
+   "what": "Quit does not close the lobby",
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
    "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "            outcome.quit = true;\n",
-   "replace": "",
+   "find": "        if (action->action == \"pvp.quit\") {\n            request->close = true;\n",
+   "replace": "        if (action->action == \"pvp.quit\") {\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the lobby's Quit*",
    "expect": "pvp-lobby-quit"
@@ -365,6 +365,19 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
    "expect": "pvp-session-end"
+  },
+  {
+   "id": "pvp-lobby-ui-not-drawn",
+   "what": "the lobby's render World has no ui_render (nothing on screen)",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
+   "find": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\", \"ui_render\"};",
+   "replace": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\"};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby shows*",
+   "expect": "pvp-lobby-drawn"
   }
  ]
 }

@@ -135,6 +135,7 @@ bool ParseNumber(const std::string_view text, T& value) {
 struct ClientRun final {
     int exitCode = 0;          // nonzero: the program ends with it
     bool windowClosed = false; // the player closed the window (the program ends)
+    bool mismatch = false;     // the Match's content differs from this Client's
     std::string endReason;     // the connection ended: back to the lobby with this
 };
 
@@ -183,10 +184,9 @@ void SetCommonOptions(O::ProductDescription& description, const std::string& con
 // The lobby: its own Product until the player submits an address, quits or closes the window.
 std::optional<PC::LobbyOutcome> RunLobby(const std::string& address, const std::string& status, const std::string& contentRoot,
                                          WA::WorkerPoolExecutor& executor, const std::int64_t frames, int& exitCode) {
-    auto outcome = std::make_shared<PC::LobbyOutcome>();
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
-    O::WorldDescription lobby = PC::LobbyGameWorld({address, status, outcome});
+    O::WorldDescription lobby = PC::LobbyGameWorld({address, status});
     if (frames > 0) {
         lobby.build = [inner = std::move(lobby.build), frames](O::WorldSetup& setup) {
             inner(setup);
@@ -221,8 +221,19 @@ std::optional<PC::LobbyOutcome> RunLobby(const std::string& address, const std::
         exitCode = 1;
         return std::nullopt;
     }
+    const auto* result = product->World("Game").GetWorld().Resource<PC::LobbyOutcome>();
+    if (result == nullptr) {
+        exitCode = 1;
+        return std::nullopt;
+    }
+    // A lobby that was never shown is a blank window: say why (ui page section 9 point 8).
+    if (!result->failure.empty()) Log(GYO::Engine::Base::LogLevel::Error, result->failure);
     exitCode = CheckDrawing(*product, frames, exit);
-    return *outcome;
+    if (frames > 0 && exitCode == 0 && !result->shown) {
+        Log(GYO::Engine::Base::LogLevel::Error, "the lobby was not shown in " + std::to_string(frames) + " frames");
+        exitCode = 1;
+    }
+    return *result;
 }
 
 // The Client's Product connected to server, until its window closes (by the player, or when the connection ended).
@@ -293,6 +304,7 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
     }
     run.exitCode = CheckDrawing(*product, frames, exit);
     if (!status.mismatch.empty()) {
+        run.mismatch = true;
         run.endReason = "Match の内容がこの Client と違います: " + status.mismatch;
     } else if (status.ended) {
         if (verbose) Log(GYO::Engine::Base::LogLevel::Info, "the connection ended: " + status.endReason);
@@ -378,13 +390,14 @@ int main(int argc, char** argv) {
             int exitCode = 0;
             const auto outcome = RunLobby(address, status, *contentRoot, executor, frames, exitCode);
             if (!outcome || exitCode != 0) return exitCode != 0 ? exitCode : 1;
-            if (frames > 0 || outcome->quit || !outcome->server) return 0;
+            if (frames > 0 || !outcome->server) return 0;  // --frames, Quit or the window closed
             server = outcome->server;
             address = outcome->address;
         }
         const ClientRun run = RunClient(*server, userId, sharedGame, sharedPresentation, *contentRoot, executor, frames, verbose);
         if (run.exitCode != 0) return run.exitCode;
-        if (frames > 0 || run.windowClosed) return 0;
+        if (frames > 0) return run.mismatch ? 1 : 0;  // a test's run: a content mismatch fails it, as before the lobby
+        if (run.windowClosed) return 0;
         status = run.endReason;
         server.reset();
     }
