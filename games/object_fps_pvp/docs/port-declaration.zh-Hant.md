@@ -13,8 +13,11 @@ v8-product-pvp-port
 ├─ 第 1 段 sim      high｜模擬與 Match：arena、移動、射擊、判定、重生、World 的登記、Match 執行檔
 ├─ 第 2 段 client   high｜Client：視窗、輸入、連線入口、3D 畫面（arena、角色先用方塊）、HUD、聲音 → 能實際對戰
 ├─ 第 3 段 model    high｜角色模型與骨骼動畫、viewmodel、第三人稱武器、骨頭上的 hitbox（PV2）、換彈事件聲
-└─ 第 4 段 engine   high｜PV10 live resize、PV11 模擬在自己的執行緒（Engine：SDL 總宣告 R3、R5），單獨的 PR
+├─ 第 4 段 engine   high｜PV10 live resize、PV11 模擬在自己的執行緒（Engine：SDL 總宣告 R3、R5），單獨的 PR
+└─ 第 5 段 lobby    high｜大廳（PV12）：輸入 Match 的位址、連上；用 U 卡的 ui、world_ui、ui_render（2026-11-24 主會話加）
 ```
+
+〔2026-11-24 主會話加第 5 段〕大廳在移植範圍內，原本四段沒排，用 `--connect host:port` 代替。加段是主會話判的，不是使用者的決定。**先後：第 5 段先、第 4 段後**（卡自己判）：第 5 段只等 #322、#326 合進 gyo2，接法已由 U 卡寫好、驗過，是產品的接線；第 4 段改編排層與 `sdl_window`（R3、R5、O-13），開工前要另寫前提與別家的對照、交使用者定。第 4 段的宣告可以在等合併時先寫。
 
 | 段 | 範圍 | 不做 | 測試 |
 |---|---|---|---|
@@ -22,6 +25,7 @@ v8-product-pvp-port
 | 2 client | 新 `client` 函式庫與執行檔：`sdl_window`、`input`（相對滑鼠、鎖游標；`PointerCapture` 的規則）、連線入口 `--connect host:port`（大廳 PV12 的代替）、arena 的網格（quads＋palette）、角色先畫方塊、第一人稱相機、HUD（準星、HP、彈藥、受擊）、聲音（`SoundCues`、`HitFeedback` 已搬的部分接上）。資產：audio、fonts。〔動工後補〕兩個 World（`Game`＋抽取它的 `Render`，render 頁第 7、8 節）；arena 與替身經遊戲的 voxel model loader（catalog 型別 `model`、格式 `json`）成為 `Mesh3d`；HUD 是第二個相機的 2D 層（`Shape2d`、文字轉成圖的 `Sprite`）；Client 成為產品的 main，Match 是第二個角色 `match` | 大廳的 UI（等 U） | 新 `object_fps_pvp.client`（沒有視窗與 GPU：渲染 World 不帶 `sdl_gpu`、在 Submit stage 讀畫面，注入 input／window 的 Message；連上本行程的 Match）、`object_fps_pvp.main`（gpu：開窗畫 30 幀）；本機實際對戰交使用者 |
 | 3 model | 角色（`Player_V20.fbx`＋UAL1 retarget）、步態與跳躍的動畫規則、分層／additive／aim／附掛、viewmodel（`Nailer1_FPS.fbx`）、第三人稱武器、Match 上骨頭的 hitbox（PV2）、換彈的 `magazine_in` → 換彈聲 | 時間型 crossfade、IK、root motion（master 也沒有） | 動畫規則、姿勢合成、hitbox 的外部測試；Match 讀 FBX 不碰 render |
 | 4 engine | `sdl_window` 的 live frame（R3）、模擬在自己的執行緒（R5） | — | SDL 的測試照總宣告；改 Engine 單獨 commit／PR |
+| 5 lobby | 大廳畫面（`pvp_lobby.json`，`ui` 型別）：位址欄、送出、狀態與提示；送出後連上 Match、進入對局，大廳關掉（拿掉 `UiRoot` 實體或換 `canvas`）。接法照 `docs/architecture/target/v2/ui.zh-Hant.md` 第 9 節（下面「PV12」） | master 的 HTTP 房間與配對（PV18）；遠端玩家內插（PV17） | client：大廳畫出來、打位址（含過濾）與送出後連上 Match、錯的位址顯示狀態；`--connect` 照舊可用（測試與腳本用）；實機（`sdl_window` 的 IME、`sdl_gpu`）交使用者 |
 
 PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`；每段手動 dispatch L1。
 
@@ -70,6 +74,20 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - 前提：Engine 要解決。OS 的 modal 迴圈（live resize）和執行緒的入口只有 `sdl_window` 與編排層做得到（SDL 總宣告 R3、R5、O-13）。
 - 放最後：遊戲在單執行緒、不 live resize 下就能玩；先把能玩的版本交出（穩定版先）。開工時另寫這一段的前提與別家的對照（Bevy 的 `bevy_winit` 的 resize、Godot 的 `DisplayServer` 的 modal 迴圈）。
 
+### PV12 大廳 → **第 5 段，用 U 卡的 UI**（2026-11-24 主會話加）
+
+- 前提：作者能處理。UI 的機制（`ui`、`world_ui`、`ui_render`）由 U 卡做好（#322；組字游標改成位元組的 #326），大廳的畫面、動作、位址的規則是遊戲的。
+- 接法照 `ui.zh-Hant.md` 第 9 節：
+  1. Module 列：來源 World 加 `world_ui`、`window_camera`（`units` 明列，漏了 `window_camera` UI 會安靜地不畫），渲染 World 加 `ui_render`。
+  2. 登記 `Ui::UiDocumentLoader`、`Text::FontLoader`；catalog 裡 `pvp_lobby.json` 型別 `ui`、字型 `object_fps_pvp.font.ui` 型別 `font`。
+  3. 生一個實體掛 `UiRoot{document, canvas = "lobby"}` 與 `UiBindings{address, room, status, hint}`；3D 場景＋HUD 並存時用 `UiRoot::camera` 指 HUD 的相機。
+  4. `Update`（`after` `WorldUi::kUiSet`）讀 `UiAction` 分派：`pvp.submit_address` 帶字串 → 連線；處理完改寫 `UiBindings`。
+  5. 位址欄的字元過濾（master 的 `Pvp/AddressText` 的規則）放進 `UiRoot::filter`。
+  6. 組字游標直接用位元組（`input` 的 `TextComposition.cursorByte`／`selectionBytes`，`sdl_window` 換好）。
+  7. 錯誤讀 `UiRootState::failure`，由產品記 log 或顯示。
+- 動工條件：#322、#326 合進 gyo2（等使用者說「合併」）。
+- 連線的時機：現在 Client 在 Product 建好時就連（`NetProductOptions` 帶 server endpoint）。大廳要「送出才連」，開工時先查 net 有沒有「之後才連」的入口；沒有的話，是不是 Engine 的事，照前提的寫法另寫、先問主會話。
+
 ### PV14 內容比對 → **遊戲用複製的 Resource**
 
 - 前提：作者能處理。Match 把 arena 的 id 與 `BoxSet` 的內容摘要放進複製的 Resource（`MatchInfo`）；Client 照 id 換成自己裝的 arena（master 的「Client 選 Match 的 arena」，盤點 2.1 `Arena` 列），摘要不同就斷線並記錄理由。不改握手（網路的握手只比協議）。
@@ -84,6 +102,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - **玩家的生成**：Match 在 `PeerConnected` 時生成玩家實體（`OnServer()`），斷線時刪掉。玩家實體帶複製的 `Owner{userId}`；Client 找自己 userId 的那個寫進 `PeerControls`。系譜：lightyear `examples/fps/src/server.rs:54-84`（連上時 spawn、`PlayerId`／`ControlledBy`）。
 - **K3**：Client 選回滾策略（`StateRollbackStrategy`），預測自己的玩家。
 - **遠端玩家**：網路不送別人的輸入（網路宣告 Q7）。Client 上遠端玩家沒有輸入元件（輸入元件只有 Client 自己控制的玩家有：`ControlOwnPlayer` 加上），`MovePlayers` 不跑它們，所以它們停在確認點的值（約晚一個來回，連重力也不算）。〔動工後改，設計審查 S5〕原寫「輸入是預設值、重力照算」，和程式不符。遊戲規則「這一步沒有輸入就不移動、不轉向」用在 Match 上還沒收到輸入的玩家。內插（PV17）是遊戲的事；lightyear 把遠端玩家當 interpolated（`InterpolationTarget`），GYO 的 K3 目前全部走回滾，這是和 lightyear 的差。判定用 Match 當 tick 的位置（PV3），所以 Client 要提前量；第 2 段實機試玩前，交使用者選「先做內插或回溯其中一個」還是「接受提前量」。
+  〔2026-11-24 主會話〕**遠端玩家內插（PV17）這一卡不做**：對手停在最新確認的值（第 3 段起對手的動畫也用最新確認的 tick）。這是主會話的判斷；使用者試玩時覺得礙事，再另外排。
 - **只在 Match 跑的**：命中判定與傷害、死亡、重生、生成與刪除玩家（`OnServer()`，兩端登記同一個 System，一致性指紋相同；`net.zh-Hant.md` 第 8 節 D-13）。Client 預測的是移動、彈藥、冷卻、換彈（開槍聲與彈藥數字不等伺服器）。
 - **時間**：tick 照 `world_time`（網路預設 64 Hz）；master 的 60 Hz tick 數換成秒（冷卻 10 tick → 1/6 s，換彈 90 → 1.5 s，重生 180 → 3 s），每步的秒數讀 `FixedTime` 的步長。
 - **地板**：arena 有隱含的地板 y＝0（master 的規則，盤點 PV1）；遊戲規則，不放 collider。
