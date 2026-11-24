@@ -121,8 +121,8 @@ struct CursorMoved final {
 };
 
 // The mouse moved (Bevy's MouseMotion, bevy_input mouse.rs:111), in the backend's relative units unless the backend
-// is set to give logical pixels (sdl_window: SDLWindowOptions::mouseMotion; the game cannot convert the backend's units
-// itself, it does not know them). While window's WindowRequest::cursorGrab is Locked (Bevy's CursorGrabMode::Locked; SDL's relative
+// is set to give logical pixels (a backend's option: the game cannot convert the backend's units itself, it does not
+// know them). While window's WindowRequest::cursorGrab is Locked (Bevy's CursorGrabMode::Locked; SDL's relative
 // mode) it is the device's own motion, reported even where the cursor could not move: a push past the window's edge
 // needs Locked and a cursor drawn by the game. Otherwise it is the cursor's motion, zero where the
 // cursor is stopped by an edge (SDL takes it from the absolute place, SDL_mouse.c:768).

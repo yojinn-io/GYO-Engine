@@ -59,7 +59,7 @@ enum class EditingUnit : std::uint8_t { CodePoint = 1, Utf16 = 2 };
 // unit of the input method's positions (EditingUnitOf the running video driver). motionUnit: MouseMotion's unit.
 [[nodiscard]] Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, Engine::Time::TimePoint ceiling,
                                    SDL_Window* window, std::size_t clipboardLimit, EditingUnit editingUnit,
-                                   MotionUnit motionUnit = MotionUnit::Device);
+                                   MotionUnit motionUnit);
 
 // Within one pump the times strictly increase in the order SDL delivered the events: an event's time is raised to
 // 1 ns after the one before when it is not later. SDL stamps some events with the OS's time and others when it

@@ -37,16 +37,14 @@ class Service;
 // it does not know them (they differ by platform and by relative mode), so the choice is made here, where they are
 // known. winit, under Bevy, has no such choice: DeviceEvent::MouseMotion is always the device's raw motion and
 // CursorMoved the cursor's place (bevy_winit/src/state.rs:459); SDL 3.4 has no raw motion outside relative mode, and
-// a game that draws its own cursor while the cursor is locked (Object_Connect's push past the window's edge) needs the
+// a game that draws its own cursor while the cursor is locked (to push past the window's edge) needs the
 // cursor's speed, not the device's counts.
 enum class MouseMotionUnit : std::uint8_t {
-    // As SDL gives it: while the cursor is locked (CursorGrab::Locked), the device's raw motion (counts on Windows,
-    // with no pointer speed or acceleration); otherwise the cursor's motion in SDL's window coordinates. For a camera
-    // turned by the mouse.
+    // As SDL gives it: while the cursor is locked (CursorGrab::Locked), the device's own motion; otherwise the
+    // cursor's motion. For a camera turned by the mouse.
     Device = 1,
-    // Logical pixels, with the OS's pointer speed and acceleration also while the cursor is locked
-    // (SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, held while the window lives; macOS's relative motion already carries
-    // them): what the cursor would have moved. For a cursor the game draws.
+    // Logical pixels, with the OS's pointer speed also while the cursor is locked (SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE,
+    // held while the window lives): what the cursor would have moved. For a cursor the game draws.
     LogicalPixels,
 };
 

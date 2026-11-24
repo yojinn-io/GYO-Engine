@@ -46,7 +46,7 @@ GYO::Base、GYO::Math、GYO::Time ◄── GYO::Kernel ◄── GYO::Orchestra
 | 時刻 | 不保留 | 每個 `Message` 帶 `TimePoint` | 使用者 P11（網路的預測要用） |
 | 丟事件 | 沒有 | `InputEventsDropped` → 全部放開 | 後端的佇列有上限（SDL-7 例外 (1)） |
 | 裝置的相對量 | winit 的 raw `DeviceEvent::MouseMotion`，任何時候都有（`bevy_winit/src/state.rs:459`） | `cursorGrab = Locked` 時才是裝置的量 | SDL 3.4 在非相對模式沒有 raw 的移動 | 一個請求欄位 |
-| 相對量的單位 | winit 沒有選擇：`DeviceEvent::MouseMotion` 永遠是 raw、`CursorMoved` 是游標的位置 | 產品選（`sdl_window` 的 `mouseMotion`）：`Device`（預設，照 SDL 給的；`Locked` 時是 raw，用滑鼠轉視角）或 `LogicalPixels`（邏輯像素、帶 OS 的指標速度，遊戲自己畫游標時用） | 鎖住游標又要自己畫游標的遊戲（Object_Connect 推過視窗邊）要的是游標的速度，不是裝置的計數；Windows 的 raw 是滑鼠計數，遊戲不知道單位換算不了 | 一個產品選項（預設不變） |
+| 相對量的單位 | winit 沒有選擇：`DeviceEvent::MouseMotion` 永遠是 raw、`CursorMoved` 是游標的位置 | 產品選（`sdl_window` 的 `mouseMotion`）：`Device`（預設，照 SDL 給的；`Locked` 時是 raw，用滑鼠轉視角）或 `LogicalPixels`（邏輯像素、帶 OS 的指標速度，遊戲自己畫游標時用） | 鎖住游標又要自己畫游標的遊戲（推過視窗邊）要的是游標的速度，不是裝置的計數；Windows 的 raw 是滑鼠計數，遊戲不知道單位換算不了 | 一個產品選項（預設不變） |
 
 ## Design Invariants
 

@@ -509,9 +509,11 @@ TEST_CASE("sdl_window: MouseMotionUnit::LogicalPixels holds SDL's relative syste
         motion.motion.yrel = 0.0F;
         Push(motion);
         Frame(*p);
+        // The dummy driver's window coordinates are logical pixels (k = 1), so this shows the motion goes through,
+        // not the scaling: that is [sw-motion-logical] and Translate's argument, which has no default.
         const float k = Adapter::LogicalPerWindowCoordinate(WindowOf(*p));
         CHECK_MESSAGE(Res<I::AccumulatedMouseMotion>(*p).delta.x == doctest::Approx(6.0F * k),
-                      "[sw-motion-logical-pump] the pumped motion is in logical pixels");
+                      "[sw-motion-logical-pump] the pumped motion arrives (k is 1 on the dummy driver)");
     }
     CHECK_MESSAGE(!SDL_GetHintBoolean(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, false),
                   "[sw-motion-hint-reset] put back when the window goes");
