@@ -8,6 +8,7 @@
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/World.hpp"
 #include "engine/render/RenderCommands.hpp"
+#include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
 #include "plugins/sdl/NativeWindow.hpp"
@@ -27,16 +28,18 @@ public:
     explicit Service(std::unique_ptr<GPUDevice> device) : device_(std::move(device)) {}
 
     // world: which World draws (its handle's number). A World other than the last one that drew has its own texture
-    // ids, starting again at 1: the textures of the earlier World go first. A World whose replacement failed keeps
-    // drawing with its own number, and nothing was forgotten (the new one never drew).
-    void Submit(const std::uint64_t world, const R::RenderCommands& commands, const R::RenderTextures& textures) {
+    // and mesh ids, starting again at 1: the textures and meshes of the earlier World go first. A World whose
+    // replacement failed keeps drawing with its own number, and nothing was forgotten (the new one never drew).
+    void Submit(const std::uint64_t world, const R::RenderCommands& commands, const R::RenderTextures& textures,
+                const R::RenderMeshes& meshes) {
         if (!device_) return;
         if (world != drawingWorld_) {
+            device_->ForgetMeshes();
             device_->ForgetTextures();
             drawingWorld_ = world;
         }
         FrameTally tally;
-        switch (device_->Submit(textures.Pending(), commands, tally)) {
+        switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally)) {
         case FrameOutcome::Shown: ++shown_; break;
         case FrameOutcome::Skipped: ++skipped_; break;
         case FrameOutcome::Failed:
@@ -46,6 +49,7 @@ public:
         }
         if (!tally.lastRefusal.empty()) lastFailure_ = tally.lastRefusal;
         refusedAsks_ += tally.refusedAsks;
+        refusedMeshAsks_ += tally.refusedMeshAsks;
         skippedDraws_ += tally.skippedDraws;
         unmappedPasses_ += tally.unmappedPasses;
     }
@@ -53,11 +57,13 @@ public:
     std::uint64_t NextWorld() noexcept { return ++preparedWorlds_; }
     void Shutdown() { device_.reset(); }
     [[nodiscard]] std::size_t TextureCount() const noexcept { return device_ ? device_->TextureCount() : 0; }
+    [[nodiscard]] std::size_t MeshCount() const noexcept { return device_ ? device_->MeshCount() : 0; }
 
     std::uint64_t shown_ = 0;
     std::uint64_t skipped_ = 0;
     std::uint64_t failed_ = 0;
     std::uint64_t refusedAsks_ = 0;
+    std::uint64_t refusedMeshAsks_ = 0;
     std::uint64_t skippedDraws_ = 0;
     std::uint64_t unmappedPasses_ = 0;
     std::string lastFailure_;
@@ -77,15 +83,16 @@ using SystemResult = Engine::Base::Result<void, Kernel::KernelError>;
 // a service outside the World (as sdl_window's handle).
 struct SDLGPUHandle final {
     Service* service = nullptr;
-    // Which World this is, for the texture table (Service::Submit).
+    // Which World this is, for the texture and mesh tables (Service::Submit).
     std::uint64_t world = 0;
 };
 inline void HashValue(Kernel::Hasher&, const SDLGPUHandle&) {}
 
 // render_world's Submit stage: the frame's asks and passes to the window (read only, SDL-5).
-SystemResult GPUSubmit(Kernel::Res<SDLGPUHandle> handle, Kernel::Res<R::RenderCommands> commands, Kernel::Res<R::RenderTextures> textures) {
-    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present()) return {};
-    handle->service->Submit(handle->world, *commands, *textures);
+SystemResult GPUSubmit(Kernel::Res<SDLGPUHandle> handle, Kernel::Res<R::RenderCommands> commands, Kernel::Res<R::RenderTextures> textures,
+                       Kernel::Res<R::RenderMeshes> meshes) {
+    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present() || !meshes.Present()) return {};
+    handle->service->Submit(handle->world, *commands, *textures, *meshes);
     return {};
 }
 
@@ -101,10 +108,12 @@ std::uint64_t SDLGPUStatus::FramesSkipped() const { return service_->skipped_; }
 std::uint64_t SDLGPUStatus::FramesFailed() const { return service_->failed_; }
 const std::string& SDLGPUStatus::LastFailure() const { return service_->lastFailure_; }
 std::uint64_t SDLGPUStatus::RefusedTextureAsks() const { return service_->refusedAsks_; }
+std::uint64_t SDLGPUStatus::RefusedMeshAsks() const { return service_->refusedMeshAsks_; }
 std::uint64_t SDLGPUStatus::SkippedDraws() const { return service_->skippedDraws_; }
 std::uint64_t SDLGPUStatus::UnmappedPasses() const { return service_->unmappedPasses_; }
 const std::string& SDLGPUStatus::DriverName() const { return service_->driver_; }
 std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
+std::size_t SDLGPUStatus::MeshCount() const { return service_->MeshCount(); }
 
 SDLGPUPlugin::SDLGPUPlugin() = default;
 SDLGPUPlugin::~SDLGPUPlugin() = default;

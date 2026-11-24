@@ -19,7 +19,11 @@ ViewTransform ViewToClip(const Math::Rect view) {
     return ViewTransform{{sx, sy}, {-1.0F - view.x * sx, 1.0F - view.y * sy}};
 }
 
-PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) {
+namespace {
+
+// A pass's viewport cut to the target (Pass2D and Pass3D alike).
+template <class Pass>
+PixelRect CutViewport(const Pass& pass, const TargetSize target) {
     if (!pass.viewport) return PixelRect{0, 0, target.width, target.height};
     const PixelRect& v = *pass.viewport;
     const std::uint32_t x = std::min(v.x, target.width);
@@ -28,6 +32,12 @@ PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) {
     const std::uint32_t height = std::min(v.height, target.height - y);
     return PixelRect{x, y, width, height};
 }
+
+} // namespace
+
+PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+PixelRect ViewportOf(const Pass3D& pass, const TargetSize target) { return CutViewport(pass, target); }
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
     if (pass.view) return *pass.view;
