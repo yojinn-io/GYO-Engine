@@ -174,6 +174,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 事件游標重評（停跑的讀者拉住保留、恢復時補讀；Kernel 的事件游標契約） | 狀態機修訂 8 交叉比對，使用者選 (A＋)（`v8-arch-gyo2-state-machine-r8-crosscheck`） | 2026-11-22 開卡；同日使用者定 (A)＋說明頁、不改 Kernel（`v8-arch-gyo2-event-cursor-reeval-author-side`）；**PR #278 合併**（6ee8d8b1） |
 | Engine 公開標頭與共通測試裡的產品名（`v8-arch-gyo2-oc-separation-review` 1、2）：window／input 標頭的 Object_Connect G 編號只留 Bevy 對應；sdl_gpu、audio、image、text 測試的產品名與「Object_Connect-sized」預算改成 Engine 自己的目標（判定不動） | 架構師 2026-11-24 | 轉 R2b 卡，併進 r2b-2d PR |
 | **待使用者定**：Object_Connect 直接連 `gyo_fast_float`（`v8-arch-gyo2-oc-separation-review` 3）——(a) 產品自己宣告依賴／(b) 改用 Engine 介面；主會話建議 (a) | 架構師 2026-11-24 | 定了交 Object_Connect 卡 |
+| `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | 轉 R2b 卡 |
 
 ## 不擋路的小事
 
