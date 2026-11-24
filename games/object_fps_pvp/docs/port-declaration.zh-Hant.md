@@ -61,6 +61,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - **判定依賴不登記的狀態**（設計審查 S2）：命中的部位依 Match 上的 `PlayerMotion`（步態的相位），它不在權威、回滾、一致性的登記裡。Match 只有一個、不回滾，所以判定仍只由 Match 決定；代價是 Match 重啟或換 Match 時步態從頭算，部位可能和原本不同。接受，理由同 PV6。
 - **對手的時刻**（設計審查 S5）：Client 畫對手用最新確認的 tick（`NetReplicaState::latestConfirmed`），不用自己預測的 tick；對手的開槍、受擊、這一命的起點都是那個 tick 上的值。
 - **viewmodel 掛在相機下**（設計審查 S6）：第一人稱武器是 viewmodel 相機的子實體（`ChildOf`），固定的局部 `Transform`（`ViewmodelPlacement`），每幀只寫 `SkinPose`；死亡時離開 viewmodel 的 layer。照 Bevy 的 `examples/camera/first_person_view_model.rs`。
+- **手臂不判定**（試玩後確認）：試玩時提到手臂以前打得到（傷害同身體）。那是膠囊判定時期（master 11-01 前、本移植第 1、2 段）的行為；`v8-product-hit-rules-three-parts`（2026-10-31）定的是手臂不設判定。使用者 2026-11-24：「先不改了」，維持三部位。
 - **沒搬**：viewmodel 的後座力（master 的 recoil 曲線；不影響判定，之後要時再加）。
 - **替身拿掉**：第 2 段的方塊替身換成 Player_V20，替身檔與 catalog 列一起刪。
 
