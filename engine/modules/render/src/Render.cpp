@@ -5,6 +5,7 @@
 
 #include "engine/base/Assert.hpp"
 #include "engine/render/RenderCommands.hpp"
+#include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderTextures.hpp"
 
 namespace GYO::Engine::Render {
@@ -18,7 +19,11 @@ ViewTransform ViewToClip(const Math::Rect view) {
     return ViewTransform{{sx, sy}, {-1.0F - view.x * sx, 1.0F - view.y * sy}};
 }
 
-PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) {
+namespace {
+
+// A pass's viewport cut to the target (Pass2D and Pass3D alike).
+template <class Pass>
+PixelRect CutViewport(const Pass& pass, const TargetSize target) {
     if (!pass.viewport) return PixelRect{0, 0, target.width, target.height};
     const PixelRect& v = *pass.viewport;
     const std::uint32_t x = std::min(v.x, target.width);
@@ -27,6 +32,12 @@ PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) {
     const std::uint32_t height = std::min(v.height, target.height - y);
     return PixelRect{x, y, width, height};
 }
+
+} // namespace
+
+PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+PixelRect ViewportOf(const Pass3D& pass, const TargetSize target) { return CutViewport(pass, target); }
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
     if (pass.view) return *pass.view;
@@ -99,6 +110,27 @@ const TextureDesc* RenderTextures::Find(const TextureId id) const noexcept {
         if (value == id.value) return &desc;
     }
     return nullptr;
+}
+
+MeshId RenderMeshes::Create(std::vector<Vertex3D> vertices, std::vector<std::uint32_t> indices) {
+    GYO_ASSERT(!vertices.empty() && !indices.empty() && "a mesh without vertices or indices");
+    GYO_ASSERT(indices.size() % 3 == 0 && "a mesh's indices are not whole triangles");
+    GYO_ASSERT(next_ != 0 && "every mesh id has been given");
+    const MeshId id{next_++};
+    live_.push_back(id.value);
+    pending_.emplace_back(MeshCreate{id, std::move(vertices), std::move(indices)});
+    return id;
+}
+
+void RenderMeshes::Release(const MeshId id) {
+    const auto it = std::find(live_.begin(), live_.end(), id.value);
+    GYO_ASSERT(it != live_.end() && "a release of a mesh that is not live");
+    live_.erase(it);
+    pending_.emplace_back(MeshRelease{id});
+}
+
+bool RenderMeshes::Live(const MeshId id) const noexcept {
+    return std::find(live_.begin(), live_.end(), id.value) != live_.end();
 }
 
 } // namespace GYO::Engine::Render

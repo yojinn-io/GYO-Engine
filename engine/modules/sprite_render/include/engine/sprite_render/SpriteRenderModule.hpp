@@ -5,10 +5,10 @@
 //
 // - ExtractSprites2d, in render_world's extract schedule: rebuilds render's Extracted2dItems from the source World's
 //   Sprites and Shape2ds that have a GlobalTransform (RenderLayers: layer 0 when none), and makes the textures of
-//   their images through RenderImages and RenderTextures (an image asset not loaded yet: the item is skipped this
-//   frame). Then the textures of held images no item showed are let go.
-// - Queue2dPasses, in SpriteRenderOptions::schedule / stage (Main / Update): for each extracted 2D camera, in order,
-//   appends Queue2d's pass to RenderCommands (before render_world's Submit stage).
+//   their images through render_world's RenderImages and RenderTextures (an image asset not loaded yet: the item is
+//   skipped this frame).
+// - Queue2dPasses, in SpriteRenderOptions::schedule / stage (Main / Update): puts each extracted 2D camera's Queue2d
+//   pass in its slot of CameraPasses; camera_render composes them (before render_world's Submit stage).
 //
 // The source World needs transform and world_render (else R-E4); an image asset is read through the source's
 // AssetView (world_asset), so a handle loaded in the source this frame is drawn this frame.

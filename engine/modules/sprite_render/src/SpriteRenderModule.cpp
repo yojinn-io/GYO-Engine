@@ -10,6 +10,7 @@
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
 #include "engine/kernel/World.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderCommands.hpp"
@@ -79,22 +80,16 @@ SystemResult ExtractSprites2d(Kernel::Extract<Kernel::Read<Render::Sprite>> spri
         item.indices = Render::TriangleListOf(shape);
         items.push_back(std::move(item));
     });
-    cache.EndFrame(texs);
     out.Get().items = std::move(items);
     return {};
 }
 
 SystemResult Queue2dPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel::Res<Render::Extracted2dItems> items,
-                           Kernel::ResMut<Render::RenderCommands> commands) {
-    // A target's first pass of the frame clears the whole target; later cameras on it clear their viewport only.
-    std::vector<std::uint32_t> drawn;
-    for (const Render::Pass2D& pass : commands.Read().passes) drawn.push_back(pass.target);
-    for (const Render::ExtractedCamera& camera : cameras->cameras) {
-        const bool first = std::find(drawn.begin(), drawn.end(), camera.target) == drawn.end();
-        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, first);
-        if (!pass) continue;
-        drawn.push_back(camera.target);
-        commands.Get().passes.push_back(std::move(*pass));
+                           Kernel::ResMut<Render::CameraPasses> passes) {
+    Render::CameraPasses& slots = passes.Get();
+    for (std::size_t i = 0; i < cameras->cameras.size() && i < slots.byCamera.size(); ++i) {
+        std::optional<Render::Pass2D> pass = Render::Queue2d(cameras->cameras[i], items->items);
+        if (pass) slots.byCamera[i].push_back(std::move(*pass));
     }
     return {};
 }
@@ -110,7 +105,6 @@ void SpriteRenderModule::Build(Orchestration::WorldSetup& setup) {
     const SpriteRenderOptions& options = OptionsOf(setup.Options<SpriteRenderOptions>());
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::Extracted2dItems>({.name = "Extracted2dItems"});
-    r.Resource<Render::RenderImages>({.name = "RenderImages"});
 
     Kernel::SystemOptions extract;
     extract.name = "ExtractSprites2d";
@@ -130,7 +124,6 @@ void SpriteRenderModule::Build(Orchestration::WorldSetup& setup) {
 
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted2dItems>(world);
-        PutIfAbsent<Render::RenderImages>(world);
         return {};
     });
 }

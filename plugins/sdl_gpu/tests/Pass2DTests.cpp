@@ -2,7 +2,7 @@
 // sdl_gpu's adapter draws RenderCommands on an 8 by 8 picture and reads it back (GPUDevice::Capture, the same drawing
 // as on the window); each pixel is compared with its exact colour (master pitfall 18: compare the colour, not "something
 // was drawn"). Only a blend of a translucent colour may differ by one step (the GPU's rounding). The frames case runs
-// the Plugin in a Product on a hidden window. Tags "[gp-...]" are the mutants' expectations.
+// the Plugin in a Product on a shown window (at least one frame must reach it). Tags "[gp-...]" are the mutants' expectations.
 #include <doctest/doctest.h>
 
 #include <cstdint>
@@ -19,6 +19,7 @@
 #include "engine/input/InputModule.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
@@ -105,7 +106,7 @@ struct Picture {
 Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* textures = nullptr) {
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
-    auto captured = Device().Capture(asks, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);
@@ -309,8 +310,14 @@ TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end t
     const std::vector<R::Extracted2dItem> items{item(2, 0.5F, 1.0F, kGreen), item(1, -1.0F, 0.0F, kRed)};
     std::optional<R::Pass2D> pass = R::Queue2d(camera, items);
     REQUIRE(pass.has_value());
+    // As camera_render composes a frame: the camera's clear, then its pass.
+    R::ExtractedCameras cameras;
+    cameras.cameras.push_back(camera);
+    R::CameraPasses slots;
+    slots.byCamera.resize(1);
+    slots.byCamera[0].push_back(std::move(*pass));
     R::RenderCommands commands;
-    commands.passes.push_back(std::move(*pass));
+    R::ComposePasses(cameras, slots, commands);
     const Picture p = Draw(commands);
     CHECK_MESSAGE(p.All(0, 0, 8, 2, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-top] the bar above");
     CHECK_MESSAGE(p.All(0, 6, 8, 8, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-bottom] the bar below");
@@ -365,7 +372,9 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     GYO::Engine::Window::WindowSettings settings;
     settings.title = "sdl_gpu test";
     settings.size = {64, 48};
-    settings.hidden = true;
+    // Shown: a hidden window gives no picture (every frame skipped, which is not an error), and this case checks
+    // that frames reach the window (Xvfb on L1, a desktop elsewhere).
+    settings.hidden = false;
     d.options.Set(settings);
     GYO::Plugins::SDLWindow::SDLWindowOptions windowOptions;
     windowOptions.installRunner = false;
@@ -389,11 +398,18 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     const G::SDLGPUStatus* status = product.Buffer().Find<G::SDLGPUStatus>();
     REQUIRE(status != nullptr);
     MESSAGE("GPU driver: " << status->DriverName());
-    constexpr int kFrames = 4;
-    for (int i = 0; i < kFrames; ++i) {
+    // The window shows up a few frames after it is made (the display maps it): frames until one is shown, at most 120,
+    // pumping the OS events as a runner does.
+    GYO::Plugins::SDLWindow::SDLWindowPump* pump = product.Buffer().Find<GYO::Plugins::SDLWindow::SDLWindowPump>();
+    REQUIRE(pump != nullptr);
+    int kFrames = 0;
+    while (kFrames < 4 || (status->FramesShown() == 0 && kFrames < 120)) {
+        pump->Pump();
         auto ran = product.RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message));
+        ++kFrames;
     }
+    CHECK_MESSAGE(status->FramesShown() >= 1, "[gp-frames-shown] a frame reached the window (" << status->FramesSkipped() << " skipped)");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-frames-none-failed] no frame failed: " << status->LastFailure());
     CHECK_MESSAGE(status->FramesShown() + status->FramesSkipped() == kFrames, "[gp-frames-each] each frame is shown or skipped");
     CHECK_MESSAGE(status->RefusedTextureAsks() == 0, "[gp-frames-asks] the texture ask was applied");
@@ -434,10 +450,10 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     REQUIRE(static_cast<bool>(made));
     G::GPUDevice& device = **made;
     G::FrameTally tally;
-    static_cast<void>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally));
+    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally));
     constexpr int kRuns = 20;
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally)));
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally)));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
@@ -469,7 +485,7 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
         REQUIRE(queued.has_value());
         R::RenderCommands piped;
         piped.passes.push_back(std::move(*queued));
-        REQUIRE(static_cast<bool>(device.Capture({}, piped, R::TargetSize{1280, 720}, tally)));
+        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally)));
     }
     const double pipeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pipeStart).count() / kRuns;
     MESSAGE("[gp-budget-pipeline] driver " << device.DriverName() << ": " << pipeMs

@@ -23,7 +23,9 @@
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Hash.hpp"
 #include "engine/math/geometry/Rect.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
+#include "engine/model/ModelData.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 
@@ -97,7 +99,45 @@ struct ClearColor final {
     Color8 color{0, 0, 0, 255};
 };
 
+// One mesh of a model asset, drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
+// batch r2b-3d). A mesh without a skin sits at its node (its rest pose, or the entity's SkinPose when it has one); a
+// skinned mesh's vertices are placed by its skin and the entity's SkinPose (model.zh-Hant.md section 2.1), on the CPU
+// (render.zh-Hant.md section 8.4). The entity's GlobalTransform places the model. The material is the author's:
+// color times image (none: white); the model's own material is data the author reads (model.zh-Hant.md: Material).
+struct Mesh3d final {
+    Asset::Handle<Model::ModelData> model;
+    // An index of ModelData::meshes; past the end: nothing is drawn.
+    std::uint32_t mesh = 0;
+    Color8 color{255, 255, 255, 255};
+    ImageRef image;
+    BlendMode blend = BlendMode::Opaque;
+    // false: drawn over whatever is nearer (an overlay in the world).
+    bool depthTest = true;
+    // None: written when opaque, not when blended (Bevy's AlphaMode::Blend writes no depth, so crossing translucent
+    // meshes do not hide each other).
+    std::optional<bool> depthWrite;
+    CullMode cull = CullMode::None;
+    TextureFilter filter = TextureFilter::Linear;
+};
+
+// A 3D camera's depth (Bevy's Camera3d::depth_load_op): clear: each camera starts with a cleared depth (the default:
+// a viewmodel camera draws over the world); false: it keeps the depth the cameras before it on the target left (a
+// second camera that draws into the same scene). No component: cleared.
+struct Camera3dDepth final {
+    bool clear = true;
+};
+
+// The model-space matrix of every node of the entity's model this frame (Model::ComputeModelSpace of the pose the game
+// sampled; the game keeps the animation, as the user's layer 2 decision leaves it, v8-arch-gyo2-skeletal-animation-
+// layers). Sizes other than the model's node count: the rest pose is used.
+struct SkinPose final {
+    std::vector<Math::Matrix4> nodes;
+};
+
 inline void HashValue(Kernel::Hasher&, const RenderLayers&) {}
+inline void HashValue(Kernel::Hasher&, const Mesh3d&) {}
+inline void HashValue(Kernel::Hasher&, const SkinPose&) {}
+inline void HashValue(Kernel::Hasher&, const Camera3dDepth&) {}
 inline void HashValue(Kernel::Hasher&, const Sprite&) {}
 inline void HashValue(Kernel::Hasher&, const Shape2d&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColorConfig&) {}
