@@ -1615,6 +1615,72 @@
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a model mesh*",
    "expect": "\\[p3\\-mesh\\-new\\-life\\]"
+  },
+  {
+   "id": "p3-skin-order-swapped",
+   "what": "the palette is inverse bind times joint",
+   "guards": [
+    "render section 8.4",
+    "model section 2.1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "palette[j] = Math::Multiply(nodes[skin.joints[j]], skin.inverseBindMatrices[j]);",
+   "replace": "palette[j] = Math::Multiply(skin.inverseBindMatrices[j], nodes[skin.joints[j]]);",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: skinning multiplies*",
+   "expect": "\\[p3\\-skin\\-order\\]"
+  },
+  {
+   "id": "p3-unbound-not-at-node",
+   "what": "a vertex of no influence stays in the mesh's own space",
+   "guards": [
+    "render section 8.4"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "                out[v].position = Math::TransformPoint(nodes[mesh.node], out[v].position);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: skinning multiplies*",
+   "expect": "\\[p3\\-skin\\-unbound\\]"
+  },
+  {
+   "id": "g3-depth-always-cleared",
+   "what": "a pass with clearDepth false clears its depth",
+   "guards": [
+    "render section 8.3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        depthTarget.load_op = pass.clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;",
+   "replace": "        depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a pass with clearDepth*",
+   "expect": "\\[g3\\-pass\\-depth\\-kept\\]"
+  },
+  {
+   "id": "p3-clear-depth-lost",
+   "what": "Queue3d ignores the camera's depth setting",
+   "guards": [
+    "render section 8.3"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    pass.clearDepth = camera.clearDepth;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-clear\\-depth\\]"
+  },
+  {
+   "id": "re-alpha-writes-depth",
+   "what": "a blended mesh writes depth by default",
+   "guards": [
+    "render section 8.3"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "        item.depthWrite = m.depthWrite.value_or(m.blend == Render::BlendMode::Opaque);",
+   "replace": "        item.depthWrite = m.depthWrite.value_or(true);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a 3D camera*",
+   "expect": "\\[re\\-3d\\-alpha\\-no\\-depth\\-write\\]"
   }
  ]
 }

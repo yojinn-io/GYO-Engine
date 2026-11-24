@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "engine/camera/Camera.hpp"
+#include "engine/math/linear/Quaternion.hpp"
+#include "engine/math/scalar/Constants.hpp"
 #include "engine/model/ModelData.hpp"
 #include "engine/render/Compose.hpp"
 #include "engine/render/Pipeline3d.hpp"
@@ -81,6 +83,12 @@ TEST_CASE("pipeline3d: a 3D camera's pass: opaque near to far, then blended far 
     for (std::size_t i = 0; i < 16; ++i) same = same && pass->clipFromWorld.values[i] == expected.values[i];
     CHECK_MESSAGE(same, "[p3-clip-from-world] clip from view times view from world");
     CHECK_MESSAGE((pass->viewport == R::PixelRect{0, 0, 100, 100}), "[p3-viewport] the camera's viewport");
+    CHECK_MESSAGE(pass->clearDepth, "[p3-clear-depth] the camera's depth setting (cleared by default)");
+    R::ExtractedCamera keeps = Camera3d();
+    keeps.clearDepth = false;
+    const std::optional<R::Pass3D> kept = R::Queue3d(keeps, items);
+    REQUIRE(kept.has_value());
+    CHECK_MESSAGE(!kept->clearDepth, "[p3-clear-depth] a camera that keeps the depth");
 }
 
 TEST_CASE("pipeline3d: a skinned item's vertices go into the pass, each draw naming its own range") {
@@ -205,4 +213,30 @@ TEST_CASE("pipeline3d: a mesh without a skin sits at its node; a skinned one at 
     mesh.skin = 0;
     const M::Matrix4 skinned = R::PlaceMesh(At(10, 0, 0), mesh, nodes);
     CHECK_MESSAGE((skinned.values[12] == 10.0F && skinned.values[13] == 0.0F), "[p3-place-skinned] the entity alone");
+}
+
+TEST_CASE("pipeline3d: skinning multiplies the joint by the inverse bind in that order; an unbound vertex sits at its node") {
+    Md::ModelData model;
+    model.nodes.resize(2);
+    Md::Skin skin;
+    skin.joints = {0};
+    // The joint turned a quarter round z this frame; at bind time it sat at x 1.
+    skin.inverseBindMatrices = {At(-1, 0, 0)};
+    model.skins.push_back(skin);
+    Md::Mesh mesh;
+    mesh.node = 1;
+    mesh.skin = 0;
+    mesh.positions = {{2, 0, 0}, {5, 0, 0}};
+    mesh.indices = {0, 1, 0};
+    mesh.vertexJoints = {{0, 0, 0, 0}, {0, 0, 0, 0}};
+    mesh.vertexWeights = {{1, 0, 0, 0}, {0, 0, 0, 0}};
+    T::Transform turned;
+    turned.rotation = M::MakeQuaternionFromAxisAngle({0, 0, 1}, M::Pi / 2.0F);
+    const std::vector<M::Matrix4> nodes{T::ToMatrix(turned), At(0, 3, 0)};
+    const std::vector<R::Vertex3D> v = R::SkinVertices(model, mesh, nodes);
+    REQUIRE(v.size() == 2);
+    // joint x inverseBind: (2,0) - (1,0) = (1,0), then turned: (0,1). The other order would give (0,2) - (1,0) = (-1,2).
+    CHECK_MESSAGE((Near(v[0].position.x, 0) && Near(v[0].position.y, 1)), "[p3-skin-order] " << v[0].position.x << ", " << v[0].position.y);
+    CHECK_MESSAGE((Near(v[1].position.x, 5) && Near(v[1].position.y, 3)), "[p3-skin-unbound] a vertex of no influence at its node: "
+                                                                            << v[1].position.x << ", " << v[1].position.y);
 }

@@ -684,11 +684,13 @@ struct GPUDevice::State {
         SDL_GPUDepthStencilTargetInfo depthTarget{};
         depthTarget.texture = depth;
         depthTarget.clear_depth = 1.0F;
-        depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;
-        depthTarget.store_op = SDL_GPU_STOREOP_DONT_CARE;
+        // Cleared unless the pass keeps the depth of the passes before it (Pass3D::clearDepth; SDL cycles a target
+        // only when it is cleared). Stored, so a later pass may keep it.
+        depthTarget.load_op = pass.clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+        depthTarget.store_op = SDL_GPU_STOREOP_STORE;
         depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
         depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthTarget.cycle = true;
+        depthTarget.cycle = pass.clearDepth;
         SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, &colour, 1, &depthTarget);
         const R::PixelRect area = R::ViewportOf(pass, size);
         const bool drawable = area.width != 0 && area.height != 0;

@@ -161,15 +161,18 @@ struct Draw3D final {
     CullMode cull = CullMode::None;
 };
 
-// A 3D pass on one target (one camera's 3D scene). Its depth starts cleared (each camera has a depth of its own, as
-// in Bevy: a viewmodel camera after the world camera draws over the world); its colour starts as the target is (the
-// camera's clear is a pass of its own before it). Draws are drawn in their order.
+// A 3D pass on one target (one camera's 3D scene). Its depth starts cleared unless clearDepth is false (each camera
+// has a depth of its own by default, as in Bevy: a viewmodel camera after the world camera draws over the world); its
+// colour starts as the target is (the camera's clear is a pass of its own before it). Draws are drawn in their order.
 struct Pass3D final {
     std::uint32_t target = 0;
     // As Pass2D's: the pixels of the target the pass draws on; nullopt: the whole target.
     std::optional<PixelRect> viewport;
     // World to clip space (math.md: depth 0 at near, 1 at far; y up).
     Math::Matrix4 clipFromWorld{};
+    // false: the depth the passes before it left (Bevy's Camera3dDepthLoadOp::Load); a depth no pass wrote this frame
+    // is undefined, as in Bevy.
+    bool clearDepth = true;
     // Geometry made for this frame only (a mesh skinned on the CPU, a shape that changes), named by draws with mesh {}.
     std::vector<Vertex3D> vertices;
     std::vector<std::uint32_t> indices;

@@ -328,6 +328,21 @@ TEST_CASE("sdl_gpu pass3d: each pass starts with cleared depth and keeps the col
     CHECK_MESSAGE(p.All(0, 0, 4, 8, kGreen), "[g3-pass-keeps-colour] a later 3D pass does not clear the colour");
 }
 
+TEST_CASE("sdl_gpu pass3d: a pass with clearDepth false keeps the depth the pass before it left") {
+    R::RenderCommands commands;
+    R::Pass3D first = Scene();
+    Quad(first, 0, 0, 8, 8, 0.2F, kGreen);
+    commands.passes.push_back(std::move(first));
+    R::Pass3D second = Scene();
+    second.clearDepth = false;
+    Quad(second, 4, 0, 8, 8, 0.8F, kRed);  // behind the first pass's quad: hidden by the depth it kept
+    Quad(second, 0, 0, 4, 8, 0.1F, kBlue);  // in front: drawn
+    commands.passes.push_back(std::move(second));
+    const Picture p = Draw(commands);
+    CHECK_MESSAGE(p.All(4, 0, 8, 8, kGreen), "[g3-pass-depth-kept] the kept depth hides the later pass's farther quad");
+    CHECK_MESSAGE(p.All(0, 0, 4, 8, kBlue), "[g3-pass-depth-kept-near] a nearer one is drawn");
+}
+
 TEST_CASE("sdl_gpu pass3d: a viewport takes the clip space") {
     R::RenderCommands commands;
     commands.passes.push_back(Cleared(kBlue));

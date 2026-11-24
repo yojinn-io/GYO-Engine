@@ -44,6 +44,8 @@ struct ExtractedCamera final {
     bool is3d = false;
     // The colour its first pass clears the target to; none: it draws over what is there.
     std::optional<Color8> clear;
+    // A 3D camera: its pass starts with a cleared depth (Camera3dDepth).
+    bool clearDepth = true;
     std::uint32_t layers = 1;
 };
 

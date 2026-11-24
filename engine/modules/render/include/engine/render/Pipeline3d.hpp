@@ -96,8 +96,9 @@ inline void HashValue(Kernel::Hasher&, const RenderModelMeshes&) {}
 [[nodiscard]] Math::Matrix4 PlaceMesh(const Math::Matrix4& global, const Model::Mesh& mesh, std::span<const Math::Matrix4> nodes);
 
 // The 3D pass one camera draws: its viewport, its clip-from-world, and the items whose layers it draws: first the
-// opaque, depth-tested ones near to far (fewer pixels shaded; Bevy's Opaque3d sorts front to back), then the
-// blended, depth-tested ones far to near (Bevy's Transparent3d), then those not depth-tested far to near (overlays
+// opaque, depth-tested ones near to far (fewer pixels shaded behind nearer ones; Bevy bins its Opaque3d by pipeline,
+// material and mesh instead, bevy_core_pipeline/src/core_3d/mod.rs:172-188), then the blended, depth-tested ones far
+// to near (Bevy's Transparent3d), then those not depth-tested far to near (overlays
 // in the world); ties by source entity. Distance: the view-space z of the item's origin. nullopt: the camera is not
 // valid or not a 3D camera.
 [[nodiscard]] std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, std::span<const Extracted3dItem> items);

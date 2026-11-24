@@ -43,7 +43,8 @@ std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Mode
 
 std::vector<Vertex3D> SkinVertices(const Model::ModelData& model, const Model::Mesh& mesh, const std::span<const Math::Matrix4> nodes) {
     const Model::Skin& skin = model.skins[mesh.skin];
-    // The joint palette: nodes[joint] x inverseBind(joint), once per joint (model.zh-Hant.md: one palette per skin).
+    // The joint palette: nodes[joint] x inverseBind(joint), once per joint for this mesh (a model whose skin is shared
+    // by several meshes computes it once per mesh; RC-RD 6 covers the cost).
     std::vector<Math::Matrix4> palette(skin.joints.size());
     for (std::size_t j = 0; j < palette.size(); ++j) palette[j] = Math::Multiply(nodes[skin.joints[j]], skin.inverseBindMatrices[j]);
     std::vector<Vertex3D> out = MeshVertices(mesh);
@@ -61,7 +62,15 @@ std::vector<Vertex3D> SkinVertices(const Model::ModelData& model, const Model::M
             normal = normal + Math::TransformVector(m, out[v].normal) * w;
             total += w;
         }
-        if (total == 0.0F) continue;
+        if (total == 0.0F) {
+            // No influence: the vertex sits at the mesh's node as a mesh without a skin does (model.zh-Hant.md 2.1),
+            // brought into model space here because a skinned mesh's world is the entity's alone (PlaceMesh).
+            if (mesh.node < nodes.size()) {
+                out[v].position = Math::TransformPoint(nodes[mesh.node], out[v].position);
+                out[v].normal = Math::TransformVector(nodes[mesh.node], out[v].normal);
+            }
+            continue;
+        }
         out[v].position = position;
         const float length = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
         out[v].normal = length > 0.0F ? normal * (1.0F / length) : normal;
@@ -84,6 +93,7 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
     pass.clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);
+    pass.clearDepth = camera.clearDepth;
 
     // 0: opaque and depth-tested, near to far; 1: blended and depth-tested, far to near; 2: not depth-tested, far to near.
     struct Entry {

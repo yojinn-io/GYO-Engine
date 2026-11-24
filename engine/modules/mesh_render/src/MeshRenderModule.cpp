@@ -69,7 +69,7 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
         item.color = m.color;
         item.blend = m.blend;
         item.depthTest = m.depthTest;
-        item.depthWrite = m.depthWrite;
+        item.depthWrite = m.depthWrite.value_or(m.blend == Render::BlendMode::Opaque);
         item.cull = m.cull;
         const std::vector<Math::Matrix4> nodes = NodesOf(*model, poses.Get(id));
         item.world = Render::PlaceMesh(g->matrix, mesh, nodes);

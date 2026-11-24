@@ -113,9 +113,18 @@ struct Mesh3d final {
     BlendMode blend = BlendMode::Opaque;
     // false: drawn over whatever is nearer (an overlay in the world).
     bool depthTest = true;
-    bool depthWrite = true;
+    // None: written when opaque, not when blended (Bevy's AlphaMode::Blend writes no depth, so crossing translucent
+    // meshes do not hide each other).
+    std::optional<bool> depthWrite;
     CullMode cull = CullMode::None;
     TextureFilter filter = TextureFilter::Linear;
+};
+
+// A 3D camera's depth (Bevy's Camera3d::depth_load_op): clear: each camera starts with a cleared depth (the default:
+// a viewmodel camera draws over the world); false: it keeps the depth the cameras before it on the target left (a
+// second camera that draws into the same scene). No component: cleared.
+struct Camera3dDepth final {
+    bool clear = true;
 };
 
 // The model-space matrix of every node of the entity's model this frame (Model::ComputeModelSpace of the pose the game
@@ -128,6 +137,7 @@ struct SkinPose final {
 inline void HashValue(Kernel::Hasher&, const RenderLayers&) {}
 inline void HashValue(Kernel::Hasher&, const Mesh3d&) {}
 inline void HashValue(Kernel::Hasher&, const SkinPose&) {}
+inline void HashValue(Kernel::Hasher&, const Camera3dDepth&) {}
 inline void HashValue(Kernel::Hasher&, const Sprite&) {}
 inline void HashValue(Kernel::Hasher&, const Shape2d&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColorConfig&) {}

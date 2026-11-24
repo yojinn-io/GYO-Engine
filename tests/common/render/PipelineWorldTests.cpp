@@ -439,6 +439,7 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
     Place(game, 2, 0.0F, 0.0F, -5.0F);
     R::Mesh3d mesh;
     mesh.model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(GYO::Engine::Asset::AssetId("model.bar"));
+    mesh.blend = R::BlendMode::Alpha;
     game.Insert(3, mesh);
     Place(game, 3, 0.0F, 0.0F, 0.0F);
     R::Sprite hud;
@@ -455,6 +456,8 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
     const auto* scene = std::get_if<R::Pass3D>(&all[1]);
     REQUIRE_MESSAGE(scene != nullptr, "[re-3d-order] then the 3D camera's pass");
     CHECK_MESSAGE(scene->draws.size() == 1, "[re-3d-mesh] the mesh is drawn");
+    CHECK_MESSAGE((scene->draws.size() == 1 && scene->draws[0].blend == R::BlendMode::Alpha && !scene->draws[0].depthWrite),
+                  "[re-3d-alpha-no-depth-write] a blended mesh writes no depth unless asked");
     const auto* overlay = std::get_if<R::Pass2D>(&all[2]);
     CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
 }

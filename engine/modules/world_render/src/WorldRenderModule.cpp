@@ -13,6 +13,7 @@ void WorldRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<Render::Shape2d>({.name = "Shape2d"});
     r.Component<Render::Mesh3d>({.name = "Mesh3d"});
     r.Component<Render::SkinPose>({.name = "SkinPose"});
+    r.Component<Render::Camera3dDepth>({.name = "Camera3dDepth"});
     r.Component<Render::RenderLayers>({.name = "RenderLayers"});
     r.Component<Render::ClearColorConfig>({.name = "ClearColorConfig"});
     r.Resource<Render::ClearColor>({.name = "ClearColor"});

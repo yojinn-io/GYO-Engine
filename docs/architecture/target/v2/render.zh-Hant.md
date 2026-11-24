@@ -172,9 +172,10 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 ### 8.3 `Pass3D` 與 `mesh_render`
 
 - **資料**：`Pass3D{target, viewport, clipFromWorld, vertices, indices, draws}`；`Draw3D{mesh, indexOffset, indexCount, vertexOffset, world, color, texture, blend, depthTest, depthWrite, cull}`；`Vertex3D`＝位置、法線、uv（32 bytes；3D pass 只綁位置與 uv，法線留給之後打光）；`RenderMeshes`（`render_world` 登記）：資料側配 id 的保留網格，同 `RenderTextures`（Bevy 的 `RenderAssets<RenderMesh>`）。`MeshId{}` 的 draw 用 pass 自己的頂點（蒙皮後的、每幀變的）。
-- **深度**：每個 `Pass3D` 的深度從清空開始、顏色不清（相機的清除是它前面的那個 pass）。等於 Bevy 每個相機有自己的深度貼圖：viewmodel 相機在世界相機之後畫、自己的深度，就是盤點表 PV7 的「清深度」，不必另設旗標。
+- **深度**：預設每個 `Pass3D` 的深度從清空開始、顏色不清（相機的清除是它前面的那個 pass）。等於 Bevy 每個相機有自己的深度：viewmodel 相機在世界相機之後畫、自己的深度，就是盤點表 PV7 的「清深度」。作者可以讓一個 3D 相機**接著用**前面的相機留下的深度：相機實體放 `Camera3dDepth{clear = false}`（Bevy 的 `Camera3dDepthLoadOp::Load`，`bevy_camera/src/components.rs:60-72`；`Pass3D::clearDepth`）——這一幀沒有 pass 寫過的深度是未定的，同 Bevy。
+- **半透明不寫深度**（照 Bevy：`AlphaMode::Blend` 不寫深度，`bevy_pbr/src/render/mesh.rs:3531-3547`）：`Mesh3d::depthWrite` 沒給時，不透明寫、半透明不寫，交錯的半透明網格不會互相擋住；作者要時明給 `true`。
 - **shader**：無光照（unlit）——貼圖×`color`，同 master（盤點表 R2a 列「unlit 的 shader」）。顏色照 bytes（同 2D pass；RC-RD 3 不觸發，因為不打光）。HLSL 在 `render/shaders/mesh3d.*.hlsl`，ABI 在 `ShaderAbi.hpp`（RD-4）。
-- **先後**（RD-8）：不透明、測深度的近到遠（Bevy 的 `Opaque3d` 前到後，少算被擋住的像素），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
+- **先後**（RD-8）：不透明、測深度的近到遠（被近的擋住的像素少算；**偏離 Bevy**：Bevy 的 `Opaque3d` 是 binned phase，照 pipeline、材質、網格分組，不照距離，`bevy_core_pipeline/src/core_3d/mod.rs:172-188`、`:275`——照距離排的代價是 pipeline 與貼圖可能來回切換，沒有量；PvP 的 draw 數少），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
 - **`Mesh3d`**（來源側，`world_render` 登記）：模型素材的 `Handle`、網格索引、`color`、`image`（`ImageRef`，沒給是白）、混合、深度測試／寫入、`CullMode`（`Back`＝螢幕上順時針的不畫，逆時針是正面，同 Bevy 的 `FrontFace::Ccw`；預設 `None`）。模型自己的材質（`Material::baseColor`、貼圖檔名）是資料，作者讀了填進 `color`／`image`——材質系統（Bevy 的 `StandardMaterial`）不在本批。
 - **實體對應**（總宣告第 6.1 節第 8 點，逐種判的 3D 那一種）：網格每幀暫時（`Extracted3dItems`）；保留的是**模型網格**（以素材 id、life、網格索引為鍵的 `RenderModelMeshes`，RD-9）。Bevy 的 `RenderMeshInstances` 以來源實體為鍵、留每實例的 GPU 資料；GYO 的 world 矩陣與材質每個 draw 推一次 uniform，沒有每實例的 GPU 狀態要留，所以不需要對應實體——四個衝突點在 3D 段也不出現（RC-RD 5 寫了什麼時候要改）。
 - **沒有蒙皮的網格**放在它的節點上（`SkinPose` 合模型的節點數就用它，否則 rest pose；`PlaceMesh`），整個模型再由實體的 `GlobalTransform` 放。
@@ -202,11 +203,13 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 | 網格的保留 | `RenderAssets<RenderMesh>`、`RenderMeshInstances` | 後端的 handle | `RenderMeshes`（資料側 id）、`RenderModelMeshes`（模型網格為鍵） |
 | 著色 | PBR（`StandardMaterial`） | unlit＋exposure／gamma | unlit；exposure／gamma 不在本批（見範囲の限界） |
 
-偏離 Bevy 與膠水量：沒有 PBR 與材質系統（PvP 是 unlit；有點名的產品再加）；CPU 蒙皮（膠水：`SkinVertices` 一個函式）；網格實例不留 GPU 狀態（每個 draw 推 uniform；大量相同網格時 RC-RD 2 的實例化）。
+偏離 Bevy 與膠水量：沒有 PBR 與材質系統（PvP 是 unlit；有點名的產品再加）；CPU 蒙皮（膠水：`SkinVertices` 一個函式）；網格實例不留 GPU 狀態（每個 draw 推 uniform；大量相同網格時 RC-RD 2 的實例化）；不透明照距離排、不照 pipeline 分組（第 8.3 節）；法線用整個矩陣換（不是 inverse-transpose：非等比縮放時法線會歪，unlit 用不到，打光時改）。
+
+**和直接寫 `RenderCommands` 的一方的先後**：`ComposeCameraPasses` 在 `PostUpdate`。同一個 World 裡在 `Update` 直接往 `RenderCommands` 放 pass 的一方（例：ImGui 的繪製那半、R2a 式的遊戲自己的 pass）會壓在所有相機**底下**，而且第一個相機因此不再是「目標上第一個」——它的清除變成只清視區，黑邊留著那一方畫的東西。要蓋在相機之上就排在 `PostUpdate` 之後、`Submit` 之前（例：`Last`）。
 
 ## Design Invariants
 
-- **RD-1 `render` 只有資料與中性的邏輯**：`RenderCommands`、`RenderTextures`、可畫元件、2D 管線的函式、換算函式、HLSL 原始碼與 ABI；沒有 SDL、沒有 GPU 物件、沒有後端介面、不依賴任何 Plugin（B'）；依賴的 Module（asset、image、world_asset、transform、camera）只取型別（R2b）；其中 `transform` 是給渲染側的單位（`camera_render`、`sprite_render` 讀 `GlobalTransform`）經 `render` 拿到型別用的，`render` 自己的程式不 include 它——不是多餘的依賴。守衛：連結檢查（`tests/common/render/CMakeLists.txt` 的 `gyo_expect_links`：`gyo_render` 是 Base、Kernel、Math 與上面五個；`render_world`、`world_render`、`camera_render`、`sprite_render` 各自列）；SDL 的原始碼掃描在 K 之後立（總宣告第 9.1 節），之前由每批的設計審查看。
+- **RD-1 `render` 只有資料與中性的邏輯**：`RenderCommands`、`RenderTextures`、可畫元件、2D 管線的函式、換算函式、HLSL 原始碼與 ABI；沒有 SDL、沒有 GPU 物件、沒有後端介面、不依賴任何 Plugin（B'）；依賴的 Module（asset、image、model、world_asset、transform、camera）只取型別（R2b）；其中 `transform` 是給渲染側的單位（`camera_render`、`sprite_render` 讀 `GlobalTransform`）經 `render` 拿到型別用的，`render` 自己的程式不 include 它——不是多餘的依賴。守衛：連結檢查（`tests/common/render/CMakeLists.txt` 的 `gyo_expect_links`：`gyo_render` 是 Base、Kernel、Math 與上面六個；`render_world`、`world_render`、`camera_render`、`sprite_render` 各自列）；SDL 的原始碼掃描在 K 之後立（總宣告第 9.1 節），之前由每批的設計審查看。
 - **RD-2 一幀的資料在 `Submit` 被看到、在 `Cleanup` 清掉**：`Submit` 在 `after` 那個 stage 之後、`Cleanup` 在 `Submit` 之後；`ClearRenderFrame` 清 pass 與貼圖要求、不動貼圖本身。守衛：`render.world`（`[rw-submit-after-last]`、`[rw-submit-sees]`、`[rw-cleanup-*]`、`[rw-prepare-ask-kept]`）。
 - **RD-3 貼圖的 id 由資料側配、不重用；白貼圖是 0**：守衛：`render.data`（`[rd-tex-*]`）。
 - **RD-4 shader 的兩邊一起改**：`ShaderAbi.hpp` 與 `Pass2D.hlsli` 是同一份 ABI；`sdl_gpu` 從編好的 SPIR-V 讀出的資源數和 `ShaderAbi.hpp` 的一致。守衛：`sdl_gpu.shaders`（`[sg-abi-*]`）、`render.data` 的 `[rd-abi-*]`、`sdl_gpu.pass2d` 的像素比對（頂點排法錯了顏色就不對）。
@@ -224,12 +227,12 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 - **RC-RD 2**：一幀的 `Vertex2D`／索引的上傳成為幀時間的主要部分（R2b 的幀時間預算先宣告，計測）→ 改成保留式的頂點緩衝（Bevy 的 batch／retained），不是改格式。
 - **RC-RD 3**：3D 在線性空間打光（R2b）和 2D pass 照 bytes 混合在同一個目標上畫不出一致的顏色 → 重定目標格式與 2D 的混合空間。
 - **RC-RD 4**（R2b）：2D 管線在 CPU 換算頂點（`Queue2d`）成為幀時間的主要部分（`[gp-budget-pipeline]` 超過第 7.5 節的預算）→ 換算移到 GPU（2D pass 帶 view 矩陣、物件帶仿射或實例），改 ABI 時 `ShaderAbi.hpp` 與 `Pass2D.hlsli` 一起改（RD-4）。
-- **RC-RD 6**（R2b 的 3D 段）：CPU 蒙皮（第 8.4 節）成為幀時間的主要部分（蒙皮的頂點數×實體數），或一幀要上傳的蒙皮頂點超過預算 → 改成 GPU 蒙皮（joint palette 放 storage buffer、頂點帶 joints／weights，同 Bevy）；來源側的介面（`SkinPose`）不變。
+- **RC-RD 6**（R2b 的 3D 段）：CPU 蒙皮（第 8.4 節；joint palette 是每個網格算一次、沒有蒙皮的實體每幀重算 rest pose）成為幀時間的主要部分（蒙皮的頂點數×實體數），或一幀要上傳的蒙皮頂點超過預算 → 改成 GPU 蒙皮（joint palette 放 storage buffer、頂點帶 joints／weights，同 Bevy）；來源側的介面（`SkinPose`）不變。
 - **RC-RD 5**（R2b）：相機在渲染 World 需要跨幀的狀態（貼圖目標、TAA 的歷史、遮擋查詢）→ 相機改成以來源實體為鍵的 Resource 或對應實體，第 7.3 節的四個衝突點在那時解。
 
 ## 範囲の限界
 
-- 內建的 shader 只有 2D pass 與 unlit 的 3D pass；沒有 shader id、實例數、打光、材質系統。3D 段**沒有**：後處理（PvP 盤點的 exposure／gamma——master 的 `SceneColorTransform`；要的時候是在 `Pass3D` 之後加一個全畫面的 pass，交 PvP 移植時定）、MSAA、陰影、視錐剔除、3D 的幀時間預算（3D 段沒有量；PvP 的場景接上時宣告與量測）。
+- 內建的 shader 只有 2D pass 與 unlit 的 3D pass；沒有 shader id、實例數、打光、材質系統。3D 段**沒有**：後處理（PvP 盤點的 exposure／gamma——master 的 `SceneColorTransform`；要的時候是在 `Pass3D` 之後加一個全畫面的 pass，交 PvP 移植時定）、MSAA、陰影、視錐剔除、3D 的幀時間預算（3D 段沒有量；PvP 的場景接上時宣告與量測）。模型網格的保留（`RenderModelMeshes`）與素材的貼圖一樣留到渲染 World 結束或同一個素材換 life——換地圖但不換 World、又放掉舊模型的 Handle 時，舊的 GPU buffer 不會放（素材卸載的通知有需要時再接）。深度貼圖在目標大小改變時重建，沒有測試（`sdl_gpu.pass3d` 都是 8×8）。
 - 2D 段沒有：`Text2d` 元件（第 7.6 節）、可見性元件（Bevy 的 `Visibility`；不畫就拿掉元件或換層）、視錐剔除（只看位置的近遠平面）、相機畫到貼圖（其他目標 id 照第 2 節，後端不畫、計數）、加色混合（第 7.9 節）。
 - 顏色照 bytes 混合（sRGB 編碼的值直接線性內插）：半透明的邊緣比線性空間混合暗一點，同 ImGui 與多數 2D 引擎；R2b 帶 3D 時重看（RC-RD 3）。
 - 貼圖只有 RGBA8；沒有 mipmap、沒有壓縮格式、沒有渲染到貼圖（R2b 的合成、疊層需要時加）。
