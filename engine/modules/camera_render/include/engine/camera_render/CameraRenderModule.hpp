@@ -16,6 +16,7 @@
 // camera and world_render (else R-E4).
 
 #include <string>
+#include <string_view>
 
 #include "engine/orchestration/Module.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
@@ -25,6 +26,9 @@ namespace GYO::Engine::CameraRender {
 
 // Where ComposeCameraPasses runs (WorldDescription::options; none given: the default skeleton). After the stage the
 // pipelines queue in, before render_world's Submit.
+// The name of ComposeCameraPasses: a pipeline that queues in the compose stage orders itself `before` it (ui_render).
+inline constexpr std::string_view kComposeCameraPasses = "ComposeCameraPasses";
+
 struct CameraRenderOptions final {
     std::string schedule = std::string(Orchestration::DefaultSchedules::frame);
     std::string composeStage = std::string(Orchestration::DefaultSchedules::postUpdate);

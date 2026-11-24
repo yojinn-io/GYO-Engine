@@ -94,7 +94,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     extract.mounts.push_back(std::move(mount));
     r.AddSystem<&ExtractCameras>(std::move(extract));
     Kernel::SystemOptions compose;
-    compose.name = "ComposeCameraPasses";
+    compose.name = std::string(kComposeCameraPasses);
     Kernel::Mount composeMount;
     composeMount.schedule = options.schedule;
     composeMount.stage = options.composeStage;
