@@ -105,7 +105,7 @@ struct Picture {
 Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* textures = nullptr) {
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
-    auto captured = Device().Capture(asks, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);
@@ -434,10 +434,10 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     REQUIRE(static_cast<bool>(made));
     G::GPUDevice& device = **made;
     G::FrameTally tally;
-    static_cast<void>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally));
+    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally));
     constexpr int kRuns = 20;
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, commands, R::TargetSize{1280, 720}, tally)));
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally)));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
@@ -469,7 +469,7 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
         REQUIRE(queued.has_value());
         R::RenderCommands piped;
         piped.passes.push_back(std::move(*queued));
-        REQUIRE(static_cast<bool>(device.Capture({}, piped, R::TargetSize{1280, 720}, tally)));
+        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally)));
     }
     const double pipeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pipeStart).count() / kRuns;
     MESSAGE("[gp-budget-pipeline] driver " << device.DriverName() << ": " << pipeMs

@@ -204,6 +204,8 @@ struct ViewTransform final {
 // The pixels a pass draws on: its viewport cut to the target, or the whole target. Empty (zero width or height)
 // when the viewport lies outside the target.
 [[nodiscard]] PixelRect ViewportOf(const Pass2D& pass, TargetSize target);
+// The same for a 3D pass.
+[[nodiscard]] PixelRect ViewportOf(const Pass3D& pass, TargetSize target);
 
 // The view of a pass on a target of this size: its own view, or the pixels of its viewport (ViewportOf).
 [[nodiscard]] Math::Rect ViewOf(const Pass2D& pass, TargetSize target);

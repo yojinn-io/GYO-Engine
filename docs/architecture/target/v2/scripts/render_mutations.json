@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the render Module, render_world and sdl_gpu (batches R2a and r2b-2d, v8-arch-gyo2-sdl-r2a and v8-arch-gyo2-sdl-r2b-2d; Design Invariants RD-1 to RD-7 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-, p2-, re-). The gp- mutants need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the render Module, render_world and sdl_gpu (batches R2a, r2b-2d and r2b-3d, v8-arch-gyo2-sdl-r2a, v8-arch-gyo2-sdl-r2b-2d and v8-arch-gyo2-sdl-r2b-3d; Design Invariants RD-1 to RD-7 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-, g3-, p2-, re-). The gp- mutants and the g3- mutants other than g3-abi- need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "rd-clip-y-not-turned",
@@ -1179,6 +1179,455 @@
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a mesh without*",
    "expect": "\\[p3\\-place\\-node\\]"
+  },
+  {
+   "id": "g3-abi-frag-no-texture",
+   "what": "the 3D fragment shader samples no texture",
+   "guards": [
+    "render RD-4"
+   ],
+   "file": "engine/modules/render/shaders/mesh3d.frag.hlsl",
+   "find": "    return meshTexture.Sample(meshSampler, input.uv) * drawColor;",
+   "replace": "    return drawColor;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu shaders:*",
+   "expect": "\\[g3\\-abi\\-fragment\\-samplers\\]"
+  },
+  {
+   "id": "g3-abi-frag-no-colour",
+   "what": "the 3D fragment shader ignores the draw's colour",
+   "guards": [
+    "render RD-4"
+   ],
+   "file": "engine/modules/render/shaders/mesh3d.frag.hlsl",
+   "find": "    return meshTexture.Sample(meshSampler, input.uv) * drawColor;",
+   "replace": "    return meshTexture.Sample(meshSampler, input.uv);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu shaders:*",
+   "expect": "\\[g3\\-abi\\-fragment\\-uniforms\\]"
+  },
+  {
+   "id": "g3-depth-less",
+   "what": "the depth test is LESS (a draw at the same depth is hidden)",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "draw.depthTest ? SDL_GPU_COMPAREOP_LESS_OR_EQUAL : SDL_GPU_COMPAREOP_ALWAYS",
+   "replace": "draw.depthTest ? SDL_GPU_COMPAREOP_LESS : SDL_GPU_COMPAREOP_ALWAYS",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-depth\\-equal\\]"
+  },
+  {
+   "id": "g3-depth-test-ignored",
+   "what": "every draw passes the depth test",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "draw.depthTest ? SDL_GPU_COMPAREOP_LESS_OR_EQUAL : SDL_GPU_COMPAREOP_ALWAYS",
+   "replace": "SDL_GPU_COMPAREOP_ALWAYS",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-depth\\-hides\\]"
+  },
+  {
+   "id": "g3-no-test-still-tests",
+   "what": "a draw with depthTest false is tested",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "draw.depthTest ? SDL_GPU_COMPAREOP_LESS_OR_EQUAL : SDL_GPU_COMPAREOP_ALWAYS",
+   "replace": "SDL_GPU_COMPAREOP_LESS_OR_EQUAL",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-no\\-test\\-over\\]"
+  },
+  {
+   "id": "g3-write-always",
+   "what": "every draw writes depth",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        info.depth_stencil_state.enable_depth_write = writes;",
+   "replace": "        info.depth_stencil_state.enable_depth_write = true;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-no\\-write\\]"
+  },
+  {
+   "id": "g3-write-never",
+   "what": "no draw writes depth",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        info.depth_stencil_state.enable_depth_write = writes;",
+   "replace": "        info.depth_stencil_state.enable_depth_write = false;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-depth\\-hides\\]"
+  },
+  {
+   "id": "g3-no-test-writes",
+   "what": "a draw with depthTest false writes depth",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        const bool writes = draw.depthTest && draw.depthWrite;",
+   "replace": "        const bool writes = draw.depthWrite;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-no\\-test\\-no\\-write\\]"
+  },
+  {
+   "id": "g3-key-depth-test",
+   "what": "the 3D pipeline cache ignores depthTest",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "p.blend == draw.blend && p.depthTest == draw.depthTest && ",
+   "replace": "p.blend == draw.blend && ",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-no\\-test\\-over\\]"
+  },
+  {
+   "id": "g3-key-depth-write",
+   "what": "the 3D pipeline cache ignores depthWrite",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": " && p.depthWrite == writes &&",
+   "replace": " &&",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: depth*",
+   "expect": "\\[g3\\-no\\-write\\]"
+  },
+  {
+   "id": "g3-key-blend",
+   "what": "the 3D pipeline cache ignores the blend",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "p.format == format && p.blend == draw.blend && p.depthTest",
+   "replace": "p.format == format && p.depthTest",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: Alpha*",
+   "expect": "\\[g3\\-blend\\-alpha\\]"
+  },
+  {
+   "id": "g3-key-cull",
+   "what": "the 3D pipeline cache ignores the cull",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": " &&\n                p.cull == draw.cull) {",
+   "replace": ") {",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: cull*",
+   "expect": "\\[g3\\-cull\\-none\\-both\\]"
+  },
+  {
+   "id": "g3-cull-front-cw",
+   "what": "clockwise is the front",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;\n        info.depth_stencil_state",
+   "replace": "        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_CLOCKWISE;\n        info.depth_stencil_state",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: cull*",
+   "expect": "\\[g3\\-cull\\-back\\-"
+  },
+  {
+   "id": "g3-cull-ignored",
+   "what": "cull Back culls nothing",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "draw.cull == R::CullMode::Back ? SDL_GPU_CULLMODE_BACK : SDL_GPU_CULLMODE_NONE",
+   "replace": "SDL_GPU_CULLMODE_NONE",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: cull*",
+   "expect": "\\[g3\\-cull\\-back\\-hides\\]"
+  },
+  {
+   "id": "g3-cull-always",
+   "what": "cull None culls the back",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "draw.cull == R::CullMode::Back ? SDL_GPU_CULLMODE_BACK : SDL_GPU_CULLMODE_NONE",
+   "replace": "SDL_GPU_CULLMODE_BACK",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: cull*",
+   "expect": "\\[g3\\-cull\\-none\\-both\\]"
+  },
+  {
+   "id": "g3-depth-not-cleared",
+   "what": "a 3D pass loads the depth instead of clearing it (not cycled: SDL refuses to cycle a loaded target)",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;\n        depthTarget.store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.cycle = true;",
+   "replace": "        depthTarget.load_op = SDL_GPU_LOADOP_LOAD;\n        depthTarget.store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_LOAD;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.cycle = false;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: each pass*",
+   "expect": "\\[g3\\-pass\\-"
+  },
+  {
+   "id": "g3-depth-cleared-near",
+   "what": "the depth is cleared to 0 (near) instead of 1",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        depthTarget.clear_depth = 1.0F;",
+   "replace": "        depthTarget.clear_depth = 0.0F;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a quad*",
+   "expect": "\\[g3\\-quad\\-inside\\]"
+  },
+  {
+   "id": "g3-colour-cleared",
+   "what": "every 3D pass clears the colour",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        colour.load_op = first ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;",
+   "replace": "        colour.load_op = SDL_GPU_LOADOP_CLEAR;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: each pass*",
+   "expect": "\\[g3\\-pass\\-keeps\\-colour\\]"
+  },
+  {
+   "id": "g3-first-kept",
+   "what": "a 3D pass first on the target leaves the next pass first too",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        first = false;\n        if (!EnsureDepth",
+   "replace": "        if (!EnsureDepth",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: drawn among*",
+   "expect": "\\[g3\\-then\\-2d\\-keeps\\]"
+  },
+  {
+   "id": "g3-transform-world-ignored",
+   "what": "the draw's world is not applied",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "Abi::ToUniform(Engine::Math::Multiply(pass.clipFromWorld, draw.world))",
+   "replace": "Abi::ToUniform(pass.clipFromWorld)",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-world\\]"
+  },
+  {
+   "id": "g3-transform-order",
+   "what": "the world is applied after clipFromWorld",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "Abi::ToUniform(Engine::Math::Multiply(pass.clipFromWorld, draw.world))",
+   "replace": "Abi::ToUniform(Engine::Math::Multiply(draw.world, pass.clipFromWorld))",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-world\\]"
+  },
+  {
+   "id": "g3-colour-ignored",
+   "what": "the draw's colour is not pushed (white)",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "Abi::ToUniform(draw.color)",
+   "replace": "Abi::ToUniform(R::Color8{255, 255, 255, 255})",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a texture*",
+   "expect": "\\[g3\\-tex\\-tint\\]"
+  },
+  {
+   "id": "g3-texture-ignored",
+   "what": "a 3D draw samples the white texture",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "const SDL_GPUTextureSamplerBinding binding{tex->texture, ",
+   "replace": "const SDL_GPUTextureSamplerBinding binding{white.texture, ",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a texture*",
+   "expect": "\\[g3\\-tex\\-top\\-left\\]"
+  },
+  {
+   "id": "g3-texture-missing-not-counted",
+   "what": "a 3D draw naming a missing texture is skipped uncounted",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                    ++tally.skippedDraws;\n                    continue;\n                }\n                tex = &it->second;",
+   "replace": "                    continue;\n                }\n                tex = &it->second;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a texture*",
+   "expect": "\\[g3\\-tex\\-missing\\-counted\\]"
+  },
+  {
+   "id": "g3-mesh-not-uploaded",
+   "what": "a mesh's bytes are not uploaded",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            SDL_UploadToGPUBuffer(copy, &source, &destination, false);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-world\\]"
+  },
+  {
+   "id": "g3-mesh-release-kept",
+   "what": "a released mesh keeps its GPU buffers",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                frame.releasedBuffers.push_back(it->second.vertices);\n                frame.releasedBuffers.push_back(it->second.indices);\n                meshes.erase(it);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-released\\-"
+  },
+  {
+   "id": "g3-mesh-missing-not-counted",
+   "what": "a draw naming a missing mesh is skipped uncounted",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                if (it == meshes.end()) {\n                    ++tally.skippedDraws;\n",
+   "replace": "                if (it == meshes.end()) {\n",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-released\\-counted\\]"
+  },
+  {
+   "id": "g3-mesh-index-offset-ignored",
+   "what": "a draw's indexOffset is not applied",
+   "guards": [
+    "render section 8"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, 0, firstVertex, 0);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-mesh\\-index\\-offset\\]"
+  },
+  {
+   "id": "g3-vertex-offset-ignored",
+   "what": "a 3D draw's vertexOffset is not applied",
+   "guards": [
+    "render section 8"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, 0, 0);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a retained*",
+   "expect": "\\[g3\\-vertex\\-offset\\]"
+  },
+  {
+   "id": "g3-base-not-advanced",
+   "what": "a 3D pass's own vertices do not move the next pass's start",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                vertexBase += static_cast<std::uint32_t>(g.vertexBytes);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: drawn among*",
+   "expect": "\\[g3\\-then\\-2d\\-over\\]"
+  },
+  {
+   "id": "g3-unmapped-drawn",
+   "what": "a 3D pass on another target is drawn on target 0",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                if (pass3d->target != 0) continue;\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: drawn among*",
+   "expect": "\\[g3\\-unmapped\\-not\\-drawn\\]"
+  },
+  {
+   "id": "g3-viewport-ignored",
+   "what": "a 3D pass's viewport is not set",
+   "guards": [
+    "render section 8",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            SDL_SetGPUViewport(render, &viewport);\n        }\n        // The pass's own geometry",
+   "replace": "        }\n        // The pass's own geometry",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a viewport*",
+   "expect": "\\[g3\\-viewport\\-"
+  },
+  {
+   "id": "g3-world-meshes-kept",
+   "what": "a new World does not let the old World's meshes go",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "            device_->ForgetMeshes();\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: GPUSubmit*",
+   "expect": "\\[g3\\-world\\-new\\-forgets\\]"
   }
  ]
 }
