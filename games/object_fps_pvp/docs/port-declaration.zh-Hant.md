@@ -51,6 +51,18 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 ### 動畫事件 → **遊戲讀**（第 3 段）
 
 - 前提：作者能處理。用到的只有一個：viewmodel 的 `Armature|Reload` 在 1.887 s 的 `magazine_in`（盤點 4.3）。遊戲讀 `viewmodel.anim_events.json`、自己判「這一幀的片段時刻有沒有越過事件」。有第二個產品要時再看要不要進 model。
+- 〔第 3 段實作〕換彈聲在 `magazine_in` 的時刻減去聲音的同步點（`viewmodel.event_sounds.json` 的 `sync_seconds`）起播，一次換彈播一次。
+
+### 第 3 段的其他判斷（動工後補）
+
+- **共用的角色**（`character` 函式庫）：Match 與 Client 用同一份骨架、retarget 過的 16 個片段、上半身遮罩、模型到世界的放法、骨頭上的 hitbox。Match 不連 render、同步讀 FBX（盤點 4.5）。
+- **分層照遊戲**：下半身（步態或跳躍）、上半身（瞄準或動作）逐節點取一半（盤點 4.3「上下半身分層：遊戲」）。上半身的動作是 additive：瞄準姿勢加上動作片段（或 idle）從第一幀起的變化（照 master 的組合方式，只取概念；設計審查 S1）。
+- **Match 的動畫狀態**：每個玩家一個 `PlayerMotion`（不是判定資料、不複製；PV6），`AnimatePlayers`（只在 Match）每步推進；`JudgeShots` 用它的姿勢擺骨頭上的形狀（PV2），同一目標取最近的形狀、等距取高的部位。沒有 `PlayerMotion` 的實體不算在對局裡；沒有角色時 `JudgeShots` 回錯（不退回膠囊，設計審查 S3）。
+- **判定依賴不登記的狀態**（設計審查 S2）：命中的部位依 Match 上的 `PlayerMotion`（步態的相位），它不在權威、回滾、一致性的登記裡。Match 只有一個、不回滾，所以判定仍只由 Match 決定；代價是 Match 重啟或換 Match 時步態從頭算，部位可能和原本不同。接受，理由同 PV6。
+- **對手的時刻**（設計審查 S5）：Client 畫對手用最新確認的 tick（`NetReplicaState::latestConfirmed`），不用自己預測的 tick；對手的開槍、受擊、這一命的起點都是那個 tick 上的值。
+- **viewmodel 掛在相機下**（設計審查 S6）：第一人稱武器是 viewmodel 相機的子實體（`ChildOf`），固定的局部 `Transform`（`ViewmodelPlacement`），每幀只寫 `SkinPose`；死亡時離開 viewmodel 的 layer。照 Bevy 的 `examples/camera/first_person_view_model.rs`。
+- **沒搬**：viewmodel 的後座力（master 的 recoil 曲線；不影響判定，之後要時再加）。
+- **替身拿掉**：第 2 段的方塊替身換成 Player_V20，替身檔與 catalog 列一起刪。
 
 ### PV10、PV11 → **第 4 段，單獨的 PR**
 
@@ -112,9 +124,21 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 | `pvp-press-lost` | 沒跑步的那一幀的按鍵丟掉 | controls：按鍵等到它那一步 |
 | `pvp-focus-loss-kept` | 失焦不放開游標 | controls：Tab、Esc、失焦 |
 | `pvp-cursor-not-locked` | 不要求視窗鎖游標 | client：點一下取得游標 |
-| `pvp-stand-in-not-shown` | 不替別的玩家做替身 | client：畫出地圖與對手 |
+| `pvp-stand-in-not-shown` | 不替別的玩家做替身 | client：畫出地圖與對手（第 3 段替身換成角色，換成下面的 `pvp-character-not-shown`） |
 
-第 3 段起各段在 dev_log 補清單。
+第 3 段（同一份清單）：
+
+| id | 改法 | 誰要殺 |
+|---|---|---|
+| `pvp-bone-part-ignored` | 骨頭上的形狀一律算身體 | world：頭、身、腿各自的傷害 |
+| `pvp-upper-mask-ignored` | 上半身照下半身的片段 | world：頭跟著瞄準 |
+| `pvp-retarget-scale-ignored` | retarget 的位移不縮放 | world：角色的骨架、片段、身高 |
+| `pvp-character-not-shown` | 不替別的玩家做身體 | client：對手的每個網格 |
+| `pvp-upper-action-replaces-aim` | 上半身的動作蓋掉瞄準（不是加上去） | world：開槍中頭跟著瞄準 |
+| `pvp-gait-not-judged` | Match 的玩家不推進步態（射擊只碰站姿） | world：走動的對手往前跨的腿 |
+| `pvp-viewmodel-unturned` | 第一人稱武器不轉向 | client：idle 姿勢在相機前、右下 |
+
+第 4 段起在 dev_log 補清單。
 
 ## 5. 完成條件
 

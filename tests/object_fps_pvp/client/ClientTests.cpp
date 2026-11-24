@@ -11,6 +11,7 @@
 #include "engine/audio/Mixer.hpp"
 #include "engine/image/ImageData.hpp"
 #include "engine/math/scalar/Angle.hpp"
+#include "engine/model/Animation.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/camera/Camera.hpp"
 #include "engine/input/Input.hpp"
@@ -206,7 +207,7 @@ std::size_t TextPictures(K::World& world) {
     return n;
 }
 
-// The entities that carry an own-player's picture: a Mesh3d placed at a player's feet (the stand-in bodies).
+// The entities whose Mesh3d is placed at a player's feet (the meshes of its body).
 std::size_t BodiesAt(K::World& world, const GYO::Engine::Math::Vec3 feet) {
     std::size_t n = 0;
     for (const K::EntityId id : world.Entities()) {
@@ -241,14 +242,17 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
     CHECK(status.mismatch.empty());
     // The picture: a 3D pass with the arena and the other player's stand-in body, then the HUD's 2D pass.
     CHECK_MESSAGE(lastPicture.passes3d >= 1, "the world camera draws a 3D pass");
-    CHECK_MESSAGE(lastPicture.draws3d >= 2, "the arena and the other player's body are drawn: " << lastPicture.draws3d);
+    CHECK_MESSAGE(lastPicture.draws3d >= 2 + ShippedContent()->character->body->meshes.size(),
+                  "the arena, the other player's body and the first-person weapon are drawn: " << lastPicture.draws3d);
     CHECK_MESSAGE(lastPicture.passes2d >= 1, "the HUD camera draws a 2D pass");
     CHECK_MESSAGE(lastPicture.draws2d >= 1, "the HUD draws");
     CHECK_MESSAGE(TextPictures(setup.Client()) >= 3, "the HUD shows HP, ammo and the status as text pictures");
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
-    CHECK_MESSAGE(BodiesAt(setup.Client(), setup.Client().Get<PW::PlayerBody>(rival)->feet) == 1,
-                  "a stand-in body where the other player stands");
+    const std::size_t bodyMeshes = ShippedContent()->character->body->meshes.size();
+    CHECK_MESSAGE(BodiesAt(setup.Client(), setup.Client().Get<PW::PlayerBody>(rival)->feet) == bodyMeshes,
+                  "the other player's body (every mesh of the model) where it stands");
+    CHECK_MESSAGE(lastPicture.passes3d >= 2, "the world camera and the viewmodel camera each draw a 3D pass");
     // The camera at the own player's eye.
     const K::EntityId own = PW::OwnPlayer(setup.Client());
     const PW::PlayerBody before = *setup.Client().Get<PW::PlayerBody>(own);
@@ -344,7 +348,7 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
     const GYO::Engine::Math::Vec3 at = setup.Client().Get<PW::PlayerBody>(rival)->feet;
-    REQUIRE(BodiesAt(setup.Client(), at) == 1);
+    REQUIRE(BodiesAt(setup.Client(), at) > 0);
     // The other Client closes, as the program does when its window closes: the Match drops it in a few frames.
     auto* service = setup.other->Buffer().Find<N::NetService>();
     REQUIRE(service != nullptr);
@@ -355,4 +359,54 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     CHECK_MESSAGE(PlayerOf(GameWorld(*setup.match), 2) == 0, "the Match took the player off without waiting for the timeout");
     CHECK(PlayerOf(setup.Client(), 2) == 0);
     CHECK(BodiesAt(setup.Client(), at) == 0);
+}
+
+TEST_CASE("client: the first-person weapon's idle pose sits before the viewmodel camera, low on the right") {
+    std::string error;
+    const auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
+    REQUIRE_MESSAGE(presentation.has_value(), error);
+    const PC::ViewmodelDefinition& viewmodel = presentation->viewmodel;
+    const auto& model = *viewmodel.model;
+    std::vector<GYO::Engine::Model::LocalTransform> local(model.nodes.size());
+    GYO::Engine::Model::SampleClip(model.nodes, model.clips[viewmodel.idle], 0.0F, GYO::Engine::Model::Wrap::Loop, local);
+    std::vector<Math::Matrix4> nodes(local.size());
+    GYO::Engine::Model::ComputeModelSpace(model.nodes, local, nodes);
+    const Math::Matrix4 toCamera = T::ToMatrix(PC::ViewmodelPlacement(viewmodel));
+    // Every skinned vertex in the camera's space (+Z ahead, +Y up, +X right).
+    Math::Vec3 sum{};
+    std::size_t count = 0;
+    float nearest = 1e9F;
+    float farthest = -1e9F;
+    std::size_t outside = 0;
+    const float tanHalf = std::tan(viewmodel.verticalFov / 2);
+    for (const auto& mesh : model.meshes) {
+        REQUIRE(mesh.skin != GYO::Engine::Model::kNoSkin);
+        const auto& skin = model.skins[mesh.skin];
+        for (std::size_t v = 0; v < mesh.positions.size(); ++v) {
+            Math::Vec3 skinned{};
+            for (std::size_t k = 0; k < 4; ++k) {
+                const float weight = mesh.vertexWeights[v][k];
+                if (weight == 0.0F) continue;
+                const std::uint16_t joint = mesh.vertexJoints[v][k];
+                const Math::Matrix4 m = Math::Multiply(nodes[skin.joints[joint]], skin.inverseBindMatrices[joint]);
+                skinned = skinned + Math::TransformPoint(m, mesh.positions[v]) * weight;
+            }
+            const Math::Vec3 p = Math::TransformPoint(toCamera, skinned);
+            sum = sum + p;
+            ++count;
+            nearest = std::min(nearest, p.z);
+            farthest = std::max(farthest, p.z);
+            if (std::abs(p.y) > p.z * tanHalf) ++outside;
+        }
+    }
+    REQUIRE(count > 0);
+    const Math::Vec3 centre = sum * (1.0F / static_cast<float>(count));
+    INFO("centre " << centre.x << " " << centre.y << " " << centre.z << ", z " << nearest << " to " << farthest);
+    // Ahead of the near plane and within the far one; the weight of it right of and below the view's middle.
+    CHECK(nearest > viewmodel.nearClip);
+    CHECK(farthest < viewmodel.farClip);
+    CHECK(centre.x > 0.0F);
+    CHECK(centre.y < 0.0F);
+    // Most of it in the view's height (the arms may leave the bottom edge).
+    CHECK(outside < count / 4);
 }

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.weapon.nailer_v2.world",
+  "material_overrides": {
+    "Nailer2_V02_Atlas_1K": { "texture_asset_id": "object_fps_pvp.texture.weapon.nailer_v2.world", "base_color_linear": [1, 1, 1, 1], "sampler": "linear_clamp" }
+  }
+}

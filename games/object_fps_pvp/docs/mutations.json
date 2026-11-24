@@ -185,17 +185,95 @@
    "expect": "takes the pointer with a click"
   },
   {
-   "id": "pvp-stand-in-not-shown",
-   "what": "no stand-in body is made for the other players",
+   "id": "pvp-bone-part-ignored",
+   "what": "every bone's shape counts as the body",
    "guards": [
-    "port-declaration 4 (segment 2)"
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "nearest = sim::PlayerHitCandidate{target, hit->t, shape.part};",
+   "replace": "nearest = sim::PlayerHitCandidate{target, hit->t, sim::HitPart::Body};",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: with the bones*",
+   "expect": "each deal their part"
+  },
+  {
+   "id": "pvp-upper-mask-ignored",
+   "what": "the upper body plays the lower body's clips",
+   "guards": [
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        if (rig.upperMask[i] == 0) {",
+   "replace": "        if (true) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the upper body*",
+   "expect": "pvp-aim-upper"
+  },
+  {
+   "id": "pvp-retarget-scale-ignored",
+   "what": "the clips' translations are carried over unscaled",
+   "guards": [
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "settings.translationScale = static_cast<float>(data::Number(data::Member(binding, \"translation_scale\"), \"translation_scale\"));",
+   "replace": "settings.translationScale = 1.0F;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character loads*",
+   "expect": "the character loads"
+  },
+  {
+   "id": "pvp-character-not-shown",
+   "what": "no body is made for the other players",
+   "guards": [
+    "port-declaration 4 (segment 3)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "if (assets->standIn.Id().Empty()) return {};",
-   "replace": "return {};",
+   "find": "if (body == nullptr) return {};\n    // The poses are the rig's",
+   "replace": "return {};\n    // The poses are the rig's",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client:*",
-   "expect": "the other player's body are drawn"
+   "expect": "every mesh of the model"
+  },
+  {
+   "id": "pvp-gait-not-judged",
+   "what": "the Match's players never move through their gait (the shots meet the standing pose)",
+   "guards": [
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        sim::Advance(motion->locomotion, AnimationInputOf(body, combat, hits, *rules, tick->value, step), rules->character->rules);",
+   "replace": "        static_cast<void>(motion);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a shot a stride*",
+   "expect": "meets its front leg"
+  },
+  {
+   "id": "pvp-viewmodel-unturned",
+   "what": "the first-person weapon hangs under its camera without its rotation",
+   "guards": [
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    t.rotation = viewmodel.rotation;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the first-person*",
+   "expect": "low on the right"
+  },
+  {
+   "id": "pvp-upper-action-replaces-aim",
+   "what": "the upper body's action replaces the aim instead of adding to it",
+   "guards": [
+    "port-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        const Model::LocalTransform& base = upper[i];",
+   "replace": "        const Model::LocalTransform base = scratch[i];",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the upper body*",
+   "expect": "pvp-aim-shooting"
   }
  ]
 }

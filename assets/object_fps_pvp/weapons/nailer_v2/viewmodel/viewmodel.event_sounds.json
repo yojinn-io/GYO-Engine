@@ -1,0 +1,8 @@
+{
+  "schema": "gyo.event_sounds",
+  "version": 1,
+  "animation_events_asset_id": "object_fps_pvp.anim_events.nailer_v2.viewmodel",
+  "events": {
+    "magazine_in": { "sound_asset_id": "object_fps_pvp.audio.gun_reload", "sync_seconds": 0.33, "gain": 0.8 }
+  }
+}
