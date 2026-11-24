@@ -25,6 +25,9 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "engine/image/ImageData.hpp"
+#include "engine/math/linear/Quaternion.hpp"
+#include "engine/model/ModelData.hpp"
+#include "engine/transform/Transform.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
 #include <memory>
@@ -36,16 +39,41 @@ namespace object_fps_pvp::client {
 
 namespace O = GYO::Engine::Orchestration;
 
-// What the Client reads before it starts, besides the game's content: the sound and hit feedback settings and the
-// palette pictures of the voxel models (the arenas', by arena index, and the stand-in body's).
+// The first-person weapon (weapons/nailer_v2/viewmodel/*.json and its model): where it sits before the viewmodel
+// camera, the picture of each material, its clips, and the reload's sound on the clip's magazine_in event.
+struct ViewmodelDefinition final {
+    std::shared_ptr<const GYO::Engine::Model::ModelData> model;  // the skeleton and clips (the store's copy is drawn)
+    std::uint32_t idle = 0, shoot = 0, reload = 0, draw = 0;    // clip indices
+    GYO::Engine::Math::Vec3 anchor{};                          // the anchor node at the Idle clip's start
+    GYO::Engine::Math::Vec3 offset{};                          // before the camera, in its space
+    GYO::Engine::Math::Quaternion rotation{};
+    float verticalFov = 0.96F;
+    float nearClip = 0.01F;
+    float farClip = 5.0F;
+    std::vector<std::string> materialImages;                   // per material: the image's asset id (empty: none)
+    float magazineInSeconds = 0.0F;                            // the event's time in the Reload clip
+    std::string reloadSound;                                   // its sound's asset id
+    float reloadSoundSync = 0.0F;                              // the sound's sync point (it starts this much earlier)
+    float reloadSoundGain = 1.0F;
+    // The third-person weapon (weapons/nailer_v2/world/character.json): its model and its picture.
+    std::string heldModel;
+    std::string heldImage;
+};
+
+// Where the first-person weapon sits under the viewmodel camera (its fixed local Transform): the anchor node of the
+// idle pose's start at the offset, turned by the rotation.
+[[nodiscard]] GYO::Engine::Transform::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel);
+
+// What the Client reads before it starts, besides the game's content: the sound and hit feedback settings, the
+// arenas' palette pictures (by arena index) and the first-person weapon.
 struct PresentationContent final {
     present::SoundSettings sound;
     present::HitFeedbackSettings hitFeedback;
     std::vector<std::shared_ptr<const GYO::Engine::Image::ImageData>> arenaPalettes;
-    std::shared_ptr<const GYO::Engine::Image::ImageData> standInPalette;
+    ViewmodelDefinition viewmodel;
 };
 
-// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, characters/stand_in.voxel_mesh.json);
+// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, weapons/nailer_v2/viewmodel/);
 // nullopt with error naming the file.
 [[nodiscard]] std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game,
                                                                   std::string& error);

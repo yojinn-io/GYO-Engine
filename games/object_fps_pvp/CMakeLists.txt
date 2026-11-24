@@ -6,6 +6,9 @@
 # device or network: the arena files and the baked voxel geometry, the
 # movement, stance and combat rules, the planar movement input, the hit
 # feedback and the client view, the sound cues and the lobby's address filter.
+# character: the player's character for the Match and the Client: the body's skeleton, its clips retargeted from
+# the animation library, the pose of a moment (the game's layering over the model library's sampling), the hit
+# shapes on its bones and the third-person weapon's mount (include/object_fps_pvp/character/CharacterRig.hpp).
 # world: the game in a GYO World, the same at the Match and every Client
 # (include/object_fps_pvp/world/PvpWorld.hpp): the players' components and
 # input, the fixed-step Systems on physics_3d, the server authority, the
@@ -29,11 +32,19 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/sim/Arena.cpp
     src/sim/CombatRules.cpp
     src/sim/MovementRules.cpp
-    src/sim/PlanarMovement.cpp)
+    src/sim/PlanarMovement.cpp
+    src/sim/PlayerAnimation.cpp)
 target_include_directories(${object_fps_pvp_logic} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
+gyo_game_add_library(character OUT_TARGET object_fps_pvp_character
+    PUBLIC_LIBRARIES ${object_fps_pvp_logic} GYO::Model
+    PRIVATE_LIBRARIES GYO::Asset GYO::IO GYO::Json
+    SOURCES
+    src/character/CharacterRig.cpp)
+target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
-    PUBLIC_LIBRARIES ${object_fps_pvp_logic} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
+    PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
         GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d
     PRIVATE_LIBRARIES GYO::IO
     SOURCES
@@ -42,10 +53,11 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PUBLIC_LIBRARIES ${object_fps_pvp_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Model GYO::Render
         GYO::Text GYO::Window GYO::WorldAsset
-    PRIVATE_LIBRARIES GYO::IO
+    PRIVATE_LIBRARIES GYO::IO GYO::Json
     SOURCES
     src/client/ClientWorld.cpp
     src/client/VoxelModelLoader.cpp)
+target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main
     LIBRARIES ${object_fps_pvp_client} GYO::OS GYO::Threads

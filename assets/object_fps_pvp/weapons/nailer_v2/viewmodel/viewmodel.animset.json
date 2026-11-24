@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "clips": {
+    "Idle": { "model_asset_id": "object_fps_pvp.model.nailer_v2", "clip": "Armature|Idle" },
+    "Shoot": { "model_asset_id": "object_fps_pvp.model.nailer_v2", "clip": "Armature|Shoot" },
+    "Reload": { "model_asset_id": "object_fps_pvp.model.nailer_v2", "clip": "Armature|Reload" },
+    "Draw": { "model_asset_id": "object_fps_pvp.model.nailer_v2", "clip": "Armature|Draw" },
+    "Hide": { "model_asset_id": "object_fps_pvp.model.nailer_v2", "clip": "Armature|Hide" }
+  }
+}

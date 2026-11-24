@@ -15,6 +15,7 @@
 // The Client predicts its own player (K3: the rollback strategy) and takes everything else from the Match. A player
 // without input in a step (a player the Client does not control) neither moves nor turns.
 
+#include "object_fps_pvp/character/CharacterRig.hpp"
 #include "object_fps_pvp/data/VoxelMeshFile.hpp"
 #include "object_fps_pvp/world/Components.hpp"
 
@@ -44,11 +45,13 @@ struct InstalledArena final {
 };
 
 // What the game reads before a World is built: every installed arena (maps/arenas.json, in its order), the stance
-// rules (rules/movement_rules.json) and the combat rules (the game's defaults).
+// rules (rules/movement_rules.json), the combat rules (the game's defaults) and the character (its skeleton, clips
+// and hit shapes; the arenas share one body height).
 struct GameContent final {
     std::vector<InstalledArena> arenas;
     sim::StanceRules stance;
     sim::CombatRules combat;
+    std::shared_ptr<const character::CharacterRig> character;
 
     [[nodiscard]] const InstalledArena* Find(const std::string& id) const;
 };
@@ -106,6 +109,11 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options);
 // The World descriptions of the two ends, named "Game".
 [[nodiscard]] O::WorldDescription MatchWorld(WorldOptions options);
 [[nodiscard]] O::WorldDescription ClientWorld(WorldOptions options);
+
+// What one player is doing for its animation, from its state at tick (seconds are the World's steps of
+// stepNanoseconds).
+[[nodiscard]] sim::AnimationInput AnimationInputOf(const PlayerBody& body, const PlayerCombat& combat, const HitRecord& hits,
+                                                   const GameRules& rules, std::uint64_t tick, std::uint64_t stepNanoseconds);
 
 // The player a Client controls (its own Owner), or 0 before the Match's player has reached it.
 [[nodiscard]] K::EntityId OwnPlayer(K::World& world);

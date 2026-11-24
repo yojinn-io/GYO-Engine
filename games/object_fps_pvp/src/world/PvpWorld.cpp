@@ -55,6 +55,7 @@ void HashValue(K::Hasher& h, const PlayerCombat& v) {
     HashValue(h, v.ammo);
     HashValue(h, static_cast<std::uint8_t>(v.life));
     HashValue(h, v.lives);
+    HashValue(h, v.lifeTick);
     HashValue(h, v.nextShotTick);
     HashValue(h, v.reloadEndTick);
     HashValue(h, v.respawnTick);
@@ -76,6 +77,7 @@ void HashValue(K::Hasher& h, const HitRecord& v) {
     HashValue(h, static_cast<std::uint8_t>(v.part));
 }
 void HashValue(K::Hasher& h, const Owner& v) { HashValue(h, v.userId); }
+void HashValue(K::Hasher&, const PlayerMotion&) {}
 void HashValue(K::Hasher& h, const PlayerInput& v) {
     HashValue(h, v.forward);
     HashValue(h, v.right);
@@ -121,6 +123,7 @@ N::Codec<PlayerCombat> CombatCodec() {
                 w.Value(v.ammo);
                 w.Value(v.life);
                 w.Value(v.lives);
+                w.Value(v.lifeTick);
                 w.Value(v.nextShotTick);
                 w.Value(v.reloadEndTick);
                 w.Value(v.respawnTick);
@@ -128,10 +131,11 @@ N::Codec<PlayerCombat> CombatCodec() {
                 w.Value(v.shots);
             },
             [](N::NetReader& r, PlayerCombat& v) {
-                return r.Value(v.hp) && r.Value(v.ammo) && r.Value(v.life) && r.Value(v.lives) && r.Value(v.nextShotTick) &&
-                       r.Value(v.reloadEndTick) && r.Value(v.respawnTick) && r.Value(v.lastShotTick) && r.Value(v.shots);
+                return r.Value(v.hp) && r.Value(v.ammo) && r.Value(v.life) && r.Value(v.lives) && r.Value(v.lifeTick) &&
+                       r.Value(v.nextShotTick) && r.Value(v.reloadEndTick) && r.Value(v.respawnTick) && r.Value(v.lastShotTick) &&
+                       r.Value(v.shots);
             },
-            1};
+            2};
 }
 N::Codec<ShotRecord> ShotCodec() {
     return {[](N::NetWriter& w, const ShotRecord& v) {
@@ -380,7 +384,7 @@ Math::Ray ShotRay(const GameRules& rules, const PlayerBody& body) {
     return Math::Ray{body.feet + Math::Vec3{0.0F, eye, 0.0F}, sim::ViewDirection(body.yaw, body.pitch)};
 }
 
-// The body's capsule for a shot (the stance capsule: the synthetic hit model until the bones carry the shapes).
+// The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
 P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
     const float height = sim::BodyHeight(rules.arena, rules.stance, body.crouched != 0);
     const float r = rules.arena.radius;
@@ -388,10 +392,11 @@ P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
 }
 
 K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>, K::Write<ShotRecord>, K::Write<HitRecord>> players,
-                           Walls walls, K::Res<GameRules> rules, K::Res<WT::Tick> tick, K::Res<WT::ActiveTime> time) {
+                           K::Query<K::Read<PlayerMotion>> motions, Walls walls, K::Res<GameRules> rules, K::Res<WT::Tick> tick, K::Res<WT::ActiveTime> time) {
     const std::uint64_t now = tick->value;
     const sim::CombatRules& combat = rules->combat;
     const float range = combat.shotRange;
+    if (!rules->character) return Base::Err(K::KernelError(K::KernelErrorCode::SystemFailed, "object_fps_pvp: no character to judge on"));
     // Ascending EntityId: the order of the shots of one step and of the ties between players.
     for (const K::EntityId shooter : players.Entities()) {
         const PlayerCombat* fired = players.Get<PlayerCombat>(shooter);
@@ -413,8 +418,29 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
             if (target == shooter) continue;
             const PlayerCombat& targetCombat = *players.Get<PlayerCombat>(target);
             if (targetCombat.life != sim::LifeState::Alive) continue;
-            const auto hit = P::CastRay(P::Shape{BodyCapsule(*rules, *players.Get<PlayerBody>(target))}, P::Pose{}, ray, range);
-            if (hit) candidates.push_back({target, hit->t, sim::HitPart::Body});
+            const PlayerBody& targetBody = *players.Get<PlayerBody>(target);
+            const PlayerMotion* motion = motions.Get<PlayerMotion>(target);
+            if (motion == nullptr) continue;  // not seated by SeatPlayers: not in the match
+            // The shapes on the target's bones in this step's pose (port inventory PV2): its nearest shape counts; at
+            // one distance the higher part.
+            const auto& rig = *rules->character;
+            const sim::AnimationInput input =
+                AnimationInputOf(targetBody, targetCombat, *players.Get<HitRecord>(target), *rules, now, StepNanos(*time));
+            std::vector<GYO::Engine::Model::LocalTransform> local;
+            character::ComposeBody(rig, motion->locomotion, sim::ResolveActions(motion->locomotion, input, rig.rules), input.crouched,
+                                   input.seconds - input.lifeSeconds, local);
+            std::vector<Math::Matrix4> modelSpace;
+            character::ModelSpace(rig, local, modelSpace);
+            std::optional<sim::PlayerHitCandidate> nearest;
+            for (const character::HitShape& shape : character::PlaceHitShapes(rig, modelSpace, targetBody.feet, targetBody.yaw)) {
+                const auto hit = P::CastRay(P::Shape{P::Capsule{shape.a, shape.b, shape.radius}}, P::Pose{}, ray, range);
+                if (!hit) continue;
+                if (!nearest || hit->t < nearest->distance ||
+                    (hit->t == nearest->distance && sim::PartRank(shape.part) > sim::PartRank(nearest->part))) {
+                    nearest = sim::PlayerHitCandidate{target, hit->t, shape.part};
+                }
+            }
+            if (nearest) candidates.push_back(*nearest);
         }
         const sim::ShotOutcome outcome = sim::ChooseShotOutcome(world, candidates, range);
         ShotRecord record;
@@ -435,12 +461,24 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
             hits->part = outcome.part;
             if (targetCombat.Read().hp == 0) {
                 targetCombat->life = sim::LifeState::Dead;
+                targetCombat->lifeTick = now;
                 targetCombat->respawnTick = now + sim::TicksFor(combat.respawnSeconds, StepNanos(*time));
                 targetCombat->reloadEndTick = 0;
             }
         }
         *players.GetMut<ShotRecord>(shooter) = record;
     }
+    return {};
+}
+
+// Match: each player's animation moves to this step (its gait and jump), for the hit shapes the next shots meet.
+K::SystemResult AnimatePlayers(K::Query<K::Read<PlayerBody>, K::Read<PlayerCombat>, K::Read<HitRecord>, K::Write<PlayerMotion>> players,
+                               K::Res<GameRules> rules, K::Res<WT::Tick> tick, K::Res<WT::ActiveTime> time) {
+    if (!rules->character) return {};
+    const std::uint64_t step = StepNanos(*time);
+    players.ForEach([&](K::EntityId, const PlayerBody& body, const PlayerCombat& combat, const HitRecord& hits, K::Mut<PlayerMotion> motion) {
+        sim::Advance(motion->locomotion, AnimationInputOf(body, combat, hits, *rules, tick->value, step), rules->character->rules);
+    });
     return {};
 }
 
@@ -515,6 +553,7 @@ K::SystemResult RespawnPlayers(K::Query<K::Write<PlayerBody>, K::Write<PlayerCom
         const std::uint32_t shots = combat.shots;
         *players.GetMut<PlayerBody>(id) = BodyAt(rules->arena.spawns[**spawn]);
         PlayerCombat fresh = FreshCombat(rules->combat, lives);
+        fresh.lifeTick = now;
         fresh.lastShotTick = lastShot;
         fresh.shots = shots;
         *players.GetMut<PlayerCombat>(id) = fresh;
@@ -529,7 +568,8 @@ K::SystemResult RespawnPlayers(K::Query<K::Write<PlayerBody>, K::Write<PlayerCom
 K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::MessageReader<N::PeerDisconnected> disconnected,
                             K::Query<K::Read<Owner>, K::Read<PlayerBody>, K::Read<PlayerCombat>> players, Walls walls,
                             K::Res<GameRules> rules, K::Res<MatchSeats> seats,
-                            K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput>> spawn,
+                            K::Res<WT::Tick> tick,
+                            K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn,
                             K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<>> controls) {
     for (const N::PeerDisconnected* gone : disconnected.Read()) {
         players.ForEach([&](const K::EntityId id, const Owner& owner, const PlayerBody&, const PlayerCombat&) {
@@ -551,7 +591,9 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         // No free spawn now: the first one (a spawn is never inside a wall; bodies may overlap until they move).
         const sim::SpawnPoint& point = rules->arena.spawns[chosen->value_or(0)];
         const PlayerBody body = BodyAt(point);
-        auto id = spawn.New(body, FreshCombat(rules->combat, 1), ShotRecord{}, HitRecord{}, Owner{joined->userId}, PlayerInput{});
+        PlayerCombat combat = FreshCombat(rules->combat, 1);
+        combat.lifeTick = tick->value;
+        auto id = spawn.New(body, combat, ShotRecord{}, HitRecord{}, Owner{joined->userId}, PlayerInput{}, PlayerMotion{});
         if (!id) return Base::Err(std::move(id).error());
         controls.Insert(joined->peer, N::PeerControls{*id});
         living.push_back(body);
@@ -720,6 +762,16 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
         }
         content.arenas.push_back(std::move(installed));
     }
+    // The character, for the arenas' body (they share one: the character is drawn and judged at that height).
+    for (const InstalledArena& arena : content.arenas) {
+        if (arena.content.bodyHeight != content.arenas.front().content.bodyHeight) {
+            error = maps + arena.content.geometry + ": the arenas do not share one body height";
+            return std::nullopt;
+        }
+    }
+    auto rig = character::LoadCharacterRig(root, content.arenas.front().content.bodyHeight, error);
+    if (!rig) return std::nullopt;
+    content.character = std::make_shared<const character::CharacterRig>(std::move(*rig));
     return content;
 }
 
@@ -745,6 +797,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
     authority.Component<HitRecord>("HitRecord");
     authority.Component<PlayerInput>("PlayerInput", {.input = true});
     r.Component<Owner>({.name = "Owner"});
+    r.Component<PlayerMotion>({.name = "PlayerMotion"});
     r.Resource<GameRules>({.name = "GameRules"});
     r.Resource<MatchInfo>({.name = "MatchInfo"});
     r.Resource<LocalUser>({.name = "LocalUser"});
@@ -768,7 +821,8 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
     const std::string postUpdate = std::string(O::DefaultSchedules::postUpdate);
     r.AddSystem<&MovePlayers>(Fixed("MovePlayers", update, {}, false));
     r.AddSystem<&UseWeapons>(Fixed("UseWeapons", update, {"MovePlayers"}, false));
-    r.AddSystem<&JudgeShots>(Fixed("JudgeShots", postUpdate, {}, true));
+    r.AddSystem<&AnimatePlayers>(Fixed("AnimatePlayers", postUpdate, {}, true));
+    r.AddSystem<&JudgeShots>(Fixed("JudgeShots", postUpdate, {"AnimatePlayers"}, true));
     r.AddSystem<&RespawnPlayers>(Fixed("RespawnPlayers", postUpdate, {"JudgeShots"}, true));
     r.AddSystem<&SeatPlayers>(Frame("SeatPlayers", update, N::OnServer()));
     r.AddSystem<&ControlOwnPlayer>(Frame("ControlOwnPlayer", update, N::OnClient()));
@@ -781,6 +835,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
         rules.stance = options.content->stance;
         rules.combat = options.content->combat;
         rules.wallsDigest = arena.wallsDigest;
+        rules.character = options.content->character;
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
@@ -821,6 +876,31 @@ O::WorldDescription Describe(WorldOptions options, const N::NetRole role) {
 
 O::WorldDescription MatchWorld(WorldOptions options) { return Describe(std::move(options), N::NetRole::Server); }
 O::WorldDescription ClientWorld(WorldOptions options) { return Describe(std::move(options), N::NetRole::Client); }
+
+sim::AnimationInput AnimationInputOf(const PlayerBody& body, const PlayerCombat& combat, const HitRecord& hits, const GameRules& rules,
+                                     const std::uint64_t tick, const std::uint64_t stepNanoseconds) {
+    const double stepSeconds = static_cast<double>(stepNanoseconds) / 1e9;
+    sim::AnimationInput input;
+    const auto at = [stepSeconds](const std::uint64_t t) { return static_cast<double>(t) * stepSeconds; };
+    input.seconds = at(tick);
+    input.feet = body.feet;
+    input.yaw = body.yaw;
+    input.pitch = body.pitch;
+    input.grounded = body.grounded != 0;
+    input.crouched = body.crouched != 0;
+    input.dead = combat.life == sim::LifeState::Dead;
+    input.lifeSeconds = at(combat.lifeTick);
+    if (combat.lastShotTick != 0) input.shotSeconds = at(combat.lastShotTick);
+    if (combat.reloadEndTick != 0) {
+        input.reloadEnd = at(combat.reloadEndTick);
+        input.reloadStart = *input.reloadEnd - static_cast<double>(sim::TicksFor(rules.combat.reloadSeconds, stepNanoseconds)) * stepSeconds;
+    }
+    if (hits.hits != 0) {
+        input.hitSeconds = at(hits.tick);
+        input.hitPart = hits.part;
+    }
+    return input;
+}
 
 K::EntityId OwnPlayer(K::World& world) {
     const LocalUser* user = world.Resource<LocalUser>();

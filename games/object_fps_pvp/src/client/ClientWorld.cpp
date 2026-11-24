@@ -7,6 +7,15 @@
 #include "object_fps_pvp/sim/MovementRules.hpp"
 
 #include "engine/asset/AssetStore.hpp"
+#include "object_fps_pvp/character/CharacterRig.hpp"
+#include "engine/model/FbxLoader.hpp"
+#include "engine/model/Animation.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
+#include "data/JsonFields.hpp"
+#include "engine/json/Document.hpp"
+#include "engine/io/helpers/ReadAllBytes.hpp"
+#include "engine/image/PngLoader.hpp"
+#include "engine/asset/LoadContext.hpp"
 #include "engine/audio/Clip.hpp"
 #include "engine/audio/Mixer.hpp"
 #include "engine/audio/WavLoader.hpp"
@@ -38,6 +47,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <stdexcept>
 #include <utility>
 
 namespace object_fps_pvp::client {
@@ -79,6 +89,9 @@ constexpr K::EntityId kHitDirection = 3'000'019;
 constexpr float kHudWidth = 1280.0F;
 constexpr float kHudHeight = 720.0F;
 constexpr std::uint32_t kHudLayer = 2;
+// The first-person weapon: a layer of its own, drawn by the viewmodel camera only (render page section 8.1).
+constexpr std::uint32_t kViewLayer = 1;
+constexpr K::EntityId kViewCamera = 3'000'018;
 
 // The world camera (master's: near 0.05, far 150) and its field of view.
 constexpr float kNear = 0.05F;
@@ -95,7 +108,11 @@ constexpr float kVerticalFov = 1.2F;  // about 69 degrees
 struct ClientAssets final {
     bool requested = false;
     std::vector<A::Handle<GYO::Engine::Model::ModelData>> arenaModels;  // by arena index
-    A::Handle<GYO::Engine::Model::ModelData> standIn;
+    A::Handle<GYO::Engine::Model::ModelData> body;       // the character (Player_V20)
+    A::Handle<GYO::Engine::Model::ModelData> heldWeapon; // the third-person weapon
+    A::Handle<IM::ImageData> heldWeaponImage;
+    A::Handle<GYO::Engine::Model::ModelData> viewmodel;  // the first-person arms and weapon
+    std::vector<A::Handle<IM::ImageData>> viewmodelImages;  // per material
     A::Handle<TX::FontData> font;
     std::map<std::string, A::Handle<AU::Clip>> clips;  // by asset id
 };
@@ -109,11 +126,27 @@ struct ClientControls final {
 };
 void HashValue(K::Hasher&, const ClientControls&) {}
 
-// A stand-in body: the player it shows.
-struct StandIn final {
+// One mesh of a player's body (its index in the body model), or the weapon in its hand (mesh: kHeld).
+inline constexpr std::uint32_t kHeld = 0xFFFF'FFFFU;
+struct CharacterPart final {
     K::EntityId player = 0;
+    std::uint32_t mesh = 0;
 };
-void HashValue(K::Hasher&, const StandIn&) {}
+void HashValue(K::Hasher&, const CharacterPart&) {}
+
+// One mesh of the first-person weapon.
+struct ViewmodelPart final {
+    std::uint32_t mesh = 0;
+};
+void HashValue(K::Hasher&, const ViewmodelPart&) {}
+
+// Each shown player's animation (the Client's own: port declaration PV6), and the first-person weapon's state.
+struct ClientCharacters final {
+    std::map<K::EntityId, sim::Locomotion> locomotion;
+    // The reload whose sound has played (its end tick), so it plays once.
+    std::uint64_t reloadSounded = 0;
+};
+void HashValue(K::Hasher&, const ClientCharacters&) {}
 
 struct ClientScene final {
     std::shared_ptr<const PresentationContent> presentation;
@@ -255,11 +288,22 @@ R::Shape2d Flash(const std::array<float, 3> color, const float alpha) {
 // ---- Systems
 
 // The pictures, the font and the sounds, asked for once; the scene and the sounds use them once they are there.
-K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientScene> scene, K::ResMut<ClientAssets> assets) {
+K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientScene> scene, K::Res<PW::GameRules> rules,
+                              K::ResMut<ClientAssets> assets) {
     if (assets.Read().requested) return {};
     ClientAssets& a = assets.Get();
     a.requested = true;
-    a.standIn = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId("object_fps_pvp.model.stand_in"));
+    if (rules->character) a.body = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(rules->character->bodyAssetId));
+    a.heldWeapon = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(scene->presentation->viewmodel.heldModel));
+    a.heldWeaponImage = requests->Load<IM::ImageData>(A::AssetId(scene->presentation->viewmodel.heldImage));
+    a.viewmodel = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId("object_fps_pvp.model.nailer_v2"));
+    for (const std::string& image : scene->presentation->viewmodel.materialImages) {
+        a.viewmodelImages.push_back(image.empty() ? A::Handle<IM::ImageData>{} : requests->Load<IM::ImageData>(A::AssetId(image)));
+    }
+    if (!scene->presentation->viewmodel.reloadSound.empty() && a.clips.count(scene->presentation->viewmodel.reloadSound) == 0) {
+        const std::string& id = scene->presentation->viewmodel.reloadSound;
+        a.clips[id] = requests->Load<AU::Clip>(A::AssetId(id));
+    }
     a.font = requests->Load<TX::FontData>(A::AssetId("object_fps_pvp.font.ui"));
     for (const present::SoundSettings::Cue& cue : scene->presentation->sound.cues) {
         if (!cue.clip.empty() && a.clips.count(cue.clip) == 0) a.clips[cue.clip] = requests->Load<AU::Clip>(A::AssetId(cue.clip));
@@ -387,57 +431,219 @@ K::SystemResult PlaceCamera(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> u
     return {};
 }
 
-// The other living players, by player.
-std::map<K::EntityId, PW::PlayerBody> OthersAlive(
-    K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>>& players, const std::uint64_t userId) {
-    std::map<K::EntityId, PW::PlayerBody> others;
-    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat) {
-        if (owner.userId != userId && combat.life == sim::LifeState::Alive) others[id] = body;
-    });
-    return others;
-}
+// ---- The characters: every other living player as the body model, posed by its animation, with the weapon in its
+// hand; the own player as the first-person weapon before the viewmodel camera.
 
-T::Transform BodyTransform(const PW::GameRules& rules, const PW::PlayerBody& body) {
-    const float height = sim::BodyHeight(rules.arena, rules.stance, body.crouched != 0);
+// A similarity matrix (rotation, uniform scale, translation) as a Transform.
+T::Transform FromSimilarity(const Math::Matrix4& m) {
     T::Transform t;
-    t.translation = body.feet;
-    t.rotation = Math::MakeQuaternionFromAxisAngle({0.0F, 1.0F, 0.0F}, body.yaw);
-    t.scale = {1.0F, height / rules.arena.bodyHeight, 1.0F};
+    const auto& v = m.values;
+    t.translation = {v[12], v[13], v[14]};
+    const float scale = Math::Length(Math::Vec3{v[0], v[1], v[2]});
+    t.scale = {scale, scale, scale};
+    // The rotation from the normalized 3x3 (columns are the axes).
+    const float r00 = v[0] / scale, r01 = v[4] / scale, r02 = v[8] / scale;
+    const float r10 = v[1] / scale, r11 = v[5] / scale, r12 = v[9] / scale;
+    const float r20 = v[2] / scale, r21 = v[6] / scale, r22 = v[10] / scale;
+    Math::Quaternion q;
+    const float trace = r00 + r11 + r22;
+    if (trace > 0.0F) {
+        const float k = 0.5F / std::sqrt(trace + 1.0F);
+        q = {(r21 - r12) * k, (r02 - r20) * k, (r10 - r01) * k, 0.25F / k};
+    } else if (r00 > r11 && r00 > r22) {
+        const float k = 2.0F * std::sqrt(1.0F + r00 - r11 - r22);
+        q = {0.25F * k, (r01 + r10) / k, (r02 + r20) / k, (r21 - r12) / k};
+    } else if (r11 > r22) {
+        const float k = 2.0F * std::sqrt(1.0F + r11 - r00 - r22);
+        q = {(r01 + r10) / k, 0.25F * k, (r12 + r21) / k, (r02 - r20) / k};
+    } else {
+        const float k = 2.0F * std::sqrt(1.0F + r22 - r00 - r11);
+        q = {(r02 + r20) / k, (r12 + r21) / k, 0.25F * k, (r10 - r01) / k};
+    }
+    t.rotation = Math::NormalizeOrIdentity(q);
     return t;
 }
 
-// The stand-in bodies follow their players; a body whose player is gone or dead goes.
-K::SystemResult MoveBodies(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
-                           K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
-                           K::Query<K::Read<StandIn>, K::Write<T::Transform>> bodies, K::Despawn despawn) {
-    const std::map<K::EntityId, PW::PlayerBody> others = OthersAlive(players, user->userId);
-    for (const K::EntityId body : bodies.Entities()) {
-        const auto shown = others.find(bodies.Get<StandIn>(body)->player);
-        if (shown == others.end()) {
-            despawn.Entity(body);
+R::Color8 MaterialColor(const GYO::Engine::Model::ModelData& model, const std::uint32_t material) {
+    if (material >= model.materials.size()) return R::Color8{255, 255, 255, 255};
+    const auto& c = model.materials[material].baseColor;
+    const auto byte = [](const float linear) { return static_cast<std::uint8_t>(std::lround(Math::EncodeSrgb(linear) * 255.0F)); };
+    return R::Color8{byte(c[0]), byte(c[1]), byte(c[2]), static_cast<std::uint8_t>(std::lround(std::clamp(c[3], 0.0F, 1.0F) * 255.0F))};
+}
+
+std::uint64_t StepOf(const WT::FixedTime& fixed) { return static_cast<std::uint64_t>(fixed.accumulator.Step()); }
+
+// Every other living player's body parts follow its pose; the parts of a player gone or dead... stay for the death
+// (the death clip plays), and go with the player.
+K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<WT::Tick> tick, K::Res<WT::FixedTime> fixed,
+                               K::Res<N::NetReplicaState> replica,
+                               K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
+                               K::Query<K::Read<CharacterPart>> parts, K::Query<K::Write<T::Transform>> transforms,
+                               K::Query<K::Write<R::SkinPose>> poses, K::ResMut<ClientCharacters> characters, K::Despawn despawn) {
+    if (!rules->character) return {};
+    const character::CharacterRig& rig = *rules->character;
+    const std::uint64_t step = StepOf(*fixed);
+    // The other players stand at the confirmed point (the Match's step their state belongs to), not at this Client's
+    // predicted step: their shots, hits and lives are timed on it (lightyear: an interpolated entity has its own
+    // timeline, crates/replication/interpolation/src/timeline.rs).
+    const std::uint64_t seen = replica->latestConfirmed ? *replica->latestConfirmed : tick->value;
+    // Each shown player's pose this frame.
+    std::map<K::EntityId, std::vector<Math::Matrix4>> modelSpace;
+    std::map<K::EntityId, const PW::PlayerBody*> bodies;
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
+                        const PW::HitRecord& hits) {
+        if (owner.userId == user->userId) return;
+        const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, seen, step);
+        sim::Locomotion& locomotion = characters->locomotion[id];
+        sim::Advance(locomotion, input, rig.rules);
+        std::vector<GYO::Engine::Model::LocalTransform> local;
+        character::ComposeBody(rig, locomotion, sim::ResolveActions(locomotion, input, rig.rules), input.crouched,
+                               input.seconds - input.lifeSeconds, local);
+        character::ModelSpace(rig, local, modelSpace[id]);
+        bodies[id] = &body;
+    });
+    for (auto it = characters->locomotion.begin(); it != characters->locomotion.end();) {
+        it = bodies.count(it->first) == 0 ? characters->locomotion.erase(it) : std::next(it);
+    }
+    for (const K::EntityId part : parts.Entities()) {
+        const CharacterPart& which = *parts.Get<CharacterPart>(part);
+        const auto shown = bodies.find(which.player);
+        if (shown == bodies.end()) {
+            despawn.Entity(part);
             continue;
         }
-        const T::Transform t = BodyTransform(*rules, shown->second);
-        if (!(t == *bodies.Get<T::Transform>(body))) *bodies.GetMut<T::Transform>(body) = t;
+        const PW::PlayerBody& body = *shown->second;
+        const std::vector<Math::Matrix4>& nodes = modelSpace[which.player];
+        const T::Transform t = which.mesh == kHeld ? FromSimilarity(character::WeaponToWorld(rig, nodes, body.feet, body.yaw))
+                                                   : FromSimilarity(character::BodyToWorld(rig, body.feet, body.yaw));
+        if (auto transform = transforms.GetMut<T::Transform>(part)) transform.Get() = t;
+        if (which.mesh != kHeld) {
+            if (auto pose = poses.GetMut<R::SkinPose>(part)) pose->nodes = nodes;
+        }
     }
     return {};
 }
 
-// A stand-in body for every other living player that has none (once the model asset is asked for).
-K::SystemResult AddBodies(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<ClientScene> scene,
-                          K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
-                          K::Query<K::Read<StandIn>> bodies,
-                          K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, StandIn, RB::KeepThroughRollback>> spawn) {
-    if (assets->standIn.Id().Empty()) return {};
-    std::map<K::EntityId, PW::PlayerBody> others = OthersAlive(players, user->userId);
-    bodies.ForEach([&](K::EntityId, const StandIn& standIn) { others.erase(standIn.player); });
-    for (const auto& [player, body] : others) {
+// The parts of every other player that has none (once the models are asked for): one entity per body mesh, and the
+// weapon in its hand.
+K::SystemResult AddCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets,
+                              K::Res<WA::AssetView> view,
+                              K::Query<K::Read<PW::Owner>> players, K::Query<K::Read<CharacterPart>> parts,
+                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, CharacterPart, RB::KeepThroughRollback>> spawnBody,
+                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, CharacterPart, RB::KeepThroughRollback>> spawnHeld) {
+    const GYO::Engine::Model::ModelData* body = view->Get(assets->body);
+    if (body == nullptr) return {};
+    // The poses are the rig's (read from the same file): the drawn copy must have its nodes.
+    if (!rules->character || body->nodes.size() != rules->character->body->nodes.size()) {
+        return Failed("the body model the store loaded does not have the character's nodes");
+    }
+    std::map<K::EntityId, bool> shown;
+    parts.ForEach([&](K::EntityId, const CharacterPart& part) { shown[part.player] = true; });
+    for (const K::EntityId player : players.Entities()) {
+        if (players.Get<PW::Owner>(player)->userId == user->userId || shown.count(player) != 0) continue;
+        for (std::uint32_t m = 0; m < body->meshes.size(); ++m) {
+            R::Mesh3d mesh;
+            mesh.model = assets->body;
+            mesh.mesh = m;
+            mesh.color = MaterialColor(*body, body->meshes[m].material);
+            auto spawned = spawnBody.New(std::move(mesh), T::Transform{}, T::GlobalTransform{}, R::SkinPose{}, CharacterPart{player, m},
+                                         RB::KeepThroughRollback{});
+            if (!spawned) return Base::Err(std::move(spawned).error());
+        }
+        R::Mesh3d held;
+        held.model = assets->heldWeapon;
+        held.image = assets->heldWeaponImage;
+        auto spawned = spawnHeld.New(std::move(held), T::Transform{}, T::GlobalTransform{}, CharacterPart{player, kHeld},
+                                     RB::KeepThroughRollback{});
+        if (!spawned) return Base::Err(std::move(spawned).error());
+    }
+    return {};
+}
+
+// The first-person weapon's clip and time for the own player: the reload over its span, a shot, the draw of a new
+// life, else the idle.
+std::pair<std::uint32_t, float> ViewmodelClip(const ViewmodelDefinition& viewmodel, const sim::AnimationInput& input) {
+    const auto& clips = viewmodel.model->clips;
+    if (input.reloadStart && input.reloadEnd && input.seconds < *input.reloadEnd) {
+        const double progress = std::clamp((input.seconds - *input.reloadStart) / (*input.reloadEnd - *input.reloadStart), 0.0, 1.0);
+        return {viewmodel.reload, static_cast<float>(progress * clips[viewmodel.reload].duration)};
+    }
+    if (input.shotSeconds && *input.shotSeconds >= input.lifeSeconds && input.seconds - *input.shotSeconds < clips[viewmodel.shoot].duration) {
+        return {viewmodel.shoot, static_cast<float>(input.seconds - *input.shotSeconds)};
+    }
+    if (input.seconds - input.lifeSeconds < clips[viewmodel.draw].duration) {
+        return {viewmodel.draw, static_cast<float>(input.seconds - input.lifeSeconds)};
+    }
+    return {viewmodel.idle, static_cast<float>(input.seconds)};
+}
+
+// The first-person weapon's pose from the own player's state (it hangs under the viewmodel camera with a fixed
+// placement: ViewmodelPlacement), hidden while the player is dead, and the reload's sound at the clip's magazine_in.
+K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<WT::Tick> tick, K::Res<WT::FixedTime> fixed,
+                              K::Res<ClientScene> scene, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientSound> sound,
+                              K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
+                              K::Query<K::Read<ViewmodelPart>, K::Write<R::SkinPose>, K::Write<R::RenderLayers>> parts,
+                              K::ResMut<ClientCharacters> characters) {
+    const ViewmodelDefinition& viewmodel = scene->presentation->viewmodel;
+    if (!viewmodel.model) return {};
+    const std::uint64_t step = StepOf(*fixed);
+    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat, const PW::HitRecord& hits) {
+        if (owner.userId != user->userId) return;
+        const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, tick->value, step);
+        const auto [clip, seconds] = ViewmodelClip(viewmodel, input);
+        std::vector<GYO::Engine::Model::LocalTransform> local(viewmodel.model->nodes.size());
+        GYO::Engine::Model::SampleClip(viewmodel.model->nodes, viewmodel.model->clips[clip], seconds,
+                                       clip == viewmodel.idle ? GYO::Engine::Model::Wrap::Loop : GYO::Engine::Model::Wrap::Clamp, local);
+        std::vector<Math::Matrix4> nodes(local.size());
+        GYO::Engine::Model::ComputeModelSpace(viewmodel.model->nodes, local, nodes);
+        // A dead player's view has no weapon: its parts leave the viewmodel camera's layer.
+        const std::uint32_t mask = combat.life == sim::LifeState::Dead ? 0U : 1U << kViewLayer;
+        parts.ForEach([&](K::EntityId, const ViewmodelPart&, K::Mut<R::SkinPose> pose, K::Mut<R::RenderLayers> layers) {
+            pose->nodes = nodes;
+            if (layers.Read().mask != mask) layers->mask = mask;
+        });
+        // The reload's sound: its sync point at the clip's magazine_in, once per reload.
+        if (input.reloadStart && input.reloadEnd && combat.reloadEndTick != characters->reloadSounded && sound->submitter != nullptr) {
+            const double span = *input.reloadEnd - *input.reloadStart;
+            const double eventAt = *input.reloadStart + span * viewmodel.magazineInSeconds / viewmodel.model->clips[viewmodel.reload].duration;
+            if (input.seconds >= eventAt - viewmodel.reloadSoundSync) {
+                characters->reloadSounded = combat.reloadEndTick;
+                const auto found = assets->clips.find(viewmodel.reloadSound);
+                if (found != assets->clips.end()) {
+                    if (const AU::Clip* clip = view->Get(found->second)) {
+                        static_cast<void>(sound->submitter->Play(AU::PlayRequest{*clip, TM::MonotonicClock::now(), viewmodel.reloadSoundGain,
+                                                                                 viewmodel.reloadSoundGain, false}));
+                    }
+                }
+            }
+        }
+    });
+    return {};
+}
+
+// The first-person weapon's parts, once its model is asked for.
+K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Query<K::Read<ViewmodelPart>> parts,
+                             K::Res<ClientScene> scene,
+                             K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, ViewmodelPart, R::RenderLayers,
+                                                K::ChildOf, RB::KeepThroughRollback>> spawn) {
+    if (parts.Count() != 0) return {};
+    const GYO::Engine::Model::ModelData* model = view->Get(assets->viewmodel);
+    if (model == nullptr) return {};
+    for (std::uint32_t m = 0; m < model->meshes.size(); ++m) {
         R::Mesh3d mesh;
-        mesh.model = assets->standIn;
-        mesh.image = scene->presentation->standInPalette;
-        mesh.filter = R::TextureFilter::Nearest;
-        const T::Transform t = BodyTransform(*rules, body);
-        auto spawned = spawn.New(std::move(mesh), t, T::GlobalTransform{T::ToMatrix(t)}, StandIn{player}, RB::KeepThroughRollback{});
+        mesh.model = assets->viewmodel;
+        mesh.mesh = m;
+        const std::uint32_t material = model->meshes[m].material;
+        if (material < assets->viewmodelImages.size() && !assets->viewmodelImages[material].Id().Empty()) {
+            mesh.image = assets->viewmodelImages[material];
+        } else {
+            mesh.color = MaterialColor(*model, material);
+        }
+        // Under the viewmodel camera, at the fixed placement: it follows the camera (Bevy's first-person view model,
+        // examples/camera/first_person_view_model.rs: the arms are a child of the camera).
+        const T::Transform placement = ViewmodelPlacement(scene->presentation->viewmodel);
+        auto spawned = spawn.New(std::move(mesh), placement, T::GlobalTransform{T::ToMatrix(placement)}, R::SkinPose{}, ViewmodelPart{m},
+                                 R::RenderLayers{1U << kViewLayer}, K::ChildOf{kViewCamera}, RB::KeepThroughRollback{});
         if (!spawned) return Base::Err(std::move(spawned).error());
     }
     return {};
@@ -616,7 +822,9 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     r.Resource<ClientScene>({.name = "object_fps_pvp.ClientScene"});
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
-    r.Component<StandIn>({.name = "object_fps_pvp.StandIn"});
+    r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
+    r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
+    r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
     read.name = "object_fps_pvp.ReadControls";
@@ -637,8 +845,10 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     r.AddSystem<&WriteStepInput>(std::move(write));
     r.AddSystem<&ShowArena>(InUpdate("object_fps_pvp.ShowArena"));
     r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera", {"object_fps_pvp.ShowHud"}));
-    r.AddSystem<&MoveBodies>(InUpdate("object_fps_pvp.MoveBodies"));
-    r.AddSystem<&AddBodies>(InUpdate("object_fps_pvp.AddBodies", {"object_fps_pvp.MoveBodies", "object_fps_pvp.RequestAssets"}));
+    r.AddSystem<&PoseCharacters>(InUpdate("object_fps_pvp.PoseCharacters"));
+    r.AddSystem<&AddCharacters>(InUpdate("object_fps_pvp.AddCharacters", {"object_fps_pvp.PoseCharacters", "object_fps_pvp.RequestAssets"}));
+    r.AddSystem<&PoseViewmodel>(InUpdate("object_fps_pvp.PoseViewmodel", {"object_fps_pvp.PlaceCamera"}));
+    r.AddSystem<&AddViewmodel>(InUpdate("object_fps_pvp.AddViewmodel", {"object_fps_pvp.PoseViewmodel", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
@@ -647,6 +857,7 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.SetResource(ClientControls{});
         world.SetResource(ClientScene{options.presentation, {}});
         world.SetResource(ClientHud{});
+        world.SetResource(ClientCharacters{});
         ClientSound sound;
         sound.submitter = port != nullptr ? &port->submitter : nullptr;
         world.SetResource(std::move(sound));
@@ -663,6 +874,23 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.Insert(kCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}});
         Place(world, kCamera, T::Transform{});
         world.Insert(kCamera, RB::KeepThroughRollback{});
+        // The viewmodel camera: after the world camera, its own depth, the first-person weapon's layer only.
+        const ViewmodelDefinition& vm = options.presentation->viewmodel;
+        C::PerspectiveProjection close;
+        close.verticalFov = vm.verticalFov;
+        close.nearClip = vm.nearClip;
+        close.farClip = vm.farClip;
+        C::Camera view;
+        view.order = 1;
+        world.Insert(kViewCamera, view);
+        world.Insert(kViewCamera, C::Camera3d{});
+        world.Insert(kViewCamera, C::CameraTarget{});
+        world.Insert(kViewCamera, C::Projection{close});
+        world.Insert(kViewCamera, C::ComputedCamera{});
+        world.Insert(kViewCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+        world.Insert(kViewCamera, R::RenderLayers{1U << kViewLayer});
+        Place(world, kViewCamera, T::Transform{});
+        world.Insert(kViewCamera, RB::KeepThroughRollback{});
         // The arena's picture (its Mesh3d comes with the model).
         Place(world, kArenaPicture, T::Transform{});
         world.Insert(kArenaPicture, RB::KeepThroughRollback{});
@@ -670,7 +898,7 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         C::OrthographicProjection flat = C::OrthographicProjection::Default2d();
         flat.scalingMode = C::ScalingFixed{kHudWidth, kHudHeight};
         C::Camera hud;
-        hud.order = 1;
+        hud.order = 2;
         world.Insert(kHudCamera, hud);
         world.Insert(kHudCamera, C::Camera2d{});
         world.Insert(kHudCamera, C::CameraTarget{});
@@ -721,7 +949,125 @@ std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, c
     return std::move(*text);
 }
 
+std::vector<std::byte> ReadBytes(GYO::Engine::IO::FS::NativeFileSystem& fs, const std::string& path) {
+    auto uri = GYO::Engine::IO::FS::NativeFileUri(path);
+    if (!uri) throw std::runtime_error(path + ": " + Base::Describe(uri.error()));
+    auto bytes = GYO::Engine::IO::Helpers::ReadAllBytes(fs, *uri);
+    if (!bytes) throw std::runtime_error(path + ": " + Base::Describe(bytes.error()));
+    return std::move(*bytes);
+}
+
+std::string Text(GYO::Engine::IO::FS::NativeFileSystem& fs, const std::string& path) {
+    const auto bytes = ReadBytes(fs, path);
+    return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+Math::Vec3 VectorOf(const GYO::Engine::Json::Value& value, const std::string& what) {
+    auto array = value.AsArray();
+    if (!array || array->Size() != 3) throw std::runtime_error(what + " is not three numbers");
+    float v[3]{};
+    std::size_t i = 0;
+    for (const auto item : *array) v[i++] = static_cast<float>(data::Number(item, what));
+    return {v[0], v[1], v[2]};
+}
+
+ViewmodelDefinition LoadViewmodel(GYO::Engine::IO::FS::NativeFileSystem& fs, const std::string& dir) {
+    ViewmodelDefinition viewmodel;
+    const std::string definitionPath = dir + "nailer_v2_viewmodel.json";
+    const auto definitionDocument = data::ParseDocument(Text(fs, definitionPath));
+    const auto definition = data::AsObject(definitionDocument.Root(), definitionPath);
+    // The model (its skeleton and clips; the textures are mapped below, as the FBX names JPGs the catalog has as PNGs).
+    const std::string modelPath = dir + "Nailer1_FPS.fbx";
+    const std::vector<std::byte> bytes = ReadBytes(fs, modelPath);
+    GYO::Engine::Model::FbxLoader loader;
+    GYO::Engine::Model::FbxSettings settings;
+    settings.textures = false;
+    A::LoadContext context(A::AssetId("object_fps_pvp.viewmodel"), modelPath, bytes.size());
+    auto model = loader.Load(bytes, settings, context);
+    if (!model) throw std::runtime_error(modelPath + ": " + Base::Describe(model.error()));
+    auto shared = std::make_shared<GYO::Engine::Model::ModelData>(std::move(*model));
+    const std::string setPath = dir + "viewmodel.animset.json";
+    const auto setDocument = data::ParseDocument(Text(fs, setPath));
+    const auto clips = data::AsObject(data::Member(data::AsObject(setDocument.Root(), setPath), "clips"), setPath + " clips");
+    const auto clipOf = [&](const std::string_view role) {
+        const auto entry = data::AsObject(data::Member(clips, role), setPath + " clip");
+        const std::string name = data::String(data::Member(entry, "clip"), "clip");
+        const auto found = shared->FindClip(name);
+        if (!found) throw std::runtime_error(modelPath + ": no clip '" + name + "'");
+        return *found;
+    };
+    viewmodel.idle = clipOf("Idle");
+    viewmodel.shoot = clipOf("Shoot");
+    viewmodel.reload = clipOf("Reload");
+    viewmodel.draw = clipOf("Draw");
+    // Where it sits: the anchor node of the idle pose's start at the offset, turned (master's ComposeEulerXYZ: X, then Y, then Z).
+    const std::string anchorName = data::String(data::Member(definition, "anchor_node"), "anchor_node");
+    const auto anchor = shared->FindNode(anchorName);
+    if (!anchor) throw std::runtime_error(modelPath + ": no node '" + anchorName + "'");
+    std::vector<GYO::Engine::Model::LocalTransform> local(shared->nodes.size());
+    GYO::Engine::Model::SampleClip(shared->nodes, shared->clips[viewmodel.idle], 0.0F, GYO::Engine::Model::Wrap::Clamp, local);
+    std::vector<Math::Matrix4> nodes(local.size());
+    GYO::Engine::Model::ComputeModelSpace(shared->nodes, local, nodes);
+    viewmodel.anchor = {nodes[*anchor].values[12], nodes[*anchor].values[13], nodes[*anchor].values[14]};
+    viewmodel.offset = VectorOf(data::Member(definition, "offset_meters"), "offset_meters");
+    const Math::Vec3 degrees = VectorOf(data::Member(definition, "rotation_degrees"), "rotation_degrees");
+    const float k = Math::Pi / 180.0F;
+    viewmodel.rotation = Math::Multiply(Math::MakeQuaternionFromAxisAngle({0, 0, 1}, degrees.z * k),
+                                        Math::Multiply(Math::MakeQuaternionFromAxisAngle({0, 1, 0}, degrees.y * k),
+                                                       Math::MakeQuaternionFromAxisAngle({1, 0, 0}, degrees.x * k)));
+    viewmodel.verticalFov = static_cast<float>(data::Number(data::Member(definition, "vertical_fov_degrees"), "vertical_fov_degrees")) * k;
+    viewmodel.nearClip = static_cast<float>(data::Number(data::Member(definition, "near_clip"), "near_clip"));
+    viewmodel.farClip = static_cast<float>(data::Number(data::Member(definition, "far_clip"), "far_clip"));
+    const auto materials = data::AsObject(data::Member(definition, "materials"), "materials");
+    for (const auto& material : shared->materials) {
+        viewmodel.materialImages.push_back(data::HasMember(materials, material.name)
+                                               ? data::String(data::Member(materials, material.name), "a material's image")
+                                               : std::string{});
+    }
+    // The reload's event and its sound.
+    const std::string eventsPath = dir + "viewmodel.anim_events.json";
+    const auto eventsDocument = data::ParseDocument(Text(fs, eventsPath));
+    const auto eventClips = data::AsObject(data::Member(data::AsObject(eventsDocument.Root(), eventsPath), "clips"), "clips");
+    const auto reloadEvents = data::Member(eventClips, shared->clips[viewmodel.reload].name).AsArray();
+    if (!reloadEvents) throw std::runtime_error(eventsPath + ": the reload clip's events are not an array");
+    bool found = false;
+    for (const auto item : *reloadEvents) {
+        const auto event = data::AsObject(item, "an event");
+        if (data::String(data::Member(event, "event"), "event") == "magazine_in") {
+            viewmodel.magazineInSeconds = static_cast<float>(data::Number(data::Member(event, "seconds"), "seconds"));
+            found = true;
+        }
+    }
+    if (!found) throw std::runtime_error(eventsPath + ": the reload clip has no magazine_in");
+    const std::string soundsPath = dir + "viewmodel.event_sounds.json";
+    const auto soundsDocument = data::ParseDocument(Text(fs, soundsPath));
+    const auto soundEvents = data::AsObject(data::Member(data::AsObject(soundsDocument.Root(), soundsPath), "events"), "events");
+    const auto magazine = data::AsObject(data::Member(soundEvents, "magazine_in"), "magazine_in");
+    viewmodel.reloadSound = data::String(data::Member(magazine, "sound_asset_id"), "sound_asset_id");
+    viewmodel.reloadSoundSync = static_cast<float>(data::Number(data::Member(magazine, "sync_seconds"), "sync_seconds"));
+    viewmodel.reloadSoundGain = static_cast<float>(data::Number(data::Member(magazine, "gain"), "gain"));
+    // The third-person weapon: its model and the picture its one material uses.
+    const std::string heldPath = dir + "../world/character.json";
+    const auto heldDocument = data::ParseDocument(Text(fs, heldPath));
+    const auto held = data::AsObject(heldDocument.Root(), heldPath);
+    viewmodel.heldModel = data::String(data::Member(held, "model_asset_id"), "model_asset_id");
+    const auto overrides = data::AsObject(data::Member(held, "material_overrides"), "material_overrides");
+    for (const auto member : overrides) {
+        const auto entry = data::AsObject(member.value, "a material override");
+        viewmodel.heldImage = data::String(data::Member(entry, "texture_asset_id"), "texture_asset_id");
+    }
+    viewmodel.model = std::move(shared);
+    return viewmodel;
+}
+
 } // namespace
+
+T::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel) {
+    T::Transform t;
+    t.rotation = viewmodel.rotation;
+    t.translation = viewmodel.offset - Math::Rotate(viewmodel.rotation, viewmodel.anchor);
+    return t;
+}
 
 std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game, std::string& error) {
     error.clear();
@@ -747,16 +1093,11 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, con
         }
         content.hitFeedback = *settings;
     }
-    {
-        const std::string path = root + "/characters/stand_in.voxel_mesh.json";
-        auto text = ReadText(fs, path, error);
-        if (!text) return std::nullopt;
-        auto file = data::ParseVoxelMeshFile(*text, error);
-        if (!file) {
-            error = path + ": " + error;
-            return std::nullopt;
-        }
-        content.standInPalette = PaletteOf(*file);
+    try {
+        content.viewmodel = LoadViewmodel(fs, root + "/weapons/nailer_v2/viewmodel/");
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return std::nullopt;
     }
     for (const world::InstalledArena& arena : game.arenas) content.arenaPalettes.push_back(PaletteOf(arena.geometry));
     return content;
@@ -774,6 +1115,8 @@ void ConfigureClient(O::ProductSetup& setup) {
         return true;
     };
     if (refused("voxel model", registry->template Register<VoxelModelLoader>())) return;
+    if (refused("fbx", registry->template Register<GYO::Engine::Model::FbxLoader>())) return;
+    if (refused("png", registry->template Register<IM::PngLoader>())) return;
     if (refused("font", registry->template Register<TX::FontLoader>())) return;
     if (refused("wav", registry->template Register<AU::WavLoader>())) return;
     AU::Mixer* mixer = setup.Buffer().Find<AU::Mixer>();
