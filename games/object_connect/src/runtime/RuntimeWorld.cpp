@@ -190,6 +190,7 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     // held, so the pointer follows the device's motion instead.
     const bool lock = wrapPointer && state.focused && mapped;
     if (lock && state.locked) {
+        // In logical pixels with the OS's pointer speed: the product sets sdl_window's MouseMotionUnit::LogicalPixels.
         state.virtualClient += Vec2{motion->delta.x, motion->delta.y};
         state.lastClient = state.virtualClient;
     } else if (cursor->position) {
@@ -241,7 +242,7 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     if (state.locked) {
         // The locked pointer is not stopped by any edge, so no relative motion is needed to tell a push; a crossing
         // moves the pointer itself (the OS cursor is held, nothing to warp).
-        const input::PointerWrapResult wrapped = state.wrap.Sample({local, viewSize, Vec2{}}, bounds);
+        const input::PointerWrapResult wrapped = state.wrap.Sample({local, viewSize, Vec2{}, true}, bounds);
         position = wrapped.position;
         unwrapped = wrapped.unwrappedPosition;
         if (wrapped.warpTo) {

@@ -183,6 +183,9 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     // keeps the loop from spinning then.
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
     sdl.minFrameInterval = std::chrono::milliseconds(4);
+    // The locked drag moves the game's cursor by the mouse's motion: in logical pixels at the OS's pointer speed, as
+    // the cursor would have moved (sdl_window's default is the device's raw motion while locked).
+    sdl.mouseMotion = GYO::Plugins::SDLWindow::MouseMotionUnit::LogicalPixels;
     description.options.Set(sdl);
 
     WA::AssetOptions assets;

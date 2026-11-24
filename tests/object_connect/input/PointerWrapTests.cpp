@@ -78,6 +78,16 @@ void TestWarpNotApplied(TestContext& context) {
                    "after it, motion counts from where the cursor really is");
 }
 
+void TestWarpsAppliedAtOnce(TestContext& context) {
+    PointerWrap wrap;
+    static_cast<void>(wrap.Sample({{100.0f, 100.0f}, kClient, {}, true}, kPlayfield));
+    const PointerWrapResult crossed = wrap.Sample({{0.0f, 100.0f}, kClient, {}, true}, kPlayfield);
+    context.Expect(crossed.warpTo && NearlyEqual(crossed.warpTo->x, 1279.0f), "a locked pointer crosses as before");
+    const PointerWrapResult flick = wrap.Sample({{1279.0f - 700.0f, 100.0f}, kClient, {}, true}, kPlayfield);
+    context.Expect(flick.unwrappedPosition && NearlyEqual(flick.unwrappedPosition->x, -701.0f),
+                   "with warps applied at once, a large motion right after a crossing is the player's");
+}
+
 } // namespace
 
 void RunPointerWrapTests(TestContext& context) {
@@ -85,6 +95,7 @@ void RunPointerWrapTests(TestContext& context) {
     TestCrossingAnEdge(context);
     TestPushAgainstAStoppedEdge(context);
     TestWarpNotApplied(context);
+    TestWarpsAppliedAtOnce(context);
 }
 
 } // namespace object_connect::tests

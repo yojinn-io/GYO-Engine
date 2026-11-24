@@ -132,7 +132,7 @@ PR：移植實作第 1 段（W、T、I 合併後）。畫面要等 R2a，聲音�
 | 游標（G5） | `PresentMenus` 算 `CursorAppearance`（哪張圖、要不要換掉系統游標＝有焦點且在視窗內）；第 3 段起遊戲畫自己的游標（`DrawFrame`），同時 `WindowRequest::cursorVisible=false` | 原版 `MouseCursorRenderer`（隱藏系統游標、畫 32×32 的圖） |
 | 選單分頁 | `PresentMenus`（`Update`，在 `TickSolvedTimer` 後）以這一幀結束時的畫面呼叫 `MenuPages::Present`；`QuitChosen` → `WindowRequest::close` | 原版 `Draw` 在 `Update` 之後移動頁數，下一幀的翻頁看「上次畫的畫面」 |
 
-**（已解決，第 12 節）** 原本的已知限制：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked`（遊戲的游標第 3 段已經畫得出來），但 `PointerWrap` 要改成由相對量追蹤指標（`Locked` 時絕對位置不再跟著動），第 3 段沒做，仍是已知限制。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
+**已知的限制（更正後，第 12 節已解決）**：不鎖游標時，游標往邊移動、到達邊緣的那一幀有移動量（`MouseMotion` 由絕對位置相減），所以視窗貼著螢幕邊時照樣能穿邊；穿不過的只有「游標已經停在邊上不動、再往外推」——停住時 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），原版則用 DirectInput 的相對量推得過。（先前寫成「貼著螢幕邊就推不過」，比實際寬，2026-11-24 更正。）
 
 ## 9. 移植實作第 2 段：聲音（卡片自己判的）
 
@@ -187,4 +187,5 @@ PR：移植實作後續（四段合併後，使用者「處理掉那個游標問
 | 什麼時候鎖 | 在 wrapEdges 關卡拿著血管時（`ReadPlayerInput` 的 `wrapPointer`、有焦點、能換算），`WindowRequest::cursorGrab = Locked`；其他時候 `None` | 只有穿邊需要；一般操作照舊用 OS 的游標 |
 | 指標 | 鎖住時不讀 OS 回報的位置（相對模式下 SDL 會把它夾在視窗內），改用「上一幀的位置＋這一幀的相對移動量」（`PointerState::virtualClient`），不受視窗或螢幕邊限制；穿邊時直接把這個位置移到對邊，不請 OS warp | 原版用 DirectInput 的相對量推過停住的邊（G4）；`input` 頁：`Locked` 時 `MouseMotion` 是裝置自己的移動 |
 | 放手 | 解除鎖定，把系統游標 warp 到遊戲游標所在的位置（夾在視窗內）；`sdl_window` 先套用解鎖、再套用 warp | SDL 解鎖時會把游標放回它夾住的位置，後送的 warp 蓋過它 |
-| 手感 | 相對模式拿到的是沒有系統加速的移動量，拖線時指標的速度可能和平常不同。使用者實機試過：「沒多大問題」 | 要套用系統加速得在 `sdl_window` 設 SDL 的 hint（Engine 的事），目前不需要 |
+| 移動量的單位 | 產品設 `sdl_window` 的 `SDLWindowOptions::mouseMotion = LogicalPixels`（#329）：鎖住時的 `MouseMotion` 也是邏輯像素、帶 OS 的指標速度與加速，所以拖線時指標和平常的游標一樣快。預設的 `Device` 在 Windows 的相對模式是 raw input 的滑鼠計數（沒有指標速度），會讓指標一拿線就變快好幾倍（設計審查 S1）。使用者在 Mac 實機試過：「沒多大問題」（Mac 的相對量本來就是加速過的 points）；Windows 的實際速度沒有在實機量 | 單位只有後端知道，遊戲換算不了，所以由 Engine 給作者選（主會話判 (1)，HANDOFF `v8-arch-gyo2-relative-mouse-system-scale`） |
+| 審查留下的 | 鎖住的那一幀前，排在 SDL 佇列裡的絕對移動在 Windows 上會被丟掉，指標落後手一幀（不會跳）；SDL 拒絕相對模式時遊戲看不到（`sdl_window` 會計數、下一幀重試），那段時間推不過停住的邊；鎖住時改變視窗大小或縮放比例，虛擬位置不會重新對齊（游標鎖住時只能用鍵盤做到） | 都不影響一般操作，記錄 |

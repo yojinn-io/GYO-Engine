@@ -457,6 +457,23 @@ TEST_CASE("runtime: on a wrapEdges level a drag locks the cursor and crosses the
     CHECK(asked->warps.back().position.y == doctest::Approx(root.y));
 }
 
+TEST_CASE("runtime: a lost focus unlocks the cursor at once and gives the system's cursor back") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    EnterWrapLevel(game);
+    const OC::Vec2 root = FirstRoot(game);
+    game.Button(root.x, root.y, I::ButtonState::Pressed);
+    game.MoveTo(root.x - 8.0f, root.y);
+    REQUIRE(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::Locked);
+    game.Next().focus.push_back({false, {}});
+    game.Frame(); // the focus is gone this frame: unlocked in the same frame, before the drag is cancelled
+    CHECK(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::None);
+    const Asked* asked = game.World().Resource<Asked>();
+    REQUIRE(asked->warps.size() == 1);
+    CHECK(asked->warps.back().position.x == doctest::Approx(root.x - 8.0f));
+}
+
 TEST_CASE("runtime: a screen edge that stops the cursor does not stop a locked drag") {
     // The window touches the screen's left edge: the OS keeps reporting x = 0, only the device's motion goes on
     // (the original pushed through with DirectInput's relative motion; G4 in the porting inventory).
