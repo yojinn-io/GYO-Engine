@@ -7,6 +7,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     TestMain.cpp
     AddressTextTests.cpp
     ArenaTests.cpp
+    ControlsTests.cpp
     HitFeedbackTests.cpp
     PlanarMovementTests.cpp
     RulesTests.cpp
@@ -45,8 +46,35 @@ add_test(NAME object_fps_pvp.world COMMAND gyo_object_fps_pvp_world_tests "--tes
 set_tests_properties(object_fps_pvp.world PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
+# The Client without a window or a GPU: its Game World and its Render World (no sdl_gpu; the picture is read at the
+# Submit stage), a Match and a second Client over memory links, the content through the asset Module, the input
+# and window Messages written by a test System.
+gyo_get_game_target(object_fps_pvp client object_fps_pvp_client)
+add_executable(gyo_object_fps_pvp_client_tests world/TestMain.cpp client/ClientTests.cpp)
+target_include_directories(gyo_object_fps_pvp_client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
+target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld doctest::doctest)
+gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render)
+target_compile_definitions(gyo_object_fps_pvp_client_tests PRIVATE
+    PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp")
+if(MSVC)
+    target_compile_options(gyo_object_fps_pvp_client_tests PRIVATE /W4 /permissive- /utf-8 /bigobj)
+    target_compile_definitions(gyo_object_fps_pvp_client_tests PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_object_fps_pvp_client_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME object_fps_pvp.client COMMAND gyo_object_fps_pvp_client_tests "--test-case=client:*")
+set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 120
+    FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+
+# The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown (no
+# Match: it shows that it is connecting), and it closes its window and exits with 0. Label gpu, as
+# object_connect.main.
+gyo_get_game_target(object_fps_pvp main object_fps_pvp_main)
+add_test(NAME object_fps_pvp.main COMMAND ${object_fps_pvp_main} --frames 30)
+set_tests_properties(object_fps_pvp.main PROPERTIES LABELS "gpu" TIMEOUT 120)
+
 # The Match program: it reads the staged content, listens on a UDP port and
 # stops itself after 64 steps (one second). Label network: it opens a socket.
-gyo_get_game_target(object_fps_pvp main object_fps_pvp_main)
-add_test(NAME object_fps_pvp.match COMMAND ${object_fps_pvp_main} --port 0 --ticks 64)
+gyo_get_game_target(object_fps_pvp match object_fps_pvp_match)
+add_test(NAME object_fps_pvp.match COMMAND ${object_fps_pvp_match} --port 0 --ticks 64)
 set_tests_properties(object_fps_pvp.match PROPERTIES LABELS "network" TIMEOUT 60)

@@ -144,6 +144,97 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a Client past the seats*",
    "expect": "past the seats is refused"
+  },
+  {
+   "id": "pvp-press-lost",
+   "what": "a press made in a frame that runs no step is lost",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "pendingJump_ = pendingJump_ || frame.jump;",
+   "replace": "pendingJump_ = frame.jump;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: a press waits*",
+   "expect": "a press waits"
+  },
+  {
+   "id": "pvp-focus-loss-kept",
+   "what": "losing the focus keeps the pointer",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "if (!frame.focused) {",
+   "replace": "if (false) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: Tab takes*",
+   "expect": "Tab takes and gives back"
+  },
+  {
+   "id": "pvp-cursor-not-locked",
+   "what": "the window is never asked to lock the cursor",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "request->cursorGrab = captured ? W::CursorGrab::Locked : W::CursorGrab::None;",
+   "replace": "request->cursorGrab = W::CursorGrab::None;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client:*",
+   "expect": "takes the pointer with a click"
+  },
+  {
+   "id": "pvp-stand-in-not-shown",
+   "what": "no stand-in body is made for the other players",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "if (assets->standIn.Id().Empty()) return {};",
+   "replace": "return {};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client:*",
+   "expect": "the other player's body are drawn"
+  },
+  {
+   "id": "pvp-hit-direction-not-drawn",
+   "what": "the arc toward the attacker is never drawn",
+   "find": "        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);",
+   "replace": "        arc.Get() = R::Shape2d{};",
+   "expect": "pvp-hit-direction",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-hp-not-red",
+   "what": "the HP stays white after a hit",
+   "find": "feedback.hpHighlighted ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "replace": "false ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "expect": "the HP turns red",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-no-shake",
+   "what": "the hit does not shake the camera",
+   "find": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, hud->sample.shakeRollRadians)",
+   "replace": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, 0.0F)",
+   "expect": "the camera rolls",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
   }
  ]
 }

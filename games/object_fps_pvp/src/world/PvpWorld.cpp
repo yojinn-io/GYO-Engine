@@ -801,6 +801,9 @@ namespace {
 O::WorldDescription Describe(WorldOptions options, const N::NetRole role) {
     O::WorldDescription world;
     world.name = "Game";
+    // The units the game needs, named so a Product that carries more (the Client's render units) does not put them
+    // here (an empty list is every unit the Product carries).
+    world.units = {"entity_ids", "world_time", "rollback", "authority", "net", "transform", "physics_3d"};
     world.options.Set(N::NetWorldOptions{role, std::nullopt});
     world.options.Set(role == N::NetRole::Server ? kMatchIds : kClientIds);
     world.options.Set(A::AuthorityOptions{std::make_shared<A::ServerAuthorityStrategy>()});
