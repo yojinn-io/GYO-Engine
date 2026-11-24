@@ -378,6 +378,7 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
         auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {
             WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,
                              exchanges);
+            setup.extractFrom_ = world.extractFrom;
             unit.unit->Build(setup);
         });
         GYO_ASSERT(static_cast<bool>(registered));
@@ -386,6 +387,7 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
                                   [&](Kernel::Registrar& registrar) {
                                       WorldSetup setup(world.name, name_, registrar, world.options, frame, prepares, carries,
                                                        *buffer, *buffer_, exchanges);
+                                      setup.extractFrom_ = world.extractFrom;
                                       if (world.build) world.build(setup);
                                   });
     GYO_ASSERT(static_cast<bool>(own));

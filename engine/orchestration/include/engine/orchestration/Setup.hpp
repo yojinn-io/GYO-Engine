@@ -245,6 +245,9 @@ public:
     WorldSetup& operator=(const WorldSetup&) = delete;
 
     [[nodiscard]] const std::string& WorldName() const noexcept { return worldName_; }
+    // The World this one extracts from (WorldDescription::extractFrom, O-12); empty: none. A unit that runs an
+    // extract schedule puts it in the frame list only when this is not empty (else O-E9).
+    [[nodiscard]] const std::string& ExtractFrom() const noexcept { return extractFrom_; }
     [[nodiscard]] Kernel::Registrar& Registrar() noexcept { return *registrar_; }
     // The description's option of this type, or nullptr.
     template <class T>
@@ -313,6 +316,7 @@ private:
           exchanges_(&exchanges) {}
     void AddCarry(Detail::CarryEntry entry);
     std::string worldName_;
+    std::string extractFrom_;
     std::string unit_;
     Kernel::Registrar* registrar_;
     const OptionBag* options_;

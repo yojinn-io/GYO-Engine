@@ -122,16 +122,15 @@ struct CursorMoved final {
 
 // The mouse moved (Bevy's MouseMotion, bevy_input mouse.rs:111), in the backend's relative units, not scaled to
 // logical pixels. While window's WindowRequest::cursorGrab is Locked (Bevy's CursorGrabMode::Locked; SDL's relative
-// mode) it is the device's own motion, reported even where the cursor could not move: Object_Connect's push past the
-// window's edge (G4) needs Locked and a cursor drawn by the game. Otherwise it is the cursor's motion, zero where the
+// mode) it is the device's own motion, reported even where the cursor could not move: a push past the window's edge
+// needs Locked and a cursor drawn by the game. Otherwise it is the cursor's motion, zero where the
 // cursor is stopped by an edge (SDL takes it from the absolute place, SDL_mouse.c:768).
 struct MouseMotion final {
     Math::Vec2 delta{};
     Time::TimePoint time{};
 };
 
-// The cursor entered or left the window (Bevy's CursorEntered / CursorLeft, bevy_window event.rs:236, :253;
-// Object_Connect G5).
+// The cursor entered or left the window (Bevy's CursorEntered / CursorLeft, bevy_window event.rs:236, :253).
 struct CursorEntered final {
     Time::TimePoint time{};
 };

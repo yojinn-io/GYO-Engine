@@ -157,13 +157,13 @@ TEST_CASE("sdl_window: SDL events become the Messages of the mapping table, in o
     CHECK_MESSAGE(std::get<I::TextCommitted>(input[1]).text == "x", "[sw-map-text-value] with its text");
     CHECK_MESSAGE(Is<I::CursorMoved>(input[2]), "[sw-map-moved] a motion becomes a CursorMoved");
     CHECK_MESSAGE(std::get<I::CursorMoved>(input[2]).position.x == 10.0F, "[sw-map-moved-value] at its place");
-    CHECK_MESSAGE(Is<I::MouseMotion>(input[3]), "[sw-map-motion] and a MouseMotion right after it (G4)");
+    CHECK_MESSAGE(Is<I::MouseMotion>(input[3]), "[sw-map-motion] and a MouseMotion right after it");
     CHECK_MESSAGE(std::get<I::MouseMotion>(input[3]).delta.y == -2.0F, "[sw-map-motion-value] with the relative motion");
     CHECK_MESSAGE(Is<I::MouseButtonInput>(input[4]), "[sw-map-button] a button event becomes a MouseButtonInput");
     CHECK_MESSAGE(std::get<I::MouseButtonInput>(input[4]).button == I::MouseButton::Back, "[sw-map-button-x1] X1 is Back");
     CHECK_MESSAGE(Is<I::MouseWheel>(input[5]), "[sw-map-wheel] a wheel event becomes a MouseWheel");
     CHECK_MESSAGE(std::get<I::MouseWheel>(input[5]).delta.y == 1.0F, "[sw-map-wheel-as-given] the wheel as the OS gives it (natural scrolling kept)");
-    CHECK_MESSAGE(Is<I::CursorEntered>(input[6]), "[sw-map-entered] the mouse entering becomes a CursorEntered (G5)");
+    CHECK_MESSAGE(Is<I::CursorEntered>(input[6]), "[sw-map-entered] the mouse entering becomes a CursorEntered");
     CHECK_MESSAGE(Is<I::KeyboardFocusLost>(input[7]), "[sw-map-focus-input] a focus loss becomes input's KeyboardFocusLost too");
     REQUIRE_MESSAGE(window.size() == 3, "[sw-map-window-count] 3 window Messages (focus, close, quit)");
     CHECK_MESSAGE(Is<W::WindowFocused>(window[0]), "[sw-map-focus] a focus loss becomes a WindowFocused");
@@ -403,7 +403,7 @@ TEST_CASE("sdl_window: the requests reach SDL a frame later, only when they chan
     CHECK_MESSAGE(SDL_TextInputActive(window), "[sw-request-text-input] the text input request starts SDL's text input");
     CHECK_MESSAGE(std::string(SDL_GetWindowTitle(window)) == "renamed", "[sw-request-title] the title request");
     // SDL's dummy driver has no SetWindowResizable (SDL_video.c:3126 keeps the flag): the resizable request cannot be
-    // seen here; the window made not resizable (G6) is checked below.
+    // seen here; the window made not resizable is checked below.
     ResMut<I::TextInputRequest>(*p).enabled = false;
     Frame(*p);
     CHECK_MESSAGE(!SDL_TextInputActive(window), "[sw-request-text-input-off] and stops it");
@@ -429,7 +429,7 @@ TEST_CASE("sdl_window: a window that cannot be made is the startup error SDL-E1"
     CHECK_MESSAGE(reported, "[sw-e1-code] sdl_window reports SDL-E1");
 }
 
-TEST_CASE("sdl_window: a window made not resizable (G6)") {
+TEST_CASE("sdl_window: a window made not resizable") {
     W::WindowSettings settings = Hidden();
     settings.resizable = false;
     auto p = Make(false, settings);

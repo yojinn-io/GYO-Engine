@@ -5,10 +5,11 @@
 #     no GPU, every CI row.
 #   sdl_gpu.pass2d, sdl_gpu.frames (label gpu): the 2D pass drawn on a GPU and read back, pixel by pixel, with SDL's
 #     GPU validation on; frames on a hidden window, World replacement. sdl_gpu.budget (label gpu) prints the frame
-#     time of an Object_Connect-sized frame. L1 runs them on Linux on Lavapipe under Xvfb; elsewhere they run on a machine with a GPU.
+#     time of a frame of a common 2D game. L1 runs them on Linux on Lavapipe under Xvfb; elsewhere they run on a machine with a GPU.
 add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp)
 target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE GYO::SDLGPU GYO::SDLWindow GYO::RenderWorld GYO::Render GYO::Input GYO::Window
+                      GYO::Camera GYO::Transform
                       doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_sdl_gpu_tests PRIVATE /W4 /permissive-)

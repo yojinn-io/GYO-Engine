@@ -115,8 +115,8 @@
     "camera CM-3"
    ],
    "file": "engine/modules/camera/src/CameraModule.cpp",
-   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target));",
-   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(CameraTarget{}));\n        (void)target;",
+   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id));",
+   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(CameraTarget{}), letterboxes.Get<Letterbox>(id));\n        (void)target;",
    "target": "gyo_camera_tests",
    "cases": "camera: each camera uses*",
    "expect": "\\[cm\\-target\\-own\\]"
@@ -452,6 +452,84 @@
    "target": "gyo_camera_tests",
    "expect_build_failure": true,
    "expect": "gyo_camera\\s+links\\s+\\S*GYO::Json\\S*\\s+expected\\s+exactly"
+  },
+  {
+   "id": "cm-letterbox-ignored",
+   "what": "UpdateCameras does not pass the camera's Letterbox",
+   "guards": [
+    "camera CM-6"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id));",
+   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(target));\n        (void)id;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: UpdateCameras uses*",
+   "expect": "\\[cm\\-letterbox\\-system\\]"
+  },
+  {
+   "id": "cm-letterbox-not-centred",
+   "what": "the letterbox is not centred (bars on one side)",
+   "guards": [
+    "camera CM-6"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    viewport.position.y += (viewport.size.y - fitHeight) / 2;",
+   "replace": "",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Letterbox cuts*",
+   "expect": "\\[cm\\-letterbox\\-bars\\]"
+  },
+  {
+   "id": "cm-letterbox-axis-swapped",
+   "what": "the letterbox keeps the wrong side",
+   "guards": [
+    "camera CM-6"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "    if (width > height * aspect) {",
+   "replace": "    if (width < height * aspect) {",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Letterbox cuts*",
+   "expect": "\\[cm\\-letterbox\\-bars\\]"
+  },
+  {
+   "id": "cm-letterbox-whole-target",
+   "what": "the letterbox ignores the author's viewport",
+   "guards": [
+    "camera CM-6"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        FitAspect(viewport, static_cast<double>(letterbox->width) / letterbox->height);",
+   "replace": "        viewport = Viewport{{0, 0}, size->physicalSize, 0.0F, 1.0F};\n        FitAspect(viewport, static_cast<double>(letterbox->width) / letterbox->height);",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Letterbox cuts*",
+   "expect": "\\[cm\\-letterbox\\-in\\-viewport\\]"
+  },
+  {
+   "id": "cm-letterbox-invalid-accepted",
+   "what": "a zero letterbox width is valid",
+   "guards": [
+    "camera CM-6"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        if (!(std::isfinite(letterbox->width) && std::isfinite(letterbox->height) && letterbox->width > 0.0F &&\n              letterbox->height > 0.0F)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Letterbox cuts*",
+   "expect": "\\[cm\\-letterbox\\-invalid\\]"
+  },
+  {
+   "id": "cm-hash-letterbox-empty",
+   "what": "the summary hashes nothing of Letterbox",
+   "guards": [
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/include/engine/camera/Camera.hpp",
+   "find": "inline void HashValue(Kernel::Hasher& h, const Letterbox& v) {\n    Kernel::HashValue(h, v.width);\n    Kernel::HashValue(h, v.height);\n}",
+   "replace": "inline void HashValue(Kernel::Hasher&, const Letterbox&) {}",
+   "target": "gyo_camera_tests",
+   "cases": "camera: the summary*",
+   "expect": "\\[cm\\-hash\\-settings\\] Letterbox"
   }
  ]
 }

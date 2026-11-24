@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the render Module, render_world and sdl_gpu (batch R2a, v8-arch-gyo2-sdl-r2a; Design Invariants RD-1 to RD-4 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-). The gp- mutants need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the render Module, render_world and sdl_gpu (batches R2a and r2b-2d, v8-arch-gyo2-sdl-r2a and v8-arch-gyo2-sdl-r2b-2d; Design Invariants RD-1 to RD-7 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-, p2-, re-). The gp- mutants need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "rd-clip-y-not-turned",
@@ -36,7 +36,7 @@
     "render section 2"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "return Math::Rect{0.0F, 0.0F, static_cast<float>(target.width), static_cast<float>(target.height)};",
+   "find": "return Math::Rect{0.0F, 0.0F, static_cast<float>(viewport.width), static_cast<float>(viewport.height)};",
    "replace": "return Math::Rect{0.0F, 0.0F, 1.0F, 1.0F};",
    "target": "gyo_render_tests",
    "cases": "render: a pass without*",
@@ -49,7 +49,7 @@
     "render section 2"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "    if (!clip) return PixelRect{0, 0, target.width, target.height};",
+   "find": "    if (!clip) return viewport;",
    "replace": "    if (!clip) return PixelRect{};",
    "target": "gyo_render_tests",
    "cases": "render: no clip*",
@@ -88,7 +88,7 @@
     "render section 2"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "    const double sx = static_cast<double>(target.width) / view.width;",
+   "find": "    const double sx = static_cast<double>(viewport.width) / view.width;",
    "replace": "    const double sx = 1.0;",
    "target": "gyo_render_tests",
    "cases": "render: a clip follows*",
@@ -471,6 +471,492 @@
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu frames:*",
    "expect": "\\[gp\\-world\\-new\\-forgets\\]"
+  },
+  {
+   "id": "rd-viewport-ignored",
+   "what": "a pass's viewport is taken as the whole target",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    if (!pass.viewport) return PixelRect{0, 0, target.width, target.height};",
+   "replace": "    return PixelRect{0, 0, target.width, target.height};",
+   "target": "gyo_render_tests",
+   "cases": "render: a viewport*",
+   "expect": "\\[rd\\-viewport\\-given\\]"
+  },
+  {
+   "id": "rd-viewport-not-cut",
+   "what": "a viewport is not cut to the target",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const std::uint32_t width = std::min(v.width, target.width - x);",
+   "replace": "    const std::uint32_t width = v.width;",
+   "target": "gyo_render_tests",
+   "cases": "render: a viewport*",
+   "expect": "\\[rd\\-viewport\\-cut\\]"
+  },
+  {
+   "id": "rd-clip-viewport-no-offset",
+   "what": "a clip forgets the viewport's corner",
+   "guards": [
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    return PixelRect{viewport.x + x0, viewport.y + y0, x1 - x0, y1 - y0};",
+   "replace": "    return PixelRect{x0, y0, x1 - x0, y1 - y0};",
+   "target": "gyo_render_tests",
+   "cases": "render: a viewport*",
+   "expect": "\\[rd\\-clip\\-viewport\\-offset\\]"
+  },
+  {
+   "id": "gp-viewport-not-set",
+   "what": "sdl_gpu draws over the whole target, not the viewport",
+   "guards": [
+    "render section 2",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            if (drawable) SDL_SetGPUViewport(render, &viewport);",
+   "replace": "            static_cast<void>(viewport);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a viewport*",
+   "expect": "\\[gp\\-viewport\\-fill\\]"
+  },
+  {
+   "id": "gp-scissor-whole-target",
+   "what": "sdl_gpu measures a clip on the whole target",
+   "guards": [
+    "render section 2",
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);",
+   "replace": "                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, size);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass2d: a viewport*",
+   "expect": "\\[gp\\-viewport\\-clip\\-above\\]"
+  },
+  {
+   "id": "p2-list-partial-kept",
+   "what": "a list keeps a trailing partial triangle",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        list.assign(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(order.size() - order.size() % 3));",
+   "replace": "        list = order;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a list*",
+   "expect": "\\[p2\\-list\\-partial\\]"
+  },
+  {
+   "id": "p2-strip-no-turn",
+   "what": "a strip's odd triangles keep the strip order",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "            list.insert(list.end(), {order[i - 1], order[i - 2], order[i]});",
+   "replace": "            list.insert(list.end(), {order[i - 2], order[i - 1], order[i]});",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a list*",
+   "expect": "\\[p2\\-strip\\]"
+  },
+  {
+   "id": "p2-sprite-v-down",
+   "what": "a sprite puts the picture's top row at the bottom",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    vertices.push_back(Vertex2D{{left, top}, {u0, v0}, sprite.color});",
+   "replace": "    vertices.push_back(Vertex2D{{left, top}, {u0, v1}, sprite.color});",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a sprite*",
+   "expect": "\\[p2\\-sprite\\-top\\-left\\]"
+  },
+  {
+   "id": "p2-anchor-ignored",
+   "what": "a sprite is always centred",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    const float left = (-0.5F - sprite.anchor.x) * size.x;",
+   "replace": "    const float left = -0.5F * size.x;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a sprite*",
+   "expect": "\\[p2\\-sprite\\-anchor\\-size\\]"
+  },
+  {
+   "id": "p2-rect-ignored",
+   "what": "a sprite's rect does not pick the uv",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    if (sprite.rect) region = *sprite.rect;",
+   "replace": "    const Math::Rect whole = region;\n    if (sprite.rect) region = Math::Rect{whole.x, whole.y, sprite.rect->width, sprite.rect->height};",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a sprite*",
+   "expect": "\\[p2\\-sprite\\-rect\\-flip\\]"
+  },
+  {
+   "id": "p2-z-reversed",
+   "what": "items are drawn front to back",
+   "guards": [
+    "render section 7",
+    "camera CM-4"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (za != zb) return za < zb;",
+   "replace": "        if (za != zb) return za > zb;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: items are drawn*",
+   "expect": "\\[p2\\-z\\-order\\]"
+  },
+  {
+   "id": "p2-tie-reversed",
+   "what": "equal z by descending entity",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (items[a].entity != items[b].entity) return items[a].entity < items[b].entity;",
+   "replace": "        if (items[a].entity != items[b].entity) return items[a].entity > items[b].entity;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: items are drawn*",
+   "expect": "\\[p2\\-z\\-tie\\]"
+  },
+  {
+   "id": "p2-layers-ignored",
+   "what": "a camera draws every layer",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if ((items[i].layers & camera.layers) == 0 || items[i].indices.empty()) continue;",
+   "replace": "        if (items[i].indices.empty()) continue;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a camera draws only*",
+   "expect": "\\[p2\\-layers\\]"
+  },
+  {
+   "id": "p2-near-far-kept",
+   "what": "items past the near or far plane are drawn",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (!(depth >= 0.0F && depth <= 1.0F)) continue;",
+   "replace": "        static_cast<void>(depth);",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: an item before*",
+   "expect": "\\[p2\\-near\\-far\\]"
+  },
+  {
+   "id": "p2-index-base-lost",
+   "what": "an item's indices do not move to its vertices",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        for (const std::uint32_t index : item.indices) pass.indices.push_back(base + index);",
+   "replace": "        for (const std::uint32_t index : item.indices) pass.indices.push_back(index);",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: items are drawn*",
+   "expect": "\\[p2\\-index\\-base\\]"
+  },
+  {
+   "id": "p2-batch-off",
+   "what": "every item is its own draw",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "            if (last.texture == item.texture && last.blend == item.blend && last.indexOffset + last.indexCount == first) {",
+   "replace": "            if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: consecutive*",
+   "expect": "\\[p2\\-batch\\]"
+  },
+  {
+   "id": "p2-batch-texture-ignored",
+   "what": "items of another texture are batched",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "            if (last.texture == item.texture && last.blend == item.blend && last.indexOffset + last.indexCount == first) {",
+   "replace": "            if (last.blend == item.blend && last.indexOffset + last.indexCount == first) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: consecutive*",
+   "expect": "\\[p2\\-batch\\-texture\\]"
+  },
+  {
+   "id": "p2-batch-blend-ignored",
+   "what": "items of another blend are batched",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "            if (last.texture == item.texture && last.blend == item.blend && last.indexOffset + last.indexCount == first) {",
+   "replace": "            if (last.texture == item.texture && last.indexOffset + last.indexCount == first) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: consecutive*",
+   "expect": "\\[p2\\-batch\\-blend\\]"
+  },
+  {
+   "id": "p2-map-y-not-turned",
+   "what": "clip y goes to pixels without turning (y up on the screen)",
+   "guards": [
+    "render section 7",
+    "render section 2"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "            pass.vertices.push_back(Vertex2D{{(x + 1.0F) * 0.5F * width, (1.0F - y) * 0.5F * height}, v.uv, v.color});",
+   "replace": "            pass.vertices.push_back(Vertex2D{{(x + 1.0F) * 0.5F * width, (1.0F + y) * 0.5F * height}, v.uv, v.color});",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: one camera*",
+   "expect": "\\[p2\\-map\\-top\\-left\\]"
+  },
+  {
+   "id": "p2-view-ignored",
+   "what": "the camera's position is ignored",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    const Math::Matrix4 clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);",
+   "replace": "    const Math::Matrix4 clipFromWorld = camera.computed.clipFromView;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: one camera*",
+   "expect": "\\[p2\\-map\\-view\\]"
+  },
+  {
+   "id": "p2-viewport-whole",
+   "what": "the pass covers the whole target, not the camera's viewport",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),\n                              static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};",
+   "replace": "    pass.viewport = std::nullopt;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: one camera*",
+   "expect": "\\[p2\\-viewport\\]"
+  },
+  {
+   "id": "p2-3d-drawn",
+   "what": "a 3D camera draws the 2D items",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    if (!camera.is2d || !camera.computed.valid) return std::nullopt;",
+   "replace": "    if (!camera.computed.valid) return std::nullopt;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a camera without*",
+   "expect": "\\[p2\\-3d\\-camera\\]"
+  },
+  {
+   "id": "p2-held-kept",
+   "what": "a held image no item showed keeps its texture",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (it->first.held != nullptr && !entry.used) {",
+   "replace": "        if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a picture*",
+   "expect": "\\[p2\\-image\\-held\\-released\\]"
+  },
+  {
+   "id": "p2-asset-released",
+   "what": "an asset's texture is let go when unused",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (it->first.held != nullptr && !entry.used) {",
+   "replace": "        if (!entry.used) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a picture*",
+   "expect": "\\[p2\\-image\\-asset\\-kept\\]"
+  },
+  {
+   "id": "p2-image-twice",
+   "what": "a picture's texture is made on every use",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    if (found == entries_.end()) {\n        if (data == nullptr",
+   "replace": "    if (true) {\n        if (data == nullptr",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a picture*",
+   "expect": "\\[p2\\-image\\-once\\]"
+  },
+  {
+   "id": "p2-filter-ignored",
+   "what": "a texture is always Linear",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        const TextureId id = textures.Create(TextureDesc{data->Width(), data->Height(), key.filter},",
+   "replace": "        const TextureId id = textures.Create(TextureDesc{data->Width(), data->Height(), TextureFilter::Linear},",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a picture*",
+   "expect": "\\[p2\\-image\\-filter\\]"
+  },
+  {
+   "id": "p2-null-held-white",
+   "what": "a null held image is drawn white",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "        if (*held == nullptr) {\n            out.key.asset = \"?\";",
+   "replace": "        if (*held == nullptr) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a picture*",
+   "expect": "\\[p2\\-image\\-null\\-held\\]"
+  },
+  {
+   "id": "re-extract-after-main",
+   "what": "the extract schedule runs after Main",
+   "guards": [
+    "render section 5"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "        setup.Frame().InsertBefore(options.schedule, std::string(kExtractSchedule));",
+   "replace": "        setup.Frame().InsertAfter(options.schedule, std::string(kExtractSchedule));",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: render_world puts*",
+   "expect": "\\[re\\-extract\\-before\\-main\\]"
+  },
+  {
+   "id": "re-extract-always",
+   "what": "every render World gets the extract schedule",
+   "guards": [
+    "render section 5",
+    "orchestration O-12"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "    if (!setup.ExtractFrom().empty()) {",
+   "replace": "    if (true) {",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: render_world puts*",
+   "expect": "\\[re\\-no\\-extract\\-without\\-source\\]"
+  },
+  {
+   "id": "re-hud-cleared",
+   "what": "a camera with ClearColorConfig None clears",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "        case Render::ClearColorConfig::Mode::None: e.clear = std::nullopt; break;",
+   "replace": "        case Render::ClearColorConfig::Mode::None: e.clear = defaultClear; break;",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a HUD camera*",
+   "expect": "\\[re\\-hud\\]"
+  },
+  {
+   "id": "re-camera-order-reversed",
+   "what": "cameras by descending order",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order < b.order; });",
+   "replace": "    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order > b.order; });",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a HUD camera*",
+   "expect": "\\[re\\-camera\\-order\\]"
+  },
+  {
+   "id": "re-inactive-drawn",
+   "what": "an inactive camera is extracted",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "        if (!camera.active) return;",
+   "replace": "        static_cast<void>(camera.active);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: no target size*",
+   "expect": "\\[re\\-inactive\\]"
+  },
+  {
+   "id": "re-strip-raw",
+   "what": "a shape's strip is drawn as a list",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+   "find": "        item.indices = Render::TriangleListOf(shape);",
+   "replace": "        item.indices = shape.indices;",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a shape given*",
+   "expect": "\\[re\\-dynamic\\]"
+  },
+  {
+   "id": "re-held-not-ended",
+   "what": "sprite_render never lets a held picture go",
+   "guards": [
+    "render section 7"
+   ],
+   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+   "find": "    cache.EndFrame(texs);",
+   "replace": "    static_cast<void>(texs);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a HUD camera*",
+   "expect": "\\[re\\-held\\-released\\]"
+  },
+  {
+   "id": "p2-new-life-kept",
+   "what": "an asset's old life keeps its texture when a new life comes",
+   "guards": [
+    "render RD-6"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "                if (it->first.asset == key.asset && it->first.life != key.life) {",
+   "replace": "                if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: an asset requested again*",
+   "expect": "\\[p2\\-image\\-new\\-life\\]"
+  },
+  {
+   "id": "p2-later-clears-target",
+   "what": "a later camera on a target clears the whole target",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    if (firstOnTarget) {",
+   "replace": "    if (true) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a later camera*",
+   "expect": "\\[p2\\-clear\\-later\\]"
+  },
+  {
+   "id": "re-every-camera-first",
+   "what": "sprite_render tells every camera it is the first on its target",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+   "find": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, first);",
+   "replace": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, true);\n        static_cast<void>(first);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a split screen*",
+   "expect": "\\[re\\-split\\-second\\]"
   }
  ]
 }

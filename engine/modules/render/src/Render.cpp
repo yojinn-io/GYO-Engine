@@ -18,9 +18,20 @@ ViewTransform ViewToClip(const Math::Rect view) {
     return ViewTransform{{sx, sy}, {-1.0F - view.x * sx, 1.0F - view.y * sy}};
 }
 
+PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) {
+    if (!pass.viewport) return PixelRect{0, 0, target.width, target.height};
+    const PixelRect& v = *pass.viewport;
+    const std::uint32_t x = std::min(v.x, target.width);
+    const std::uint32_t y = std::min(v.y, target.height);
+    const std::uint32_t width = std::min(v.width, target.width - x);
+    const std::uint32_t height = std::min(v.height, target.height - y);
+    return PixelRect{x, y, width, height};
+}
+
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
     if (pass.view) return *pass.view;
-    return Math::Rect{0.0F, 0.0F, static_cast<float>(target.width), static_cast<float>(target.height)};
+    const PixelRect viewport = ViewportOf(pass, target);
+    return Math::Rect{0.0F, 0.0F, static_cast<float>(viewport.width), static_cast<float>(viewport.height)};
 }
 
 namespace {
@@ -35,21 +46,25 @@ std::uint32_t PixelFrom(const double edge, const std::uint32_t limit) {
 
 } // namespace
 
-PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, const Math::Rect view, const TargetSize target) {
-    if (!clip) return PixelRect{0, 0, target.width, target.height};
+PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, const Math::Rect view, const PixelRect viewport) {
+    if (!clip) return viewport;
     GYO_ASSERT(view.width != 0.0F && view.height != 0.0F && "a view of zero size");
-    // View units to target pixels (the view covers the whole target).
-    const double sx = static_cast<double>(target.width) / view.width;
-    const double sy = static_cast<double>(target.height) / view.height;
+    // View units to pixels of the viewport (the view covers the whole viewport), then to the target.
+    const double sx = static_cast<double>(viewport.width) / view.width;
+    const double sy = static_cast<double>(viewport.height) / view.height;
     const double left = (static_cast<double>(clip->x) - view.x) * sx;
     const double top = (static_cast<double>(clip->y) - view.y) * sy;
     const double right = (static_cast<double>(clip->x) + clip->width - view.x) * sx;
     const double bottom = (static_cast<double>(clip->y) + clip->height - view.y) * sy;
-    const std::uint32_t x0 = PixelFrom(std::min(left, right), target.width);
-    const std::uint32_t x1 = PixelFrom(std::max(left, right), target.width);
-    const std::uint32_t y0 = PixelFrom(std::min(top, bottom), target.height);
-    const std::uint32_t y1 = PixelFrom(std::max(top, bottom), target.height);
-    return PixelRect{x0, y0, x1 - x0, y1 - y0};
+    const std::uint32_t x0 = PixelFrom(std::min(left, right), viewport.width);
+    const std::uint32_t x1 = PixelFrom(std::max(left, right), viewport.width);
+    const std::uint32_t y0 = PixelFrom(std::min(top, bottom), viewport.height);
+    const std::uint32_t y1 = PixelFrom(std::max(top, bottom), viewport.height);
+    return PixelRect{viewport.x + x0, viewport.y + y0, x1 - x0, y1 - y0};
+}
+
+PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, const Math::Rect view, const TargetSize target) {
+    return ClipToPixels(clip, view, PixelRect{0, 0, target.width, target.height});
 }
 
 TextureId RenderTextures::Create(const TextureDesc desc, std::vector<std::uint8_t> pixels) {
