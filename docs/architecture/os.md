@@ -182,8 +182,8 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     on every platform. No product is named: a new, cloned or removed product needs no common change. A target
     that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
     programs that FetchContent adds (protoc, and SDL's own) are outside the roots and keep their own manifests; Go services are
-    not CMake executables. The separately configured host shader tool includes the engine/core/os module and applies it
-    itself.
+    not CMake executables. sdl_gpu's separately configured shader tool (plugins/sdl_gpu/shader_tool) includes the
+    engine/core/os module and applies it itself.
   - Windows 10 1903 and later honour the declaration; earlier versions ignore it and the process takes the system
     setting, which engine/core/os does not depend on (Invariant 5). Whether Proton and Wine honour it is not verified
     (open decision 20); `longPathAware` is not declared (open decision 21), since it takes effect only where the
@@ -303,7 +303,7 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/core/os and the host shader tool, plugins, games and tools), fstream, `fopen`
+- **R4**: in runtime code (engine outside engine/core/os, plugins, games and tools), fstream, `fopen`
   and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
 - **R5**: in engine/core/os, an include of anything but the standard library, OS headers, `engine/core/base` and
@@ -394,9 +394,11 @@ Known blind spots, left to review:
    preprocessor condition (R2) and call no listed OS or CRT-split API (R3). A non-os target gets no
    OS-identifying compile definition from CMake. Compiler and architecture macros are not OS branches. Exceptions
    live only in an owner's ratchet allowlist.
-2. **Native file access goes through engine/core/os only** (R4). Runtime code in engine (outside engine/core/os and the host
-   shader tool, engine/core/io included), plugins, games and tools uses no fstream, `fopen` or `_wfopen` and no
-   `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
+2. **Native file access goes through engine/core/os only** (R4). Runtime code in engine (outside engine/core/os,
+   engine/core/io included), plugins, games and tools uses no fstream, `fopen` or `_wfopen` and no
+   `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. The
+   shader tool has no exception (it had one while it lived in master's engine/render): sdl_gpu's build-time shader
+   tool is runtime code under plugins/ and reads and writes files through SDL (v8-arch-gyo2-sdl-r2a). Files
    go through engine/core/io's abstraction, whose native backend calls engine/core/os; process facts come from engine/core/os
    directly. (master's engine/trace wrote its files through engine/core/os directly, os-subsystem open decision 2,
    D58; gyo2's trace Module writes through logging and has no such exception.) Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
