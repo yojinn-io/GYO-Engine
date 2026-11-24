@@ -205,7 +205,16 @@ System（都在公開的 set `kUiSet`）：
 
 ## 9. 留給 PvP 卡的接法
 
-（實作完成時補上：大廳要的 Module 列、`UiRoot` 的掛法、`UiAction` 的分派、位址欄的過濾函式、`TextInputRequest` 的順序。）
+大廳（PV12）的接線歸 PvP 移植卡。照下面接，整條路已由 `ui.lobby` 驗過（真的 `pvp_lobby.json`、真的字型、輸入 `Message` → `UiAction`、組字、送出、`RenderCommands`）。
+
+1. **產品的 Module 列**：客戶端的來源 World 帶 `world_ui`（它要的 `input`、`window`、`camera`、`world_asset` 都是 `default=yes`；明列 `units` 的產品要寫出來），渲染 World 帶 `ui_render`（和 `render_world`、`camera_render` 一起；R2b 的形）。來源 World 也要有 `world_render`（`camera_render` 抽相機的清除設定）。
+2. **loader**：`AssetLoaderRegistry::Register<Ui::UiDocumentLoader>()`、`Register<Text::FontLoader>()`。catalog 裡 `pvp_lobby.json` 的型別寫 `"ui"`、字型 `object_fps_pvp.font.ui` 的型別寫 `"font"`；文件讀好、引用的字型也讀好之後才畫（字型由 `world_ui` 從素材加進 `UiText`）。
+3. **掛上去**：生一個實體，`UiRoot{document = AssetRequests::Load<Ui::UiAsset>(id), canvas = "lobby"}`、`UiBindings{address, room, status, hint}`。相機不必指定（目標 0 上 `(order, entity)` 最大的那台；3D 場景＋HUD 時可以用 `UiRoot::camera` 指 HUD 的相機）。大廳關掉＝拿掉實體或換掉 `canvas`。
+4. **動作**：在 `Update`（或 `after` `WorldUi::kUiSet`）讀 `MessageReader<Ui::UiAction>`，照 `action` 分派（`pvp.submit_address` 的 payload 是字串，`pvp.refresh` 等沒有 payload）；處理完改寫 `UiBindings`（例：送出後把新的位址寫回 `address`；binding 被改時，編輯中的文字會被丟棄，UI-4）。
+5. **位址的字元過濾**（master 的 `Pvp/AddressText`）：放進 `UiRoot::filter`（`std::function<std::string(element, text)>`），只對確定的文字（打字、貼上、組字確定）作用。
+6. **輸入法**：`world_ui` 在文字框編輯時寫 `TextInputRequest`（開、候選窗的矩形，視窗的邏輯像素），編輯結束時寫一次關；`sdl_window` 下一幀套用。同一個 World 還有 ImGui 時，照 IN-4 由作者排先後（`world_ui` 只在自己的意思改變時寫）。
+7. **鍵的對應**：預設的 `MapUiInput` 就是大廳要的（Tab／Shift+Tab、Enter、Escape、編輯鍵、Ctrl 或 ⌘＋A／V）。要換手把或別的鍵：`UiOptions::defaultInputMapping = false`，自己寫 `Ui::UiInput` 這個 Resource（指標是視窗的邏輯像素）。
+8. **錯誤**：缺 binding、文件驗證不過等，寫在 `UiRootState::failure`（那一份文件不畫，World 照跑）；要顯示或記 log 由產品讀它。
 
 ## 10. 回報主會話
 

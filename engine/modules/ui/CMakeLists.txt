@@ -5,7 +5,10 @@
 add_library(gyo_ui STATIC
     src/UiColor.cpp
     src/UiDocumentCodec.cpp
+    src/UiDocumentLoader.cpp
+    src/UiRuntime.cpp
     src/UiSerialization.cpp
+    src/UiText.cpp
     src/UiValidation.cpp
 )
 add_library(GYO::Ui ALIAS gyo_ui)
@@ -17,7 +20,7 @@ target_include_directories(gyo_ui
 
 target_compile_features(gyo_ui PUBLIC cxx_std_20)
 # Links to core, ecs and orchestration are written here; links to other Modules come from config/modules.csv (O-6).
-target_link_libraries(gyo_ui PUBLIC GYO::Base GYO::Math)
+target_link_libraries(gyo_ui PUBLIC GYO::Base GYO::Math GYO::Kernel)
 gyo_link_registered_dependencies(ui)
 if(MSVC)
     target_compile_options(gyo_ui PRIVATE /W4 /permissive- /utf-8)
