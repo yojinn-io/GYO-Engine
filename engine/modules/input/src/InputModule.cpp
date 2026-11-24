@@ -99,7 +99,7 @@ SystemResult UpdateTextInput(Kernel::ResMut<TextInput> text, Kernel::MessageRead
     std::optional<Time::TimePoint> committedAt;
     for (const TextCommitted* event : commits.Read()) committedAt = event->time;
     if (last != nullptr && (!committedAt || last->time > *committedAt)) {
-        text.Get() = TextInput{last->text, last->cursor, last->selectionLength};
+        text.Get() = TextInput{last->text, last->cursorByte, last->selectionBytes};
     } else if (committedAt) {
         text.Get() = TextInput{};
     }

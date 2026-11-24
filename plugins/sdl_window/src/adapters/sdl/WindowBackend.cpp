@@ -98,6 +98,26 @@ void OrderTimes(Translated& translated, std::optional<Engine::Time::TimePoint>& 
     for (WindowItem& item : translated.window) std::visit([time](auto& m) { m.time = time; }, item);
 }
 
+EditingUnit EditingUnitOf(const char* videoDriver) noexcept {
+    return videoDriver != nullptr && std::string_view(videoDriver) == "windows" ? EditingUnit::Utf16 : EditingUnit::CodePoint;
+}
+
+std::int32_t EditingByteOffset(const std::string_view utf8, const std::int32_t units, const EditingUnit unit) noexcept {
+    if (units < 0) return -1;
+    std::int32_t left = units;
+    std::size_t offset = 0;
+    while (left > 0 && offset < utf8.size()) {
+        std::size_t next = offset + 1;
+        while (next < utf8.size() && (static_cast<unsigned char>(utf8[next]) & 0xC0U) == 0x80U) ++next;
+        // Four bytes of UTF-8 are a code point outside the Basic Multilingual Plane: two UTF-16 units.
+        const std::int32_t width = unit == EditingUnit::Utf16 && next - offset == 4 ? 2 : 1;
+        if (width > left) break;
+        left -= width;
+        offset = next;
+    }
+    return static_cast<std::int32_t>(offset);
+}
+
 Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const Engine::Time::TimePoint ceiling,
                      SDL_Window* window, const std::size_t clipboardLimit) {
     Translated out;
@@ -120,11 +140,20 @@ Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const E
         out.input.emplace_back(m);
         break;
     }
-    case SDL_EVENT_TEXT_EDITING:
+    case SDL_EVENT_TEXT_EDITING: {
         if (!OwnWindow(window, event.edit.windowID)) break;
-        out.input.emplace_back(In::TextComposition{event.edit.text != nullptr ? event.edit.text : "", event.edit.start,
-                                                   event.edit.length, time});
+        // input's unit is bytes of the text (TextComposition): SDL's units are converted here, at the edge.
+        In::TextComposition m;
+        m.text = event.edit.text != nullptr ? event.edit.text : "";
+        const EditingUnit unit = EditingUnitOf(SDL_GetCurrentVideoDriver());
+        m.cursorByte = EditingByteOffset(m.text, event.edit.start, unit);
+        if (event.edit.start >= 0 && event.edit.length >= 0) {
+            m.selectionBytes = EditingByteOffset(m.text, event.edit.start + event.edit.length, unit) - m.cursorByte;
+        }
+        m.time = time;
+        out.input.emplace_back(std::move(m));
         break;
+    }
     case SDL_EVENT_TEXT_INPUT:
         if (!OwnWindow(window, event.text.windowID)) break;
         out.input.emplace_back(In::TextCommitted{event.text.text != nullptr ? event.text.text : "", time});

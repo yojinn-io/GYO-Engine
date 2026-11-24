@@ -159,7 +159,7 @@ TEST_CASE("ui_text_field: a composition is drawn underlined with the caret in it
     const float emptyCaret = before.value().editArea->caretX;
 
     Ui::UiInput compose;
-    compose.text.push_back({Ui::UiTextInputKind::Composition, "がっこう", 2});
+    compose.text.push_back({Ui::UiTextInputKind::Composition, "がっこう", 6});
     REQUIRE(runtime.Update(compose, empty, kViewport, text));
     auto frame = runtime.Compose(empty, kViewport, text);
     REQUIRE(frame);
@@ -180,7 +180,7 @@ TEST_CASE("ui_text_field: a composition is drawn underlined with the caret in it
     CHECK_MESSAGE(underline, "[ui-composition-underline]");
     REQUIRE(frame.value().editArea);
     const float caret = frame.value().editArea->caretX;
-    // Cursor 2 (UTF-16 units): after "がっ", about half way through the text.
+    // Cursor at byte 6: after "がっ", about half way through the text.
     CHECK_MESSAGE((caret > emptyCaret + 20.0F && caret < emptyCaret + 60.0F), "[ui-composition-caret] " << caret);
     // The commit ends the composition and replaces it; the activate submits the committed text (UI-5).
     Ui::UiInput commit;
@@ -190,14 +190,4 @@ TEST_CASE("ui_text_field: a composition is drawn underlined with the caret in it
     REQUIRE(submitted);
     REQUIRE(submitted.value().size() == 1);
     CHECK(std::get<std::string>(submitted.value()[0].payload) == "学校");
-}
-
-TEST_CASE("ui_text_field: UTF-16 offsets count a code point outside the Basic Multilingual Plane twice") {
-    CHECK(Ui::UiUtf16Offset("abc", 2) == 2);
-    CHECK(Ui::UiUtf16Offset("がっこう", 2) == 6);
-    // U+1F600 is four bytes of UTF-8 and two UTF-16 units.
-    const std::string emoji = "a\xF0\x9F\x98\x80" "b";
-    CHECK_MESSAGE(Ui::UiUtf16Offset(emoji, 3) == 5, "[ui-utf16-surrogates]");
-    CHECK(Ui::UiUtf16Offset(emoji, 2) == 1);
-    CHECK(Ui::UiUtf16Offset(emoji, 99) == emoji.size());
 }

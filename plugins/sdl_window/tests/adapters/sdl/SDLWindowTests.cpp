@@ -243,6 +243,42 @@ TEST_CASE("sdl_window: logical pixels per SDL window coordinate") {
     CHECK_MESSAGE(Adapter::LogicalPerCoordinate(0.0F, 2.0F) == 1.0F, "[sw-coord-unknown] no usable value: 1");
 }
 
+TEST_CASE("sdl_window: the input method's positions become bytes of the composition") {
+    using Adapter::EditingByteOffset;
+    using Adapter::EditingUnit;
+    // が is 3 bytes, a 1, U+1F600 4 (two UTF-16 units).
+    const std::string_view text = "\xE3\x81\x8C" "a" "\xF0\x9F\x98\x80" "b";
+    CHECK_MESSAGE(EditingByteOffset(text, 2, EditingUnit::CodePoint) == 4, "[sw-ime-codepoints]");
+    CHECK(EditingByteOffset(text, 3, EditingUnit::CodePoint) == 8);
+    CHECK_MESSAGE(EditingByteOffset(text, 4, EditingUnit::Utf16) == 8, "[sw-ime-utf16]");
+    CHECK_MESSAGE(EditingByteOffset(text, 3, EditingUnit::Utf16) == 4, "[sw-ime-utf16-inside] inside a pair: rounds down");
+    CHECK(EditingByteOffset(text, 99, EditingUnit::CodePoint) == static_cast<std::int32_t>(text.size()));
+    CHECK_MESSAGE(EditingByteOffset(text, -1, EditingUnit::CodePoint) == -1, "[sw-ime-not-given]");
+    CHECK_MESSAGE(Adapter::EditingUnitOf("windows") == EditingUnit::Utf16, "[sw-ime-unit-windows]");
+    CHECK(Adapter::EditingUnitOf("cocoa") == EditingUnit::CodePoint);
+    CHECK(Adapter::EditingUnitOf(nullptr) == EditingUnit::CodePoint);
+}
+
+TEST_CASE("sdl_window: a text editing event becomes a TextComposition in bytes") {
+    auto backend = MakeBackend();
+    Drain(*backend);
+    SDL_Event edit{};
+    edit.type = SDL_EVENT_TEXT_EDITING;
+    edit.edit.windowID = IdOf(*backend);
+    edit.edit.text = "\xE3\x81\x8C\xE3\x81\xA3\xE3\x81\x93";  // がっこ
+    edit.edit.start = 1;
+    edit.edit.length = 2;
+    Push(edit);
+    S::EventQueue queue(16, 16);
+    backend->Pump(queue);
+    const auto input = queue.TakeInput();
+    REQUIRE(input.size() == 1);
+    const auto& composition = std::get<I::TextComposition>(input[0]);
+    // The dummy driver is not "windows": code points.
+    CHECK_MESSAGE(composition.cursorByte == 3, "[sw-ime-cursor-bytes]");
+    CHECK_MESSAGE(composition.selectionBytes == 6, "[sw-ime-selection-bytes]");
+}
+
 TEST_CASE("sdl_window: an event's time is on the engine base, no later than its delivery (SDL-3)") {
     auto backend = MakeBackend();
     Drain(*backend);

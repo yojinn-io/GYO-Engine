@@ -563,7 +563,7 @@ void ApplyTextInput(TextEdit& edit, const UiTextInput& input, const UiElement& f
     }
     case UiTextInputKind::Composition:
         edit.composition = UiSingleLineText(input.text);
-        edit.compositionCursor = input.cursor;
+        edit.compositionCursor = input.cursorByte;
         break;
     case UiTextInputKind::Backspace:
         if (clearSelection() || edit.cursor == 0) break;
@@ -674,9 +674,10 @@ void AppendEditMarks(const PlacedText& placed, const TextEdit& edit, const std::
                 {placed.origin.x + r.x, placed.origin.y + r.y + r.height - thickness, r.width, thickness}, color, clip});
         }
     }
+    // The composition's caret is in bytes of the composition (input's unit); SnapToGrapheme keeps it on a boundary.
     const std::size_t cursor = edit.compositionCursor < 0
         ? edit.cursor + edit.composition.size()
-        : edit.cursor + UiUtf16Offset(edit.composition, static_cast<std::size_t>(edit.compositionCursor));
+        : edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursor), edit.composition.size());
     const Text::CaretRect caret = Text::CaretAt(layout, Text::Caret{SnapToGrapheme(layout, cursor)});
     const float width = Math::Max(1.0F, std::round(sizePx * kCaretWidth));
     drawList.commands.emplace_back(UiQuadDraw{
@@ -885,19 +886,6 @@ std::string UiSingleLineText(const std::string_view utf8) {
         index += length;
     }
     return result;
-}
-
-std::size_t UiUtf16Offset(const std::string_view utf8, std::size_t units) noexcept {
-    std::size_t offset = 0;
-    while (units > 0 && offset < utf8.size()) {
-        const std::size_t next = UiNextCodePoint(utf8, offset);
-        // Four bytes of UTF-8 are a code point outside the Basic Multilingual Plane: two UTF-16 code units.
-        const std::size_t width = next - offset == 4 ? 2U : 1U;
-        if (width > units) break;
-        units -= width;
-        offset = next;
-    }
-    return offset;
 }
 
 UiCanvasFit FitDesignCanvas(Math::Vec2 designSize, UiViewport viewport) noexcept {

@@ -90,24 +90,11 @@
         "ui 4.4"
       ],
       "file": "engine/modules/ui/src/UiRuntime.cpp",
-      "find": ": edit.cursor + UiUtf16Offset(edit.composition, static_cast<std::size_t>(edit.compositionCursor));",
+      "find": ": edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursor), edit.composition.size());",
       "replace": ": edit.cursor + edit.composition.size();",
       "target": "gyo_ui_tests",
       "cases": "ui_text_field:*",
       "expect": "\\[ui\\-composition\\-caret\\]"
-    },
-    {
-      "id": "ui-utf16-no-surrogates",
-      "what": "UTF-16 offsets count every code point once",
-      "guards": [
-        "ui 4.4"
-      ],
-      "file": "engine/modules/ui/src/UiRuntime.cpp",
-      "find": "const std::size_t width = next - offset == 4 ? 2U : 1U;",
-      "replace": "const std::size_t width = 1U;",
-      "target": "gyo_ui_tests",
-      "cases": "ui_text_field:*",
-      "expect": "\\[ui\\-utf16\\-surrogates\\]"
     },
     {
       "id": "ui-edit-area-inset",

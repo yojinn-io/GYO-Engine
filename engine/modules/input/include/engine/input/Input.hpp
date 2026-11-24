@@ -144,14 +144,14 @@ struct MouseWheel final {
     Time::TimePoint time{};
 };
 
-// The input method's composition changed (Bevy's Ime::Preedit): the text being composed (UTF-8), the start and the
-// length of the selected part as the backend gives them (SDL: in the platform's units, UTF-16 code units on Windows
-// and macOS, SDL_windowskeyboard.c:924-928, SDL_cocoakeyboard.m:148; -1: not given). An empty text ends the
-// composition.
+// The input method's composition changed (Bevy's Ime::Preedit): the text being composed (UTF-8), and the start and
+// the length of its selected part in bytes of text, on code point boundaries (-1: not given). A backend converts its
+// platform's unit at its edge, as winit does for Bevy (Ime::Preedit's cursor is a byte range, bevy_window
+// event.rs:276-284): every reader then indexes text directly. An empty text ends the composition.
 struct TextComposition final {
     std::string text;
-    std::int32_t cursor = -1;
-    std::int32_t selectionLength = -1;
+    std::int32_t cursorByte = -1;
+    std::int32_t selectionBytes = -1;
     Time::TimePoint time{};
 };
 
@@ -223,8 +223,9 @@ struct CursorPosition final {
 // The composition in progress (the last TextComposition, cleared by a TextCommitted or an empty composition).
 struct TextInput final {
     std::string composition;
-    std::int32_t cursor = -1;
-    std::int32_t selectionLength = -1;
+    // Bytes of composition, as TextComposition's.
+    std::int32_t cursorByte = -1;
+    std::int32_t selectionBytes = -1;
 };
 
 // What ui or ImGui asks of the input method, read by the backend each frame and applied a frame later (Bevy's

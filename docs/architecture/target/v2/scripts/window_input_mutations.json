@@ -1,457 +1,513 @@
 {
- "version": 1,
- "description": "Declared mutants of the input and window Modules, window_camera, the sdl library's clock pairing and sdl_window (batch W, v8-arch-gyo2-sdl-w; Design Invariants IN-1 to IN-5 in docs/architecture/target/v2/input.zh-Hant.md, WN-1 to WN-4 in window.zh-Hant.md, SDL-3 and SDL-7 in sdl.zh-Hant.md; ids in-, wn-, wc-, sc-, sw-). A mutant is killed only when the named test case fails with the expected message.",
- "mutants": [
-  {
-   "id": "in-repeat-press",
-   "what": "a press of a held key (a repeat) is a new press",
-   "guards": [
-    "input IN-3"
-   ],
-   "file": "engine/modules/input/include/engine/input/Input.hpp",
-   "find": "        if (Contains(pressed_, button)) return;\n        pressed_.push_back(button);",
-   "replace": "        pressed_.push_back(button);",
-   "target": "gyo_input_tests",
-   "cases": "input: a repeat*",
-   "expect": "\\[in\\-repeat\\-not\\-press\\]"
-  },
-  {
-   "id": "in-unheld-release",
-   "what": "the release of a key not held counts as a release",
-   "guards": [
-    "input IN-3"
-   ],
-   "file": "engine/modules/input/include/engine/input/Input.hpp",
-   "find": "        if (found == pressed_.end()) return;",
-   "replace": "        if (found == pressed_.end()) {\n            justReleased_.push_back(button);\n            return;\n        }",
-   "target": "gyo_input_tests",
-   "cases": "input: a repeat*",
-   "expect": "\\[in\\-unheld\\-release\\]"
-  },
-  {
-   "id": "in-focus-ignored",
-   "what": "a focus loss releases nothing",
-   "guards": [
-    "input IN-3"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "    if (lost || droppedAny) state.ReleaseAll();",
-   "replace": "    if (droppedAny) state.ReleaseAll();",
-   "target": "gyo_input_tests",
-   "cases": "input: a focus loss*",
-   "expect": "\\[in\\-focus\\-releases\\-keys\\]"
-  },
-  {
-   "id": "in-dropped-ignored",
-   "what": "dropped events release no key",
-   "guards": [
-    "input IN-3"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "    if (lost || droppedAny) state.ReleaseAll();",
-   "replace": "    if (lost) state.ReleaseAll();",
-   "target": "gyo_input_tests",
-   "cases": "input: dropped events*",
-   "expect": "\\[in\\-dropped\\-keys\\]"
-  },
-  {
-   "id": "in-dropped-buttons-ignored",
-   "what": "dropped events release no mouse button",
-   "guards": [
-    "input IN-3"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "    if (!dropped.Read().empty()) state.ReleaseAll();",
-   "replace": "    static_cast<void>(dropped.Read());",
-   "target": "gyo_input_tests",
-   "cases": "input: dropped events*",
-   "expect": "\\[in\\-dropped\\-buttons\\]"
-  },
-  {
-   "id": "in-motion-carried",
-   "what": "the mouse motion sum carries over to the next frame",
-   "guards": [
-    "input IN-2"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "    motion.Get().delta = moved;",
-   "replace": "    motion.Get().delta = motion.Read().delta + moved;",
-   "target": "gyo_input_tests",
-   "cases": "input: the mouse sums*",
-   "expect": "\\[in\\-motion\\-reset\\]"
-  },
-  {
-   "id": "in-cursor-left-ignored",
-   "what": "leaving the window keeps the cursor's place",
-   "guards": [
-    "input IN-2"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "        cursor.Get().position.reset();",
-   "replace": "        static_cast<void>(0);",
-   "target": "gyo_input_tests",
-   "cases": "input: the cursor*",
-   "expect": "\\[in\\-cursor\\-left\\]"
-  },
-  {
-   "id": "in-commit-ignored",
-   "what": "a commit leaves the composition",
-   "guards": [
-    "input IN-2"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "        text.Get() = TextInput{};",
-   "replace": "        static_cast<void>(0);",
-   "target": "gyo_input_tests",
-   "cases": "input: the composition*",
-   "expect": "\\[in\\-commit\\-clears\\]"
-  },
-  {
-   "id": "in-set-missing",
-   "what": "the state Systems are not in kInputSet: the set has no member, and the kernel refuses a writer's before naming it at startup",
-   "guards": [
-    "input IN-4",
-    "orchestration O-12"
-   ],
-   "file": "engine/modules/input/src/InputModule.cpp",
-   "find": "    mount.sets.push_back(std::string(kInputSet));",
-   "replace": "",
-   "target": "gyo_input_tests",
-   "cases": "input: a key press*",
-   "expect": "World\\ 'Main':\\ kernel\\ startup\\ errors"
-  },
-  {
-   "id": "wn-close-ignored",
-   "what": "a close request does not set close",
-   "guards": [
-    "window WN-4"
-   ],
-   "file": "engine/modules/window/src/WindowModule.cpp",
-   "find": "    if (!closeRequested.Read().empty() && request.Read().closeWhenRequested) request.Get().close = true;",
-   "replace": "    static_cast<void>(closeRequested.Read());",
-   "target": "gyo_input_tests",
-   "cases": "window: the state*",
-   "expect": "\\[wn\\-close\\-when\\-requested\\]"
-  },
-  {
-   "id": "wn-close-always",
-   "what": "close is set even with closeWhenRequested off",
-   "guards": [
-    "window WN-4"
-   ],
-   "file": "engine/modules/window/src/WindowModule.cpp",
-   "find": "    if (!closeRequested.Read().empty() && request.Read().closeWhenRequested) request.Get().close = true;",
-   "replace": "    if (!closeRequested.Read().empty()) request.Get().close = true;",
-   "target": "gyo_input_tests",
-   "cases": "window: closeWhenRequested*",
-   "expect": "\\[wn\\-close\\-left\\-to\\-game\\]"
-  },
-  {
-   "id": "wn-settings-ignored",
-   "what": "WindowSettings::closeWhenRequested is not read",
-   "guards": [
-    "window WN-4"
-   ],
-   "file": "engine/modules/window/src/WindowModule.cpp",
-   "find": "    closeWhenRequested_ = settings != nullptr ? settings->closeWhenRequested : WindowSettings{}.closeWhenRequested;",
-   "replace": "    closeWhenRequested_ = true;",
-   "target": "gyo_input_tests",
-   "cases": "window: closeWhenRequested*",
-   "expect": "\\[wn\\-close\\-left\\-to\\-game\\]"
-  },
-  {
-   "id": "wn-known-not-set",
-   "what": "a WindowResized does not mark the size known",
-   "guards": [
-    "window WN-2"
-   ],
-   "file": "engine/modules/window/src/WindowModule.cpp",
-   "find": "        s.known = true;",
-   "replace": "",
-   "target": "gyo_input_tests",
-   "cases": "window: the state*",
-   "expect": "\\[wn\\-known\\]"
-  },
-  {
-   "id": "wn-clipboard-ignored",
-   "what": "ClipboardChanged does not reach the mirror",
-   "guards": [
-    "window WN-2"
-   ],
-   "file": "engine/modules/window/src/WindowModule.cpp",
-   "find": "    if (!texts.empty()) clipboard.Get() = Clipboard{texts.back()->text, texts.back()->truncated};",
-   "replace": "",
-   "target": "gyo_input_tests",
-   "cases": "window: the state*",
-   "expect": "\\[wn\\-clipboard\\]"
-  },
-  {
-   "id": "wc-unknown-written",
-   "what": "window_camera writes a size the window does not know yet",
-   "guards": [
-    "window window_camera"
-   ],
-   "file": "engine/modules/window_camera/src/WindowCameraModule.cpp",
-   "find": "    if (!state.known) return {};",
-   "replace": "",
-   "target": "gyo_input_tests",
-   "cases": "window_camera:*",
-   "expect": "\\[wc\\-none\\-unknown\\]"
-  },
-  {
-   "id": "sc-midpoint",
-   "what": "the pair's engine time is the first read, not the midpoint",
-   "guards": [
-    "sdl SDL-3"
-   ],
-   "file": "plugins/sdl/src/ClockPair.cpp",
-   "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
-   "replace": "    return {engineBefore, sdlNs, engineAfter - engineBefore};",
-   "target": "gyo_sdl_tests",
-   "cases": "clock: MakeClockPair*",
-   "expect": "\\[sc\\-midpoint\\]"
-  },
-  {
-   "id": "sc-read-order",
-   "what": "SDL's clock is read first",
-   "guards": [
-    "sdl SDL-3"
-   ],
-   "file": "plugins/sdl/src/ClockPair.cpp",
-   "find": "    const Engine::Time::TimePoint before = readers.engine();\n    const std::uint64_t sdl = readers.sdl();",
-   "replace": "    const std::uint64_t sdl = readers.sdl();\n    const Engine::Time::TimePoint before = readers.engine();",
-   "target": "gyo_sdl_tests",
-   "cases": "clock: SampleClockPair*",
-   "expect": "\\[sc\\-read\\-order\\]"
-  },
-  {
-   "id": "sc-no-ceiling",
-   "what": "a converted time may be later than its delivery",
-   "guards": [
-    "sdl SDL-3 (1)"
-   ],
-   "file": "plugins/sdl/src/ClockPair.cpp",
-   "find": "    return converted < ceiling ? converted : ceiling;",
-   "replace": "    return converted;",
-   "target": "gyo_sdl_tests",
-   "cases": "clock: promise (1)*",
-   "expect": "\\[sc\\-ceiling\\]"
-  },
-  {
-   "id": "sc-zero-converted",
-   "what": "SDL time 0 is converted like any other",
-   "guards": [
-    "sdl SDL-3 (3)"
-   ],
-   "file": "plugins/sdl/src/ClockPair.cpp",
-   "find": "    if (sdlNs == 0) return ceiling;",
-   "replace": "",
-   "target": "gyo_sdl_tests",
-   "cases": "clock: promise (3)*",
-   "expect": "\\[sc\\-zero\\]"
-  },
-  {
-   "id": "sw-writer-unordered",
-   "what": "sdl_window's writers are not ordered before input's and window's sets",
-   "guards": [
-    "input IN-4",
-    "orchestration O-12",
-    "v8-arch-gyo2-sdl-input-writer-preupdate"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "    mount.before.push_back(std::string(beforeSet));",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a key pushed*",
-   "expect": "\\[sw\\-order\\-same\\-frame\\]"
-  },
-  {
-   "id": "sw-motion-missing",
-   "what": "a mouse motion becomes no MouseMotion (G4)",
-   "guards": [
-    "sdl SDL-7"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "        out.input.emplace_back(In::MouseMotion{{event.motion.xrel, event.motion.yrel}, time});\n",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: SDL events*",
-   "expect": "\\[sw\\-map\\-input\\-count\\]"
-  },
-  {
-   "id": "sw-focus-input-missing",
-   "what": "a focus loss becomes no KeyboardFocusLost",
-   "guards": [
-    "sdl SDL-7"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "        out.input.emplace_back(In::KeyboardFocusLost{time});\n",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a focus loss*",
-   "expect": "\\[sw\\-focus\\-input\\]"
-  },
-  {
-   "id": "sw-other-window",
-   "what": "a key event of another window is translated",
-   "guards": [
-    "sdl SDL-7"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "        if (!OwnWindow(window, event.key.windowID)) break;\n        In::KeyboardInput m;",
-   "replace": "        In::KeyboardInput m;",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: SDL events*",
-   "expect": "\\[sw\\-map\\-input\\-count\\]"
-  },
-  {
-   "id": "sw-quit-dropped",
-   "what": "SDL's quit becomes nothing",
-   "guards": [
-    "sdl SDL-7",
-    "window WN-4"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "        out.window.emplace_back(Win::WindowCloseRequested{Win::CloseSource::Application, time});",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: SDL events*",
-   "expect": "\\[sw\\-map\\-window\\-count\\]"
-  },
-  {
-   "id": "sw-drop-uncounted",
-   "what": "a dropped event is not counted",
-   "guards": [
-    "sdl SDL-7 (1)"
-   ],
-   "file": "plugins/sdl_window/src/EventQueue.hpp",
-   "find": "            ++dropped_;\n",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a full queue*",
-   "expect": "\\[sw\\-drop\\-count\\]"
-  },
-  {
-   "id": "sw-drop-partial",
-   "what": "an event is accepted while there is any room, even if its Messages do not fit",
-   "guards": [
-    "sdl SDL-7 (1)"
-   ],
-   "file": "plugins/sdl_window/src/EventQueue.hpp",
-   "find": "        if (input_.size() + translated.input.size() > inputCapacity_ ||",
-   "replace": "        if (input_.size() >= inputCapacity_ ||",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a full queue*",
-   "expect": "\\[sw\\-drop\\-kept\\]"
-  },
-  {
-   "id": "sw-dropped-not-written",
-   "what": "the drop count is not written as InputEventsDropped",
-   "guards": [
-    "sdl SDL-7 (1)",
-    "input IN-3"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "        dropped.Send(In::InputEventsDropped{count, Engine::Time::Now()});",
-   "replace": "        static_cast<void>(count);",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: dropped events*",
-   "expect": "\\[sw\\-dropped\\-reaches\\-input\\]"
-  },
-  {
-   "id": "sw-snapshot-missing",
-   "what": "a new World's first round does not write the window's size (the first World also gets the size SDL's dummy driver sends when the window is made; a replaced World gets it only from the snapshot)",
-   "guards": [
-    "sdl SDL-7 (2)",
-    "window WN-3"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "            resized.Send(Win::WindowResized{now.physicalSize, now.scaleFactor, at});",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a new World*",
-   "expect": "\\[sw\\-replaced\\-known\\]"
-  },
-  {
-   "id": "sw-close-not-applied",
-   "what": "WindowRequest::close is not applied",
-   "guards": [
-    "window WN-4"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "    if (window.Present() && window->close) service.Close();",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: the close request*",
-   "expect": "\\[sw\\-close\\-applied\\]"
-  },
-  {
-   "id": "sw-text-input-ignored",
-   "what": "the text input request is not applied",
-   "guards": [
-    "input IN-1",
-    "sdl SDL-7"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "        apply(backend->SetTextInput(*textInput), applied.textInput, *textInput);",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: the requests*",
-   "expect": "\\[sw\\-request\\-text\\-input\\]"
-  },
-  {
-   "id": "sw-window-capacity-shared",
-   "what": "the window Messages share the input bound (a flood of input crowds out a close request)",
-   "guards": [
-    "sdl SDL-7 (1)",
-    "window WN-4"
-   ],
-   "file": "plugins/sdl_window/src/EventQueue.hpp",
-   "find": "            window_.size() + translated.window.size() > windowCapacity_) {",
-   "replace": "            input_.size() + window_.size() + translated.Size() > inputCapacity_) {",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a flood of input*",
-   "expect": "\\[sw\\-window\\-own\\-room\\]"
-  },
-  {
-   "id": "sw-times-unordered",
-   "what": "times within a pump are left as SDL stamped them",
-   "guards": [
-    "sdl SDL-3",
-    "input IN-2"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "    if (last && time <= *last) time = *last + std::chrono::nanoseconds(1);\n",
-   "replace": "",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: within one pump*",
-   "expect": "\\[sw\\-times\\-increase\\]"
-  },
-  {
-   "id": "sw-e1-not-reported",
-   "what": "a window that cannot be made is not reported as SDL-E1",
-   "guards": [
-    "sdl sdl_window"
-   ],
-   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
-   "find": "setup.Report(\"SDL-E1\",",
-   "replace": "setup.Report(\"SDL-EX\",",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: a window that cannot be made*",
-   "expect": "\\[sw\\-e1\\-code\\]"
-  },
-  {
-   "id": "sw-coord-inverted",
-   "what": "logical pixels per coordinate are display scale / pixel density",
-   "guards": [
-    "sdl sdl_window (coordinates)"
-   ],
-   "file": "plugins/sdl_window/src/adapters/sdl/Translate.hpp",
-   "find": "pixelDensity / displayScale : 1.0F;",
-   "replace": "displayScale / pixelDensity : 1.0F;",
-   "target": "gyo_sdl_window_tests",
-   "cases": "sdl_window: logical pixels*",
-   "expect": "\\[sw\\-coord\\-windows\\-150\\]"
-  }
- ]
+  "version": 1,
+  "description": "Declared mutants of the input and window Modules, window_camera, the sdl library's clock pairing and sdl_window (batch W, v8-arch-gyo2-sdl-w; Design Invariants IN-1 to IN-5 in docs/architecture/target/v2/input.zh-Hant.md, WN-1 to WN-4 in window.zh-Hant.md, SDL-3 and SDL-7 in sdl.zh-Hant.md; ids in-, wn-, wc-, sc-, sw-). A mutant is killed only when the named test case fails with the expected message.",
+  "mutants": [
+    {
+      "id": "in-repeat-press",
+      "what": "a press of a held key (a repeat) is a new press",
+      "guards": [
+        "input IN-3"
+      ],
+      "file": "engine/modules/input/include/engine/input/Input.hpp",
+      "find": "        if (Contains(pressed_, button)) return;\n        pressed_.push_back(button);",
+      "replace": "        pressed_.push_back(button);",
+      "target": "gyo_input_tests",
+      "cases": "input: a repeat*",
+      "expect": "\\[in\\-repeat\\-not\\-press\\]"
+    },
+    {
+      "id": "in-unheld-release",
+      "what": "the release of a key not held counts as a release",
+      "guards": [
+        "input IN-3"
+      ],
+      "file": "engine/modules/input/include/engine/input/Input.hpp",
+      "find": "        if (found == pressed_.end()) return;",
+      "replace": "        if (found == pressed_.end()) {\n            justReleased_.push_back(button);\n            return;\n        }",
+      "target": "gyo_input_tests",
+      "cases": "input: a repeat*",
+      "expect": "\\[in\\-unheld\\-release\\]"
+    },
+    {
+      "id": "in-focus-ignored",
+      "what": "a focus loss releases nothing",
+      "guards": [
+        "input IN-3"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "    if (lost || droppedAny) state.ReleaseAll();",
+      "replace": "    if (droppedAny) state.ReleaseAll();",
+      "target": "gyo_input_tests",
+      "cases": "input: a focus loss*",
+      "expect": "\\[in\\-focus\\-releases\\-keys\\]"
+    },
+    {
+      "id": "in-dropped-ignored",
+      "what": "dropped events release no key",
+      "guards": [
+        "input IN-3"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "    if (lost || droppedAny) state.ReleaseAll();",
+      "replace": "    if (lost) state.ReleaseAll();",
+      "target": "gyo_input_tests",
+      "cases": "input: dropped events*",
+      "expect": "\\[in\\-dropped\\-keys\\]"
+    },
+    {
+      "id": "in-dropped-buttons-ignored",
+      "what": "dropped events release no mouse button",
+      "guards": [
+        "input IN-3"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "    if (!dropped.Read().empty()) state.ReleaseAll();",
+      "replace": "    static_cast<void>(dropped.Read());",
+      "target": "gyo_input_tests",
+      "cases": "input: dropped events*",
+      "expect": "\\[in\\-dropped\\-buttons\\]"
+    },
+    {
+      "id": "in-motion-carried",
+      "what": "the mouse motion sum carries over to the next frame",
+      "guards": [
+        "input IN-2"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "    motion.Get().delta = moved;",
+      "replace": "    motion.Get().delta = motion.Read().delta + moved;",
+      "target": "gyo_input_tests",
+      "cases": "input: the mouse sums*",
+      "expect": "\\[in\\-motion\\-reset\\]"
+    },
+    {
+      "id": "in-cursor-left-ignored",
+      "what": "leaving the window keeps the cursor's place",
+      "guards": [
+        "input IN-2"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "        cursor.Get().position.reset();",
+      "replace": "        static_cast<void>(0);",
+      "target": "gyo_input_tests",
+      "cases": "input: the cursor*",
+      "expect": "\\[in\\-cursor\\-left\\]"
+    },
+    {
+      "id": "in-commit-ignored",
+      "what": "a commit leaves the composition",
+      "guards": [
+        "input IN-2"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "        text.Get() = TextInput{};",
+      "replace": "        static_cast<void>(0);",
+      "target": "gyo_input_tests",
+      "cases": "input: the composition*",
+      "expect": "\\[in\\-commit\\-clears\\]"
+    },
+    {
+      "id": "in-set-missing",
+      "what": "the state Systems are not in kInputSet: the set has no member, and the kernel refuses a writer's before naming it at startup",
+      "guards": [
+        "input IN-4",
+        "orchestration O-12"
+      ],
+      "file": "engine/modules/input/src/InputModule.cpp",
+      "find": "    mount.sets.push_back(std::string(kInputSet));",
+      "replace": "",
+      "target": "gyo_input_tests",
+      "cases": "input: a key press*",
+      "expect": "World\\ 'Main':\\ kernel\\ startup\\ errors"
+    },
+    {
+      "id": "wn-close-ignored",
+      "what": "a close request does not set close",
+      "guards": [
+        "window WN-4"
+      ],
+      "file": "engine/modules/window/src/WindowModule.cpp",
+      "find": "    if (!closeRequested.Read().empty() && request.Read().closeWhenRequested) request.Get().close = true;",
+      "replace": "    static_cast<void>(closeRequested.Read());",
+      "target": "gyo_input_tests",
+      "cases": "window: the state*",
+      "expect": "\\[wn\\-close\\-when\\-requested\\]"
+    },
+    {
+      "id": "wn-close-always",
+      "what": "close is set even with closeWhenRequested off",
+      "guards": [
+        "window WN-4"
+      ],
+      "file": "engine/modules/window/src/WindowModule.cpp",
+      "find": "    if (!closeRequested.Read().empty() && request.Read().closeWhenRequested) request.Get().close = true;",
+      "replace": "    if (!closeRequested.Read().empty()) request.Get().close = true;",
+      "target": "gyo_input_tests",
+      "cases": "window: closeWhenRequested*",
+      "expect": "\\[wn\\-close\\-left\\-to\\-game\\]"
+    },
+    {
+      "id": "wn-settings-ignored",
+      "what": "WindowSettings::closeWhenRequested is not read",
+      "guards": [
+        "window WN-4"
+      ],
+      "file": "engine/modules/window/src/WindowModule.cpp",
+      "find": "    closeWhenRequested_ = settings != nullptr ? settings->closeWhenRequested : WindowSettings{}.closeWhenRequested;",
+      "replace": "    closeWhenRequested_ = true;",
+      "target": "gyo_input_tests",
+      "cases": "window: closeWhenRequested*",
+      "expect": "\\[wn\\-close\\-left\\-to\\-game\\]"
+    },
+    {
+      "id": "wn-known-not-set",
+      "what": "a WindowResized does not mark the size known",
+      "guards": [
+        "window WN-2"
+      ],
+      "file": "engine/modules/window/src/WindowModule.cpp",
+      "find": "        s.known = true;",
+      "replace": "",
+      "target": "gyo_input_tests",
+      "cases": "window: the state*",
+      "expect": "\\[wn\\-known\\]"
+    },
+    {
+      "id": "wn-clipboard-ignored",
+      "what": "ClipboardChanged does not reach the mirror",
+      "guards": [
+        "window WN-2"
+      ],
+      "file": "engine/modules/window/src/WindowModule.cpp",
+      "find": "    if (!texts.empty()) clipboard.Get() = Clipboard{texts.back()->text, texts.back()->truncated};",
+      "replace": "",
+      "target": "gyo_input_tests",
+      "cases": "window: the state*",
+      "expect": "\\[wn\\-clipboard\\]"
+    },
+    {
+      "id": "wc-unknown-written",
+      "what": "window_camera writes a size the window does not know yet",
+      "guards": [
+        "window window_camera"
+      ],
+      "file": "engine/modules/window_camera/src/WindowCameraModule.cpp",
+      "find": "    if (!state.known) return {};",
+      "replace": "",
+      "target": "gyo_input_tests",
+      "cases": "window_camera:*",
+      "expect": "\\[wc\\-none\\-unknown\\]"
+    },
+    {
+      "id": "sc-midpoint",
+      "what": "the pair's engine time is the first read, not the midpoint",
+      "guards": [
+        "sdl SDL-3"
+      ],
+      "file": "plugins/sdl/src/ClockPair.cpp",
+      "find": "    return {engineBefore + (engineAfter - engineBefore) / 2, sdlNs, engineAfter - engineBefore};",
+      "replace": "    return {engineBefore, sdlNs, engineAfter - engineBefore};",
+      "target": "gyo_sdl_tests",
+      "cases": "clock: MakeClockPair*",
+      "expect": "\\[sc\\-midpoint\\]"
+    },
+    {
+      "id": "sc-read-order",
+      "what": "SDL's clock is read first",
+      "guards": [
+        "sdl SDL-3"
+      ],
+      "file": "plugins/sdl/src/ClockPair.cpp",
+      "find": "    const Engine::Time::TimePoint before = readers.engine();\n    const std::uint64_t sdl = readers.sdl();",
+      "replace": "    const std::uint64_t sdl = readers.sdl();\n    const Engine::Time::TimePoint before = readers.engine();",
+      "target": "gyo_sdl_tests",
+      "cases": "clock: SampleClockPair*",
+      "expect": "\\[sc\\-read\\-order\\]"
+    },
+    {
+      "id": "sc-no-ceiling",
+      "what": "a converted time may be later than its delivery",
+      "guards": [
+        "sdl SDL-3 (1)"
+      ],
+      "file": "plugins/sdl/src/ClockPair.cpp",
+      "find": "    return converted < ceiling ? converted : ceiling;",
+      "replace": "    return converted;",
+      "target": "gyo_sdl_tests",
+      "cases": "clock: promise (1)*",
+      "expect": "\\[sc\\-ceiling\\]"
+    },
+    {
+      "id": "sc-zero-converted",
+      "what": "SDL time 0 is converted like any other",
+      "guards": [
+        "sdl SDL-3 (3)"
+      ],
+      "file": "plugins/sdl/src/ClockPair.cpp",
+      "find": "    if (sdlNs == 0) return ceiling;",
+      "replace": "",
+      "target": "gyo_sdl_tests",
+      "cases": "clock: promise (3)*",
+      "expect": "\\[sc\\-zero\\]"
+    },
+    {
+      "id": "sw-writer-unordered",
+      "what": "sdl_window's writers are not ordered before input's and window's sets",
+      "guards": [
+        "input IN-4",
+        "orchestration O-12",
+        "v8-arch-gyo2-sdl-input-writer-preupdate"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "    mount.before.push_back(std::string(beforeSet));",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a key pushed*",
+      "expect": "\\[sw\\-order\\-same\\-frame\\]"
+    },
+    {
+      "id": "sw-motion-missing",
+      "what": "a mouse motion becomes no MouseMotion (G4)",
+      "guards": [
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "        out.input.emplace_back(In::MouseMotion{{event.motion.xrel, event.motion.yrel}, time});\n",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: SDL events*",
+      "expect": "\\[sw\\-map\\-input\\-count\\]"
+    },
+    {
+      "id": "sw-focus-input-missing",
+      "what": "a focus loss becomes no KeyboardFocusLost",
+      "guards": [
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "        out.input.emplace_back(In::KeyboardFocusLost{time});\n",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a focus loss*",
+      "expect": "\\[sw\\-focus\\-input\\]"
+    },
+    {
+      "id": "sw-other-window",
+      "what": "a key event of another window is translated",
+      "guards": [
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "        if (!OwnWindow(window, event.key.windowID)) break;\n        In::KeyboardInput m;",
+      "replace": "        In::KeyboardInput m;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: SDL events*",
+      "expect": "\\[sw\\-map\\-input\\-count\\]"
+    },
+    {
+      "id": "sw-quit-dropped",
+      "what": "SDL's quit becomes nothing",
+      "guards": [
+        "sdl SDL-7",
+        "window WN-4"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "        out.window.emplace_back(Win::WindowCloseRequested{Win::CloseSource::Application, time});",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: SDL events*",
+      "expect": "\\[sw\\-map\\-window\\-count\\]"
+    },
+    {
+      "id": "sw-drop-uncounted",
+      "what": "a dropped event is not counted",
+      "guards": [
+        "sdl SDL-7 (1)"
+      ],
+      "file": "plugins/sdl_window/src/EventQueue.hpp",
+      "find": "            ++dropped_;\n",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a full queue*",
+      "expect": "\\[sw\\-drop\\-count\\]"
+    },
+    {
+      "id": "sw-drop-partial",
+      "what": "an event is accepted while there is any room, even if its Messages do not fit",
+      "guards": [
+        "sdl SDL-7 (1)"
+      ],
+      "file": "plugins/sdl_window/src/EventQueue.hpp",
+      "find": "        if (input_.size() + translated.input.size() > inputCapacity_ ||",
+      "replace": "        if (input_.size() >= inputCapacity_ ||",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a full queue*",
+      "expect": "\\[sw\\-drop\\-kept\\]"
+    },
+    {
+      "id": "sw-dropped-not-written",
+      "what": "the drop count is not written as InputEventsDropped",
+      "guards": [
+        "sdl SDL-7 (1)",
+        "input IN-3"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "        dropped.Send(In::InputEventsDropped{count, Engine::Time::Now()});",
+      "replace": "        static_cast<void>(count);",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: dropped events*",
+      "expect": "\\[sw\\-dropped\\-reaches\\-input\\]"
+    },
+    {
+      "id": "sw-snapshot-missing",
+      "what": "a new World's first round does not write the window's size (the first World also gets the size SDL's dummy driver sends when the window is made; a replaced World gets it only from the snapshot)",
+      "guards": [
+        "sdl SDL-7 (2)",
+        "window WN-3"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "            resized.Send(Win::WindowResized{now.physicalSize, now.scaleFactor, at});",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a new World*",
+      "expect": "\\[sw\\-replaced\\-known\\]"
+    },
+    {
+      "id": "sw-close-not-applied",
+      "what": "WindowRequest::close is not applied",
+      "guards": [
+        "window WN-4"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "    if (window.Present() && window->close) service.Close();",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: the close request*",
+      "expect": "\\[sw\\-close\\-applied\\]"
+    },
+    {
+      "id": "sw-text-input-ignored",
+      "what": "the text input request is not applied",
+      "guards": [
+        "input IN-1",
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "        apply(backend->SetTextInput(*textInput), applied.textInput, *textInput);",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: the requests*",
+      "expect": "\\[sw\\-request\\-text\\-input\\]"
+    },
+    {
+      "id": "sw-window-capacity-shared",
+      "what": "the window Messages share the input bound (a flood of input crowds out a close request)",
+      "guards": [
+        "sdl SDL-7 (1)",
+        "window WN-4"
+      ],
+      "file": "plugins/sdl_window/src/EventQueue.hpp",
+      "find": "            window_.size() + translated.window.size() > windowCapacity_) {",
+      "replace": "            input_.size() + window_.size() + translated.Size() > inputCapacity_) {",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a flood of input*",
+      "expect": "\\[sw\\-window\\-own\\-room\\]"
+    },
+    {
+      "id": "sw-times-unordered",
+      "what": "times within a pump are left as SDL stamped them",
+      "guards": [
+        "sdl SDL-3",
+        "input IN-2"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "    if (last && time <= *last) time = *last + std::chrono::nanoseconds(1);\n",
+      "replace": "",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: within one pump*",
+      "expect": "\\[sw\\-times\\-increase\\]"
+    },
+    {
+      "id": "sw-e1-not-reported",
+      "what": "a window that cannot be made is not reported as SDL-E1",
+      "guards": [
+        "sdl sdl_window"
+      ],
+      "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+      "find": "setup.Report(\"SDL-E1\",",
+      "replace": "setup.Report(\"SDL-EX\",",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a window that cannot be made*",
+      "expect": "\\[sw\\-e1\\-code\\]"
+    },
+    {
+      "id": "sw-coord-inverted",
+      "what": "logical pixels per coordinate are display scale / pixel density",
+      "guards": [
+        "sdl sdl_window (coordinates)"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/Translate.hpp",
+      "find": "pixelDensity / displayScale : 1.0F;",
+      "replace": "displayScale / pixelDensity : 1.0F;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: logical pixels*",
+      "expect": "\\[sw\\-coord\\-windows\\-150\\]"
+    },
+    {
+      "id": "sw-ime-units-as-bytes",
+      "what": "SDL's positions passed on as they are, not as bytes",
+      "guards": [
+        "input TextComposition",
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "        m.cursorByte = EditingByteOffset(m.text, event.edit.start, unit);",
+      "replace": "        m.cursorByte = event.edit.start;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a text editing*",
+      "expect": "\\[sw\\-ime\\-cursor\\-bytes\\]"
+    },
+    {
+      "id": "sw-ime-selection-as-length",
+      "what": "the selection passed on in SDL units",
+      "guards": [
+        "input TextComposition",
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "            m.selectionBytes = EditingByteOffset(m.text, event.edit.start + event.edit.length, unit) - m.cursorByte;",
+      "replace": "            m.selectionBytes = event.edit.length;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: a text editing*",
+      "expect": "\\[sw\\-ime\\-selection\\-bytes\\]"
+    },
+    {
+      "id": "sw-ime-utf16-single",
+      "what": "a UTF-16 surrogate pair counted as one unit",
+      "guards": [
+        "input TextComposition",
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "const std::int32_t width = unit == EditingUnit::Utf16 && next - offset == 4 ? 2 : 1;",
+      "replace": "const std::int32_t width = 1;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: the input method*",
+      "expect": "\\[sw\\-ime\\-utf16\\]"
+    },
+    {
+      "id": "sw-ime-windows-codepoints",
+      "what": "the Windows driver read as code points",
+      "guards": [
+        "input TextComposition",
+        "sdl SDL-7"
+      ],
+      "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+      "find": "return videoDriver != nullptr && std::string_view(videoDriver) == \"windows\" ? EditingUnit::Utf16 : EditingUnit::CodePoint;",
+      "replace": "return EditingUnit::CodePoint;",
+      "target": "gyo_sdl_window_tests",
+      "cases": "sdl_window: the input method*",
+      "expect": "\\[sw\\-ime\\-unit\\-windows\\]"
+    }
+  ]
 }

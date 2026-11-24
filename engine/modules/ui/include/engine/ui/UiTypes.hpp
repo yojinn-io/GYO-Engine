@@ -155,9 +155,8 @@ enum class UiTextInputKind : std::uint8_t {
 struct UiTextInput final {
     UiTextInputKind kind{UiTextInputKind::Insert};
     std::string text;
-    // Composition: the caret inside text in UTF-16 code units (the unit SDL reports on Windows and macOS; equal to
-    // code points inside the Basic Multilingual Plane); -1 at its end.
-    std::int32_t cursor{-1};
+    // Composition: the caret inside text in bytes (input's TextComposition::cursorByte); -1 at its end.
+    std::int32_t cursorByte{-1};
 
     friend bool operator==(const UiTextInput&, const UiTextInput&) = default;
 };

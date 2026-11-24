@@ -1,6 +1,6 @@
 # UI（`engine/modules/ui`）與 `world_ui`、`ui_render`
 
-更新：2026-11-24（新頁，SDL 線子批 U `v8-arch-gyo2-sdl-u`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.2 節 `GYO::Ui`、`UiRenderer` 兩列、第 3.3 節 `ui`、`world_ui`、`ui_render` 三列、第 6.6 節「`gyo.ui` 的節點模型」一列、第 10.2 節 U 列；前提 P17（ui 留 Engine，使用者 2026-11-13）。新 AGENTS（#296）之後，事前宣告寫完就動手；Design Invariants 沒有推翻使用者決定的條文，不逐條核准（照 R2b 的先例）。
+更新：2026-11-24（組字游標改成位元組，`v8-arch-gyo2-sdl-u` 的後續小 PR）；2026-11-24（新頁，SDL 線子批 U `v8-arch-gyo2-sdl-u`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.2 節 `GYO::Ui`、`UiRenderer` 兩列、第 3.3 節 `ui`、`world_ui`、`ui_render` 三列、第 6.6 節「`gyo.ui` 的節點模型」一列、第 10.2 節 U 列；前提 P17（ui 留 Engine，使用者 2026-11-13）。新 AGENTS（#296）之後，事前宣告寫完就動手；Design Invariants 沒有推翻使用者決定的條文，不逐條核准（照 R2b 的先例）。
 
 Owner：架構。程式：`engine/modules/ui/`（`GYO::Engine::Ui`，target `GYO::Ui`，函式庫）、`engine/modules/world_ui/`（`GYO::Engine::WorldUi`，登記單位 `WorldUiModule`，來源側）、`engine/modules/ui_render/`（`GYO::Engine::UiRender`，登記單位 `UiRenderModule`，渲染側）。行為測試：`tests/common/ui/`。
 
@@ -71,7 +71,7 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 | 文字框與輸入法 | `bevy_ui_widgets` 的文字輸入、`Window.ime_enabled`／`ime_position` | Godot：`LineEdit` 有 `ime_text`、開關輸入法並設位置（`scene/gui/line_edit.cpp:129-150`） | `world_ui` 寫 `TextInputRequest`（W 的請求資料）、讀 `TextComposition`／`TextCommitted` | 同 Bevy／Godot：請求資料、後端下一幀套用 |
 | 焦點 | `InputFocus` Resource、Tab 導覽（`bevy_input_focus`） | Godot：`focus_next`／`focus_neighbor_*` | 文件的 `focus_order`（資料契約）；每個根各有自己的焦點 | 照 master 的資料契約 |
 | 多個根之間的輸入 | picking 擋住下層（`Pickable`／`FocusPolicy`）、鍵盤焦點只有一個 `InputFocus` | — | **偏離**：這一幀的輸入給每個 `acceptsInput` 的根，不遮擋；根之間怎麼分是作者的事（用 `acceptsInput`）。master 一次只有一份文件，這是 GYO2 新的語意，`ui.world` 釘住 | 沒有點名的需求，不加機制；有了再比 Bevy 的 picking（UI-RC3） |
-| 輸入法組字游標的單位 | winit 在後端換成位元組（`bevy_window/src/event.rs:276-284`） | — | **偏離**：`input` 的 `TextComposition.cursor` 是平台的單位（W 定的），`ui` 照 UTF-16 換算（`UiUtf16Offset`） | 外部組件的單位漏出 adapter；轉主會話（第 10 節） |
+| 輸入法組字游標的單位 | winit 在後端換成位元組（`bevy_window/src/event.rs:276-284`） | — | 同 Bevy：`input` 的 `TextComposition.cursorByte` 是位元組，`sdl_window` 的 adapter 換算（2026-11-24 由平台的單位改過來，設計審查 S2） | — |
 
 ### 3.1 節點模型：文件樹（卡片照 L17 判；總宣告第 6.6 節要 U 比）
 
@@ -115,7 +115,7 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 - `UiText`（`world_ui` 登記的 Resource；型別在 `ui`）：`TextContext`、一個 `GlyphAtlas`（Alpha8）、字型表（素材 id → `FontId`）、排字的快取（文字、字型、像素大小 → `TextLayout`，一幀沒用到就丟）。同 Bevy 的 `FontAtlasSet`／`CosmicFontSystem` 是 main world 的 Resource（總宣告第 6.6 節 `text` 列的傾向）。
 - 字型的來源：`UiRoot` 的文件是素材時，`world_ui` 從 `AssetView` 讀引用的 `FontData` 加進去；作者也可以自己 `UiText::AddFont(id, data)`（測試、工具）。字型還沒到：那段文字不畫、互動照常（同 Bevy：字型沒讀好就不排）。
 - 排字：不自動換行（同 master；`\n` 照硬換行），排好之後照 `horizontal_align`／`vertical_align` 放進框；字形原點取整數像素（`text` 的 TX-8、`GlyphPlacement` 的畫法）。
-- 文字框：游標、選取、組字底線的位置用 `text` 的 `CaretAt`／`RangeRects`；滑鼠點用 `HitTest` 決定游標（**改進 master**：master 點下去游標一律在尾端）。編輯照 master 以 code point 為單位（`max_length` 數 code point）；畫游標時退到最近的字素邊界（`CaretAt` 只收字素邊界）。輸入法的組字游標照 `input` 的說明是平台的單位（Windows、macOS 是 UTF-16），換成位元組時照 UTF-16 數。
+- 文字框：游標、選取、組字底線的位置用 `text` 的 `CaretAt`／`RangeRects`；滑鼠點用 `HitTest` 決定游標（**改進 master**：master 點下去游標一律在尾端）。編輯照 master 以 code point 為單位（`max_length` 數 code point）；畫游標時退到最近的字素邊界（`CaretAt` 只收字素邊界）。輸入法的組字游標是組字字串的位元組（`input` 的 `TextComposition.cursorByte`，`sdl_window` 換好）。
 - 圖集滿了：`text` 開新頁（`GlyphAtlas` 的頁）；ui_render 每頁一張貼圖。
 
 ### 4.5 runtime
@@ -207,7 +207,7 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 | # | 指摘 | 處置 |
 |---|---|---|
 | S1 | `UiRootState::runtime` 用 `shared_ptr`，Extract 拿到 const 也能改 runtime（UI-7 守不住） | 改成 `std::optional<UiRuntime>` |
-| S2 | 組字游標的單位漏出 adapter | 第 3 節加一列、第 10 節轉主會話（W 的契約） |
+| S2 | 組字游標的單位漏出 adapter | 主會話判改成位元組；另一個小 PR 改 `input` 的契約、`sdl_window` 的 adapter 換算，`ui` 拿掉 `UiUtf16Offset` |
 | S3 | 圖集快取沒有身分，換掉來源 World 會錯 | `UiText::Id()`；`ExtractUi` 看到換了就放掉舊頁重傳；`ui.render` 加一案 |
 | S4 | 多個根之間的輸入路由沒寫 | 第 3 節、第 4.6 節寫明「給每個 `acceptsInput` 的根、不遮擋」；`ui.world` 加兩個根的案；UI-RC3 |
 | S5 | 第 9 節漏了 `window_camera`、大廳測試繞過它 | 第 9 節補 `window_camera`、`transform`；`ui.lobby` 改經 `WindowResized` → `window_camera`；寫明沒驗的範圍 |
@@ -226,7 +226,6 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 - GPU 的像素只有 Linux Lavapipe；本批的渲染測試讀 `RenderCommands`，不比像素。
 - 半透明的顏色和 master 略有不同（第 4.7 節）。
 - 文字框不捲動、單行；游標以 code point 移動，組合字元的中間可以停（畫的時候退到字素邊界）。
-- 輸入法組字游標的單位：照 UTF-16 換算；Linux 的輸入法若給 code point，BMP 以外的字會偏。
 - 圖集只增不減：`fit` 的倍率是連續值，拖拉視窗大小時每個中間的字級都會點陣化一批字形，沒有清掉的方法（Bevy 有 `FontAtlasSet::clear`）；有量到的壓力時再加。
 - 字型加不進去、文件驗證不過時，每幀重試一次（文件不可變，結果相同）；成本小，沒有記住失敗。
 
@@ -246,7 +245,7 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 
 ## 10. 回報主會話
 
-- **轉 W 的契約（設計審查 S2）**：`input` 的 `TextComposition.cursor` 是平台的單位（Windows、macOS 是 UTF-16），每個消費者（`ui`、之後 K 的 ImGui）都得自己換算，作者自己寫 `UiInput` 時也得懂 UTF-16。建議改成 `text` 裡的位元組偏移、由 `sdl_window` 的 adapter 換算（同 winit 給 Bevy 的形）；改了之後 `ui` 拿掉 `UiUtf16Offset`。本批不改 W。
+- **設計審查 S2（組字游標的單位）**：主會話判「改成位元組、由 `sdl_window` 的 adapter 換算」（HANDOFF `v8-arch-gyo2-sdl-u-three-judgments` 第 3 件），另一個小 PR 做完；`ui` 的 `UiUtf16Offset` 拿掉。
 
 - 節點模型照 L17 選了文件樹（第 3.1 節）；總宣告第 6.6 節寫的是「U 的宣告比、交使用者」——新 AGENTS 下卡片自己判，請主會話判要不要再交使用者。
 - `gyo.ui` 經 JSON Module 讀的行為與版本不升（第 4.1 節）：JSON 宣告第 452 行寫「交使用者」，同上。

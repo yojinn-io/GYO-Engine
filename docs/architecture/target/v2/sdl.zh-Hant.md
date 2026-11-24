@@ -92,7 +92,7 @@ plugins/<名>/
 | SDL 事件 | `Message` |
 |---|---|
 | `KEY_DOWN`／`KEY_UP` | `input` `KeyboardInput`（scancode → `KeyCode`〔同為 USB HID 的值，`input` 沒命名的 → `Unidentified`〕、`down`、`repeat`、無修飾時的字〔`SDL_GetKeyFromScancode`〕、SDL 給的 `mod`） |
-| `TEXT_EDITING` | `input` `TextComposition`（`start`、`length` 照 SDL 給的，-1＝沒給） |
+| `TEXT_EDITING` | `input` `TextComposition`（`start`、`length` 換成字串的位元組：SDL 文件寫「UTF-8 字元」＝code point，Cocoa、Wayland、X11、IBus、Fcitx 都給 code point，只有 Windows 給 IMM 的 UTF-16 位置——adapter 照 `SDL_GetCurrentVideoDriver()` 選單位換算；-1＝沒給） |
 | `TEXT_INPUT` | `input` `TextCommitted` |
 | `MOUSE_MOTION` | `input` `CursorMoved`（`x`、`y` 換成邏輯像素）＋`MouseMotion`（`xrel`、`yrel` 照 SDL 給的），兩個 |
 | `MOUSE_BUTTON_DOWN`／`UP` | `input` `MouseButtonInput`（左、中、右、X1→Back、X2→Forward；其他鍵 → 0 個） |

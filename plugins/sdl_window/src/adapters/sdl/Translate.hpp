@@ -7,6 +7,8 @@
 #include <SDL3/SDL.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <string_view>
 #include <optional>
 
 #include "engine/input/Input.hpp"
@@ -28,6 +30,17 @@ namespace GYO::Plugins::SDLWindow::Adapter {
     return pixelDensity > 0.0F && displayScale > 0.0F ? pixelDensity / displayScale : 1.0F;
 }
 [[nodiscard]] float LogicalPerWindowCoordinate(SDL_Window* window) noexcept;
+
+// The unit of SDL_TextEditingEvent's start and length. SDL documents "UTF-8 characters" (code points,
+// SDL_events.h:378-380) and its Cocoa, Wayland, X11, IBus and Fcitx back ends give code points
+// (SDL_cocoakeyboard.m:145-147, SDL_waylandevents.c:3076-3077); its Windows back end gives the IMM's positions as
+// they are, UTF-16 code units (SDL_windowskeyboard.c:811, :924-928).
+enum class EditingUnit : std::uint8_t { CodePoint = 1, Utf16 = 2 };
+// The unit of the video driver SDL runs ("windows": UTF-16; any other, or none: code points).
+[[nodiscard]] EditingUnit EditingUnitOf(const char* videoDriver) noexcept;
+// The byte offset in utf8 of the position units units from its start (a code point outside the Basic Multilingual
+// Plane is two UTF-16 units; a position inside one rounds down), clamped to the text; -1 (not given) stays -1.
+[[nodiscard]] std::int32_t EditingByteOffset(std::string_view utf8, std::int32_t units, EditingUnit unit) noexcept;
 
 // The Messages event becomes (SDL-7's table); every Message carries the event's time converted with pair, no later
 // than ceiling. window is the program's window: window events of another window become nothing.
