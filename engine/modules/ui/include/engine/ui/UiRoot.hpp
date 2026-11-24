@@ -14,6 +14,9 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 #include <variant>
 
 #include "engine/asset/Handle.hpp"
@@ -46,9 +49,30 @@ struct UiRoot final {
     UiTextFilter filter;
 };
 
-// The binding values a root's document reads (the author's). A root without one has none.
+// The binding values a root's document reads (the author's). A root without one has none. A vector, not a map: a
+// component moves without throwing (the kernel's W-8), and MSVC's node containers allocate when they are moved.
 struct UiBindings final {
-    UiBindingTable values;
+    // One entry per binding id.
+    std::vector<std::pair<std::string, UiBindingValue>> values;
+
+    // Sets the value of id, adding it when it is not there.
+    void Set(std::string id, UiBindingValue value) {
+        for (auto& entry : values) {
+            if (entry.first == id) {
+                entry.second = std::move(value);
+                return;
+            }
+        }
+        values.emplace_back(std::move(id), std::move(value));
+    }
+    [[nodiscard]] const UiBindingValue* Find(std::string_view id) const {
+        for (const auto& entry : values) {
+            if (entry.first == id) return &entry.second;
+        }
+        return nullptr;
+    }
+    // The values as UiRuntime takes them.
+    [[nodiscard]] UiBindingTable Table() const { return UiBindingTable(values.begin(), values.end()); }
 };
 
 // What world_ui derives for a root each frame (written only by world_ui).
@@ -67,8 +91,16 @@ struct UiRootState final {
     UiDrawList drawList;
     // The text field being edited, in pixels of the viewport.
     std::optional<UiEditArea> editArea;
-    // The pictures of the document's image elements, requested by their asset id.
-    std::map<std::string, Asset::Handle<Image::ImageData>, std::less<>> textures;
+    // The pictures of the document's image elements, requested by their asset id (a vector for the reason UiBindings
+    // has one).
+    std::vector<std::pair<std::string, Asset::Handle<Image::ImageData>>> textures;
+
+    [[nodiscard]] const Asset::Handle<Image::ImageData>* Texture(std::string_view id) const {
+        for (const auto& entry : textures) {
+            if (entry.first == id) return &entry.second;
+        }
+        return nullptr;
+    }
     // What went wrong this frame (a missing binding, a document that did not validate); the root is not drawn while
     // it is set (E2: this root, not the World).
     std::optional<UiFailure> failure;

@@ -260,10 +260,9 @@ void SetViewport(const CameraView& camera, Ui::UiRootState& state) {
     state.scaleFactor = camera.computed->scaleFactor;
 }
 
-const Ui::UiBindingTable& BindingsOf(Kernel::Query<Kernel::Read<Ui::UiBindings>>& bindings, const Kernel::EntityId id) {
-    static const Ui::UiBindingTable none;
+Ui::UiBindingTable BindingsOf(Kernel::Query<Kernel::Read<Ui::UiBindings>>& bindings, const Kernel::EntityId id) {
     const Ui::UiBindings* found = bindings.Get<Ui::UiBindings>(id);
-    return found != nullptr ? found->values : none;
+    return found != nullptr ? found->Table() : Ui::UiBindingTable{};
 }
 
 SystemResult UpdateUi(Kernel::Query<Kernel::Read<Ui::UiRoot>, Kernel::Write<Ui::UiRootState>> roots,
@@ -321,10 +320,10 @@ void AddFonts(const Ui::UiRoot& root, const WorldAsset::AssetView& assets, Ui::U
 void RequestTextures(const Ui::UiDrawList& drawList, const WorldAsset::AssetRequests& requests, Ui::UiRootState& state) {
     for (const Ui::UiDrawCommand& command : drawList.commands) {
         const auto* image = std::get_if<Ui::UiImageDraw>(&command);
-        if (image == nullptr || image->textureAsset.empty() || state.textures.find(image->textureAsset) != state.textures.end()) {
+        if (image == nullptr || image->textureAsset.empty() || state.Texture(image->textureAsset) != nullptr) {
             continue;
         }
-        state.textures.emplace(image->textureAsset, requests.Load<Image::ImageData>(Asset::AssetId(image->textureAsset)));
+        state.textures.emplace_back(image->textureAsset, requests.Load<Image::ImageData>(Asset::AssetId(image->textureAsset)));
     }
 }
 

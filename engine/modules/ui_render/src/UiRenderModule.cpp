@@ -97,10 +97,9 @@ SystemResult ExtractUi(Kernel::Extract<Kernel::Read<Ui::UiRoot>> roots, Kernel::
             const auto* image = std::get_if<Ui::UiImageDraw>(&command);
             if (image == nullptr) continue;
             Render::TextureId texture{};
-            const auto handle = state->textures.find(image->textureAsset);
-            if (handle != state->textures.end()) {
+            if (const Asset::Handle<Image::ImageData>* handle = state->Texture(image->textureAsset)) {
                 Render::ResolvedImage resolved =
-                    Render::ResolveImage(Render::ImageRef{handle->second}, Render::TextureFilter::Linear, view);
+                    Render::ResolveImage(Render::ImageRef{*handle}, Render::TextureFilter::Linear, view);
                 Math::Vec2 size{};
                 const std::optional<Render::TextureId> made =
                     images.Get().Use(resolved.key, resolved.data, std::move(resolved.holder), textures.Get(), size);

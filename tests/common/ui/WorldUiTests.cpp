@@ -545,11 +545,11 @@ namespace {
 
 constexpr const char* kLobbyFont = "object_fps_pvp.font.ui";
 
-Ui::UiBindingTable LobbyBindings(std::string address = "127.0.0.1:8080") {
-    return {{"address", std::move(address)},
+Ui::UiBindings LobbyBindings(std::string address = "127.0.0.1:8080") {
+    return {{{"address", std::move(address)},
             {"room", std::string("No room found. Refresh or create one.")},
             {"status", std::string("Ready")},
-            {"hint", std::string("Click the address to edit. Enter confirms.")}};
+            {"hint", std::string("Click the address to edit. Enter confirms.")}}};
 }
 
 } // namespace
@@ -580,7 +580,7 @@ TEST_CASE("ui_lobby: the lobby loads through world_asset with its font, and keys
     const K::EntityId lobby = 2;
     game.Insert(lobby, root);
     game.Insert(lobby, Ui::UiRootState{});
-    game.Insert(lobby, Ui::UiBindings{LobbyBindings()});
+    game.Insert(lobby, LobbyBindings());
     Frames(*p);
     CHECK_MESSAGE(!StateOf(game, lobby).runtime, "[ui-lobby-wait] not loaded yet");
     for (int i = 0; i < 4; ++i) {
