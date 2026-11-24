@@ -339,4 +339,15 @@ private:
     std::string fixedSchedule_;
 };
 
+// An entity a rollback keeps in being: the official strategy keeps it out of the alive sets it records, and a
+// restore neither despawns it nor puts it back. Only its being: its rollback-registered components, if it has any,
+// roll back like any other entity's (one it did not have at the point is taken off), so give it none. The idea of
+// lightyear's DisableRollback (crates/replication/prediction/src/rollback.rs:272-275), which also leaves the
+// components out and hides the entity during a resimulation; not its name, since the meaning is narrower. For what
+// lives beside the game's state, made outside the step: a connection's Peer entity (the net Module puts it on a
+// client's own Peer), a client's camera or the pictures of what it shows. Registered in a World that chose a
+// strategy (R-4: none without one).
+struct KeepThroughRollback final {};
+inline void HashValue(Kernel::Hasher&, const KeepThroughRollback&) {}
+
 } // namespace GYO::Engine::Rollback

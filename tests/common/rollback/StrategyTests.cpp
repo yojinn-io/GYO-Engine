@@ -13,6 +13,7 @@
 #include "engine/entity_ids/RangeAllotter.hpp"
 #include "engine/base/Trace.hpp"
 #include "engine/rollback/Inbox.hpp"
+#include "engine/rollback/Registrations.hpp"
 #include "engine/rollback/Runtime.hpp"
 #include "engine/rollback/StateRollbackStrategy.hpp"
 
@@ -1460,4 +1461,37 @@ TEST_CASE("rollback strategy: R-8 third state: an entity the snapshot of C does 
         Frames(*p, 1);
         CHECK_MESSAGE(StepsRun() > 1, "[rb-not-sent-only-at-its-tick] the value of step 3 was not compared at 7");
     }
+}
+
+// ---- KeepThroughRollback (the net Module's K3 client: its own Peer entity is made outside the step)
+
+TEST_CASE("rollback strategy: an entity with KeepThroughRollback made after C stays in being across the rollback to C; one without is removed") {
+    auto p = Make(WithStrategy());
+    Frames(*p, 9);
+    // Two entities made outside the step at step 9, after every record before it: one marked.
+    WorldOf(*p).Insert(901, Health{5});
+    WorldOf(*p).Insert(901, GYO::Engine::Rollback::KeepThroughRollback{});
+    WorldOf(*p).Insert(902, Health{6});
+    Inbox(*p).Value<Health>(1, 5, Health{7});
+    Inbox(*p).ConfirmedThrough(5);
+    Frames(*p, 1);
+    CHECK_MESSAGE(WorldOf(*p).Alive(901), "[rb-keep-through-kept] the marked entity is left in being");
+    CHECK_MESSAGE(WorldOf(*p).Get<GYO::Engine::Rollback::KeepThroughRollback>(901) != nullptr, "it keeps its marker");
+    // Only its being: Health is a rollback-registered component, which 901 did not have at step 5, so it is taken
+    // off like any entity's (the marker's comment says to give such an entity none).
+    CHECK_MESSAGE(WorldOf(*p).Get<Health>(901) == nullptr, "[rb-keep-through-components-roll-back] its rollback-registered component rolls back");
+    CHECK_MESSAGE(!WorldOf(*p).Alive(902), "the entity made after C without the marker goes, as before");
+    // A later rollback keeps it too; despawned, it stays despawned (no alive set it is in).
+    Inbox(*p).Value<Health>(1, 7, Health{8});
+    Inbox(*p).ConfirmedThrough(7);
+    Frames(*p, 1);
+    CHECK(WorldOf(*p).Alive(901));
+    WorldOf(*p).Despawn(901);
+    // A value no prediction has, so this rollback runs (to step 9, whose record the earlier resimulation rewrote
+    // while 901 was alive).
+    Inbox(*p).Value<Health>(1, 9, Health{-1234});
+    Inbox(*p).ConfirmedThrough(9);
+    Frames(*p, 1);
+    REQUIRE(WorldOf(*p).Get<Health>(1) != nullptr);
+    CHECK_MESSAGE(!WorldOf(*p).Alive(901), "[rb-keep-through-not-put-back] a rollback does not bring the marked entity back");
 }

@@ -3,6 +3,7 @@
 #include "engine/base/Trace.hpp"
 #include "engine/rollback/History.hpp"
 #include "engine/rollback/Inbox.hpp"
+#include "engine/rollback/Registrations.hpp"
 #include "engine/world_time/FixedStep.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
@@ -20,6 +21,15 @@ namespace GYO::Engine::Rollback {
 namespace {
 
 using Ok = Base::Result<void, Kernel::KernelError>;
+
+// The entities alive now that a rollback leaves in being (KeepThroughRollback), ascending.
+std::vector<Kernel::EntityId> LeftInBeing(Exclusive& world) {
+    std::vector<Kernel::EntityId> marked;
+    world.template ReadColumn<KeepThroughRollback>(
+        [&marked](Kernel::EntityId entity, Kernel::ChangeStamp, Kernel::ChangeStamp, const KeepThroughRollback&) { marked.push_back(entity); });
+    std::sort(marked.begin(), marked.end());
+    return marked;
+}
 
 // alive (ascending) without the entities of drop (ascending).
 std::vector<Kernel::EntityId> Without(const std::vector<Kernel::EntityId>& alive, const std::vector<Kernel::EntityId>& drop) {
@@ -162,7 +172,8 @@ Ok StateRollbackStrategy::Record(RecordContext& context) {
         for (auto& column : history.columns) column->Record(world, since, tick);
         for (auto& input : history.inputs) input->Record(world, tick);
         while (!history.alive.empty() && history.alive.back().first >= tick) history.alive.pop_back();
-        history.alive.emplace_back(tick, world.Entities());
+        // The entities a rollback leaves in being are not part of the recorded alive set (KeepThroughRollback).
+        history.alive.emplace_back(tick, Without(world.Entities(), LeftInBeing(world)));
         history.lastStamp = world.Stamp();
         history.lastTick = tick;
         if (tick > depth) {
@@ -263,7 +274,11 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
             // R-8 A: an entity the caller said entered at or before target and did not exit is put back (spawned
             // with its id when it is not there, its values from the inbox); one said to have exited is removed.
             const std::vector<Kernel::EntityId> alive = inbox.AliveWith(*recorded, target);
-            set.Alive(alive);
+            // The entities a rollback leaves in being stay as they are (KeepThroughRollback); the columns see them alive.
+            const std::vector<Kernel::EntityId> marked = LeftInBeing(world);
+            std::vector<Kernel::EntityId> after;
+            std::set_union(alive.begin(), alive.end(), marked.begin(), marked.end(), std::back_inserter(after));
+            set.Alive(after);
             // An entity the snapshot of target does not carry keeps the World's own history when this World had it
             // at target (its recorded alive set), and takes the inbox's value when it did not, e.g. one that just
             // entered (R-8's third state; the user's U1 (c), 2026-11-23; the recheck's N2: entries of an entity of
@@ -274,7 +289,7 @@ Ok StateRollbackStrategy::Restore(RestoreContext& context) {
             }
             for (const auto& column : history.columns) {
                 const InboxColumnBase* values = AuthoritativeOf(inbox, *column);
-                column->AddTo(set, target, alive, values, kept);
+                column->AddTo(set, target, after, values, kept);
                 // The history at target agrees with the authority afterwards.
                 if (values != nullptr) column->Adopt(target, *values, Without(alive, kept));
             }

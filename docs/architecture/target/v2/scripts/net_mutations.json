@@ -1391,6 +1391,19 @@
    "target": "gyo_net_tests",
    "cases": "k3: an entity hidden*",
    "expect": "K3:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ a\\ seen\\ entity\\ is\\ gone\\ at\\ the\\ client"
+  },
+  {
+   "id": "nt-k3-peer-not-kept",
+   "what": "a K3 client's own Peer entity does not get KeepThroughRollback: the first rollback to a point before it connected removes it",
+   "guards": [
+    "net section 13"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "if (k3 != nullptr && k3->strategy != nullptr) {",
+   "replace": "if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "k3: the client's own Peer entity*",
+   "expect": "\\[nt\\-k3\\-peer\\-kept\\]"
   }
  ]
 }

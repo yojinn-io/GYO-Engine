@@ -366,6 +366,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - 生成是整份：寫的時候，不在生成清單裡的不回滾元件從實體上拿掉（之前那份留下的）。
   - 拿掉不回滾的元件時，留著的那一個 wire 一併丟掉，之後不會寫回去。
 - **複製的 Resource**：會回滾、而且上 wire 的值就是 Resource 本身的，寫 `ResourceValue`（閘口 1 的 F）；不回滾的照第 12 節的 `apply`。會回滾、上 wire 的值不是 Resource 本身（`ReplicateResource<R, V>`，V ≠ R）的，`Check` 回 `NT-E6`、不建 World（PR-2 設計審查 B2；使用者 2026-11-23 選 U2 (a)：一直拒絕）。`apply` 在 `First` 直接寫會回滾的資料，下一次回滾就把它蓋掉（R-2 前提 5）。
+- **Client 自己的 Peer 實體**〔實作，`v8-product-pvp-port` 2026-11-24〕：`ReceiveNet` 在步外生成它；確認點早於連上的那一步時，第一次回滾會把它刪掉（PvP 移植時發現：伺服器連上時已有的實體讓那次回滾發生）。K3 的 World 多一個 System `KeepPeerInBeing`（回滾的決定 stage、在 `RunRollback` 之前，`ExclusiveWorld`，標 `OneEndOnly`），替它加回滾 Module 的 `KeepThroughRollback`（回滾頁第 2 節）。守衛：`net.k3`「the client's own Peer entity outlives the rollbacks to points before it connected」；突變 `nt-k3-peer-not-kept`。
 - **確認點**（D-7）：第 C 個 tick 的值訊息全部處理過、而且它們要求的結構更新已套用（`NetReplicaState::latestConfirmed`）時，寫 `ConfirmedThrough(C)`。C 只落在伺服器送了值的 tick；伺服器一幀跑好幾步時只送最後一步（第 20 節 U4），C 跳著前進（閘口 1 的 B）。伺服器訊息不算。
 - **晚到的值**：比 C 舊的照樣寫進入口（MC-1：回滾在 C 用「C 當時或之前最後的值」）；比 C 還舊超過深度的丟掉，計 `ReplicaDrop::BeyondDepth`。K1、K2 的「比寫過的舊就不寫」不用在 K3 的回滾元件上。
 - **計數**：`NetReplicaState::inboxValues`、`inboxRemovals`、`inboxEntries`、`inboxExits`、`inboxConfirmed`；`entriesWhileAlive`（生成到的時候之前那份還在 World 裡）。回滾端的 `RollbackHistory::rollbacksForEntries`：明說進入的實體讓存活集合不同而回滾的次數（使用者 2026-11-23 選 U3：計數、不量 CPU）。
