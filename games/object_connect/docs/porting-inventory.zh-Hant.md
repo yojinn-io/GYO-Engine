@@ -47,7 +47,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | 讀資料檔 | `std::ifstream` | `asset`（catalog Data Contract、`TextLoader`）＋`world_asset`（`AssetRequests`／`AssetView`）；`assets/object_connect/content.json`（建置層生成的 `GYO_GAME_CONTENT_MANIFEST`） | **移植實作第 1 段已接**：遊戲自己的 loader 經 `LoadContext::ReferencePath` 宣告引用（第 8 節） |
 | 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | **移植實作第 1 段已接**：產品的 `configure` 登記 `PngLoader`；節點圖經 `nodes.csv` 的 loader 宣告引用，游標 3 張直接請求 |
 | 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有；**移植實作第 1 段已接**字型（`FontLoader`、`UiText` 的 `TextContext`）。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
-| 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | 部分已有，缺口見第 3 節 G1、G2 |
+| 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | **移植實作第 2 段已接**（第 9 節）；G1、G2 由 A（#306）補上 |
 | 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；縮放模式與換算是 R2b（第 3 節核對） |
 | 記錄 | `OutputDebugStringA` | `logging` | 已有 |
 | 存檔 | 沒有（通關紀錄只在一輪遊玩中、不寫檔） | `save_version` | **不需要** |
@@ -69,8 +69,8 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 
 | # | 缺的能力 | Engine 的機制還是遊戲的事 | 原本怎麼用 | 影響的子批 | 參考 |
 |---|---|---|---|---|---|
-| G1 | **播放中改音量**（壓低 BGM、淡出音效） | Engine（混音器的機制）。`audio` 的 `PlayRequest` 只在開始時給增益，`Submitter` 只有 `Play`／`Stop`／`StopAll` | 拖線時 BGM 在 0.05 s 內壓到 0.4、放開 0.25 s 回復；放開時拉線音 0.05 s 淡出（`GameAudio.cpp:27-30`、`:385`、`:407`） | audio 線（A 或另開小批） | kira 的 `set_volume(…, Tween)`；Bevy `AudioSink::set_volume` |
-| G2 | **迴圈播放** | Engine（混音器的機制）。`PlayRequest` 註明「One sound, played once」；`Playhead` 規定「never for decisions」，遊戲不能靠查播放位置接下一段 | BGM：序奏播完接迴圈段（`GameAudio.cpp:338`、`:349` 用 `IsPlaying` 判斷）；拉線音迴圈 | audio 線 | kira 的 `loop_region`；Bevy `PlaybackMode::Loop`。不改 Engine 的替代：遊戲用 `at` 排下一段的開始時刻（要 clip 的長度），每段結束前補排——可行但每個遊戲都要自己寫 |
+| G1 | **播放中改音量**（壓低 BGM、淡出音效） | Engine（混音器的機制）。`audio` 的 `PlayRequest` 只在開始時給增益，`Submitter` 只有 `Play`／`Stop`／`StopAll` | 拖線時 BGM 在 0.05 s 內壓到 0.4、放開 0.25 s 回復；放開時拉線音 0.05 s 淡出（`GameAudio.cpp:27-30`、`:385`、`:407`） | audio 線（A 或另開小批）；**A（#306）已補：`Submitter::SetGain`（ramp）** | kira 的 `set_volume(…, Tween)`；Bevy `AudioSink::set_volume` |
+| G2 | **迴圈播放** | Engine（混音器的機制）。`PlayRequest` 註明「One sound, played once」；`Playhead` 規定「never for decisions」，遊戲不能靠查播放位置接下一段 | BGM：序奏播完接迴圈段（`GameAudio.cpp:338`、`:349` 用 `IsPlaying` 判斷）。（更正：拉線音不是迴圈，`BeginLineHold` 以 `loop=false` 播，`GameAudio.cpp:158`） | audio 線；**A（#306）已補：`PlayRequest::loop`** | kira 的 `loop_region`；Bevy `PlaybackMode::Loop`。不改 Engine 的替代：遊戲用 `at` 排下一段的開始時刻（要 clip 的長度），每段結束前補排——可行但每個遊戲都要自己寫 |
 | G3 | **把系統游標移到指定位置（warp）** | Engine（`window` 的請求資料） | `wrapEdges` 關卡（20 關中 9 關）拖線碰到視窗邊緣時，把游標移到對邊（`InputSystem.cpp:87-115` 的 `SetCursorPos`），讓線穿過邊界繼續拉 | W | Bevy `Window::set_cursor_position`；SDL `SDL_WarpMouseInWindow` |
 | G4 | **滑鼠的相對移動量（游標被邊緣擋住時仍有）** | Engine（`input` 的 `Message`） | 游標卡在邊上時，絕對座標不動，用 DirectInput 的相對量判斷「還在往外拉」（`InputSystem.cpp:200-230`） | W | Bevy `MouseMotion`（raw delta）；SDL `SDL_MouseMotionEvent::xrel` |
 | G5 | **游標進出視窗** | Engine（`input` 或 `window` 的 `Message`） | 只在「有焦點且游標在視窗內」時隱藏系統游標、畫自訂游標（`ShouldUseCustomMouseCursor`） | W | Bevy `CursorEntered`／`CursorLeft`；SDL `SDL_EVENT_WINDOW_MOUSE_ENTER`／`LEAVE` |
@@ -101,7 +101,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | `PuzzleCatalogTests` 的 `TestBundledCatalogs`、`PuzzleBoardTests` 的 `TestBundledStageOneIntegration` | 讀磁碟上的關卡資料（`Load` 已拿掉） | **PR 2 接回**：測試自己讀 `assets/object_connect/` 的檔（`tests/object_connect/BundledData.cpp`；tests 不受 R4 限制），交給 `Parse`，斷言照原本 |
 | `PuzzleCatalogTests` 的 `TestIndependentDiskLoad` | 測的是 `Load` 本身 | 不回來（`Load` 不存在了；讀檔之後經 asset） |
 | `Text/*`、`FontSystemLifecycleTests` | 原 `Text/*` 不搬（GYO2 `text`） | 不回來 |
-| `GameAudioTests` | `GameAudio` 要改寫在 `audio` 上，且有 G1、G2 | audio 那一段移植時，依新寫法重寫 |
+| `GameAudioTests` | `GameAudio` 要改寫在 `audio` 上，且有 G1、G2 | **移植實作第 2 段**：依新寫法改寫成 `object_connect.runtime` 的三個聲音情境（第 9 節） |
 
 ## 6. 搬法的取捨（卡片自己判的）
 
@@ -133,3 +133,19 @@ PR：移植實作第 1 段（W、T、I 合併後）。畫面要等 R2a，聲音�
 | 選單分頁 | `PresentMenus`（`Update`，在 `TickSolvedTimer` 後）以這一幀結束時的畫面呼叫 `MenuPages::Present`；`QuitChosen` → `WindowRequest::close` | 原版 `Draw` 在 `Update` 之後移動頁數，下一幀的翻頁看「上次畫的畫面」 |
 
 **已知的限制**：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked` 並由遊戲畫游標——R2a 那段（遊戲游標畫得出來後）再改。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
+
+## 9. 移植實作第 2 段：聲音（卡片自己判的）
+
+PR：移植實作第 2 段（A #306 合併後）。
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| 混音器與提交口 | 產品帶 `sdl_audio`；它在自己的 `Configure` 建 `Mixer` 放進 Product 的共用處、登記 `WavLoader`、開預設裝置。產品的 `configure`（`runtime::ConfigureProduct`）從共用處找 `Mixer`、建一個 `Submitter`，包成 `SoundPort` 放回共用處；World 的 `GameSound` 只持指標 | `Mixer` 的說明要提交口「放在比生產者重建活得久的地方」；共用處活到所有 World 之後 |
+| 沒有混音器或裝置 | 沒有 `Mixer`（不帶 `sdl_audio`）→ 記一行 Info、靜音照跑；裝置開不了（`AudioOutput::Failure`）→ `main` 記一行 Warning、照跑 | 原版音訊不可用時記警告、關掉聲音（`GameAudio::Initialize`） |
+| 音檔 | 4 個 wav 照原版是**可有可無**：載入時一起等、失敗的記 Warning、那個聲音不出聲；其餘內容失敗才是啟動失敗 | 原版 `loadOptional` |
+| BGM | 生成結束後的第一幀播序奏（0.9），迴圈段（0.4、`loop`）排在序奏的長度之後（`PlayRequest::loop` 的說明的做法）；`MusicRestarted` → 停掉兩者、重排 | 原版用 `IsPlaying` 查序奏播完再接；GYO 的 `Playhead` 不准拿來做決定，A 的寫法是事先排好 |
+| 壓低 BGM（G1） | 拿到線時目標 0.4、放開時 1.0；對序奏與迴圈段各送一次 `SetGain`。ramp 照混音器實際的時間線算（`PlanDuck`）：混音器大約在送出時接手、把正在跑的 ramp 凍結在那裡，延遲 `scheduleDelay` 後才開始新的 ramp；長度＝剩下的距離 ÷ 原版的速率（攻 0.05 s、放 0.25 s 走完整段 0.6）。時間用 Engine 的時間基準（混音器用的那個），不用遊戲時間。中途重播 BGM 時，新的兩個聲部以那時的增益開始、再補一次 `SetGain` 接完剩下的 ramp | 原版每幀以固定速率移動。**和原版的差別**：比延遲（60 ms）還短的一次拿線，壓低還沒開始就被取代，BGM 不會沉下去（原版會沉一點）；其他情形曲線相同、只晚 60 ms（混音器所有請求的共同延遲） |
+| 拉線音、放開音 | 拿到線：切掉上一次的（淡出中的也切）、播拉線音（0.65、不迴圈）；放手：拉線音 `SetGain` 到 0、ramp 0.05 s，0.05 s 後 `Stop`（淡出中的另外記著）；是「放開」（不是取消）時再播放開音（2.0） | 原版 `BeginLineHold`／`EndLineHold`／`UpdateHoldFade` |
+| 時刻 | 每個請求的 `at` 是送出時的 `Time::Now()`（Engine 時間基準）；混音器自己加 `scheduleDelay`（預設 60 ms） | audio DI 3：不用可縮放的遊戲時間 |
+
+**沒處理的（審查 nit）**：同一幀若先後有「放手」與「拿線」兩種 Message，System 先處理全部拿線再處理放手（現在沒有會這樣送的路徑）；World 被替換時舊的迴圈段不會停（這款遊戲不替換 World）；兩個 World 共用一個提交口會違反單一使用者（只有一個 World）。

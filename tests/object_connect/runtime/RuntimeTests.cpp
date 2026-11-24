@@ -5,11 +5,13 @@
 #include <doctest/doctest.h>
 
 #include "object_connect/runtime/GameData.hpp"
+#include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
 #include "object_connect/world/GameScreenState.hpp"
 #include "object_connect/world/Resources.hpp"
 
 #include "engine/asset/AssetStore.hpp"
+#include "engine/audio/Mixer.hpp"
 #include "engine/input/Input.hpp"
 #include "engine/input/InputModule.hpp"
 #include "engine/kernel/Kernel.hpp"
@@ -24,6 +26,7 @@
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,6 +36,7 @@
 
 namespace {
 
+namespace AU = GYO::Engine::Audio;
 namespace I = GYO::Engine::Input;
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
@@ -87,7 +91,8 @@ void HashValue(K::Hasher&, const Asked&) {}
 
 class Game {
 public:
-    explicit Game(std::string contentRoot = OBJECT_CONNECT_CONTENT_ROOT) {
+    // withMixer: a mixer in the Product's buffer where sdl_audio puts its own (no device: the test renders it).
+    explicit Game(std::string contentRoot = OBJECT_CONNECT_CONTENT_ROOT, const bool withMixer = true) {
         auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(pool));
         pool_ = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(pool).value());
@@ -124,10 +129,13 @@ public:
         O::ProductDescription description;
         description.name = "object_connect";
         description.worlds.push_back(std::move(world));
-        description.configure = [](O::ProductSetup& setup) {
-            const auto* registry = setup.Buffer().Find<GYO::Engine::Asset::AssetLoaderRegistry>();
-            REQUIRE(registry != nullptr);
-            REQUIRE(!OR::RegisterLoaders(*registry).has_value());
+        description.configure = [withMixer](O::ProductSetup& setup) {
+            if (withMixer) {
+                auto mixer = AU::Mixer::Create({});
+                REQUIRE(static_cast<bool>(mixer));
+                setup.Buffer().Create<AU::Mixer>(std::move(mixer).value());
+            }
+            OR::ConfigureProduct(setup);
         };
         WA::AssetOptions assets;
         assets.contentRoot = std::move(contentRoot);
@@ -167,6 +175,16 @@ public:
     }
 
     Pending& Next() { return *World().ResourceMut<Pending>(); }
+
+    // The mixer's counters once its audio thread has taken every queued request (one rendered block).
+    [[nodiscard]] AU::MixerStats Sound() {
+        AU::Mixer* mixer = product_->Buffer().Find<AU::Mixer>();
+        REQUIRE(mixer != nullptr);
+        std::vector<std::int16_t> block(512);
+        mixer->Render(block, GYO::Engine::Time::Now());
+        return mixer->Stats();
+    }
+    [[nodiscard]] const OR::GameSound& SoundState() { return *World().Resource<OR::GameSound>(); }
 
     // The window as sdl_window reports it on a new World: its size and the focus.
     void OpenWindow() {
@@ -468,4 +486,152 @@ TEST_CASE("runtime: the menus take no hover once the cursor has left the window"
     game.Frame();
     CHECK(game.Selected() == 0); // the hover no longer pulls the selection back
     CHECK_FALSE(game.Input().menu.hoveredItem.has_value());
+}
+
+TEST_CASE("runtime: the music starts, ducks under a held vessel and the hold and relax sounds play") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    AU::MixerStats stats = game.Sound();
+    CHECK(stats.submitted == 2); // the intro, and the loop after it
+    CHECK(game.SoundState().intro.Valid());
+    CHECK(game.SoundState().loop.Valid());
+
+    game.Press(I::KeyCode::Enter);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    game.Button(360.0f, 360.0f, I::ButtonState::Pressed);
+    REQUIRE(game.Session().board->IsDragging());
+    stats = game.Sound();
+    CHECK(stats.submitted == 3);        // the hold sound
+    CHECK(stats.gainsSubmitted == 2);   // the intro and the loop duck
+    CHECK(game.SoundState().holding);
+
+    for (float x = 400.0f; x <= 920.0f; x += 40.0f) game.MoveTo(x, 360.0f);
+    game.Button(920.0f, 360.0f, I::ButtonState::Released);
+    stats = game.Sound();
+    CHECK(stats.submitted == 4);        // the relax sound
+    CHECK(stats.gainsSubmitted == 5);   // the hold fades out, the music comes back
+    CHECK(stats.stopsSubmitted >= 1);   // the hold stops after its fade
+    CHECK_FALSE(game.SoundState().holding);
+    CHECK(game.SoundState().relax.Valid());
+}
+
+TEST_CASE("runtime: back at the main menu after a level the music starts over") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    game.Press(I::KeyCode::Enter);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    const AU::MixerStats before = game.Sound();
+    game.Press(I::KeyCode::Escape);
+    for (int step = 0; step < 3; ++step) game.Press(I::KeyCode::ArrowDown);
+    game.Press(I::KeyCode::Enter); // "メインメニュー"
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::MainMenu);
+    const AU::MixerStats after = game.Sound();
+    CHECK(after.submitted == before.submitted + 2);
+    CHECK(after.stopsMatched == before.stopsMatched + 2); // the intro and the loop, sounding or scheduled
+}
+
+TEST_CASE("runtime: a cancelled hold fades its sound and plays no relax sound") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    game.Press(I::KeyCode::Enter);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    game.Button(360.0f, 360.0f, I::ButtonState::Pressed);
+    REQUIRE(game.SoundState().holding);
+    const AU::MixerStats before = game.Sound();
+    game.Press(I::KeyCode::Escape);
+    const AU::MixerStats after = game.Sound();
+    CHECK_FALSE(game.SoundState().holding);
+    CHECK(after.submitted == before.submitted); // no relax sound
+    CHECK(after.gainsSubmitted == before.gainsSubmitted + 3); // the hold fades, the music comes back
+    CHECK_FALSE(game.SoundState().relax.Valid());
+    CHECK(game.SoundState().fadingHold.Valid());
+}
+
+TEST_CASE("runtime: the music restarted while it comes back from a duck keeps coming back") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    game.Press(I::KeyCode::Enter);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    game.Button(360.0f, 360.0f, I::ButtonState::Pressed);
+    // The duck is planned on the Engine clock, as the mixer runs it: wait past the delay and the 0.05 s attack.
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    game.Press(I::KeyCode::Escape); // cancels the hold: the release ramp (0.25 s after the delay) starts
+    game.Button(360.0f, 360.0f, I::ButtonState::Released);
+    const AU::MixerStats before = game.Sound();
+    game.Click(400.0f, 450.0f); // the pause menu's "メインメニュー", well within the release
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::MainMenu);
+    const AU::MixerStats after = game.Sound();
+    CHECK(after.submitted == before.submitted + 2);
+    // The new intro and loop get the rest of the release (both started below 1.0).
+    CHECK(after.gainsSubmitted == before.gainsSubmitted + 2);
+}
+
+TEST_CASE("runtime: a sound file that does not load leaves that sound silent and the game playing") {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "object_connect_runtime_missing_intro";
+    fs::remove_all(root);
+    fs::copy(OBJECT_CONNECT_CONTENT_ROOT, root, fs::copy_options::recursive);
+    fs::remove(root / "audio" / "bgm_start.wav");
+    {
+        Game game(root.string());
+        game.LoadContent();
+        game.OpenWindow();
+        const AU::MixerStats stats = game.Sound();
+        CHECK(stats.submitted == 1); // the loop alone
+        CHECK_FALSE(game.SoundState().intro.Valid());
+        CHECK(game.SoundState().loop.Valid());
+        game.Press(I::KeyCode::Enter);
+        CHECK(game.Screen() == GameScreen::LevelSelect);
+    }
+    fs::remove_all(root);
+}
+
+TEST_CASE("runtime: the duck ramps from the gain the mixer has, at the original's rate") {
+    using namespace std::chrono_literals;
+    namespace T = GYO::Engine::Time;
+    const T::Duration delay = 60ms;
+    const T::TimePoint t0 = T::Now();
+
+    const OR::GainRamp attack = OR::PlanDuck({}, OR::kDuckGain, t0, delay);
+    CHECK(attack.start == t0 + delay);
+    CHECK(attack.from == doctest::Approx(1.0f));
+    CHECK(attack.length == std::chrono::duration_cast<T::Duration>(50ms));
+    CHECK(attack.At(t0 + delay + 25ms) == doctest::Approx(0.7f));
+
+    // Released after the attack ended: back up over the full 0.25 s.
+    const OR::GainRamp release = OR::PlanDuck(attack, 1.0f, t0 + 200ms, delay);
+    CHECK(release.from == doctest::Approx(OR::kDuckGain));
+    CHECK(release.length == std::chrono::duration_cast<T::Duration>(250ms));
+
+    // Released while the attack runs: the mixer freezes it where it is when it takes the change (about now), and
+    // the remaining distance goes up at the release rate.
+    const OR::GainRamp early = OR::PlanDuck(attack, 1.0f, t0 + delay + 25ms, delay);
+    CHECK(early.from == doctest::Approx(0.7f));
+    CHECK(std::chrono::duration<double>(early.length).count() == doctest::Approx(0.125).epsilon(0.001));
+
+    // Released before the attack started (a hold shorter than the delay): the attack never runs.
+    const OR::GainRamp tooShort = OR::PlanDuck(attack, 1.0f, t0 + 30ms, delay);
+    CHECK(tooShort.from == doctest::Approx(1.0f));
+    CHECK(tooShort.length == T::Duration::zero());
+}
+
+TEST_CASE("runtime: without a mixer the game plays silent") {
+    Game game(OBJECT_CONNECT_CONTENT_ROOT, false);
+    game.LoadContent();
+    game.OpenWindow();
+    CHECK(game.SoundState().submitter == nullptr);
+    game.Press(I::KeyCode::Enter);
+    CHECK(game.Screen() == GameScreen::LevelSelect);
 }
