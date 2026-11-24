@@ -175,6 +175,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | Engine 公開標頭與共通測試裡的產品名（`v8-arch-gyo2-oc-separation-review` 1、2）：window／input 標頭的 Object_Connect G 編號只留 Bevy 對應；sdl_gpu、audio、image、text 測試的產品名與「Object_Connect-sized」預算改成 Engine 自己的目標（判定不動） | 架構師 2026-11-24 | **已處理**：#319 的獨立 commit 29d27487 |
 | **待使用者定**：Object_Connect 直接連 `gyo_fast_float`（`v8-arch-gyo2-oc-separation-review` 3）——(a) 產品自己宣告依賴／(b) 改用 Engine 介面；主會話建議 (a) | 架構師 2026-11-24 | 定了交 Object_Connect 卡 |
 | `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | **已處理**：#320 c862aed1（2D／3D 幀測試改用顯示的視窗、要求至少一幀送到視窗） |
+| `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批（K）順手改 |
+| Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | 不擋移植；實機試玩覺得礙事再排 |
 
 ## 不擋路的小事
 
