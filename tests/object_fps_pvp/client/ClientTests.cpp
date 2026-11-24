@@ -356,3 +356,66 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     CHECK(PlayerOf(setup.Client(), 2) == 0);
     CHECK(BodiesAt(setup.Client(), at) == 0);
 }
+
+TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, the HP in red, the camera shaken") {
+    Setup setup;
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId own = PW::OwnPlayer(setup.Client());
+    const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+    REQUIRE(rival != 0);
+    // The Match records a hit on the own player by the other one (as JudgeShots does).
+    {
+        K::World& match = GameWorld(*setup.match);
+        auto hits = match.GetMut<PW::HitRecord>(own);
+        hits->tick = TickOf(match);
+        ++hits->hits;
+        hits->attacker = rival;
+        hits->part = object_fps_pvp::sim::HitPart::Body;
+        match.GetMut<PW::PlayerCombat>(own)->hp -= 25'000;
+    }
+    const auto arc = [&setup]() -> const R::Shape2d* {
+        // The only HUD shape of dots: four corners each (ui/hit_feedback.json: seven dots).
+        for (const K::EntityId id : setup.Client().Entities()) {
+            const auto* shape = setup.Client().Get<R::Shape2d>(id);
+            if (shape != nullptr && setup.Client().Get<R::Sprite>(id) == nullptr && shape->vertices.size() == 7 * 4) return shape;
+        }
+        return nullptr;
+    };
+    const auto hpRed = [&setup] {
+        for (const K::EntityId id : setup.Client().Entities()) {
+            const auto* sprite = setup.Client().Get<R::Sprite>(id);
+            if (sprite != nullptr && sprite->color.r == 255 && sprite->color.g == 77 && sprite->color.b == 64) return true;
+        }
+        return false;
+    };
+    // The camera's right axis tips out of the horizontal only when it rolls.
+    const auto cameraRoll = [&setup] {
+        for (const K::EntityId id : setup.Client().Entities()) {
+            if (setup.Client().Get<GYO::Engine::Camera::Camera3d>(id) == nullptr) continue;
+            return std::abs(GYO::Engine::Math::Rotate(setup.Client().Get<T::Transform>(id)->rotation, {1.0F, 0.0F, 0.0F}).y);
+        }
+        return 0.0F;
+    };
+    CHECK(arc() == nullptr);
+    CHECK_FALSE(hpRed());
+    CHECK(cameraRoll() < 1e-5F);
+    setup.Frames(4);
+    REQUIRE(setup.Client().Get<PW::HitRecord>(own)->hits == 1);
+    const R::Shape2d* shown = arc();
+    REQUIRE_MESSAGE(shown != nullptr, "[pvp-hit-direction] the arc of dots is drawn");
+    // Its middle points from the crosshair toward the attacker, relative to where the player looks.
+    GYO::Engine::Math::Vec2 middle{};
+    for (const auto& vertex : shown->vertices) middle = middle + vertex.position;
+    const GYO::Engine::Math::Vec3 to = setup.Client().Get<PW::PlayerBody>(rival)->feet - setup.Client().Get<PW::PlayerBody>(own)->feet;
+    const float bearing = GYO::Engine::Math::WrapRadians(std::atan2(to.x, to.z) - setup.Client().Get<PW::PlayerBody>(own)->yaw);
+    CHECK(GYO::Engine::Math::WrapRadians(std::atan2(middle.x, middle.y) - bearing) == doctest::Approx(0.0F).epsilon(0.05));
+    CHECK(shown->vertices.front().color.a > 0);
+    CHECK_MESSAGE(hpRed(), "the HP turns red");
+    CHECK_MESSAGE(cameraRoll() > 1e-3F, "the camera rolls with the hit");
+    // A second and a half later all of it has faded.
+    setup.Frames(96);
+    CHECK(arc() == nullptr);
+    CHECK_FALSE(hpRed());
+    CHECK(cameraRoll() < 1e-5F);
+}
