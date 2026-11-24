@@ -14,9 +14,10 @@
 // The model loader: type "model", format "fbx" (version 1), the Data Contract
 // in docs/architecture/target/v2/model.zh-Hant.md section 3. Binary and ASCII
 // FBX come out as one ModelData in model space (metres, +Y up, +Z forward,
-// left-handed); animations are baked to keys. Textures are named, never read
-// or decoded, and the loader declares no references. A product registers it
-// with AssetLoaderRegistry::Register<FbxLoader>().
+// left-handed); animations are baked to keys. Each material's base colour
+// texture is declared as a reference by path (an "image"), never read or
+// decoded here; the entry's settings can turn that off. A product registers
+// it with AssetLoaderRegistry::Register<FbxLoader>().
 
 namespace GYO::Engine::Model {
 
@@ -54,6 +55,10 @@ struct FbxSettings final {
     // false: no meshes (the nodes, materials and clips only), for a user that
     // needs the skeleton and the animation but never the geometry.
     bool meshes = true;
+    // false: no texture is declared as a reference (the file names stay in
+    // the materials), for an author who maps them to images itself, as
+    // Bevy's glTF loader's load_materials turns materials off.
+    bool textures = true;
 
     [[nodiscard]] friend bool operator==(const FbxSettings&, const FbxSettings&) = default;
 };
@@ -71,8 +76,9 @@ public:
     // The rate animations are baked at, keys per second.
     static constexpr double kBakeRate = 60.0;
 
-    // No settings: meshes. {"meshes": true | false}; any other member or value
-    // is BadSettings.
+    // No settings: meshes and textures. {"meshes": true | false, "textures":
+    // true | false}, each member optional; any other member or value is
+    // BadSettings.
     [[nodiscard]] Base::Result<Settings, Asset::LoaderFailure<Code>> ParseSettings(
         std::optional<std::string_view> settingsJson) const;
 

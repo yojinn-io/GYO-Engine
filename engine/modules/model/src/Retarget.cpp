@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <string>
 #include <string_view>
@@ -36,16 +37,28 @@ bool UniformPositive(const Math::Vec3 s) noexcept {
     return Math::IsFinite(s) && smallest > 0.0F && largest - smallest <= largest * kUniformTolerance;
 }
 
-// frames[i] is node i's own rest frame (its parent's times its own rest).
-std::vector<Frame> RestFrames(const std::span<const Node> nodes) {
+// The reference pose: the one given, or the nodes' rest.
+std::vector<LocalTransform> ReferencePose(const std::span<const Node> nodes,
+                                          const std::span<const LocalTransform> given) {
+    if (!given.empty()) {
+        GYO_ASSERT(given.size() == nodes.size());
+        return {given.begin(), given.end()};
+    }
+    std::vector<LocalTransform> pose(nodes.size());
+    for (std::size_t i = 0; i < nodes.size(); ++i) pose[i] = nodes[i].rest;
+    return pose;
+}
+
+// frames[i] is node i's own reference frame (its parent's times its own).
+std::vector<Frame> ReferenceFrames(const std::span<const Node> nodes, const std::vector<LocalTransform>& pose) {
     std::vector<Frame> frames(nodes.size());
     for (std::size_t i = 0; i < nodes.size(); ++i) {
-        const Node& node = nodes[i];
-        const Frame parent = node.parent == kNoParent ? Frame{} : frames[node.parent];
+        const LocalTransform& own = pose[i];
+        const Frame parent = nodes[i].parent == kNoParent ? Frame{} : frames[nodes[i].parent];
         Frame& frame = frames[i];
-        frame.rotation = Math::NormalizeOrIdentity(Math::Multiply(parent.rotation, node.rest.rotation));
-        frame.scale = parent.scale * node.rest.scale.x;
-        frame.valid = parent.valid && UniformPositive(node.rest.scale) && std::isfinite(frame.scale) && frame.scale > 0;
+        frame.rotation = Math::NormalizeOrIdentity(Math::Multiply(parent.rotation, own.rotation));
+        frame.scale = parent.scale * own.scale.x;
+        frame.valid = parent.valid && UniformPositive(own.scale) && std::isfinite(frame.scale) && frame.scale > 0;
     }
     return frames;
 }
@@ -62,8 +75,8 @@ Math::Vec3 Multiply(const Math::Vec3 a, const Math::Vec3 b) noexcept { return {a
 
 Base::Result<NameBinding, RetargetFailure> BindByName(const std::span<const Node> source,
                                                       const std::span<const Node> target) {
-    // Name -> index, or kNoParent when the name is on more than one node.
-    constexpr std::uint32_t kAmbiguous = kNoParent;
+    // Name -> index, or kAmbiguous when the name is on more than one node.
+    constexpr std::uint32_t kAmbiguous = std::numeric_limits<std::uint32_t>::max();
     const auto index = [](const std::span<const Node> nodes) {
         std::map<std::string_view, std::uint32_t> byName;
         for (std::size_t i = 0; i < nodes.size(); ++i) {
@@ -97,7 +110,9 @@ Base::Result<NameBinding, RetargetFailure> BindByName(const std::span<const Node
 Base::Result<AnimationClip, RetargetFailure> Retarget(const std::span<const Node> source,
                                                       const std::span<const Node> target, const AnimationClip& clip,
                                                       const std::span<const JointBinding> bindings,
-                                                      const RetargetSettings& settings) {
+                                                      const RetargetSettings& settings,
+                                                      const std::span<const LocalTransform> sourceReference,
+                                                      const std::span<const LocalTransform> targetReference) {
     GYO_ASSERT(clip.nodeCount == source.size());
     // 1
     if (!std::isfinite(settings.translationScale) || !(settings.translationScale > 0.0F)) {
@@ -105,7 +120,7 @@ Base::Result<AnimationClip, RetargetFailure> Retarget(const std::span<const Node
                     std::to_string(settings.translationScale));
     }
     // 2
-    constexpr std::uint32_t kUnbound = kNoParent;
+    constexpr std::uint32_t kUnbound = std::numeric_limits<std::uint32_t>::max();
     std::vector<std::uint32_t> targetOf(source.size(), kUnbound);
     std::vector<bool> targetBound(target.size(), false);
     for (const JointBinding& binding : bindings) {
@@ -120,8 +135,10 @@ Base::Result<AnimationClip, RetargetFailure> Retarget(const std::span<const Node
         targetBound[binding.target] = true;
     }
     // 3
-    const std::vector<Frame> sourceFrames = RestFrames(source);
-    const std::vector<Frame> targetFrames = RestFrames(target);
+    const std::vector<LocalTransform> sourcePose = ReferencePose(source, sourceReference);
+    const std::vector<LocalTransform> targetPose = ReferencePose(target, targetReference);
+    const std::vector<Frame> sourceFrames = ReferenceFrames(source, sourcePose);
+    const std::vector<Frame> targetFrames = ReferenceFrames(target, targetPose);
     for (const JointBinding& binding : bindings) {
         const std::string where = std::to_string(binding.source) + " \"" + source[binding.source].name + "\" -> " +
                                   std::to_string(binding.target) + " \"" + target[binding.target].name + "\"";
@@ -130,7 +147,7 @@ Base::Result<AnimationClip, RetargetFailure> Retarget(const std::span<const Node
             return Fail(RetargetCode::BadRestScale, "the rest scales above a bound node are uniform and above 0",
                         where);
         }
-        const Math::Vec3 own = source[binding.source].rest.scale;
+        const Math::Vec3 own = sourcePose[binding.source].scale;
         if (own.x == 0.0F || own.y == 0.0F || own.z == 0.0F) {
             return Fail(RetargetCode::BadRestScale, "a bound source node's rest scale has no component of 0", where);
         }
@@ -143,8 +160,8 @@ Base::Result<AnimationClip, RetargetFailure> Retarget(const std::span<const Node
     for (const Track& track : clip.tracks) {
         const std::uint32_t t = targetOf[track.node];
         if (t == kUnbound) continue;
-        const LocalTransform& restS = source[track.node].rest;
-        const LocalTransform& restT = target[t].rest;
+        const LocalTransform& restS = sourcePose[track.node];
+        const LocalTransform& restT = targetPose[t];
         const Frame parentS = ParentFrame(source, sourceFrames, track.node);
         const Frame parentT = ParentFrame(target, targetFrames, t);
         const Math::Quaternion c = Math::NormalizeOrIdentity(Math::Multiply(Math::Conjugate(parentT.rotation),

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the model Module (docs/architecture/target/v2/model.zh-Hant.md; ids md- the model data rules, ma- skeletal animation's first layer, mr- retargeting, mf- the fbx loader and its adapter, mb- build-time link checks). One per independently wrong decision of Design Invariants MD-1 to MD-6 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): removing the before-the-first-key and after-the-last-key branches of the key search, or the empty-channel checks (each then reads outside a vector, undefined behaviour); the duration-0 branch of Wrap::Loop (without it fmod gives NaN, and a channel of a duration-0 clip has one key, so the value is the same); the unbound-track skip of Retarget (indexes with the unbound marker, undefined behaviour); Validate's BadData rule of the loader and the Unsupported rule (no file Blender writes reaches them); the equal-time key merge of the adapter (Blender's linear keys never collide).",
+ "description": "Declared mutants of the model Module (docs/architecture/target/v2/model.zh-Hant.md; ids md- the model data rules, ma- skeletal animation's first layer, mr- retargeting, mf- the fbx loader and its adapter, mb- build-time link checks). One per independently wrong decision of Design Invariants MD-1 to MD-6 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): removing the before-the-first-key and after-the-last-key branches of the key search, or the empty-channel checks (each then reads outside a vector, undefined behaviour); the duration-0 branch of Wrap::Loop (without it fmod gives NaN, and a channel of a duration-0 clip has one key, so the value is the same); the unbound-track skip of Retarget (indexes with the unbound marker, undefined behaviour); Validate's BadData rule of the loader and the Unsupported rule (no file Blender writes reaches them); the equal-time key merge of the adapter (Blender's linear keys never collide); one skin per mesh, shared by its material parts (structural: the skin is made once per mesh, before the parts; the shared-skin case shows it); the mesh-skin range check of Validate (without it the check reads skins out of range, undefined behaviour); the PBR base colour fallback of the materials (Blender writes the FBX diffuse colour, so no file of ours reaches it); the importer memory limit following the byte limit (the contract example never nears 256 MiB, so no test sees the limit).",
  "mutants": [
   {
    "id": "ma-sample-no-rest-first",
@@ -191,7 +191,7 @@
     "model MD-2"
    ],
    "file": "engine/modules/model/src/ModelData.cpp",
-   "find": "if (skin.vertexJoints[v][k] >= skin.joints.size()) {",
+   "find": "if (mesh.vertexJoints[v][k] >= jointCount) {",
    "replace": "if (false) {",
    "target": "gyo_model_animation_tests",
    "cases": "Validate rule 3: BadSkin",
@@ -225,12 +225,12 @@
   },
   {
    "id": "mr-no-parent-frame",
-   "what": "MD-4: the parents' rest rotations are not corrected for",
+   "what": "MD-4: the parents' reference rotations are not corrected for",
    "guards": [
     "model MD-4"
    ],
    "file": "engine/modules/model/src/Retarget.cpp",
-   "find": "frame.rotation = Math::NormalizeOrIdentity(Math::Multiply(parent.rotation, node.rest.rotation));",
+   "find": "frame.rotation = Math::NormalizeOrIdentity(Math::Multiply(parent.rotation, own.rotation));",
    "replace": "frame.rotation = Math::Quaternion{};",
    "target": "gyo_model_animation_tests",
    "cases": "Retarget keeps the model-space change of rotation when parent rests differ,Retarget turns translation motion into the target parent's frame",
@@ -341,6 +341,32 @@
    "expect": "a non-uniform scale above a bound source node"
   },
   {
+   "id": "mr-reference-ignored",
+   "what": "MD-4: the reference poses the caller gives are ignored (the rest is used)",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "    if (!given.empty()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget measures motion from the reference poses the caller gives",
+   "expect": "values\\[0\\], AboutZ\\(-45\\)"
+  },
+  {
+   "id": "md-joints-without-skin",
+   "what": "MD-2: a mesh without a skin may carry joints and weights",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "if (!mesh.vertexJoints.empty() || !mesh.vertexWeights.empty()) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 3: BadSkin",
+   "expect": "joints and weights on a mesh without a skin"
+  },
+  {
    "id": "mr-ambiguous",
    "what": "MD-4: BindByName binds a name that one list has twice",
    "guards": [
@@ -360,11 +386,11 @@
     "model MD-6"
    ],
    "file": "engine/modules/model/src/FbxLoader.cpp",
-   "find": "if (member.key != \"meshes\") return BadSettings",
-   "replace": "if (false) return BadSettings",
+   "find": "            return BadSettings(\"unknown member \\\"\" + std::string(member.key) + \"\\\"\");",
+   "replace": "            continue;",
    "target": "gyo_model_fbx_tests",
-   "cases": "FbxLoader settings: meshes and nothing else",
-   "expect": "textures"
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "materials"
   },
   {
    "id": "mf-not-fbx",
@@ -378,6 +404,45 @@
    "target": "gyo_model_fbx_tests",
    "cases": "FbxLoader rule 1: NotFbx",
    "expect": "NotFbx"
+  },
+  {
+   "id": "mf-textures-not-declared",
+   "what": "MD-6: a material's texture is not declared as a reference (asset decision 11)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "            material.baseColorImage = context.ReferencePath<Image::ImageData>(material.baseColorTexture);\n",
+   "replace": "",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "declared\\.size\\(\\) == 1"
+  },
+  {
+   "id": "mf-textures-setting-ignored",
+   "what": "MD-6: textures false still declares the textures",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "    if (settings.textures) {",
+   "replace": "    if (true) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "FbxSettings\\{true, false\\}\\)\\.empty\\(\\)"
+  },
+  {
+   "id": "mf-textures-setting-unread",
+   "what": "MD-6: the textures member of the settings is refused",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "        } else if (member.key == \"textures\") {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "noTextures\\.has_value\\(\\)"
   },
   {
    "id": "mf-uv-not-flipped",
