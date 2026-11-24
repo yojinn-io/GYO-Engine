@@ -1,0 +1,383 @@
+{
+  "schema": "gyo.ui",
+  "version": 1,
+  "design_canvas": {
+    "size": [
+      100.0,
+      100.0
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "test.font"
+  },
+  "default_font": "ui",
+  "colors": {
+    "background": "#000000FF",
+    "fill": "#E08020FF",
+    "focused": "#804000FF",
+    "gray": "#808080FF",
+    "normal": "#202020FF",
+    "pressed": "#C06000FF",
+    "thumb": "#FFFFFFFF",
+    "track": "#303030FF",
+    "white": "#FFFFFFFF"
+  },
+  "actions": [
+    {
+      "id": "back",
+      "payload": "none"
+    },
+    {
+      "id": "one",
+      "payload": "none"
+    },
+    {
+      "id": "two",
+      "payload": "none"
+    },
+    {
+      "id": "set_gamma",
+      "payload": "number"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "gamma",
+      "type": "number",
+      "preview": 1.0
+    },
+    {
+      "id": "outcome",
+      "type": "enum",
+      "values": [
+        "win",
+        "lose"
+      ],
+      "preview": "win"
+    },
+    {
+      "id": "rooms",
+      "type": "list<object>",
+      "item_fields": {
+        "kills": "integer",
+        "name": "string"
+      },
+      "preview": [
+        {
+          "kills": 2,
+          "name": "A"
+        },
+        {
+          "kills": 5,
+          "name": "B"
+        }
+      ]
+    }
+  ],
+  "canvases": [
+    {
+      "id": "screen",
+      "backdrop_color": "background",
+      "default_focus": "button_one",
+      "cancel_action": "back",
+      "focus_order": [
+        "button_one",
+        "button_two",
+        "gamma_slider"
+      ],
+      "children": [
+        {
+          "type": "container",
+          "id": "stretch_parent",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              1.0,
+              1.0
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              -20.0,
+              -20.0
+            ]
+          },
+          "children": [
+            {
+              "type": "button",
+              "id": "button_one",
+              "rect": {
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  1.0
+                ],
+                "pivot": [
+                  0.5,
+                  0.5
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  40.0,
+                  -40.0
+                ]
+              },
+              "text": {
+                "literal": "ゲームスタート"
+              },
+              "point_size": 10.0,
+              "text_color": {
+                "color": "white"
+              },
+              "horizontal_align": "center",
+              "vertical_align": "center",
+              "action": "one",
+              "background": {
+                "normal": "normal",
+                "focused": "focused",
+                "pressed": "pressed"
+              }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "id": "button_two",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              65.0,
+              5.0
+            ],
+            "size_delta": [
+              30.0,
+              20.0
+            ]
+          },
+          "text": {
+            "literal": "TWO"
+          },
+          "point_size": 10.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "two",
+          "background": {
+            "normal": "normal",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "horizontal_slider",
+          "id": "gamma_slider",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              10.0,
+              75.0
+            ],
+            "size_delta": [
+              80.0,
+              20.0
+            ]
+          },
+          "text": {
+            "literal": "GAMMA"
+          },
+          "point_size": 8.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "top",
+          "action": "set_gamma",
+          "background": {
+            "normal": "normal",
+            "focused": "focused",
+            "pressed": "pressed"
+          },
+          "binding": "gamma",
+          "minimum": 0.75,
+          "maximum": 1.5,
+          "step": 0.05,
+          "value_format": {
+            "decimals": 2,
+            "show_plus": false
+          },
+          "track_color": "track",
+          "fill_color": "fill",
+          "thumb_color": "thumb"
+        },
+        {
+          "type": "fixed_step_list",
+          "id": "room_list",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              5.0,
+              2.0
+            ],
+            "size_delta": [
+              40.0,
+              20.0
+            ]
+          },
+          "binding": "rooms",
+          "max_items": 4,
+          "item_step": [
+            0.0,
+            9.0
+          ],
+          "template": [
+            {
+              "type": "text",
+              "id": "room_row",
+              "rect": {
+                "anchor_min": [
+                  0.0,
+                  0.0
+                ],
+                "anchor_max": [
+                  1.0,
+                  0.0
+                ],
+                "pivot": [
+                  0.0,
+                  0.0
+                ],
+                "position": [
+                  0.0,
+                  0.0
+                ],
+                "size_delta": [
+                  0.0,
+                  8.0
+                ]
+              },
+              "text": {
+                "compose": {
+                  "format": "{name} {kills}",
+                  "placeholders": {
+                    "kills": {
+                      "item_field": "kills",
+                      "format": {
+                        "decimals": 0,
+                        "show_plus": false
+                      }
+                    },
+                    "name": {
+                      "item_field": "name",
+                      "format": {
+                        "decimals": 0,
+                        "show_plus": false
+                      }
+                    }
+                  }
+                }
+              },
+              "point_size": 7.0,
+              "text_color": {
+                "color": "gray"
+              },
+              "horizontal_align": "left",
+              "vertical_align": "top"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "outcome",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.5
+            ],
+            "anchor_max": [
+              0.5,
+              0.5
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              30.0,
+              10.0
+            ]
+          },
+          "text": {
+            "select": {
+              "binding": "outcome",
+              "cases": {
+                "lose": "LOSE",
+                "win": "WIN"
+              }
+            }
+          },
+          "point_size": 8.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        }
+      ]
+    }
+  ]
+}
