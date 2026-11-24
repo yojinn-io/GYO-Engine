@@ -71,7 +71,7 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 | 文字框與輸入法 | `bevy_ui_widgets` 的文字輸入、`Window.ime_enabled`／`ime_position` | Godot：`LineEdit` 有 `ime_text`、開關輸入法並設位置（`scene/gui/line_edit.cpp:129-150`） | `world_ui` 寫 `TextInputRequest`（W 的請求資料）、讀 `TextComposition`／`TextCommitted` | 同 Bevy／Godot：請求資料、後端下一幀套用 |
 | 焦點 | `InputFocus` Resource、Tab 導覽（`bevy_input_focus`） | Godot：`focus_next`／`focus_neighbor_*` | 文件的 `focus_order`（資料契約）；每個根各有自己的焦點 | 照 master 的資料契約 |
 | 多個根之間的輸入 | picking 擋住下層（`Pickable`／`FocusPolicy`）、鍵盤焦點只有一個 `InputFocus` | — | **偏離**：這一幀的輸入給每個 `acceptsInput` 的根，不遮擋；根之間怎麼分是作者的事（用 `acceptsInput`）。master 一次只有一份文件，這是 GYO2 新的語意，`ui.world` 釘住 | 沒有點名的需求，不加機制；有了再比 Bevy 的 picking（UI-RC3） |
-| 輸入法組字游標的單位 | winit 在後端換成位元組（`bevy_window/src/event.rs:276-284`） | — | 同 Bevy：`input` 的 `TextComposition.cursorByte` 是位元組，`sdl_window` 的 adapter 換算（2026-11-24 由平台的單位改過來，設計審查 S2） | — |
+| 輸入法組字游標的單位 | 單位是位元組（winit 給 Bevy 的 `PreeditCursor`，`bevy_text/src/text_edit.rs:21-25`） | Godot：平台層換成自己字串的索引（Wayland，`platform/linuxbsd/wayland/wayland_thread.cpp:3660`；反例 macOS 直接傳 NSRange 的 UTF-16，`platform/macos/godot_content_view.mm:220`） | 同 Bevy：`input` 的 `TextComposition.cursorByte` 是位元組，`sdl_window` 的 adapter 換算（2026-11-24 由平台的單位改過來，設計審查 S2） | — |
 
 ### 3.1 節點模型：文件樹（卡片照 L17 判；總宣告第 6.6 節要 U 比）
 
@@ -226,6 +226,7 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 - GPU 的像素只有 Linux Lavapipe；本批的渲染測試讀 `RenderCommands`，不比像素。
 - 半透明的顏色和 master 略有不同（第 4.7 節）。
 - 文字框不捲動、單行；游標以 code point 移動，組合字元的中間可以停（畫的時候退到字素邊界）。
+- 組字字串裡有控制字元或不完整的序列時，`ui` 把它們去掉（`UiSingleLineText`），組字游標的位元組是對原字串的，會偏那幾個位元組（退到字素邊界、夾在範圍內，不會越界）；輸入法幾乎不送控制字元。
 - 圖集只增不減：`fit` 的倍率是連續值，拖拉視窗大小時每個中間的字級都會點陣化一批字形，沒有清掉的方法（Bevy 有 `FontAtlasSet::clear`）；有量到的壓力時再加。
 - 字型加不進去、文件驗證不過時，每幀重試一次（文件不可變，結果相同）；成本小，沒有記住失敗。
 

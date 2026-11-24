@@ -277,6 +277,20 @@ TEST_CASE("sdl_window: a text editing event becomes a TextComposition in bytes")
     // The dummy driver is not "windows": code points.
     CHECK_MESSAGE(composition.cursorByte == 3, "[sw-ime-cursor-bytes]");
     CHECK_MESSAGE(composition.selectionBytes == 6, "[sw-ime-selection-bytes]");
+    // A cursor without a length (IBus, Fcitx): the length is not given. A length without its start: neither is.
+    edit.edit.length = -1;
+    Push(edit);
+    edit.edit.start = -1;
+    edit.edit.length = 2;
+    Push(edit);
+    backend->Pump(queue);
+    const auto more = queue.TakeInput();
+    REQUIRE(more.size() == 2);
+    const auto& noLength = std::get<I::TextComposition>(more[0]);
+    CHECK(noLength.cursorByte == 3);
+    CHECK_MESSAGE(noLength.selectionBytes == -1, "[sw-ime-length-not-given]");
+    const auto& noStart = std::get<I::TextComposition>(more[1]);
+    CHECK_MESSAGE((noStart.cursorByte == -1 && noStart.selectionBytes == -1), "[sw-ime-start-not-given]");
 }
 
 TEST_CASE("sdl_window: an event's time is on the engine base, no later than its delivery (SDL-3)") {

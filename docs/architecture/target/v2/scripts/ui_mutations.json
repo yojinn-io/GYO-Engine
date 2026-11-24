@@ -90,7 +90,7 @@
         "ui 4.4"
       ],
       "file": "engine/modules/ui/src/UiRuntime.cpp",
-      "find": ": edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursor), edit.composition.size());",
+      "find": ": edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursorByte), edit.composition.size());",
       "replace": ": edit.cursor + edit.composition.size();",
       "target": "gyo_ui_tests",
       "cases": "ui_text_field:*",

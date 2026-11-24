@@ -519,7 +519,7 @@ struct TextEdit final {
     std::size_t cursor{};          // bytes, at a code point boundary
     bool selectAll{};
     std::string composition;       // shown only (Design Invariant 6)
-    std::int32_t compositionCursor{-1};
+    std::int32_t compositionCursorByte{-1};
     std::string startValue;        // the binding value when editing began
 };
 
@@ -549,7 +549,7 @@ void ApplyTextInput(TextEdit& edit, const UiTextInput& input, const UiElement& f
     case UiTextInputKind::Insert: {
         // Committed text ends a composition (the input method committed it).
         edit.composition.clear();
-        edit.compositionCursor = -1;
+        edit.compositionCursorByte = -1;
         // The filter's result is cleaned too: ui keeps one line of whole code points.
         std::string accepted = UiSingleLineText(filter ? filter(field.id, input.text) : input.text);
         if (accepted.empty()) break;
@@ -563,7 +563,7 @@ void ApplyTextInput(TextEdit& edit, const UiTextInput& input, const UiElement& f
     }
     case UiTextInputKind::Composition:
         edit.composition = UiSingleLineText(input.text);
-        edit.compositionCursor = input.cursorByte;
+        edit.compositionCursorByte = input.cursorByte;
         break;
     case UiTextInputKind::Backspace:
         if (clearSelection() || edit.cursor == 0) break;
@@ -675,9 +675,9 @@ void AppendEditMarks(const PlacedText& placed, const TextEdit& edit, const std::
         }
     }
     // The composition's caret is in bytes of the composition (input's unit); SnapToGrapheme keeps it on a boundary.
-    const std::size_t cursor = edit.compositionCursor < 0
+    const std::size_t cursor = edit.compositionCursorByte < 0
         ? edit.cursor + edit.composition.size()
-        : edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursor), edit.composition.size());
+        : edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursorByte), edit.composition.size());
     const Text::CaretRect caret = Text::CaretAt(layout, Text::Caret{SnapToGrapheme(layout, cursor)});
     const float width = Math::Max(1.0F, std::round(sizePx * kCaretWidth));
     drawList.commands.emplace_back(UiQuadDraw{

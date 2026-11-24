@@ -146,8 +146,8 @@ struct MouseWheel final {
 
 // The input method's composition changed (Bevy's Ime::Preedit): the text being composed (UTF-8), and the start and
 // the length of its selected part in bytes of text, on code point boundaries (-1: not given). A backend converts its
-// platform's unit at its edge, as winit does for Bevy (Ime::Preedit's cursor is a byte range, bevy_window
-// event.rs:276-284): every reader then indexes text directly. An empty text ends the composition.
+// platform's unit at its edge; the unit is winit's for Bevy (a byte range, bevy_text text_edit.rs:21-25; the shape
+// here is a start and a length): every reader then indexes text directly. An empty text ends the composition.
 struct TextComposition final {
     std::string text;
     std::int32_t cursorByte = -1;

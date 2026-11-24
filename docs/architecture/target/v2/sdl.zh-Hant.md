@@ -1,6 +1,6 @@
 # SDL 的 Plugin（`plugins/sdl*`）
 
-更新：2026-11-24（子批 R2a `v8-arch-gyo2-sdl-r2a`：第 1 節 `sdl_gpu` 列、第 7 節 `sdl_gpu` 與 shader 工具、SDL-4 的 `GPUSubmit`、SDL-5）；2026-11-23（子批 A `v8-arch-gyo2-sdl-a`：第 6 節 `sdl_audio`、SDL-3 的音訊一半、Plugin 的名字、SDL 的全域狀態、`GYO::Sdl` 改 `GYO::SDL`）；2026-11-23（子批 W `v8-arch-gyo2-sdl-w`：`sdl` 函式庫的共用型別、第 5 節 `sdl_window`、SDL-3、SDL-4、SDL-7 與對應表、examples 的拿法；**最終文字在 W 的合併前核准**）；2026-11-23（新頁，子批 P `v8-arch-gyo2-sdl-p`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 9.1、10.2、12 節。本頁是 `plugins/sdl*` 的 owner 文件：子批 P 開頁、寫目錄的形、取得、選擇與 SDL-1、SDL-2；W（`sdl_window`）、A（`sdl_audio`）、R2a（`sdl_gpu`）各自補自己那一列與 SDL-3～SDL-7（草案在總宣告第 12 節）。
+更新：2026-11-24（SDL-7 表的 `TEXT_EDITING`：起點與長度換成位元組、依 video driver 選單位，第「升版」節加一條重查，`v8-arch-gyo2-sdl-u` 的後續）；2026-11-24（子批 R2a `v8-arch-gyo2-sdl-r2a`：第 1 節 `sdl_gpu` 列、第 7 節 `sdl_gpu` 與 shader 工具、SDL-4 的 `GPUSubmit`、SDL-5）；2026-11-23（子批 A `v8-arch-gyo2-sdl-a`：第 6 節 `sdl_audio`、SDL-3 的音訊一半、Plugin 的名字、SDL 的全域狀態、`GYO::Sdl` 改 `GYO::SDL`）；2026-11-23（子批 W `v8-arch-gyo2-sdl-w`：`sdl` 函式庫的共用型別、第 5 節 `sdl_window`、SDL-3、SDL-4、SDL-7 與對應表、examples 的拿法；**最終文字在 W 的合併前核准**）；2026-11-23（新頁，子批 P `v8-arch-gyo2-sdl-p`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 9.1、10.2、12 節。本頁是 `plugins/sdl*` 的 owner 文件：子批 P 開頁、寫目錄的形、取得、選擇與 SDL-1、SDL-2；W（`sdl_window`）、A（`sdl_audio`）、R2a（`sdl_gpu`）各自補自己那一列與 SDL-3～SDL-7（草案在總宣告第 12 節）。
 
 Owner：架構。
 
@@ -68,7 +68,7 @@ plugins/<名>/
 
 ### 升版
 
-改 `plugins/sdl/CMakeLists.txt` 的 URL 與 `URL_HASH`、本節的表、`plugins/sdl/tests/adapters/sdl/SDLBuildTests.cpp` 的版本；每個補丁重新上、上不去時照上表的移除條件。下載新版本要使用者同意（版本、來源、大小、SHA-256）。
+改 `plugins/sdl/CMakeLists.txt` 的 URL 與 `URL_HASH`、本節的表、`plugins/sdl/tests/adapters/sdl/SDLBuildTests.cpp` 的版本；每個補丁重新上、上不去時照上表的移除條件。另外重查 `sdl_window` 的 adapter 依賴的 SDL 實作：Windows 的輸入法位置是 UTF-16（`SDL_windowskeyboard.c` 的 `IME_SendEditingEvent`，和 SDL 文件寫的「UTF-8 字元」相反；3.4.0 驗過），其他後端是 code point——改了就改 `EditingUnitOf`（`plugins/sdl_window/src/adapters/sdl/Translate.hpp`）。下載新版本要使用者同意（版本、來源、大小、SHA-256）。
 
 ## 5. `sdl_window`
 
@@ -92,7 +92,7 @@ plugins/<名>/
 | SDL 事件 | `Message` |
 |---|---|
 | `KEY_DOWN`／`KEY_UP` | `input` `KeyboardInput`（scancode → `KeyCode`〔同為 USB HID 的值，`input` 沒命名的 → `Unidentified`〕、`down`、`repeat`、無修飾時的字〔`SDL_GetKeyFromScancode`〕、SDL 給的 `mod`） |
-| `TEXT_EDITING` | `input` `TextComposition`（`start`、`length` 換成字串的位元組：SDL 文件寫「UTF-8 字元」＝code point，Cocoa、Wayland、X11、IBus、Fcitx 都給 code point，只有 Windows 給 IMM 的 UTF-16 位置——adapter 照 `SDL_GetCurrentVideoDriver()` 選單位換算；-1＝沒給） |
+| `TEXT_EDITING` | `input` `TextComposition`（`start`、`length` 換成字串的位元組：SDL 文件寫「UTF-8 字元」＝code point，Cocoa、Wayland、X11、IBus、Fcitx 都給 code point，只有 Windows 給 IMM 的 UTF-16 位置〔3.4.0 驗過、升版重查〕——adapter 在建視窗時照 `SDL_GetCurrentVideoDriver()` 選單位換算；起點、長度各自可以是 -1＝沒給） |
 | `TEXT_INPUT` | `input` `TextCommitted` |
 | `MOUSE_MOTION` | `input` `CursorMoved`（`x`、`y` 換成邏輯像素）＋`MouseMotion`（`xrel`、`yrel` 照 SDL 給的），兩個 |
 | `MOUSE_BUTTON_DOWN`／`UP` | `input` `MouseButtonInput`（左、中、右、X1→Back、X2→Forward；其他鍵 → 0 個） |

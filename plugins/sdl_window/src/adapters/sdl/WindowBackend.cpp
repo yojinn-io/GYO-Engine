@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <climits>
 #include <cmath>
+#include <cstdint>
+#include <string_view>
 #include <utility>
 
 #include "engine/base/Assert.hpp"
@@ -119,7 +122,7 @@ std::int32_t EditingByteOffset(const std::string_view utf8, const std::int32_t u
 }
 
 Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const Engine::Time::TimePoint ceiling,
-                     SDL_Window* window, const std::size_t clipboardLimit) {
+                     SDL_Window* window, const std::size_t clipboardLimit, const EditingUnit editingUnit) {
     Translated out;
     const Engine::Time::TimePoint time = SDL::ConvertSDLTime(event.common.timestamp, pair, ceiling);
     const auto logical = [window](const float x, const float y) {
@@ -145,10 +148,12 @@ Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const E
         // input's unit is bytes of the text (TextComposition): SDL's units are converted here, at the edge.
         In::TextComposition m;
         m.text = event.edit.text != nullptr ? event.edit.text : "";
-        const EditingUnit unit = EditingUnitOf(SDL_GetCurrentVideoDriver());
-        m.cursorByte = EditingByteOffset(m.text, event.edit.start, unit);
+        m.cursorByte = EditingByteOffset(m.text, event.edit.start, editingUnit);
+        // Each of start and length may be -1 (not given; IBus and Fcitx send a cursor without a length): a length
+        // without its start is not given either. The sum is taken in 64 bits (the values come from the OS) and clamped.
         if (event.edit.start >= 0 && event.edit.length >= 0) {
-            m.selectionBytes = EditingByteOffset(m.text, event.edit.start + event.edit.length, unit) - m.cursorByte;
+            const std::int64_t end = std::min<std::int64_t>(std::int64_t{event.edit.start} + event.edit.length, INT32_MAX);
+            m.selectionBytes = EditingByteOffset(m.text, static_cast<std::int32_t>(end), editingUnit) - m.cursorByte;
         }
         m.time = time;
         out.input.emplace_back(std::move(m));
@@ -269,6 +274,8 @@ SDL_SystemCursor SystemCursorOf(const Win::CursorIcon icon) noexcept {
 struct WindowBackend::State {
     SDL_Window* window = nullptr;
     std::size_t clipboardLimit = 0;
+    // The unit of the input method's positions, of the video driver SDL runs (it does not change while the window is).
+    Adapter::EditingUnit editingUnit = Adapter::EditingUnit::CodePoint;
     std::array<SDL_Cursor*, 12> cursors{};
 };
 
@@ -306,6 +313,7 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
     auto state = std::make_unique<State>();
     state->window = window;
     state->clipboardLimit = settings.clipboardLimit;
+    state->editingUnit = Adapter::EditingUnitOf(SDL_GetCurrentVideoDriver());
     return std::unique_ptr<WindowBackend>(new WindowBackend(std::move(state)));
 }
 
@@ -331,7 +339,8 @@ void WindowBackend::Pump(EventQueue& queue) {
     std::optional<Engine::Time::TimePoint> last;
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
-        Translated translated = Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit);
+        Translated translated = Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit,
+                                                   state_->editingUnit);
         Adapter::OrderTimes(translated, last);
         static_cast<void>(queue.Accept(std::move(translated)));
     }
