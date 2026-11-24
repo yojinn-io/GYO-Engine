@@ -54,7 +54,8 @@ gyo_get_game_target(object_fps_pvp client object_fps_pvp_client)
 add_executable(gyo_object_fps_pvp_client_tests world/TestMain.cpp client/ClientTests.cpp)
 target_include_directories(gyo_object_fps_pvp_client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld doctest::doctest)
-gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render)
+gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render
+    world_ui ui_render)
 target_compile_definitions(gyo_object_fps_pvp_client_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp")
 if(MSVC)
@@ -67,12 +68,14 @@ add_test(NAME object_fps_pvp.client COMMAND gyo_object_fps_pvp_client_tests "--t
 set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown (no
-# Match: it shows that it is connecting), and it closes its window and exits with 0. Label gpu, as
-# object_connect.main.
+# The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown, and it
+# closes its window and exits with 0 -- the lobby (main), and the Client with --connect (no Match: it shows that it
+# is connecting; main_connect). Label gpu, as object_connect.main.
 gyo_get_game_target(object_fps_pvp main object_fps_pvp_main)
 add_test(NAME object_fps_pvp.main COMMAND ${object_fps_pvp_main} --frames 30)
 set_tests_properties(object_fps_pvp.main PROPERTIES LABELS "gpu" TIMEOUT 120)
+add_test(NAME object_fps_pvp.main_connect COMMAND ${object_fps_pvp_main} --frames 30 --connect 127.0.0.1:40000)
+set_tests_properties(object_fps_pvp.main_connect PROPERTIES LABELS "gpu" TIMEOUT 120)
 
 # The Match program: it reads the staged content, listens on a UDP port and
 # stops itself after 64 steps (one second). Label network: it opens a socket.
