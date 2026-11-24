@@ -2,7 +2,7 @@
 // sdl_gpu's adapter draws RenderCommands on an 8 by 8 picture and reads it back (GPUDevice::Capture, the same drawing
 // as on the window); each pixel is compared with its exact colour (master pitfall 18: compare the colour, not "something
 // was drawn"). Only a blend of a translucent colour may differ by one step (the GPU's rounding). The frames case runs
-// the Plugin in a Product on a hidden window. Tags "[gp-...]" are the mutants' expectations.
+// the Plugin in a Product on a shown window (at least one frame must reach it). Tags "[gp-...]" are the mutants' expectations.
 #include <doctest/doctest.h>
 
 #include <cstdint>
@@ -372,7 +372,9 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     GYO::Engine::Window::WindowSettings settings;
     settings.title = "sdl_gpu test";
     settings.size = {64, 48};
-    settings.hidden = true;
+    // Shown: a hidden window gives no picture (every frame skipped, which is not an error), and this case checks
+    // that frames reach the window (Xvfb on L1, a desktop elsewhere).
+    settings.hidden = false;
     d.options.Set(settings);
     GYO::Plugins::SDLWindow::SDLWindowOptions windowOptions;
     windowOptions.installRunner = false;
@@ -396,11 +398,18 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     const G::SDLGPUStatus* status = product.Buffer().Find<G::SDLGPUStatus>();
     REQUIRE(status != nullptr);
     MESSAGE("GPU driver: " << status->DriverName());
-    constexpr int kFrames = 4;
-    for (int i = 0; i < kFrames; ++i) {
+    // The window shows up a few frames after it is made (the display maps it): frames until one is shown, at most 120,
+    // pumping the OS events as a runner does.
+    GYO::Plugins::SDLWindow::SDLWindowPump* pump = product.Buffer().Find<GYO::Plugins::SDLWindow::SDLWindowPump>();
+    REQUIRE(pump != nullptr);
+    int kFrames = 0;
+    while (kFrames < 4 || (status->FramesShown() == 0 && kFrames < 120)) {
+        pump->Pump();
         auto ran = product.RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message));
+        ++kFrames;
     }
+    CHECK_MESSAGE(status->FramesShown() >= 1, "[gp-frames-shown] a frame reached the window (" << status->FramesSkipped() << " skipped)");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-frames-none-failed] no frame failed: " << status->LastFailure());
     CHECK_MESSAGE(status->FramesShown() + status->FramesSkipped() == kFrames, "[gp-frames-each] each frame is shown or skipped");
     CHECK_MESSAGE(status->RefusedTextureAsks() == 0, "[gp-frames-asks] the texture ask was applied");

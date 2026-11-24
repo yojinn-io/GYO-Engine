@@ -213,7 +213,7 @@ plugins/<名>/
 
 ## 範囲の限界
 
-- **`sdl_gpu`（R2a）**：GPU 的測試（label `gpu`：`sdl_gpu.pass2d`、`sdl_gpu.frames`）在 L1 只在 Linux 的 Lavapipe 跑；Windows（Direct3D 12）與 macOS（Metal）的 L1 列只建不跑，本機在 macOS（Metal）跑過，Windows 的實機沒跑。半透明混合的像素允許差 1（各 GPU 的捨入）；其他像素比確切的值。隱藏的視窗可能不給 swapchain 的畫面，所以 `sdl_gpu.frames` 只確認每幀「送出或跳過、沒有失敗」，視窗上的像素沒有比（swapchain 讀不回來；畫法和 `Capture` 共用同一段程式）。垂直同步之外的 present mode、HDR、多視窗、render to texture 沒有做。
+- **`sdl_gpu`（R2a）**：GPU 的測試（label `gpu`：`sdl_gpu.pass2d`、`sdl_gpu.frames`）在 L1 只在 Linux 的 Lavapipe 跑；Windows（Direct3D 12）與 macOS（Metal）的 L1 列只建不跑，本機在 macOS（Metal）跑過，Windows 的實機沒跑。半透明混合的像素允許差 1（各 GPU 的捨入）；其他像素比確切的值。隱藏的視窗不給 swapchain 的畫面（每幀都跳過，照契約不是錯誤），所以 `sdl_gpu.frames` 與 `sdl_gpu.pass3d` 的幀測試用**顯示的**視窗、像 runner 一樣泵事件，要求**至少一幀送到視窗**（`[gp-frames-shown]`、`[g3-frames-shown]`；R2b 的 3D 段加——之前全部跳過也會通過，是 Object_Connect 移植的 Linux CI 抓到的）；視窗上的像素沒有比（swapchain 讀不回來；畫法和 `Capture` 共用同一段程式）。垂直同步之外的 present mode、HDR、多視窗、render to texture 沒有做。
 - **`sdl_window`（W）**：SDL 的 dummy 驅動沒有 `SetWindowResizable`（`SDL_video.c:3126`），執行中改「能不能改大小」在 CI 看不到（建窗時不能改大小有測）；`ResizeWindow`、`cursorGrab` 在 dummy 驅動上同樣看不到效果；「值不同才呼叫」沒有計呼叫次數的測試；輸入法的組字、候選窗只能實機驗（K）；三平台的修飾鍵卡住（Bevy 點名的三種情形）沒有實測，SDL 3.4 的平台後端自己對齊（總宣告第 6.6、15 節），實機場次時一起測。`WarpCursor` 在 dummy 驅動上不可觀測（只確認不被拒）。live frame（OS 的 modal 迴圈中畫圖）不在本批。
 
 - `remove` 要 checkout 的追蹤檔沒有改動（否則拒絕、請用 `copy`），`restore` 把所有追蹤檔放回 HEAD；中途失敗時 checkout 停在拿掉的狀態（CI 的那個 job 已經失敗）。`copy` 建的是 HEAD 的工作樹：本機還沒 commit 的改動不在裡面。

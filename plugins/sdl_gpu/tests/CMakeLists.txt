@@ -4,7 +4,7 @@
 #   sdl_gpu.startup, sdl_gpu.shaders (label cpu): the startup errors and the embedded shaders against render's ABI;
 #     no GPU, every CI row.
 #   sdl_gpu.pass2d, sdl_gpu.pass3d, sdl_gpu.frames (label gpu): the 2D and 3D passes drawn on a GPU and read back,
-#     pixel by pixel, with SDL's GPU validation on; frames on a hidden window, World replacement. sdl_gpu.budget (label gpu) prints the frame
+#     pixel by pixel, with SDL's GPU validation on; frames on a shown window (at least one must reach it), World replacement. sdl_gpu.budget (label gpu) prints the frame
 #     time of a frame of a common 2D game. L1 runs them on Linux on Lavapipe under Xvfb; elsewhere they run on a machine with a GPU.
 add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp)
 target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

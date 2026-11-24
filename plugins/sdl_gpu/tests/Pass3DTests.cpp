@@ -457,7 +457,9 @@ TEST_CASE("sdl_gpu pass3d: GPUSubmit draws 3D frames on the window; a new World 
     GYO::Engine::Window::WindowSettings settings;
     settings.title = "sdl_gpu 3D test";
     settings.size = {64, 48};
-    settings.hidden = true;
+    // Shown: a hidden window gives no picture (every frame skipped, which is not an error), and this case checks
+    // that frames reach the window (Xvfb on L1, a desktop elsewhere).
+    settings.hidden = false;
     d.options.Set(settings);
     GYO::Plugins::SDLWindow::SDLWindowOptions windowOptions;
     windowOptions.installRunner = false;
@@ -480,11 +482,18 @@ TEST_CASE("sdl_gpu pass3d: GPUSubmit draws 3D frames on the window; a new World 
     O::Product& product = **built;
     const G::SDLGPUStatus* status = product.Buffer().Find<G::SDLGPUStatus>();
     REQUIRE(status != nullptr);
-    constexpr int kFrames = 4;
-    for (int i = 0; i < kFrames; ++i) {
+    // The window shows up a few frames after it is made (the display maps it): frames until one is shown, at most 120,
+    // pumping the OS events as a runner does.
+    GYO::Plugins::SDLWindow::SDLWindowPump* pump = product.Buffer().Find<GYO::Plugins::SDLWindow::SDLWindowPump>();
+    REQUIRE(pump != nullptr);
+    int kFrames = 0;
+    while (kFrames < 4 || (status->FramesShown() == 0 && kFrames < 120)) {
+        pump->Pump();
         auto ran = product.RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message));
+        ++kFrames;
     }
+    CHECK_MESSAGE(status->FramesShown() >= 1, "[g3-frames-shown] a frame reached the window (" << status->FramesSkipped() << " skipped)");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[g3-frames-none-failed] no frame failed: " << status->LastFailure());
     CHECK_MESSAGE(status->FramesShown() + status->FramesSkipped() == kFrames, "[g3-frames-each] each frame is shown or skipped");
     CHECK_MESSAGE(status->RefusedMeshAsks() == 0, "[g3-frames-asks] the mesh ask was applied");

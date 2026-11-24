@@ -1681,6 +1681,32 @@
    "target": "gyo_render_tests",
    "cases": "render_extract: a 3D camera*",
    "expect": "\\[re\\-3d\\-alpha\\-no\\-depth\\-write\\]"
+  },
+  {
+   "id": "gp-frames-never-shown",
+   "what": "GPUSubmit never draws on the window (every frame skipped)",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "    if (swapchain != nullptr) {\n        // When the uploads failed",
+   "replace": "    if (false) {\n        // When the uploads failed",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu frames:*",
+   "expect": "\\[gp\\-frames\\-shown\\]"
+  },
+  {
+   "id": "g3-frames-never-shown",
+   "what": "GPUSubmit never draws on the window (every frame skipped)",
+   "guards": [
+    "sdl section 7"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "    if (swapchain != nullptr) {\n        // When the uploads failed",
+   "replace": "    if (false) {\n        // When the uploads failed",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: GPUSubmit*",
+   "expect": "\\[g3\\-frames\\-shown\\]"
   }
  ]
 }
