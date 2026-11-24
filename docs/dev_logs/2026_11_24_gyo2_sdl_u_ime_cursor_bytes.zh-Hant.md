@@ -24,6 +24,7 @@ blocker 0、should 2、nit 9，全部處理：
 
 ## 驗收
 
-- 本機（macOS arm64）：`ui.*`、`input.module`、`window.module`、`sdl_window.*` 全過；完整 `ctest -L "cpu|gpu"` 與 L1 的結果見 PR。
-- 突變：新的 4 個與相關的 3 個（`ui-composition-caret-end`、`ui-key-while-composing`、`ui-text-before-key`）全部 killed。
+- 本機（macOS arm64）：`ctest -L "cpu|gpu"` 248/249（`cmake.PluginSelection`＝本機離線設定，既有）。
+- L1：run 45396600496（head `1ccf87ad`）三平台全綠。之後只有文件的 commit。
+- 突變：`sw-ime-*` 5 個與相關的 3 個（`ui-composition-caret-end`、`ui-key-while-composing`、`ui-text-before-key`）全部 killed。
 - Windows 的 UTF-16 那一支：CI 的 Windows 只跑 cpu／shader，沒有真的輸入法；`EditingUnitOf("windows")` 與換算由單元測試驗，實機的組字由 PvP 卡在 Windows 上看。
