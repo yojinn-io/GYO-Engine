@@ -1,0 +1,55 @@
+{
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": { "size": [100, 100], "scale_mode": "fit" },
+  "fonts": { "ui": "test.font" },
+  "default_font": "ui",
+  "colors": {
+    "background": "#000000FF",
+    "white": "#FFFFFFFF",
+    "gray": "#808080FF",
+    "normal": "#202020FF",
+    "focused": "#804000FF",
+    "editing": "#C06000FF"
+  },
+  "actions": [
+    { "id": "submit_address", "payload": "string" },
+    { "id": "go", "payload": "none" },
+    { "id": "back", "payload": "none" }
+  ],
+  "bindings": [
+    { "id": "address", "type": "string", "preview": "" }
+  ],
+  "canvases": [
+    {
+      "id": "main",
+      "backdrop_color": "background",
+      "cancel_action": "back",
+      "focus_order": ["address_field", "go_button"],
+      "children": [
+        {
+          "type": "text_field",
+          "id": "address_field",
+          "rect": { "anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [0, 0], "size_delta": [80, 20] },
+          "point_size": 10,
+          "text_color": { "color": "white" },
+          "action": "submit_address",
+          "background": { "normal": "normal", "focused": "focused", "pressed": "editing" },
+          "binding": "address",
+          "max_length": 8,
+          "placeholder": "host:port",
+          "placeholder_color": "gray"
+        },
+        {
+          "type": "button",
+          "id": "go_button",
+          "rect": { "anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [0, 50], "size_delta": [80, 20] },
+          "text": { "literal": "Go" },
+          "text_color": { "color": "white" },
+          "action": "go",
+          "background": { "normal": "normal" }
+        }
+      ]
+    }
+  ]
+}
