@@ -1,0 +1,578 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the model Module (docs/architecture/target/v2/model.zh-Hant.md; ids md- the model data rules, ma- skeletal animation's first layer, mr- retargeting, mf- the fbx loader and its adapter, mb- build-time link checks). One per independently wrong decision of Design Invariants MD-1 to MD-6 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): removing the before-the-first-key and after-the-last-key branches of the key search, or the empty-channel checks (each then reads outside a vector, undefined behaviour); the duration-0 branch of Wrap::Loop (without it fmod gives NaN, and a channel of a duration-0 clip has one key, so the value is the same); the unbound-track skip of Retarget (indexes with the unbound marker, undefined behaviour); Validate's BadData rule of the loader and the Unsupported rule (no file Blender writes reaches them); the equal-time key merge of the adapter (Blender's linear keys never collide); one skin per mesh, shared by its material parts (structural: the skin is made once per mesh, before the parts; the shared-skin case shows it); the mesh-skin range check of Validate (without it the check reads skins out of range, undefined behaviour); the PBR base colour fallback of the materials (Blender writes the FBX diffuse colour, so no file of ours reaches it); the importer memory limit following the byte limit (the contract example never nears 256 MiB, so no test sees the limit).",
+ "mutants": [
+  {
+   "id": "ma-sample-no-rest-first",
+   "what": "MD-3: nodes without a track are not put at rest before sampling",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    RestPose(nodes, out);\n    const float t",
+   "replace": "    const float t",
+   "target": "gyo_model_animation_tests",
+   "cases": "SampleClip leaves nodes without a track and channels without keys at rest",
+   "expect": "SameBits\\(pose\\[2\\], nodes\\[2\\]\\.rest\\)"
+  },
+  {
+   "id": "ma-sample-no-interpolation",
+   "what": "MD-3: between two keys the earlier key's value, no interpolation",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "const float s = (t - times[low]) / (times[high] - times[low]);",
+   "replace": "const float s = 0.0F;",
+   "target": "gyo_model_animation_tests",
+   "cases": "SampleClip interpolates between keys: translation linearly and rotation by slerp",
+   "expect": "\\{0, 2, 0\\}"
+  },
+  {
+   "id": "ma-sample-rotation-lerp",
+   "what": "MD-3: rotation keys interpolate component by component instead of by shortest-path slerp",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    return Math::Slerp(a, b, s);",
+   "replace": "    return Math::Quaternion{a.x + (b.x - a.x) * s, a.y + (b.y - a.y) * s, a.z + (b.z - a.z) * s, a.w + (b.w - a.w) * s};",
+   "target": "gyo_model_animation_tests",
+   "cases": "SampleClip rotation keys take the shortest path",
+   "expect": "AboutY\\(180\\)"
+  },
+  {
+   "id": "ma-loop-negative",
+   "what": "MD-3: Wrap::Loop does not count negative times back from the end",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (t < 0.0F) t += duration;\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
+   "expect": "-0\\.5F, Wrap::Loop"
+  },
+  {
+   "id": "ma-loop-end-is-start",
+   "what": "MD-3: a negative time that rounds to the end of the loop is left at the end, not at the start",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    return t < duration ? t : 0.0F;",
+   "replace": "    return t;",
+   "target": "gyo_model_animation_tests",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
+   "expect": "-1\\.0e-8F, Wrap::Loop"
+  },
+  {
+   "id": "ma-loop-as-clamp",
+   "what": "MD-3: Wrap::Loop does not repeat",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (wrap == Wrap::Clamp) return seconds;",
+   "replace": "    return seconds;",
+   "target": "gyo_model_animation_tests",
+   "cases": "Wrap::Loop repeats and negative times count back from the end",
+   "expect": "2\\.5F, Wrap::Loop"
+  },
+  {
+   "id": "ma-blend-rotation-kept",
+   "what": "MD-3: Blend leaves the rotation of a",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Slerp(from.rotation, to.rotation, weight)",
+   "replace": "from.rotation",
+   "target": "gyo_model_animation_tests",
+   "cases": "Blend mixes translation and scale linearly and rotation by slerp",
+   "expect": "AboutZ\\(22\\.5F\\)"
+  },
+  {
+   "id": "ma-modelspace-no-parent",
+   "what": "MD-3: ComputeModelSpace ignores the parent",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "out[i] = parent == kNoParent ? own : Math::Multiply(out[parent], own);",
+   "replace": "out[i] = own;",
+   "target": "gyo_model_animation_tests",
+   "cases": "ComputeModelSpace multiplies down the hierarchy",
+   "expect": "Near\\(arm, \\{2, 0, 0\\}\\)"
+  },
+  {
+   "id": "ma-modelspace-order",
+   "what": "MD-3: ComputeModelSpace multiplies local by parent, the wrong order",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(out[parent], own)",
+   "replace": "Math::Multiply(own, out[parent])",
+   "target": "gyo_model_animation_tests",
+   "cases": "ComputeModelSpace multiplies down the hierarchy",
+   "expect": "Near\\(hand, \\{2, 2, 0\\}\\)"
+  },
+  {
+   "id": "md-parent-self",
+   "what": "MD-2: a node may be its own parent",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "node.parent != kNoParent && node.parent >= i",
+   "replace": "node.parent != kNoParent && node.parent > i",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 1: BadNode",
+   "expect": "BadNode"
+  },
+  {
+   "id": "md-weights-sum",
+   "what": "MD-2: weights need not sum to 1",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "if (!allZero && std::fabs(sum - 1.0F) > kWeightSumTolerance) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 3: BadSkin",
+   "expect": "weights summing to neither 1 nor 0"
+  },
+  {
+   "id": "md-key-order",
+   "what": "MD-2: key times need not increase",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "if (i > 0 && !(keys.times[i - 1] < t)) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 4: BadClip",
+   "expect": "times not strictly increasing"
+  },
+  {
+   "id": "md-key-after-duration",
+   "what": "MD-2: a key time may lie after the duration",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "t < 0.0F || t > duration)",
+   "replace": "t < 0.0F)",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 4: BadClip",
+   "expect": "a time after the duration"
+  },
+  {
+   "id": "md-clip-node-count",
+   "what": "MD-2: a clip's node count need not be the node list's",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "    if (clip.nodeCount != nodes.size()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 4: BadClip",
+   "expect": "node count not the node list's"
+  },
+  {
+   "id": "md-skin-joint-range",
+   "what": "MD-2: a vertex may name a joint its skin does not have",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "if (mesh.vertexJoints[v][k] >= jointCount) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 3: BadSkin",
+   "expect": "a vertex names a joint the skin does not have"
+  },
+  {
+   "id": "md-order-clips-first",
+   "what": "MD-2: the clips are checked before the meshes",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "    // 2, then 3 for the same mesh\n",
+   "replace": "    for (const AnimationClip& clip : model.clips) {\n        if (auto r = ValidateClip(model.nodes, clip); !r) return r;\n    }\n",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate checks in order: nodes then each mesh then the clips",
+   "expect": "BadSkin"
+  },
+  {
+   "id": "mr-absolute-rotation",
+   "what": "MD-4: rotations are carried as absolute values, not relative to the source rest",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "const Math::Quaternion delta = Math::Multiply(Math::NormalizeOrIdentity(q), restSInverse);",
+   "replace": "const Math::Quaternion delta = Math::NormalizeOrIdentity(q);",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget carries motion relative to rest: a source rest key gives the target rest",
+   "expect": "AboutZ\\(-45\\)\\)"
+  },
+  {
+   "id": "mr-no-parent-frame",
+   "what": "MD-4: the parents' reference rotations are not corrected for",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "frame.rotation = Math::NormalizeOrIdentity(Math::Multiply(parent.rotation, own.rotation));",
+   "replace": "frame.rotation = Math::Quaternion{};",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget keeps the model-space change of rotation when parent rests differ,Retarget turns translation motion into the target parent's frame",
+   "expect": "(?=[\\s\\S]*(?:SameRotation\\(sourceChange, targetChange\\)))[\\s\\S]*(?:\\{1, 1, 0\\})"
+  },
+  {
+   "id": "mr-absolute-translation",
+   "what": "MD-4: translations are carried as absolute values",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "restT.translation + Math::Rotate(c, v - restS.translation) * k",
+   "replace": "Math::Rotate(c, v) * k",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget carries motion relative to rest: a source rest key gives the target rest",
+   "expect": "\\{0, 2, 0\\}"
+  },
+  {
+   "id": "mr-no-parent-scale",
+   "what": "MD-4: the parents' rest scales do not enter the translation factor",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "const float k = settings.translationScale * parentS.scale / parentT.scale;",
+   "replace": "const float k = settings.translationScale;",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget scales translation motion by translationScale and the parents' rest scales",
+   "expect": "\\{0, 3, 1\\}"
+  },
+  {
+   "id": "mr-translation-scale-ignored",
+   "what": "MD-4: translationScale is ignored",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "const float k = settings.translationScale * parentS.scale / parentT.scale;",
+   "replace": "const float k = parentS.scale / parentT.scale;",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget scales translation motion by translationScale and the parents' rest scales",
+   "expect": "\\{0, 3, 1\\}"
+  },
+  {
+   "id": "mr-absolute-scale",
+   "what": "MD-4: scales are carried as absolute values",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "Multiply(restT.scale, Divide(s, restS.scale))",
+   "replace": "s",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget carries scale as a ratio to rest",
+   "expect": "\\{2, 3, 3\\}"
+  },
+  {
+   "id": "mr-unsorted",
+   "what": "MD-4: tracks stay in the source's order",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "    std::sort(out.tracks.begin(), out.tracks.end(), [](const Track& a, const Track& b) { return a.node < b.node; });\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget orders the tracks by the target's nodes",
+   "expect": "out\\.tracks\\[0\\]\\.node == 0"
+  },
+  {
+   "id": "mr-binding-twice",
+   "what": "MD-4: a node may be bound twice",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "if (targetOf[binding.source] != kUnbound || targetBound[binding.target]) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget rule 2: BadBinding",
+   "expect": "\\{\\{1, 1\\}, \\{2, 1\\}\\}"
+  },
+  {
+   "id": "mr-scale-sign",
+   "what": "MD-4: a translation scale of 0 or below is accepted",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "if (!std::isfinite(settings.translationScale) || !(settings.translationScale > 0.0F)) {",
+   "replace": "if (!std::isfinite(settings.translationScale)) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget rule 1: BadTranslationScale",
+   "expect": "0\\.0F\\) == RetargetCode::BadTranslationScale"
+  },
+  {
+   "id": "mr-rest-scale-source",
+   "what": "MD-4: a source parent chain's rest scale is not checked",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "if (!ParentFrame(source, sourceFrames, binding.source).valid ||",
+   "replace": "if (false ||",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget rule 3: BadRestScale",
+   "expect": "a non-uniform scale above a bound source node"
+  },
+  {
+   "id": "mr-reference-ignored",
+   "what": "MD-4: the reference poses the caller gives are ignored (the rest is used)",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "    if (!given.empty()) {",
+   "replace": "    if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Retarget measures motion from the reference poses the caller gives",
+   "expect": "values\\[0\\], AboutZ\\(-45\\)"
+  },
+  {
+   "id": "md-joints-without-skin",
+   "what": "MD-2: a mesh without a skin may carry joints and weights",
+   "guards": [
+    "model MD-2"
+   ],
+   "file": "engine/modules/model/src/ModelData.cpp",
+   "find": "if (!mesh.vertexJoints.empty() || !mesh.vertexWeights.empty()) {",
+   "replace": "if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "Validate rule 3: BadSkin",
+   "expect": "joints and weights on a mesh without a skin"
+  },
+  {
+   "id": "mr-ambiguous",
+   "what": "MD-4: BindByName binds a name that one list has twice",
+   "guards": [
+    "model MD-4"
+   ],
+   "file": "engine/modules/model/src/Retarget.cpp",
+   "find": "            if (!inserted) it->second = kAmbiguous;\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "BindByName: a name on two nodes of one list is AmbiguousName when the other list has it",
+   "expect": "has_value\\(\\)"
+  },
+  {
+   "id": "mf-settings-unknown",
+   "what": "MD-6: an unknown settings member is accepted",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "            return BadSettings(\"unknown member \\\"\" + std::string(member.key) + \"\\\"\");",
+   "replace": "            continue;",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "materials"
+  },
+  {
+   "id": "mf-not-fbx",
+   "what": "MD-6 rule 1: bytes ufbx does not recognize are Undecodable, not NotFbx",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "error.type == UFBX_ERROR_UNRECOGNIZED_FILE_FORMAT || error.type == UFBX_ERROR_EMPTY_FILE",
+   "replace": "false",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader rule 1: NotFbx",
+   "expect": "NotFbx"
+  },
+  {
+   "id": "mf-textures-not-declared",
+   "what": "MD-6: a material's texture is not declared as a reference (asset decision 11)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "            material.baseColorImage = context.ReferencePath<Image::ImageData>(material.baseColorTexture);\n",
+   "replace": "",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "declared\\.size\\(\\) == 1"
+  },
+  {
+   "id": "mf-textures-setting-ignored",
+   "what": "MD-6: textures false still declares the textures",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "    if (settings.textures) {",
+   "replace": "    if (true) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader declares each material's texture as an image by path unless textures is false",
+   "expect": "FbxSettings\\{true, false\\}\\)\\.empty\\(\\)"
+  },
+  {
+   "id": "mf-textures-setting-unread",
+   "what": "MD-6: the textures member of the settings is refused",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/FbxLoader.cpp",
+   "find": "        } else if (member.key == \"textures\") {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader settings: meshes and textures and nothing else",
+   "expect": "noTextures\\.has_value\\(\\)"
+  },
+  {
+   "id": "mf-uv-not-flipped",
+   "what": "MD-6: v is not turned to the top-left origin",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "out.uvs.push_back({uv.x, 1.0F - uv.y});",
+   "replace": "out.uvs.push_back({uv.x, uv.y});",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: the skinned mesh",
+   "expect": "bar\\.uvs\\[v\\]\\.y"
+  },
+  {
+   "id": "mf-weights-not-scaled",
+   "what": "MD-6: the kept weights are not scaled to sum to 1 (the loader then refuses the file by rule 4, BadData)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "weights[k] = static_cast<float>(all[k].first / total);",
+   "replace": "weights[k] = static_cast<float>(all[k].first);",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: the four largest weights scaled and no material",
+   "expect": "REQUIRE\\( loaded\\.has_value\\(\\) \\)"
+  },
+  {
+   "id": "mf-weights-all",
+   "what": "MD-6: more than the four largest weights reach the vertex (the fifth replaces the fourth)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "const std::size_t count = std::min<std::size_t>(4, all.size());",
+   "replace": "const std::size_t count = std::min<std::size_t>(4, all.size()); if (all.size() > 4) std::swap(all[3], all[4]);",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: the four largest weights scaled and no material",
+   "expect": "node\\(k\\) != aux3"
+  },
+  {
+   "id": "mf-no-merge",
+   "what": "MD-6: the corners are not turned into indexed vertices",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "        if (auto r = MergeVertices(out); !r) return r;\n",
+   "replace": "",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: the skinned mesh",
+   "expect": "indices\\.size\\(\\) == 60"
+  },
+  {
+   "id": "mf-axes",
+   "what": "MD-6: the space is not turned to the left-handed model space (Blender's file is already +Y up, so only the handedness shows)",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "    opts.target_axes = ufbx_axes_left_handed_y_up;\n",
+   "replace": "",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: Blender's front view kept with right +X and up +Y and away +Z",
+   "expect": "Math::Distance\\(p, want\\)"
+  },
+  {
+   "id": "mf-not-fbx-format",
+   "what": "MD-6 rule 1: a file ufbx reads as another format (OBJ) is taken",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "    if (scene->metadata.file_format != UFBX_FILE_FORMAT_FBX) {",
+   "replace": "    if (false) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader rule 1: NotFbx",
+   "expect": "v 0 0 0"
+  },
+  {
+   "id": "mf-meshes-ignored",
+   "what": "MD-6: meshes false still reads the geometry",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "    opts.ignore_geometry = !options.meshes;",
+   "replace": "    opts.ignore_geometry = false;",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader with meshes false: the same nodes and materials and clips but no meshes",
+   "expect": "meshes\\.empty\\(\\)"
+  },
+  {
+   "id": "mf-texture-unnamed",
+   "what": "MD-6: the base colour texture is not named",
+   "guards": [
+    "model MD-6"
+   ],
+   "file": "engine/modules/model/src/adapters/ufbx/UfbxImport.cpp",
+   "find": "            if (const ufbx_texture* texture = color.texture) {",
+   "replace": "            if (const ufbx_texture* texture = nullptr) {",
+   "target": "gyo_model_fbx_tests",
+   "cases": "FbxLoader reads the contract example: the material is data and the texture only named",
+   "expect": "paint\\.png"
+  },
+  {
+   "id": "mb-ufbx-public",
+   "what": "MD-1: gyo_model hands ufbx to its users",
+   "guards": [
+    "model MD-1"
+   ],
+   "file": "engine/modules/model/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_model PRIVATE gyo_ufbx)",
+   "replace": "target_link_libraries(gyo_model PUBLIC gyo_ufbx)",
+   "target": "gyo_model_animation_tests",
+   "expect": "gyo_model exposes gyo_ufbx",
+   "expect_build_failure": true
+  },
+  {
+   "id": "mb-extra-link",
+   "what": "MD-5: gyo_model links something more than its five",
+   "guards": [
+    "model MD-5"
+   ],
+   "file": "engine/modules/model/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_model PUBLIC GYO::Base GYO::Math)",
+   "replace": "target_link_libraries(gyo_model PUBLIC GYO::Base GYO::Math GYO::Kernel)",
+   "target": "gyo_model_animation_tests",
+   "expect": "gyo_model links",
+   "expect_build_failure": true
+  }
+ ]
+}

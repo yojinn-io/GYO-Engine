@@ -84,10 +84,11 @@ class GuardTree(unittest.TestCase):
         self.assertEqual(guard.camel_case("base", guard.ACRONYMS), "Base")
 
     def test_acronym_table(self):
-        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC"})
+        self.assertEqual(guard.ACRONYMS, {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC", "gpu": "GPU"})
         self.assertEqual(guard.camel_case("io", guard.ACRONYMS), "IO")
         self.assertEqual(guard.camel_case("sdl_audio", guard.ACRONYMS), "SDLAudio")
         self.assertEqual(guard.camel_case("os", guard.ACRONYMS), "OS")
+        self.assertEqual(guard.camel_case("render_gpu", guard.ACRONYMS), "RenderGPU")
 
     def test_engine_layers_are_pinned(self):
         self.assertEqual(guard.ENGINE_LAYERS, {"core": "units", "ecs": "units", "modules": "units",

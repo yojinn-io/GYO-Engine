@@ -126,9 +126,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.GYO_HOST_TOOLS }}
-          # No source hash while the shader tool sources are absent (gyo2 has no
-          # render module); hash the tool's sources again when they return.
-          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}
+          # sdl_gpu's shader tool host build (docs/architecture/target/v2/sdl.zh-Hant.md,
+          # sdl_gpu). The key has the pins (Dependencies.cmake), then the tool's own
+          # sources. A change of the tool alone restores the build of the same pins
+          # (restore-keys): DXC and the rest are up to date there and only the tool
+          # is built again; new pins build everything.
+          key: shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/**', 'plugins/sdl_gpu/src/adapters/sdl/ShaderTool.cpp', 'engine/core/os/cmake/GyoProcessCodePage.cmake') }}
+          restore-keys: |
+            shader-tools-v4-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('plugins/sdl_gpu/shader_tool/cmake/Dependencies.cmake') }}-
 
       - name: Build the registered graph and its tests
         id: build
@@ -149,6 +154,36 @@ jobs:
         run: |
           ctest --test-dir "$env:GYO_HOST_TOOLS" -C Release -L shader --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/shader-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/shader-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The GPU tests (label gpu: sdl_gpu's 2D pass read back pixel by pixel,
+      # frames on a hidden window) on Mesa's Lavapipe under Xvfb, Linux only.
+      # The Windows and macOS rows build them; a machine with a GPU runs them.
+      - name: Run Linux GPU tests
+        id: gpu
+        timeout-minutes: 20
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          SDL_VIDEODRIVER: x11
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -euo pipefail
+          mapfile -t icds < <(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print)
+          if [ "${#icds[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one Mesa Lavapipe ICD, found ${#icds[@]}"
+            exit 1
+          fi
+          export VK_DRIVER_FILES="${icds[0]}"
+          export VK_ICD_FILENAMES="$VK_DRIVER_FILES"
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/gyo-xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary > "build/target/_build/$PRESET/logs/vulkan-info.log" 2>&1
+          xvfb-run -a -s '-screen 0 1920x1080x24' ctest \
+            --test-dir "build/target/_build/$PRESET" -L gpu \
+            --no-tests=error --output-on-failure \
+            --output-junit "$GITHUB_WORKSPACE/build/target/_build/$PRESET/logs/gpu-tests.xml" \
+            2>&1 | tee "build/target/_build/$PRESET/logs/gpu-tests.log"
 
       # Same command as the toolchain packaging row, which also runs it on
       # Windows: the core preset leaves MSVC on /Zi, whose shared per-target
@@ -257,6 +292,7 @@ jobs:
           BUILD_RESULT: ${{ steps.build.outcome }}
           TEST_RESULT: ${{ steps.tests.outcome }}
           SHADER_RESULT: ${{ steps.shaders.outcome }}
+          GPU_RESULT: ${{ steps.gpu.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
           GO_RESULT: ${{ steps.go.outcome }}
           GO_SERVICES_RESULT: ${{ steps.go_services.outcome }}
@@ -270,12 +306,13 @@ jobs:
           | Build (registered games, default tools, engine, tests) | $env:BUILD_RESULT |
           | CPU / headless tests | $env:TEST_RESULT |
           | Host shader tests (Linux) | $env:SHADER_RESULT |
+          | GPU tests on Lavapipe (Linux) | $env:GPU_RESULT |
           | Core baseline (Linux) | $env:CORE_RESULT |
           | Go vet / test / race (Linux) | $env:GO_RESULT |
           | Go service cross-builds (Linux) | $env:GO_SERVICES_RESULT |
 
           L1 builds and tests only. Packaging and installed acceptance run on master integration.
-          L1 runs no GPU tests: the engine has no render module to test. macos-x64 is a local build target only and has no L1 row.
+          Only Linux runs the GPU tests (Lavapipe, software Vulkan); the Windows and macOS rows build them. macos-x64 is a local build target only and has no L1 row.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
   quick:

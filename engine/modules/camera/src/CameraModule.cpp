@@ -46,10 +46,10 @@ ComputedCamera ComputedFromCamera(const Camera&) { return ComputedCamera{}; }
 SystemResult UpdateCameras(Kernel::Query<Kernel::Read<Camera>, Kernel::Read<CameraTarget>, Kernel::Read<Projection>,
                                          Kernel::Write<ComputedCamera>>
                                cameras,
-                           Kernel::Res<CameraTargetSizes> sizes) {
-    cameras.ForEach([&sizes](Kernel::EntityId, const Camera& camera, const CameraTarget& target,
-                             const Projection& projection, Kernel::Mut<ComputedCamera> computed) {
-        ComputedCamera next = Compute(camera, projection, sizes->Find(target));
+                           Kernel::Query<Kernel::Read<Letterbox>> letterboxes, Kernel::Res<CameraTargetSizes> sizes) {
+    cameras.ForEach([&sizes, &letterboxes](Kernel::EntityId id, const Camera& camera, const CameraTarget& target,
+                                           const Projection& projection, Kernel::Mut<ComputedCamera> computed) {
+        ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id));
         if (!SameComputed(computed.Read(), next)) *computed = std::move(next);
     });
     return {};
@@ -67,6 +67,7 @@ void CameraModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<Camera2d>({.name = "Camera2d"});
     r.Component<Camera3d>({.name = "Camera3d"});
     r.Component<ComputedCamera>({.name = "ComputedCamera"});
+    r.Component<Letterbox>({.name = "Letterbox"});
     r.Resource<CameraTargetSizes>({.name = "CameraTargetSizes"});
     // Camera does not give a Projection (as in Bevy): with Camera and Camera2d in one spawn, the Projection would
     // come from the lower ComponentId.

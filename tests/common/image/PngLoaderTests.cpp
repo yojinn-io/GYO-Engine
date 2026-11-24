@@ -274,7 +274,7 @@ TEST_CASE("PngLoader turns every colour type and bit depth into RGBA8 (rule 4's 
     SUBCASE("greyscale with alpha: (g, g, g, a)") {
         CHECK(Loaded(File(1, 1, 8, 4, {Of({90, 30})}, {}, 0, 2)) == Pixels{90, 90, 90, 30});
     }
-    SUBCASE("RGB of 8 bits: (r, g, b, 255), Object_Connect's white1x1.png") {
+    SUBCASE("RGB of 8 bits: (r, g, b, 255)") {
         CHECK(Loaded(File(2, 1, 8, 2, {Of({1, 2, 3, 255, 255, 255})}, {}, 0, 3)) ==
               Pixels{1, 2, 3, 255, 255, 255, 255, 255});
     }
@@ -343,7 +343,7 @@ TEST_CASE("PngLoader reads Adam7 interlaced files as the same pixels") {
 
 TEST_CASE("PngLoader ignores the colour chunks, other ancillary chunks, CRCs and split IDAT") {
     const Rows rows = Rgba3x2();
-    // Object_Connect's textures carry sRGB, gAMA and pHYs before IDAT.
+    // Textures exported by common tools carry sRGB, gAMA and pHYs before IDAT.
     const std::vector<Bytes> colour{Chunk("sRGB", Of({0})), Chunk("gAMA", Of({0, 0, 0xB1, 0x8F})),
                                     Chunk("pHYs", Of({0, 0, 0x0E, 0xC3, 0, 0, 0x0E, 0xC3, 1})),
                                     Chunk("tEXt", Of({'a', 0, 'b'}))};

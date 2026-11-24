@@ -10,7 +10,7 @@
     "naming DI 1"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\"}",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
    "replace": "ACRONYMS = {}",
    "expect": "FAIL: test_n1_acronym_unit_spelled_otherwise_is_reported",
    "command": [
@@ -671,8 +671,8 @@
     "rebuild-naming N17 縮寫表"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\"}",
-   "replace": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"spsc\": \"SPSC\"}",
+   "find": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"sdl\": \"SDL\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
+   "replace": "ACRONYMS = {\"io\": \"IO\", \"os\": \"OS\", \"spsc\": \"SPSC\", \"gpu\": \"GPU\"}",
    "expect": "FAIL: test_n1_plugin_unit_namespace_is_derived_from_its_directory",
    "command": [
     "{python}",

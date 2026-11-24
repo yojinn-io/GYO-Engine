@@ -10,6 +10,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace GYO::Test::Orchestration;
 
@@ -158,6 +159,22 @@ TEST_CASE("extract: each frame the reader extracts what the source has after its
     REQUIRE(static_cast<bool>(p.RunFrame()));
     CHECK_MESSAGE(Joined() == "in render | extract n=101 | in render | extract n=202", "[or-ex-frame] " << Joined());
     CHECK(p.World("Render").GetWorld().Resource<Mirror>()->n == 202);
+}
+
+TEST_CASE("extract: a unit's WorldSetup tells the World's extractFrom; empty when there is none") {
+    std::vector<std::string> seen;
+    O::ProductDescription d = Pair();
+    for (O::WorldDescription& w : d.worlds) {
+        w.build = [base = w.build, &seen](O::WorldSetup& s) {
+            base(s);
+            seen.push_back(s.WorldName() + "<-" + s.ExtractFrom());
+        };
+    }
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    REQUIRE(seen.size() == 2);
+    CHECK_MESSAGE(seen[0] == "Sim<-", "[or-ex-setup-none] " << seen[0]);
+    CHECK_MESSAGE(seen[1] == "Render<-Sim", "[or-ex-setup-from] " << seen[1]);
 }
 
 TEST_CASE("extract: O-E9: extractFrom names no World, the World itself, or a later one; the reader is not checked") {
