@@ -177,6 +177,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | **已處理**：#320 c862aed1（2D／3D 幀測試改用顯示的視窗、要求至少一幀送到視窗） |
 | `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批（K）順手改 |
 | Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | **進行中**：使用者在卡裡直接要求，卡已改好未 commit，等使用者實機試 |
+| JSON Module 加排版輸出（pretty print）：`gyo.ui` 經 JSON Module 寫出變成一行，Editor 回來前要有排版輸出，否則檔案 diff 沒法看（`v8-arch-gyo2-sdl-u-three-judgments` 2） | U #322 | Editor（工具線）回來前 |
+| `TextComposition.cursor` 改成位元組、由 `sdl_window` 的 adapter 換算（同 winit；`v8-arch-gyo2-sdl-u-three-judgments` 3） | U #322 設計審查 S2 | 交 U 卡另開小 PR，PvP 大廳接上前合 |
 
 ## 不擋路的小事
 
