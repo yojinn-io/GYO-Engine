@@ -5,6 +5,7 @@
 
 #include "engine/base/Assert.hpp"
 #include "engine/render/RenderCommands.hpp"
+#include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderTextures.hpp"
 
 namespace GYO::Engine::Render {
@@ -99,6 +100,27 @@ const TextureDesc* RenderTextures::Find(const TextureId id) const noexcept {
         if (value == id.value) return &desc;
     }
     return nullptr;
+}
+
+MeshId RenderMeshes::Create(std::vector<Vertex3D> vertices, std::vector<std::uint32_t> indices) {
+    GYO_ASSERT(!vertices.empty() && !indices.empty() && "a mesh without vertices or indices");
+    GYO_ASSERT(indices.size() % 3 == 0 && "a mesh's indices are not whole triangles");
+    GYO_ASSERT(next_ != 0 && "every mesh id has been given");
+    const MeshId id{next_++};
+    live_.push_back(id.value);
+    pending_.emplace_back(MeshCreate{id, std::move(vertices), std::move(indices)});
+    return id;
+}
+
+void RenderMeshes::Release(const MeshId id) {
+    const auto it = std::find(live_.begin(), live_.end(), id.value);
+    GYO_ASSERT(it != live_.end() && "a release of a mesh that is not live");
+    live_.erase(it);
+    pending_.emplace_back(MeshRelease{id});
+}
+
+bool RenderMeshes::Live(const MeshId id) const noexcept {
+    return std::find(live_.begin(), live_.end(), id.value) != live_.end();
 }
 
 } // namespace GYO::Engine::Render

@@ -16,11 +16,14 @@
 #include <cstdint>
 #include <optional>
 #include <type_traits>
+#include <variant>
 #include <vector>
 
 #include "engine/kernel/Hash.hpp"
 #include "engine/math/geometry/Rect.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
+#include "engine/math/linear/Vec3.hpp"
 #include "engine/render/RenderTextures.hpp"
 
 namespace GYO::Engine::Render {
@@ -113,9 +116,76 @@ struct Pass2D final {
     std::vector<Draw2D> draws;
 };
 
+// One vertex of a 3D mesh: position, normal and uv, 32 bytes (ShaderAbi.hpp: the 3D pass binds position and uv; the
+// normal is kept for lit shading to come). Model space follows math.md (left-handed, +Y up, +Z forward).
+struct Vertex3D final {
+    Math::Vec3 position{};
+    Math::Vec3 normal{};
+    Math::Vec2 uv{};
+};
+static_assert(sizeof(Vertex3D) == 32 && alignof(Vertex3D) == 4);
+static_assert(std::is_trivially_copyable_v<Vertex3D> && std::is_standard_layout_v<Vertex3D>);
+
+// A mesh kept from frame to frame (RenderMeshes). MeshId{} (0): none, the draw takes the pass's own vertices.
+struct MeshId final {
+    std::uint32_t value = 0;
+
+    friend bool operator==(const MeshId&, const MeshId&) = default;
+};
+
+// Which triangles a 3D draw leaves out.
+enum class CullMode : std::uint8_t {
+    // Both faces are drawn.
+    None = 1,
+    // Triangles whose corners go clockwise on the screen are left out (counter-clockwise is the front, as Bevy's
+    // FrontFace::Ccw).
+    Back,
+};
+
+// One draw of a 3D pass: indexCount indices from indexOffset of its mesh's indices (or of the pass's own, mesh {}),
+// each index plus vertexOffset naming a vertex there, as triangles, placed by world.
+struct Draw3D final {
+    MeshId mesh{};
+    std::uint32_t indexOffset = 0;
+    std::uint32_t indexCount = 0;
+    std::uint32_t vertexOffset = 0;
+    // Local to world.
+    Math::Matrix4 world{};
+    // Multiplies the texture's colours (bytes as stored, alpha straight, as the 2D pass).
+    Color8 color{255, 255, 255, 255};
+    TextureId texture{};
+    BlendMode blend = BlendMode::Opaque;
+    // false: drawn over whatever is nearer (an overlay in the world).
+    bool depthTest = true;
+    bool depthWrite = true;
+    CullMode cull = CullMode::None;
+};
+
+// A 3D pass on one target (one camera's 3D scene). Its depth starts cleared (each camera has a depth of its own, as
+// in Bevy: a viewmodel camera after the world camera draws over the world); its colour starts as the target is (the
+// camera's clear is a pass of its own before it). Draws are drawn in their order.
+struct Pass3D final {
+    std::uint32_t target = 0;
+    // As Pass2D's: the pixels of the target the pass draws on; nullopt: the whole target.
+    std::optional<PixelRect> viewport;
+    // World to clip space (math.md: depth 0 at near, 1 at far; y up).
+    Math::Matrix4 clipFromWorld{};
+    // Geometry made for this frame only (a mesh skinned on the CPU, a shape that changes), named by draws with mesh {}.
+    std::vector<Vertex3D> vertices;
+    std::vector<std::uint32_t> indices;
+    std::vector<Draw3D> draws;
+};
+
+using RenderPass = std::variant<Pass2D, Pass3D>;
+
+// The target a pass draws on.
+[[nodiscard]] inline std::uint32_t TargetOf(const RenderPass& pass) noexcept {
+    return std::visit([](const auto& p) { return p.target; }, pass);
+}
+
 // This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
 struct RenderCommands final {
-    std::vector<Pass2D> passes;
+    std::vector<RenderPass> passes;
 };
 
 // The render World is not decided state: nothing of it goes into a consistency fingerprint (as sdl_window's handle).
