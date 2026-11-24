@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the render Module, render_world and sdl_gpu (batches R2a, r2b-2d and r2b-3d, v8-arch-gyo2-sdl-r2a, v8-arch-gyo2-sdl-r2b-2d and v8-arch-gyo2-sdl-r2b-3d; Design Invariants RD-1 to RD-7 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-, g3-, p2-, re-). The gp- mutants and the g3- mutants other than g3-abi- need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
+ "description": "Declared mutants of the render Module, render_world and sdl_gpu (batches R2a, r2b-2d and r2b-3d, v8-arch-gyo2-sdl-r2a, v8-arch-gyo2-sdl-r2b-2d and v8-arch-gyo2-sdl-r2b-3d; Design Invariants RD-1 to RD-9 in docs/architecture/target/v2/render.zh-Hant.md, SDL-4, SDL-5 and section 7 in sdl.zh-Hant.md; ids rd-, rw-, sg-, gp-, g3-, p2-, re-). The gp- mutants and the g3- mutants other than g3-abi- need a GPU (label gpu: a machine with one, or Lavapipe). A mutant is killed only when the named test case fails with the expected message.",
  "mutants": [
   {
    "id": "rd-clip-y-not-turned",
@@ -153,8 +153,8 @@
     "render RD-3"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "    live_.erase(it);\n",
-   "replace": "",
+   "find": "    GYO_ASSERT(it != live_.end() && \"a release of a texture that is not live\");\n    live_.erase(it);\n",
+   "replace": "    GYO_ASSERT(it != live_.end() && \"a release of a texture that is not live\");\n",
    "target": "gyo_render_tests",
    "cases": "render: texture ids*",
    "expect": "\\[rd\\-tex\\-released\\-gone\\]"
@@ -908,13 +908,13 @@
   },
   {
    "id": "re-held-not-ended",
-   "what": "sprite_render never lets a held picture go",
+   "what": "render_world never lets a held picture go",
    "guards": [
     "render section 7"
    ],
-   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
-   "find": "    cache.EndFrame(texs);",
-   "replace": "    static_cast<void>(texs);",
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "    images.Get().EndFrame(textures.Get());\n",
+   "replace": "",
    "target": "gyo_render_tests",
    "cases": "render_extract: a HUD camera*",
    "expect": "\\[re\\-held\\-released\\]"
@@ -931,32 +931,6 @@
    "target": "gyo_render_tests",
    "cases": "pipeline2d: an asset requested again*",
    "expect": "\\[p2\\-image\\-new\\-life\\]"
-  },
-  {
-   "id": "p2-later-clears-target",
-   "what": "a later camera on a target clears the whole target",
-   "guards": [
-    "render RD-7"
-   ],
-   "file": "engine/modules/render/src/Pipeline2d.cpp",
-   "find": "    if (firstOnTarget) {",
-   "replace": "    if (true) {",
-   "target": "gyo_render_tests",
-   "cases": "pipeline2d: a later camera*",
-   "expect": "\\[p2\\-clear\\-later\\]"
-  },
-  {
-   "id": "re-every-camera-first",
-   "what": "sprite_render tells every camera it is the first on its target",
-   "guards": [
-    "render RD-7"
-   ],
-   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
-   "find": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, first);",
-   "replace": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, true);\n        static_cast<void>(first);",
-   "target": "gyo_render_tests",
-   "cases": "render_extract: a split screen*",
-   "expect": "\\[re\\-split\\-second\\]"
   },
   {
    "id": "p3-opaque-far-first",
@@ -1628,6 +1602,19 @@
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: GPUSubmit*",
    "expect": "\\[g3\\-world\\-new\\-forgets\\]"
+  },
+  {
+   "id": "rd-mesh-release-kept-live",
+   "what": "a released mesh stays live",
+   "guards": [
+    "render section 8.3"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    GYO_ASSERT(it != live_.end() && \"a release of a mesh that is not live\");\n    live_.erase(it);\n",
+   "replace": "    GYO_ASSERT(it != live_.end() && \"a release of a mesh that is not live\");\n",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a model mesh*",
+   "expect": "\\[p3\\-mesh\\-new\\-life\\]"
   }
  ]
 }

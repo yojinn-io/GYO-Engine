@@ -295,13 +295,16 @@ TEST_CASE("render_extract: a HUD camera on another layer draws after, without cl
     game.Insert(3, R::RenderLayers{2});
     Place(game, 3, 0.0F, 0.0F, 0.0F);
     Frames(*p, 2);
-    REQUIRE(seen.back().passes.size() == 2);
-    CHECK_MESSAGE((seen.back().clears.size() == 1 && seen.back().passes[0].draws.size() == 1 &&
-                   seen.back().passes[0].draws[0].texture.value != 0),
+    // The world camera's clear, its pass, then the HUD camera's pass (no clear of its own).
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    const auto pass2d = [&](std::size_t i) { return i < all.size() ? std::get_if<R::Pass2D>(&all[i]) : nullptr; };
+    CHECK_MESSAGE((all.size() == 3 && pass2d(0) != nullptr && pass2d(0)->clear.has_value() && pass2d(1) != nullptr &&
+                   pass2d(1)->draws.size() == 1 && pass2d(1)->draws[0].texture.value != 0),
                   "[re-camera-order] the world camera first, with its sprite");
-    CHECK_MESSAGE((!seen.back().passes[1].clear.has_value() && seen.back().passes[1].draws.size() == 1 &&
-                   seen.back().passes[1].draws[0].texture.value == 0),
+    CHECK_MESSAGE((all.size() == 3 && pass2d(2) != nullptr && !pass2d(2)->clear.has_value() && pass2d(2)->draws.size() == 1 &&
+                   pass2d(2)->draws[0].texture.value == 0),
                   "[re-hud] the HUD camera second, no clear, only its layer");
+    REQUIRE(seen.back().passes.size() == 2);
     game.Remove<R::Sprite>(2);
     Frames(*p);
     CHECK_MESSAGE(seen.back().passes[0].draws.empty(), "[re-gone] a sprite taken away is not drawn");

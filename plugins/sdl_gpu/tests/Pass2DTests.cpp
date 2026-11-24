@@ -19,6 +19,7 @@
 #include "engine/input/InputModule.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
@@ -309,8 +310,14 @@ TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end t
     const std::vector<R::Extracted2dItem> items{item(2, 0.5F, 1.0F, kGreen), item(1, -1.0F, 0.0F, kRed)};
     std::optional<R::Pass2D> pass = R::Queue2d(camera, items);
     REQUIRE(pass.has_value());
+    // As camera_render composes a frame: the camera's clear, then its pass.
+    R::ExtractedCameras cameras;
+    cameras.cameras.push_back(camera);
+    R::CameraPasses slots;
+    slots.byCamera.resize(1);
+    slots.byCamera[0].push_back(std::move(*pass));
     R::RenderCommands commands;
-    commands.passes.push_back(std::move(*pass));
+    R::ComposePasses(cameras, slots, commands);
     const Picture p = Draw(commands);
     CHECK_MESSAGE(p.All(0, 0, 8, 2, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-top] the bar above");
     CHECK_MESSAGE(p.All(0, 6, 8, 8, R::Color8{0, 0, 0, 255}), "[gp-pipe-bar-bottom] the bar below");
