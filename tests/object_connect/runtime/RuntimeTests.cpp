@@ -679,7 +679,8 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     game.MoveTo(400.0f, 290.0f);
     const Asked& asked = *game.World().Resource<Asked>();
     REQUIRE(asked.picture.passes.size() == 1);
-    const GYO::Engine::Render::Pass2D& pass = asked.picture.passes.front();
+    REQUIRE(std::holds_alternative<GYO::Engine::Render::Pass2D>(asked.picture.passes.front()));
+    const auto& pass = std::get<GYO::Engine::Render::Pass2D>(asked.picture.passes.front());
     REQUIRE(pass.view.has_value());
     CHECK(pass.view->width == doctest::Approx(1280.0f));
     CHECK(pass.view->height == doctest::Approx(720.0f));
@@ -719,7 +720,7 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     REQUIRE(game.Screen() == GameScreen::Playing);
     game.Button(360.0f, 360.0f, I::ButtonState::Pressed);
     for (float x = 400.0f; x <= 600.0f; x += 40.0f) game.MoveTo(x, 360.0f);
-    const GYO::Engine::Render::Pass2D& playing = game.World().Resource<Asked>()->picture.passes.front();
+    const auto& playing = std::get<GYO::Engine::Render::Pass2D>(game.World().Resource<Asked>()->picture.passes.front());
     CHECK(playing.vertices.size() > menuVertices);
     // stage_01's heart and brain are drawn as their pictures (not as placeholder rectangles).
     std::size_t pictureDraws = 0;
