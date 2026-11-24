@@ -5,8 +5,8 @@
 //   gyo_object_connect               the game in a 1280 x 720 window
 //   gyo_object_connect --frames N    closes itself after N frames once the
 //                                    content has loaded (CI runs it headless)
-//   gyo_object_connect --verbose     logs the screen, the cursor, the drag and
-//                                    the warps as they change
+//   gyo_object_connect --verbose     logs the screen, the cursor, the drag, the
+//                                    cursor lock and the warps as they change
 
 #include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
@@ -72,6 +72,7 @@ struct Shown {
     std::optional<object_connect::GameScreen> screen;
     object_connect::runtime::CursorAppearance cursor{};
     bool drag = false;
+    bool locked = false;
 };
 void HashValue(K::Hasher&, const Shown&) {}
 
@@ -81,7 +82,8 @@ K::SystemResult LogDecisions(K::Res<object_connect::world::ScreenState> screen,
                              K::Res<object_connect::world::ScreenRequest> request,
                              K::Res<object_connect::runtime::CursorAppearance> cursor,
                              K::Res<object_connect::world::Session> session,
-                             K::MessageReader<W::WarpCursor> warps, K::ResMut<Shown> shown) {
+                             K::Res<W::WindowRequest> window, K::MessageReader<W::WarpCursor> warps,
+                             K::ResMut<Shown> shown) {
     // The screen the frame ends on (a request made this frame is applied next frame).
     const std::optional<object_connect::GameScreen> current = object_connect::world::EffectiveScreen(*screen, *request);
     if (current != shown.Read().screen && current) {
@@ -100,6 +102,11 @@ K::SystemResult LogDecisions(K::Res<object_connect::world::ScreenState> screen,
     if (drag != shown.Read().drag) {
         LogInfo(drag ? "drag started" : (session->board && session->board->IsSolved() ? "drag ended: solved" : "drag ended"));
         shown->drag = drag;
+    }
+    const bool locked = window->cursorGrab == W::CursorGrab::Locked;
+    if (locked != shown.Read().locked) {
+        LogInfo(locked ? "cursor locked (the drag follows the mouse's motion)" : "cursor released");
+        shown->locked = locked;
     }
     for (const W::WarpCursor* warp : warps.Read()) {
         LogInfo("warp the cursor to (" + std::to_string(warp->position.x) + ", " + std::to_string(warp->position.y) +

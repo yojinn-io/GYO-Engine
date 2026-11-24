@@ -23,6 +23,7 @@
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/AssetView.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <cstddef>
@@ -168,7 +169,8 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
                                 K::Res<world::ScreenState> screen, K::Res<world::Catalog> catalog,
                                 K::Res<world::Session> session, K::Res<world::Playfield> playfield,
                                 K::ResMut<PointerState> pointer, K::ResMut<MenuPagesState> pages,
-                                K::ResMut<world::FrameInput> frame, K::MessageWriter<W::WarpCursor> warp) {
+                                K::ResMut<world::FrameInput> frame, K::ResMut<W::WindowRequest> request,
+                                K::MessageWriter<W::WarpCursor> warp) {
     PointerState& state = pointer.Get();
     const GameScreen screenBeforeInput = screen->Current().value_or(GameScreen::MainMenu);
     const bool wrapPointer = session->board && screenBeforeInput == GameScreen::Playing &&
@@ -183,13 +185,36 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     state.fit = window->known ? FitPlayfield(window->physicalSize, window->scaleFactor) : std::nullopt;
     const Vec2 viewOrigin = state.fit ? state.fit->logicalOrigin : Vec2{};
     const Vec2 viewSize = state.fit ? state.fit->logicalSize : clientSize;
-    if (cursor->position) {
+    const bool mapped = input::CanMapPointer(bounds, viewSize);
+    // Locked while a vessel is dragged on a wrapEdges level (see PointerState::locked): the place the OS reports is
+    // held, so the pointer follows the device's motion instead.
+    const bool lock = wrapPointer && state.focused && mapped;
+    if (lock && state.locked) {
+        state.virtualClient += Vec2{motion->delta.x, motion->delta.y};
+        state.lastClient = state.virtualClient;
+    } else if (cursor->position) {
         state.lastClient = {cursor->position->x, cursor->position->y};
     }
-    // Inside the client as the original's PtInRect: a held button keeps reporting places outside the window.
-    state.insideClient = cursor->position.has_value() && state.lastClient.x >= 0.0f &&
-                         state.lastClient.y >= 0.0f && state.lastClient.x < clientSize.x &&
-                         state.lastClient.y < clientSize.y;
+    if (lock && !state.locked) {
+        state.locked = true;
+        state.virtualClient = state.lastClient;
+    } else if (!lock && state.locked) {
+        // Unlocked: the system's cursor comes back where the game's was.
+        state.locked = false;
+        const Vec2 back{std::clamp(state.virtualClient.x, 0.0f, (std::max)(clientSize.x - 1.0f, 0.0f)),
+                        std::clamp(state.virtualClient.y, 0.0f, (std::max)(clientSize.y - 1.0f, 0.0f))};
+        warp.Send(W::WarpCursor{{back.x, back.y}});
+        state.lastClient = back;
+    }
+    const W::CursorGrab grab = lock ? W::CursorGrab::Locked : W::CursorGrab::None;
+    if (request.Read().cursorGrab != grab) {
+        request->cursorGrab = grab;
+    }
+    // Inside the client as the original's PtInRect: a held button keeps reporting places outside the window. A locked
+    // pointer is the game's own and always counts as inside.
+    state.insideClient = state.locked || (cursor->position.has_value() && state.lastClient.x >= 0.0f &&
+                                          state.lastClient.y >= 0.0f && state.lastClient.x < clientSize.x &&
+                                          state.lastClient.y < clientSize.y);
     const bool focusLost = state.previousFocused && !state.focused;
     state.previousFocused = state.focused;
 
@@ -198,7 +223,6 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     const Keys pressed = state.focused ? ReadKeys(*keys) : Keys{};
     // The pointer relative to the playfield's rectangle (the original mapped the whole client).
     const Vec2 local = state.lastClient - viewOrigin;
-    const bool mapped = input::CanMapPointer(bounds, viewSize);
     Vec2 position = mapped ? input::ClientToPlayfield(local, bounds, viewSize) : local;
     std::optional<Vec2> unwrapped;
 
@@ -214,13 +238,15 @@ K::SystemResult ReadPlayerInput(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<
     }
     state.previousLeftHeld = leftHeld;
 
-    if (state.focused && wrapPointer && mapped) {
-        const input::PointerWrapResult wrapped = state.wrap.Sample(
-            {local, viewSize, Vec2{motion->delta.x, motion->delta.y}}, bounds);
+    if (state.locked) {
+        // The locked pointer is not stopped by any edge, so no relative motion is needed to tell a push; a crossing
+        // moves the pointer itself (the OS cursor is held, nothing to warp).
+        const input::PointerWrapResult wrapped = state.wrap.Sample({local, viewSize, Vec2{}}, bounds);
         position = wrapped.position;
         unwrapped = wrapped.unwrappedPosition;
         if (wrapped.warpTo) {
-            warp.Send(W::WarpCursor{{wrapped.warpTo->x + viewOrigin.x, wrapped.warpTo->y + viewOrigin.y}});
+            state.virtualClient = *wrapped.warpTo + viewOrigin;
+            state.lastClient = state.virtualClient;
         }
     } else {
         state.wrap.Reset();
