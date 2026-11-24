@@ -4,6 +4,8 @@ add_subdirectory(yyjson)
 add_subdirectory(fast_float)
 # The image Module (engine/modules/image) is an engine Module too.
 add_subdirectory(stb_image)
+# The model Module (engine/modules/model) is an engine Module too.
+add_subdirectory(ufbx)
 # The text Module (engine/modules/text) is an engine Module too: FreeType,
 # HarfBuzz and libunibreak are added whether or not tests are built.
 add_subdirectory(freetype)

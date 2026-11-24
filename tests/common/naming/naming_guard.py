@@ -59,7 +59,7 @@ from source_text import SUFFIXES as C_SUFFIXES, camel_case, line_of, strip_comme
 
 ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestration": "unit"}
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
-ACRONYMS = {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC"}
+ACRONYMS = {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC", "gpu": "GPU"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
 SCAN_ROOTS = ("engine", "games", "tools", "plugins", "tests", "examples")
 OLD_ROOT = "Engine"
