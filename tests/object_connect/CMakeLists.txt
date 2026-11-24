@@ -11,9 +11,11 @@ add_executable(gyo_object_connect_logic_tests
     game/MouseCursorStateTests.cpp
     game/MusicSequencePolicyTests.cpp
     geometry/Geometry2DTests.cpp
+    input/PointerWrapTests.cpp
     puzzle/PuzzleBoardTests.cpp
     tentacle/BloodTentacleTests.cpp
-    tentacle/RibbonStripTests.cpp)
+    tentacle/RibbonStripTests.cpp
+    ui/MenuLayoutTests.cpp)
 target_include_directories(gyo_object_connect_logic_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(gyo_object_connect_logic_tests PRIVATE ${object_connect_logic})
 target_compile_definitions(gyo_object_connect_logic_tests PRIVATE
@@ -41,3 +43,27 @@ endif()
 add_test(NAME object_connect.world COMMAND gyo_object_connect_world_tests "--test-case=world:*")
 set_tests_properties(object_connect.world PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+
+# The game with its runtime, headless: the content read from assets/object_connect through the asset Module, the
+# input and window Messages written by a test System where sdl_window writes them.
+gyo_get_game_target(object_connect runtime object_connect_runtime)
+add_executable(gyo_object_connect_runtime_tests runtime/TestMain.cpp runtime/RuntimeTests.cpp)
+target_link_libraries(gyo_object_connect_runtime_tests PRIVATE ${object_connect_runtime} GYO::Threads doctest::doctest)
+gyo_product_units(gyo_object_connect_runtime_tests)
+target_compile_definitions(gyo_object_connect_runtime_tests PRIVATE
+    OBJECT_CONNECT_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_connect")
+if(MSVC)
+    target_compile_options(gyo_object_connect_runtime_tests PRIVATE /W4 /permissive- /utf-8 /bigobj)
+    target_compile_definitions(gyo_object_connect_runtime_tests PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_object_connect_runtime_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME object_connect.runtime COMMAND gyo_object_connect_runtime_tests "--test-case=runtime:*")
+set_tests_properties(object_connect.runtime PROPERTIES LABELS "cpu" TIMEOUT 120
+    FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+
+# The program itself on SDL's dummy video driver: the window opens, the content loads, 30 frames run and the program
+# closes its window and exits with 0.
+gyo_get_game_target(object_connect main object_connect_main)
+add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30)
+set_tests_properties(object_connect.main PROPERTIES LABELS "cpu" TIMEOUT 120 ENVIRONMENT "SDL_VIDEODRIVER=dummy")
