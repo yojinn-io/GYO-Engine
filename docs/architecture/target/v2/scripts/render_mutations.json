@@ -957,6 +957,228 @@
    "target": "gyo_render_tests",
    "cases": "render_extract: a split screen*",
    "expect": "\\[re\\-split\\-second\\]"
+  },
+  {
+   "id": "p3-opaque-far-first",
+   "what": "opaque items far to near",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (a.distance != b.distance) return a.group == 0 ? a.distance < b.distance : a.distance > b.distance;",
+   "replace": "        if (a.distance != b.distance) return a.distance > b.distance;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-opaque\\-near\\-first\\]"
+  },
+  {
+   "id": "p3-blend-near-first",
+   "what": "blended items near to far",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (a.distance != b.distance) return a.group == 0 ? a.distance < b.distance : a.distance > b.distance;",
+   "replace": "        if (a.distance != b.distance) return a.distance < b.distance;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-blend\\-far\\-first\\]"
+  },
+  {
+   "id": "p3-groups-ignored",
+   "what": "no groups: one order by distance",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (a.group != b.group) return a.group < b.group;",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-blend\\-far\\-first\\]"
+  },
+  {
+   "id": "p3-overlay-in-opaque",
+   "what": "items not depth-tested go with the opaque",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        const int group = !item.depthTest ? 2 : (item.blend == BlendMode::Opaque ? 0 : 1);",
+   "replace": "        const int group = item.blend == BlendMode::Opaque ? 0 : 1;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-overlay\\-last\\]"
+  },
+  {
+   "id": "p3-layers-ignored",
+   "what": "a 3D camera draws every layer",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if ((item.layers & camera.layers) == 0) continue;\n        if (item.mesh == MeshId{} && item.indices.empty()) continue;",
+   "replace": "        if (item.mesh == MeshId{} && item.indices.empty()) continue;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-layers\\]"
+  },
+  {
+   "id": "p3-view-ignored",
+   "what": "the camera's view point is ignored",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    pass.clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);",
+   "replace": "    pass.clipFromWorld = camera.computed.clipFromView;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 3D camera*",
+   "expect": "\\[p3\\-clip\\-from\\-world\\]"
+  },
+  {
+   "id": "p3-own-offset-lost",
+   "what": "own geometry draws all start at 0",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            draw.vertexOffset = static_cast<std::uint32_t>(pass.vertices.size());",
+   "replace": "            draw.vertexOffset = 0;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a skinned item*",
+   "expect": "\\[p3\\-own\\-offsets\\]"
+  },
+  {
+   "id": "p3-2d-drawn",
+   "what": "a 2D camera draws a 3D pass",
+   "guards": [
+    "render RD-8"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    if (!camera.is3d || !camera.computed.valid) return std::nullopt;",
+   "replace": "    if (!camera.computed.valid) return std::nullopt;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a 2D camera*",
+   "expect": "\\[p3\\-2d\\-camera\\]"
+  },
+  {
+   "id": "p3-skin-no-inverse-bind",
+   "what": "skinning forgets the inverse bind matrices",
+   "guards": [
+    "render section 8.4",
+    "model section 2.1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    for (std::size_t j = 0; j < palette.size(); ++j) palette[j] = Math::Multiply(nodes[skin.joints[j]], skin.inverseBindMatrices[j]);",
+   "replace": "    for (std::size_t j = 0; j < palette.size(); ++j) palette[j] = nodes[skin.joints[j]];",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: CPU skinning*",
+   "expect": "\\[p3\\-skin\\-joint\\]"
+  },
+  {
+   "id": "p3-skin-first-weight-only",
+   "what": "skinning takes only the first influence",
+   "guards": [
+    "render section 8.4"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        for (std::size_t k = 0; k < 4; ++k) {\n            const float w = weights[k];",
+   "replace": "        for (std::size_t k = 0; k < 1; ++k) {\n            const float w = weights[k] > 0.0F ? 1.0F : 0.0F;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: CPU skinning*",
+   "expect": "\\[p3\\-skin\\-blend\\]"
+  },
+  {
+   "id": "p3-skin-normal-unnormalized",
+   "what": "skinned normals are not normalized",
+   "guards": [
+    "render section 8.4"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        out[v].normal = length > 0.0F ? normal * (1.0F / length) : normal;",
+   "replace": "        out[v].normal = normal * 0.5F;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: CPU skinning*",
+   "expect": "\\[p3\\-skin\\-normal\\]"
+  },
+  {
+   "id": "p3-mesh-twice",
+   "what": "a model mesh is retained on every use",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    auto found = entries_.find(key);\n    if (found == entries_.end()) {\n        if (mesh.positions.empty()",
+   "replace": "    auto found = entries_.end();\n    if (found == entries_.end()) {\n        if (mesh.positions.empty()",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a model mesh*",
+   "expect": "\\[p3\\-mesh\\-once\\]"
+  },
+  {
+   "id": "p3-mesh-old-life-kept",
+   "what": "the old life's mesh stays",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            if (it->first.asset == key.asset && it->first.life != key.life) {\n                meshes.Release",
+   "replace": "            if (false) {\n                meshes.Release",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a model mesh*",
+   "expect": "\\[p3\\-mesh\\-new\\-life\\]"
+  },
+  {
+   "id": "cp-later-clears-target",
+   "what": "a later camera clears the whole target",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            if (first) {\n                clear.clear = camera.clear;",
+   "replace": "            if (true) {\n                clear.clear = camera.clear;",
+   "target": "gyo_render_tests",
+   "cases": "compose:*",
+   "expect": "\\[cp\\-later\\-viewport\\]"
+  },
+  {
+   "id": "cp-clear-after",
+   "what": "the camera's clear comes after its passes",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            out.passes.push_back(std::move(clear));\n        }",
+   "replace": "            passes.byCamera.resize(std::max(passes.byCamera.size(), i + 1));\n            passes.byCamera[i].push_back(std::move(clear));\n        }",
+   "target": "gyo_render_tests",
+   "cases": "compose:*",
+   "expect": "\\[cp\\-order\\]"
+  },
+  {
+   "id": "cp-target-ignored",
+   "what": "the first camera on any target clears only once a frame",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        const bool first = std::find(drawn.begin(), drawn.end(), camera.target) == drawn.end();",
+   "replace": "        const bool first = drawn.empty();",
+   "target": "gyo_render_tests",
+   "cases": "compose:*",
+   "expect": "\\[cp\\-per\\-target\\]"
+  },
+  {
+   "id": "p3-place-node-ignored",
+   "what": "a mesh without a skin is not placed at its node",
+   "guards": [
+    "render section 8.4"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    return mesh.node < nodes.size() ? Math::Multiply(global, nodes[mesh.node]) : global;",
+   "replace": "    return global;",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a mesh without*",
+   "expect": "\\[p3\\-place\\-node\\]"
   }
  ]
 }

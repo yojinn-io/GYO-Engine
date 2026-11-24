@@ -69,6 +69,11 @@ std::vector<Vertex3D> SkinVertices(const Model::ModelData& model, const Model::M
     return out;
 }
 
+Math::Matrix4 PlaceMesh(const Math::Matrix4& global, const Model::Mesh& mesh, const std::span<const Math::Matrix4> nodes) {
+    if (mesh.skin != Model::kNoSkin) return global;
+    return mesh.node < nodes.size() ? Math::Multiply(global, nodes[mesh.node]) : global;
+}
+
 std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<const Extracted3dItem> items) {
     if (!camera.is3d || !camera.computed.valid) return std::nullopt;
     const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(camera.view);

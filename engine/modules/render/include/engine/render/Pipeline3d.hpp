@@ -91,6 +91,10 @@ inline void HashValue(Kernel::Hasher&, const RenderModelMeshes&) {}
 [[nodiscard]] std::vector<Vertex3D> SkinVertices(const Model::ModelData& model, const Model::Mesh& mesh,
                                                  std::span<const Math::Matrix4> nodes);
 
+// Local to world of a model mesh: the entity's GlobalTransform times the mesh's node in model space (nodes) when the
+// mesh has no skin; the GlobalTransform alone for a skinned mesh (its vertices are in model space once skinned).
+[[nodiscard]] Math::Matrix4 PlaceMesh(const Math::Matrix4& global, const Model::Mesh& mesh, std::span<const Math::Matrix4> nodes);
+
 // The 3D pass one camera draws: its viewport, its clip-from-world, and the items whose layers it draws: first the
 // opaque, depth-tested ones near to far (fewer pixels shaded; Bevy's Opaque3d sorts front to back), then the
 // blended, depth-tested ones far to near (Bevy's Transparent3d), then those not depth-tested far to near (overlays

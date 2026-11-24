@@ -138,7 +138,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 ## 5. 不在本 Module
 
 - **第 2 層**（每個實體播哪個片段、播到哪裡，`AnimationModule`）：先不做，等有產品要 Bevy `AnimationPlayer`（`lib.rs:748`）那種用法（`-skeletal-animation-layers`）。
-- **第 3 層**（蒙皮顯示：網格照姿勢變形、上傳 GPU）：render（R2b，GPU 或 CPU 在那裡判）。第 2.1 節的公式是 render 要照的。
+- **第 3 層**（蒙皮顯示：網格照姿勢變形、上傳 GPU）：render（R2b 的 3D 段判 **CPU**：`mesh_render` 每幀照 `SkinPose` 算，render 頁第 8.4 節；換 GPU 的條件 RC-RD 6）。第 2.1 節的公式是 render 要照的。
 - **動畫事件**（盤點 4.6 放在第 1 層的「事件資料與區間穿越」）：這張卡沒做。PvP 的事件來自另一份 JSON（`viewmodel.anim_events.json`），不在 FBX 裡；要時加一個純函式（區間內穿過了哪些時刻，含跨 loop）與它的資料，列在後續。
 - 命中形狀、何時切片段、分層、additive、瞄準、附掛：遊戲規則。
 - FBX 以外的格式（glTF、OBJ）：有點名的 Feature 時另加 loader。

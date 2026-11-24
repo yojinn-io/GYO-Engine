@@ -34,12 +34,12 @@ M::Matrix4 At(const float x, const float y, const float z) {
 
 bool Near(const float a, const float b) { return std::fabs(a - b) <= 1e-4F; }
 
-// A 3D camera at the origin looking along +Z on a 100 x 100 target.
+// A 3D camera at (1, 0, -2) looking along +Z on a 100 x 100 target.
 R::ExtractedCamera Camera3d(const std::uint32_t target = 0, const std::int32_t order = 0) {
     const C::TargetSize size{{100, 100}, 1.0F};
     R::ExtractedCamera camera;
     camera.computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size);
-    camera.view = At(0, 0, 0);
+    camera.view = At(1, 0, -2);
     camera.is3d = true;
     camera.order = order;
     camera.target = target;
@@ -194,4 +194,15 @@ TEST_CASE("compose: cameras in order, each clear first: the first on a target cl
     CHECK_MESSAGE((otherClear != nullptr && otherClear->clear == R::Color8{7, 7, 7, 255} && otherClear->target == 5),
                   "[cp-per-target] the first camera on another target clears that target");
     CHECK_MESSAGE((passes.byCamera[0].empty() && passes.byCamera[1].empty()), "[cp-emptied] the slots are emptied");
+}
+
+TEST_CASE("pipeline3d: a mesh without a skin sits at its node; a skinned one at the entity alone") {
+    Md::Mesh mesh;
+    mesh.node = 1;
+    const std::vector<M::Matrix4> nodes{At(0, 0, 0), At(0, 3, 0)};
+    const M::Matrix4 placed = R::PlaceMesh(At(10, 0, 0), mesh, nodes);
+    CHECK_MESSAGE((placed.values[12] == 10.0F && placed.values[13] == 3.0F), "[p3-place-node] the entity times the node");
+    mesh.skin = 0;
+    const M::Matrix4 skinned = R::PlaceMesh(At(10, 0, 0), mesh, nodes);
+    CHECK_MESSAGE((skinned.values[12] == 10.0F && skinned.values[13] == 0.0F), "[p3-place-skinned] the entity alone");
 }

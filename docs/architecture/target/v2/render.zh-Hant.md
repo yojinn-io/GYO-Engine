@@ -1,6 +1,6 @@
 # 渲染（`engine/modules/render`）與 `render_world`
 
-更新：2026-11-24（R2b 的 2D 段 `v8-arch-gyo2-sdl-r2b-2d`：`Pass2D::viewport`、extract schedule、第 7 節的 2D 管線、RD-5～RD-7；新頁是 SDL 線子批 R2a `v8-arch-gyo2-sdl-r2a`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.3、6.1、9.2、10.2 節的 R2a 列；Q7＝(a)（`-plugin-in-world-rule-removed`）、讀法 2（`-sdl-system-calls-via-adapter`）。後端 `sdl_gpu` 寫在 [SDL 的 Plugin 頁](sdl.zh-Hant.md)第 7 節。Design Invariants 照新 AGENTS §2.6：沒有推翻使用者決定的條文，不逐條核准（主會話 2026-11-24）。
+更新：2026-11-24（R2b 的 3D 段 `v8-arch-gyo2-sdl-r2b-3d`：第 8 節的 3D pass、合成、`mesh_render`、CPU 蒙皮，`RenderCommands::passes` 改成 2D／3D 的 variant，RD-8、RD-9）；2026-11-24（R2b 的 2D 段 `v8-arch-gyo2-sdl-r2b-2d`：`Pass2D::viewport`、extract schedule、第 7 節的 2D 管線、RD-5～RD-7；新頁是 SDL 線子批 R2a `v8-arch-gyo2-sdl-r2a`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.3、6.1、9.2、10.2 節的 R2a 列；Q7＝(a)（`-plugin-in-world-rule-removed`）、讀法 2（`-sdl-system-calls-via-adapter`）。後端 `sdl_gpu` 寫在 [SDL 的 Plugin 頁](sdl.zh-Hant.md)第 7 節。Design Invariants 照新 AGENTS §2.6：沒有推翻使用者決定的條文，不逐條核准（主會話 2026-11-24）。
 
 Owner：架構。程式：`engine/modules/render/`（`GYO::Engine::Render`，target `GYO::Render`，函式庫）、`engine/modules/render_world/`（`GYO::Engine::RenderWorld`，target `GYO::RenderWorld`，登記單位 `RenderWorldModule`）；R2b 的 2D 段加 `world_render`、`camera_render`、`sprite_render`（第 7 節）。行為測試：`tests/common/render/`（ctest `render.data`、`render.world`、`render.pipeline2d`、`render.extract`）、`plugins/sdl_gpu/tests/`（`sdl_gpu.pass2d` 等）。
 
@@ -25,7 +25,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 
 ## 2. `RenderCommands`：這一幀要畫什麼（資料）
 
-`RenderCommands{passes}` 是渲染 World 的 Resource（`render_world` 登記），每個 `Pass2D` 照順序畫。R2a 只有一種 pass：**2D pass**（貼圖、混合、裁切）。
+`RenderCommands{passes}` 是渲染 World 的 Resource（`render_world` 登記），每個 pass 照順序畫。R2a 只有一種 pass：**2D pass**（貼圖、混合、裁切）；R2b 的 3D 段把 `passes` 改成 `std::variant<Pass2D, Pass3D>` 的序列（`RenderPass`，第 8 節），2D 與 3D 照相機的順序交錯。
 
 | 欄位 | 意思 |
 |---|---|
@@ -118,7 +118,7 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 ### 7.4 排序、合批、座標
 
 - **相機的先後**：`order` 小的先畫，同 `order` 照來源實體（Bevy 照 `order` 與目標排、同值的先後不定，`camera.rs:836`；GYO 用實體讓它確定）。每個相機一個 `Pass2D`：`target`＝相機的目標 id、`viewport`＝`ComputedCamera::viewport`。
-- **清除**（照 Bevy）：一個目標這一幀**第一個**畫的相機清整個目標（`Pass2D::clear`，黑邊）；之後的相機有清除色時**只清自己的視區**——pass 的第一個 draw 是蓋滿視區、清除色的不透明矩形（`Opaque`），所以分割畫面的第二個相機不會把第一個相機的半邊清掉（`[re-split-*]`）；`None` 的相機什麼都不清、疊在前面的畫面上。Bevy 的視窗輸出每幀只在第一次使用時清（`bevy_render/src/texture/texture_attachment.rs:408-433` 的 `is_first_call`），每個相機的畫面放回輸出時用 scissor 限在自己的視區（`bevy_core_pipeline/src/upscaling/node.rs:91-97`）；GYO 沒有每個相機的中間貼圖，用矩形得到同樣的結果。
+- **清除**（照 Bevy；3D 段起由 `camera_render` 的合成做，第 8.2 節）：一個目標這一幀**第一個**畫的相機清整個目標（只有 `clear` 的 `Pass2D`，黑邊）；之後的相機有清除色時**只清自己的視區**——蓋滿視區、清除色的不透明矩形（`Opaque`），所以分割畫面的第二個相機不會把第一個相機的半邊清掉（`[re-split-*]`、`[cp-*]`）；`None` 的相機什麼都不清、疊在前面的畫面上。Bevy 的視窗輸出每幀只在第一次使用時清（`bevy_render/src/texture/texture_attachment.rs:408-433` 的 `is_first_call`），每個相機的畫面放回輸出時用 scissor 限在自己的視區（`bevy_core_pipeline/src/upscaling/node.rs:91-97`）；GYO 沒有每個相機的中間貼圖，用矩形得到同樣的結果。
 - **2D 物件的先後**：只畫 `RenderLayers` 和相機有交集的；照位置的 z 從小到大（後畫的蓋在前面；Bevy `Transparent2d` 的 sort key＝z，`bevy_sprite_render/src/render/mod.rs:504`；和 X1 的 `Default2d` 一致：z 大的在前），同 z 照來源實體、同一個實體（同時有 `Sprite` 與 `Shape2d`）照抽出的順序（sprite 先）——每個平台都一樣（Bevy 是 `sort_unstable`，先後不定）。位置在近平面之前或遠平面之後的整個不畫（只看位置，不切三角形）。
 - **合批**：相鄰、同貼圖、同混合的物件併成一個 draw（Bevy 的 sprite 也是相鄰同圖併批，`mod.rs:615`）。不跨貼圖重排（會改變半透明的先後）。
 - **座標**：每個頂點在 CPU 經「物件的 `GlobalTransform` → 相機的 clip-from-world」換成 clip space，再換成 `viewport` 的像素（y 向下）；`Pass2D::view` 不給。上下在這裡轉一次（clip 的 y 向上 → 像素的 y 向下），之後 `ViewToClip` 再轉回去——兩次都在換算函式裡，資料路徑沒有翻轉（master 坑 17 的單一邊界：uv 照 `image` 的第 0 列在上，sprite 的上緣接 v=0）。不加 shader 的矩陣：2D pass 的 ABI 不變（RD-4），K 的 draw list 照用；CPU 的成本見第 7.5 節與 RC-RD 4。
@@ -157,6 +157,53 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 粒子、拖尾、閃光這類效果的形狀和 Object_Connect 的血管一樣是「每幀給頂點」：2D 先用 `Shape2d`（每幀重建，第 7.3 節）就做得出來。預見的需求與接點：(1) 大量粒子時 CPU 換算超過預算 → RC-RD 4 的 GPU 換算或實例化（`RenderCommands` 加實例數，總宣告 P27 已列）；(2) 加色混合（`BlendMode::Add`，加一個值、`sdl_gpu` 多一個 pipeline）；(3) 自訂 shader（遊戲的 shader）→ 第一個帶遊戲 shader 的批做「共通內容管線從已選 Plugin 的登記資料找到 `sdl_gpu` 的編譯工具」（P22 的讀法 (a)，SDL 頁第 7 節）。2D 段沒有遊戲 shader（Object_Connect 原專案的 shader 都是 KamataEngine 內建的 sprite／shape），所以 P22 在 2D 段不觸發。
 
+## 8. 3D 管線與合成（R2b 的 3D 段，`v8-arch-gyo2-sdl-r2b-3d`）
+
+PvP 的盤點（`games/object_fps_pvp/docs/porting-inventory.zh-Hant.md` 第 2.3 節 R2b 列、PV5、PV7）要的：世界相機（near 0.05／far 150）、viewmodel 用另一個相機並清深度、不測深度的世界疊層、半透明、貼圖、蒙皮的角色、2D 的 HUD 疊在最上面。
+
+### 8.1 例子
+
+PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、viewmodel 相機（`Camera3d`、`order 1`、`ClearColorConfig::None`、`RenderLayers{2}`、近平面 0.01）、HUD 相機（`Camera2d`、`order 2`、`None`、`RenderLayers{4}`）。每個角色一個實體：`Mesh3d{model, mesh}`＋`SkinPose`（遊戲照 tick 取樣、`ComputeModelSpace` 算出每個節點的模型空間矩陣，使用者定的第 2 層由遊戲做）。手臂與槍放 `RenderLayers{2}`。每幀：`Extract` 抽出相機、網格、sprite → `Update` 的 `Queue3dPasses`、`Queue2dPasses` 把每個相機的 pass 放進它的格子 → `PostUpdate` 的 `ComposeCameraPasses` 照相機順序寫進 `RenderCommands`：清整個目標 → 世界的 `Pass3D` → viewmodel 的 `Pass3D`（深度重新清空，所以手臂不會被牆擋住）→ HUD 的 `Pass2D`。
+
+### 8.2 合成
+
+`camera_render` 的 `CameraPasses`：每個抽出的相機一格（`ExtractCameras` 清空）；`sprite_render`、`mesh_render` 把那個相機的 pass 放進去；`ComposeCameraPasses`（`CameraRenderOptions`，預設 `Main`／`PostUpdate`，在管線的 `Update` 之後、`Submit` 之前）照相機順序寫進 `RenderCommands`，每個相機的清除在它的 pass 之前（第 7.4 節的清除規則，`Compose.hpp`）。沒有合成的話，哪個管線先跑就先畫：HUD 的 2D 相機會畫在世界的 3D 相機之前。Bevy 的相機也照 order 排（`sort_cameras`，`bevy_render/src/camera.rs:836`），每個相機跑自己的 phase。
+
+### 8.3 `Pass3D` 與 `mesh_render`
+
+- **資料**：`Pass3D{target, viewport, clipFromWorld, vertices, indices, draws}`；`Draw3D{mesh, indexOffset, indexCount, vertexOffset, world, color, texture, blend, depthTest, depthWrite, cull}`；`Vertex3D`＝位置、法線、uv（32 bytes；3D pass 只綁位置與 uv，法線留給之後打光）；`RenderMeshes`（`render_world` 登記）：資料側配 id 的保留網格，同 `RenderTextures`（Bevy 的 `RenderAssets<RenderMesh>`）。`MeshId{}` 的 draw 用 pass 自己的頂點（蒙皮後的、每幀變的）。
+- **深度**：每個 `Pass3D` 的深度從清空開始、顏色不清（相機的清除是它前面的那個 pass）。等於 Bevy 每個相機有自己的深度貼圖：viewmodel 相機在世界相機之後畫、自己的深度，就是盤點表 PV7 的「清深度」，不必另設旗標。
+- **shader**：無光照（unlit）——貼圖×`color`，同 master（盤點表 R2a 列「unlit 的 shader」）。顏色照 bytes（同 2D pass；RC-RD 3 不觸發，因為不打光）。HLSL 在 `render/shaders/mesh3d.*.hlsl`，ABI 在 `ShaderAbi.hpp`（RD-4）。
+- **先後**（RD-8）：不透明、測深度的近到遠（Bevy 的 `Opaque3d` 前到後，少算被擋住的像素），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
+- **`Mesh3d`**（來源側，`world_render` 登記）：模型素材的 `Handle`、網格索引、`color`、`image`（`ImageRef`，沒給是白）、混合、深度測試／寫入、`CullMode`（`Back`＝螢幕上順時針的不畫，逆時針是正面，同 Bevy 的 `FrontFace::Ccw`；預設 `None`）。模型自己的材質（`Material::baseColor`、貼圖檔名）是資料，作者讀了填進 `color`／`image`——材質系統（Bevy 的 `StandardMaterial`）不在本批。
+- **實體對應**（總宣告第 6.1 節第 8 點，逐種判的 3D 那一種）：網格每幀暫時（`Extracted3dItems`）；保留的是**模型網格**（以素材 id、life、網格索引為鍵的 `RenderModelMeshes`，RD-9）。Bevy 的 `RenderMeshInstances` 以來源實體為鍵、留每實例的 GPU 資料；GYO 的 world 矩陣與材質每個 draw 推一次 uniform，沒有每實例的 GPU 狀態要留，所以不需要對應實體——四個衝突點在 3D 段也不出現（RC-RD 5 寫了什麼時候要改）。
+- **沒有蒙皮的網格**放在它的節點上（`SkinPose` 合模型的節點數就用它，否則 rest pose；`PlaceMesh`），整個模型再由實體的 `GlobalTransform` 放。
+
+### 8.4 蒙皮（骨骼動畫第 3 層）：CPU
+
+`-skeletal-animation-layers` 留給 R2b 判「GPU 或 CPU」。**判：CPU**（`SkinVertices`：每個頂點＝Σ 權重×節點的模型空間矩陣×inverse bind×位置，照 model 頁第 2.1 節的式子；法線用矩陣的旋轉部分、再正規化）。
+
+| | CPU（選） | GPU（Bevy） |
+|---|---|---|
+| 做法 | 每幀在渲染 World 算頂點、放進 pass 自己的頂點上傳 | joint palette 放 storage buffer、頂點帶 joints／weights、vertex shader 混合 |
+| PvP 的量 | 同時最多 4 個身體＋1 個 viewmodel、每頂點 4 個權重（盤點表第 4.6 節）——CPU 的量小 | 一樣畫得出 |
+| 要多的 | 無（3D pass 一組 shader、一種頂點格式） | 第二組 shader 與頂點格式、storage buffer、shader 工具多檢查一種資源 |
+| master | CPU（`ModelRenderer.cpp:85,131`），PvP 已經這樣跑 | — |
+
+理由：來源側的介面（`SkinPose`＝每個節點的模型空間矩陣）兩種做法都一樣，上層的遊戲、網路、動畫都不依賴它；換成 GPU 只動 `mesh_render` 與 `sdl_gpu` 的內部（RC-RD 6）。所以先選少的那一個，之後換也不會被上層的程式卡住（建機制時要提防的是「保守的選項被上層蓋住、沒人回頭改」，這一題的上層不碰它）。
+
+### 8.5 比過的
+
+| 題 | Bevy | master | GYO（3D 段） |
+|---|---|---|---|
+| 一幀的組成 | 每個相機自己的 render graph 子圖、照 order | 固定的 scene → viewmodel → overlay（`RenderQueue`、`MeshLayer`） | 照相機 order 合成（第 8.2 節）；viewmodel 是一個普通的相機 |
+| viewmodel 的深度 | 每個相機自己的深度 | `MeshLayer::ViewModel` 前清深度 | 每個 `Pass3D` 自己清深度 |
+| 蒙皮 | GPU | CPU | CPU（第 8.4 節） |
+| 網格的保留 | `RenderAssets<RenderMesh>`、`RenderMeshInstances` | 後端的 handle | `RenderMeshes`（資料側 id）、`RenderModelMeshes`（模型網格為鍵） |
+| 著色 | PBR（`StandardMaterial`） | unlit＋exposure／gamma | unlit；exposure／gamma 不在本批（見範囲の限界） |
+
+偏離 Bevy 與膠水量：沒有 PBR 與材質系統（PvP 是 unlit；有點名的產品再加）；CPU 蒙皮（膠水：`SkinVertices` 一個函式）；網格實例不留 GPU 狀態（每個 draw 推 uniform；大量相同網格時 RC-RD 2 的實例化）。
+
 ## Design Invariants
 
 - **RD-1 `render` 只有資料與中性的邏輯**：`RenderCommands`、`RenderTextures`、可畫元件、2D 管線的函式、換算函式、HLSL 原始碼與 ABI；沒有 SDL、沒有 GPU 物件、沒有後端介面、不依賴任何 Plugin（B'）；依賴的 Module（asset、image、world_asset、transform、camera）只取型別（R2b）；其中 `transform` 是給渲染側的單位（`camera_render`、`sprite_render` 讀 `GlobalTransform`）經 `render` 拿到型別用的，`render` 自己的程式不 include 它——不是多餘的依賴。守衛：連結檢查（`tests/common/render/CMakeLists.txt` 的 `gyo_expect_links`：`gyo_render` 是 Base、Kernel、Math 與上面五個；`render_world`、`world_render`、`camera_render`、`sprite_render` 各自列）；SDL 的原始碼掃描在 K 之後立（總宣告第 9.1 節），之前由每批的設計審查看。
@@ -166,7 +213,10 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 - **RD-5 extract schedule 只在有 `extractFrom` 的 World**（R2b）：`render_world` 在那種 World 宣告 `Extract`、插在畫面的 schedule 之前；沒有 `extractFrom` 的 World 沒有它。守衛：`render.extract`（`[re-extract-before-main]`、`[re-no-extract-without-source]`、`[re-keeptool]`）、`orchestration.extract`（`[or-ex-setup-*]`）。
 - **RD-6 抽出的 2D 資料每幀重建，留著的只有以圖為鍵的貼圖**（R2b，第 7.3 節）：`ExtractedCameras`、`Extracted2dItems` 每次 extract 整個換掉；`RenderImages` 以素材（id＋life）或作者持有的圖為鍵，同一張圖只建一次；作者持有的圖沒人用就放掉，素材的留著。守衛：`render.extract`（`[re-gone]`、`[re-dynamic]`、`[re-texture-once]`、`[re-held-released]`、`[re-asset-*]`：真的 PNG 經 world_asset，載好的那一幀就畫）、`render.pipeline2d`（`[p2-image-*]`）。
-- **RD-7 2D 的先後與清除**（R2b，第 7.4 節）：一個目標第一個相機清整個目標，之後的相機只清自己的視區；相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`、`[p2-clear-*]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`、`[re-split-*]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
+- **RD-7 相機的先後、清除與 2D 的先後**（R2b，第 7.4 節）：一個目標第一個相機清整個目標，之後的相機只清自己的視區；相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`、`[p2-clear-*]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`、`[re-split-*]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
+
+- **RD-8 3D 的先後**（R2b 的 3D 段，第 8.3 節）：一個 3D 相機一個 `Pass3D`，深度從清空開始、顏色不清；先畫不透明、測深度的（近到遠），再畫半透明、測深度的（遠到近），最後畫不測深度的（遠到近）；同距離照來源實體；只畫 `RenderLayers` 有交集的。守衛：`render.pipeline3d`（`[p3-*]`）、`sdl_gpu.pass3d`（`[g3-*]`，Lavapipe 上的像素）。
+- **RD-9 模型網格以模型網格為鍵保留**（第 8.3 節）：沒有蒙皮的模型網格第一次畫時建成 `RenderMeshes` 的網格、以（素材 id、life、網格索引）為鍵；同一個素材的新 life 放掉舊的；蒙皮的網格每幀在 CPU 算、放在 pass 自己的頂點。守衛：`render.pipeline3d`（`[p3-mesh-*]`、`[p3-skin-*]`、`[p3-place-*]`）、`render.extract`（`[re-3d-*]`）。
 
 ## Replacement Criteria
 
@@ -174,11 +224,12 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 - **RC-RD 2**：一幀的 `Vertex2D`／索引的上傳成為幀時間的主要部分（R2b 的幀時間預算先宣告，計測）→ 改成保留式的頂點緩衝（Bevy 的 batch／retained），不是改格式。
 - **RC-RD 3**：3D 在線性空間打光（R2b）和 2D pass 照 bytes 混合在同一個目標上畫不出一致的顏色 → 重定目標格式與 2D 的混合空間。
 - **RC-RD 4**（R2b）：2D 管線在 CPU 換算頂點（`Queue2d`）成為幀時間的主要部分（`[gp-budget-pipeline]` 超過第 7.5 節的預算）→ 換算移到 GPU（2D pass 帶 view 矩陣、物件帶仿射或實例），改 ABI 時 `ShaderAbi.hpp` 與 `Pass2D.hlsli` 一起改（RD-4）。
+- **RC-RD 6**（R2b 的 3D 段）：CPU 蒙皮（第 8.4 節）成為幀時間的主要部分（蒙皮的頂點數×實體數），或一幀要上傳的蒙皮頂點超過預算 → 改成 GPU 蒙皮（joint palette 放 storage buffer、頂點帶 joints／weights，同 Bevy）；來源側的介面（`SkinPose`）不變。
 - **RC-RD 5**（R2b）：相機在渲染 World 需要跨幀的狀態（貼圖目標、TAA 的歷史、遮擋查詢）→ 相機改成以來源實體為鍵的 Resource 或對應實體，第 7.3 節的四個衝突點在那時解。
 
 ## 範囲の限界
 
-- 只有 2D pass、只有內建的一組 shader；shader id、實例數、3D 在 R2b 的 3D 段，3D 的幀時間預算在那裡另宣告。
+- 內建的 shader 只有 2D pass 與 unlit 的 3D pass；沒有 shader id、實例數、打光、材質系統。3D 段**沒有**：後處理（PvP 盤點的 exposure／gamma——master 的 `SceneColorTransform`；要的時候是在 `Pass3D` 之後加一個全畫面的 pass，交 PvP 移植時定）、MSAA、陰影、視錐剔除、3D 的幀時間預算（3D 段沒有量；PvP 的場景接上時宣告與量測）。
 - 2D 段沒有：`Text2d` 元件（第 7.6 節）、可見性元件（Bevy 的 `Visibility`；不畫就拿掉元件或換層）、視錐剔除（只看位置的近遠平面）、相機畫到貼圖（其他目標 id 照第 2 節，後端不畫、計數）、加色混合（第 7.9 節）。
 - 顏色照 bytes 混合（sRGB 編碼的值直接線性內插）：半透明的邊緣比線性空間混合暗一點，同 ImGui 與多數 2D 引擎；R2b 帶 3D 時重看（RC-RD 3）。
 - 貼圖只有 RGBA8；沒有 mipmap、沒有壓縮格式、沒有渲染到貼圖（R2b 的合成、疊層需要時加）。

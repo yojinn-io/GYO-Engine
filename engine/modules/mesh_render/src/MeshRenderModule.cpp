@@ -72,8 +72,8 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
         item.depthWrite = m.depthWrite;
         item.cull = m.cull;
         const std::vector<Math::Matrix4> nodes = NodesOf(*model, poses.Get(id));
+        item.world = Render::PlaceMesh(g->matrix, mesh, nodes);
         if (mesh.skin != Model::kNoSkin && mesh.skin < model->skins.size()) {
-            item.world = g->matrix;
             item.vertices = Render::SkinVertices(*model, mesh, nodes);
             item.indices = mesh.indices;
             item.indices.resize(item.indices.size() - item.indices.size() % 3);
@@ -83,7 +83,6 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             const std::optional<Render::MeshId> retained = modelMeshes.Get().Use(key, mesh, renderMeshes.Get(), item.indexCount);
             if (!retained) return;
             item.mesh = *retained;
-            item.world = mesh.node < nodes.size() ? Math::Multiply(g->matrix, nodes[mesh.node]) : g->matrix;
         }
         items.push_back(std::move(item));
     });
