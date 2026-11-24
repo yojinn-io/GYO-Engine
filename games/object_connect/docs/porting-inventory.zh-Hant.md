@@ -132,7 +132,7 @@ PR：移植實作第 1 段（W、T、I 合併後）。畫面要等 R2a，聲音�
 | 游標（G5） | `PresentMenus` 算 `CursorAppearance`（哪張圖、要不要換掉系統游標＝有焦點且在視窗內）；第 3 段起遊戲畫自己的游標（`DrawFrame`），同時 `WindowRequest::cursorVisible=false` | 原版 `MouseCursorRenderer`（隱藏系統游標、畫 32×32 的圖） |
 | 選單分頁 | `PresentMenus`（`Update`，在 `TickSolvedTimer` 後）以這一幀結束時的畫面呼叫 `MenuPages::Present`；`QuitChosen` → `WindowRequest::close` | 原版 `Draw` 在 `Update` 之後移動頁數，下一幀的翻頁看「上次畫的畫面」 |
 
-**已知的限制**：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked`（遊戲的游標第 3 段已經畫得出來），但 `PointerWrap` 要改成由相對量追蹤指標（`Locked` 時絕對位置不再跟著動），第 3 段沒做，仍是已知限制。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
+**（已解決，第 12 節）** 原本的已知限制：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked`（遊戲的游標第 3 段已經畫得出來），但 `PointerWrap` 要改成由相對量追蹤指標（`Locked` 時絕對位置不再跟著動），第 3 段沒做，仍是已知限制。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
 
 ## 9. 移植實作第 2 段：聲音（卡片自己判的）
 
@@ -177,3 +177,14 @@ PR：移植實作第 4 段（R2b #319、#320 合併後）。R2b 卡交來兩條�
 | 指標的換算 | 滑鼠位置先扣掉視區的左上角（邏輯像素）、再照視區大小換成遊戲座標；穿邊的「邊」是遊戲畫面的邊（黑邊算在外面）；warp 的目標加回左上角。游標「在不在視窗內」仍以整個視窗判斷 | 第 1 段的 `ClientToPlayfield` 本來就是線性換算，換成以視區為準 |
 | 游標 | 遊戲的游標另起一個 `Pass2D`（不清除、沒有 viewport、view＝整個視窗的邏輯像素），畫在遊戲畫面的 pass 之後，大小照遊戲畫面的倍率 | 遊戲畫面的 pass 只畫在 viewport 裡，游標進了黑邊會被切掉，而系統游標已經藏起來（設計審查 should） |
 | 什麼時候看得到黑邊 | 視窗不可縮放（G6），一般整個視窗就是 1280×720（HiDPI 等比例）；螢幕放不下或縮放比例除不盡時才有黑邊 | — |
+
+## 12. 拖線時鎖住游標（第 8 節的已知限制）
+
+PR：移植實作後續（四段合併後，使用者「處理掉那個游標問題」）。
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| 什麼時候鎖 | 在 wrapEdges 關卡拿著血管時（`ReadPlayerInput` 的 `wrapPointer`、有焦點、能換算），`WindowRequest::cursorGrab = Locked`；其他時候 `None` | 只有穿邊需要；一般操作照舊用 OS 的游標 |
+| 指標 | 鎖住時不讀 OS 回報的位置（相對模式下 SDL 會把它夾在視窗內），改用「上一幀的位置＋這一幀的相對移動量」（`PointerState::virtualClient`），不受視窗或螢幕邊限制；穿邊時直接把這個位置移到對邊，不請 OS warp | 原版用 DirectInput 的相對量推過停住的邊（G4）；`input` 頁：`Locked` 時 `MouseMotion` 是裝置自己的移動 |
+| 放手 | 解除鎖定，把系統游標 warp 到遊戲游標所在的位置（夾在視窗內）；`sdl_window` 先套用解鎖、再套用 warp | SDL 解鎖時會把游標放回它夾住的位置，後送的 warp 蓋過它 |
+| 手感 | 相對模式拿到的是沒有系統加速的移動量，拖線時指標的速度可能和平常不同。使用者實機試過：「沒多大問題」 | 要套用系統加速得在 `sdl_window` 設 SDL 的 hint（Engine 的事），目前不需要 |
