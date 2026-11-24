@@ -176,7 +176,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **已定 (a)（暫定，`v8-arch-gyo2-oc-fast-float-a`）**：Object_Connect 直接連 `gyo_fast_float`（`v8-arch-gyo2-oc-separation-review` 3）——產品自己宣告依賴；使用者「後面我想想如何改」 | 架構師 2026-11-24 | 交 Object_Connect 卡（兩處註解）；之後使用者可能改 |
 | `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | **已處理**：#320 c862aed1（2D／3D 幀測試改用顯示的視窗、要求至少一幀送到視窗） |
 | `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批（K）順手改 |
-| Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | **進行中**：使用者在卡裡直接要求，卡已改好未 commit，等使用者實機試 |
+| Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | **使用者實機試過**（2026-11-24「這個我已經試過了。沒多大問題。」）；卡推 `claude/gyo2-object-connect-cursor-lock-d5884a` 開 PR（含 fast_float (a) 註解 258a952a） |
 | JSON Module 加排版輸出（pretty print）：`gyo.ui` 經 JSON Module 寫出變成一行，Editor 回來前要有排版輸出，否則檔案 diff 沒法看（`v8-arch-gyo2-sdl-u-three-judgments` 2） | U #322 | Editor（工具線）回來前 |
 | `TextComposition.cursor` 改成位元組、由 `sdl_window` 的 adapter 換算（同 winit；`v8-arch-gyo2-sdl-u-three-judgments` 3） | U #322 設計審查 S2 | **已處理**：#326 bec63ca5 |
 | **待使用者定：大地圖線**（`v8-arch-gyo2-pvp-playtest-2026-11-24` 3）：master big-map（1 km²、cell 0.5 m、`gyo.voxel_map`＋`gyo.voxel_region`）做到格式、分塊工具、broadphase，scene v1 與 pa-measure 沒做；gyo2 只有單檔 v1、無剔除、無地圖編輯器；約 200 m 見方內現狀可行（未量）。開線要照 gyo2 重對層的歸屬（工具與遊戲只用資料形式交接） | PvP 卡 2026-11-24 | 使用者定開不開、和 PvP 第 4 段的先後 |
