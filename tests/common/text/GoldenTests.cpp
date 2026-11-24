@@ -80,7 +80,7 @@ struct Golden {
     std::string atlas;
 };
 
-// BIZ UDPGothic (a real TrueType Japanese font) at the sizes Object_Connect
+// BIZ UDPGothic (a real TrueType Japanese font) at the sizes a 2D game's HUD
 // uses, and the synthetic fonts (TrueType and CFF outlines).
 Golden Run(const char* font, const std::string& text, const float size, const float width) {
     Text::TextContext context;

@@ -1,5 +1,5 @@
 // Gain changes (Submitter::SetGain) and looping plays (PlayRequest::loop): the
-// two playback features v8-arch-gyo2-sdl-a added for Object_Connect (G1, G2).
+// two playback features v8-arch-gyo2-sdl-a added.
 // Replacement Criterion 6 asks every new playback feature to verify again the
 // mapping, the late rule, the ring order, the clip's release and real-time
 // safety; the last two are in RenderAllocTests.cpp, the rest here.
@@ -404,7 +404,7 @@ TEST_CASE("Audio Mixer reports a looping sound's position within its current pas
 }
 
 TEST_CASE("Audio Mixer plays an intro then a loop scheduled at the intro's end") {
-    // Object_Connect's music: the intro plays once, the loop starts at its last frame plus one.
+    // Music with an intro: the intro plays once, the loop starts at its last frame plus one.
     Rig rig = MakeRig();
     const Clip intro = Constant(150, 100);
     const Clip loop = Constant(50, 200);

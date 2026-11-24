@@ -30,7 +30,7 @@ struct WindowSettings final {
     std::string title = "GYO";
     // The size asked for, in logical pixels.
     Math::Vec2i size{1280, 720};
-    // false: the player cannot resize it (Object_Connect G6; Bevy's Window::resizable).
+    // false: the player cannot resize it (Bevy's Window::resizable).
     bool resizable = true;
     // Made hidden (tests on a headless machine).
     bool hidden = false;
@@ -44,8 +44,8 @@ enum class CursorGrab : std::uint8_t {
     None = 0,
     // Kept inside the window (SDL_SetWindowMouseGrab).
     Confined,
-    // Hidden and held in place; input's MouseMotion reports the device's motion (SDL's relative mode; Object_Connect
-    // G4 with a cursor the game draws).
+    // Hidden and held in place; input's MouseMotion reports the device's motion (SDL's relative mode; Bevy's
+    // CursorGrabMode::Locked; a game that pushes past the window's edge draws its own cursor).
     Locked,
 };
 
@@ -110,8 +110,8 @@ struct ClipboardChanged final {
 
 // Requests: written by the game, read by the backend at the end of the frame (Main/Last), applied a frame later.
 
-// Puts the system cursor at a place of the window, in logical pixels (Bevy's Window::set_cursor_position;
-// Object_Connect G3). The backend's writes after the warp report the cursor's new place as usual.
+// Puts the system cursor at a place of the window, in logical pixels (Bevy's Window::set_cursor_position). The
+// backend's writes after the warp report the cursor's new place as usual.
 struct WarpCursor final {
     Math::Vec2 position{};
 };

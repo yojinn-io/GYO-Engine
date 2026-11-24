@@ -4,8 +4,8 @@
 // declaration section 6.4, R2b). world_render registers these in the source World; the render World reads them
 // through Extract (camera_render, sprite_render) and turns them into RenderCommands. After Bevy: Sprite
 // (bevy_sprite/src/sprite.rs:17), ClearColorConfig and ClearColor (bevy_camera/src/clear_color.rs:13, :46), RenderLayers
-// (bevy_camera's visibility). Shape2d is the 2D shape whose vertices the author gives every frame (Object_Connect's
-// blood vessels: a triangle strip from a Verlet chain; SDL declaration section 6.4, "(1)").
+// (bevy_camera's visibility). Shape2d is the 2D shape whose vertices the author gives every frame (a ribbon: a
+// triangle strip from a chain of particles; SDL declaration section 6.4, "(1)").
 //
 // Coordinates are world units of the entity's GlobalTransform, y up (as Bevy 2D and the camera Module); a larger z is
 // drawn in front (the 2D camera's default, the user's choice (b), X1). Texture coordinate (0, 0) is a picture's

@@ -418,8 +418,8 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
 
 // The frame-time budget declared in render.zh-Hant.md section 2 (batch R2a): measured, not judged (the GPU and the
 // driver decide it; Lavapipe is far slower than any player's GPU). It prints the mean of Capture (asks, uploads, the
-// pass and the read back, waiting for the GPU) of an Object_Connect-sized frame: 1280 by 720, 2,000 quads, one pass.
-TEST_CASE("sdl_gpu budget: an Object_Connect-sized 2D frame") {
+// pass and the read back, waiting for the GPU) of a frame of a common 2D game: 1280 by 720, 2,000 quads, one pass.
+TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     R::RenderCommands commands;
     R::Pass2D pass = Cleared(kBlue);
     pass.view = Rect{0, 0, 1280, 720};
