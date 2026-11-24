@@ -6,6 +6,7 @@
 // adapter asserts it (SDL-4).
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -70,6 +71,16 @@ public:
     void Pump(EventQueue& queue);
     // Waits up to ns for an OS event (nothing is taken from SDL's queue).
     void WaitForEvent(std::int64_t ns);
+    // The live frame (SDL declaration R3; live-frame-sim-thread declaration 4.1): while the OS holds the pump in its
+    // modal loop (a live resize, a dragged title bar), SDL sends SDL_EVENT_WINDOW_EXPOSED with data1 1 and allows
+    // drawing from an event watch. The watch runs frame only when all hold: that event, for this window, on the main
+    // thread, while Pump is running, not already in frame (no reentry). Before frame the window's size now goes into
+    // the queue as a WindowResized (the queued resize events wait for the pump to return: master's pit 3). An empty
+    // function: no live frame. The watch is added on the first non-empty one and removed with the backend (on the
+    // main thread: master's pit 5).
+    void SetLiveFrame(std::function<void()> frame);
+    // Inside frame (the requests wait for the next frame outside the OS's modal loop).
+    [[nodiscard]] bool InLiveFrame() const noexcept;
     [[nodiscard]] WindowSnapshot Snapshot() const;
     // Where the cursor is over the window, in logical pixels; nullopt when it is not over the window.
     [[nodiscard]] std::optional<Engine::Math::Vec2> CursorNow() const;
@@ -89,8 +100,9 @@ public:
     void Close();
     [[nodiscard]] const std::string& LastError() const noexcept { return lastError_; }
 
-private:
     struct State;
+
+private:
     explicit WindowBackend(std::unique_ptr<State> state);
     std::unique_ptr<State> state_;
     std::string lastError_;

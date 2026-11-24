@@ -522,6 +522,71 @@
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: the input method*",
    "expect": "\\[sw\\-ime\\-unit\\-windows\\]"
+  },
+  {
+   "id": "sw-live-any-expose",
+   "what": "every expose runs the live frame (data1 not read)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (event->type != SDL_EVENT_WINDOW_EXPOSED || event->window.data1 != 1) return true;",
+   "replace": "    if (event->type != SDL_EVENT_WINDOW_EXPOSED) return true;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-data1\\]"
+  },
+  {
+   "id": "sw-live-outside-pump",
+   "what": "the live frame runs outside the pump",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (!SDL_IsMainThread() || state->pumpQueue == nullptr || state->inLiveFrame || !state->liveFrame) return true;",
+   "replace": "    if (!SDL_IsMainThread() || state->inLiveFrame || !state->liveFrame) return true;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-only\\-in\\-pump\\]|test case CRASHED"
+  },
+  {
+   "id": "sw-live-reentered",
+   "what": "the live frame is entered again from inside itself",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    state->inLiveFrame = true;\n    state->liveFrame();",
+   "replace": "    state->liveFrame();",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-once\\]|test case CRASHED"
+  },
+  {
+   "id": "sw-live-failure-ignored",
+   "what": "a live frame's failure does not end the runner",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "            if (auto ran = product.RunFrame(); !ran) liveFailure = std::move(ran).error();",
+   "replace": "            static_cast<void>(product.RunFrame());",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the runner's live frame*",
+   "expect": "\\[sw\\-live\\-failure\\]"
+  },
+  {
+   "id": "sw-own-thread-ignored",
+   "what": "ownThreadWorlds is not lent (every World on the main thread)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "        if (auto refused = lent.Lend(options.ownThreadWorlds, options.ownThreadIdle)) return *refused;",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a World of ownThreadWorlds*",
+   "expect": "\\[sw\\-own\\-thread\\]"
   }
  ]
 }
