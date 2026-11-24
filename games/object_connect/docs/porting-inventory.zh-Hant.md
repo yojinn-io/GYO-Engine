@@ -165,3 +165,15 @@ PR：移植實作第 3 段（R2a #315 合併後）。
 | 頂點上限 | 拿掉原版的 65,536 頂點預算與「放不下就丟掉血管副本」的保留邏輯 | `Pass2D` 的清單會長，沒有固定上限 |
 | 幀間隔 | `SDLWindowOptions::minFrameInterval` 4 ms | 顯示畫面時等垂直同步；視窗最小化時拿不到畫面、不會等，這個下限讓迴圈不空轉 |
 | 測試 | `object_connect.main` 改 gpu 標籤（視窗不隱藏：X11 上隱藏視窗拿不到畫面，每幀都被跳過）；`--frames` 模式下沒有任何一幀顯示、或有畫壞的幀／跳過的繪製／被拒的貼圖時結束碼 1（SDL dummy 驅動沒有 GPU 裝置；L1 在 Linux 的 Lavapipe＋Xvfb 跑）；`object_connect.runtime` 在 `Submit` 階段讀 `RenderCommands`，當資料檢查 | 畫素級的比對是 `sdl_gpu.pass2d` 的事 |
+
+## 11. 移植實作第 4 段：R2b 之後的形（卡片自己判的）
+
+PR：移植實作第 4 段（R2b #319、#320 合併後）。R2b 卡交來兩條路：(A) 維持單一 World、要黑邊時設 `Pass2D::viewport`；(B) 拆成遊戲 World＋渲染 World（extract），用 `Shape2d`／`Sprite`＋`Camera2d`＋`Letterbox`。
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| 選哪條 | **(A)**：單一 World、`DrawFrame` 自己組 `Pass2D`（第 3 段的形），只換掉「固定解析度的縮放」 | 動態頂點（血管）第 3 段已用 `Pass2D` 的每幀頂點做好；(B) 要把文字、游標、選單的畫法搬進渲染 World，畫面不會變，只多一層搬運。R2b 的 `Shape2d`／`Sprite` 在這款遊戲用不到 |
+| 固定解析度的縮放 | `FitPlayfield`：用 camera 的純函式 `Compute`＋`Letterbox{1280,720}`（`ScalingFixed` 同尺寸）從視窗的實際像素算出置中、等比例的最大矩形；`Pass2D::viewport` 設成它（第一個 pass 清整個目標＝黑邊），`view` 照舊 1280×720 | 用 Engine 的機制，不在遊戲裡自己寫 letterbox 的算式；不建相機實體（單一 World 不需要相機的系統，`Compute` 是純函式） |
+| 指標的換算 | 滑鼠位置先扣掉視區的左上角（邏輯像素）、再照視區大小換成遊戲座標；穿邊的「邊」是遊戲畫面的邊（黑邊算在外面）；warp 的目標加回左上角。游標「在不在視窗內」仍以整個視窗判斷 | 第 1 段的 `ClientToPlayfield` 本來就是線性換算，換成以視區為準 |
+| 游標 | 遊戲的游標另起一個 `Pass2D`（不清除、沒有 viewport、view＝整個視窗的邏輯像素），畫在遊戲畫面的 pass 之後，大小照遊戲畫面的倍率 | 遊戲畫面的 pass 只畫在 viewport 裡，游標進了黑邊會被切掉，而系統游標已經藏起來（設計審查 should） |
+| 什麼時候看得到黑邊 | 視窗不可縮放（G6），一般整個視窗就是 1280×720（HiDPI 等比例）；螢幕放不下或縮放比例除不盡時才有黑邊 | — |

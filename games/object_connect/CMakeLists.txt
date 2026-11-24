@@ -38,12 +38,13 @@ gyo_game_add_library(world OUT_TARGET object_connect_world
     src/world/ObjectConnectWorld.cpp)
 
 gyo_game_add_library(runtime OUT_TARGET object_connect_runtime
-    PUBLIC_LIBRARIES ${object_connect_world} GYO::Asset GYO::Audio GYO::Image GYO::Input GYO::Render GYO::RenderWorld
+    PUBLIC_LIBRARIES ${object_connect_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Render GYO::RenderWorld
         GYO::Text GYO::Window GYO::WorldAsset
     SOURCES
     src/runtime/Drawing.cpp
     src/runtime/GameData.cpp
     src/runtime/GameSound.cpp
+    src/runtime/PlayfieldFit.cpp
     src/runtime/PuzzleDrawing.cpp
     src/runtime/UiDrawing.cpp
     src/runtime/RuntimeWorld.cpp)

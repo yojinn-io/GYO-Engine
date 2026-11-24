@@ -7,6 +7,7 @@
 #include "object_connect/runtime/GameData.hpp"
 #include "object_connect/runtime/Drawing.hpp"
 #include "object_connect/runtime/GameSound.hpp"
+#include "object_connect/runtime/PlayfieldFit.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
 #include "object_connect/world/GameScreenState.hpp"
 #include "object_connect/world/Resources.hpp"
@@ -678,8 +679,12 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     game.OpenWindow();
     game.MoveTo(400.0f, 290.0f);
     const Asked& asked = *game.World().Resource<Asked>();
-    REQUIRE(asked.picture.passes.size() == 1);
+    // The playfield's pass, and the cursor's own pass over the whole window.
+    REQUIRE(asked.picture.passes.size() == 2);
     REQUIRE(std::holds_alternative<GYO::Engine::Render::Pass2D>(asked.picture.passes.front()));
+    const auto& cursorPass = std::get<GYO::Engine::Render::Pass2D>(asked.picture.passes.back());
+    CHECK_FALSE(cursorPass.clear.has_value());
+    CHECK_FALSE(cursorPass.viewport.has_value());
     const auto& pass = std::get<GYO::Engine::Render::Pass2D>(asked.picture.passes.front());
     REQUIRE(pass.view.has_value());
     CHECK(pass.view->width == doctest::Approx(1280.0f));
@@ -697,10 +702,12 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
     CHECK(resources.nodeTextures.size() == 7);
     CHECK(asked.texturesLive == 7 + 3 + resources.atlasPages.size());
     REQUIRE_FALSE(resources.atlasPages.empty());
-    CHECK(TexturedDraws(pass) >= 2);
+    CHECK(TexturedDraws(pass) >= 1); // the texts (the cursor has its own pass)
     // The order: the rectangles, then the texts (from the atlas), the cursor last (the original's Game::Impl::Draw).
     REQUIRE_FALSE(pass.draws.empty());
-    CHECK(pass.draws.back().texture == resources.cursors[static_cast<std::size_t>(OC::MouseCursorIcon::Interactive)]);
+    REQUIRE(cursorPass.draws.size() == 1);
+    CHECK(cursorPass.draws.back().texture ==
+          resources.cursors[static_cast<std::size_t>(OC::MouseCursorIcon::Interactive)]);
     std::size_t lastWhite = 0;
     std::size_t firstAtlas = pass.draws.size();
     for (std::size_t index = 0; index < pass.draws.size(); ++index) {
@@ -709,7 +716,7 @@ TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu'
         if (texture == resources.atlasPages.front() && firstAtlas == pass.draws.size()) firstAtlas = index;
     }
     CHECK(lastWhite < firstAtlas);
-    CHECK(firstAtlas < pass.draws.size() - 1);
+    CHECK(firstAtlas < pass.draws.size());
     CHECK(game.World().Resource<W::WindowRequest>()->cursorVisible == false); // the game draws its own
 
     // In the first level the board is drawn too: more vertices than the menu.
@@ -738,4 +745,153 @@ TEST_CASE("runtime: the colours are the original's linear values encoded as its 
     CHECK(ToColor8({1.0f, 1.0f, 1.0f, 1.0f}) == GYO::Engine::Render::Color8{255, 255, 255, 255});
     CHECK(ToColor8({0.5f, 0.5f, 0.5f, 0.5f}) == GYO::Engine::Render::Color8{188, 188, 188, 128});
     CHECK(ToColor8({0.002f, 0.2f, 2.0f, 1.0f}) == GYO::Engine::Render::Color8{7, 124, 255, 255});
+}
+
+TEST_CASE("runtime: the playfield keeps its aspect in a window of another shape, black bars around it") {
+    using OR::FitPlayfield;
+    const auto same = FitPlayfield({1280, 720}, 1.0F);
+    REQUIRE(same.has_value());
+    CHECK(same->physical == GYO::Engine::Render::PixelRect{0, 0, 1280, 720});
+    const auto retina = FitPlayfield({2560, 1440}, 2.0F);
+    REQUIRE(retina.has_value());
+    CHECK(retina->physical == GYO::Engine::Render::PixelRect{0, 0, 2560, 1440});
+    CHECK(retina->logicalSize.x == doctest::Approx(1280.0f));
+    const auto wide = FitPlayfield({1600, 720}, 1.0F);
+    REQUIRE(wide.has_value());
+    CHECK(wide->physical == GYO::Engine::Render::PixelRect{160, 0, 1280, 720});
+    const auto wide2 = FitPlayfield({3200, 1440}, 2.0F);
+    REQUIRE(wide2.has_value());
+    CHECK(wide2->physical == GYO::Engine::Render::PixelRect{320, 0, 2560, 1440});
+    CHECK(wide2->logicalOrigin.x == doctest::Approx(160.0f));
+    CHECK(wide2->logicalSize.x == doctest::Approx(1280.0f));
+    CHECK(wide2->logicalSize.y == doctest::Approx(720.0f));
+    CHECK(wide2->windowLogicalSize.x == doctest::Approx(1600.0f));
+    const auto tall = FitPlayfield({2560, 1600}, 2.0F);
+    REQUIRE(tall.has_value());
+    CHECK(tall->physical == GYO::Engine::Render::PixelRect{0, 80, 2560, 1440});
+    CHECK(tall->logicalOrigin.y == doctest::Approx(40.0f));
+    CHECK_FALSE(FitPlayfield({0, 720}, 1.0F).has_value());
+
+    // In a 1600 x 720 window the picture is drawn in the middle 1280 and the pointer is mapped through it.
+    Game game;
+    game.LoadContent();
+    game.Next().sizes.push_back({{1600, 720}, 1.0F, {}});
+    game.Next().focus.push_back({true, {}});
+    game.Frame();
+    game.Click(160.0f + 885.0f, 290.0f); // "ゲーム開始"'s right end (390 to 890), moved right by the bar
+    game.Frame();
+    CHECK(game.Screen() == GameScreen::LevelSelect);
+    const auto& pass = std::get<GYO::Engine::Render::Pass2D>(game.World().Resource<Asked>()->picture.passes.front());
+    REQUIRE(pass.viewport.has_value());
+    CHECK(*pass.viewport == GYO::Engine::Render::PixelRect{160, 0, 1280, 720});
+    game.Click(100.0f, 290.0f); // in the left bar: outside the playfield, nothing is hit
+    CHECK(game.Screen() == GameScreen::LevelSelect);
+    game.Click(160.0f + 345.0f, 215.0f); // the first tile's left edge (344); unshifted it would be the second tile
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    CHECK(game.Session().puzzleIndex == std::size_t{0});
+}
+
+TEST_CASE("runtime: in a letterboxed window the wrap crosses the playfield's edges and warps inside it") {
+    Game game;
+    game.LoadContent();
+    game.Next().sizes.push_back({{1600, 720}, 1.0F, {}}); // a 160 px bar on each side
+    game.Next().focus.push_back({true, {}});
+    game.Frame();
+    const OW::Catalog* catalog = game.World().Resource<OW::Catalog>();
+    std::size_t wrapLevel = 0;
+    while (!catalog->puzzles.GetPuzzles()[wrapLevel].wrapEdges) ++wrapLevel;
+    game.Press(I::KeyCode::Enter);
+    for (std::size_t step = 0; step < wrapLevel; ++step) game.Press(I::KeyCode::ArrowDown);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    std::optional<OC::Vec2> root;
+    for (const auto& node : game.Session().board->GetDefinition().nodes) {
+        if (node.type == OC::NodeType::Root && node.tilePosition) {
+            root = OC::Vec2{(static_cast<float>(node.tilePosition->x) + node.widthTiles * 0.5f) * 16.0f,
+                            (static_cast<float>(node.tilePosition->y) + node.heightTiles * 0.5f) * 16.0f};
+            break;
+        }
+    }
+    REQUIRE(root.has_value());
+    constexpr float kBar = 160.0f;
+    game.Button(kBar + root->x, root->y, I::ButtonState::Pressed);
+    REQUIRE(game.Session().board->IsDragging());
+    for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(kBar + x, root->y);
+    game.MoveTo(kBar - 2.0f, root->y); // two pixels into the left bar: past the playfield's left edge
+    const Asked* asked = game.World().Resource<Asked>();
+    REQUIRE(asked->warps.size() == 1);
+    CHECK(asked->warps.back().position.x == doctest::Approx(kBar + 1278.0f)); // inside the playfield's right edge
+}
+
+TEST_CASE("runtime: at a scale factor of 2 the pointer and the warp go through the playfield in logical pixels") {
+    // 3200 x 1440 physical pixels at scale 2: a 1600 x 720 logical window, a 160 logical px bar on each side.
+    Game game;
+    game.LoadContent();
+    game.Next().sizes.push_back({{3200, 1440}, 2.0F, {}});
+    game.Next().focus.push_back({true, {}});
+    game.Frame();
+    constexpr float kBar = 160.0f;
+    game.Click(kBar + 885.0f, 290.0f); // "ゲーム開始"'s right end
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::LevelSelect);
+    const auto& pass = std::get<GYO::Engine::Render::Pass2D>(game.World().Resource<Asked>()->picture.passes.front());
+    REQUIRE(pass.viewport.has_value());
+    CHECK(*pass.viewport == GYO::Engine::Render::PixelRect{320, 0, 2560, 1440});
+
+    // The cursor in a bar is still drawn: its own pass covers the whole window.
+    game.MoveTo(40.0f, 290.0f);
+    CHECK(game.Cursor().custom);
+    const auto& passes = game.World().Resource<Asked>()->picture.passes;
+    REQUIRE(passes.size() == 2);
+    const auto& cursorPass = std::get<GYO::Engine::Render::Pass2D>(passes.back());
+    REQUIRE(cursorPass.view.has_value());
+    CHECK(cursorPass.view->width == doctest::Approx(1600.0f));
+    REQUIRE_FALSE(cursorPass.vertices.empty());
+    CHECK(cursorPass.vertices.front().position.x == doctest::Approx(40.0f - 16.0f)); // centred, 32 logical px
+
+    const OW::Catalog* catalog = game.World().Resource<OW::Catalog>();
+    std::size_t wrapLevel = 0;
+    while (!catalog->puzzles.GetPuzzles()[wrapLevel].wrapEdges) ++wrapLevel;
+    // The click left the pointer over a tile, whose hover moved the selection; step from there.
+    while (game.Selected() < wrapLevel) game.Press(I::KeyCode::ArrowDown);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    REQUIRE(game.Session().board->GetDefinition().wrapEdges);
+    std::optional<OC::Vec2> root;
+    for (const auto& node : game.Session().board->GetDefinition().nodes) {
+        if (node.type == OC::NodeType::Root && node.tilePosition) {
+            root = OC::Vec2{(static_cast<float>(node.tilePosition->x) + node.widthTiles * 0.5f) * 16.0f,
+                            (static_cast<float>(node.tilePosition->y) + node.heightTiles * 0.5f) * 16.0f};
+            break;
+        }
+    }
+    REQUIRE(root.has_value());
+    game.Button(kBar + root->x, root->y, I::ButtonState::Pressed);
+    REQUIRE(game.Session().board->IsDragging());
+    for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(kBar + x, root->y);
+    game.MoveTo(kBar - 2.0f, root->y);
+    const Asked* asked = game.World().Resource<Asked>();
+    REQUIRE(asked->warps.size() == 1);
+    CHECK(asked->warps.back().position.x == doctest::Approx(kBar + 1278.0f));
+}
+
+TEST_CASE("runtime: in a larger window of the same shape the cursor follows the playfield's scale") {
+    // 1600 x 900: the playfield fills it at 1.25 times; the cursor (32 playfield px) is 40 px, centred on the pointer.
+    Game game;
+    game.LoadContent();
+    game.Next().sizes.push_back({{1600, 900}, 1.0F, {}});
+    game.Next().focus.push_back({true, {}});
+    game.Frame();
+    game.MoveTo(800.0f, 450.0f); // the playfield's centre (640, 360)
+    REQUIRE(game.Cursor().custom);
+    CHECK(game.Input().pointer.position.x == doctest::Approx(640.0f));
+    const auto& passes = game.World().Resource<Asked>()->picture.passes;
+    REQUIRE(passes.size() == 2);
+    const auto& cursorPass = std::get<GYO::Engine::Render::Pass2D>(passes.back());
+    REQUIRE(cursorPass.vertices.size() == 4);
+    CHECK(cursorPass.vertices[0].position.x == doctest::Approx(800.0f - 20.0f));
+    CHECK(cursorPass.vertices[3].position.x == doctest::Approx(800.0f + 20.0f));
 }
