@@ -17,7 +17,7 @@ v8-product-pvp-port
 └─ 第 5 段 lobby    high｜大廳（PV12）：輸入 Match 的位址、連上；用 U 卡的 ui、world_ui、ui_render（2026-11-24 主會話加）
 ```
 
-〔2026-11-24 主會話加第 5 段〕大廳在移植範圍內，原本四段沒排，用 `--connect host:port` 代替。加段是主會話判的，不是使用者的決定。**先後：第 5 段先、第 4 段後**（卡自己判）：第 5 段只等 #322、#326 合進 gyo2，接法已由 U 卡寫好、驗過，是產品的接線；第 4 段改編排層與 `sdl_window`（R3、R5、O-13），開工前要另寫前提與別家的對照、交使用者定。第 4 段的宣告可以在等合併時先寫。
+〔2026-11-24 主會話加第 5 段〕大廳在移植範圍內，原本四段沒排，用 `--connect host:port` 代替。加段是主會話判的，不是使用者的決定。**先後：第 5 段先、第 4 段後**（卡自己判）：第 5 段只等 #322、#326 合進 gyo2，接法已由 U 卡寫好、驗過，是產品的接線；第 4 段改編排層與 `sdl_window`（R3、R5、O-13），開工前另寫前提與別家的對照。主會話 2026-11-24 確認這個先後，並說第 4 段的前提與對照寫完就動工、不必先交使用者：R3、R5、O-13 都在已核准的 SDL 總宣告裡，照它實作不算推翻使用者的決定；只有「要改總宣告已定的內容」或「要動 AGENTS §1」時停下問主會話。
 
 | 段 | 範圍 | 不做 | 測試 |
 |---|---|---|---|
@@ -73,6 +73,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 
 - 前提：Engine 要解決。OS 的 modal 迴圈（live resize）和執行緒的入口只有 `sdl_window` 與編排層做得到（SDL 總宣告 R3、R5、O-13）。
 - 放最後：遊戲在單執行緒、不 live resize 下就能玩；先把能玩的版本交出（穩定版先）。開工時另寫這一段的前提與別家的對照（Bevy 的 `bevy_winit` 的 resize、Godot 的 `DisplayServer` 的 modal 迴圈）。
+- 〔2026-11-24 主會話〕排在第 5 段之後；前提與別家對照寫完就動工（理由與停下的條件見第 1 節第 5 段的註）。
 
 ### PV12 大廳 → **第 5 段，用 U 卡的 UI**（2026-11-24 主會話加）
 
@@ -86,7 +87,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
   6. 組字游標直接用位元組（`input` 的 `TextComposition.cursorByte`／`selectionBytes`，`sdl_window` 換好）。
   7. 錯誤讀 `UiRootState::failure`，由產品記 log 或顯示。
 - 動工條件：#322、#326 合進 gyo2（等使用者說「合併」）。
-- 連線的時機：現在 Client 在 Product 建好時就連（`NetProductOptions` 帶 server endpoint）。大廳要「送出才連」，開工時先查 net 有沒有「之後才連」的入口；沒有的話，是不是 Engine 的事，照前提的寫法另寫、先問主會話。
+- 連線的時機：現在 Client 在 Product 建好時就連（`NetProductOptions` 帶 server endpoint，`NetService` 建構時固定）。大廳要「送出才連」：大廳先跑不帶 net 的 Product，送出後再建帶位址的 Client（net 頁 D-8：重連＝新 client World 的新連線，產品的事），歸作者處理（主會話 2026-11-24 確認）。開工確認時若 Engine 缺入口，先問主會話。
 
 ### PV14 內容比對 → **遊戲用複製的 Resource**
 
