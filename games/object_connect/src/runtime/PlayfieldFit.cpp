@@ -26,6 +26,8 @@ std::optional<PlayfieldFit> FitPlayfield(const GYO::Engine::Math::Vec2i physical
                          static_cast<float>(viewport.position.y) / computed.scaleFactor};
     fit.logicalSize = {static_cast<float>(viewport.size.x) / computed.scaleFactor,
                        static_cast<float>(viewport.size.y) / computed.scaleFactor};
+    fit.windowLogicalSize = {static_cast<float>(physicalSize.x) / computed.scaleFactor,
+                             static_cast<float>(physicalSize.y) / computed.scaleFactor};
     return fit;
 }
 

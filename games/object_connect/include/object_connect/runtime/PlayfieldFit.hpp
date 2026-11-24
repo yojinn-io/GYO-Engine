@@ -21,6 +21,8 @@ struct PlayfieldFit final {
     // In the window's logical pixels (the input's positions).
     Vec2 logicalOrigin{};
     Vec2 logicalSize{};
+    // The whole window in logical pixels (the cursor is drawn over the bars too).
+    Vec2 windowLogicalSize{};
 };
 
 // nullopt while the window's size is not known or has no area.
