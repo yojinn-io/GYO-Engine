@@ -48,6 +48,14 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     mount.stage = std::string(kCleanupStage);
     clear.mounts.push_back(std::move(mount));
     r.AddSystem<&ClearRenderFrame>(std::move(clear));
+    if (!setup.ExtractFrom().empty()) {
+        Kernel::ScheduleOptions extract;
+        extract.name = std::string(kExtractSchedule);
+        extract.extract = true;
+        extract.stages.push_back(std::string(kExtractSchedule));
+        r.Schedule(std::move(extract));
+        setup.Frame().InsertBefore(options.schedule, std::string(kExtractSchedule));
+    }
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::RenderCommands>(world);
         PutIfAbsent<Render::RenderTextures>(world);

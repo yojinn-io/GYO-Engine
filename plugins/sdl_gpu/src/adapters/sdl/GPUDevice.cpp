@@ -389,13 +389,19 @@ struct GPUDevice::State {
         for (const R::Pass2D& pass : commands.passes) {
             if (pass.target != 0) continue;
             SDL_GPURenderPass* render = begin(pass.clear);
-            const SDL_GPUViewport viewport{0.0F, 0.0F, static_cast<float>(size.width), static_cast<float>(size.height), 0.0F, 1.0F};
-            SDL_SetGPUViewport(render, &viewport);
-            const Engine::Math::Rect view = R::ViewOf(pass, size);
-            const Abi::Pass2DViewUniform uniform = Abi::ToUniform(R::ViewToClip(view));
-            SDL_PushGPUVertexUniformData(cmd, Abi::kPass2DViewUniformSlot, &uniform, sizeof(uniform));
+            // The clear above covers the whole target; the draws land in the pass's viewport.
+            const R::PixelRect area = R::ViewportOf(pass, size);
+            const bool drawable = area.width != 0 && area.height != 0;
+            const SDL_GPUViewport viewport{static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.width),
+                                           static_cast<float>(area.height), 0.0F, 1.0F};
+            if (drawable) SDL_SetGPUViewport(render, &viewport);
+            const Engine::Math::Rect view = drawable ? R::ViewOf(pass, size) : Engine::Math::Rect{};
+            if (drawable) {
+                const Abi::Pass2DViewUniform uniform = Abi::ToUniform(R::ViewToClip(view));
+                SDL_PushGPUVertexUniformData(cmd, Abi::kPass2DViewUniformSlot, &uniform, sizeof(uniform));
+            }
             // A pass with no vertices or no indices has nothing a draw could name.
-            const bool bound = !pass.vertices.empty() && !pass.indices.empty() && vertices != nullptr && indices != nullptr;
+            const bool bound = drawable && !pass.vertices.empty() && !pass.indices.empty() && vertices != nullptr && indices != nullptr;
             if (bound) {
                 const SDL_GPUBufferBinding vb{vertices, vertexBase};
                 SDL_BindGPUVertexBuffers(render, 0, &vb, 1);
@@ -418,7 +424,7 @@ struct GPUDevice::State {
                     }
                     t = &it->second;
                 }
-                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, size);
+                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);
                 if (scissor.width == 0 || scissor.height == 0) continue;
                 SDL_GPUGraphicsPipeline* pipeline = PipelineFor(format, draw.blend, tally.lastRefusal);
                 if (pipeline == nullptr) {

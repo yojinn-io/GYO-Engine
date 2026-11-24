@@ -9,6 +9,7 @@
 add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp)
 target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE GYO::SDLGPU GYO::SDLWindow GYO::RenderWorld GYO::Render GYO::Input GYO::Window
+                      GYO::Camera GYO::Transform
                       doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_sdl_gpu_tests PRIVATE /W4 /permissive-)

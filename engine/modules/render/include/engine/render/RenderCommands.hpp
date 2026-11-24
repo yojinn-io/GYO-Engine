@@ -74,17 +74,39 @@ struct Draw2D final {
     std::uint32_t vertexOffset = 0;
 };
 
+// A target's size in pixels.
+struct TargetSize final {
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+
+    friend bool operator==(const TargetSize&, const TargetSize&) = default;
+};
+
+// A rectangle of whole pixels on a target.
+struct PixelRect final {
+    std::uint32_t x = 0;
+    std::uint32_t y = 0;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+
+    friend bool operator==(const PixelRect&, const PixelRect&) = default;
+};
+
 // A 2D pass on one target. The vertices and indices of all its draws are in one list each, so a producer such as
 // Dear ImGui hands its draw list over as it is.
 struct Pass2D final {
     // The target, in camera's id space (CameraTarget::id): 0 is the main target, the main window when there is one.
     // What another id names is the backend's to map.
     std::uint32_t target = 0;
-    // Cleared to this colour before the draws. A target's first pass of the frame with no clear starts from
-    // transparent black: a window's picture is undefined when a frame begins.
+    // The whole target (not only the viewport, as a GPU clear and Bevy's camera clear) is cleared to this colour
+    // before the draws. A target's first pass of the frame with no clear starts from transparent black: a window's
+    // picture is undefined when a frame begins.
     std::optional<Color8> clear;
-    // The rectangle of view units stretched over the whole target; nullopt: the target's own pixels (view unit =
-    // pixel, origin at the top-left pixel).
+    // The pixels of the target the pass draws on (a camera's viewport; the rest is left as it is, so a letterboxed
+    // picture's bars are what the clear left); nullopt: the whole target. Cut to the target.
+    std::optional<PixelRect> viewport;
+    // The rectangle of view units stretched over the viewport; nullopt: the viewport's own pixels (view unit = pixel,
+    // origin at the viewport's top-left pixel).
     std::optional<Math::Rect> view;
     std::vector<Vertex2D> vertices;
     std::vector<std::uint32_t> indices;
@@ -109,30 +131,19 @@ struct ViewTransform final {
 // width or height is a Programmer Error.
 [[nodiscard]] ViewTransform ViewToClip(Math::Rect view);
 
-// A target's size in pixels.
-struct TargetSize final {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
+// The pixels a pass draws on: its viewport cut to the target, or the whole target. Empty (zero width or height)
+// when the viewport lies outside the target.
+[[nodiscard]] PixelRect ViewportOf(const Pass2D& pass, TargetSize target);
 
-    friend bool operator==(const TargetSize&, const TargetSize&) = default;
-};
-
-// The view of a pass on a target of this size: its own view, or the target's pixels.
+// The view of a pass on a target of this size: its own view, or the pixels of its viewport (ViewportOf).
 [[nodiscard]] Math::Rect ViewOf(const Pass2D& pass, TargetSize target);
 
-// A rectangle of whole pixels on a target.
-struct PixelRect final {
-    std::uint32_t x = 0;
-    std::uint32_t y = 0;
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-
-    friend bool operator==(const PixelRect&, const PixelRect&) = default;
-};
-
-// The pixels a draw's clip lets through: those whose centre lies inside the clip, left and top edges included, right
-// and bottom edges not (the rasterizer's own rule, so a clip on whole pixels is exact), cut to the target; nullopt
-// clip: the whole target. Empty (zero width or height) when nothing is let through.
+// The pixels a draw's clip lets through, the view stretched over viewport: those whose centre lies inside the clip,
+// left and top edges included, right and bottom edges not (the rasterizer's own rule, so a clip on whole pixels is
+// exact), cut to the viewport; nullopt clip: the whole viewport. Empty (zero width or height) when nothing is let
+// through.
+[[nodiscard]] PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, Math::Rect view, PixelRect viewport);
+// The same with the view stretched over the whole target.
 [[nodiscard]] PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, Math::Rect view, TargetSize target);
 
 } // namespace GYO::Engine::Render

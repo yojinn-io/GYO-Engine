@@ -90,6 +90,18 @@ struct OrthographicProjection final {
     }
 };
 
+// The camera shows a picture of this aspect (width : height) whatever the target's shape: the viewport used
+// (ComputedCamera::viewport) is the largest rectangle of this aspect centred in the camera's area (its viewport, or
+// the whole target); the rest of the target is left to the clear (black bars above and below, or left and right).
+// With ScalingFixed of the same size, a fixed-resolution game (Object_Connect's 1280 x 720) is scaled without
+// stretching. The author's Camera::viewport is not changed: it is hashed, and the window's size differs between
+// machines. Optional; Bevy has none (an author sets Camera::viewport), Godot's stretch aspect "keep" is the same
+// rule. A width or height that is not positive and finite leaves the camera not valid.
+struct Letterbox final {
+    float width = 16.0F;
+    float height = 9.0F;
+};
+
 // Bevy's Projection::default is the perspective one.
 using Projection = std::variant<PerspectiveProjection, OrthographicProjection>;
 
@@ -155,7 +167,9 @@ static_assert(Base::CodedError<ViewportConversionFailure>);
 // logical viewport size, scale and viewportOrigin). valid is false when size is null, its scale factor is not
 // positive or the viewport size is zero. A pure function: a caller that needs the values of a camera that is not
 // in a World (a tool's preview, a test) calls it; it writes nothing.
-[[nodiscard]] ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size);
+// letterbox: the camera's Letterbox, or null.
+[[nodiscard]] ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size,
+                                     const Letterbox* letterbox = nullptr);
 
 // Bevy's world_to_viewport: the point's position in the target's logical pixels. NDC depth below 0 is PastNearPlane,
 // above 1 PastFarPlane (so a point behind a perspective camera is PastFarPlane, as in Bevy).
@@ -203,6 +217,10 @@ inline void HashValue(Kernel::Hasher& h, const Projection& v) {
         }
         Kernel::HashValue(h, o->scale);
     }
+}
+inline void HashValue(Kernel::Hasher& h, const Letterbox& v) {
+    Kernel::HashValue(h, v.width);
+    Kernel::HashValue(h, v.height);
 }
 inline void HashValue(Kernel::Hasher&, const Camera2d&) {}
 inline void HashValue(Kernel::Hasher&, const Camera3d&) {}

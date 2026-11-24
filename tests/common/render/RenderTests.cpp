@@ -95,6 +95,29 @@ TEST_CASE("render: a clip follows the view's scale and origin and is cut to the 
     CHECK_MESSAGE((outside.width == 0 || outside.height == 0), "[rd-clip-outside] a clip outside lets nothing through");
 }
 
+TEST_CASE("render: a viewport is cut to the target; the view and clips are measured in it") {
+    R::Pass2D pass;
+    CHECK_MESSAGE((R::ViewportOf(pass, R::TargetSize{64, 32}) == R::PixelRect{0, 0, 64, 32}), "[rd-viewport-default] nullopt is the whole target");
+    pass.viewport = R::PixelRect{8, 4, 32, 16};
+    CHECK_MESSAGE((R::ViewportOf(pass, R::TargetSize{64, 32}) == R::PixelRect{8, 4, 32, 16}), "[rd-viewport-given] a given viewport is used");
+    const Rect own = R::ViewOf(pass, R::TargetSize{64, 32});
+    CHECK_MESSAGE((own.x == 0.0F && own.y == 0.0F && own.width == 32.0F && own.height == 16.0F),
+                  "[rd-viewport-view] nullopt view is the viewport's pixels");
+    pass.viewport = R::PixelRect{48, 30, 32, 16};
+    CHECK_MESSAGE((R::ViewportOf(pass, R::TargetSize{64, 32}) == R::PixelRect{48, 30, 16, 2}), "[rd-viewport-cut] cut to the target");
+    pass.viewport = R::PixelRect{70, 0, 4, 4};
+    const R::PixelRect outside = R::ViewportOf(pass, R::TargetSize{64, 32});
+    CHECK_MESSAGE((outside.width == 0), "[rd-viewport-outside] a viewport outside the target is empty");
+
+    // A 1280 by 720 view over a letterboxed 1920 by 1080 viewport at (0, 60) of a 1920 by 1200 target: 1.5 pixels a unit.
+    const R::PixelRect letterbox{0, 60, 1920, 1080};
+    CHECK_MESSAGE((R::ClipToPixels(std::nullopt, Rect{0, 0, 1280, 720}, letterbox) == letterbox), "[rd-clip-viewport-none] nullopt clip is the viewport");
+    CHECK_MESSAGE((R::ClipToPixels(Rect{100.0F, 40.0F, 200.0F, 100.0F}, Rect{0, 0, 1280, 720}, letterbox) == R::PixelRect{150, 120, 300, 150}),
+                  "[rd-clip-viewport-offset] view units to pixels of the viewport, offset by its corner");
+    CHECK_MESSAGE((R::ClipToPixels(Rect{-10.0F, 700.0F, 100.0F, 100.0F}, Rect{0, 0, 1280, 720}, letterbox) == R::PixelRect{0, 1110, 135, 30}),
+                  "[rd-clip-viewport-cut] cut to the viewport, not the target");
+}
+
 TEST_CASE("render: texture ids start at 1, grow and are never given twice; the white texture is 0") {
     R::RenderTextures textures;
     const R::TextureId a = textures.Create(R::TextureDesc{2, 1}, Pixels(2, 1));
