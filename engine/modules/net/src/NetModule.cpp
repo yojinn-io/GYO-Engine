@@ -99,6 +99,17 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel:
     return {};
 }
 
+// A K3 client's decide stage, before RunRollback: the client's own Peer entity gets KeepThroughRollback.
+SystemResult KeepPeerInBeing(Kernel::ExclusiveWorld<> world) {
+    auto peer = world.Read<NetWorldLink>([](const NetWorldLink& link) { return link.clientPeer; });
+    if (!peer || !peer->has_value() || **peer == 0) return {};
+    auto marked = world.Read<Rollback::KeepThroughRollback>(**peer, [](const Rollback::KeepThroughRollback&) { return true; });
+    if (marked && marked->has_value()) return {};
+    auto inserted = world.Insert(**peer, Rollback::KeepThroughRollback{});
+    if (!inserted) return Base::Err(std::move(inserted).error());
+    return {};
+}
+
 // What both SendNet signatures do: the World's facts, then the connection layer's datagrams, then the Peers'
 // drop counts.
 void Send(NetWorldLink& world, const WorldTime::Tick& tick, const WorldTime::FixedTime& fixed, const IdRange& range,
@@ -213,6 +224,18 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
         Detail::MarkOneEnd(setup, "SendInputs", "the net Module sends the client's inputs");
         // It writes the replicated components (decision data at K2) at the client only.
         Detail::MarkOneEnd(setup, "ApplyReplication", "the net Module writes the server's values at the client");
+        // K3: the client's own Peer entity is the connection's, made outside the step; a rollback leaves it in being
+        // (the rollback Module's KeepThroughRollback), or the first rollback to a point before it connected removes it.
+        const auto* k3 = setup.Options<Rollback::RollbackOptions>();
+        if (k3 != nullptr && k3->strategy != nullptr) {
+            // In the rollback's decide stage, before it decides: the Peer ReceiveNet spawned is there after First's
+            // sync point.
+            Kernel::SystemOptions keep = Detail::MountedAt("KeepPeerInBeing", k3->decideStage);
+            if (!k3->frameSchedule.empty()) keep.mounts.front().schedule = k3->frameSchedule;
+            keep.mounts.front().before.push_back("RunRollback");
+            r.AddSystem<&KeepPeerInBeing>(std::move(keep));
+            Detail::MarkOneEnd(setup, "KeepPeerInBeing", "the net Module keeps the client's own Peer out of its rollbacks");
+        }
     }
 
     NetService* service = setup.ProductBuffer().Find<NetService>();

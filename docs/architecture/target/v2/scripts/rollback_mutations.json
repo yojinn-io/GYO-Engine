@@ -1324,6 +1324,32 @@
    "target": "gyo_rollback_tests",
    "cases": "rollback strategy: R-8 third state*",
    "expect": "\\[rb\\-not\\-sent\\-history\\-not\\-adopted\\]"
+  },
+  {
+   "id": "rb-keep-through-recorded",
+   "what": "the record keeps the entities with KeepThroughRollback in the alive set: a rollback brings a despawned one back",
+   "guards": [
+    "rollback KeepThroughRollback"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "history.alive.emplace_back(tick, Without(world.Entities(), LeftInBeing(world)));",
+   "replace": "history.alive.emplace_back(tick, world.Entities());",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: an entity with KeepThroughRollback*",
+   "expect": "\\[rb\\-keep\\-through\\-not\\-put\\-back\\]"
+  },
+  {
+   "id": "rb-keep-through-restored",
+   "what": "the restore leaves out the entities with KeepThroughRollback: one made after C is removed",
+   "guards": [
+    "rollback KeepThroughRollback"
+   ],
+   "file": "engine/modules/rollback/src/StateRollbackStrategy.cpp",
+   "find": "            set.Alive(after);",
+   "replace": "            set.Alive(alive);",
+   "target": "gyo_rollback_tests",
+   "cases": "rollback strategy: an entity with KeepThroughRollback*",
+   "expect": "\\[rb\\-keep\\-through\\-kept\\]"
   }
  ]
 }

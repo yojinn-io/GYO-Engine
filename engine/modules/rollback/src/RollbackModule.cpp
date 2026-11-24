@@ -49,6 +49,7 @@ void RollbackModule::Build(Orchestration::WorldSetup& setup) {
         r.Resource<RollbackRuntime>({.name = "RollbackRuntime"});
         r.Resource<RollbackPending>({.name = "RollbackPending"});
         r.Message<RollbackAbandoned>({.name = "RollbackAbandoned"});
+        r.Component<KeepThroughRollback>({.name = "KeepThroughRollback"});
         Kernel::SystemOptions decide;
         decide.name = "RunRollback";
         decide.mounts.push_back(Kernel::Mount{frame, options->decideStage, {}, {}, {}, {}});

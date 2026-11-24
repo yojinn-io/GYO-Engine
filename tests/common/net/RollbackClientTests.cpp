@@ -765,3 +765,39 @@ TEST_CASE("k3: a value of a component that does not roll back, come while its en
     REQUIRE(gated.between);
     CHECK_MESSAGE(gated.tintSame, "K3: a value of a component that does not roll back, come before the entity is in the World, waits for it");
 }
+
+// Both ends run from the start, but the link delivers nothing until the server is past step 33 (crates from step
+// 30; the link's latency is one Advance and Advance is not called before): the client has recorded steps without a Peer entity when it connects. The clock sync puts the client ahead
+// of the server, so its first confirmed points lie before the step it connected at, and the crates the server says
+// entered make those rollbacks run: they go back past the birth of the client's own Peer entity, which the net
+// Module spawns outside the step (ReceiveNet). The Peer is the connection's, not the game's state: a rollback
+// leaves it alone (the rollback Module's KeepThroughRollback, lightyear's DisableRollback).
+TEST_CASE("k3: the client's own Peer entity outlives the rollbacks to points before it connected") {
+    N::MemoryLinkSettings link;
+    link.seed = 5;
+    link.aToB.fixedDelaySteps = 1;
+    link.bToA.fixedDelaySteps = 1;
+    Sample sample(link, 1);
+    K::EntityId peer = 0;
+    std::uint64_t bornAt = 0;
+    for (int frame = 0; frame < 120 && peer == 0; ++frame) {
+        REQUIRE(static_cast<bool>(sample.server->RunFrame()));
+        REQUIRE(static_cast<bool>(sample.client->RunFrame()));
+        // Nothing is delivered before the server is past step 33.
+        if (frame >= 33) sample.links.first.Advance();
+        *sample.clock += Ms(16);
+        peer = sample.ClientWorld().Resource<N::NetWorldLink>()->clientPeer;
+        bornAt = sample.ClientTick();
+    }
+    REQUIRE_MESSAGE(peer != 0, "the client connects");
+    for (int i = 0; i < 40; ++i) {
+        REQUIRE(static_cast<bool>(sample.server->RunFrame()));
+        REQUIRE(static_cast<bool>(sample.client->RunFrame()));
+        sample.links.first.Advance();
+        *sample.clock += Ms(16);
+    }
+    CAPTURE(bornAt);
+    REQUIRE_MESSAGE(sample.Replica().inboxConfirmed.has_value(), "values were confirmed (the rollbacks ran)");
+    CHECK_MESSAGE(sample.ClientWorld().Alive(peer), "[nt-k3-peer-kept] the client's Peer entity is still alive");
+    CHECK(sample.Peer(sample.ClientWorld()) == peer);
+}
