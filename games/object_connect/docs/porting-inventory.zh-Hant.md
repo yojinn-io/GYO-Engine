@@ -164,4 +164,4 @@ PR：移植實作第 3 段（R2a #315 合併後）。
 | 貼圖 | 節點圖：`nodes.csv` 與各地圖 CSV 的 `texture_path` 都經 loader 宣告引用（地圖改成遊戲自己的型別 `MapTable`），生成結束後的第一幀一次做成貼圖；游標 3 張；最終結果的器官圖用 `organ.png`。濾波 Linear | 地圖 CSV 也指定 4 張器官圖（liver、lung、stomach、kidney），原版從路徑直接讀 |
 | 頂點上限 | 拿掉原版的 65,536 頂點預算與「放不下就丟掉血管副本」的保留邏輯 | `Pass2D` 的清單會長，沒有固定上限 |
 | 幀間隔 | `SDLWindowOptions::minFrameInterval` 4 ms | 顯示畫面時等垂直同步；視窗最小化時拿不到畫面、不會等，這個下限讓迴圈不空轉 |
-| 測試 | `object_connect.main` 改 gpu 標籤＋`--hidden`；`--frames` 模式下沒有任何一幀顯示、或有畫壞的幀／跳過的繪製／被拒的貼圖時結束碼 1（SDL dummy 驅動沒有 GPU 裝置；L1 在 Linux 的 Lavapipe＋Xvfb 跑）；`object_connect.runtime` 在 `Submit` 階段讀 `RenderCommands`，當資料檢查 | 畫素級的比對是 `sdl_gpu.pass2d` 的事 |
+| 測試 | `object_connect.main` 改 gpu 標籤（視窗不隱藏：X11 上隱藏視窗拿不到畫面，每幀都被跳過）；`--frames` 模式下沒有任何一幀顯示、或有畫壞的幀／跳過的繪製／被拒的貼圖時結束碼 1（SDL dummy 驅動沒有 GPU 裝置；L1 在 Linux 的 Lavapipe＋Xvfb 跑）；`object_connect.runtime` 在 `Submit` 階段讀 `RenderCommands`，當資料檢查 | 畫素級的比對是 `sdl_gpu.pass2d` 的事 |

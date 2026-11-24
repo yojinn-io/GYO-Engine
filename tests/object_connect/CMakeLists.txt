@@ -62,9 +62,11 @@ add_test(NAME object_connect.runtime COMMAND gyo_object_connect_runtime_tests "-
 set_tests_properties(object_connect.runtime PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# The program itself on a hidden window: the GPU device and the window open, the content loads, 30 frames are drawn and
-# the program closes its window and exits with 0. Label gpu (sdl_gpu needs a device; SDL's dummy video driver has
-# none): L1 runs it on Linux on Lavapipe under Xvfb, a machine with a GPU elsewhere.
+# The program itself: the GPU device and the window open, the content loads, 30 frames are drawn and shown, and the
+# program closes its window and exits with 0 (with --frames it exits with 1 when no frame was shown or a draw
+# failed). Label gpu (sdl_gpu needs a device; SDL's dummy video driver has none): L1 runs it on Linux on Lavapipe
+# under Xvfb, a machine with a GPU elsewhere. The window is not hidden: a hidden window gets no picture under X11
+# (every frame skipped).
 gyo_get_game_target(object_connect main object_connect_main)
-add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30 --hidden)
+add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30)
 set_tests_properties(object_connect.main PROPERTIES LABELS "gpu" TIMEOUT 120)

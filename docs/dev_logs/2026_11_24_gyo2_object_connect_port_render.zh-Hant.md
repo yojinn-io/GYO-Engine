@@ -9,7 +9,7 @@ Owner：產品（Object_Connect）。GYO2 主會話開的任務卡（使用者�
 2. `runtime/PuzzleDrawing`（原 `PuzzleRenderer::Draw`）、`runtime/UiDrawing`（原 `GameUiRenderer::Draw`）。
 3. 遊戲畫自己的游標，同時隱藏系統游標。
 4. 地圖 CSV 改成遊戲自己的型別 `MapTable`（宣告它指到的圖）。
-5. 主程式帶 `render_world`、`sdl_gpu`；`--hidden`；結束時若有畫壞的幀、跳過的繪製或被拒的貼圖，記一行 Warning。
+5. 主程式帶 `render_world`、`sdl_gpu`；結束時若有畫壞的幀、跳過的繪製或被拒的貼圖，記一行 Warning。
 6. 測試：`object_connect.main` 改 gpu 標籤；`object_connect.runtime` 加畫面資料與 sRGB 換算的檢查。
 
 ## 驗證
@@ -27,6 +27,10 @@ blocker 0、should 4、nit 3。處理：
 - should：拿掉 16 ms 下限後，視窗最小化時迴圈會空轉 → 下限 4 ms。
 - nit 處理：多行文字逐行對齊；貼圖也檢查高度。
 - nit 不處理：貼圖與文字都用 Linear 濾波（HiDPI 拉伸時會雙線性放大，原版是 1:1）；`object_connect.main` 改 gpu 標籤後，L1 只在 Linux 跑啟動（Windows、macOS 只建置）。
+
+## L1 第一次（run 45318115340）
+
+windows-x64、macos-arm64 綠；linux-x64 的 GPU 測試 `object_connect.main` 失敗：`no frame was shown (63 skipped)`。X11（Xvfb）上隱藏的視窗拿不到 swapchain 的畫面，每幀都被 `sdl_gpu` 跳過（`sdl_gpu.frames` 允許跳過所以會過）。審查 S3 加的「至少顯示一幀」把它抓出來。處理：測試的視窗不隱藏，`--hidden` 沒有使用者了，拿掉。
 
 ## 已知的差別與限制
 

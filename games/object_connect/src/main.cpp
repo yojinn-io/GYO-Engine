@@ -7,7 +7,6 @@
 //                                    content has loaded (CI runs it headless)
 //   gyo_object_connect --verbose     logs the screen, the cursor, the drag and
 //                                    the warps as they change
-//   gyo_object_connect --hidden      the window is made hidden (the tests)
 
 #include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
@@ -124,7 +123,7 @@ std::optional<std::string> ContentRoot() {
 }
 
 O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExecutor& executor,
-                               const std::int64_t frames, const bool verbose, const bool hidden) {
+                               const std::int64_t frames, const bool verbose) {
     O::WorldDescription world;
     world.name = "Main";
     world.build = [frames, verbose](O::WorldSetup& setup) {
@@ -171,7 +170,6 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     window.title = GYO_GAME_DISPLAY_NAME;
     window.size = {1280, 720};
     window.resizable = false;
-    window.hidden = hidden;
     description.options.Set(window);
 
     // Presenting waits for the display; a minimized window gives no picture and does not wait, so a small floor
@@ -193,7 +191,6 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
 int main(int argc, char** argv) {
     std::int64_t frames = -1;
     bool verbose = false;
-    bool hidden = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--frames" && index + 1 < argc) {
@@ -205,10 +202,8 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--verbose") {
             verbose = true;
-        } else if (argument == "--hidden") {
-            hidden = true;
         } else {
-            LogError("unknown argument '" + std::string(argument) + "' (--frames N, --verbose, --hidden)");
+            LogError("unknown argument '" + std::string(argument) + "' (--frames N, --verbose)");
             return 2;
         }
     }
@@ -225,7 +220,7 @@ int main(int argc, char** argv) {
     }
     WA::WorkerPoolExecutor executor(*pool);
 
-    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose, hidden), O::MakeRegisteredUnits());
+    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose), O::MakeRegisteredUnits());
     if (!built) {
         const O::ProductStartupReport& report = built.error();
         std::string text = "the game did not start: " + report.message + (report.detail.empty() ? "" : "\n" + report.detail);
