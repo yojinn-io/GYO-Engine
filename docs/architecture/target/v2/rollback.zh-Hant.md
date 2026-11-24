@@ -31,6 +31,8 @@ PvP 射擊的 Client：玩家按前進，Client 不等伺服器，當場預測�
 | `SkipDuringResimulation(options)` | 在 `AddSystem` 之前給它的每個掛載加執行條件（讀時間 Module 的 `Resimulation`）。「重跑時跑不跑」逐個掛載看條件（`RunsWhileResimulating`）：之後才加的掛載會重跑 |
 | `Input<T>(length, kind)` | 官方策略替 `T` 保留按 tick 的紀錄，重跑每一步前寫回（不是回滾狀態）；不登記 `T`。`kind`：`DataKind::Resource`（預設）或 `DataKind::Component`——元件的輸入每個實體按 tick 一份（玩家實體上的輸入元件，網路宣告 D-11；照 lightyear 的 `InputBuffer`），重跑每一步前逐格寫回，那一步沒有這個元件的實體不寫；保留與放回（`Keep`／`PutBack`）也逐格〔實作，合併前核准定稿〕。長度用檔位 `InputHistoryLength`（`StrategyDepth`＝策略的深度、預設；`Short` 20、`Medium` 32、`Long` 64）或直接寫步數，不攔。檔位的系譜：`Short` 是預算 P1、P3 的深度與 lightyear 的預設回滾深度，`Medium` 是 P2 的深度，`Long` 是時間 Module 預設 64 Hz 的一秒。容量小於深度照舊是 RB-E9；預設長度不會小於深度。伺服器權威的判定輸入（`authority.Resource<T>({.input = true})`、`authority.Component<T>({.input = true})`）由權威代為登記（預設長度），作者不必寫這行（2026-11-22 使用者選 (c)）；只有選了回滾策略的 World 才建紀錄，沒選的零成本（R-4） |
 
+`KeepThroughRollback`（ECS 元件，選了策略的 World 才登記，R-4）〔實作，`v8-product-pvp-port` 2026-11-24〕：回滾讓它所在的實體**留在原處**——官方策略記錄的存活集合不含它，還原時不刪、也不放回。只管存在：實體上可回滾登記的元件照舊回滾（在確認點沒有的會被拿掉），所以不要給它這種元件。取 lightyear 的 `DisableRollback`（`crates/replication/prediction/src/rollback.rs:272-275`）的概念；lightyear 連元件也排除、重跑時把實體藏起來，意思比這裡寬，所以不沿用它的名字（設計審查 S2）。給和遊戲狀態並存、在步外做出的實體用：網路 Module 替 K3 Client 自己的 Peer 實體加上（網路頁第 13 節）、Client 的相機與畫面用的實體。由來：PvP 移植時 K3 Client 的 Peer 實體被第一次回滾刪掉（確認點早於連上的那一步；守衛 `rollback strategy: an entity with KeepThroughRollback…`、`net.k3` 的「the client's own Peer entity outlives…」；突變 `rb-keep-through-recorded`、`rb-keep-through-restored`、`nt-k3-peer-not-kept`）。
+
 同一型別同時登記成可回滾與 `Derived`：作者的蓋過代為的（跨兩種也一樣）；兩筆都是作者的是 RB-E1。
 
 `RollbackOptions::frameSchedule`（決定、還原、重跑與修正掛的 frame schedule）空字串＝時間 Module 的 `WorldTimeOptions::frameSchedule`（沒有時間的選項時是預設骨架的）。
@@ -100,7 +102,7 @@ Kernel 的 `Restore` 照給的內容放回、不補 `InitialValue`（DI-KS 12；
 ## 3. 本批的限界
 
 - 修正（`Correct`）的官方實作本批什麼都不做：比較函式以外的修正函式還沒有登記入口，畫面修正等 Client 那一批（實作）。
-- 存活集合整份放回（回滾份 5.5，7.4 說要寫進限制）：步外生成、只帶本機元件的實體，回滾到它出生之前會被刪掉且不會再生；步外刪掉的實體會以沒有元件的空殼回來。〔實作，合併前核准定稿；閘口 1 的 D〕網路寫進來的生成與刪除走 `Entered`、`Exited`（R-8 的明說），回滾不會刪掉它們。**本機**的步外生成與刪除照舊整份放回。
+- 存活集合整份放回（回滾份 5.5，7.4 說要寫進限制）：步外生成、只帶本機元件的實體，回滾到它出生之前會被刪掉且不會再生；步外刪掉的實體會以沒有元件的空殼回來。〔實作，合併前核准定稿；閘口 1 的 D〕網路寫進來的生成與刪除走 `Entered`、`Exited`（R-8 的明說），回滾不會刪掉它們。**本機**的步外生成與刪除照舊整份放回，帶 `KeepThroughRollback` 的實體除外（第 2 節）。
 - 只重跑第一張步的 schedule；步的 schedule 和時間 Module 的固定步 schedule 不同也不檢查（實作；目前只有一張）。
 - 記錄 System 掛在 `recordStage`，同一個 stage 裡比它晚跑的寫者、或那個 stage 的延後命令，會記到下一步：`recordStage` 要選步裡最後的 stage（預設 `Last`）。
 - Plan 的版本在一個 World 裡不變，換 Plan 就是換 World（R-5 的新歷史）；回滾份 7.5「Plan 版本變了歷史作廢」由此滿足，不另檢查。

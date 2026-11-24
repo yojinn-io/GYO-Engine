@@ -1,0 +1,240 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the Object_FPS_PVP port (games/object_fps_pvp/docs/port-declaration.zh-Hant.md, section 4; ids pvp-). A mutant is killed only when the named test case fails with the expected message. Run: python3 tests/common/mutation/run_mutations.py --build-dir build/target/_build/test --catalog games/object_fps_pvp/docs/mutations.json",
+ "mutants": [
+  {
+   "id": "pvp-jump-no-gravity",
+   "what": "the fall keeps the jump's speed: the body never comes down",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "body.verticalVelocity = fall.velocity;",
+   "replace": "(void)fall.velocity;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a jump*",
+   "expect": "a jump rises"
+  },
+  {
+   "id": "pvp-crouch-stands-anywhere",
+   "what": "standing up does not ask for room",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "if (*room) crouched = false;",
+   "replace": "crouched = false;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a crouched*",
+   "expect": "a crouched player"
+  },
+  {
+   "id": "pvp-shot-wall-ignored",
+   "what": "the shot's ray does not look at the walls",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "if (*wall && (!world || (*wall)->hit.t < *world)) world = (*wall)->hit.t;",
+   "replace": "(void)wall;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the pillar*",
+   "expect": "the pillar stops a shot"
+  },
+  {
+   "id": "pvp-tie-higher-id",
+   "what": "players at one distance: the higher id wins",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/sim/CombatRules.cpp",
+   "find": "candidate.player < closest.player",
+   "replace": "candidate.player > closest.player",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP combat rules: the shot's outcome*",
+   "expect": "the shot's outcome"
+  },
+  {
+   "id": "pvp-head-multiplier-ignored",
+   "what": "a head hit deals the body's damage",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/sim/CombatRules.cpp",
+   "find": "case HitPart::Head: permille = rules.headPermille; break;",
+   "replace": "case HitPart::Head: permille = rules.bodyPermille; break;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP combat rules: the damage*",
+   "expect": "the damage of each part"
+  },
+  {
+   "id": "pvp-cooldown-ignored",
+   "what": "a press in the cooldown fires",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "now >= next.nextShotTick",
+   "replace": "true",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a shot hits*",
+   "expect": "the cooldown holds the next"
+  },
+  {
+   "id": "pvp-spawn-nearest",
+   "what": "the spawn nearest the enemies is chosen",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/sim/CombatRules.cpp",
+   "find": "if (!selected || nearest > best) {",
+   "replace": "if (!selected || nearest < best) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP combat rules: the spawn*",
+   "expect": "the spawn farthest"
+  },
+  {
+   "id": "pvp-collider-origin-ignored",
+   "what": "the unit conversion leaves out origin",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/data/VoxelMeshFile.cpp",
+   "find": "const std::int64_t sum = std::int64_t{units[i]} + 16 * std::int64_t{file.origin[i]};",
+   "replace": "const std::int64_t sum = std::int64_t{units[i]};",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP voxel mesh:*",
+   "expect": "units are 1/16 of a cell|pvp_arena's five colliders"
+  },
+  {
+   "id": "pvp-no-input-moves",
+   "what": "a player without input steers by its last input",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "const bool steering = alive && input.present != 0;",
+   "replace": "const bool steering = alive;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a player without input*",
+   "expect": "neither moves nor turns"
+  },
+  {
+   "id": "pvp-respawn-early",
+   "what": "a dead player comes back at once",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "now < combat.respawnTick",
+   "replace": "false",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a shot hits*",
+   "expect": "the respawn is the farthest spawn"
+  },
+  {
+   "id": "pvp-room-not-full",
+   "what": "the admission never refuses",
+   "guards": [
+    "port-declaration 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "if (taken >= seats->capacity) {",
+   "replace": "if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client past the seats*",
+   "expect": "past the seats is refused"
+  },
+  {
+   "id": "pvp-press-lost",
+   "what": "a press made in a frame that runs no step is lost",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "pendingJump_ = pendingJump_ || frame.jump;",
+   "replace": "pendingJump_ = frame.jump;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: a press waits*",
+   "expect": "a press waits"
+  },
+  {
+   "id": "pvp-focus-loss-kept",
+   "what": "losing the focus keeps the pointer",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "if (!frame.focused) {",
+   "replace": "if (false) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: Tab takes*",
+   "expect": "Tab takes and gives back"
+  },
+  {
+   "id": "pvp-cursor-not-locked",
+   "what": "the window is never asked to lock the cursor",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "request->cursorGrab = captured ? W::CursorGrab::Locked : W::CursorGrab::None;",
+   "replace": "request->cursorGrab = W::CursorGrab::None;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client:*",
+   "expect": "takes the pointer with a click"
+  },
+  {
+   "id": "pvp-stand-in-not-shown",
+   "what": "no stand-in body is made for the other players",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "if (assets->standIn.Id().Empty()) return {};",
+   "replace": "return {};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client:*",
+   "expect": "the other player's body are drawn"
+  },
+  {
+   "id": "pvp-hit-direction-not-drawn",
+   "what": "the arc toward the attacker is never drawn",
+   "find": "        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);",
+   "replace": "        arc.Get() = R::Shape2d{};",
+   "expect": "pvp-hit-direction",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-hp-not-red",
+   "what": "the HP stays white after a hit",
+   "find": "feedback.hpHighlighted ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "replace": "false ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} :",
+   "expect": "the HP turns red",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-hit-no-shake",
+   "what": "the hit does not shake the camera",
+   "find": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, hud->sample.shakeRollRadians)",
+   "replace": "Math::MakeQuaternionFromAxisAngle({0.0F, 0.0F, 1.0F}, 0.0F)",
+   "expect": "the camera rolls",
+   "guards": [
+    "port-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a hit shows*"
+  }
+ ]
+}

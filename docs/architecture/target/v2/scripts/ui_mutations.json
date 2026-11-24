@@ -1,0 +1,483 @@
+{
+  "version": 1,
+  "description": "Mutants of ui, world_ui and ui_render (docs/architecture/target/v2/ui.zh-Hant.md, section 6.2): only written contracts and behaviour, no misuse guards.",
+  "mutants": [
+    {
+      "id": "ui-glyph-not-whole",
+      "what": "glyphs placed at the aligned origin without rounding it to a whole pixel",
+      "guards": [
+        "ui 4.4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "return {layout, {std::round(aligned.x), std::round(aligned.y)}};",
+      "replace": "return {layout, aligned};",
+      "target": "gyo_ui_tests",
+      "cases": "ui_layout:*",
+      "expect": "\\[ui\\-glyph\\-whole\\-pixels\\]"
+    },
+    {
+      "id": "ui-text-not-scaled",
+      "what": "text laid out at point_size, not point_size times the fit",
+      "guards": [
+        "ui 4.3",
+        "ui 4.4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "const PlacedText placed = PlaceText(context.text, *font.value(), element.textStyle.pointSize * context.fit.scale,",
+      "replace": "const PlacedText placed = PlaceText(context.text, *font.value(), element.textStyle.pointSize,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_layout:*",
+      "expect": "\\[ui\\-text\\-scaled\\]"
+    },
+    {
+      "id": "ui-text-centre-right",
+      "what": "centred text aligned right",
+      "guards": [
+        "ui 4.4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "position.x += (bounds.width - extent.x) * 0.5F;",
+      "replace": "position.x += (bounds.width - extent.x);",
+      "target": "gyo_ui_tests",
+      "cases": "ui_layout:*",
+      "expect": "\\[ui\\-text\\-centred\\]"
+    },
+    {
+      "id": "ui-glyph-atlas-swapped",
+      "what": "a glyph draw names its atlas rectangle with x and y swapped",
+      "guards": [
+        "ui 4.4",
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "drawList.commands.emplace_back(UiGlyphDraw{rect, placement.page, placement.rect.x, placement.rect.y, color, clip});",
+      "replace": "drawList.commands.emplace_back(UiGlyphDraw{rect, placement.page, placement.rect.y, placement.rect.x, color, clip});",
+      "target": "gyo_ui_tests",
+      "cases": "ui_layout:*",
+      "expect": "\\[ui\\-glyph\\-atlas\\-rect\\]"
+    },
+    {
+      "id": "ui-press-caret-end",
+      "what": "a press on a text field puts the caret at the end (master), not where it is",
+      "guards": [
+        "ui 4.4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "impl_->edit->cursor = caret.value();",
+      "replace": "impl_->edit->cursor = impl_->edit->text.size();",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "\\[ui\\-press\\-caret\\]"
+    },
+    {
+      "id": "ui-underline-full-height",
+      "what": "the composition is marked by a full-height rectangle, not an underline",
+      "guards": [
+        "ui 4.4",
+        "UI-5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "{placed.origin.x + r.x, placed.origin.y + r.y + r.height - thickness, r.width, thickness}, color, clip});",
+      "replace": "{placed.origin.x + r.x, placed.origin.y + r.y, r.width, r.height}, color, clip});",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "\\[ui\\-composition\\-underline\\]"
+    },
+    {
+      "id": "ui-composition-caret-end",
+      "what": "the input method's caret inside the composition is ignored",
+      "guards": [
+        "ui 4.4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": ": edit.cursor + Math::Min(static_cast<std::size_t>(edit.compositionCursorByte), edit.composition.size());",
+      "replace": ": edit.cursor + edit.composition.size();",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "\\[ui\\-composition\\-caret\\]"
+    },
+    {
+      "id": "ui-edit-area-inset",
+      "what": "the edit area is the inset text bounds, not the field",
+      "guards": [
+        "ui 4.6"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "context.frame.editArea = UiEditArea{field, placed.origin.x + caret.x - field.x};",
+      "replace": "context.frame.editArea = UiEditArea{FieldTextBounds(field), placed.origin.x + caret.x - field.x};",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "\\[ui\\-edit\\-area\\]"
+    },
+    {
+      "id": "ui-srgb-not-encoded",
+      "what": "linear colours written as bytes without sRGB encoding",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "return {byte(Math::EncodeSrgb(color.red)),",
+      "replace": "return {byte(color.red),",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-srgb\\-encode\\]"
+    },
+    {
+      "id": "ui-alpha-encoded",
+      "what": "alpha encoded as if it were a colour",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "byte(color.alpha)};",
+      "replace": "byte(Math::EncodeSrgb(color.alpha))};",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-alpha\\-linear\\]"
+    },
+    {
+      "id": "ui-pass-viewport-top",
+      "what": "the UI pass ignores the viewport's top",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "static_cast<std::uint32_t>(std::max(0, viewport.position.y)),",
+      "replace": "0U,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-pass\\-viewport\\]"
+    },
+    {
+      "id": "ui-glyph-uv-axes",
+      "what": "glyph uv divided by the wrong page side",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "const Math::Rect uv{static_cast<float>(draw.atlasX) / w, static_cast<float>(draw.atlasY) / h,",
+      "replace": "const Math::Rect uv{static_cast<float>(draw.atlasX) / h, static_cast<float>(draw.atlasY) / w,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-glyph\\-uv\\]"
+    },
+    {
+      "id": "ui-no-batch",
+      "what": "every rectangle its own draw",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (last.texture == texture && last.blend == Render::BlendMode::Alpha && sameClip(last.clip) &&",
+      "replace": "if (false && last.texture == texture && last.blend == Render::BlendMode::Alpha && sameClip(last.clip) &&",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-batch\\]"
+    },
+    {
+      "id": "ui-no-clip-as-clip",
+      "what": "ui's kNoClip handed on as a clip rectangle",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (clip.width < Ui::kNoClip.width || clip.height < Ui::kNoClip.height) {",
+      "replace": "if (true) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-no\\-clip\\]"
+    },
+    {
+      "id": "ui-empty-clip-drawn",
+      "what": "a rectangle with an empty clip still drawn",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (!(clip.width > 0.0F) || !(clip.height > 0.0F)) return;",
+      "replace": "if (false) return;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-empty\\-skipped\\]"
+    },
+    {
+      "id": "ui-image-white",
+      "what": "an image whose picture is not loaded drawn with the white texture",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (texture == Render::TextureId{}) return;",
+      "replace": "if (false) return;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-image\\-wait\\]"
+    },
+    {
+      "id": "ui-atlas-remade",
+      "what": "every atlas page made again every frame",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "for (std::size_t page = known; page < atlas.PageCount(); ++page) {",
+      "replace": "for (std::size_t page = 0; page < atlas.PageCount(); ++page) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-render\\-atlas\\-changes\\-only\\]"
+    },
+    {
+      "id": "ui-pass-before-compose-dropped",
+      "what": "QueueUiPasses not ordered before camera_render's composing",
+      "guards": [
+        "ui 4.7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "queueMount.before.push_back(std::string(CameraRender::kComposeCameraPasses));",
+      "replace": "",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-render\\-pass\\-count\\]"
+    },
+    {
+      "id": "ui-pointer-not-scaled",
+      "what": "the pointer's logical pixels used as physical pixels",
+      "guards": [
+        "ui 4.3"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "local.pointerPixels = {local.pointerPixels.x * state.scaleFactor - state.viewportPosition.x,",
+      "replace": "local.pointerPixels = {local.pointerPixels.x - state.viewportPosition.x,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-pointer\\-scale\\]"
+    },
+    {
+      "id": "ui-request-physical",
+      "what": "the text input request in physical pixels",
+      "guards": [
+        "ui 4.3",
+        "ui 4.6"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "request.areaPosition = {(state.viewportPosition.x + area.field.x) / scale,",
+      "replace": "request.areaPosition = {(state.viewportPosition.x + area.field.x),",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-request\\-logical\\]"
+    },
+    {
+      "id": "ui-request-every-frame",
+      "what": "the text input request written every frame",
+      "guards": [
+        "ui 4.6",
+        "IN-4"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "if (!written.written ? next.enabled : !(*written.written == next)) {",
+      "replace": "if (true) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-request\\-not\\-every\\-frame\\]"
+    },
+    {
+      "id": "ui-key-while-composing",
+      "what": "a key while the input method composes mapped (its Enter submits)",
+      "guards": [
+        "UI-5",
+        "UI-6"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "} else if (!composing) {",
+      "replace": "} else {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-ime\\-enter\\]"
+    },
+    {
+      "id": "ui-text-before-key",
+      "what": "at one time, the commit put before the key",
+      "guards": [
+        "UI-5"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "return a.rank < b.rank;",
+      "replace": "return a.rank > b.rank;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-ime\\-enter\\]"
+    },
+    {
+      "id": "ui-default-camera-smallest",
+      "what": "the default camera is the one with the smallest order",
+      "guards": [
+        "ui 3"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "if (!chosen || camera.order > bestOrder || (camera.order == bestOrder && id > chosen->entity)) {",
+      "replace": "if (!chosen || camera.order < bestOrder || (camera.order == bestOrder && id > chosen->entity)) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-default\\-camera\\]"
+    },
+    {
+      "id": "ui-failure-dropped",
+      "what": "a composition failure not kept in the root's state",
+      "guards": [
+        "UI-3"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "            state.failure = std::move(composed).error();",
+      "replace": "            (void)composed.error();",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-failure\\]"
+    },
+    {
+      "id": "ui-paste-dropped",
+      "what": "the shortcut V pastes nothing",
+      "guards": [
+        "UI-6"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "edit(Ui::UiTextInputKind::Insert, clipboard->text);",
+      "replace": "(void)clipboard;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-edit\\-keys\\]"
+    },
+    {
+      "id": "ui-focus-no-wrap-forward",
+      "what": "the focus stops at the end of the focus order",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "index = (index + 1U) % impl_->canvas->focusOrder.size();",
+      "replace": "index = Math::Min(index + 1U, impl_->canvas->focusOrder.size() - 1U);",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-focus\\-wrap\\]"
+    },
+    {
+      "id": "ui-slider-not-quantized",
+      "what": "a slider sends its unquantized value",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "const double steps = std::round((value - slider.minimum) / slider.step);",
+      "replace": "const double steps = (value - slider.minimum) / slider.step;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-slider\\-clamp\\]"
+    },
+    {
+      "id": "ui-max-length-ignored",
+      "what": "max_length does not stop insertion",
+      "guards": [
+        "UI-4",
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "const std::size_t room = field.maxLength > used ? field.maxLength - used : 0;",
+      "replace": "const std::size_t room = used + 1000;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "max_length counts code points"
+    },
+    {
+      "id": "ui-binding-change-kept",
+      "what": "an edit survives a change of its binding",
+      "guards": [
+        "UI-4"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "if (current.value() != impl_->edit->startValue) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_text_field:*",
+      "expect": "an edit of a value that changed is not submitted"
+    },
+    {
+      "id": "ui-hit-closed-right",
+      "what": "hit testing includes the right edge",
+      "guards": [
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "point.x < rect.x + rect.width && point.y < rect.y + rect.height;",
+      "replace": "point.x <= rect.x + rect.width && point.y < rect.y + rect.height;",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-half\\-open\\]"
+    },
+    {
+      "id": "ui-validate-default-focus",
+      "what": "default_focus outside the focus order accepted",
+      "guards": [
+        "UI-2"
+      ],
+      "file": "engine/modules/ui/src/UiValidation.cpp",
+      "find": "if (canvas.defaultFocus && !focusIds.contains(*canvas.defaultFocus)) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_contract_tests",
+      "cases": "ui_contract:*",
+      "expect": "default focus outside the focus order"
+    },
+    {
+      "id": "ui-validate-max-length",
+      "what": "max_length 0 accepted",
+      "guards": [
+        "UI-2"
+      ],
+      "file": "engine/modules/ui/src/UiValidation.cpp",
+      "find": "if (element.maxLength == 0) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_contract_tests",
+      "cases": "ui_contract:*",
+      "expect": "text_field without length|max_length below 1"
+    },
+    {
+      "id": "ui-master-layout-pivot",
+      "what": "the pivot not subtracted from the anchored position",
+      "guards": [
+        "UI-2",
+        "ui 4.5"
+      ],
+      "file": "engine/modules/ui/src/UiRuntime.cpp",
+      "find": "anchorPivotX + transform.position.x - transform.pivot.x * width,",
+      "replace": "anchorPivotX + transform.position.x,",
+      "target": "gyo_ui_tests",
+      "cases": "ui_runtime:*",
+      "expect": "\\[ui\\-master\\-layout\\]"
+    },
+    {
+      "id": "ui-atlas-identity-ignored",
+      "what": "a replaced UiText read as the old atlas",
+      "guards": [
+        "ui 4.7",
+        "UI-7"
+      ],
+      "file": "engine/modules/ui_render/src/UiRenderModule.cpp",
+      "find": "if (text.Id() != state.atlas) {",
+      "replace": "if (false) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_render:*",
+      "expect": "\\[ui\\-render\\-atlas\\-identity\\]"
+    },
+    {
+      "id": "ui-accepts-input-ignored",
+      "what": "a root that does not accept input still gets it",
+      "guards": [
+        "ui 4.6"
+      ],
+      "file": "engine/modules/world_ui/src/WorldUiModule.cpp",
+      "find": "if (root.acceptsInput) {",
+      "replace": "if (true) {",
+      "target": "gyo_ui_tests",
+      "cases": "ui_world:*",
+      "expect": "\\[ui\\-world\\-accepts\\-input\\]"
+    }
+  ]
+}
