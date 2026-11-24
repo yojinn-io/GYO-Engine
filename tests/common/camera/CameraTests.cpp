@@ -329,7 +329,7 @@ TEST_CASE("camera: Letterbox cuts the viewport to its aspect, centred, and the c
                   "[cm-letterbox-in-viewport] " << nested.viewport.position.y << " " << nested.viewport.size.y);
     CHECK_MESSAGE((inViewport.viewport->position.y == 0), "the author's viewport is not changed");
     const C::Letterbox broken{0.0F, 720.0F};
-    CHECK_MESSAGE(!C::Compute(C::Camera{}, Ortho(), &tall, &broken).valid, "[cm-letterbox-invalid] a zero width is valid");
+    CHECK_MESSAGE(!C::Compute(C::Camera{}, Ortho(), &tall, &broken).valid, "[cm-letterbox-invalid] a zero width must leave the camera not valid");
 }
 
 TEST_CASE("camera: UpdateCameras uses a camera's Letterbox") {

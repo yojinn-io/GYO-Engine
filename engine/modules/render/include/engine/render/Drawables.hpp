@@ -3,7 +3,7 @@
 // What an author puts in the source World to be drawn (docs/architecture/target/v2/render.zh-Hant.md, section 7; SDL
 // declaration section 6.4, R2b). world_render registers these in the source World; the render World reads them
 // through Extract (camera_render, sprite_render) and turns them into RenderCommands. After Bevy: Sprite
-// (bevy_sprite/src/sprite.rs:17), ClearColorConfig and ClearColor (bevy_camera/src/clear_color.rs:13, :46), RenderLayers
+// (bevy_sprite/src/sprite.rs:17), ClearColorConfig and ClearColor (bevy_camera/src/clear_color.rs:13, :52), RenderLayers
 // (bevy_camera's visibility). Shape2d is the 2D shape whose vertices the author gives every frame (a ribbon: a
 // triangle strip from a chain of particles; SDL declaration section 6.4, "(1)").
 //

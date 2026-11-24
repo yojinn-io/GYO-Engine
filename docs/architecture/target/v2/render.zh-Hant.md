@@ -30,7 +30,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 | 欄位 | 意思 |
 |---|---|
 | `target` | 畫到哪個目標，用 `camera` 的 id 空間（`CameraTarget::id`）：0 是主目標（有視窗時是視窗）。其他 id 對到什麼是後端的事；R2a 的 `sdl_gpu` 只對 0，別的 pass 不畫、計數 |
-| `clear` | 先把**整個目標**（不只 `viewport`；同 GPU 的清除與 Bevy 相機的清除）清成這個顏色——黑邊就是這樣來的。某個目標這一幀的第一個 pass 沒給時清成透明黑（視窗的畫面在幀開始時是未定的）；之後的 pass 沒給就疊在已有的畫面上 |
+| `clear` | 先把**整個目標**（不只 `viewport`；同 GPU 的清除）清成這個顏色——黑邊就是這樣來的。2D 管線只把它給一個目標這一幀的第一個相機（第 7.4 節）。某個目標這一幀的第一個 pass 沒給時清成透明黑（視窗的畫面在幀開始時是未定的）；之後的 pass 沒給就疊在已有的畫面上 |
 | `viewport` | （R2b）這個 pass 畫在目標的哪一塊像素（相機的視區；黑邊）。沒給＝整個目標；超出目標的部分切掉 |
 | `view` | 拉滿 `viewport` 的那個矩形（view 單位，y 向下）。沒給＝`viewport` 自己的像素（1 單位＝1 像素、原點在 `viewport` 左上角的像素） |
 | `vertices`、`indices` | 這個 pass 所有 draw 的頂點與索引各一份。`Vertex2D`＝位置、uv、顏色（20 bytes，和 Dear ImGui 的 `ImDrawVert` 同一排法）；索引是 32 位元——ImGui 預設的 `ImDrawIdx` 是 16 位元，K 定 `#define ImDrawIdx unsigned int` 或轉換；ImGui 的 `ImDrawCallback`（draw 之間插自己的指令）表達不了，K 用到時再定 |
@@ -113,12 +113,13 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 所以 2D 段**沒有渲染側的實體**，總宣告列的四個衝突點（對照表放哪、增刪的通知誰清、同步要動兩個 World、元件被拿掉的通知）在 2D 段都不出現：每幀重建，來源刪掉的實體下一幀就不在（`[re-gone]`）。來源被替換（R1b）時也沒有以舊實體為鍵的對照要作廢；`RenderImages` 的鍵是素材 id 與 life，換 World 不受影響。3D 段的網格（Bevy 是以來源實體為鍵的 `RenderMeshInstances`）在 3D 段再判。
 
-**圖的貼圖什麼時候放掉**：素材的貼圖留到渲染 World 結束（Object_Connect 每關 ≤255 種，Bevy 要等素材被卸載才放）；作者持有的圖（字形圖集）某一幀沒有任何物件用它就放掉（`ImageData` 不可變：新圖是新的值、新的位址；`RenderImages` 拿著 `shared_ptr`，位址不會被重用）。素材還沒載好的物件這一幀跳過（同 Bevy）。
+**圖的貼圖什麼時候放掉**：素材的貼圖留著，直到同一個素材 id 以新的 life 再被要求（它的 Handle 全放掉之後再要求，asset 給新的 life；舊 life 的圖不可能再出現，所以建新貼圖時放掉舊的，`[p2-image-new-life]`）或渲染 World 結束（Bevy 在素材被移除時放）；作者持有的圖（字形圖集）某一幀沒有任何物件用它就放掉（`ImageData` 不可變：新圖是新的值、新的位址；`RenderImages` 拿著 `shared_ptr`，位址不會被重用）。素材還沒載好的物件這一幀跳過（同 Bevy）。
 
 ### 7.4 排序、合批、座標
 
-- **相機的先後**：`order` 小的先畫，同 `order` 照來源實體（Bevy 照 `order` 與目標排、同值的先後不定，`camera.rs:836`；GYO 用實體讓它確定）。每個相機一個 `Pass2D`：`target`＝相機的目標 id、`viewport`＝`ComputedCamera::viewport`、`clear`＝相機的清除色（`None` 的相機疊在前面的畫面上）。
-- **2D 物件的先後**：只畫 `RenderLayers` 和相機有交集的；照位置的 z 從小到大（後畫的蓋在前面；Bevy `Transparent2d` 的 sort key＝z，`bevy_sprite_render/src/render/mod.rs:504`；和 X1 的 `Default2d` 一致：z 大的在前），同 z 照來源實體（Bevy 是 `sort_unstable`，先後不定）。位置在近平面之前或遠平面之後的整個不畫（只看位置，不切三角形）。
+- **相機的先後**：`order` 小的先畫，同 `order` 照來源實體（Bevy 照 `order` 與目標排、同值的先後不定，`camera.rs:836`；GYO 用實體讓它確定）。每個相機一個 `Pass2D`：`target`＝相機的目標 id、`viewport`＝`ComputedCamera::viewport`。
+- **清除**（照 Bevy）：一個目標這一幀**第一個**畫的相機清整個目標（`Pass2D::clear`，黑邊）；之後的相機有清除色時**只清自己的視區**——pass 的第一個 draw 是蓋滿視區、清除色的不透明矩形（`Opaque`），所以分割畫面的第二個相機不會把第一個相機的半邊清掉（`[re-split-*]`）；`None` 的相機什麼都不清、疊在前面的畫面上。Bevy 的視窗輸出每幀只在第一次使用時清（`bevy_render/src/texture/texture_attachment.rs:408-433` 的 `is_first_call`），每個相機的畫面放回輸出時用 scissor 限在自己的視區（`bevy_core_pipeline/src/upscaling/node.rs:91-97`）；GYO 沒有每個相機的中間貼圖，用矩形得到同樣的結果。
+- **2D 物件的先後**：只畫 `RenderLayers` 和相機有交集的；照位置的 z 從小到大（後畫的蓋在前面；Bevy `Transparent2d` 的 sort key＝z，`bevy_sprite_render/src/render/mod.rs:504`；和 X1 的 `Default2d` 一致：z 大的在前），同 z 照來源實體、同一個實體（同時有 `Sprite` 與 `Shape2d`）照抽出的順序（sprite 先）——每個平台都一樣（Bevy 是 `sort_unstable`，先後不定）。位置在近平面之前或遠平面之後的整個不畫（只看位置，不切三角形）。
 - **合批**：相鄰、同貼圖、同混合的物件併成一個 draw（Bevy 的 sprite 也是相鄰同圖併批，`mod.rs:615`）。不跨貼圖重排（會改變半透明的先後）。
 - **座標**：每個頂點在 CPU 經「物件的 `GlobalTransform` → 相機的 clip-from-world」換成 clip space，再換成 `viewport` 的像素（y 向下）；`Pass2D::view` 不給。上下在這裡轉一次（clip 的 y 向上 → 像素的 y 向下），之後 `ViewToClip` 再轉回去——兩次都在換算函式裡，資料路徑沒有翻轉（master 坑 17 的單一邊界：uv 照 `image` 的第 0 列在上，sprite 的上緣接 v=0）。不加 shader 的矩陣：2D pass 的 ABI 不變（RD-4），K 的 draw list 照用；CPU 的成本見第 7.5 節與 RC-RD 4。
 - **`Shape2d`**：`TriangleList` 或 `TriangleStrip`（strip 在 `TriangleListOf` 展開，奇數三角形對調前兩點，保持朝向）；沒給索引＝頂點照順序。索引指到頂點外不檢查（同第 2 節的契約）。
@@ -126,7 +127,7 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 ### 7.5 幀時間的預算
 
-和第 2 節同一個預算：Object_Connect 大小的一幀（1280×720、一個相機、2,000 個半透明方塊）經 `Queue2d`（排序、頂點換算、合批）再 `Capture`，**8 ms 以內**。量法：`sdl_gpu.budget` 的 `[gp-budget-pipeline]`（只印、不判）。本機（macOS Intel、Metal）2026-11-24：直接組 `Pass2D` 4.70 ms、經 `Queue2d` 5.37 ms（多 0.67 ms 是 CPU 的排序與換算）。超過時看 RC-RD 2、RC-RD 4。
+和第 2 節同一個預算：Object_Connect 大小的一幀（1280×720、一個相機、2,000 個半透明方塊）經 `Queue2d`（排序、頂點換算、合批）再 `Capture`，**8 ms 以內**。量法：`sdl_gpu.budget` 的 `[gp-budget-pipeline]`（只印、不判）。本機（macOS Intel、Metal）2026-11-24：直接組 `Pass2D` 4.70 ms、經 `Queue2d` 5.37 ms（多 0.67 ms 是 CPU 的排序與換算）。**沒有量的**：`ExtractSprites2d`（每個物件複製素材 id 的字串、查一次 `RenderImages`、`Shape2d` 的頂點複製一份）——真的遊戲接上兩個 World 時量。超過時看 RC-RD 2、RC-RD 4。
 
 ### 7.6 疊層（HUD）
 
@@ -158,14 +159,14 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 ## Design Invariants
 
-- **RD-1 `render` 只有資料與中性的邏輯**：`RenderCommands`、`RenderTextures`、可畫元件、2D 管線的函式、換算函式、HLSL 原始碼與 ABI；沒有 SDL、沒有 GPU 物件、沒有後端介面、不依賴任何 Plugin（B'）；依賴的 Module（asset、image、world_asset、transform、camera）只取型別（R2b）。守衛：連結檢查（`tests/common/render/CMakeLists.txt` 的 `gyo_expect_links`：`gyo_render` 是 Base、Kernel、Math 與上面五個；`render_world`、`world_render`、`camera_render`、`sprite_render` 各自列）；SDL 的原始碼掃描在 K 之後立（總宣告第 9.1 節），之前由每批的設計審查看。
+- **RD-1 `render` 只有資料與中性的邏輯**：`RenderCommands`、`RenderTextures`、可畫元件、2D 管線的函式、換算函式、HLSL 原始碼與 ABI；沒有 SDL、沒有 GPU 物件、沒有後端介面、不依賴任何 Plugin（B'）；依賴的 Module（asset、image、world_asset、transform、camera）只取型別（R2b）；其中 `transform` 是給渲染側的單位（`camera_render`、`sprite_render` 讀 `GlobalTransform`）經 `render` 拿到型別用的，`render` 自己的程式不 include 它——不是多餘的依賴。守衛：連結檢查（`tests/common/render/CMakeLists.txt` 的 `gyo_expect_links`：`gyo_render` 是 Base、Kernel、Math 與上面五個；`render_world`、`world_render`、`camera_render`、`sprite_render` 各自列）；SDL 的原始碼掃描在 K 之後立（總宣告第 9.1 節），之前由每批的設計審查看。
 - **RD-2 一幀的資料在 `Submit` 被看到、在 `Cleanup` 清掉**：`Submit` 在 `after` 那個 stage 之後、`Cleanup` 在 `Submit` 之後；`ClearRenderFrame` 清 pass 與貼圖要求、不動貼圖本身。守衛：`render.world`（`[rw-submit-after-last]`、`[rw-submit-sees]`、`[rw-cleanup-*]`、`[rw-prepare-ask-kept]`）。
 - **RD-3 貼圖的 id 由資料側配、不重用；白貼圖是 0**：守衛：`render.data`（`[rd-tex-*]`）。
 - **RD-4 shader 的兩邊一起改**：`ShaderAbi.hpp` 與 `Pass2D.hlsli` 是同一份 ABI；`sdl_gpu` 從編好的 SPIR-V 讀出的資源數和 `ShaderAbi.hpp` 的一致。守衛：`sdl_gpu.shaders`（`[sg-abi-*]`）、`render.data` 的 `[rd-abi-*]`、`sdl_gpu.pass2d` 的像素比對（頂點排法錯了顏色就不對）。
 
 - **RD-5 extract schedule 只在有 `extractFrom` 的 World**（R2b）：`render_world` 在那種 World 宣告 `Extract`、插在畫面的 schedule 之前；沒有 `extractFrom` 的 World 沒有它。守衛：`render.extract`（`[re-extract-before-main]`、`[re-no-extract-without-source]`、`[re-keeptool]`）、`orchestration.extract`（`[or-ex-setup-*]`）。
-- **RD-6 抽出的 2D 資料每幀重建，留著的只有以圖為鍵的貼圖**（R2b，第 7.3 節）：`ExtractedCameras`、`Extracted2dItems` 每次 extract 整個換掉；`RenderImages` 以素材（id＋life）或作者持有的圖為鍵，同一張圖只建一次；作者持有的圖沒人用就放掉，素材的留著。守衛：`render.extract`（`[re-gone]`、`[re-dynamic]`、`[re-texture-once]`、`[re-held-released]`）、`render.pipeline2d`（`[p2-image-*]`）。
-- **RD-7 2D 的先後**（R2b，第 7.4 節）：相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
+- **RD-6 抽出的 2D 資料每幀重建，留著的只有以圖為鍵的貼圖**（R2b，第 7.3 節）：`ExtractedCameras`、`Extracted2dItems` 每次 extract 整個換掉；`RenderImages` 以素材（id＋life）或作者持有的圖為鍵，同一張圖只建一次；作者持有的圖沒人用就放掉，素材的留著。守衛：`render.extract`（`[re-gone]`、`[re-dynamic]`、`[re-texture-once]`、`[re-held-released]`、`[re-asset-*]`：真的 PNG 經 world_asset，載好的那一幀就畫）、`render.pipeline2d`（`[p2-image-*]`）。
+- **RD-7 2D 的先後與清除**（R2b，第 7.4 節）：一個目標第一個相機清整個目標，之後的相機只清自己的視區；相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`、`[p2-clear-*]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`、`[re-split-*]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
 
 ## Replacement Criteria
 

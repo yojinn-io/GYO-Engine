@@ -98,8 +98,8 @@ struct Pass2D final {
     // The target, in camera's id space (CameraTarget::id): 0 is the main target, the main window when there is one.
     // What another id names is the backend's to map.
     std::uint32_t target = 0;
-    // The whole target (not only the viewport, as a GPU clear and Bevy's camera clear) is cleared to this colour
-    // before the draws. A target's first pass of the frame with no clear starts from transparent black: a window's
+    // The whole target (not only the viewport, as a GPU clear does) is cleared to this colour before the draws (the
+    // 2D pipeline gives it to a target's first camera only; Pipeline2d.hpp, Queue2d). A target's first pass of the frame with no clear starts from transparent black: a window's
     // picture is undefined when a frame begins.
     std::optional<Color8> clear;
     // The pixels of the target the pass draws on (a camera's viewport; the rest is left as it is, so a letterboxed

@@ -216,3 +216,45 @@ TEST_CASE("pipeline2d: a picture's texture is made once; an asset's stays, a hel
     CHECK_MESSAGE(!R::ResolveImage(R::ImageRef{std::shared_ptr<const I::ImageData>{}}, R::TextureFilter::Linear, nullptr).key.asset.empty(),
                   "[p2-image-null-held] a null image is skipped, not white");
 }
+
+TEST_CASE("pipeline2d: a later camera on a target clears its viewport only") {
+    R::ExtractedCamera camera = Camera2d();
+    camera.clear = R::Color8{10, 20, 30, 255};
+    const std::optional<R::Pass2D> first = R::Queue2d(camera, {}, true);
+    REQUIRE(first.has_value());
+    CHECK_MESSAGE((first->clear == R::Color8{10, 20, 30, 255} && first->draws.empty()), "[p2-clear-first] the first camera clears the target");
+    const std::optional<R::Pass2D> later = R::Queue2d(camera, std::vector<R::Extracted2dItem>{Square(1, 0, 0, 0)}, false);
+    REQUIRE(later.has_value());
+    CHECK_MESSAGE(!later->clear.has_value(), "[p2-clear-later] a later camera does not clear the whole target");
+    REQUIRE(later->draws.size() == 2);
+    CHECK_MESSAGE((later->draws[0].blend == R::BlendMode::Opaque && later->draws[0].texture == R::TextureId{} &&
+                   later->vertices[0].color == R::Color8{10, 20, 30, 255} && later->vertices[2].position.x == 2560.0F &&
+                   later->vertices[2].position.y == 1440.0F),
+                  "[p2-clear-viewport] an opaque rectangle of the clear colour over the viewport, first");
+    camera.clear = std::nullopt;
+    const std::optional<R::Pass2D> none = R::Queue2d(camera, {}, false);
+    REQUIRE(none.has_value());
+    CHECK_MESSAGE(none->draws.empty(), "[p2-clear-later-none] a later camera without a clear draws no rectangle");
+}
+
+TEST_CASE("pipeline2d: an asset requested again (a new life) lets the old life's texture go") {
+    R::RenderTextures textures;
+    R::RenderImages images;
+    M::Vec2 size{};
+    const auto picture = Picture(2, 2);
+    R::ImageKey old;
+    old.asset = "node.heart";
+    old.life = 1;
+    const std::optional<R::TextureId> first = images.Use(old, picture.get(), nullptr, textures, size);
+    REQUIRE(first.has_value());
+    R::ImageKey other;
+    other.asset = "node.bone";
+    other.life = 1;
+    REQUIRE(images.Use(other, picture.get(), nullptr, textures, size).has_value());
+    R::ImageKey renewed = old;
+    renewed.life = 2;
+    const std::optional<R::TextureId> second = images.Use(renewed, picture.get(), nullptr, textures, size);
+    REQUIRE(second.has_value());
+    CHECK_MESSAGE((textures.Find(*first) == nullptr && textures.LiveCount() == 2 && images.Count() == 2),
+                  "[p2-image-new-life] the old life's texture goes, the other asset's stays");
+}

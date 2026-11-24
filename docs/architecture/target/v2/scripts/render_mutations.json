@@ -625,8 +625,8 @@
     "render section 7"
    ],
    "file": "engine/modules/render/src/Pipeline2d.cpp",
-   "find": "        return items[a].entity < items[b].entity;",
-   "replace": "        return items[a].entity > items[b].entity;",
+   "find": "        if (items[a].entity != items[b].entity) return items[a].entity < items[b].entity;",
+   "replace": "        if (items[a].entity != items[b].entity) return items[a].entity > items[b].entity;",
    "target": "gyo_render_tests",
    "cases": "pipeline2d: items are drawn*",
    "expect": "\\[p2\\-z\\-tie\\]"
@@ -918,6 +918,45 @@
    "target": "gyo_render_tests",
    "cases": "render_extract: a HUD camera*",
    "expect": "\\[re\\-held\\-released\\]"
+  },
+  {
+   "id": "p2-new-life-kept",
+   "what": "an asset's old life keeps its texture when a new life comes",
+   "guards": [
+    "render RD-6"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "                if (it->first.asset == key.asset && it->first.life != key.life) {",
+   "replace": "                if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: an asset requested again*",
+   "expect": "\\[p2\\-image\\-new\\-life\\]"
+  },
+  {
+   "id": "p2-later-clears-target",
+   "what": "a later camera on a target clears the whole target",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/render/src/Pipeline2d.cpp",
+   "find": "    if (firstOnTarget) {",
+   "replace": "    if (true) {",
+   "target": "gyo_render_tests",
+   "cases": "pipeline2d: a later camera*",
+   "expect": "\\[p2\\-clear\\-later\\]"
+  },
+  {
+   "id": "re-every-camera-first",
+   "what": "sprite_render tells every camera it is the first on its target",
+   "guards": [
+    "render RD-7"
+   ],
+   "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+   "find": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, first);",
+   "replace": "        std::optional<Render::Pass2D> pass = Render::Queue2d(camera, items->items, true);\n        static_cast<void>(first);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a split screen*",
+   "expect": "\\[re\\-split\\-second\\]"
   }
  ]
 }

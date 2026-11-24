@@ -3,6 +3,11 @@
 add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp PipelineWorldTests.cpp)
 target_link_libraries(gyo_render_tests PRIVATE GYO::Render GYO::RenderWorld GYO::WorldRender GYO::CameraRender GYO::SpriteRender
     GYO::EntityIds gyo_test_support doctest::doctest)
+# The asset path of sprite_render reads a real PNG through world_asset (the store's test executor and content).
+target_link_libraries(gyo_render_tests PRIVATE GYO::WorldAsset GYO::Image)
+target_include_directories(gyo_render_tests PRIVATE "${GYO_REPOSITORY_ROOT}/tests/common/asset" "${GYO_REPOSITORY_ROOT}/tests/common/world_asset")
+target_compile_definitions(gyo_render_tests PRIVATE GYO_ASSET_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
+    GYO_RENDER_TEST_PNG="${GYO_REPOSITORY_ROOT}/tests/common/image/contract/gradient_rgba_16x8.png")
 if(MSVC)
     target_compile_options(gyo_render_tests PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_render_tests PRIVATE NOMINMAX)

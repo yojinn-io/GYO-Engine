@@ -45,6 +45,18 @@ std::optional<TextureId> RenderImages::Use(const ImageKey& key, const Image::Ima
     auto found = entries_.find(key);
     if (found == entries_.end()) {
         if (data == nullptr || data->Width() == 0 || data->Height() == 0) return std::nullopt;
+        // An asset requested again after all its Handles went has a new life: the old life's picture can never be
+        // shown again, so its texture goes now (Bevy lets an image's GPU texture go when the asset is removed).
+        if (!key.asset.empty()) {
+            for (auto it = entries_.begin(); it != entries_.end();) {
+                if (it->first.asset == key.asset && it->first.life != key.life) {
+                    textures.Release(it->second.texture);
+                    it = entries_.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
         const std::span<const std::uint8_t> pixels = data->Pixels();
         const TextureId id = textures.Create(TextureDesc{data->Width(), data->Height(), key.filter},
                                              std::vector<std::uint8_t>(pixels.begin(), pixels.end()));
@@ -116,7 +128,7 @@ std::vector<std::uint32_t> TriangleListOf(const Shape2d& shape) {
     return list;
 }
 
-std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items) {
+std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items, const bool firstOnTarget) {
     if (!camera.is2d || !camera.computed.valid) return std::nullopt;
     const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(camera.view);
     if (!viewFromWorld) return std::nullopt;
@@ -127,9 +139,19 @@ std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<con
 
     Pass2D pass;
     pass.target = camera.target;
-    pass.clear = camera.clear;
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
+    if (firstOnTarget) {
+        // The whole target (the letterbox bars), as Bevy clears a window's output on its first use in a frame.
+        pass.clear = camera.clear;
+    } else if (camera.clear) {
+        // A later camera clears its own viewport only (Bevy: each camera's picture is put on the output within its
+        // viewport), so a split screen's second camera keeps the first one's half: an opaque rectangle over it.
+        const Color8 c = *camera.clear;
+        pass.vertices = {{{0.0F, 0.0F}, {}, c}, {{width, 0.0F}, {}, c}, {{width, height}, {}, c}, {{0.0F, height}, {}, c}};
+        pass.indices = {0, 1, 2, 0, 2, 3};
+        pass.draws.push_back(Draw2D{TextureId{}, BlendMode::Opaque, std::nullopt, 0, 6, 0});
+    }
 
     // Back to front: the z of each item's position, ties by source entity.
     std::vector<std::size_t> order;
@@ -143,7 +165,8 @@ std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<con
         const float za = zOf(a);
         const float zb = zOf(b);
         if (za != zb) return za < zb;
-        return items[a].entity < items[b].entity;
+        if (items[a].entity != items[b].entity) return items[a].entity < items[b].entity;
+        return a < b;  // a sprite and a shape of one entity: in extract order, the same on every platform
     });
 
     for (const std::size_t i : order) {

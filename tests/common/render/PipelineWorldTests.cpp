@@ -30,6 +30,14 @@
 #include "engine/transform/TransformModule.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/world_render/WorldRenderModule.hpp"
+#include "engine/image/PngLoader.hpp"
+#include "engine/world_asset/AssetRequests.hpp"
+
+#include "StoreSupport.hpp"
+#include "WorldAssetSupport.hpp"
+
+#include <fstream>
+#include <iterator>
 
 namespace C = GYO::Engine::Camera;
 namespace I = GYO::Engine::Image;
@@ -121,11 +129,12 @@ O::WorldDescription Render(std::vector<std::string> units = {"entity_ids", "rend
     return w;
 }
 
-std::unique_ptr<O::Product> Make(O::WorldDescription render = Render()) {
+std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GYO::Engine::WorldAsset::AssetOptions* assets = nullptr) {
     seen.clear();
     trail.clear();
     O::ProductDescription d;
     d.name = "draws";
+    if (assets != nullptr) d.options.Set(*assets);
     d.worlds.push_back(Game());
     d.worlds.push_back(std::move(render));
     auto built = O::Product::Build(std::move(d), Units());
@@ -233,8 +242,11 @@ TEST_CASE("render_extract: a 2D camera's pass draws the source's sprites and sha
                        {{10, 10}, {}, {255, 0, 0, 255}}};
     game.Insert(3, ribbon);
     Place(game, 3, 0.0F, 0.0F, 0.0F);
-    Frames(*p, 2);  // frame 1: the camera's target size reaches ComputedCamera in PostUpdate; frame 2 draws it
+    // The target size is there before frame 1: the source computes the camera in its PostUpdate and the render World
+    // extracts it in the same frame.
+    Frames(*p, 2);
     REQUIRE(seen.size() == 2);
+    CHECK_MESSAGE(seen[0].passes.size() == 1, "[re-same-frame] the first frame already draws");
     REQUIRE(seen[1].passes.size() == 1);
     const R::Pass2D& pass = seen[1].passes[0];
     CHECK_MESSAGE((pass.viewport == R::PixelRect{0, 80, 2560, 1440}), "[re-viewport] the camera's letterbox viewport");
@@ -314,4 +326,61 @@ TEST_CASE("render_extract: a shape given new vertices each frame draws only this
     Frames(*p);
     // 1000 x 720 is narrower than 16:9: full width, height round(1000 * 9 / 16) = 563 (562.5 rounded), bars of 78 and 79.
     CHECK_MESSAGE((seen.back().passes[0].viewport == R::PixelRect{0, 78, 1000, 563}), "[re-resize] the letterbox follows the window");
+}
+
+TEST_CASE("render_extract: a split screen's second camera clears its own half, not the first camera's") {
+    auto p = Make();
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{2560, 1600}, 1.0F});
+    Camera2dAt(game, 1);
+    Camera2dAt(game, 2, 1);
+    C::Camera left;
+    left.viewport = C::Viewport{{0, 0}, {1280, 1600}};
+    game.Insert(1, left);
+    C::Camera right;
+    right.order = 1;
+    right.viewport = C::Viewport{{1280, 0}, {1280, 1600}};
+    game.Insert(2, right);
+    Frames(*p);
+    REQUIRE(seen.back().passes.size() == 2);
+    const R::Pass2D& a = seen.back().passes[0];
+    const R::Pass2D& b = seen.back().passes[1];
+    CHECK_MESSAGE(a.clear.has_value(), "[re-split-first] the first camera clears the window");
+    CHECK_MESSAGE((!b.clear.has_value() && !b.draws.empty() && b.draws[0].blend == R::BlendMode::Opaque &&
+                   b.viewport.has_value() && b.viewport->x >= 1280),
+                  "[re-split-second] the second camera clears only its viewport");
+}
+
+TEST_CASE("render_extract: a sprite of an image asset is skipped until loaded, then drawn in the frame the source sees it") {
+    WorldAssetTest::Content content("render-sprite-asset");
+    std::ifstream file(GYO_RENDER_TEST_PNG, std::ios::binary);
+    REQUIRE(file.good());
+    const std::string bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    content.Add("pic.gradient", "image", "pic/gradient.png", bytes).Write();
+    AssetTest::ControlledExecutor executor;
+    GYO::Engine::WorldAsset::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    auto p = Make(Render(), &options);
+    const auto* registry = std::as_const(p->Buffer()).Find<GYO::Engine::Asset::AssetLoaderRegistry>();
+    REQUIRE(registry != nullptr);
+    REQUIRE(static_cast<bool>(registry->Register<I::PngLoader>()));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    Camera2dAt(game, 1);
+    R::Sprite sprite;
+    sprite.image = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<I::ImageData>(GYO::Engine::Asset::AssetId("pic.gradient"));
+    game.Insert(2, sprite);
+    Place(game, 2, 0.0F, 0.0F, 0.0F);
+    Frames(*p);
+    REQUIRE(seen.back().passes.size() == 1);
+    CHECK_MESSAGE(seen.back().passes[0].draws.empty(), "[re-asset-wait] not loaded yet: skipped");
+    executor.RunAll();
+    Frames(*p);
+    REQUIRE(seen.back().passes.size() == 1);
+    CHECK_MESSAGE((seen.back().passes[0].draws.size() == 1 && seen.back().passes[0].draws[0].texture.value != 0),
+                  "[re-asset-drawn] drawn in the frame the source's view has it");
+    CHECK_MESSAGE(Count(seen.back().asks, 0) == 1, "[re-asset-texture] its texture made that frame");
+    const auto* made = seen.back().asks.empty() ? nullptr : std::get_if<R::TextureCreate>(&seen.back().asks.front());
+    CHECK_MESSAGE((made != nullptr && made->desc.width == 16 && made->desc.height == 8), "[re-asset-size] the picture's pixels");
 }
