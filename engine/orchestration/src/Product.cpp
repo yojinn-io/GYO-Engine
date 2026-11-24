@@ -1138,6 +1138,10 @@ WorldLease& WorldLease::operator=(WorldLease&& other) noexcept {
 WorldLease::~WorldLease() { GYO_ASSERT(product_ == nullptr && "a WorldLease is dropped without Product::Return"); }
 
 Base::Result<void, OrchestrationError> WorldLease::RunRound() {
+    return Traced("WorldLease::RunRound", [&] { return RunRoundSteps(); });
+}
+
+Base::Result<void, OrchestrationError> WorldLease::RunRoundSteps() {
     GYO_ASSERT(product_ != nullptr);
     Product::WorldSlot& slot = product_->worlds_[slot_];
     if (shared_->broken.load(std::memory_order_relaxed)) {

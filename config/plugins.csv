@@ -1,5 +1,5 @@
 name,dir,target,description,library_only,default,depends,private_depends,unit,header
 sdl,sdl,GYO::SDL,"SDL3 for the sdl* Plugins: fetched with GYO's patches, built only when a product or GYO_PLUGINS selects an sdl* Plugin",yes,no,,,,
-sdl_window,sdl_window,GYO::SDLWindow,"The window, the OS events as input and window Messages, the requests and the window runner, through SDL",no,no,sdl;input;window,,GYO::Plugins::SDLWindow::SDLWindowPlugin,plugins/sdl_window/SDLWindowPlugin.hpp
+sdl_window,sdl_window,GYO::SDLWindow,"The window, the OS events as input and window Messages, the requests and the window runner, through SDL",no,no,sdl;input;window,world_time,GYO::Plugins::SDLWindow::SDLWindowPlugin,plugins/sdl_window/SDLWindowPlugin.hpp
 sdl_audio,sdl_audio,GYO::SDLAudio,"The audio output on SDL: creates the mixer or plays the product's, registers the sound loader, opens the default playback device and stops it in OnDestroy; put into no World",no,no,sdl;audio,,GYO::Plugins::SDLAudio::SDLAudioPlugin,plugins/sdl_audio/SDLAudioPlugin.hpp
 sdl_gpu,sdl_gpu,GYO::SDLGPU,"Draws render's RenderCommands on the window through SDL_GPU: the device, the swapchain, textures keyed by render's ids, the 2D pass and GPUSubmit in the World that draws; the shaders compiled at build time",no,no,sdl;render;render_world,,GYO::Plugins::SDLGPU::SDLGPUPlugin,plugins/sdl_gpu/SDLGPUPlugin.hpp

@@ -128,6 +128,8 @@ public:
 
 private:
     friend class Product;
+    // RunRound's steps, inside its trace span (trace declaration D6).
+    Base::Result<void, OrchestrationError> RunRoundSteps();
     Product* product_ = nullptr;
     std::size_t slot_ = 0;
     std::shared_ptr<Detail::LeaseShared> shared_;

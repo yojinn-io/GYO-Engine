@@ -64,10 +64,11 @@ Engine 的改動（lend、live-frame、runner）與遊戲的改動分開 commit�
 
 ### 4.1 live frame（`v8-product-pvp-port-live-frame`，R3）
 
-1. `sdl_window` 在 `Configure`（主執行緒）以 `SDL_AddEventWatch` 登記一個 watch，`OnDestroy`（主執行緒）`SDL_RemoveEventWatch`——watch 只在主執行緒裝、拆（坑 5）。
-2. watch 只在**全部**成立時動作：事件是 `SDL_EVENT_WINDOW_EXPOSED`、`data1 == 1`、是這個視窗；在主執行緒（`SDL_IsMainThread`；坑 6）；runner 正在泵（`Service::Pump` 裡）；不在一幀裡（不重入）。其他情形什麼都不做（事件照常進佇列）。
-3. 動作：先把**現在的**視窗大小（直接查，坑 3）照常轉成 `window` 的 `WindowResized`（值不同才送，同 `WriteWindowMessages`），再呼叫 runner 給的「一幀」函式。預設 runner 的「一幀」＝`Product::RunFrame()`（交出的 World 不跑，第 4.2 節）。
-4. 錯誤：一幀回錯時存起來、不從 watch 跳出；泵這一輪處理完才由 runner 照原路結束（坑 4）。`RunFrame` 回的是 `Result`，沒有例外。
+1. adapter 在第一次 `SetLiveFrame` 給函式時（主執行緒）以 `SDL_AddEventWatch` 登記 watch，隨 adapter 的解構（主執行緒）`SDL_RemoveEventWatch`——watch 只在主執行緒裝、拆（坑 5）。〔審查 N4 更正：原寫 `Configure`／`OnDestroy`〕
+2. watch 只在**全部**成立時動作：事件是 `SDL_EVENT_WINDOW_EXPOSED`、`data1 == 1`、是這個視窗；在主執行緒（`SDL_IsMainThread`；坑 6）；runner 正在泵**或等事件**（`SDL_WaitEventTimeout` 也會泵，OS 的 modal 迴圈可能在那裡開始；審查 S1）；不在一幀裡（不重入）。其他情形什麼都不做（事件照常進佇列）。
+3. 動作：先把**現在的**視窗大小（直接查，坑 3）寫成 `window` 的 `WindowResized`（每次都寫、不比較：不持狀態；審查 S3 更正原寫的「值不同才送」；它的時刻是 `Now()`，同一次泵裡之後泵出的事件可能比它早，SDL-3 不保證跨泵的先後），再呼叫 runner 給的「一幀」函式。預設 runner 的「一幀」＝`Product::RunFrame()`（交出的 World 不跑，第 4.2 節）。**這一筆是 SDL-7 以外的合成**：要不要列為 SDL-7 的例外 (3)，已交主會話與使用者（審查 U1），合併前定。
+4. 錯誤：一幀回錯時存起來、不從 watch 跳出；泵這一輪處理完才由 runner 照原路結束（坑 4）。`RunOn` 會讓 System 的例外記下失敗後照樣丟出（error levels D4），所以**例外也存起來**（`std::exception_ptr`），不穿過 SDL 的 C 程式、watcher 鎖與 OS 的 modal 迴圈；泵或等事件返回後再丟（審查 B1 更正原寫的「沒有例外」）。
+4a. live frame 整段在 SDL 的 watcher 鎖裡：別的執行緒的 `SDL_PushEvent` 都等它，所以「一幀」不能在主執行緒等會推 SDL 事件的執行緒；「一幀」也不能呼叫 `SetLiveFrame`（會銷毀自己）。live frame 裡 `ApplyWindowRequests` 不呼叫 adapter：狀態式的請求由下一個 modal 外的幀套用，一次性的（`WarpCursor`、`ResizeWindow`、`CopyToClipboard`）存在 Service、下一個 modal 外的幀照順序先套用（審查 S2、S7）。`SDL_AddEventWatch` 失敗時記為 `SDLWindowPump` 的一次拒絕（N5）。
 5. 自己的 runner（`SDLWindowOptions::installRunner = false`）：`SDLWindowPump` 加 `SetLiveFrame(std::function<void()>)`；不設就沒有 live frame（今天的行為）。
 6. 選項：`SDLWindowOptions::liveFrame`（預設 `true`）。關掉＝不裝 watch。
 
@@ -83,15 +84,15 @@ Linux（X11、Wayland）沒有這種 modal 迴圈，watch 裝了也不會收到 
 | 推一輪的內容 | `WorldLease::RunRound` 和 `RunFrame` 的一個 World 共用 `Product::RunRound(slot)`（生成的處理、交換函式的「進」→ 一輪 →「出」；W-10） |
 | `RunFrame` 遇到交出的 World | 跳過，其他 World 照順序跑。交出的 World 是 Extract 的來源或讀者時不能交出（下一列） |
 | 指名交出的 World 的入口 | `RunSchedule`、`ReplaceWorld`、`InsertSystems` 回新的碼 `WorldLent`（E2，請求沒做成）；`World(name)`、`Generating(name)` 是斷言（拿參照、讀狀態都是跨執行緒碰它，W-5、檢查 B4） |
-| 遊戲初始化 | `Lend` 在 `RunGameInit` 之前回 `WorldLent` 以外的錯：新碼不加，用既有的「遊戲初始化還沒跑」那一類——實作時照 `RunGameInitSteps` 現有的錯誤選；若沒有合適的碼再加一個，寫進 dev_log |
-| 讀者交出期間來源 `InsertSystems`（跨 Registry 的讀） | Extract 的來源與讀者都不能交出（`Lend` 回 `WorldLent`），所以不會發生。PvP 的模擬 World 不是 Extract 的來源（渲染 World 讀的是畫面 World） |
+| 遊戲初始化 | `Lend` 在 `RunGameInit` 之前回 `LendRefused`（新碼：既有的碼沒有「拒絕交出」這一類，理由在 dev_log；審查 N4） |
+| 讀者交出期間來源 `InsertSystems`（跨 Registry 的讀） | Extract 的來源與讀者都不能交出（`Lend` 回 `LendRefused`），所以不會發生。PvP 的模擬 World 不是 Extract 的來源（渲染 World 讀的是畫面 World） |
 | 準備函式、綁執行緒的 Resource | 準備函式在 Product 的執行緒跑（建 World 時，交出之前）；交出的 World 裡有綁執行緒的 Resource（`threadBound`）時，那條執行緒推一輪會照現有規則斷言——`Lend` 不另外查（Bevy 的 `!Send` 也是用到時才擋）。PvP 的模擬 World 不帶 `sdl_*` |
 | runner 直接讀寫交出的 World | 由持有租約的執行緒做（租約給 `World&`，只在不在 Run 裡時） |
 | 別的 World 要知道交出的 World 在生成 | 只能經它自己的「出」＋有鎖的物件（W-5） |
 | 銷毀前收回 | `~Product` 時還有交出的 World 是斷言（交換點的宣告第 5.2 節第 5 點的前提）；runner 在 `Run` 返回之前 `Return` |
 | **O-11**（交出的 World 壞了，Product 要結束） | 租約帶一個編排層的 `std::atomic<bool>`（交換點的宣告第 5.3 節第 4 點的候選）：`RunRound` 壞掉當下，租約存 `WorldFailure` 並設旗標；Product 每個入口先看旗標，設了就回 `Ended`（E1，帶「交出的 World 壞了」）；`Return` 時把 `WorldFailure` 搬進 Product（`Failure()` 照舊讀得到）。Kernel 不加原子操作 |
 
-旗標只回答「壞了沒有」，`WorldFailure` 本身只在 `Return` 之後由 Product 的執行緒讀（happens-before 經 `std::thread::join`／租約的交還）。
+旗標只回答「壞了沒有」：持有的執行緒先寫 `WorldFailure` 再以 release 設旗標，之後不再寫它；Product 的執行緒以 acquire 看到旗標後讀它（`Ended()`、`Return`）。〔審查 N4 更正：原寫「只在 `Return` 之後讀」〕
 
 ### 4.3 模擬執行緒（`v8-product-pvp-port-sim-thread`，R5）
 
@@ -99,10 +100,10 @@ Linux（X11、Wayland）沒有這種 modal 迴圈，watch 裝了也不會收到 
 
 1. 選項 `SDLWindowOptions::ownThreadWorlds`（`std::vector<std::string>`，預設空＝今天的行為）。
 2. 第一次 `RunFrame` 之前（遊戲初始化之後）：對每個名字 `Lend`，各開一條 `Threads::RoleThread`（`engine/core/threads`：停止請求＋自己的 `Waiter`），名字 `gyo-world-<名字>`。
-3. 模擬執行緒的迴圈＝時間設計 5.5（一）：`RunRound` → 讀交出的 World 的 `world_time` `FixedTime`，`WaitUntil`（取樣時刻＋離下一步還差的時間；暫停或倍率 0 時用閒置間隔）→ 停止請求就出迴圈。`RunRound` 回錯時記下並出迴圈（旗標已由租約設）。
+3. 模擬執行緒的迴圈＝時間設計 5.5（一）：記下這一輪開始的時刻（它的 `AdvanceTime` 緊接著取樣）→ `RunRound` → 讀交出的 World 的 `world_time` `FixedTime`，`WaitUntil`（那個時刻＋離下一步還差的時間÷倍率，最多一秒；沒有 world_time、暫停或倍率 0 時用閒置間隔）→ 停止請求就出迴圈（審查 S4 更正：原本用等待當下的時刻，每次晚醒一輪的耗時）。`RunRound` 回錯（World 壞了，或交換函式的 E2）或有例外離開一輪時，記下、以 release 設「已停」旗標、出迴圈；例外不逃出執行緒（`RoleThread` 的契約）。
 4. 主執行緒：照舊「泵 → `RunFrame`（跳過交出的）→ 等畫面」；live frame 的「一幀」也是 `RunFrame`。
-5. 結束：視窗關、主執行緒的 `RunFrame` 回錯、或旗標設了（主執行緒的入口回 `Ended`）→ 對每條模擬執行緒送停止請求、`join`、`Return`，runner 回 `RunnerExit`（Failure 時帶 `WorldFailure` 的全文，O-3）。
-6. runner 依賴 `world_time`（讀 `FixedTime`）與 `core/threads`：`sdl_window` 的依賴清單加這兩個（Plugin 依賴 Engine 的 Module 是允許的方向）。
+5. 結束：視窗關、主執行緒的 `RunFrame` 回錯、live frame 回錯，或主迴圈每圈看到某條模擬執行緒「已停」→ 對每條送停止請求、`join`、`Return`；之後在主執行緒：模擬執行緒的例外照樣丟出（和 `RunFrame` 丟出的一樣），否則它的錯誤或 Product 的 `Failure()` 讓 runner 回 Failure（O-3；審查 B2：原本 E2 與例外沒有回報，正常關窗時才壞的 World 也回了 Success）。
+6. runner 依賴 `world_time`（讀 `FixedTime`）與 `core/threads`：`config/plugins.csv` 的 `sdl_window` 的 `private_depends` 加 `world_time`（審查 S6），`core/threads` 是 core、直接連。
 
 **遊戲（作者，`games/object_fps_pvp`）**：
 

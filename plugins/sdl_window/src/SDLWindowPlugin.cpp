@@ -1,5 +1,10 @@
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
+#include <algorithm>
+#include <atomic>
+#include <exception>
+#include <memory>
+#include <vector>
 #include <chrono>
 #include <optional>
 #include <string>
@@ -135,9 +140,15 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
     Service& service = *handle->service;
     WindowBackend* backend = service.Backend();
     if (backend == nullptr || service.Closed()) return {};
-    // Inside the OS's modal loop (a live frame) nothing is asked of the window: the next frame outside applies it
-    // (master's survey: no operation from a watch).
-    if (backend->InLiveFrame()) return {};
+    // Inside the OS's modal loop (a live frame) nothing is asked of the window (master's survey: no operation from a
+    // watch): the state requests are applied by the next frame outside it, the one-shot ones are kept for it.
+    Service::DeferredRequests& deferred = service.Deferred();
+    if (backend->InLiveFrame()) {
+        for (const Win::WarpCursor* warp : warpList) deferred.warps.push_back(*warp);
+        for (const Win::ResizeWindow* resize : resizeList) deferred.resizes.push_back(*resize);
+        for (const Win::CopyToClipboard* copy : copyList) deferred.copies.push_back(*copy);
+        return {};
+    }
     AppliedRequests& applied = service.Applied();
     const auto apply = [&](bool accepted, auto& cached, const auto& wanted) {
         if (accepted) {
@@ -161,6 +172,17 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
         }
         if (request.cursorGrab != applied.cursorGrab) apply(backend->SetCursorGrab(request.cursorGrab), applied.cursorGrab, request.cursorGrab);
     }
+    // The kept ones first (they were sent earlier).
+    for (const Win::ResizeWindow& resize : deferred.resizes) {
+        if (!backend->SetSize(resize.size)) service.Refused(backend->LastError());
+    }
+    for (const Win::WarpCursor& warp : deferred.warps) {
+        if (!backend->WarpCursor(warp.position)) service.Refused(backend->LastError());
+    }
+    for (const Win::CopyToClipboard& copy : deferred.copies) {
+        if (!backend->SetClipboard(copy.text)) service.Refused(backend->LastError());
+    }
+    deferred = {};
     for (const Win::ResizeWindow* resize : resizeList) {
         if (!backend->SetSize(resize->size)) service.Refused(backend->LastError());
     }
@@ -192,8 +214,10 @@ O::RunnerExit FailedExit(const O::OrchestrationError& error) {
 }
 
 // The Worlds lent to threads of their own (O-13; R5; time design 5.5 (3)): each thread runs its World's rounds and
-// waits, between two, until its next fixed step (time design 5.5 (1) step 5: the sampled time plus what is left to
-// the next step, divided by the virtual time's scale). Stopped, joined and returned on every way out of the runner.
+// waits, between two, until its next fixed step (time design 5.5 (1) step 5: the round's start, near the time its
+// AdvanceTime sampled, plus what is left to the next step divided by the virtual time's scale). A thread that stops
+// on its own (its World broke, an exchange function failed, or an exception left a round) says so through its flag;
+// the main loop ends the runner then. Stopped, joined and returned on every way out of the runner.
 class LentWorlds final {
 public:
     explicit LentWorlds(O::Product& product) : product_(product) {}
@@ -206,17 +230,25 @@ public:
             auto lent = product_.Lend(name);
             if (!lent) return FailedExit(lent.error());
             auto lease = std::make_shared<O::WorldLease>(std::move(lent).value());
-            auto failure = std::make_shared<std::optional<O::OrchestrationError>>();
+            auto stop = std::make_shared<Stopped>();
             auto started = Engine::Threads::RoleThread::Start(
                 {.name = "gyo-world-" + name, .priority = Engine::Threads::ThreadPriority::Interactive},
-                [lease, failure, idle](Engine::Threads::RoleContext& context) {
-                    while (!context.StopRequested()) {
-                        auto ran = lease->RunRound();
-                        if (!ran) {
-                            *failure = std::move(ran).error();
-                            return;
+                [lease, stop, idle](Engine::Threads::RoleContext& context) {
+                    // The body lets no exception escape (RoleThread's contract): it is kept for the main thread.
+                    try {
+                        while (!context.StopRequested()) {
+                            const Engine::Time::TimePoint start = Engine::Time::Now();
+                            auto ran = lease->RunRound();
+                            if (!ran) {
+                                stop->failure = std::move(ran).error();
+                                stop->stopped.store(true, std::memory_order_release);
+                                return;
+                            }
+                            static_cast<void>(context.WaitUntil(start + UntilNextRound(lease->World(), idle)));
                         }
-                        static_cast<void>(context.WaitUntil(Engine::Time::Now() + UntilNextRound(lease->World(), idle)));
+                    } catch (...) {
+                        stop->exception = std::current_exception();
+                        stop->stopped.store(true, std::memory_order_release);
                     }
                 });
             if (!started) {
@@ -224,25 +256,54 @@ public:
                 return O::RunnerExit{O::RunnerExitCode::Failure, "the thread of World " + name + " did not start: " +
                                                                      Engine::Base::Describe(started.error())};
             }
-            worlds_.push_back({lease, failure, std::move(started).value()});
+            worlds_.push_back({lease, stop, std::move(started).value()});
         }
         return std::nullopt;
     }
 
-    // Stops every thread, joins it and returns its World (a World that broke there ends the Product: Return keeps it).
+    // A thread that stopped on its own (its failure written before the flag, release; read after an acquire).
+    [[nodiscard]] bool AnyStopped() const {
+        for (const Lent& lent : worlds_) {
+            if (lent.stop->stopped.load(std::memory_order_acquire)) return true;
+        }
+        return false;
+    }
+
+    // Stops every thread, joins it and returns its World (a World that broke there ends the Product: Return keeps
+    // it). What a thread stopped with stays for Outcome.
     void ReturnAll() {
         for (Lent& lent : worlds_) lent.thread.RequestStop();
         for (Lent& lent : worlds_) {
             lent.thread.Join();
             product_.Return(std::move(*lent.lease));
+            if (lent.stop->exception && !exception_) exception_ = lent.stop->exception;
+            if (lent.stop->failure && !failure_) failure_ = lent.stop->failure;
         }
         worlds_.clear();
     }
 
+    // After ReturnAll, on the main thread: an exception that left a lent World's round goes on here (as one leaving
+    // RunFrame would); else the exit, made a Failure when a lent World stopped with an error or the Product ended.
+    O::RunnerExit Outcome(O::RunnerExit exit) {
+        if (exception_) std::rethrow_exception(std::exchange(exception_, nullptr));
+        if (exit.code == O::RunnerExitCode::Success) {
+            if (failure_) return FailedExit(*failure_);
+            if (const O::WorldFailure* ended = product_.Failure()) {
+                return O::RunnerExit{O::RunnerExitCode::Failure, "the Product ended: " + ended->Text()};
+            }
+        }
+        return exit;
+    }
+
 private:
+    struct Stopped {
+        std::atomic<bool> stopped{false};
+        std::optional<O::OrchestrationError> failure;
+        std::exception_ptr exception;
+    };
     struct Lent {
         std::shared_ptr<O::WorldLease> lease;
-        std::shared_ptr<std::optional<O::OrchestrationError>> failure;
+        std::shared_ptr<Stopped> stop;
         Engine::Threads::RoleThread thread;
     };
 
@@ -254,12 +315,15 @@ private:
         const auto* fixed = world.Resource<Engine::WorldTime::FixedTime>();
         const auto* time = world.Resource<Engine::WorldTime::VirtualTime>();
         if (fixed == nullptr || time == nullptr || time->paused != 0 || !(time->scale > 0.0)) return idle;
-        const double left = static_cast<double>(fixed->accumulator.UntilNextStep()) / time->scale;
-        return std::chrono::nanoseconds(static_cast<std::int64_t>(left > 0.0 ? left : 0.0));
+        // At most a second (a tiny scale would overflow the conversion; a stop request wakes the wait anyway).
+        const double left = std::clamp(static_cast<double>(fixed->accumulator.UntilNextStep()) / time->scale, 0.0, 1e9);
+        return std::chrono::nanoseconds(static_cast<std::int64_t>(left));
     }
 
     O::Product& product_;
     std::vector<Lent> worlds_;
+    std::optional<O::OrchestrationError> failure_;
+    std::exception_ptr exception_;
 };
 
 // The window's runner (SDL declaration section 9.1; Bevy's winit runner): pump, frame, until the window closed or
@@ -274,32 +338,42 @@ O::RunnerExit RunWindow(O::Product& product, Service& service, const SDLWindowOp
         if (!product.GameInitRan()) {
             if (auto init = product.RunGameInit(); !init) return FailedExit(init.error());
         }
-        if (auto refused = lent.Lend(options.ownThreadWorlds, options.ownThreadIdle)) return *refused;
+        if (auto refused = lent.Lend(options.ownThreadWorlds, options.ownThreadIdle)) return lent.Outcome(*refused);
     }
     std::optional<O::OrchestrationError> liveFailure;
-    if (options.liveFrame && service.Backend() != nullptr) {
-        service.Backend()->SetLiveFrame([&product, &liveFailure] {
+    // The live frame's function points at this frame of the runner: taken away on every way out, an exception's too.
+    struct LiveFrameGuard {
+        WindowBackend* backend;
+        ~LiveFrameGuard() {
+            if (backend != nullptr) backend->SetLiveFrame({});
+        }
+    } guard{options.liveFrame ? service.Backend() : nullptr};
+    if (guard.backend != nullptr) {
+        guard.backend->SetLiveFrame([&product, &liveFailure] {
             if (liveFailure) return;
             if (auto ran = product.RunFrame(); !ran) liveFailure = std::move(ran).error();
         });
+        if (!guard.backend->LiveFrameReady()) {
+            service.Refused(guard.backend->LastError());  // told through SDLWindowPump::LastRefusal; the game goes on
+        }
     }
     const auto finish = [&](O::RunnerExit exit) {
-        if (service.Backend() != nullptr) service.Backend()->SetLiveFrame({});
         lent.ReturnAll();
-        return exit;
+        return lent.Outcome(std::move(exit));
     };
     while (!service.Closed()) {
         const Clock::time_point frameStart = Clock::now();
         if (Engine::OS::Console::RequestedShutdown()) service.ShutdownRequested(frameStart);
         service.Pump();
         if (liveFailure) return finish(FailedExit(*liveFailure));
-        if (service.Closed()) break;  // a live frame applied the close
+        if (lent.AnyStopped()) return finish(O::RunnerExit{});
         auto ran = product.RunFrame();
         if (!ran) return finish(FailedExit(ran.error()));
         if (options.minFrameInterval.count() > 0 && !service.Closed()) {
             const auto left = options.minFrameInterval - (Clock::now() - frameStart);
             if (left.count() > 0 && service.Backend() != nullptr) {
-                service.Backend()->WaitForEvent(std::chrono::duration_cast<std::chrono::nanoseconds>(left).count());
+                service.Backend()->WaitForEvent(std::chrono::duration_cast<std::chrono::nanoseconds>(left).count(), service.Queue());
+                if (liveFailure) return finish(FailedExit(*liveFailure));
             }
         }
     }

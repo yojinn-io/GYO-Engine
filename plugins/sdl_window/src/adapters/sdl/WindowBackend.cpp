@@ -10,7 +10,9 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <string_view>
+#include <utility>
 #include <utility>
 
 #include "engine/base/Assert.hpp"
@@ -282,6 +284,9 @@ struct WindowBackend::State {
     bool watchAdded = false;
     EventQueue* pumpQueue = nullptr;
     bool inLiveFrame = false;
+    // An exception that left the live frame: kept here (it must not cross SDL's C code, its watcher lock and the
+    // OS's modal loop: master's pit 4) and thrown again once the pump or the wait returned.
+    std::exception_ptr liveException;
 };
 
 namespace {
@@ -293,11 +298,16 @@ bool SDLCALL LiveFrameWatch(void* userdata, SDL_Event* event) {
     if (event->type != SDL_EVENT_WINDOW_EXPOSED || event->window.data1 != 1) return true;
     if (!SDL_IsMainThread() || state->pumpQueue == nullptr || state->inLiveFrame || !state->liveFrame) return true;
     if (state->window == nullptr || event->window.windowID != SDL_GetWindowID(state->window)) return true;
+    if (state->liveException) return true;  // a frame already failed with an exception in this pump
     Translated now;
     now.window.emplace_back(Adapter::ResizedNow(state->window, Engine::Time::Now()));
     static_cast<void>(state->pumpQueue->Accept(std::move(now)));
     state->inLiveFrame = true;
-    state->liveFrame();
+    try {
+        state->liveFrame();
+    } catch (...) {
+        state->liveException = std::current_exception();
+    }
     state->inLiveFrame = false;
     return true;
 }
@@ -372,6 +382,13 @@ void WindowBackend::Pump(EventQueue& queue) {
         static_cast<void>(queue.Accept(std::move(translated)));
     }
     state_->pumpQueue = nullptr;
+    RethrowLiveException();
+}
+
+void WindowBackend::RethrowLiveException() {
+    if (!state_->liveException) return;
+    std::exception_ptr exception = std::exchange(state_->liveException, nullptr);
+    std::rethrow_exception(exception);
 }
 
 void WindowBackend::SetLiveFrame(std::function<void()> frame) {
@@ -383,12 +400,19 @@ void WindowBackend::SetLiveFrame(std::function<void()> frame) {
     }
 }
 
+bool WindowBackend::LiveFrameReady() const noexcept { return !state_->liveFrame || state_->watchAdded; }
+
 bool WindowBackend::InLiveFrame() const noexcept { return state_->inLiveFrame; }
 
-void WindowBackend::WaitForEvent(const std::int64_t ns) {
+void WindowBackend::WaitForEvent(const std::int64_t ns, EventQueue& queue) {
     RequireMainThread();
     const std::int64_t ms = std::clamp<std::int64_t>((ns + 999'999) / 1'000'000, 0, 1000);
+    // SDL pumps while it waits (SDL_WaitEventTimeout calls SDL_PumpEventsInternal): the OS's modal loop can start
+    // here too, so the live frame's condition holds while waiting as well.
+    state_->pumpQueue = &queue;
     static_cast<void>(SDL_WaitEventTimeout(nullptr, static_cast<Sint32>(ms)));
+    state_->pumpQueue = nullptr;
+    RethrowLiveException();
 }
 
 WindowSnapshot WindowBackend::Snapshot() const {

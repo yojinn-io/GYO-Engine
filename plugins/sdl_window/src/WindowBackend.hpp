@@ -69,16 +69,22 @@ public:
     // Polls every pending OS event (SDL's whole pass), translated per the mapping table into queue, times converted
     // with one clock pair of this pump.
     void Pump(EventQueue& queue);
-    // Waits up to ns for an OS event (nothing is taken from SDL's queue).
-    void WaitForEvent(std::int64_t ns);
+    // Waits up to ns for an OS event (nothing is taken from SDL's queue). SDL pumps while it waits, so the live frame
+    // can run here too (its WindowResized goes into queue).
+    void WaitForEvent(std::int64_t ns, EventQueue& queue);
     // The live frame (SDL declaration R3; live-frame-sim-thread declaration 4.1): while the OS holds the pump in its
     // modal loop (a live resize, a dragged title bar), SDL sends SDL_EVENT_WINDOW_EXPOSED with data1 1 and allows
     // drawing from an event watch. The watch runs frame only when all hold: that event, for this window, on the main
-    // thread, while Pump is running, not already in frame (no reentry). Before frame the window's size now goes into
-    // the queue as a WindowResized (the queued resize events wait for the pump to return: master's pit 3). An empty
-    // function: no live frame. The watch is added on the first non-empty one and removed with the backend (on the
-    // main thread: master's pit 5).
+    // thread, while Pump or WaitForEvent is running, not already in frame (no reentry). Before frame the window's
+    // size now goes into the queue as a WindowResized (the queued resize events wait for the pump to return: master's
+    // pit 3). An exception leaving frame is kept and thrown again when Pump or WaitForEvent returns (it must not
+    // cross SDL and the OS's modal loop: pit 4); frame does not run again in that pump. An empty function: no live
+    // frame. The watch is added on the first non-empty one and removed with the backend (on the main thread: pit 5).
+    // frame runs inside SDL's event-watcher lock: every other thread's SDL_PushEvent waits until it returns, so it
+    // must not wait for a thread that pushes SDL events. frame must not call SetLiveFrame (it would destroy itself).
     void SetLiveFrame(std::function<void()> frame);
+    // false: a live frame was asked for but SDL did not add the watch (the text in LastError()).
+    [[nodiscard]] bool LiveFrameReady() const noexcept;
     // Inside frame (the requests wait for the next frame outside the OS's modal loop).
     [[nodiscard]] bool InLiveFrame() const noexcept;
     [[nodiscard]] WindowSnapshot Snapshot() const;
@@ -103,6 +109,7 @@ public:
     struct State;
 
 private:
+    void RethrowLiveException();
     explicit WindowBackend(std::unique_ptr<State> state);
     std::unique_ptr<State> state_;
     std::string lastError_;
