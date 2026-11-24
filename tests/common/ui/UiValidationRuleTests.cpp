@@ -32,7 +32,7 @@ struct ValidationRule final {
 void CheckRules(const std::string_view file, const std::vector<ValidationRule>& rules) {
     const std::string text = ReadContractFile(file);
     for (const ValidationRule& rule : rules) {
-        CAPTURE(rule.name);
+        INFO("rule: " << std::string(rule.name));
         UiDocument document = ParseOrFail(text);
         REQUIRE(UiDocumentCodec::Validate(document));
         rule.change(document);
@@ -56,7 +56,7 @@ struct TextRule final {
 void CheckTextRules(const std::string_view file, const std::vector<TextRule>& rules) {
     const std::string text = ReadContractFile(file);
     for (const TextRule& rule : rules) {
-        CAPTURE(rule.name);
+        INFO("rule: " << std::string(rule.name));
         auto parsed = UiDocumentCodec::Parse(Replace(text, rule.from, rule.to), "rule.json");
         REQUIRE_FALSE(parsed);
         CHECK(parsed.error().code == rule.code);
@@ -378,7 +378,7 @@ TEST_CASE("ui_contract: every text_field validation rule has a reverse case") {
 
 TEST_CASE("ui_contract: every reading rule has a reverse case") {
     for (const char* root : {"[]", "\"gyo.ui\"", "1", "null"}) {
-        CAPTURE(root);
+        INFO("root: " << std::string(root));
         auto parsed = UiDocumentCodec::Parse(root, "root.json");
         REQUIRE_FALSE(parsed);
         CHECK(parsed.error().code == kInvalid);

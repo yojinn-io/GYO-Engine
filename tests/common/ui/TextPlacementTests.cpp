@@ -20,7 +20,8 @@ using GYO::Test::UiSupport::TextWithFont;
 
 namespace {
 
-// A 100 x 50 design canvas: a centred text in a 100 x 20 box at the top, a text field (80 x 20 at y 25) and a
+// A 100 x 50 design canvas: a centred text in a 100 x 20 box at the top (a quarter unit in, so its centred origin
+// falls between pixels at the fit of 2), a text field (80 x 20 at y 25) and a
 // button.
 constexpr std::string_view kDocument = R"json({
   "schema": "gyo.ui", "version": 2,
@@ -32,7 +33,7 @@ constexpr std::string_view kDocument = R"json({
   "canvases": [{
     "id": "main", "backdrop_color": "bg", "focus_order": ["field", "go"],
     "children": [
-      {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [0, 0], "size_delta": [100, 20]},
+      {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [0.25, 0.25], "size_delta": [100, 20]},
        "text": {"literal": "がっこう"}, "point_size": 10, "text_color": {"color": "white"}, "horizontal_align": "center", "vertical_align": "center"},
       {"type": "text_field", "id": "field", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [10, 25], "size_delta": [80, 20]},
        "binding": "name", "max_length": 16, "placeholder": "name", "placeholder_color": "gray", "point_size": 10,

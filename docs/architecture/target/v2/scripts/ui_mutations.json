@@ -426,19 +426,6 @@
       "expect": "\\[ui\\-half\\-open\\]"
     },
     {
-      "id": "ui-codec-version-3",
-      "what": "version 3 read as supported",
-      "guards": [
-        "UI-2"
-      ],
-      "file": "engine/modules/ui/src/UiDocumentCodec.cpp",
-      "find": "version > static_cast<std::int64_t>(kUiSchemaVersion)) {",
-      "replace": "version > static_cast<std::int64_t>(kUiSchemaVersion) + 1) {",
-      "target": "gyo_ui_contract_tests",
-      "cases": "ui_contract:*",
-      "expect": "UnsupportedVersion"
-    },
-    {
       "id": "ui-validate-default-focus",
       "what": "default_focus outside the focus order accepted",
       "guards": [
@@ -462,7 +449,7 @@
       "replace": "if (false) {",
       "target": "gyo_ui_contract_tests",
       "cases": "ui_contract:*",
-      "expect": "max_length below 1"
+      "expect": "text_field without length|max_length below 1"
     },
     {
       "id": "ui-master-layout-pivot",

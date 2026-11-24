@@ -461,12 +461,17 @@ TEST_CASE("ui_render: the render World draws a root's UI over its camera, glyphs
     bool focused = false;
     for (const R::Vertex2D& v : ui->vertices) focused = focused || (v.color == R::Color8{0x40, 0x40, 0x40, 0xFF});
     CHECK_MESSAGE(focused, "[ui-render-srgb-roundtrip]");
-    // A later frame uploads only what changed: nothing new to draw, no new page.
+    // A later frame with a new glyph uploads only what changed: an update of the page, no new page.
     asks.clear();
+    game.Insert(2, Ui::UiBindings{{{"name", std::string("abcz")}}});
     Frames(*p);
     std::size_t creates = 0;
-    for (const R::TextureOp& op : asks) creates += std::holds_alternative<R::TextureCreate>(op) ? 1 : 0;
-    CHECK_MESSAGE(creates == 0, "[ui-render-atlas-changes-only]");
+    std::size_t updates = 0;
+    for (const R::TextureOp& op : asks) {
+        creates += std::holds_alternative<R::TextureCreate>(op) ? 1 : 0;
+        updates += std::holds_alternative<R::TextureUpdate>(op) ? 1 : 0;
+    }
+    CHECK_MESSAGE((creates == 0 && updates >= 1), "[ui-render-atlas-changes-only] " << creates << " " << updates);
 }
 
 // ---- PvP's lobby (porting inventory PV12).
