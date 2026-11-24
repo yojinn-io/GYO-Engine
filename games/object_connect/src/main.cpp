@@ -1,13 +1,13 @@
 // Object_Connect's program (the original Core/Application and WinMain): the
-// Product with the default Modules, the sdl_window and sdl_audio Plugins and one World with
+// Product with the default Modules and render_world, the sdl_window, sdl_audio and sdl_gpu Plugins and one World with
 // the game, run by sdl_window's runner until the game closes the window.
 //
 //   gyo_object_connect               the game in a 1280 x 720 window
 //   gyo_object_connect --frames N    closes itself after N frames once the
 //                                    content has loaded (CI runs it headless)
 //   gyo_object_connect --verbose     logs the screen, the cursor, the drag and
-//                                    the warps as they change (nothing is drawn
-//                                    until the render batch)
+//                                    the warps as they change
+//   gyo_object_connect --hidden      the window is made hidden (the tests)
 
 #include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
@@ -27,10 +27,9 @@
 #include "engine/world_asset/WorkerPoolExecutor.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "plugins/sdl_audio/AudioOutput.hpp"
-#include "plugins/sdl_window/SDLWindowPlugin.hpp"
+#include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
 #include <charconv>
-#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -123,7 +122,7 @@ std::optional<std::string> ContentRoot() {
 }
 
 O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExecutor& executor,
-                               const std::int64_t frames, const bool verbose) {
+                               const std::int64_t frames, const bool verbose, const bool hidden) {
     O::WorldDescription world;
     world.name = "Main";
     world.build = [frames, verbose](O::WorldSetup& setup) {
@@ -170,6 +169,7 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     window.title = GYO_GAME_DISPLAY_NAME;
     window.size = {1280, 720};
     window.resizable = false;
+    window.hidden = hidden;
     description.options.Set(window);
 
     WA::AssetOptions assets;
@@ -177,10 +177,6 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     assets.executor = &executor;
     description.options.Set(assets);
 
-    GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
-    // Nothing draws yet (the render batch waits for the display): about 60 frames a second.
-    sdl.minFrameInterval = std::chrono::milliseconds(16);
-    description.options.Set(sdl);
     return description;
 }
 
@@ -189,6 +185,7 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
 int main(int argc, char** argv) {
     std::int64_t frames = -1;
     bool verbose = false;
+    bool hidden = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--frames" && index + 1 < argc) {
@@ -200,8 +197,10 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--verbose") {
             verbose = true;
+        } else if (argument == "--hidden") {
+            hidden = true;
         } else {
-            LogError("unknown argument '" + std::string(argument) + "' (--frames N, --verbose)");
+            LogError("unknown argument '" + std::string(argument) + "' (--frames N, --verbose, --hidden)");
             return 2;
         }
     }
@@ -218,7 +217,7 @@ int main(int argc, char** argv) {
     }
     WA::WorkerPoolExecutor executor(*pool);
 
-    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose), O::MakeRegisteredUnits());
+    auto built = O::Product::Build(Describe(*contentRoot, executor, frames, verbose, hidden), O::MakeRegisteredUnits());
     if (!built) {
         const O::ProductStartupReport& report = built.error();
         std::string text = "the game did not start: " + report.message + (report.detail.empty() ? "" : "\n" + report.detail);
@@ -241,7 +240,19 @@ int main(int argc, char** argv) {
                 LogInfo("sound on the " + output->DriverName() + " driver");
             }
         }
+        const auto* gpu = std::as_const(product->Buffer()).Find<GYO::Plugins::SDLGPU::SDLGPUStatus>();
+        if (gpu != nullptr && verbose) {
+            LogInfo("drawing on the " + gpu->DriverName() + " GPU driver");
+        }
         exit = product->Run();
+        // What did not draw is told, not fatal (sdl_gpu): one line when frames or draws failed.
+        if (gpu != nullptr && (gpu->FramesFailed() > 0 || gpu->SkippedDraws() > 0 || gpu->RefusedTextureAsks() > 0)) {
+            ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Warning, GYO_GAME_ID,
+                                     "drawing: " + std::to_string(gpu->FramesFailed()) + " frames failed, " +
+                                         std::to_string(gpu->SkippedDraws()) + " draws skipped, " +
+                                         std::to_string(gpu->RefusedTextureAsks()) + " textures refused; last: " +
+                                         gpu->LastFailure());
+        }
     }
     if (exit.code == O::RunnerExitCode::Failure) {
         LogError(exit.reason);

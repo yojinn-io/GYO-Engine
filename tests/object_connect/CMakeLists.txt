@@ -49,7 +49,7 @@ set_tests_properties(object_connect.world PROPERTIES LABELS "cpu" TIMEOUT 60
 gyo_get_game_target(object_connect runtime object_connect_runtime)
 add_executable(gyo_object_connect_runtime_tests runtime/TestMain.cpp runtime/RuntimeTests.cpp)
 target_link_libraries(gyo_object_connect_runtime_tests PRIVATE ${object_connect_runtime} GYO::Threads doctest::doctest)
-gyo_product_units(gyo_object_connect_runtime_tests)
+gyo_product_units(gyo_object_connect_runtime_tests MODULES render_world)
 target_compile_definitions(gyo_object_connect_runtime_tests PRIVATE
     OBJECT_CONNECT_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_connect")
 if(MSVC)
@@ -62,8 +62,9 @@ add_test(NAME object_connect.runtime COMMAND gyo_object_connect_runtime_tests "-
 set_tests_properties(object_connect.runtime PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
-# The program itself on SDL's dummy video driver: the window opens, the content loads, 30 frames run and the program
-# closes its window and exits with 0.
+# The program itself on a hidden window: the GPU device and the window open, the content loads, 30 frames are drawn and
+# the program closes its window and exits with 0. Label gpu (sdl_gpu needs a device; SDL's dummy video driver has
+# none): L1 runs it on Linux on Lavapipe under Xvfb, a machine with a GPU elsewhere.
 gyo_get_game_target(object_connect main object_connect_main)
-add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30)
-set_tests_properties(object_connect.main PROPERTIES LABELS "cpu" TIMEOUT 120 ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30 --hidden)
+set_tests_properties(object_connect.main PROPERTIES LABELS "gpu" TIMEOUT 120)

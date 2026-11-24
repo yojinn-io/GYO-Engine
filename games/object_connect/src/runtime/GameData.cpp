@@ -75,8 +75,29 @@ B::Result<LevelTable, Failure> LevelTableLoader::Load(const std::span<const std:
         return B::Err(std::move(paths).error());
     }
     for (std::string& path : *paths) {
-        A::AssetRef<A::Text> asset = context.ReferencePath<A::Text>(ReferenceFromTable(context.Path(), path));
+        A::AssetRef<MapTable> asset = context.ReferencePath<MapTable>(ReferenceFromTable(context.Path(), path));
         table.maps.push_back({std::move(path), std::move(asset)});
+    }
+    return table;
+}
+
+B::Result<GameDataSettings, Failure> MapTableLoader::ParseSettings(const std::optional<std::string_view>) const {
+    return GameDataSettings{};
+}
+
+// A map may name its own textures (texture_path overrides the preset's).
+B::Result<MapTable, Failure> MapTableLoader::Load(const std::span<const std::byte> bytes, const GameDataSettings&,
+                                                 A::LoadContext& context) const {
+    MapTable table;
+    table.csv = ToString(bytes);
+    auto paths = ColumnValues(table.csv, "texture_path", context);
+    if (!paths) {
+        return B::Err(std::move(paths).error());
+    }
+    for (std::string& path : *paths) {
+        A::AssetRef<GYO::Engine::Image::ImageData> asset =
+            context.ReferencePath<GYO::Engine::Image::ImageData>(ReferenceFromTable(context.Path(), path));
+        table.textures.push_back({std::move(path), std::move(asset)});
     }
     return table;
 }
@@ -109,6 +130,7 @@ std::optional<std::string> RegisterLoaders(const A::AssetLoaderRegistry& registr
         return std::string("the ") + name + " loader was refused: " + GYO::Engine::Base::Describe(result.error());
     };
     if (auto f = failed("level table", registry.Register<LevelTableLoader>())) return f;
+    if (auto f = failed("map", registry.Register<MapTableLoader>())) return f;
     if (auto f = failed("node table", registry.Register<NodeTableLoader>())) return f;
     if (auto f = failed("png", registry.Register<GYO::Engine::Image::PngLoader>())) return f;
     if (auto f = failed("font", registry.Register<GYO::Engine::Text::FontLoader>())) return f;

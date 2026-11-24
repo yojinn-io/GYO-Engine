@@ -33,12 +33,15 @@
 //                                   original InputSystem::Sample, the UI hit test
 //                                   and the page arrows); a wrap asks WarpCursor
 //                (the game's Systems, after generation)
-//                PresentMenus       the pages and the cursor as the frame ends;
-//                                   QuitChosen closes the window
+//                PresentMenus       the pages and the cursor as the frame ends (the
+//                                   system cursor hidden where the game draws
+//                                   its own); QuitChosen closes the window
+//                PlaySounds         the sound (GameSound.hpp)
+//   Main/Last    DrawFrame          the picture on render's 2D pass (Drawing.hpp)
 //
 // The window's settings (1280 x 720, not resizable) are the product's, in
-// main.cpp; the drawing comes with the render batches and reads the Resources
-// here and the game's.
+// main.cpp. The World needs render_world (DrawFrame writes its Resources); a
+// backend (sdl_gpu) draws them, and without one they are made and dropped.
 
 namespace object_connect::runtime {
 
@@ -89,11 +92,10 @@ struct MenuPagesState final {
     ui::MenuPages pages;
 };
 
-// The cursor the game shows this frame (the original MouseCursorRenderer's
-// input). Drawn by the render batch; until then the system cursor stays.
+// The cursor the game shows this frame (the original MouseCursorRenderer's input).
 struct CursorAppearance final {
     MouseCursorIcon icon = MouseCursorIcon::Normal;
-    // Focused and inside the window: the game's cursor replaces the system one.
+    // Focused and inside the window: the game's cursor replaces the system one (drawn by DrawFrame).
     bool custom = false;
 };
 
