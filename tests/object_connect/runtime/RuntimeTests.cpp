@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include "object_connect/runtime/GameData.hpp"
+#include "object_connect/runtime/Drawing.hpp"
 #include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
 #include "object_connect/world/GameScreenState.hpp"
@@ -17,6 +18,9 @@
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/orchestration/WorldGeneration.hpp"
+#include "engine/render/RenderCommands.hpp"
+#include "engine/render/RenderTextures.hpp"
+#include "engine/render_world/RenderWorldModule.hpp"
 #include "engine/threads/WorkerPool.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
@@ -32,6 +36,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -60,10 +65,24 @@ struct Pending {
     std::vector<W::WindowResized> sizes;
 };
 
-// What the game asked of the window, kept across frames.
+// What the game asked of the window, kept across frames; the last frame's picture as render_world held it at its
+// Submit stage (where sdl_gpu would draw it), before Cleanup empties it.
 struct Asked {
     std::vector<W::WarpCursor> warps;
+    GYO::Engine::Render::RenderCommands picture;
+    std::size_t texturesMade = 0;
+    std::size_t texturesLive = 0;
 };
+
+K::SystemResult KeepPicture(K::Res<GYO::Engine::Render::RenderCommands> commands,
+                            K::Res<GYO::Engine::Render::RenderTextures> textures, K::ResMut<Asked> asked) {
+    asked->picture = *commands;
+    for (const auto& op : textures->Pending()) {
+        if (std::holds_alternative<GYO::Engine::Render::TextureCreate>(op)) ++asked->texturesMade;
+    }
+    asked->texturesLive = textures->LiveCount();
+    return {};
+}
 
 K::SystemResult WriteEvents(K::ResMut<Pending> pending, K::MessageWriter<I::KeyboardInput> keys,
                             K::MessageWriter<I::MouseButtonInput> buttons, K::MessageWriter<I::CursorMoved> moves,
@@ -120,6 +139,13 @@ public:
             readMount.stage = std::string(O::DefaultSchedules::last);
             read.mounts.push_back(std::move(readMount));
             r.AddSystem<&ReadRequests>(std::move(read));
+            K::SystemOptions keep;
+            keep.name = "test.KeepPicture";
+            K::Mount keepMount;
+            keepMount.schedule = std::string(O::DefaultSchedules::frame);
+            keepMount.stage = std::string(GYO::Engine::RenderWorld::kSubmitStage);
+            keep.mounts.push_back(std::move(keepMount));
+            r.AddSystem<&KeepPicture>(std::move(keep));
             setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 w.SetResource(Pending{});
                 w.SetResource(Asked{});
@@ -634,4 +660,82 @@ TEST_CASE("runtime: without a mixer the game plays silent") {
     CHECK(game.SoundState().submitter == nullptr);
     game.Press(I::KeyCode::Enter);
     CHECK(game.Screen() == GameScreen::LevelSelect);
+}
+
+// The picture as data (the 2D pass sdl_gpu would draw): one pass a frame over the 1280 x 720 playfield, the menu's
+// texts as glyph quads from the atlas, the level's pictures and the game's cursor as textures.
+namespace {
+[[nodiscard]] std::size_t TexturedDraws(const GYO::Engine::Render::Pass2D& pass) {
+    std::size_t count = 0;
+    for (const auto& draw : pass.draws) count += draw.texture.value != 0 ? 1 : 0;
+    return count;
+}
+} // namespace
+
+TEST_CASE("runtime: each frame draws one 2D pass of the playfield with the menu's text and the game's cursor") {
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    game.MoveTo(400.0f, 290.0f);
+    const Asked& asked = *game.World().Resource<Asked>();
+    REQUIRE(asked.picture.passes.size() == 1);
+    REQUIRE(std::holds_alternative<GYO::Engine::Render::Pass2D>(asked.picture.passes.front()));
+    const auto& pass = std::get<GYO::Engine::Render::Pass2D>(asked.picture.passes.front());
+    REQUIRE(pass.view.has_value());
+    CHECK(pass.view->width == doctest::Approx(1280.0f));
+    CHECK(pass.view->height == doctest::Approx(720.0f));
+    REQUIRE(pass.clear.has_value());
+    CHECK(pass.indices.size() % 3 == 0);
+    for (const auto& draw : pass.draws) {
+        CHECK(draw.indexOffset + draw.indexCount <= pass.indices.size());
+    }
+    for (const std::uint32_t index : pass.indices) {
+        REQUIRE(index < pass.vertices.size());
+    }
+    // The node pictures (nodes.csv's 3 and the maps' 4), the cursors (3) and the atlas's page are textures.
+    const OR::DrawResources& resources = *game.World().Resource<OR::DrawResources>();
+    CHECK(resources.nodeTextures.size() == 7);
+    CHECK(asked.texturesLive == 7 + 3 + resources.atlasPages.size());
+    REQUIRE_FALSE(resources.atlasPages.empty());
+    CHECK(TexturedDraws(pass) >= 2);
+    // The order: the rectangles, then the texts (from the atlas), the cursor last (the original's Game::Impl::Draw).
+    REQUIRE_FALSE(pass.draws.empty());
+    CHECK(pass.draws.back().texture == resources.cursors[static_cast<std::size_t>(OC::MouseCursorIcon::Interactive)]);
+    std::size_t lastWhite = 0;
+    std::size_t firstAtlas = pass.draws.size();
+    for (std::size_t index = 0; index < pass.draws.size(); ++index) {
+        const auto texture = pass.draws[index].texture;
+        if (texture.value == 0) lastWhite = index;
+        if (texture == resources.atlasPages.front() && firstAtlas == pass.draws.size()) firstAtlas = index;
+    }
+    CHECK(lastWhite < firstAtlas);
+    CHECK(firstAtlas < pass.draws.size() - 1);
+    CHECK(game.World().Resource<W::WindowRequest>()->cursorVisible == false); // the game draws its own
+
+    // In the first level the board is drawn too: more vertices than the menu.
+    const std::size_t menuVertices = pass.vertices.size();
+    game.Press(I::KeyCode::Enter);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    game.Button(360.0f, 360.0f, I::ButtonState::Pressed);
+    for (float x = 400.0f; x <= 600.0f; x += 40.0f) game.MoveTo(x, 360.0f);
+    const auto& playing = std::get<GYO::Engine::Render::Pass2D>(game.World().Resource<Asked>()->picture.passes.front());
+    CHECK(playing.vertices.size() > menuVertices);
+    // stage_01's heart and brain are drawn as their pictures (not as placeholder rectangles).
+    std::size_t pictureDraws = 0;
+    for (const auto& draw : playing.draws) {
+        for (const auto& [path, id] : resources.nodeTextures) {
+            if (draw.texture == id && (path.ends_with("heart.png") || path.ends_with("brain.png"))) ++pictureDraws;
+        }
+    }
+    CHECK(pictureDraws >= 2);
+}
+
+TEST_CASE("runtime: the colours are the original's linear values encoded as its sRGB target stored them") {
+    using OR::ToColor8;
+    CHECK(ToColor8({0.0f, 0.0f, 0.0f, 0.0f}) == GYO::Engine::Render::Color8{0, 0, 0, 0});
+    CHECK(ToColor8({1.0f, 1.0f, 1.0f, 1.0f}) == GYO::Engine::Render::Color8{255, 255, 255, 255});
+    CHECK(ToColor8({0.5f, 0.5f, 0.5f, 0.5f}) == GYO::Engine::Render::Color8{188, 188, 188, 128});
+    CHECK(ToColor8({0.002f, 0.2f, 2.0f, 1.0f}) == GYO::Engine::Render::Color8{7, 124, 255, 255});
 }

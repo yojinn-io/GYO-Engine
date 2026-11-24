@@ -1,5 +1,6 @@
 #include "object_connect/runtime/RuntimeWorld.hpp"
 
+#include "object_connect/runtime/Drawing.hpp"
 #include "object_connect/runtime/GameSound.hpp"
 
 #include "object_connect/data/PuzzleCatalogLoader.hpp"
@@ -108,12 +109,12 @@ K::SystemResult LoadGameData(K::Res<WA::AssetRequests> requests, K::Res<WA::Asse
     const NodeTable& nodes = *view->Get(c.nodes);
     std::vector<PuzzleMapCsvSource> maps;
     maps.reserve(levels.maps.size());
-    for (const NamedFile<A::Text>& map : levels.maps) {
-        const A::Text* contents = view->Get(map.asset);
+    for (const NamedFile<MapTable>& map : levels.maps) {
+        const MapTable* contents = view->Get(map.asset);
         if (contents == nullptr) {
             return Failed("the map '" + map.path + "' is not loaded with its level table");
         }
-        maps.push_back({map.path, contents->Bytes()});
+        maps.push_back({map.path, contents->csv});
     }
     world::Catalog parsed;
     std::string error;
@@ -284,6 +285,10 @@ K::SystemResult PresentMenus(K::Res<world::ScreenState> screen, K::Res<world::Sc
     if (cursor.Read().icon != next.icon || cursor.Read().custom != next.custom) {
         cursor.Get() = next;
     }
+    // The game draws its own cursor (DrawFrame) where it replaces the system's.
+    if (window.Read().cursorVisible == next.custom) {
+        window->cursorVisible = !next.custom;
+    }
 
     pages->pages.Present(shown, selection->item, puzzleCount, results->summary.stages.size());
 
@@ -312,6 +317,7 @@ K::SystemOptions InUpdate(std::string name, std::vector<std::string> before, std
 void BuildRuntime(O::WorldSetup& setup) {
     world::BuildWorld(setup, world::WorldOptions{{O::AfterGenerating()}});
     BuildSound(setup);
+    BuildDrawing(setup);
     K::Registrar& r = setup.Registrar();
     r.Resource<GameContent>({.name = "object_connect.GameContent"});
     r.Resource<UiText>({.name = "object_connect.UiText"});

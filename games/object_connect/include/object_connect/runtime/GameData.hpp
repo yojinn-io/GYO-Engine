@@ -26,8 +26,9 @@
 // from the content root (the original's resourceRoot); a loader turns that into
 // a reference relative to the table's own file.
 //
-// levels.csv -> LevelTable: the text, and its map_path column as text assets.
-// nodes.csv  -> NodeTable:  the text, and its texture_path column as images.
+// levels.csv     -> LevelTable: the text, and its map_path column as maps.
+// maps/*.csv     -> MapTable:   the text, and its texture_path column as images.
+// nodes.csv      -> NodeTable:  the text, and its texture_path column as images.
 
 namespace object_connect::runtime {
 
@@ -38,9 +39,14 @@ struct NamedFile final {
     GYO::Engine::Asset::AssetRef<T> asset;
 };
 
+struct MapTable final {
+    std::string csv;
+    std::vector<NamedFile<GYO::Engine::Image::ImageData>> textures;
+};
+
 struct LevelTable final {
     std::string csv;
-    std::vector<NamedFile<GYO::Engine::Asset::Text>> maps;
+    std::vector<NamedFile<MapTable>> maps;
 };
 
 struct NodeTable final {
@@ -83,6 +89,22 @@ public:
         std::span<const std::byte> bytes, const Settings& settings, GYO::Engine::Asset::LoadContext& context) const;
 };
 
+class MapTableLoader final {
+public:
+    using Output = MapTable;
+    using Settings = GameDataSettings;
+    using Code = GameDataCode;
+
+    static constexpr std::string_view kTypeName = "object_connect.map";
+    static constexpr std::array<std::string_view, 1> kFormats{"csv"};
+    static constexpr std::size_t kDefaultMaxBytes = std::size_t{1} * 1024u * 1024u;
+
+    [[nodiscard]] GYO::Engine::Base::Result<Settings, GYO::Engine::Asset::LoaderFailure<Code>> ParseSettings(
+        std::optional<std::string_view> settingsJson) const;
+    [[nodiscard]] GYO::Engine::Base::Result<MapTable, GYO::Engine::Asset::LoaderFailure<Code>> Load(
+        std::span<const std::byte> bytes, const Settings& settings, GYO::Engine::Asset::LoadContext& context) const;
+};
+
 class NodeTableLoader final {
 public:
     using Output = NodeTable;
@@ -116,9 +138,15 @@ struct GYO::Engine::Asset::AssetTypeName<object_connect::runtime::LevelTable> {
 };
 
 template <>
+struct GYO::Engine::Asset::AssetTypeName<object_connect::runtime::MapTable> {
+    static constexpr std::string_view value = "object_connect.map";
+};
+
+template <>
 struct GYO::Engine::Asset::AssetTypeName<object_connect::runtime::NodeTable> {
     static constexpr std::string_view value = "object_connect.nodes";
 };
 
 static_assert(GYO::Engine::Asset::AssetLoader<object_connect::runtime::LevelTableLoader>);
+static_assert(GYO::Engine::Asset::AssetLoader<object_connect::runtime::MapTableLoader>);
 static_assert(GYO::Engine::Asset::AssetLoader<object_connect::runtime::NodeTableLoader>);

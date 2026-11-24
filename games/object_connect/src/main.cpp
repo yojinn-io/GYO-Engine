@@ -1,13 +1,12 @@
 // Object_Connect's program (the original Core/Application and WinMain): the
-// Product with the default Modules, the sdl_window and sdl_audio Plugins and one World with
+// Product with the default Modules and render_world, the sdl_window, sdl_audio and sdl_gpu Plugins and one World with
 // the game, run by sdl_window's runner until the game closes the window.
 //
 //   gyo_object_connect               the game in a 1280 x 720 window
 //   gyo_object_connect --frames N    closes itself after N frames once the
 //                                    content has loaded (CI runs it headless)
 //   gyo_object_connect --verbose     logs the screen, the cursor, the drag and
-//                                    the warps as they change (nothing is drawn
-//                                    until the render batch)
+//                                    the warps as they change
 
 #include "object_connect/runtime/GameSound.hpp"
 #include "object_connect/runtime/RuntimeWorld.hpp"
@@ -27,6 +26,7 @@
 #include "engine/world_asset/WorkerPoolExecutor.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "plugins/sdl_audio/AudioOutput.hpp"
+#include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
 #include <charconv>
@@ -172,15 +172,17 @@ O::ProductDescription Describe(const std::string& contentRoot, WA::WorkerPoolExe
     window.resizable = false;
     description.options.Set(window);
 
+    // Presenting waits for the display; a minimized window gives no picture and does not wait, so a small floor
+    // keeps the loop from spinning then.
+    GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
+    sdl.minFrameInterval = std::chrono::milliseconds(4);
+    description.options.Set(sdl);
+
     WA::AssetOptions assets;
     assets.contentRoot = contentRoot;
     assets.executor = &executor;
     description.options.Set(assets);
 
-    GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
-    // Nothing draws yet (the render batch waits for the display): about 60 frames a second.
-    sdl.minFrameInterval = std::chrono::milliseconds(16);
-    description.options.Set(sdl);
     return description;
 }
 
@@ -241,7 +243,32 @@ int main(int argc, char** argv) {
                 LogInfo("sound on the " + output->DriverName() + " driver");
             }
         }
+        const auto* gpu = std::as_const(product->Buffer()).Find<GYO::Plugins::SDLGPU::SDLGPUStatus>();
+        if (gpu != nullptr && verbose) {
+            LogInfo("drawing on the " + gpu->DriverName() + " GPU driver");
+        }
         exit = product->Run();
+        // What did not draw is told, not fatal (sdl_gpu): one line when frames or draws failed. A run with --frames
+        // (the tests) fails then, and when no frame reached the window at all.
+        const bool drawingFailed =
+            gpu != nullptr && (gpu->FramesFailed() > 0 || gpu->SkippedDraws() > 0 || gpu->RefusedTextureAsks() > 0);
+        if (drawingFailed) {
+            ::GYO::Engine::Base::Log(::GYO::Engine::Base::LogLevel::Warning, GYO_GAME_ID,
+                                     "drawing: " + std::to_string(gpu->FramesFailed()) + " frames failed, " +
+                                         std::to_string(gpu->SkippedDraws()) + " draws skipped, " +
+                                         std::to_string(gpu->RefusedTextureAsks()) + " textures refused; last: " +
+                                         gpu->LastFailure());
+        }
+        if (frames > 0 && exit.code != O::RunnerExitCode::Failure) {
+            if (gpu == nullptr || gpu->FramesShown() == 0) {
+                LogError("no frame was shown (" + std::to_string(gpu != nullptr ? gpu->FramesSkipped() : 0) +
+                         " skipped)");
+                return 1;
+            }
+            if (drawingFailed) {
+                return 1;
+            }
+        }
     }
     if (exit.code == O::RunnerExitCode::Failure) {
         LogError(exit.reason);

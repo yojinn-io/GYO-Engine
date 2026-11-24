@@ -33,8 +33,8 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | `MouseCursorRenderer.hpp` 裡的 `ResolveMouseCursorIcon`、`ShouldUseCustomMouseCursor` | 游標要用哪張圖、什麼時候換掉系統游標 | 遊戲（`game/MouseCursorPolicy.hpp`，從 renderer 標頭拆出、內容不變） | **PR 1 已搬** |
 | `Math/Vec2`、`Math/Color` | 2D 向量、RGBA | 遊戲（`include/object_connect/math/`）。Engine 的 `core/math` 有 `Vec2`／`Vec4`（`Color` 可對 `Vec4`），但 PuzzleBoard 等大量程式用原型別；換型別是之後 World 層的事，不在搬邏輯時一起改 | **PR 1 已搬** |
 | `Game/Game`（`Game::Impl`） | 一幀的流程：讀輸入 → 失焦／Esc 取消拖曳 → UI 命中 → GameFlow → 套用命令（開關卡、重試、下一關）→ 更新 PuzzleBoard → 音效事件 → 游標 | `world` 函式庫（`include/object_connect/world/`）：Resource `Catalog`、`Playfield`（固定 1280×720）、`FrameInput`、`MenuSelection`、`Session`、`RunResults`；Message `MenuStepped`、`LineHoldStarted`／`LineHoldEnded`、`MusicRestarted`、`QuitChosen`；`Main`／`Update` 依序五個 System（CancelDragOnLeave → StepMenu → ApplyMenuCommand → SimulateBoard → TickSolvedTimer）；一幀的時間是 `world_time` 的 `ActiveTime::delta`。輸入取樣、UI 命中、翻頁、游標、音效呼叫留在外面：`FrameInput` 進、Message 出 | **PR 2 已寫**，headless 測試 `object_connect.world`（9 個情境） |
-| `Rendering/GameUiRenderer` 的命中判定與翻頁 | 選單、選關（5×2 一頁）、結果卡的版面與滑鼠命中 | 遊戲。版面與命中是遊戲的規則；畫字用 `text`、畫矩形用 R2a／R2b。**不需要 U**（沒有文字框、沒有通用控件）；U 來了可以改用、不是前提 | **移植實作第 1 段已搬**：版面、命中、選關與結果的翻頁搬成 `logic` 的 `ui/MenuLayout`（`MenuPages`；原 `Draw` 裡移動頁數的部分成為 `Present`，每幀結束時呼叫）；畫的部分等 R2a／R2b |
-| `Rendering/PuzzleRenderer` | 背景、血管三角形帶、節點 sprite（含光暈、脈動、inactive 55% 亮度）、dead 節點的程序化外觀 | 遊戲的「每幀產生畫面資料」System；接 R2b 的可畫元件 | 等 R2b |
+| `Rendering/GameUiRenderer` 的命中判定與翻頁 | 選單、選關（5×2 一頁）、結果卡的版面與滑鼠命中 | 遊戲。版面與命中是遊戲的規則；畫字用 `text`、畫矩形用 R2a／R2b。**不需要 U**（沒有文字框、沒有通用控件）；U 來了可以改用、不是前提 | **移植實作第 1 段已搬**：版面、命中、選關與結果的翻頁搬成 `logic` 的 `ui/MenuLayout`（`MenuPages`；原 `Draw` 裡移動頁數的部分成為 `Present`，每幀結束時呼叫）；**第 3 段**畫出來（`runtime/UiDrawing`，第 10 節） |
+| `Rendering/PuzzleRenderer` | 背景、血管三角形帶、節點 sprite（含光暈、脈動、inactive 55% 亮度）、dead 節點的程序化外觀 | 遊戲的「每幀產生畫面資料」System | **移植實作第 3 段已畫**：`runtime/PuzzleDrawing`，用 R2a 的 `Pass2D`（每幀自給頂點），不必等 R2b（第 10 節） |
 | `Core/Application`、`Core/FrameTimer` | `WinMain`、KamataEngine 的初始化與主迴圈、幀時間 | 產品的 `main` 建 `Product`、runner 由 `sdl_window` 給；幀時間由 `world_time` | **移植實作第 1 段已做**：`src/main.cpp`（第 8 節） |
 
 ### 2.2 對到 GYO2 已有的單位
@@ -48,7 +48,7 @@ GYO2 基準：`gyo2` `7be54ccb`（2026-11-23）。這份表屬於產品；刪掉
 | 節點與游標的 PNG | DirectXTex／KamataEngine `TextureManager` | `image`（子批 I，PR #301 待合併）的 PNG loader | **移植實作第 1 段已接**：產品的 `configure` 登記 `PngLoader`；節點圖經 `nodes.csv` 的 loader 宣告引用，游標 3 張直接請求 |
 | 日文字型、排版 | `FontSystem`（`imstb_truetype`）＋`TextLayout`／`Utf8`（左到右、無 shaping） | `text`（子批 T，已合併：FreeType＋HarfBuzz、換行、圖集） | 已有；**移植實作第 1 段已接**字型（`FontLoader`、`UiText` 的 `TextContext`）。原 `Text/*` **不搬**：GYO2 的 `text` 涵蓋（且多了 shaping）；原 `TextLayoutTests`／`Utf8Tests`／`LazyGlyphTests`／`FontSystemLifecycleTests` 跟著不搬 |
 | 音效、BGM | `GameAudio`（XAudio2 經 KamataEngine：載 WAV、播放、迴圈、改音量、查是否在播） | `audio`（`Mixer`、`Clip`、`WavLoader`）；裝置輸出在子批 A（`sdl_audio`） | **移植實作第 2 段已接**（第 9 節）；G1、G2 由 A（#306）補上 |
-| 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；縮放模式與換算是 R2b（第 3 節核對） |
+| 正交相機、2D 座標 | 固定 1280×720 的像素座標 | `transform`＋`camera`（X1，已合併：正交投影、2D marker） | 已有；**第 3 段**直接用 `Pass2D::view`（1280×720 拉滿視窗；視窗不可縮放，HiDPI 是等比例），沒有用 camera；黑邊（等比例＋置中）要等 R2b 的 `Pass2D::viewport`／`KeepAspect`，不可縮放時用不到 |
 | 記錄 | `OutputDebugStringA` | `logging` | 已有 |
 | 存檔 | 沒有（通關紀錄只在一輪遊玩中、不寫檔） | `save_version` | **不需要** |
 | 網路、權威、回滾 | 沒有 | `net`、`authority`、`rollback` | **不需要**（單機；不帶也成立） |
@@ -129,10 +129,10 @@ PR：移植實作第 1 段（W、T、I 合併後）。畫面要等 R2a，聲音�
 | 輸入 | `ReadPlayerInput`（`Update`，在 `CancelDragOnLeave` 前）：`input` 的 `ButtonInput`／`CursorPosition`／`AccumulatedMouse*` 與 `window` 的 `WindowState` → `FrameInput`。鍵：W/↑、S/↓、Enter/NumpadEnter、Esc 的「剛按下」；左鍵三態；滾輪一格＝120（原版的 `WHEEL_DELTA`）。沒有焦點時不讀鍵、鍵與滾輪（原版 `Sample`），但這一幀仍照原版 `Update` 走過 UI（失焦算「啟動」，清掉滾輪的零頭）。「游標在視窗內」照原版 `PtInRect` 用範圍判斷（按住左鍵時 `CursorPosition` 會給視窗外的位置）；游標不在視窗內時選單不做命中（原版的滑鼠位置跟著游標出去，命中不到） | 原版 `InputSystem::Sample` 與 `Game::Impl::Update` 開頭照搬 |
 | 座標 | 視窗的邏輯像素 → 遊戲座標（1280×720）：照比例換算（`ClientToPlayfield`）。視窗不可改大小，所以一般是 1:1；HiDPI 由 `window` 的邏輯像素吸收 | 原版 `ToLogicalPosition` |
 | 穿邊（G3、G4） | `input/PointerWrap`（`logic`，不碰視窗）：原版 `InputSystem` 的穿邊整段；要 warp 時送 `window` 的 `WarpCursor`（邏輯像素）。相對移動只看正負號（游標停在邊上時判斷「還在往外推」）。原版的 `SetCursorPos` 會回報成功與否，請求資料不會：warp 後那一軸若出現超過視窗一半、往原處的跳動，當成 OS 沒套用 warp（基準移到游標實際的位置、指標不動），不當成玩家的移動 | 原版行為照搬，視窗呼叫換成請求資料；沒套用時不讓穿邊每幀重複觸發（設計審查 should） |
-| 游標（G5） | `PresentMenus` 算 `CursorAppearance`（哪張圖、要不要換掉系統游標＝有焦點且在視窗內）；**系統游標先不隱藏**：遊戲的游標要 R2a 才畫得出來，現在隱藏會看不到游標 | R2a 那段改 `WindowRequest::cursorVisible` |
+| 游標（G5） | `PresentMenus` 算 `CursorAppearance`（哪張圖、要不要換掉系統游標＝有焦點且在視窗內）；第 3 段起遊戲畫自己的游標（`DrawFrame`），同時 `WindowRequest::cursorVisible=false` | 原版 `MouseCursorRenderer`（隱藏系統游標、畫 32×32 的圖） |
 | 選單分頁 | `PresentMenus`（`Update`，在 `TickSolvedTimer` 後）以這一幀結束時的畫面呼叫 `MenuPages::Present`；`QuitChosen` → `WindowRequest::close` | 原版 `Draw` 在 `Update` 之後移動頁數，下一幀的翻頁看「上次畫的畫面」 |
 
-**已知的限制**：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked` 並由遊戲畫游標——R2a 那段（遊戲游標畫得出來後）再改。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
+**已知的限制**：視窗貼著螢幕邊時，游標被螢幕擋住後 `MouseMotion` 是 0（不是 `Locked` 時 SDL 由絕對位置算，`input` 頁 G4），所以推不過那個邊；原版用 DirectInput 的相對量推得過。要完全照原版，得在拖線時切 `CursorGrab::Locked`（遊戲的游標第 3 段已經畫得出來），但 `PointerWrap` 要改成由相對量追蹤指標（`Locked` 時絕對位置不再跟著動），第 3 段沒做，仍是已知限制。視窗沒貼邊時，按住左鍵時 OS 讓游標出得了視窗，照絕對位置就能穿邊。
 
 ## 9. 移植實作第 2 段：聲音（卡片自己判的）
 
@@ -149,3 +149,19 @@ PR：移植實作第 2 段（A #306 合併後）。
 | 時刻 | 每個請求的 `at` 是送出時的 `Time::Now()`（Engine 時間基準）；混音器自己加 `scheduleDelay`（預設 60 ms） | audio DI 3：不用可縮放的遊戲時間 |
 
 **沒處理的（審查 nit）**：同一幀若先後有「放手」與「拿線」兩種 Message，System 先處理全部拿線再處理放手（現在沒有會這樣送的路徑）；World 被替換時舊的迴圈段不會停（這款遊戲不替換 World）；兩個 World 共用一個提交口會違反單一使用者（只有一個 World）。
+
+## 10. 移植實作第 3 段：畫面（卡片自己判的）
+
+PR：移植實作第 3 段（R2a #315 合併後）。
+
+| 項 | 做法 | 理由 |
+|---|---|---|
+| 用 R2a 還是等 R2b | 直接用 R2a：遊戲的 World 帶 `render_world`，`DrawFrame`（`Main/Last`，生成結束後）每幀組一個 `Pass2D` 寫進 `RenderCommands`，`sdl_gpu` 在 `Submit` 畫。血管的三角形帶就是每幀自給的頂點，不必等 R2b 的 `Shape2d` | R2a 的 `Pass2D` 本來就是每幀的頂點＋索引；R2b 卡也確認這條可行（主會話轉來的說明） |
+| 座標 | `Pass2D::view = {0,0,1280,720}`，畫面拉滿視窗（不可縮放，HiDPI 等比例） | 原版的 back buffer 就是 1280×720 |
+| 順序 | 原版 `Game::Impl::Draw` 的順序：關卡（背景 → 血管外框帶 → 血管核心帶 → 肉的畫素 → 程序化的死節點與骨斑 → 死節點的圖 → 光暈 → 脈動 → 互動節點的佔位方塊 → 互動節點的圖）→ UI 方塊（`GameUiRenderer::Draw` 的順序）→ 全部文字 → 游標 | 照原版 |
+| 顏色 | 原版畫在 sRGB 的 render target、顏色是線性值；`ToColor8` 把線性值做 sRGB 編碼成位元組（貼圖的染色也一樣） | R2a 的 2D pass 拿位元組原樣混合（render 頁第 2 節）。**差別**：混合在編碼後的位元組上做，不是線性空間，半透明的覆蓋層比原版稍暗 |
+| 文字 | `text` 的 `TextContext`（BIZ UDPGothic，`ja`）每幀 Shape→Layout→Rasterize 進 `GlyphAtlas`；新頁整頁 `Create`、舊頁照 `ChangesSince` 的矩形 `Update`（Alpha8 → RGBA，白色＋覆蓋率當 alpha）；行高 1.0（原版是字型的 ascent－descent＋line gap，這個字型正好是 1.0；Engine 預設 1.2 會讓 Top 對齊的字低 0.1 倍字高）；對齊照原版 `TextLayout.cpp:64-97`（每行用自己的寬度水平對齊；Top＝版面頂端在錨點、Middle＝中線在錨點）；字形位置取整數像素 | 原版 `FontSystem`（imstb_truetype）不搬 |
+| 貼圖 | 節點圖：`nodes.csv` 與各地圖 CSV 的 `texture_path` 都經 loader 宣告引用（地圖改成遊戲自己的型別 `MapTable`），生成結束後的第一幀一次做成貼圖；游標 3 張；最終結果的器官圖用 `organ.png`。濾波 Linear | 地圖 CSV 也指定 4 張器官圖（liver、lung、stomach、kidney），原版從路徑直接讀 |
+| 頂點上限 | 拿掉原版的 65,536 頂點預算與「放不下就丟掉血管副本」的保留邏輯 | `Pass2D` 的清單會長，沒有固定上限 |
+| 幀間隔 | `SDLWindowOptions::minFrameInterval` 4 ms | 顯示畫面時等垂直同步；視窗最小化時拿不到畫面、不會等，這個下限讓迴圈不空轉 |
+| 測試 | `object_connect.main` 改 gpu 標籤（視窗不隱藏：X11 上隱藏視窗拿不到畫面，每幀都被跳過）；`--frames` 模式下沒有任何一幀顯示、或有畫壞的幀／跳過的繪製／被拒的貼圖時結束碼 1（SDL dummy 驅動沒有 GPU 裝置；L1 在 Linux 的 Lavapipe＋Xvfb 跑）；`object_connect.runtime` 在 `Submit` 階段讀 `RenderCommands`，當資料檢查 | 畫素級的比對是 `sdl_gpu.pass2d` 的事 |
