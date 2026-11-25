@@ -417,6 +417,32 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the other player's stand-in goes*",
    "expect": "pvp-frame-mirror"
+  },
+  {
+   "id": "pvp-exchange-add-overwrites",
+   "what": "the exchange's AddControls keeps only the newest frame's controls: with the Sim World lent, a click in an earlier frame between two of its rounds is lost",
+   "guards": [
+    "live-frame-sim-thread declaration 4.3; design review S1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        Merge(controls_, step);\n",
+   "replace": "        controls_ = step;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: with the Sim World lent*",
+   "expect": "pvp-exchange-accumulates"
+  },
+  {
+   "id": "pvp-frame-arena-kept",
+   "what": "the Frame World keeps the arena it started with when the Sim World follows the Match's",
+   "guards": [
+    "live-frame-sim-thread declaration 4.3; design review S2"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            rules->arena = arena->content;\n            rules->wallsDigest = arena->wallsDigest;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the Frame World follows*",
+   "expect": "pvp-frame-arena"
   }
  ]
 }

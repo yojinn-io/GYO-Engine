@@ -113,20 +113,24 @@ struct Setup final {
     int framesPerStep = 1;
     int frame = 0;
 
-    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4) : framesPerStep(perStep) {
+    std::shared_ptr<const PC::PresentationContent> presentation;
+
+    // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it).
+    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0) : framesPerStep(perStep) {
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
         auto reader = [c = clock] { return *c; };
         match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(std::vector<N::MemoryLink>{first.first, second.first}),
-                           SeatsOf(seats), reader);
+                           SeatsOf(seats), reader, matchArena);
         other = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(second.second), 2, reader);
 
         std::string error;
         auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
-        PC::ClientOptions options{ShippedContent(), std::make_shared<const PC::PresentationContent>(std::move(*presentation)), 0, 1};
+        this->presentation = std::make_shared<const PC::PresentationContent>(std::move(*presentation));
+        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1};
         O::WorldDescription sim = Stepped(PC::ClientSimWorld(options), kStep / framesPerStep);
         O::WorldDescription game = Stepped(PC::ClientFrameWorld(options, false), kStep / framesPerStep);
         game.build = [inner = std::move(game.build)](O::WorldSetup& setup) {
@@ -390,7 +394,7 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
         int phase = 0;  // 0 before the stop, 1 during it, 2 after
         std::uint64_t simTick = 0;
         std::uint64_t consumed = 0, missing = 0;  // the Match's counts of this Client's inputs
-        GYO::Engine::Math::Vec3 feet{};           // the own player at the Match
+        float forward = 0.0F;                     // the input the Match gave the own player this step
     };
     std::vector<Round> rounds;
     std::atomic<int> phase{0};
@@ -416,10 +420,10 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
                     round.missing = inputs->counts.missing;
                 }
             }
-            if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.feet = body->feet;
+            if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) round.forward = input->forward;
             round.simTick = TickOf(lease.World());
             rounds.push_back(round);
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::yield();
         }
     });
     std::string mainFailure;
@@ -440,12 +444,12 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
     setup.client->Return(std::move(lease));
     REQUIRE_MESSAGE(simFailure.empty(), simFailure);
     REQUIRE_MESSAGE(mainFailure.empty(), mainFailure);
+    const std::uint64_t frameTick = setup.Client().Resource<PC::ClientView>()->tick;
 
     std::vector<Round> stopped;
     for (const Round& round : rounds) {
         if (round.phase == 1) stopped.push_back(round);
     }
-    // (sleep_for(1 ms) is about 15 ms on Windows: 250 ms is still more than ten rounds.)
     REQUIRE_MESSAGE(stopped.size() >= 10, "[pvp-sim-thread-steps] rounds while the main thread stopped: " << stopped.size());
     const Round& first = stopped.front();
     const Round& last = stopped.back();
@@ -453,12 +457,84 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
     CHECK_MESSAGE(last.consumed - first.consumed == stopped.size() - 1,
                   "[pvp-sim-thread-input] the Match took this Client's input every step: " << last.consumed - first.consumed);
     CHECK_MESSAGE(last.missing == first.missing, "[pvp-sim-thread-input] no step without its input: " << last.missing - first.missing);
-    CHECK_MESSAGE(GYO::Engine::Math::Length(last.feet - first.feet) > 0.5F, "[pvp-sim-thread-input] the held W walked the player at the Match");
+    std::size_t walking = 0;
+    for (const Round& round : stopped) walking += round.forward > 0.0F ? 1 : 0;
+    CHECK_MESSAGE(walking == stopped.size(), "[pvp-sim-thread-input] the held W in every step's input at the Match: " << walking << "/" << stopped.size());
+    // After the stop the Frame World shows the newest picture, not the ones it missed.
+    CHECK_MESSAGE(frameTick > last.simTick, "[pvp-sim-thread-newest] the Frame World's tick " << frameTick << " after the stop's last " << last.simTick);
     // The Sim World is back on the main thread; still connected, still playing.
     setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
     setup.Frames(10);
     CHECK(PC::StatusOf(setup.Client()).connected);
     CHECK(PlayerOf(GameWorld(*setup.match), 1) != 0);
+}
+
+// The Sim World lent: the Frame World runs several frames between two of its rounds, and the presses of those frames
+// add up in the exchange (a click in an early frame is not overwritten by the later frames' controls).
+TEST_CASE("client: with the Sim World lent, a click among several frames between two of its rounds fires once") {
+    Setup setup;
+    setup.other.reset();
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.position = {640.0F, 360.0F};
+    const auto press = [&](const I::ButtonState state) {
+        click.state = state;
+        setup.Next().buttons.push_back(click);
+        setup.Frame();
+    };
+    press(I::ButtonState::Pressed);  // takes the pointer
+    press(I::ButtonState::Released);
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    setup.Frames(20);
+    const std::uint32_t shotsBefore = GameWorld(*setup.match).Get<PW::PlayerCombat>(own)->shots;
+    O::WorldLease lease = std::move(setup.client->Lend("Sim")).value();
+    const auto frame = [&setup] { REQUIRE(static_cast<bool>(setup.client->RunFrame())); };
+    const auto round = [&] {
+        REQUIRE(static_cast<bool>(setup.match->RunFrame()));
+        REQUIRE(static_cast<bool>(lease.RunRound()));
+        setup.first.first.Advance();
+        setup.second.first.Advance();
+        *setup.clock += N::NetTime(std::chrono::nanoseconds(kStep));
+    };
+    // Four Frame frames, the click in the first, then one Sim round; then rounds and frames until it reached the Match.
+    click.state = I::ButtonState::Pressed;
+    setup.Next().buttons.push_back(click);
+    frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    frame();
+    frame();
+    frame();
+    round();
+    for (int i = 0; i < 20; ++i) {
+        frame();
+        round();
+    }
+    setup.client->Return(std::move(lease));
+    CHECK_MESSAGE(GameWorld(*setup.match).Get<PW::PlayerCombat>(own)->shots == shotsBefore + 1,
+                  "[pvp-exchange-accumulates] one click, one shot: " << GameWorld(*setup.match).Get<PW::PlayerCombat>(own)->shots - shotsBefore);
+}
+
+// The Match plays another arena than the one the Client starts with: the Frame World follows the Sim World's.
+TEST_CASE("client: the Frame World follows the arena the Match plays") {
+    Setup setup(1, 4, 1);
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const PW::InstalledArena& played = ShippedContent()->arenas[1];
+    REQUIRE(setup.Sim().Resource<PW::GameRules>()->arena.id == played.content.id);
+    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == played.content.id, "[pvp-frame-arena] the Frame World's rules");
+    CHECK(setup.Client().Resource<PW::GameRules>()->wallsDigest == played.wallsDigest);
+    bool drawn = false;
+    for (const K::EntityId id : setup.Client().Entities()) {
+        const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
+        if (mesh == nullptr) continue;
+        const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh->image);
+        if (image != nullptr && *image == setup.presentation->arenaPalettes[1]) drawn = true;
+    }
+    CHECK_MESSAGE(drawn, "[pvp-frame-arena] the played arena's picture is drawn");
 }
 
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {

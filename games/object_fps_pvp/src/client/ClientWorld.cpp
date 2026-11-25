@@ -19,6 +19,7 @@
 #include "engine/audio/Clip.hpp"
 #include "engine/audio/Mixer.hpp"
 #include "engine/audio/WavLoader.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/base/Log.hpp"
 #include "engine/camera/Camera.hpp"
 #include "engine/input/Input.hpp"
@@ -154,15 +155,17 @@ struct WorldSnapshot final {
 };
 class ClientExchange final {
 public:
+    // (Made outside the lock; the lock only swaps the pointer.)
     void PutSnapshot(WorldSnapshot snapshot) {
+        auto shared = std::make_shared<WorldSnapshot>(std::move(snapshot));
         const std::lock_guard<std::mutex> lock(snapshotLock_);
-        snapshot.version = ++version_;
-        snapshot_ = std::move(snapshot);
+        shared->version = ++version_;
+        snapshot_ = std::move(shared);
     }
-    // The newest picture when it is newer than seen (nullopt otherwise).
-    std::optional<WorldSnapshot> TakeSnapshot(std::uint64_t& seen) {
+    // The newest picture when it is newer than seen (nullptr otherwise).
+    std::shared_ptr<const WorldSnapshot> TakeSnapshot(std::uint64_t& seen) {
         const std::lock_guard<std::mutex> lock(snapshotLock_);
-        if (!snapshot_ || snapshot_->version == seen) return std::nullopt;
+        if (!snapshot_ || snapshot_->version == seen) return nullptr;
         seen = snapshot_->version;
         return snapshot_;
     }
@@ -193,7 +196,7 @@ public:
 
 private:
     std::mutex snapshotLock_;
-    std::optional<WorldSnapshot> snapshot_;
+    std::shared_ptr<const WorldSnapshot> snapshot_;
     std::uint64_t version_ = 0;
     std::mutex controlsLock_;
     present::StepInput controls_;
@@ -946,11 +949,6 @@ void Mount(K::SystemOptions& options, const std::string_view schedule, const std
     options.mounts.push_back(std::move(mount));
 }
 
-Base::Result<void, O::OrchestrationError> NoExchange() {
-    return Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed,
-                                           "the Client's Worlds need ConfigureClient (their ClientExchange)"));
-}
-
 // ---- The Sim World's exchange: in takes the controls, out puts the picture.
 void TakeControls(ClientExchange& exchange, K::World& world) {
     if (const auto controls = exchange.TakeControls()) ClientExchange::Merge(world.ResourceMut<SimControls>()->pending, *controls);
@@ -995,7 +993,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
 // ---- The Frame World's exchange: in applies the picture, out adds the controls.
 void ApplySnapshot(ClientExchange& exchange, K::World& world) {
     FrameMirror& mirror = *world.ResourceMut<FrameMirror>();
-    auto snapshot = exchange.TakeSnapshot(mirror.seen);
+    const std::shared_ptr<const WorldSnapshot> snapshot = exchange.TakeSnapshot(mirror.seen);
     if (!snapshot) return;
     // Written only when changed: the Frame World's Systems see what changed as it changes.
     const auto put = [&world](const K::EntityId id, const auto& value) {
@@ -1035,7 +1033,7 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
             rules->wallsDigest = arena->wallsDigest;
         }
     }
-    world.SetResource(std::move(snapshot->view));
+    world.SetResource(snapshot->view);
 }
 
 void BuildSim(O::WorldSetup& setup) {
@@ -1057,13 +1055,12 @@ void BuildSim(O::WorldSetup& setup) {
     r.AddSystem<&WriteStepInput>(std::move(write));
     r.AddSystem<&NoteSessionEnd>(InUpdate("object_fps_pvp.NoteSessionEnd"));
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
-    setup.Prepare([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        if (exchange == nullptr) return NoExchange();
+    GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
+    setup.Prepare([](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(SimControls{});
         world.SetResource(ClientSessionEnd{});
         return {};
     });
-    if (exchange == nullptr) return;
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         TakeControls(*exchange, world);
         return {};
@@ -1115,8 +1112,8 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
     r.AddSystem<&CloseOnEnd>(InUpdate("object_fps_pvp.CloseOnEnd"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
-    setup.Prepare([options, port, exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        if (exchange == nullptr) return NoExchange();
+    GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
+    setup.Prepare([options, port](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
         PW::GameRules rules;
@@ -1205,7 +1202,6 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
         text(kStatusText, {0, kHudHeight / 2 - 80, 2}, {0.0F, 0.5F});
         return {};
     });
-    if (exchange == nullptr) return;
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ApplySnapshot(*exchange, world);
         return {};
