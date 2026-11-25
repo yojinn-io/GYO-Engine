@@ -217,11 +217,14 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     // function that puts a default does not overwrite a value already there).
     const auto* start = setup.ProductBuffer().Find<ClientStart>();
     GYO_ASSERT(start != nullptr && "the Client's Product needs ConfigureClient (it keeps its ClientStart)");
-    setup.Prepare([start = *start](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+    const auto* director = setup.ProductBuffer().Find<SceneDirector>();
+    const Scene scene = director != nullptr ? director->Current().scene : Scene::Menu;
+    const bool gatewayNeeded = scene == Scene::Lobby || scene == Scene::Room || scene == Scene::MultiGame;
+    setup.Prepare([start = *start, gatewayNeeded](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SceneRequest{});
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
         if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
-        PlaceGatewayClient(w, start.gateway, start.dataDirectory);
+        PlaceGatewayClient(w, start.gateway, start.dataDirectory, gatewayNeeded);
         return {};
     });
 }

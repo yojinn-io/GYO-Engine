@@ -951,6 +951,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         CHECK_MESSAGE(setup.Binding("record") == "出撃 " + std::to_string(game) + " 回・死亡 1 回", "[pvp-solo-record] " << setup.Binding("record"));
     }
     CHECK_MESSAGE(socketless, "[pvp-solo-no-socket] no UDP socket was opened throughout");
+    CHECK_MESSAGE(!std::filesystem::exists(directory.path / "device-id"), "[pvp-solo-no-device-id] single player makes no Gateway device id");
     CHECK_MESSAGE(setup.Notes().failure.empty(), "[pvp-solo-documents] every scene's document was shown: " << setup.Notes().failure);
 }
 

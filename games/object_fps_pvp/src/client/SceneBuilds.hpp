@@ -54,8 +54,10 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
 
 // The device id file in the player's directory.
 [[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
-// The Frame World's GatewayClient, when the World has none yet (the first scene: later ones get it carried): with this
-// player's device id (read, or made the first time), or without one (it then calls nothing and says why).
-void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory);
+// The Frame World's GatewayClient, when the World has none that can call (later scenes get it carried): needed (a
+// scene that calls the Gateway), with this player's device id (read, or made the first time) or without one (it then
+// calls nothing and says why); not needed, one that calls nothing (no file is read or made for the menu or single
+// player).
+void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory, bool needed);
 
 } // namespace object_fps_pvp::client
