@@ -140,6 +140,23 @@ SystemResult ReadsDerived(Extract<Read<XLater>> derived) {
     return Ok();
 }
 
+// Logs how many times it ran, from its Local (DI-KS 38: a new source keeps the reader's System state).
+SystemResult CountsRuns(ExtractRes<XRes> res, Local<std::int32_t> runs) {
+    ++*runs;
+    Seen().push_back("run " + std::to_string(*runs) + " res " + (res.Present() ? std::to_string(res->value) : std::string("none")));
+    return Ok();
+}
+
+// A source Registry with XRes and no XPos: a reader extracting XPos cannot read it (DI-KS 38, R-E4).
+std::unique_ptr<Registry> MakeSourceWithoutPos() {
+    auto source = std::make_unique<Registry>();
+    REQUIRE(Done(RegisterAll(*source, {{"source", [](Registrar& r) {
+                                            r.Resource<XRes>({.name = "XRes"});
+                                            r.Schedule(UpdateSchedule());
+                                        }}})));
+    return source;
+}
+
 // The source Registry: the common data and the Update schedule, built.
 std::unique_ptr<Registry> MakeSource() {
     auto source = std::make_unique<Registry>();
@@ -403,4 +420,130 @@ TEST_CASE("DI-KS 35: the asserts of RunExtract and Run") {
     REQUIRE_FALSE(static_cast<bool>(failing.Run("Update")));
     REQUIRE(failing.GetWorld().State() == WorldState::Interrupted);
     GYO_CHECK_ASSERTS(readsFailing.RunExtract("Extract", failing.GetWorld()));
+}
+
+// DI-KS 38 (declaration docs/architecture/target/v2/sdl-extract-replace-declaration.zh-Hant.md, 3.2):
+// a reader Registry reads another source after a later round.
+
+TEST_CASE("DI-KS 38: after ReplaceExtractSource the reader reads the new source; its Local stays") {
+    Seen().clear();
+    auto oldRegistry = MakeSource();
+    auto newRegistry = MakeSource();
+    auto readerRegistry = MakeReader(*oldRegistry, [](Registrar& r) {
+        r.AddSystem<&CountsRuns>(Sys("CountsRuns", {At("Extract", "Copy")}));
+    });
+    WorldExecutor oldSource(*oldRegistry, "old");
+    WorldExecutor newSource(*newRegistry, "new");
+    WorldExecutor reader(*readerRegistry, "reader");
+    oldSource.GetWorld().SetResource(XRes{1});
+    newSource.GetWorld().SetResource(XRes{2});
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));
+
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(*newRegistry)));
+    REQUIRE(Done(readerRegistry->BuildPlans()));
+    CHECK(readerRegistry->Frozen().Version() == 2U);
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", newSource.GetWorld())));
+    CHECK_MESSAGE((Seen() == std::vector<std::string>{"run 1 res 1", "run 2 res 2"}),
+                  "[ks-rx-new-source] the new source is read, and the System's Local went on");
+    // The old source is not this reader's any more.
+    GYO_CHECK_ASSERTS(reader.RunExtract("Extract", oldSource.GetWorld()));
+}
+
+TEST_CASE("DI-KS 38: StagePlans keeps the round aside until CommitPlans; DiscardRegistrations drops it") {
+    Seen().clear();
+    auto oldRegistry = MakeSource();
+    auto newRegistry = MakeSource();
+    auto readerRegistry = MakeReader(*oldRegistry, [](Registrar& r) {
+        r.AddSystem<&CountsRuns>(Sys("CountsRuns", {At("Extract", "Copy")}));
+    });
+    WorldExecutor oldSource(*oldRegistry, "old");
+    WorldExecutor newSource(*newRegistry, "new");
+    WorldExecutor reader(*readerRegistry, "reader");
+    oldSource.GetWorld().SetResource(XRes{1});
+    newSource.GetWorld().SetResource(XRes{2});
+
+    // Staged then dropped: the reader stays on the old source and the old version.
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(*newRegistry)));
+    REQUIRE(Done(readerRegistry->StagePlans()));
+    CHECK_MESSAGE(readerRegistry->Frozen().Version() == 1U, "[ks-rx-stage-commits] a staged round is not in yet");
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));
+    readerRegistry->DiscardRegistrations();
+    CHECK(readerRegistry->Frozen().Version() == 1U);
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));
+
+    // Staged then taken in.
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(*newRegistry)));
+    REQUIRE(Done(readerRegistry->StagePlans()));
+    readerRegistry->CommitPlans();
+    CHECK(readerRegistry->Frozen().Version() == 2U);
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", newSource.GetWorld())));
+    CHECK(Seen() == std::vector<std::string>{"run 1 res 1", "run 2 res 1", "run 3 res 2"});
+}
+
+TEST_CASE("DI-KS 38: a new source without Plans is D-E14, one without a type read is R-E4; the reader stays") {
+    Seen().clear();
+    auto oldRegistry = MakeSource();
+    auto readerRegistry = MakeReader(*oldRegistry, [](Registrar& r) {
+        r.AddSystem<&CopyFromSource>(Sys("CopyFromSource", {At("Extract", "Copy")}));
+    });
+    WorldExecutor oldSource(*oldRegistry, "old");
+    WorldExecutor reader(*readerRegistry, "reader");
+    oldSource.GetWorld().SetResource(XRes{1});
+    reader.GetWorld().SetResource(XOut{0});
+
+    Registry unbuilt;
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(unbuilt)));
+    const auto noPlans = readerRegistry->StagePlans();
+    REQUIRE_FALSE(static_cast<bool>(noPlans));
+    CHECK_MESSAGE(GYO::Test::Kernel::ErrorCount(noPlans, StartupCode::DE14) >= 1, "[ks-rx-de14] " << noPlans.error().detail);
+
+    auto withoutPos = MakeSourceWithoutPos();
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(*withoutPos)));
+    const auto missing = readerRegistry->BuildPlans();
+    REQUIRE_FALSE(static_cast<bool>(missing));
+    CHECK_MESSAGE(GYO::Test::Kernel::ErrorCount(missing, StartupCode::RE4) == 1, "[ks-rx-re4] " << missing.error().detail);
+
+    // Both rounds were dropped: the reader reads the old source, on the first version.
+    CHECK(readerRegistry->Frozen().Version() == 1U);
+    REQUIRE(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));
+    CHECK(Seen() == std::vector<std::string>{"copy res:1"});
+}
+
+TEST_CASE("DI-KS 38: a World that declares no dynamic insert refuses a new source, as Register") {
+    auto oldRegistry = MakeSource();
+    auto newRegistry = MakeSource();
+    auto readerRegistry = MakeReader(*oldRegistry, [](Registrar&) {});
+    WorldExecutor oldSource(*oldRegistry, "old");
+    WorldExecutor reader(*readerRegistry, "reader", WorldOptions{false});
+    const auto refused = readerRegistry->ReplaceExtractSource(*newRegistry);
+    CHECK_MESSAGE(!refused, "[ks-rx-refusal] a World that declares no dynamic insert let a new source in");
+    if (refused) {
+        readerRegistry->DiscardRegistrations();
+        return;
+    }
+    CHECK_MESSAGE(refused.error().code == KernelErrorCode::DynamicInsertRefused, "[ks-rx-refusal] " << refused.error().Text());
+    CHECK(readerRegistry->Frozen().Version() == 1U);
+    CHECK(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));
+}
+
+TEST_CASE("DI-KS 38: the asserts of ReplaceExtractSource, StagePlans and CommitPlans") {
+    auto sourceRegistry = MakeSource();
+    auto newRegistry = MakeSource();
+    // Before the first BuildPlans (SetExtractSource is the way then).
+    Registry unbuiltReader;
+    GYO_CHECK_ASSERTS(unbuiltReader.ReplaceExtractSource(*sourceRegistry));
+    auto readerRegistry = MakeReader(*sourceRegistry, [](Registrar&) {});
+    // Nothing staged, nothing to stage.
+    GYO_CHECK_ASSERTS(readerRegistry->CommitPlans());
+    GYO_CHECK_ASSERTS(readerRegistry->StagePlans());
+    // With a staged round: no other round, no BuildPlans, no second stage.
+    REQUIRE(Done(readerRegistry->ReplaceExtractSource(*newRegistry)));
+    REQUIRE(Done(readerRegistry->StagePlans()));
+    GYO_CHECK_ASSERTS(readerRegistry->ReplaceExtractSource(*newRegistry));
+    auto registerLate = [&] { return readerRegistry->Register(RegistrationOwner{"late", 9}, [](Registrar&) {}); };
+    GYO_CHECK_ASSERTS(registerLate());
+    GYO_CHECK_ASSERTS(readerRegistry->BuildPlans());
+    GYO_CHECK_ASSERTS(readerRegistry->StagePlans());
+    readerRegistry->CommitPlans();
+    CHECK(readerRegistry->Frozen().Version() == 2U);
 }
