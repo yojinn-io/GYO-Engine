@@ -1471,6 +1471,84 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
    "expect": "pvp-notes-carried"
+  },
+  {
+   "id": "pvp-local-spawn-fixed",
+   "what": "the Local World's player always stands at the first spawn",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "rules->arena.spawns[chosen->index % rules->arena.spawns.size()]",
+   "replace": "rules->arena.spawns[0 % rules->arena.spawns.size()]",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World seats*",
+   "expect": "pvp-local-spawn"
+  },
+  {
+   "id": "pvp-local-input-ignored",
+   "what": "the Solo World does not write the step's input into its player",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-walks"
+  },
+  {
+   "id": "pvp-solo-never-plays",
+   "what": "the Solo World plays in no scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }",
+   "replace": "bool SoloPlays(const Scene) noexcept { return false; }",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-world"
+  },
+  {
+   "id": "pvp-solo-start-ignored",
+   "what": "the room's start goes nowhere",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-start"
+  },
+  {
+   "id": "pvp-solo-not-saved",
+   "what": "the evacuation settles nothing into the file",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "    return WriteLocalText(path, match::EncodePlayerSave(after));",
+   "replace": "    return {};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-saved"
+  },
+  {
+   "id": "pvp-pause-not-shown",
+   "what": "the overlay never shows the pause canvas",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const std::string canvas = paused ? \"pause\" : \"play\";",
+   "replace": "        const std::string canvas = \"play\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-pause-shown"
   }
  ]
 }

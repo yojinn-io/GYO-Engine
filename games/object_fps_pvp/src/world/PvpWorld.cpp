@@ -912,7 +912,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
     const std::string postUpdate = std::string(O::DefaultSchedules::postUpdate);
     r.AddSystem<&MovePlayers>(Fixed("MovePlayers", update, {}, false));
     r.AddSystem<&UseWeapons>(Fixed("UseWeapons", update, {"MovePlayers"}, false));
-    r.AddSystem<&AnimatePlayers>(Fixed("AnimatePlayers", postUpdate, {}, true));
+    r.AddSystem<&AnimatePlayers>(Fixed("AnimatePlayers", postUpdate, {}, networked));
     r.AddSystem<&JudgeShots>(Fixed("JudgeShots", postUpdate, {"AnimatePlayers"}, networked));
     r.AddSystem<&RespawnPlayers>(Fixed("RespawnPlayers", postUpdate, {"JudgeShots"}, networked));
     if (networked) {
@@ -985,8 +985,9 @@ O::WorldDescription ClientWorld(WorldOptions options) { return Describe(std::mov
 O::WorldDescription LocalWorld(WorldOptions options) {
     O::WorldDescription world;
     world.name = "Game";
-    // No net and no rollback: the World is the authority and nobody predicts it.
-    world.units = {"entity_ids", "world_time", "authority", "transform", "physics_3d"};
+    // No net, and the rollback Module without a strategy (authority needs it there; nothing is predicted): the World is
+    // the authority.
+    world.units = {"entity_ids", "world_time", "rollback", "authority", "transform", "physics_3d"};
     world.options.Set(kMatchIds);
     world.options.Set(A::AuthorityOptions{std::make_shared<A::ServerAuthorityStrategy>()});
     world.dynamicInsert = false;

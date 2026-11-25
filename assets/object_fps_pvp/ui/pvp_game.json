@@ -12,7 +12,7 @@
   ],
   "bindings": [],
   "canvases": [
-    {"id": "play", "backdrop_color": "clear", "children": []},
+    {"id": "play", "backdrop_color": "clear", "focus_order": [], "children": []},
     {
       "id": "pause", "backdrop_color": "shade", "default_focus": "evacuate",
       "focus_order": ["evacuate"],

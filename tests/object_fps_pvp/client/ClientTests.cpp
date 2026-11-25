@@ -942,6 +942,14 @@ TEST_CASE("client: single player: the room, a game without a server, the evacuat
         if (state != nullptr && state->runtime) break;
         setup.Frames(1);
     }
+    {
+        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+        REQUIRE(state != nullptr);
+        INFO("failure: " << (state->failure ? state->failure->message : std::string("none")) << " notes: " << setup.Notes().failure);
+        REQUIRE(state->runtime.has_value());
+        INFO("focused: " << state->runtime->InteractionState().focusedElement);
+        CHECK(state->runtime->InteractionState().focusedElement == "evacuate");
+    }
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-solo-evacuate] back to the menu: " << setup.Binding("status"));
     CHECK_MESSAGE(setup.Scene().status.find("記録しました") != std::string::npos, setup.Scene().status);
@@ -959,6 +967,7 @@ TEST_CASE("client: single player: the room, a game without a server, the evacuat
     REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
     setup.Load();
     CHECK_MESSAGE(setup.Binding("record") == "出撃 1 回・死亡 0 回", "[pvp-solo-record] " << setup.Binding("record"));
+    CHECK_MESSAGE(setup.Notes().failure.empty(), "[pvp-solo-documents] every scene's document was shown: " << setup.Notes().failure);
 }
 
 TEST_CASE("client: leaving the game closes the connection; a new game connects again and sees nothing of the last") {
