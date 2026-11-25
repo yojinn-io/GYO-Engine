@@ -1060,8 +1060,11 @@ K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView
         add(a.font);
         for (const auto& image : a.viewmodelImages) add(image);
         for (const auto& [id, clip] : a.clips) add(clip);
+        // (a model the World holds, not an asset, has nothing to wait for)
         const R::Mesh3d* arena = meshes.Get<R::Mesh3d>(kArenaPicture);
-        if (arena != nullptr) add(arena->model);
+        if (arena != nullptr) {
+            if (const auto* model = std::get_if<A::Handle<GYO::Engine::Model::ModelData>>(&arena->model)) add(*model);
+        }
         if (const Ui::UiRoot* overlay = roots.Get<Ui::UiRoot>(kOverlay)) {
             if (const auto* document = std::get_if<A::Handle<Ui::UiAsset>>(&overlay->document)) add(*document);
         }
