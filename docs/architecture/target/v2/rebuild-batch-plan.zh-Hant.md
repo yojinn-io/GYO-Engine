@@ -187,7 +187,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | **算在 PvP 移植裡**（`v8-arch-gyo2-gateway-in-pvp-port`）；待開卡 |
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
 | **遊戲流程框架（主菜單）卡**（`v8-arch-gyo2-next-game-flow-not-harness`；使用者 2026-11-25「照建議，第 4 段完成再開流程框架卡」）：主菜單 World → 單人（房間 World → 遊戲 World，不帶連線目標）／多人（Gateway 大廳 → 房間 → 遊戲 World 開始時帶 `NetConnectTarget`）／設置（使用者資料目錄）／退出；換場景用 R1b 換前台 World（不關窗）＋#332；多人一支等 Gateway 第 1、2 段合併後接（原「大廳不關窗」與 Gateway 第 3 步一併歸這張卡）；商人、任務、合作／生存只留位置與資料流 | 使用者 2026-11-25 | **PvP 第 4 段遊戲部分完成後開** |
-| 遊戲優化（範圍待使用者說明：手感＝遠端內插／命中回溯／後座力、效能、或試玩發現的問題） | 使用者 2026-11-25 | 待問 |
+| 遊戲優化＝大地圖（bigMap）＋渲染管線（光照、shader、粒子等）（`v8-arch-gyo2-game-optimization-scope`） | 使用者 2026-11-25 | 待開卡（主會話提案：兩條線各先寫宣告） |
 
 ## 不擋路的小事
 
