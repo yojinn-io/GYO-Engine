@@ -188,7 +188,49 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
 | **遊戲流程框架（主菜單）卡**（`v8-arch-gyo2-next-game-flow-not-harness`；使用者 2026-11-25「照建議，第 4 段完成再開流程框架卡」）：主菜單 World → 單人（房間 World → 遊戲 World，不帶連線目標）／多人（Gateway 大廳 → 房間 → 遊戲 World 開始時帶 `NetConnectTarget`）／設置（使用者資料目錄）／退出；換場景用 R1b 換前台 World（不關窗）＋#332；多人一支等 Gateway 第 1、2 段合併後接（原「大廳不關窗」與 Gateway 第 3 步一併歸這張卡）；商人、任務、合作／生存只留位置與資料流 | 使用者 2026-11-25 | **PvP 第 4 段遊戲部分完成後開** |
 | 遊戲優化＝大地圖（bigMap）＋渲染管線（光照、shader、粒子等）（`v8-arch-gyo2-game-optimization-scope`） | 使用者 2026-11-25 | 待開卡（主會話提案：兩條線各先寫宣告） |
-| **渲染管線線：全部要做**（使用者 2026-11-25「渲染管線 先記下來。這些都是要做的。」，`v8-arch-gyo2-render-pipeline-scope`）。清單：**光照與陰影**（方向光、點光、聚光、環境光／天空光；材質模型 Lambert／Blinn-Phong 或 PBR；cascaded shadow map、點光 cube shadow；skybox、IBL、SSAO）；**shader 與材質系統**（遊戲自己的 shader 走共通內容管線 P22；材質參數與 shader 的對應、熱重載）；**後處理**（tonemapping＋exposure／gamma、bloom、霧、color grading；MSAA 或 FXAA／TAA）；**效果**（粒子 CPU／GPU、decal、軌跡）；**效能**（視錐剔除、instancing、LOD、mipmap 與貼圖壓縮）；**基礎設施**（render target、多 pass／render graph、GPU 計時與除錯）。主會話建議的順序：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal；剔除、instancing、LOD 可隨大地圖線做。gyo2 現況（關鍵字查，未逐檔讀）：3D 是 unlit、只有 Plugin 內建 shader，上列幾乎都沒有 | 使用者 2026-11-25 | 已記；開卡時機待使用者定 |
+| **渲染管線線：全部要做**（`v8-arch-gyo2-render-pipeline-scope`）：清單原樣見下面〈渲染管線線〉一節 | 使用者 2026-11-25 | 已記；開卡時機待使用者定 |
+
+## 渲染管線線（全部要做，待開卡）
+
+使用者 2026-11-25：「渲染管線 先記下來。這些都是要做的。」並指定「我說的是上面這個」（`v8-arch-gyo2-render-pipeline-scope`）。下面是使用者指定的清單原樣：
+
+```text
+渲染管線
+│
+├─ 光照與陰影
+│  ├─ 光源：方向光（太陽）、點光、聚光；環境光／天空光
+│  ├─ 材質模型：Lambert／Blinn-Phong（簡單）或 PBR（Bevy 的 StandardMaterial）
+│  ├─ 陰影：方向光的 cascaded shadow map、點光的 cube shadow
+│  └─ 環境：skybox、IBL（環境貼圖反射）、AO（SSAO）
+│
+├─ shader 與材質系統
+│  ├─ 遊戲自己的 shader（P22：走共通內容管線）
+│  └─ 材質資料：哪些參數、怎麼對應 shader、熱重載
+│
+├─ 後處理（畫完整張畫面再加工）
+│  ├─ tonemapping＋exposure／gamma（PvP 盤點本來就列了 exposure／gamma）
+│  ├─ bloom、霧、色調調整（color grading）
+│  └─ 抗鋸齒：MSAA 或 FXAA／TAA
+│
+├─ 效果
+│  ├─ 粒子（CPU 或 GPU；Bevy 生態有 bevy_hanabi）
+│  ├─ 貼花（decal：彈孔、血跡）
+│  └─ 軌跡／拖尾（子彈軌跡）
+│
+├─ 效能（大地圖一定會碰到）
+│  ├─ 視錐剔除（frustum culling）：只畫看得到的
+│  ├─ instancing：同一個網格畫很多份只送一次
+│  ├─ LOD：遠的東西用簡化網格
+│  └─ mipmap、貼圖壓縮
+│
+└─ 基礎設施
+   ├─ render target：畫到貼圖上（小地圖、鏡子、編輯器預覽、後處理都靠它）
+   ├─ 多 pass／render graph：pass 之間的順序與相依（Bevy 的 render graph）
+   └─ GPU 計時與除錯（每個 pass 花多少時間）
+```
+
+- 現況（主會話用關鍵字查 render、各 `*_render`、`sdl_gpu`，未逐檔讀）：3D 是 unlit、只有 Plugin 內建 shader，上列幾乎都沒有。
+- 主會話建議的順序（未定）：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal；視錐剔除、instancing、LOD 可隨大地圖線做。開卡時機待使用者定。
 
 ## 不擋路的小事
 
