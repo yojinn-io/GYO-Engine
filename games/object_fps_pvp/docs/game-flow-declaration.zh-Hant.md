@@ -217,4 +217,5 @@ struct SDLWindowBetweenFrames final {
   - 3.7 新增。設定頁、遊戲的 loading／暫停改用 `state_machine`（`MenuPage`、`GamePage`）：原本設定是換 canvas、loading 與暫停是每幀照條件挑 canvas（`ShowPause`），改成頁面的 enter／exit 放與拿 UI 根、頁面的 System 用 `InState`。
   - 3.6：解像度按一下換下一種（繞回），不是左右切換：只有四種，一顆鍵夠；要左右時加一顆「上一種」即可。
   - 3.6：視窗模式是 window 的 `WindowMode`（設定直接用它，檔案仍寫 `"windowed"`／`"borderless"`）；適用時送 `SetWindowMode` 與 `ResizeWindow`（每次都送，視窗不一定在那個大小）；進設定頁時，畫面一列照視窗實際的 `WindowState::mode`（玩家用 OS 的按鈕切過時）；無邊框時解像度一列標「（ウィンドウ時）」（全屏取螢幕的大小，選的是回到視窗時的大小）。VSync：Render World 的 Extract 把設定抄進 render 的 `Presentation`（`CopyPresentation`）。
+  - 3.4：房間的地圖帶進遊戲：`SceneChange::map`（房間的 `map`，arena 的 id）；Sim、Solo 的 `BuildWorld` 與 Frame 的 `GameRules` 照它在 `GameContent` 找 arena 的 index（`WorldOptions::arena`）；沒有那張圖或沒帶（單人房間、`--connect`）用 Client 自己的（`ClientOptions::arena`），Match 開始後照舊跟隨 Match 的（`FollowMatchArena`）。大地圖卡要的接點。
   - 3.6：解像度是視窗的**邏輯像素**（`WindowSettings::size`、`ResizeWindow` 的單位）。Windows 的顯示縮放 125% 時 1920×1080 的邏輯視窗比 1080p 螢幕大。要不要改成實體像素（照 `WindowState::scaleFactor` 換算）是使用者的決定（他定的是「送現有的 `ResizeWindow`」），回報主會話問。

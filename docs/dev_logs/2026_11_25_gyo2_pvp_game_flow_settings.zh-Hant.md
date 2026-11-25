@@ -10,6 +10,7 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 3. **程式**：啟動時讀 `<使用者資料目錄>/GYO/object_fps_pvp/settings.json`（一台機器一份，不分 profile），視窗用它的尺寸開；讀不到就記一行警告、用預設值。
 4. **視窗模式與 VSync**（「視窗模式＋VSync」卡 #344 與「內插＋後座力」卡 #345 合併進 gyo2 之後接上）：設定直接用 window 的 `WindowMode`（檔案照舊寫 `"windowed"`／`"borderless"`）；啟動時給 `WindowSettings::mode`；適用時送 `SetWindowMode` 與 `ResizeWindow`（每次都送）；Render World 的 Extract 把 VSync 抄進 render 的 `Presentation`（`CopyPresentation`）。
 5. **頁面改用 `state_machine`**（宣告 3.7，主會話轉達使用者「master 頁面跳轉都是一堆 if else」）：`client/Pages.hpp` 的 `MenuPage{Main, Settings}`、`GamePage{Loading, Playing, Paused}`。頁面的 enter／exit schedule 放與拿 UI 根；頁面的 System 用 `InState`；按鈕與條件（loading 就緒且開始、指標被拿走或還回）送 `StateMachineRequest::Request`。原本設定是換 canvas、loading 與暫停是每幀照條件挑 canvas（`ShowPause`），都拿掉。場景之間仍是 `ReplaceWorld`。
+6. **房間的地圖帶進遊戲**（大地圖卡要的接點）：`SceneChange::map` 帶房間的 `map`（arena 的 id）；Sim、Solo、Frame 照它找 arena 的 index；沒有那張圖或沒帶時用 Client 自己的。`kiriyu_extraction_250m` 放進 `arenas.json` 後會自動出現在大廳的「マップ」切換裡。
 
 ## 驗證
 
@@ -30,6 +31,7 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - 新突變：`pvp-settings-no-mode`、`pvp-settings-no-vsync`、`pvp-settings-not-dropped`、`pvp-settings-start-ignored`、`pvp-page-loading-stays`；頁面改寫後 find 變了的突變重跑：20/20 killed（`pvp-pause-not-shown`、`pvp-loading-not-shown` 第一次是 wrong_failure：頁面的請求下一幀才套用，最先失敗的是沒有 tag 的 `REQUIRE`；把那兩個 `REQUIRE` 加上 tag 後 killed）。
 
 - 審查與頁面改寫之後：本機（Intel Mac）`ctest -L "cpu|gpu"` 258/258、`-L "go|network"` 5/5；client 29 案全過。
+- 地圖：Gateway 的案在大廳選第二張圖 → 房間 → 遊戲：`SceneChange::map`、Sim 與 Frame 的 `GameRules` 都是那張圖（`[pvp-gw-map*]`）；突變 `pvp-map-not-carried`、`pvp-map-sim-ignored`、`pvp-map-frame-ignored` 3/3 killed。
 
 ## 沒驗
 

@@ -1610,6 +1610,15 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<DrawnFrames>({.name = "object_fps_pvp.DrawnFrames"});
 }
 
+// The arena a game scene plays: the one its change names when this Client has it, else the Client's own.
+std::size_t ArenaOf(const SceneChange& change, const ClientOptions& options) {
+    const auto& arenas = options.game->arenas;
+    for (std::size_t i = 0; i < arenas.size(); ++i) {
+        if (arenas[i].content.id == change.map) return i;
+    }
+    return options.arena;
+}
+
 void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
     K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
@@ -1663,13 +1672,14 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
     GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
     const std::uint64_t user = LocalUserOf(change, options);
-    setup.Prepare([options, port, origin, user](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    const std::size_t played = ArenaOf(change, options);
+    setup.Prepare([options, port, origin, user, played](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
         world.SetResource(GameReadiness{});
         world.SetResource(CoverState{});
         if (world.Resource<DrawnFrames>() == nullptr) world.SetResource(DrawnFrames{});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
-        const PW::InstalledArena& arena = options.game->arenas[options.arena];
+        const PW::InstalledArena& arena = options.game->arenas[played];
         PW::GameRules rules;
         rules.arena = arena.content;
         rules.stance = options.game->stance;
@@ -2010,7 +2020,7 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
             RB::RollbackEntry(setup).StepSchedule();
             return;
         }
-        PW::BuildWorld(setup, {.content = options.game, .arena = options.arena, .localUser = LocalUserOf(scene, options)},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options)},
                        PW::WorldEnd::Client);
         BuildSim(setup);
         if (scene.connect) {
@@ -2030,9 +2040,10 @@ O::WorldDescription ClientSoloWorld(ClientOptions options) {
     world.build = [options](O::WorldSetup& setup) {
         const auto* director = setup.ProductBuffer().Find<SceneDirector>();
         GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
-        if (!SoloPlays(director->Current().scene)) return;
+        const SceneChange& scene = director->Current();
+        if (!SoloPlays(scene.scene)) return;
         std::random_device device;
-        PW::BuildWorld(setup, {.content = options.game, .arena = options.arena, .localUser = options.userId, .spawn = device()},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = options.userId, .spawn = device()},
                        PW::WorldEnd::Local);
         BuildSolo(setup);
     };

@@ -2057,6 +2057,45 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the loading screen covers*",
    "expect": "pvp-loading-gone"
+  },
+  {
+   "id": "pvp-map-not-carried",
+   "what": "the room's map does not reach the game scene",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "                                        .room = room.id,\n                                        .map = room.room->map};",
+   "replace": "                                        .room = room.id};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map"
+  },
+  {
+   "id": "pvp-map-sim-ignored",
+   "what": "the Sim World plays the Client's own arena, not the room's",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": ".arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options)}",
+   "replace": ".arena = options.arena, .localUser = LocalUserOf(scene, options)}",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map-sim"
+  },
+  {
+   "id": "pvp-map-frame-ignored",
+   "what": "the Frame World's rules start with the Client's own arena, not the room's",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const std::size_t played = ArenaOf(change, options);",
+   "replace": "    const std::size_t played = options.arena;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map-frame"
   }
  ]
 }

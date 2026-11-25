@@ -131,7 +131,8 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
         if (server && token) {
             request->next = SceneChange{.scene = Scene::MultiGame,
                                         .connect = N::NetConnectTarget{*server, connect.userId, *token},
-                                        .room = room.id};
+                                        .room = room.id,
+                                        .map = room.room->map};
             return {};
         }
         status = "Gateway の接続先を読めません: " + connect.server;

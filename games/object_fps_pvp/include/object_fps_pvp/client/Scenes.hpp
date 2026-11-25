@@ -49,6 +49,9 @@ struct SceneChange final {
     std::optional<GYO::Engine::Net::NetConnectTarget> connect;
     // The Gateway's room: Room, the room entered; MultiGame, the room the game came from (0: none, --connect).
     std::uint64_t room = 0;
+    // SoloGame, MultiGame: the arena played, by its id (the room's map); empty, or one this Client does not have: the
+    // Client's own (ClientOptions::arena; a Match then says which it plays).
+    std::string map;
 };
 
 // The Frame World's request for the next scene (written by a scene's System; the runner reads it between frames).

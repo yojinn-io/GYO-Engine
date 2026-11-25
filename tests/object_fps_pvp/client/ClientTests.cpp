@@ -1374,8 +1374,12 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     const auto device = PC::ReadLocalText(directory.Utf8() + "/device-id");
     REQUIRE((device && device->has_value()));
     CHECK((*device)->size() == 64);
-    // Make a room: the creation is the sixth of the focus order (join, prev, next, mode, map, create).
-    for (int i = 0; i < 5; ++i) setup.Press(I::KeyCode::Tab);
+    // Make a room on the second map: the map is the fifth of the focus order (join, prev, next, mode, map, create).
+    for (int i = 0; i < 4; ++i) setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    const PW::InstalledArena& picked = ShippedContent()->arenas[1];
+    REQUIRE(setup.Binding("map") == "マップ: " + picked.content.id);
+    setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Room; }), "[pvp-gw-create] " << setup.Binding("status"));
     CHECK(setup.Scene().room == 3);
@@ -1397,6 +1401,10 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     CHECK(setup.Scene().room == 3);
     CHECK_MESSAGE(HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-scene-sim-target] the game's Sim World has the target");
     CHECK_MESSAGE(setup.Sim().Resource<PW::LocalUser>()->userId == 7, "[pvp-gw-user] the player is the Gateway's user");
+    // The room's map is the arena the game starts with (the Sim World's and the Frame World's), before any Match says.
+    CHECK_MESSAGE(setup.Scene().map == picked.content.id, "[pvp-gw-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Sim().Resource<PW::GameRules>()->arena.id == picked.content.id, "[pvp-gw-map-sim]");
+    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == picked.content.id, "[pvp-gw-map-frame]");
     CHECK(setup.Client().Resource<PW::LocalUser>()->userId == 7);
     // Every call after the session's carried its token; every change its own key.
     for (const FakeGateway::Seen& seen : gateway.Requests()) {
