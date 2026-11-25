@@ -121,13 +121,13 @@
   },
   {
    "id": "pvp-room-not-full",
-   "what": "the admission never refuses",
+   "what": "the admission never refuses (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "port-declaration 4"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "if (taken >= seats->capacity) {",
-   "replace": "if (false) {",
+   "find": "if (connections_.size() >= capacity_) return",
+   "replace": "if (false) return",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a Client past the seats*",
    "expect": "past the seats is refused"

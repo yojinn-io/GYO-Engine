@@ -226,12 +226,46 @@ TEST_CASE("handshake: a new handshake from the same endpoint is a new connection
     REQUIRE_MESSAGE(second.State() == N::ClientState::Connected,
                     "a reconnect from the same endpoint is a new connection: the newer handshake connects");
     CHECK_MESSAGE(second.Accepted()->connectionId != oldId, "a reconnect from the same endpoint is a new connection");
-    CHECK(host.ConnectionCount() == 1);
+    CHECK_MESSAGE(host.ConnectionCount() == 1, "[nt-reconnect-old-ended] a reconnect that passes ends the old connection");
     const auto events = host.TakeEvents();
     REQUIRE(events.size() == 2);
     CHECK(events[0].kind == N::HostEventKind::Disconnected);
     CHECK(events[0].reason == N::DisconnectReason::ClosedByRemote);
     CHECK(events[1].kind == N::HostEventKind::Connected);
+}
+
+TEST_CASE("handshake: a newer handshake from the same endpoint that is refused leaves the live connection as it was") {
+    // The product admits a token {1} only (a stale or forged one is refused).
+    N::ServerHost host(Settings(), ServerFacts(), 77, 99, [](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
+        if (request.token == Bytes({1})) return {};
+        return GYO::Engine::Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, "token refused"));
+    });
+    N::ClientSession first(Settings(), N::ConnectRequest{ClientFacts(), 42, Bytes({1}), 1}, Ms(0));
+    Wire wire{host, first};
+    wire.Round(Ms(0));
+    wire.Round(Ms(1));
+    REQUIRE(first.State() == N::ClientState::Connected);
+    const std::uint32_t liveId = first.Accepted()->connectionId;
+    (void)host.TakeEvents();
+
+    // From the same endpoint, with a larger salt: first a refused token, then facts that differ.
+    auto stale = N::ConnectRequest{ClientFacts(), 42, Bytes({2}), 2};
+    auto differs = N::ConnectRequest{ClientFacts(), 42, Bytes({1}), 3};
+    differs.facts.protocolHash = 0x9999;
+    for (const auto& request : {stale, differs}) {
+        N::ClientSession later(Settings(), request, Ms(2));
+        Wire again{host, later};
+        again.Round(Ms(2));
+        again.Round(Ms(3));
+        REQUIRE(later.State() == N::ClientState::Disconnected);
+        CHECK_MESSAGE(host.ConnectionCount() == 1, "[nt-refused-keeps-live] a refused handshake does not end the live connection");
+        CHECK(host.ConnectionIds() == std::vector<std::uint32_t>{liveId});
+        CHECK_MESSAGE(host.TakeEvents().empty(), "[nt-refused-keeps-live] a refused handshake ends nothing and connects nothing");
+    }
+    // The live connection still carries datagrams both ways.
+    wire.Round(Ms(4));
+    CHECK(first.State() == N::ClientState::Connected);
+    CHECK(host.ConnectionIds() == std::vector<std::uint32_t>{liveId});
 }
 
 namespace {

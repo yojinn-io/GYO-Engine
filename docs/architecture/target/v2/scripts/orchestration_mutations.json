@@ -144,10 +144,10 @@
   },
   {
    "id": "or-unit-error-ignored",
-   "what": "O-5: a unit-reported error does not stop the build",
+   "what": "O-5: a unit-reported error does not stop the build (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {",
-   "replace": "    if (!errors.empty() || kernelFailed) {",
+   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed || unchecked) {",
+   "replace": "    if (!errors.empty() || kernelFailed || unchecked) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-2: the World context*",
    "expect": "\\[or\\-finish\\-report\\]"
@@ -370,10 +370,10 @@
   },
   {
    "id": "g8-kernel-only-failure",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same; a kernel error now also leaves the World unchecked, so both terms are turned off)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed) {",
-   "replace": "    if (!errors.empty() || !unitErrors.empty() || (kernelFailed && false)) {",
+   "find": "    if (!errors.empty() || !unitErrors.empty() || kernelFailed || unchecked) {",
+   "replace": "    if (!errors.empty() || !unitErrors.empty() || ((kernelFailed || unchecked) && false)) {",
    "target": "gyo_orchestration_tests",
    "cases": "O-5: a kernel error alone*",
    "expect": "TEST CASE:  O\\-5: a kernel error alone stops the build"
@@ -483,20 +483,20 @@
   },
   {
    "id": "g8-frame-list-reversed",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }",
-   "replace": "    for (std::size_t at = slot.frame.size(); at-- > 0;) {\n        if (auto ran = RunOn(slot, slot.frame[at], \"RunFrame\"); !ran) return ran;\n    }",
+   "find": "    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }",
+   "replace": "    for (std::size_t at = slot.frame.size(); at-- > 0;) {\n        if (auto ran = RunOn(slot, slot.frame[at], lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: units insert*",
    "expect": "\\[or\\-frame\\-order\\]"
   },
   {
    "id": "g8-frame-error-ignored",
-   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find rewritten for v8-arch-gyo2-broken-world-ends-product); expect is the kernel assertion: the next schedule now runs on the interrupted World, RunOn no longer checks (find rewritten by v8-arch-gyo2-world-gen: the frame list runs in RunRound, the skeleton is declared with WorldGeneration) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;",
-   "replace": "        static_cast<void>(RunOn(slot, schedule, \"RunFrame\"));",
+   "find": "        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;",
+   "replace": "        static_cast<void>(RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease));",
    "target": "gyo_orchestration_tests",
    "cases": "O-1: a failing frame*",
    "expect": "GYO_ASSERT failed: world\\.state_ == WorldState::Ready"
@@ -513,10 +513,10 @@
   },
   {
    "id": "g8-runschedule-unknown-world-code",
-   "what": "G-8 candidate (g8-check-fable-high.md)",
+   "what": "G-8 candidate (g8-check-fable-high.md) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));",
-   "replace": "OrchestrationErrorCode::WorldMissing, \"no World \" + Quoted(world)));",
+   "find": "OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n    if (slot->lease) return Base::Err(LentError(world));",
+   "replace": "OrchestrationErrorCode::WorldMissing, \"no World \" + Quoted(world)));\n    }\n    if (slot->lease) return Base::Err(LentError(world));",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: unknown World names*",
    "expect": "\\[or\\-unknown\\-world\\-run\\]"
@@ -1962,20 +1962,20 @@
   },
   {
    "id": "or-ended-runschedule-unchecked",
-   "what": "RunSchedule runs a healthy World while another is broken (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "RunSchedule runs a healthy World while another is broken (v8-arch-gyo2-broken-world-ends-product) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);",
-   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);",
+   "find": "Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {\n    RequireNotRunning();\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);",
+   "replace": "Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {\n    RequireNotRunning();\n    WorldSlot* slot = Find(world);",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: one interrupted World ends the Product*",
    "expect": "\\[or\\-ended\\-runschedule\\-other\\]"
   },
   {
    "id": "or-ended-before-name",
-   "what": "RunSchedule looks the name up before checking the Worlds (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "RunSchedule looks the name up before checking the Worlds (v8-arch-gyo2-broken-world-ends-product) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    RequireNotRunning();\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n",
-   "replace": "    RequireNotRunning();\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n",
+   "find": "Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {\n    RequireNotRunning();\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n",
+   "replace": "Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {\n    RequireNotRunning();\n    WorldSlot* slot = Find(world);\n    if (slot == nullptr) {\n        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, \"no World \" + Quoted(world)));\n    }\n    if (auto ended = Ended()) return Base::Err(std::move(*ended));\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: one interrupted World ends the Product*",
    "expect": "\\[or\\-ended\\-before\\-name\\]"
@@ -2032,10 +2032,10 @@
   },
   {
    "id": "or-failure-not-attached",
-   "what": "the first error carries no failure (v8-arch-gyo2-broken-world-ends-product)",
+   "what": "the first error carries no failure (v8-arch-gyo2-broken-world-ends-product) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        error.failure = Break(std::move(failure));\n        return Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
-   "replace": "        Break(std::move(failure));\n        return Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "find": "        error.failure = record(std::move(failure));\n        return Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
+   "replace": "        record(std::move(failure));\n        return Base::Err(std::move(error));\n    }\n    slot.lastSchedule",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: one interrupted World ends the Product*",
    "expect": "\\[or\\-ended\\-failure\\-set\\]"
@@ -2145,9 +2145,9 @@
   },
   {
    "id": "or-run-throw-unrecorded",
-   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
+   "what": "std::bad_alloc leaving a schedule is not recorded by the entry point (v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "            }\n            Break(std::move(failure));\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
+   "find": "            }\n            record(std::move(failure));\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
    "replace": "            }\n            throw;\n        } catch (...) {\n            failure.kind = WorldFailureKind::Interrupted;",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: std::bad_alloc leaving a schedule*",
@@ -3246,28 +3246,28 @@
   },
   {
    "id": "or-exch-out-before-round",
-   "what": "RunFrame calls the \"out\" exchange functions before the round (5.1: in, round, out). Only it catches the out side's place",
+   "what": "RunFrame calls the \"out\" exchange functions before the round (5.1: in, round, out). Only it catches the out side's place (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "orchestration O-12",
     "exchange-declaration 5.1"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n",
-   "replace": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n",
+   "replace": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    if (auto exchanged = Exchange(slot.exchangeOut, world, \"out\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }\n    // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.\n    if (generating) {\n        const WorldGeneration* after = world.Resource<WorldGeneration>();\n        if (after != nullptr && !after->held) world.SetResource(WorldGeneration{.generating = false, .held = false});\n    }\n    // The exchange functions' \"out\", after the judgement: the \"out\" of the frame generation ended in reads it ended.\n",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-1 RunFrame*",
    "expect": "\\[or\\-exch\\-order\\] in net@A in game@A out net@A out logs@A out game@A a"
   },
   {
    "id": "or-exch-init-after-in",
-   "what": "RunFrame's game initialization runs after the Worlds' rounds, so after the first World's \"in\" (5.1: it comes before it). Only it catches that place (or-runframe-no-gameinit drops it)",
+   "what": "RunFrame's game initialization runs after the Worlds' rounds, so after the first World's \"in\" (5.1: it comes before it). Only it catches that place (or-runframe-no-gameinit drops it) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "orchestration O-12",
     "exchange-declaration 5.1"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n",
-   "replace": "    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n",
+   "find": "    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (slot.lease) continue;  // lent to another thread: its holder runs it (O-13)\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n",
+   "replace": "    // Each World: its \"in\" exchange functions, its round, its \"out\" ones (exchange declaration 5.1).\n    // A World breaking in its round stops here: neither its \"out\" nor any later World's exchange runs.\n    for (WorldSlot& slot : worlds_) {\n        if (slot.lease) continue;  // lent to another thread: its holder runs it (O-13)\n        if (auto ran = RunRound(slot); !ran) return ran;\n    }\n    if (!gameInitRan_) {\n        if (auto ran = RunGameInit(); !ran) return ran;\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-8*",
    "expect": "\\[or\\-exch\\-init\\-first\\] in game@A"
@@ -3372,14 +3372,14 @@
   },
   {
    "id": "or-exch-break-calls-out",
-   "what": "a World breaking in its round still has its \"out\" called (5.1, O-11). Only it catches the break path",
+   "what": "a World breaking in its round still has its \"out\" called (5.1, O-11). Only it catches the break path (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "orchestration O-12",
     "exchange-declaration 5.1"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n",
-   "replace": "        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) {\n            static_cast<void>(Exchange(slot.exchangeOut, world, \"out\"));\n            return ran;\n        }\n",
+   "find": "        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n",
+   "replace": "        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) {\n            static_cast<void>(Exchange(slot.exchangeOut, world, \"out\"));\n            return ran;\n        }\n",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-7*",
    "expect": "\\[or\\-exch\\-break\\-no\\-out\\]"
@@ -3655,14 +3655,14 @@
   },
   {
    "id": "or-exch-round-after-failed-in",
-   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running",
+   "what": "after a failing \"in\" the World's round still runs before RunFrame returns the error (5.1: RunFrame stops). Only it catches the round not running (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "orchestration O-12",
     "exchange-declaration 5.1"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n",
-   "replace": "    auto exchanged = Exchange(slot.exchangeIn, world, \"in\");\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, \"RunFrame\"); !ran) return ran;\n    }\n    if (!exchanged) return exchanged;\n",
+   "find": "    if (auto exchanged = Exchange(slot.exchangeIn, world, \"in\"); !exchanged) return exchanged;\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }\n",
+   "replace": "    auto exchanged = Exchange(slot.exchangeIn, world, \"in\");\n    for (const std::string& schedule : slot.frame) {\n        if (auto ran = RunOn(slot, schedule, lease == nullptr ? \"RunFrame\" : \"WorldLease::RunRound\", lease); !ran) return ran;\n    }\n    if (!exchanged) return exchanged;\n",
    "target": "gyo_orchestration_tests",
    "cases": "exchange: X-3 a failing*",
    "expect": "\\[or\\-exch\\-stops\\] in game@A a out game@A in game@B b"
