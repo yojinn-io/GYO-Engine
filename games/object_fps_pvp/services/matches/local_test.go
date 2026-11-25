@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 
 func fakeMatch() int {
 	arguments := strings.Join(os.Args[1:], " ")
-	want := "--port 7811 --match-id 77 --capacity 3 --admission-key-stdin --idle-seconds 60 --arena pvp_corners_v1"
+	want := "--port 7811 --match-id 77 --capacity 3 --admission-key-stdin --idle-seconds 60 --arena pvp_corners_v1 --expect-users 7,9"
 	if !strings.Contains(arguments, want) {
 		os.Stderr.WriteString("fake match: arguments " + arguments + "\n")
 		return 3
@@ -38,7 +38,7 @@ func fakeMatch() int {
 func TestLocalStartsAMatchProcessAndFreesItsPort(t *testing.T) {
 	local := &Local{Command: os.Args[0], Arguments: []string{"-test.run=^$"}, Advertise: "127.0.0.1",
 		FirstPort: 7811, LastPort: 7811, Environment: []string{"GYO_FAKE_MATCH=1"}}
-	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Map: "pvp_corners_v1"}
+	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Map: "pvp_corners_v1", Players: []uint64{7, 9}}
 	running, err := local.Start(context.Background(), spec)
 	if err != nil {
 		t.Fatal(err)

@@ -84,6 +84,7 @@ namespace WT = GYO::Engine::WorldTime;
 namespace PW = object_fps_pvp::world;
 
 void HashValue(K::Hasher&, const ClientView&) {}
+void HashValue(K::Hasher&, const DrawnFrames&) {}
 
 namespace {
 
@@ -458,6 +459,8 @@ PW::PlayerInput StepInputOf(SimControls& state) {
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
+    // Readiness is not the player's input: stale controls keep it.
+    input.ready = state.pending.ready ? 1 : 0;
     return input;
 }
 
@@ -921,15 +924,104 @@ struct GameOrigin final {
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
 
-// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "pause" while the pointer is the player's (Tab or Esc
-// gave it back), "play" (nothing) while the game has it.
-K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Query<K::Write<Ui::UiRoot>> roots) {
-    const bool paused = !controls->controls.Captured();
+// The loading of the game scene (game-flow declaration 3.5), each step once done staying done.
+struct GameReadiness final {
+    double progress = 0.0;
+    bool assets = false;                    // every asset of the game finished, with its dependencies
+    std::optional<std::uint64_t> warmFrom;  // DrawnFrames::shown when the assets were done
+    std::uint64_t skippedAt = 0;            // ... and its skipped draws then
+    bool warmed = false;
+    bool network = false;                   // the own player is there (and the arena is this Client's)
+    std::optional<std::uint64_t> lastFrom;  // shown when the rest was done: the next shown frame is the first
+    bool ready = false;
+};
+void HashValue(K::Hasher&, const GameReadiness&) {}
+
+// The steps of the loading, in order; each waits for the ones before it.
+K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim,
+                               K::Res<DrawnFrames> drawn, K::Query<K::Read<R::Mesh3d>> meshes, K::Query<K::Read<Ui::UiRoot>> roots,
+                               K::ResMut<GameReadiness> readiness) {
+    if (readiness.Read().ready) return {};
+    GameReadiness next = readiness.Read();
+    if (!next.assets && assets->requested) {
+        std::vector<WA::UntypedHandle> handles;
+        const ClientAssets& a = *assets;
+        for (const auto* handle : {&a.body, &a.heldWeapon, &a.viewmodel}) handles.emplace_back(*handle);
+        handles.emplace_back(a.heldWeaponImage);
+        handles.emplace_back(a.font);
+        for (const auto& image : a.viewmodelImages) handles.emplace_back(image);
+        for (const auto& [id, clip] : a.clips) handles.emplace_back(clip);
+        if (const R::Mesh3d* arena = meshes.Get<R::Mesh3d>(kArenaPicture)) handles.emplace_back(arena->model);
+        if (const Ui::UiRoot* overlay = roots.Get<Ui::UiRoot>(kOverlay)) {
+            if (const auto* document = std::get_if<A::Handle<Ui::UiAsset>>(&overlay->document)) handles.emplace_back(*document);
+        }
+        const WA::AssetReadiness ready = view->Ready(handles);
+        // A failed asset does not hold the game (its own place says why): finished is done.
+        const std::size_t total = std::max<std::size_t>(ready.ids.size(), 1);
+        next.progress = 0.8 * static_cast<double>(ready.loaded + ready.failed) / static_cast<double>(total);
+        next.assets = ready.allFinished && ready.dependenciesFinished && meshes.Get<R::Mesh3d>(kArenaPicture) != nullptr;
+    }
+    if (next.assets && !next.warmed) {
+        if (!drawn->known) {
+            next.warmed = true;
+        } else if (!next.warmFrom) {
+            next.warmFrom = drawn->shown;
+            next.skippedAt = drawn->skipped;
+        } else if (drawn->skipped != next.skippedAt) {
+            next.warmFrom = drawn->shown;  // a draw was skipped: two clean frames from here
+            next.skippedAt = drawn->skipped;
+        } else if (drawn->shown >= *next.warmFrom + 2) {
+            next.warmed = true;
+        }
+        next.progress = std::max(next.progress, 0.85);
+    }
+    if (next.warmed && !next.network) {
+        next.network = sim->ownPlayer != 0 && sim->mismatch.empty();
+        next.progress = std::max(next.progress, 0.9);
+    }
+    if (next.network) {
+        // One more frame drawn with all of it: the first frame the player will see.
+        if (!next.lastFrom) {
+            next.lastFrom = drawn->known ? drawn->shown : 0;
+        } else if (!drawn->known || drawn->shown > *next.lastFrom) {
+            next.ready = true;
+            next.progress = 1.0;
+        }
+    }
+    readiness.Get() = std::move(next);
+    return {};
+}
+
+// The player's words for where the loading is.
+std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const Scene scene) {
+    if (!readiness.assets) return "データを読み込んでいます…";
+    if (!readiness.warmed) return "描画の準備をしています…";
+    if (!readiness.network) return scene == Scene::MultiGame ? "Match に接続しています…" : "準備しています…";
+    if (!readiness.ready) return "最初の画面を描いています…";
+    if (!sim.started) return "ほかのプレイヤーを待っています…";
+    return {};
+}
+
+// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "loading" until the game is ready and the match has
+// started; then "pause" while the pointer is the player's (Tab or Esc gave it back), "play" (nothing) while the game
+// has it.
+K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Res<GameReadiness> readiness, K::Res<ClientView> sim,
+                          K::Res<GameOrigin> origin, K::Query<K::Write<Ui::UiRoot>, K::Write<Ui::UiBindings>> roots) {
     auto root = roots.GetMut<Ui::UiRoot>(kOverlay);
     if (!root) return {};
-    const std::string canvas = paused ? "pause" : "play";
+    const bool loading = !readiness->ready || !sim->started;
+    const bool paused = !loading && !controls->controls.Captured();
+    const std::string canvas = loading ? "loading" : paused ? "pause" : "play";
     if (root->canvas != canvas) root->canvas = canvas;
     if (root->acceptsInput != paused) root->acceptsInput = paused;
+    if (loading) {
+        auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
+        const std::string text = LoadingText(*readiness, *sim, origin->scene);
+        const auto* shown = bindings->Find("loading");
+        if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
+        const auto* progress = bindings->Find("progress");
+        if (progress == nullptr || std::get<double>(*progress) != readiness->progress) bindings->Set("progress", readiness->progress);
+    }
     return {};
 }
 
@@ -1053,6 +1145,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
     if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
+    if (const auto* info = Find<PW::MatchInfo>(world)) view.started = info->phase == PW::MatchPhase::Playing;
     if (const auto* session = Find<ClientSessionEnd>(world)) {
         view.ended = session->ended;
         view.endReason = session->reason;
@@ -1200,6 +1293,8 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
     r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
+    r.Resource<GameReadiness>({.name = "object_fps_pvp.GameReadiness"});
+    r.Resource<DrawnFrames>({.name = "object_fps_pvp.DrawnFrames"});
 }
 
 void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
@@ -1222,7 +1317,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
-    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause"));
+    r.AddSystem<&TrackReadiness>(InUpdate("object_fps_pvp.TrackReadiness", {"object_fps_pvp.RequestAssets", "object_fps_pvp.ShowArena"}));
+    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause", {"object_fps_pvp.TrackReadiness"}));
     r.AddSystem<&Resume>(InUpdate("object_fps_pvp.Resume"));
     r.AddSystem<&Evacuate>(InUpdate("object_fps_pvp.Evacuate"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
@@ -1232,6 +1328,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     const std::uint64_t user = LocalUserOf(change, options);
     setup.Prepare([options, port, origin, user](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
+        world.SetResource(GameReadiness{});
+        if (world.Resource<DrawnFrames>() == nullptr) world.SetResource(DrawnFrames{});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
         PW::GameRules rules;
@@ -1321,13 +1419,15 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         // The overlay (pause, evacuate) over the HUD camera; ShowPause picks its canvas.
         Ui::UiRoot overlay;
         overlay.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game"));
-        overlay.canvas = "play";
+        overlay.canvas = "loading";
         overlay.camera = kHudCamera;
         overlay.acceptsInput = false;
         world.Insert(kOverlay, std::move(overlay));
         world.Insert(kOverlay, Ui::UiRootState{});
         Ui::UiBindings overlayBindings;
         overlayBindings.Set("title", std::string(origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"));
+        overlayBindings.Set("loading", std::string("データを読み込んでいます…"));
+        overlayBindings.Set("progress", 0.0);
         world.Insert(kOverlay, std::move(overlayBindings));
         return {};
     });
@@ -1338,9 +1438,14 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     const bool solo = change.scene == Scene::SoloGame;
     setup.ExchangeOut([exchange, solo](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ClientControls& controls = *world.ResourceMut<ClientControls>();
-        exchange->AddControls(controls.controls.Take());
-        // Single player's pause: the Solo World stops while the pointer is the player's (a Match does not wait).
-        exchange->SetPaused(solo && !controls.controls.Captured());
+        present::StepInput step = controls.controls.Take();
+        const GameReadiness& readiness = *world.Resource<GameReadiness>();
+        step.ready = readiness.ready;
+        exchange->AddControls(step);
+        // Single player's pause: the Solo World stops while the pointer is the player's, once the game is on (a Match
+        // does not wait; the loading neither: the start waits for the player's readiness in the steps).
+        const bool started = world.Resource<ClientView>()->started;
+        exchange->SetPaused(solo && readiness.ready && started && !controls.controls.Captured());
         return {};
     });
 }
@@ -1643,6 +1748,13 @@ ClientStatus StatusOf(K::World& world) {
         status.endReason = view->endReason;
     }
     if (const auto* controls = world.Resource<ClientControls>()) status.captured = controls->controls.Captured();
+    if (world.Types().ResourceIdOf<GameReadiness>()) {
+        if (const auto* readiness = world.Resource<GameReadiness>()) {
+            status.ready = readiness->ready;
+            status.progress = readiness->progress;
+        }
+    }
+    if (const auto* view = world.Resource<ClientView>()) status.started = view->started;
     return status;
 }
 

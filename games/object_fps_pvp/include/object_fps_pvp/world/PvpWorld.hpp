@@ -12,6 +12,10 @@
 //                       ControlOwnPlayer         Client only: PeerControls and PlayerInput on the player it owns
 //   Main/PreUpdate      FollowMatchArena         Client only: the Match's arena (MatchInfo)
 //   Main/Update         SpawnLocalPlayer         Local only: the local user's player at LocalSpawn
+//                       ShowPlayers              Match only: before the start a connection sees only its player
+//   FixedUpdate/Update  StartMatch               the authority: Waiting -> Playing (MatchInfo::phase) when every
+//                                                expected player is ready, or at the deadline; before it MovePlayers
+//                                                and UseWeapons take no input
 //
 // Three ends: the Match (the server), a Client (predicts its own player) and Local (single player: no net; the rollback
 // Module is there without a strategy, as authority needs it; the World is the authority, "Match only" runs there too,
@@ -146,6 +150,10 @@ struct WorldOptions final {
     std::shared_ptr<Seats> seats;
     // Local: the spawn index of the local player (taken modulo the arena's spawns; the product picks it at random).
     std::size_t spawn = 0;
+    // The Match: the users the start waits for (the room's members; none: played from the first step), and how long
+    // after the first player came it waits at most (0: no limit).
+    std::vector<std::uint64_t> expectUsers;
+    std::uint32_t startDeadlineSeconds = 60;
 };
 
 // Which end a World is.
@@ -156,6 +164,14 @@ struct LocalSpawn final {
     std::size_t index = 0;
 };
 void HashValue(K::Hasher&, const LocalSpawn&);
+
+// The authority's start (StartMatch): the users it waits for, when the first player came, the deadline after that.
+struct MatchStart final {
+    std::vector<std::uint64_t> expect;
+    std::optional<std::uint64_t> firstTick;
+    std::uint32_t deadlineSeconds = 0;
+};
+void HashValue(K::Hasher&, const MatchStart&);
 
 // A death of a player as a save counts it: a dead player whose respawn tick (set when it dies) was not seen before.
 // respawnSeen: the last one seen for that player.

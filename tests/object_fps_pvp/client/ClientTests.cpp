@@ -839,6 +839,21 @@ TEST_CASE("client: the menu's Quit closes the window; a reason given to the lobb
 
 namespace {
 
+// Runs frames until done says so (at most n); an answer may come from another thread (the Gateway, the asset threads).
+template <class Done>
+bool FramesUntil(Setup& setup, Done done, const int n = 600) {
+    for (int i = 0; i < n; ++i) {
+        if (done()) return true;
+        setup.Frame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return done();
+}
+
+} // namespace
+
+namespace {
+
 // A directory of its own under the system's temporary directory, removed afterwards.
 struct TempDirectory final {
     std::filesystem::path path;
@@ -878,6 +893,10 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
             socketless = socketless && noSocket();
         }
         REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-solo-playing] the own player reached the Frame World");
+        // The loading screen until the game is loaded and drawn; then the Local World starts.
+        CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "loading", "[pvp-loading-shown]");
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).started; }), "[pvp-solo-started]");
+        CHECK(PC::StatusOf(setup.Client()).ready);
         const K::EntityId own = PW::OwnPlayer(setup.Solo());
         REQUIRE(own != 0);
         if (game == 1) {
@@ -1112,17 +1131,6 @@ bool Asked(FakeGateway& gateway, const std::string& method, const std::string& t
         if (seen.method == method && seen.target == target) return true;
     }
     return false;
-}
-
-// Runs frames until done says so (at most n); the Gateway answers on its own thread.
-template <class Done>
-bool FramesUntil(Setup& setup, Done done, const int n = 600) {
-    for (int i = 0; i < n; ++i) {
-        if (done()) return true;
-        setup.Frame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
-    return done();
 }
 
 std::string ListLine(Setup& setup, const std::size_t row) {
@@ -1380,4 +1388,42 @@ TEST_CASE("network: through the Gateway: a room made, readied and started, playe
     REQUIRE(runUntil([&] { return scene().scene == PC::Scene::Lobby; }, 5));
     CHECK_MESSAGE(runUntil([&] { return binding("record").find("出撃 1 回") != std::string::npos; }, 40),
                   "[pvp-gw-e2e-saved] the record after one game: " << binding("record") << " (before: " << before << ")");
+}
+
+TEST_CASE("client: the loading screen covers the game until it is loaded and drawn; then the Match is told it is ready") {
+    Setup setup;
+    const auto* overlay = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+    REQUIRE(overlay != nullptr);
+    CHECK_MESSAGE(overlay->canvas == "loading", "[pvp-loading-first] the first frame shows nothing of the game");
+    double last = 0.0;
+    bool monotonic = true;
+    bool sawProgress = false;
+    // The drawing as the program reports it: a frame shown each frame, no draw skipped.
+    std::uint64_t shown = 0;
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] {
+                        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0});
+                        const PC::ClientStatus status = PC::StatusOf(setup.Client());
+                        monotonic = monotonic && status.progress >= last;
+                        sawProgress = sawProgress || (status.progress > 0.0 && status.progress < 1.0);
+                        last = status.progress;
+                        if (!status.ready) {
+                            const auto* root = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+                            if (root == nullptr || root->canvas != "loading") return true;
+                        }
+                        return status.ready;
+                    }),
+                    "[pvp-loading-ready] the game was loaded, drawn and its own player came");
+    CHECK_MESSAGE(PC::StatusOf(setup.Client()).ready, "[pvp-loading-covers] the loading screen stayed until ready");
+    CHECK(monotonic);
+    CHECK_MESSAGE(sawProgress, "[pvp-loading-progress] the bar moved through the loading");
+    CHECK(last == 1.0);
+    // The input says so: the Match's player of this Client is ready.
+    REQUIRE(FramesUntil(setup, [&] {
+        const K::EntityId own = PlayerOf(GameWorld(*setup.match), 1);
+        return own != 0 && GameWorld(*setup.match).Get<PW::PlayerInput>(own) != nullptr &&
+               GameWorld(*setup.match).Get<PW::PlayerInput>(own)->ready == 1;
+    }));
+    // A Match played from the first step: the screen is gone.
+    setup.Frames(2);
+    CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas != "loading", "[pvp-loading-gone]");
 }

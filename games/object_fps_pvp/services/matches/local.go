@@ -65,6 +65,13 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		arguments = append(arguments, "--saves", spec.Saves)
 	}
 	// Not CommandContext: the Match outlives the allocation request.
+	if len(spec.Players) > 0 {
+		users := make([]string, len(spec.Players))
+		for j, user := range spec.Players {
+			users[j] = strconv.FormatUint(user, 10)
+		}
+		arguments = append(arguments, "--expect-users", strings.Join(users, ","))
+	}
 	command := exec.Command(l.Command, arguments...)
 	command.Env = append(os.Environ(), l.Environment...)
 	command.Stdin = strings.NewReader(hex.EncodeToString(spec.Key) + "\n")

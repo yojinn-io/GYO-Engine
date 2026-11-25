@@ -15,6 +15,10 @@
 //                                            neither the command line nor the environment
 //   --saves A.B.C.D:P                        reads a player's save from the save service when they join and writes it
 //                                            back, settled, when they leave (with --match-id)
+//   --expect-users ID,ID,...                 the room's members: the match starts when each one's Client is ready
+//                                            (before it, each player sees only itself and nobody moves); none: it is
+//                                            played from the first step
+//   --start-deadline-seconds N               starts anyway N seconds after the first player came (default 60)
 //   --idle-seconds N                         ends once no player has been in the match for N seconds, from the start
 //                                            or since the last one left (a player who drops may come back within
 //                                            it); the matches service then frees the port
@@ -34,6 +38,7 @@
 #include "engine/time/Waiter.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
@@ -43,6 +48,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -116,6 +122,8 @@ int main(int argc, char** argv) {
     std::optional<std::uint64_t> matchId;
     bool keyOnStdin = false;
     std::optional<std::int64_t> idleSeconds;
+    std::vector<std::uint64_t> expectUsers;
+    std::uint32_t startDeadline = 60;
     std::optional<GYO::Engine::OS::DatagramAddress> saves;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -163,11 +171,28 @@ int main(int argc, char** argv) {
                 return 2;
             }
             idleSeconds = seconds;
+        } else if (argument == "--expect-users" && hasValue) {
+            const std::string_view list(argv[++index]);
+            for (std::size_t at = 0; at <= list.size();) {
+                const std::size_t comma = std::min(list.find(',', at), list.size());
+                std::uint64_t user = 0;
+                if (!ParseNumber(list.substr(at, comma - at), user) || user == 0) {
+                    Log(GYO::Engine::Base::LogLevel::Error, "--expect-users takes user ids separated by commas");
+                    return 2;
+                }
+                expectUsers.push_back(user);
+                at = comma + 1;
+            }
+        } else if (argument == "--start-deadline-seconds" && hasValue) {
+            if (!ParseNumber(argv[++index], startDeadline)) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--start-deadline-seconds takes a whole number");
+                return 2;
+            }
         } else {
             Log(GYO::Engine::Base::LogLevel::Error,
                 "unknown argument '" + std::string(argument) +
                     "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --match-id ID, "
-                    "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N)");
+                    "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N, --expect-users ID,..., --start-deadline-seconds N)");
             return 2;
         }
     }
@@ -226,7 +251,8 @@ int main(int argc, char** argv) {
     net.bind = GYO::Engine::OS::DatagramAddress::Any(port);
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
-    O::WorldDescription world = PW::MatchWorld({shared, arena, 0, seats});
+    O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .seats = seats, .expectUsers = expectUsers,
+                                                .startDeadlineSeconds = startDeadline});
     if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {

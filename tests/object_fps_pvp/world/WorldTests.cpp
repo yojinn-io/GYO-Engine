@@ -279,8 +279,10 @@ struct Session {
     std::unique_ptr<O::Product> match;
     std::vector<std::unique_ptr<O::Product>> clients;
 
+    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step).
     Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
-            std::shared_ptr<const PW::GameContent> clientContent = ShippedContent()) {
+            std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
+            const std::uint32_t startDeadlineSeconds = 60) {
         seats = std::make_shared<PW::Seats>(capacity);
         std::vector<N::MemoryLink> serverEnds;
         for (int i = 0; i < clientCount; ++i) {
@@ -292,7 +294,8 @@ struct Session {
             serverEnds.push_back(links.back().first);
         }
         auto reader = [c = clock] { return *c; };
-        match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena);
+        match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena, std::move(expectUsers),
+                           startDeadlineSeconds);
         for (int i = 0; i < clientCount; ++i) {
             clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
                                           static_cast<std::uint64_t>(i + 1), reader));
@@ -587,3 +590,52 @@ TEST_CASE("world: the upper body follows the aim and the lower body the gait") {
     CHECK(Math::Length(headAt({}, walking)[4].b - headAt({}, later)[4].b) > 0.05F);
 }
 
+
+namespace {
+
+PW::PlayerInput Ready(PW::PlayerInput input) {
+    input.ready = 1;
+    return input;
+}
+
+} // namespace
+
+TEST_CASE("world: before the start each Client sees only its own player and nobody moves; ready together, the match starts") {
+    Session session(2, 4, 0, ShippedContent(), {1, 2});
+    session.Frames(90);
+    const K::EntityId one = PlayerOf(session.Match(), 1);
+    const K::EntityId two = PlayerOf(session.Match(), 2);
+    REQUIRE(one != 0);
+    REQUIRE(two != 0);
+    CHECK(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Waiting);
+    for (std::size_t i = 0; i < 2; ++i) {
+        CAPTURE(i);
+        CHECK(PW::OwnPlayer(session.Client(i)) == (i == 0 ? one : two));
+        CHECK_MESSAGE(PlayerOf(session.Client(i), i == 0 ? 2 : 1) == 0, "[pvp-start-hidden] the other player's place is not sent before the start");
+    }
+    // One ready Client walking: nothing moves yet (the other is not ready).
+    const Math::Vec3 start = session.Match().Get<PW::PlayerBody>(one)->feet;
+    const float yaw = session.Match().Get<PW::PlayerBody>(one)->yaw;
+    session.Frames(40, {Ready(Input(1, 0, yaw))});
+    CHECK_MESSAGE(Math::Length(session.Match().Get<PW::PlayerBody>(one)->feet - start) < 1e-4F, "[pvp-start-frozen] nobody moves before the start");
+    CHECK(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Waiting);
+    // Both ready: the match starts; everybody sees everybody, and the walk moves.
+    session.Frames(30, {Ready(Input(0, 0, yaw)), Ready(Input(0, 0, 0))});
+    CHECK_MESSAGE(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Playing, "[pvp-start-ready] every expected player ready: started");
+    for (std::size_t i = 0; i < 2; ++i) {
+        CAPTURE(i);
+        CHECK(session.Client(i).Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Playing);
+        CHECK_MESSAGE(PlayerOf(session.Client(i), i == 0 ? 2 : 1) != 0, "[pvp-start-shown] after the start the other player is sent");
+    }
+    session.Frames(40, {Ready(Input(1, 0, yaw)), Ready(Input(0, 0, 0))});
+    CHECK(Math::Length(session.Match().Get<PW::PlayerBody>(one)->feet - start) > 0.5F);
+}
+
+TEST_CASE("world: an expected player who never comes does not hold the start past its deadline") {
+    Session session(1, 4, 0, ShippedContent(), {1, 2}, 1);
+    session.Frames(30, {Ready(Input(0, 0, 0))});
+    CHECK(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Waiting);
+    // A second (64 steps) after the first player came.
+    session.Frames(80, {Ready(Input(0, 0, 0))});
+    CHECK_MESSAGE(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Playing, "[pvp-start-deadline]");
+}
