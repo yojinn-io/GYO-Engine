@@ -704,7 +704,29 @@ public:
     // round leaves the Registry unusable).
     Engine::Base::Result<void, StartupReport> BuildPlans();
 
-    // Drops the round registered since the last BuildPlans (its ids are void).
+    // DI-KS 38 (v8-arch-gyo2-sdl-r1b): a later round in which this Registry's
+    // extract schedules read source instead of the current one. After the first
+    // successful BuildPlans only (before it, SetExtractSource). It takes effect
+    // when the round builds (BuildPlans, or StagePlans then CommitPlans): the
+    // Extract parameters resolve against source again (D-E14 when source has no
+    // Plans, R-E4 when it lacks a type read). Err DynamicInsertRefused, as
+    // Register (DI-KS 26): nothing changes. GYO_ASSERT as Register, and with a
+    // staged round.
+    Engine::Base::Result<void, KernelError> ReplaceExtractSource(const Registry& source);
+
+    // Builds the later round as BuildPlans does but keeps it aside: the Registry
+    // and its Worlds stay on the current version until CommitPlans, or
+    // DiscardRegistrations drops it. Lets a caller build the rounds of several
+    // Registries and take all of them or none (DI-KS 38). Err: as BuildPlans;
+    // the round is dropped. GYO_ASSERT: no later round open, a staged one, or
+    // as BuildPlans.
+    Engine::Base::Result<void, StartupReport> StagePlans();
+    // Takes the staged round in: the version +1, as a successful BuildPlans.
+    // Only moves, so it throws nothing (a failed GYO_ASSERT aside: no staged
+    // round, or a World made from this Registry inside a Run).
+    void CommitPlans();
+
+    // Drops the round registered since the last BuildPlans, staged or not (its ids are void).
     void DiscardRegistrations();
 
     // Whether a BuildPlans has succeeded.
@@ -734,6 +756,9 @@ private:
 
     // Ok: the owner's index in the table this round writes (Target()).
     Engine::Base::Result<std::uint32_t, KernelError> OpenRegistrar(RegistrationOwner owner);
+    // The checks of a new round and, after the first successful BuildPlans, its
+    // pending copy (DI-KS 26). who names the caller in the refusal.
+    Engine::Base::Result<void, KernelError> OpenRound(const std::string& who);
     void CloseRegistrar() noexcept;
     // The table the open round writes: the pending copy after the first
     // successful BuildPlans, the tables themselves before it.
@@ -745,6 +770,8 @@ private:
     std::unique_ptr<Detail::RegistryData> data_;
     // The round registered after the first successful BuildPlans; null otherwise.
     std::unique_ptr<Detail::RegistryData> pending_;
+    // pending_ has built (StagePlans) and waits for CommitPlans.
+    bool staged_ = false;
     FrozenRegistry frozen_;
 };
 

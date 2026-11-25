@@ -3,6 +3,7 @@
 // sections 3.4 to 3.12).
 
 #include "engine/orchestration/Product.hpp"
+#include "engine/orchestration/ExtractSourceSwaps.hpp"
 #include "engine/orchestration/WorldGeneration.hpp"
 
 #include "engine/base/Assert.hpp"
@@ -367,6 +368,8 @@ Product::Registration Product::Register(const WorldSlot& slot, bool firstWorld, 
     // (O-2, O-14; world-gen declaration 5.2), the default skeleton when it is on (O-4; time-events declaration 3.6).
     auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {
         registrar.Resource<WorldGeneration>({.name = "WorldGeneration"});
+        // O-12: the notice of a replaced extract source, in every World that reads one (O-8).
+        if (!world.extractFrom.empty()) registrar.Resource<ExtractSourceSwaps>({.name = "ExtractSourceSwaps"});
         if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);
     });
     GYO_ASSERT(static_cast<bool>(own0));
@@ -475,6 +478,7 @@ std::unique_ptr<Kernel::WorldExecutor> Product::MakeExecutor(WorldSlot& slot, co
                                                             Kernel::WorldOptions{slot.description.dynamicInsert});
     // Generating from the moment it is built, before its prepare functions (world-gen declaration 5.1, O-14).
     executor->GetWorld().SetResource(WorldGeneration{true, false});
+    if (!slot.description.extractFrom.empty()) executor->GetWorld().SetResource(ExtractSourceSwaps{});
     return executor;
 }
 
@@ -798,13 +802,18 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
     }
     WorldSlot& slot = *found;
-    // O-8 (v8-arch-gyo2-sdl-extract): until R1b decides how, replacing a World another one extracts
-    // from is a Programmer Error: the reader's Registry keeps a pointer to this World's Registry,
-    // which the swap destroys. Checked before anything is dropped.
-    for (const WorldSlot& other : worlds_) {
-        GYO_ASSERT(other.description.extractFrom != slot.description.name &&
-                   "ReplaceWorld: another World extracts from this one (source replacement comes with R1b)");
+    // O-8 (v8-arch-gyo2-sdl-r1b): the Worlds that extract from this one stay; their Registries read the new
+    // World's Registry from the swap on (Kernel DI-KS 38). Their rounds are staged once the new World is ready
+    // and taken in together at the swap, so none of them is left reading a Registry that goes.
+    std::vector<WorldSlot*> readers;
+    for (WorldSlot& other : worlds_) {
+        if (other.description.extractFrom == slot.description.name) readers.push_back(&other);
     }
+    std::size_t staged = 0;
+    auto dropStaged = [&]() noexcept {
+        for (std::size_t i = 0; i < staged; ++i) readers[i]->registry->DiscardRegistrations();
+        staged = 0;
+    };
     const bool firstWorld = &slot == &worlds_.front();
     const bool dropOldFirst = request.order == ReplaceOrder::DropOldFirst;
     // The schedule running when a step failed (WorldFailure::schedule of a DropOldFirst failure).
@@ -963,7 +972,30 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
                                        std::move(ran).error()));
             }
         }
+        // Step 5 (O-8, DI-KS 38): every reader's round reads the new Registry, built and kept aside; one that does
+        // not build drops them all, and the readers stay on the old World (BuildNewFirst) or the Product ends.
+        for (WorldSlot* reader : readers) {
+            Kernel::Registry& readerRegistry = *reader->registry;
+            if (auto opened = readerRegistry.ReplaceExtractSource(*registration.registry); !opened) {
+                dropStaged();
+                giveBack(moved);
+                return fail(FromKernel(OrchestrationErrorCode::ReplaceRegistrationFailed,
+                                       "World " + Quoted(reader->description.name) + " extracts from " + Quoted(name) +
+                                           " and cannot read the new World",
+                                       std::move(opened).error()));
+            }
+            if (auto built = readerRegistry.StagePlans(); !built) {
+                dropStaged();
+                giveBack(moved);
+                return fail(OrchestrationError(OrchestrationErrorCode::ReplaceRegistrationFailed,
+                                               "World " + Quoted(reader->description.name) + " extracts from " +
+                                                   Quoted(name) + " and cannot read the new World",
+                                               built.error().detail));
+            }
+            ++staged;
+        }
     } catch (...) {
+        dropStaged();
         giveBack(moved);
         if (!dropOldFirst) {
             if (initRunHere) gameInitRan_ = false;  // D10, as for an Err
@@ -989,7 +1021,9 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         throw;
     }
 
-    // Step 5: swap. The old executor first, then its Registry; the exchange functions come with the new build.
+    // Step 6: swap. The readers take their staged rounds in (moves only), then the old executor goes, then its
+    // Registry; the exchange functions come with the new build.
+    for (WorldSlot* reader : readers) reader->registry->CommitPlans();
     slot.replacing = false;
     slot.executor.reset();
     slot.registry.reset();
@@ -1001,6 +1035,12 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
     slot.exchangeOut = std::move(registration.exchangeOut);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
+    // O-12: each reader is told its source was replaced (its World attaches the new version here).
+    for (WorldSlot* reader : readers) {
+        Kernel::World& readerWorld = reader->executor->GetWorld();
+        const ExtractSourceSwaps* swaps = readerWorld.Resource<ExtractSourceSwaps>();
+        readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});
+    }
     return {};
 }
 

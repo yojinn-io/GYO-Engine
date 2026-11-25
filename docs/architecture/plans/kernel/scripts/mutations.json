@@ -8636,6 +8636,59 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 35: a run condition with Extract parameters outside an extract schedule is D-E7",
       "expect": "XK\\-7:\\ the\\ same\\ condition\\ on\\ an\\ extract\\ schedule"
+    },
+    {
+      "id": "ks-rx-stage-commits",
+      "what": "StagePlans takes the round in at once (DI-KS 38): several readers can no longer be taken in all or none.",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    round.registered = false;\n    staged_ = true;\n    return {};",
+      "replace": "    round.registered = false;\n    staged_ = true;\n    CommitPlans();\n    return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: StagePlans keeps the round aside*",
+      "expect": "\\[ks\\-rx\\-stage\\-commits\\]"
+    },
+    {
+      "id": "ks-rx-source-not-set",
+      "what": "ReplaceExtractSource opens a round but leaves the round's source as it was (DI-KS 38).",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    pending_->extractSource = source.data_.get();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: after ReplaceExtractSource the reader reads the new source*",
+      "expect": "RunExtract:\\ the\\ source\\ World\\ was\\ not\\ made\\ from\\ this\\ World's\\ extract\\ source\\ Registry"
+    },
+    {
+      "id": "ks-rx-refusal-bypassed",
+      "what": "A new extract source is not refused by a World that declares no dynamic insert (the bypass the R1b declaration's review S-1 turned down; DI-KS 26, 38).",
+      "guards": [
+        "kernel DI-KS 26",
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    if (data_->refusingWorlds > 0) {\n        // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.",
+      "replace": "    if (data_->refusingWorlds > 0 && who.rfind(\"Register\", 0) == 0) {\n        // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: a World that declares no dynamic insert*",
+      "expect": "REQUIRE_FALSE"
+    },
+    {
+      "id": "ks-rx-discard-keeps-staged",
+      "what": "DiscardRegistrations drops a staged round's tables but leaves it marked staged (DI-KS 38).",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "        pending_.reset();\n        staged_ = false;\n        return;",
+      "replace": "        pending_.reset();\n        return;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: StagePlans keeps the round aside*",
+      "expect": "a\\ staged\\ round\\ waits\\ for\\ CommitPlans\\ or\\ DiscardRegistrations"
     }
   ]
 }

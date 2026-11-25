@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace GYO::Kernel {
@@ -1260,7 +1261,9 @@ bool PlanStage(RegistryData& data) {
 // object, so FrozenRegistry, the Worlds' table pointer and the extract-source
 // pointers of other Registries stay valid (declaration 3.2 rule 1). The World
 // counters belong to the object, not to a round.
-void Adopt(RegistryData& into, RegistryData&& round) {
+// CommitPlans relies on this throwing nothing (DI-KS 38: several staged rounds are taken in together).
+static_assert(std::is_nothrow_move_assignable_v<RegistryData>, "Adopt only moves");
+void Adopt(RegistryData& into, RegistryData&& round) noexcept {
     const std::uint32_t liveWorlds = into.liveWorlds;
     const std::uint32_t refusingWorlds = into.refusingWorlds;
     const std::uint32_t runningWorlds = into.runningWorlds;
@@ -1287,14 +1290,15 @@ Detail::RegistryData& Registry::Target() noexcept {
     return pending_ ? *pending_ : *data_;
 }
 
-Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
+Engine::Base::Result<void, KernelError> Registry::OpenRound(const std::string& who) {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)
+    GYO_ASSERT(!staged_ && "a staged round waits for CommitPlans or DiscardRegistrations");
     RequireNoWorldRunning();
     if (data_->refusingWorlds > 0) {
         // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.
         KernelError error(KernelErrorCode::DynamicInsertRefused,
-                          "Register by '" + owner.name + "' refused: " + std::to_string(data_->refusingWorlds) +
+                          who + " refused: " + std::to_string(data_->refusingWorlds) +
                               " live World(s) made from this Registry declare no dynamic insert "
                               "(WorldOptions::dynamicInsert = false); nothing was registered");
         error.rule = "DI-KS 26";
@@ -1316,6 +1320,13 @@ Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(Registr
         base.initialValues = round.initialValues.size();
         base.allotterDeclarations = round.allotterDeclarations.size();
     }
+    return {};
+}
+
+Engine::Base::Result<std::uint32_t, KernelError> Registry::OpenRegistrar(RegistrationOwner owner) {
+    if (auto opened = OpenRound("Register by '" + owner.name + "'"); !opened) {
+        return Engine::Base::Err(std::move(opened).error());
+    }
     Detail::RegistryData& target = Target();
     target.registered = true;
     std::uint32_t index = 0;
@@ -1329,23 +1340,53 @@ void Registry::CloseRegistrar() noexcept {
     Target().building = false;
 }
 
+Engine::Base::Result<void, KernelError> Registry::ReplaceExtractSource(const Registry& source) {
+    GYO_ASSERT(data_->frozen && "ReplaceExtractSource: before the first BuildPlans, SetExtractSource");
+    GYO_ASSERT(&source != this && "ReplaceExtractSource: a Registry is not its own extract source");
+    if (auto opened = OpenRound("ReplaceExtractSource"); !opened) return opened;
+    // The round reads the new source; the tables keep the current one until the round is taken in.
+    pending_->extractSource = source.data_.get();
+    pending_->extractSourceSet = true;
+    pending_->registered = true;
+    return {};
+}
+
+Engine::Base::Result<void, StartupReport> Registry::StagePlans() {
+    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
+    GYO_ASSERT(!data_->failed);
+    GYO_ASSERT(pending_ && !staged_ && "StagePlans: no later round to build");
+    RequireNoWorldRunning();
+    // A later round: built on the copy; the tables change only when it is taken in.
+    Detail::RegistryData& round = *pending_;
+    Detail::ResolveStage(round, true);
+    if (!Detail::PlanStage(round)) {
+        StartupReport report(std::move(round.errors));
+        pending_.reset();
+        return Engine::Base::Err(std::move(report));
+    }
+    round.version = data_->version + 1;
+    round.registered = false;
+    staged_ = true;
+    return {};
+}
+
+void Registry::CommitPlans() {
+    GYO_ASSERT(staged_ && "CommitPlans: no staged round");
+    RequireNoWorldRunning();
+    Detail::Adopt(*data_, std::move(*pending_));
+    pending_.reset();
+    staged_ = false;
+}
+
 Engine::Base::Result<void, StartupReport> Registry::BuildPlans() {
     GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)
     GYO_ASSERT(!data_->failed);
+    GYO_ASSERT(!staged_ && "BuildPlans: a staged round waits for CommitPlans or DiscardRegistrations");
     RequireNoWorldRunning();
     if (pending_) {
-        // A later round: built on the copy; the tables change only when it succeeds.
-        Detail::RegistryData& round = *pending_;
-        Detail::ResolveStage(round, true);
-        if (!Detail::PlanStage(round)) {
-            StartupReport report(std::move(round.errors));
-            pending_.reset();
-            return Engine::Base::Err(std::move(report));
-        }
-        round.version = data_->version + 1;
-        round.registered = false;
-        Detail::Adopt(*data_, std::move(round));
-        pending_.reset();
+        auto staged = StagePlans();
+        if (!staged) return staged;
+        CommitPlans();
         return {};
     }
     Detail::RegistryData& data = *data_;
@@ -1369,6 +1410,7 @@ void Registry::DiscardRegistrations() {
     RequireNoWorldRunning();
     if (pending_) {
         pending_.reset();
+        staged_ = false;
         return;
     }
     if (data_->frozen || !data_->registered) return;

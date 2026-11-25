@@ -3857,19 +3857,6 @@
    "expect": "\\[or\\-ex\\-reader\\-unchecked\\]"
   },
   {
-   "id": "or-ex-replace-source-allowed",
-   "what": "ReplaceWorld replaces a World another one extracts from (O-8 assert until R1b).",
-   "guards": [
-    "orchestration O-8"
-   ],
-   "file": "engine/orchestration/src/Product.cpp",
-   "find": "        GYO_ASSERT(other.description.extractFrom != slot.description.name &&",
-   "replace": "        GYO_ASSERT(true ||",
-   "target": "gyo_orchestration_tests",
-   "cases": "extract: the asserts: replacing the source of a reader (BuildNewFirst)",
-   "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ \\(\\*built\\)\\->ReplaceWorld\\(\"Sim\",\\ O::ReplaceRequest\\{\\}\\)"
-  },
-  {
    "id": "or-ex-assert-inside-run",
    "what": "The \"extract schedule without a source\" assert fires inside the run (as an exception out of the schedule), so a Programmer Error ends the Product.",
    "guards": [
@@ -3949,6 +3936,71 @@
    "target": "gyo_orchestration_tests",
    "cases": "extract: a unit's WorldSetup*",
    "expect": "\\[or\\-ex\\-setup\\-from\\]"
+  },
+  {
+   "id": "or-rx-readers-skipped",
+   "what": "ReplaceWorld does not move the Worlds extracting from the replaced one to the new World (O-8, DI-KS 38): they keep a Registry that goes.",
+   "guards": [
+    "orchestration O-8"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (other.description.extractFrom == slot.description.name) readers.push_back(&other);",
+   "replace": "        if (false) readers.push_back(&other);",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: replacing the source: the reader stays and reads the new World*",
+   "expect": "RunExtract:\\ the\\ source\\ World\\ was\\ not\\ made\\ from\\ this\\ World's\\ extract\\ source\\ Registry"
+  },
+  {
+   "id": "or-rx-commit-skipped",
+   "what": "The staged rounds of the readers are not taken in at the swap (O-8, DI-KS 38).",
+   "guards": [
+    "orchestration O-8"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    for (WorldSlot* reader : readers) reader->registry->CommitPlans();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: replacing the source: the reader stays and reads the new World*",
+   "expect": "RunExtract:\\ the\\ source\\ World\\ was\\ not\\ made\\ from\\ this\\ World's\\ extract\\ source\\ Registry"
+  },
+  {
+   "id": "or-rx-staged-kept",
+   "what": "A reader that cannot read the new World does not drop the other readers' staged rounds (O-8 all or none).",
+   "guards": [
+    "orchestration O-8"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        for (std::size_t i = 0; i < staged; ++i) readers[i]->registry->DiscardRegistrations();\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: replacing the source: a reader that cannot read the new World drops every staged round",
+   "expect": "a\\ staged\\ round\\ waits\\ for\\ CommitPlans\\ or\\ DiscardRegistrations"
+  },
+  {
+   "id": "or-rx-no-notice",
+   "what": "The readers are not told their source was replaced (O-12, ExtractSourceSwaps).",
+   "guards": [
+    "orchestration O-12"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});\n",
+   "replace": "        static_cast<void>(swaps);\n",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: replacing the source:*",
+   "expect": "\\[or\\-rx\\-"
+  },
+  {
+   "id": "or-rx-refusal-ignored",
+   "what": "A reader refusing the new source (DynamicInsertRefused) is skipped and the replacement goes on (O-8): it is never staged, and the swap asserts taking it in.",
+   "guards": [
+    "orchestration O-8"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            if (auto opened = readerRegistry.ReplaceExtractSource(*registration.registry); !opened) {",
+   "replace": "            if (auto opened = readerRegistry.ReplaceExtractSource(*registration.registry); !opened) {\n                if (true) continue;",
+   "target": "gyo_orchestration_tests",
+   "cases": "extract: replacing the source: a reader that declares no dynamic insert*",
+   "expect": "CommitPlans:\\ no\\ staged\\ round"
   }
  ]
 }

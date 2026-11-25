@@ -1,9 +1,10 @@
 # 事前宣告：Extract 的來源被替換（`v8-arch-gyo2-sdl-r1b`，SDL 線子批 R1b）
 
-更新：2026-11-25（修訂 1）。Owner：Kernel＋編排層（GYO2 主會話開的任務卡，SDL 線子批 R1b）。**狀態：等使用者選做法（第 10 節 Q1）**。選定之前不動兩個做法涉及的程式。
+更新：2026-11-25（修訂 1）。Owner：Kernel＋編排層（GYO2 主會話開的任務卡，SDL 線子批 R1b）。**狀態：動工前核准（2026-11-25）**——使用者在本卡「選 B，開始」（之前問「別家如何？」，卡片回了第 4 節的對照）：Q1＝(B) 准許換來源；其餘照第 3.2 節卡片的判斷。最終文字在合併前核准。
 
 經過：
 - 修訂 0（d4529577）：照卡片寫。
+- 實作（2026-11-25）：照修訂 1 第 3.2 節。Kernel 的三個函式定名 `ReplaceExtractSource`（開之後一輪、改來源；拒絕時回 `KernelError`，同 `Register`）、`StagePlans`（建好留著，同 `BuildPlans` 的錯誤）、`CommitPlans`（只搬移）——第 3.2 節的「stage 一次做開輪與建」拆成開輪與建兩步，是為了沿用 `Register`／`BuildPlans` 的兩種錯誤型別，不新增錯誤碼；`BuildPlans` 的之後一輪改成 `StagePlans`＋`CommitPlans`。
 - 修訂 1：修訂 0 送設計審查（**Opus／high，作者與審查者同為 Opus**：Fable 暫停）：blocker 1、should 5、nit 4，全部採用（對照在第 11 節）。審查者沒有建置、沒有跑測試；第 2 節的行號逐一核對過。最大的改動：(B) 的換來源改成「全部暫存、全部成功才一起換進」（B-1，拿掉「失敗改回」）；不繞過 `dynamicInsert = false`（S-1）；列第三個做法 (C) 延後綁定與不選的理由（S-5）。
 
 根據：
