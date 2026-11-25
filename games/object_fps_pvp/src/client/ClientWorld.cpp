@@ -144,6 +144,8 @@ struct ClientControls final {
     present::Controls controls;
     // The next frame takes the pointer, as a click does (the pause's pvp.resume).
     bool resume = false;
+    // This frame asks for the pause: it gave the pointer back (Tab, Esc, the window's focus lost), or Esc without it.
+    bool pauseAsked = false;
     // The life the view was turned to (a new life faces its spawn's yaw).
     std::uint32_t facedLife = 0;
     K::EntityId facedPlayer = 0;
@@ -486,7 +488,9 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     frame.right = keys->Pressed(I::KeyCode::D);
     frame.crouch = keys->Pressed(I::KeyCode::ControlLeft);
     frame.motion = motion->delta;
+    const bool before = c.controls.Captured();
     c.controls.Apply(frame);
+    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape;
     // The pointer: hidden and held while the game has it (window's Locked: relative motion).
     const bool captured = c.controls.Captured();
     if (request.Read().cursorVisible == captured || (request.Read().cursorGrab == W::CursorGrab::Locked) != captured) {
@@ -1203,10 +1207,11 @@ K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> 
     return {};
 }
 
-// Playing -> Paused when the pointer is given back (Tab, Esc); Paused -> Playing when the game takes it again (a click,
-// Tab, 続ける).
+// Playing -> Paused when the pointer is given back (Tab, Esc, the focus lost) or Esc is pressed: a change, not a pointer
+// the game never had (a game that begins shows itself; its first click takes the pointer, ReadControls). Paused ->
+// Playing when the game takes it again (a click, Tab, 続ける).
 K::SystemResult PauseOnRelease(K::Res<ClientControls> controls, K::ResMut<GamePageRequest> page) {
-    if (!controls->controls.Captured()) page->Request(GamePage::Paused);
+    if (controls->pauseAsked) page->Request(GamePage::Paused);
     return {};
 }
 K::SystemResult PlayOnCapture(K::Res<ClientControls> controls, K::ResMut<GamePageRequest> page) {

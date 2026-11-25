@@ -223,3 +223,6 @@ struct SDLWindowBetweenFrames final {
 - 修訂 6（使用者的兩個決定，`v8-arch-gyo2-decisions-2026-11-26-night`）：
   - 3.6：解析度改實體像素，產品照 `WindowState::scaleFactor` 換算（`WindowSizeFor`、`FitWindow`），不動 Engine。macOS Retina（scale 2）上 1920×1080 的視窗佔畫面的一半大小，這是實體像素的意思。
   - 3.3：單人房間改成多人的房間畫面（同一份文件、同樣的面板），按鈕不同（單人「開始」、多人「準備」）；模式固定「生存」；地圖在房間裡選，經 `SceneChange::map` 進遊戲。舊的 `pvp_solo_room.json` 刪掉。多人房間的標題只留「部屋 #id」，模式與地圖移到兩列（兩個 canvas 同一個排法）。
+  - 3.3／3.7：暫停（使用者實機試玩：「剛進入遊戲時立刻跳出暫停」）。原因：`GamePage::Playing` 的 `PauseOnRelease` 判的是「指標不是遊戲的」，而遊戲開始時指標本來就還不是遊戲的（第一下點擊才拿），所以 loading 一結束就進暫停。改成判「這一幀要暫停」：指標被交還（Tab、Esc、視窗失去焦點）或按了 Esc；遊戲開始時照舊顯示遊戲，第一下點擊拿指標（不是射擊）。
+  - 3.4：「選地圖沒用」（同一次試玩）。使用者：「我看到的都是原始的測試地圖」：試玩的整合版只有 `pvp_training_v1`、`pvp_corners_v1`、`biome_trial`，250 m 的 Extraction 在 #354、還沒合併。選圖的每一層（房間的 map → matches 的 `--arena` → Match 玩那張，services.log 第二場 `pvp_corners_v1` → `SceneChange::map` → Client 的 arena）都接上了，不改程式。另外屬實但不是這次原因的一件：`pvp_training_v1` 與 `pvp_corners_v1` 的幾何是同一份（只差出生點），兩張之間切換畫面不變；要不要改地圖資料由主會話問使用者。`--verbose` 的 log 加「選的地圖」與「遊戲玩的 arena」兩行，給下次試玩當依據。
+  - 3.5：`#342`（大地圖）之後 arena 的畫面是每個 region 一個 Mesh3d、模型由 Client 持有，資產那一步不再等 arena 的模型（`ShowArena` 同一幀就換好）；`#348` 的 `ModelRef` 不用另外處理。

@@ -66,19 +66,31 @@ namespace PW = object_fps_pvp::world;
 
 void Log(const GYO::Engine::Base::LogLevel level, const std::string& text) { GYO::Engine::Base::Log(level, GYO_GAME_ID, text); }
 
-// --verbose: the connection and the own player as they change (the game scene's ClientView).
+// --verbose: the connection and the own player as they change (the game scene's ClientView), and the arena the game
+// plays (the Frame World's rules: the room's map at first, then the Match's).
 struct VerboseWatch final {
     bool connected = false;
     bool playing = false;
+    std::string arena;
 };
 void HashValue(K::Hasher&, const VerboseWatch&) {}
+
+K::SystemResult WatchArena(K::Res<PW::GameRules> rules, K::ResMut<VerboseWatch> seen) {
+    if (rules->arena.id == seen.Read().arena) return {};
+    Log(GYO::Engine::Base::LogLevel::Info, "the game plays arena " + rules->arena.id);
+    seen->arena = rules->arena.id;
+    return {};
+}
 
 K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWatch> seen) {
     const bool connected = view->connected;
     const bool playing = view->ownPlayer != 0;
     if (connected != seen.Read().connected) Log(GYO::Engine::Base::LogLevel::Info, connected ? "connected" : "not connected");
     if (playing != seen.Read().playing) Log(GYO::Engine::Base::LogLevel::Info, playing ? "playing" : "not playing");
-    if (connected != seen.Read().connected || playing != seen.Read().playing) *seen = VerboseWatch{connected, playing};
+    if (connected != seen.Read().connected || playing != seen.Read().playing) {
+        seen->connected = connected;
+        seen->playing = playing;
+    }
     return {};
 }
 
@@ -156,15 +168,24 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
         frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
             inner(setup);
             const auto* director = setup.ProductBuffer().Find<PC::SceneDirector>();
-            if (director == nullptr || director->Current().scene != PC::Scene::MultiGame) return;
+            if (director == nullptr) return;
+            const PC::SceneChange& scene = director->Current();
+            const bool multi = scene.scene == PC::Scene::MultiGame;
+            if (!multi && scene.scene != PC::Scene::SoloGame) return;
+            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + scene.map +
+                                                       "' chosen" + (multi ? " in room " + std::to_string(scene.room) : std::string()));
             setup.Registrar().Resource<VerboseWatch>({.name = "VerboseWatch"});
-            K::SystemOptions watch;
-            watch.name = "WatchConnection";
-            K::Mount mount;
-            mount.schedule = std::string(O::DefaultSchedules::frame);
-            mount.stage = std::string(O::DefaultSchedules::last);
-            watch.mounts.push_back(std::move(mount));
-            setup.Registrar().AddSystem<&WatchConnection>(std::move(watch));
+            const auto last = [](std::string name) {
+                K::SystemOptions watch;
+                watch.name = std::move(name);
+                K::Mount mount;
+                mount.schedule = std::string(O::DefaultSchedules::frame);
+                mount.stage = std::string(O::DefaultSchedules::last);
+                watch.mounts.push_back(std::move(mount));
+                return watch;
+            };
+            setup.Registrar().AddSystem<&WatchArena>(last("WatchArena"));
+            if (multi) setup.Registrar().AddSystem<&WatchConnection>(last("WatchConnection"));
             setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 w.SetResource(VerboseWatch{});
                 return {};

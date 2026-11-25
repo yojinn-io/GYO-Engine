@@ -14,6 +14,10 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 7. **使用者的兩個決定**（2026-11-26 夜，`v8-arch-gyo2-decisions-2026-11-26-night`，宣告修訂 6）：
    - 解析度改實體像素：`WindowSizeFor(physical, scale)` 換成邏輯像素再送 `ResizeWindow`；`FitWindow`（每個場景，`WindowFit` 用 `CarryOver` 帶）在視窗說出 scale 或 scale 改變時送一次；適用照現在的 scale 換算。
    - 單人房間：和多人用同一份房間文件（`pvp_room.json` 的 `solo_room` canvas），按鈕「開始」「マップ」「戻る」；模式固定「生存」；選的地圖經 `SceneChange::map` 進 Solo World；中止回房間時帶回那張圖。多人房間的模式與地圖移到兩列。`pvp_solo_room.json` 刪除。
+8. **跟上 gyo2（#348 `ModelRef`、#342 大地圖）**：#346～#353 依序 merge（不 rebase）。衝突：`CMakeLists.txt`（`VoxelModelLoader.cpp` 拿掉、本卡的檔留著）、`ClientWorld.cpp`（include、Frame World 的 units 兩邊都要：`visibility`＋`world_ui`；`ShowArena` 用大地圖的版本）、`PvpWorld.cpp`（`BuildWorld` 用共用的 `BoxSet`，本卡的 `LocalSpawn`／`MatchStart` 留著）、`tests/.../CMakeLists.txt`（`visibility`＋loopback listener）、`mutations.json`（依 id 三方合併，沒有兩邊都改的一筆）。loading 的資產一步拿掉 arena 模型的等待（模型由 Client 持有）；`[pvp-loading-arena]` 改成看 Match 的 arena 出現、第一個 arena 消失。
+9. **使用者實機試玩的兩個問題**（整合版，`build/evidence/gyo2-pvp-game-flow/20261126-013137/`）：
+   - 一進遊戲就暫停：先寫失敗的檢查（loading 結束後幾幀內不是暫停，`[pvp-play-not-paused]`，修前失敗），再把 `PauseOnRelease` 改成看 `ClientControls::pauseAsked`（指標被交還、或 Esc）。突變 `pvp-pause-when-not-held`、`pvp-pause-esc-ignored`。
+   - 選地圖沒用：使用者看到的都是原始的測試地圖——整合版還沒有 250 m 的 Extraction（#354 未合併）；選圖的每一層都接上了，不改程式（兩張小圖的幾何相同是另一件事實，見宣告修訂 6）。`--verbose` 加兩行 log（選的地圖、遊戲玩的 arena）。
 
 ## 驗證
 
@@ -36,6 +40,7 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - 審查與頁面改寫之後：本機（Intel Mac）`ctest -L "cpu|gpu"` 258/258、`-L "go|network"` 5/5；client 29 案全過。
 - 地圖：Gateway 的案在大廳選第二張圖 → 房間 → 遊戲：`SceneChange::map`、Sim 與 Frame 的 `GameRules` 都是那張圖（`[pvp-gw-map*]`）；突變 `pvp-map-not-carried`、`pvp-map-sim-ignored`、`pvp-map-frame-ignored` 3/3 killed。
 - 修訂 6：新案兩個——「解析度是實體像素」（`WindowSizeFor` 的換算；視窗說 125% 時送一次 1536×864；適用也照 scale；測試的游標原本停在 1280×720 視窗的中央，換了大小會停到別的按鈕上，所以移到角落）；「單人房間是多人的房間」（`solo_room` canvas、模式固定、選第二張圖 → Solo World 玩那張、中止回房間仍是那張）。Gateway 的案多檢查房間顯示建房時的地圖。新突變 `pvp-solo-map-ignored`、`pvp-solo-map-not-cycled`、`pvp-solo-map-not-kept`、`pvp-room-map-not-shown`、`pvp-settings-physical-ignored`、`pvp-settings-apply-logical`；find 變了的 `pvp-solo-start-ignored`、`pvp-settings-no-resize` 改 find 重跑。
+- 跟上 gyo2 與試玩兩件之後：本機 `ctest -L "cpu|gpu"` 260/260、`-L "go|network"` 5/5（Gateway 的 e2e 原本在遊戲開始後直接按 Enter 撤退——舊的「沒拿指標就是暫停」——改成先按 Esc）；相關突變 40/40 killed（`pvp-loading-no-wait-start` 第一次是 wrong_failure：頁面離開後 loading 的根不在，測試讀空指標；加 tag 的 `REQUIRE` 後 killed）。
 
 ## 沒驗
 

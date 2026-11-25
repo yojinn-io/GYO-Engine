@@ -1615,8 +1615,9 @@ TEST_CASE("network: through the Gateway: a room made, readied and started, playe
                         << PC::StatusOf(frameWorld()).connected);
     // The match starts (this Client was the room's one member, and it is ready): the loading screen goes.
     REQUIRE_MESSAGE(runUntil([&] { return PC::StatusOf(frameWorld()).started; }, 20), "[pvp-gw-e2e-started]");
-    // Evacuate (the pause, shown while the pointer is the player's: Enter on 撤退する): the room is left, the
-    // connection closes, the Match writes the save.
+    // Evacuate (Esc: the pause; Enter on 撤退する): the room is left, the connection closes, the Match writes the save.
+    for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>(client->RunFrame()));
+    press(I::KeyCode::Escape);
     for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>(client->RunFrame()));
     press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(runUntil([&] { return scene().scene == PC::Scene::Lobby; }, 5), "[pvp-gw-e2e-evacuated]");
@@ -1663,6 +1664,12 @@ TEST_CASE("client: the loading screen covers the game until it is loaded and dra
     setup.Frames(2);
     const auto* after = setup.Root() != 0 ? setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root()) : nullptr;
     CHECK_MESSAGE((after == nullptr || after->canvas != "loading"), "[pvp-loading-gone]");
+    // The game shows when it begins, without the pause (the player's report: it paused as soon as it began, the pointer
+    // being not yet the game's); its first click takes the pointer.
+    setup.Frames(5);
+    CHECK_FALSE(PC::StatusOf(setup.Client()).captured);
+    const auto* later = setup.Root() != 0 ? setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root()) : nullptr;
+    CHECK_MESSAGE((later == nullptr || later->canvas != "pause"), "[pvp-play-not-paused] no pause when the game begins");
 }
 
 TEST_CASE("client: gateway: a game that ends on its own goes back to the lobby without leaving the room, and does not reconnect") {
@@ -1765,6 +1772,7 @@ TEST_CASE("client: the loading screen waits for the Match's start; it is judged 
         REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
         setup.Frames(10);
         CHECK_FALSE(PC::StatusOf(setup.Client()).started);
+        REQUIRE_MESSAGE(setup.Root() != 0, "[pvp-loading-waits-start] the loading page's root is there");
         const auto* root = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
         CHECK_MESSAGE(root->canvas == "loading", "[pvp-loading-waits-start] ready, but the match has not started: still covered");
         CHECK(setup.Binding("loading") == "ほかのプレイヤーを待っています…");

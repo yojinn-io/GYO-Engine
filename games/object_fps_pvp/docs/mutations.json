@@ -1617,7 +1617,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    if (!controls->controls.Captured()) page->Request(GamePage::Paused);\n",
+   "find": "    if (controls->pauseAsked) page->Request(GamePage::Paused);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -2194,6 +2194,32 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: the rules of an arena file",
    "expect": "version\\\": 2"
+  },
+  {
+   "id": "pvp-pause-when-not-held",
+   "what": "the game pauses whenever the pointer is not its own (so at once when it begins)",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the pause)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape;\n",
+   "replace": "    c.pauseAsked = !c.controls.Captured();\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen covers*",
+   "expect": "pvp-play-not-paused"
+  },
+  {
+   "id": "pvp-pause-esc-ignored",
+   "what": "Esc does not pause a game whose pointer was never taken",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the pause)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape;\n",
+   "replace": "    c.pauseAsked = before && !c.controls.Captured();\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room? a game without a server*",
+   "expect": "pvp-pause-shown"
   }
  ]
 }
