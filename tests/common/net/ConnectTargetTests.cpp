@@ -179,7 +179,11 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
         world.RemoveResource<N::NetConnectTarget>();
         return {};
     }})));
-    for (int i = 0; i < 5; ++i) {
+    // Over real UDP the Disconnect takes as long as the loopback does: wait for both ends, bounded like the connect above.
+    const auto closed = [&] {
+        return !(*c)->Buffer().Find<N::NetService>()->UdpAddress().has_value() && PeersOf((*s)->World("Net").GetWorld()).empty();
+    };
+    for (int i = 0; i < 200 && !closed(); ++i) {
         REQUIRE(static_cast<bool>((*c)->RunFrame()));
         REQUIRE(static_cast<bool>((*s)->RunFrame()));
     }
