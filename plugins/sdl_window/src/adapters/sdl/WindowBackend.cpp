@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <utility>
@@ -61,6 +62,8 @@ Win::WindowResized ResizedNow(SDL_Window* window, const Engine::Time::TimePoint 
 
 bool OwnWindow(SDL_Window* window, const SDL_WindowID id) noexcept { return id == SDL_GetWindowID(window); }
 
+bool IsFullscreen(SDL_Window* window) noexcept { return (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0; }
+
 } // namespace
 
 In::KeyCode KeyCodeOf(const SDL_Scancode scancode) noexcept {
@@ -88,6 +91,17 @@ char32_t CharacterOf(const SDL_Scancode scancode) noexcept {
 float LogicalPerWindowCoordinate(SDL_Window* window) noexcept {
     return LogicalPerCoordinate(SDL_GetWindowPixelDensity(window), SDL_GetWindowDisplayScale(window));
 }
+
+namespace {
+
+// A size in logical pixels to SDL's window coordinates (pixels on Windows).
+bool SetWindowSizeLogical(SDL_Window* window, const Engine::Math::Vec2i logicalSize) {
+    const float toWindow = 1.0F / LogicalPerWindowCoordinate(window);
+    return SDL_SetWindowSize(window, static_cast<int>(std::lround(static_cast<float>(logicalSize.x) * toWindow)),
+                             static_cast<int>(std::lround(static_cast<float>(logicalSize.y) * toWindow)));
+}
+
+} // namespace
 
 void OrderTimes(Translated& translated, std::optional<Engine::Time::TimePoint>& last) {
     if (translated.Size() == 0) return;
@@ -223,6 +237,14 @@ Translated Translate(const SDL_Event& event, const SDL::ClockPair& pair, const E
         if (!OwnWindow(window, event.window.windowID)) break;
         out.window.emplace_back(ResizedNow(window, time));
         break;
+    case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        if (!OwnWindow(window, event.window.windowID)) break;
+        out.window.emplace_back(Win::WindowModeChanged{Win::WindowMode::BorderlessFullscreen, time});
+        break;
+    case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+        if (!OwnWindow(window, event.window.windowID)) break;
+        out.window.emplace_back(Win::WindowModeChanged{Win::WindowMode::Windowed, time});
+        break;
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         if (!OwnWindow(window, event.window.windowID)) break;
         out.window.emplace_back(Win::WindowCloseRequested{Win::CloseSource::Window, time});
@@ -290,6 +312,10 @@ struct WindowBackend::State {
     // An exception that left the live frame: kept here (it must not cross SDL's C code, its watcher lock and the
     // OS's modal loop: master's pit 4) and thrown again once the pump or the wait returned.
     std::exception_ptr liveException;
+    // The request side's own cache (as sdl_window's AppliedRequests, not event state: SDL-7): the mode asked last,
+    // and a Windowed size (logical pixels) held while the window is or is to be fullscreen (SetSize).
+    bool askedFullscreen = false;
+    std::optional<Engine::Math::Vec2i> heldWindowedSize;
 };
 
 namespace {
@@ -337,6 +363,9 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
     SDL_WindowFlags flags = SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (settings.window.resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (settings.window.hidden) flags |= SDL_WINDOW_HIDDEN;
+    // No fullscreen mode is set: SDL's fullscreen is the desktop's (borderless).
+    const bool fullscreen = settings.window.mode == Win::WindowMode::BorderlessFullscreen;
+    if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
     SDL_Window* window = SDL_CreateWindow(settings.window.title.c_str(), settings.window.size.x, settings.window.size.y, flags);
     if (window == nullptr) {
         BackendFailure failure = BackendFailure::Make(BackendFailureCode::WindowFailed, std::string("SDL_CreateWindow: ") + SDL_GetError());
@@ -345,14 +374,17 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
         if (settings.logicalMotion) static_cast<void>(SDL_ResetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE));
         return Engine::Base::Err(std::move(failure));
     }
-    // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
-    // is set again at the display's scale.
-    const float perCoordinate = Adapter::LogicalPerWindowCoordinate(window);
-    if (perCoordinate != 1.0F) {
-        static_cast<void>(SDL_SetWindowSize(window, static_cast<int>(std::lround(static_cast<float>(settings.window.size.x) / perCoordinate)),
-                                            static_cast<int>(std::lround(static_cast<float>(settings.window.size.y) / perCoordinate))));
-    }
     auto state = std::make_unique<State>();
+    state->askedFullscreen = fullscreen;
+    // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
+    // is set again at the display's scale (made fullscreen: held for when it becomes Windowed).
+    if (Adapter::LogicalPerWindowCoordinate(window) != 1.0F) {
+        if (fullscreen) {
+            state->heldWindowedSize = settings.window.size;
+        } else {
+            static_cast<void>(Adapter::SetWindowSizeLogical(window, settings.window.size));
+        }
+    }
     state->window = window;
     state->clipboardLimit = settings.clipboardLimit;
     state->editingUnit = Adapter::EditingUnitOf(SDL_GetCurrentVideoDriver());
@@ -434,6 +466,7 @@ WindowSnapshot WindowBackend::Snapshot() const {
     now.physicalSize = size.physicalSize;
     now.scaleFactor = size.scaleFactor;
     now.focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+    now.mode = Adapter::IsFullscreen(window) ? Win::WindowMode::BorderlessFullscreen : Win::WindowMode::Windowed;
     now.clipboard = Adapter::ClipboardText(state_->clipboardLimit, now.clipboardTruncated);
     return now;
 }
@@ -481,10 +514,29 @@ bool WindowBackend::SetTitle(const std::string& title) {
 
 bool WindowBackend::SetSize(const Engine::Math::Vec2i logicalSize) {
     RequireMainThread();
-    const float toWindow = 1.0F / Adapter::LogicalPerWindowCoordinate(state_->window);
-    return Done(SDL_SetWindowSize(state_->window, static_cast<int>(std::lround(static_cast<float>(logicalSize.x) * toWindow)),
-                                  static_cast<int>(std::lround(static_cast<float>(logicalSize.y) * toWindow))),
-                lastError_);
+    if (state_->askedFullscreen || Adapter::IsFullscreen(state_->window)) {
+        state_->heldWindowedSize = logicalSize;
+        return true;
+    }
+    state_->heldWindowedSize.reset();  // a size given now replaces one held from before
+    return Done(Adapter::SetWindowSizeLogical(state_->window, logicalSize), lastError_);
+}
+
+bool WindowBackend::SetMode(const Win::WindowMode mode) {
+    RequireMainThread();
+    const bool fullscreen = mode == Win::WindowMode::BorderlessFullscreen;
+    // nullptr: the desktop's mode (borderless), whatever was set before.
+    if (fullscreen && !Done(SDL_SetWindowFullscreenMode(state_->window, nullptr), lastError_)) return false;
+    if (!Done(SDL_SetWindowFullscreen(state_->window, fullscreen), lastError_)) return false;
+    state_->askedFullscreen = fullscreen;
+    return true;
+}
+
+bool WindowBackend::FlushWindowedSize() {
+    RequireMainThread();
+    if (!state_->heldWindowedSize || state_->askedFullscreen || Adapter::IsFullscreen(state_->window)) return true;
+    const Engine::Math::Vec2i size = *std::exchange(state_->heldWindowedSize, std::nullopt);
+    return Done(Adapter::SetWindowSizeLogical(state_->window, size), lastError_);
 }
 
 bool WindowBackend::SetCursorGrab(const Win::CursorGrab grab) {

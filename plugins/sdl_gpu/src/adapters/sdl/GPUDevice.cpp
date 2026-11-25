@@ -20,6 +20,7 @@
 #include "engine/render/ShaderAbi.hpp"
 
 #include "../../EmbeddedShaders.hpp"
+#include "../../PresentModes.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -128,6 +129,8 @@ struct GPUDevice::State {
     SDL_Window* window = nullptr;
     bool videoStarted = false;
     std::string driver;
+    // SDL claims the window with VSYNC (SDL_ClaimWindowForGPUDevice).
+    SwapchainPresentMode presentMode = SwapchainPresentMode::Vsync;
     SDL_GPUShader* vertex = nullptr;
     SDL_GPUShader* fragment = nullptr;
     SDL_GPUShader* meshVertex = nullptr;
@@ -993,6 +996,38 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     cleanup();
     return image;
 }
+
+namespace {
+
+SDL_GPUPresentMode SDLPresentMode(const SwapchainPresentMode mode) noexcept {
+    switch (mode) {
+    case SwapchainPresentMode::Vsync: return SDL_GPU_PRESENTMODE_VSYNC;
+    case SwapchainPresentMode::Immediate: return SDL_GPU_PRESENTMODE_IMMEDIATE;
+    case SwapchainPresentMode::Mailbox: return SDL_GPU_PRESENTMODE_MAILBOX;
+    }
+    return SDL_GPU_PRESENTMODE_VSYNC;
+}
+
+} // namespace
+
+bool GPUDevice::SetPresentMode(const R::PresentMode mode) {
+    RequireMainThread();
+    if (state_->window == nullptr) return true;
+    SDL_GPUDevice* device = state_->device;
+    SDL_Window* window = state_->window;
+    const SwapchainPresentMode chosen =
+        ChoosePresentMode(mode, SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_IMMEDIATE),
+                          SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_MAILBOX));
+    // The composition SDL claimed the window with (SDR, sRGB-unaware UNORM: render's 2D pass blends bytes as stored).
+    if (!SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDLPresentMode(chosen))) {
+        lastError_ = SDLError("SDL_SetGPUSwapchainParameters");
+        return false;
+    }
+    state_->presentMode = chosen;
+    return true;
+}
+
+SwapchainPresentMode GPUDevice::ActivePresentMode() const noexcept { return state_->presentMode; }
 
 void GPUDevice::ForgetTextures() {
     RequireMainThread();

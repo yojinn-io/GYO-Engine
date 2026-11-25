@@ -21,6 +21,7 @@
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/render/Compose.hpp"
 #include "engine/render/Pipeline2d.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -416,6 +417,24 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     CHECK_MESSAGE(status->SkippedDraws() == 0, "[gp-frames-draws] no draw skipped");
     CHECK_MESSAGE(!status->DriverName().empty(), "[gp-frames-driver] SDL names its driver");
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-frames-texture] the texture asked for in the first frame has a GPU texture");
+
+    // VSync off and on again from render's Presentation (window-mode-vsync declaration, section 4.3).
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-default] the swapchain starts with VSYNC");
+    K::World& world = product.World("Main").GetWorld();
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    const G::SwapchainPresentMode off = status->ActivePresentMode();
+    MESSAGE("VSync off on " << status->DriverName() << ": " << std::string(G::ToString(off)));
+    CHECK_MESSAGE(status->RefusedPresentModes() == 0, "[gp-present-none-refused] " << status->LastFailure());
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoVsync;
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-back] VSync on again is VSYNC");
+    CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-present-frames] no frame failed across the changes: " << status->LastFailure());
+    // A driver that has no other mode keeps VSYNC for AutoNoVsync; every desktop driver SDL_GPU uses has IMMEDIATE or
+    // MAILBOX (Metal, D3D12, Vulkan on X11), so here it must have changed.
+    CHECK_MESSAGE(off != G::SwapchainPresentMode::Vsync, "[gp-present-off] VSync off left VSYNC (" << std::string(G::ToString(off)) << ")");
 
     // A replacement that fails before the swap: the old World goes on drawing with its textures.
     O::ReplaceRequest failing;

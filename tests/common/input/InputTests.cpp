@@ -49,6 +49,7 @@ struct Pending {
     std::vector<I::TextCommitted> committed;
     std::vector<W::WindowResized> resized;
     std::vector<W::WindowFocused> focused;
+    std::vector<W::WindowModeChanged> modeChanged;
     std::vector<W::WindowCloseRequested> closeRequested;
     std::vector<W::ClipboardChanged> clipboard;
 };
@@ -81,9 +82,11 @@ SystemResult WriteInput(K::MessageWriter<I::KeyboardInput> keys, K::MessageWrite
 }
 
 SystemResult WriteWindow(K::MessageWriter<W::WindowResized> resized, K::MessageWriter<W::WindowFocused> focused,
+                         K::MessageWriter<W::WindowModeChanged> modeChanged,
                          K::MessageWriter<W::WindowCloseRequested> closeRequested, K::MessageWriter<W::ClipboardChanged> clipboard) {
     SendAll(pending.resized, resized);
     SendAll(pending.focused, focused);
+    SendAll(pending.modeChanged, modeChanged);
     SendAll(pending.closeRequested, closeRequested);
     SendAll(pending.clipboard, clipboard);
     return {};
@@ -279,6 +282,21 @@ TEST_CASE("window: the state from the Messages, and a close request sets close")
     pending.closeRequested.push_back(W::WindowCloseRequested{W::CloseSource::Window, {}});
     Frame(*p);
     CHECK_MESSAGE(Res<W::WindowRequest>(*p).close, "[wn-close-when-requested] a close request sets close (closeWhenRequested on)");
+}
+
+TEST_CASE("window: the mode from WindowModeChanged, the last of the frame") {
+    auto p = Make();
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[wn-mode-windowed-first] a new World starts Windowed");
+    pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::BorderlessFullscreen, {}});
+    Frame(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[wn-mode] the mode the backend reported");
+    pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::Windowed, {}});
+    pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::BorderlessFullscreen, {}});
+    pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::Windowed, {}});
+    Frame(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[wn-mode-last] the last mode of the frame");
+    Frame(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[wn-mode-kept] a frame without one keeps it");
 }
 
 TEST_CASE("window: closeWhenRequested off leaves the close to the game") {

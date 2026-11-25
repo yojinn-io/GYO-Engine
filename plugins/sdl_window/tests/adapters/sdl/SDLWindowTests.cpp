@@ -885,4 +885,143 @@ TEST_CASE("sdl_window: an exception that leaves a lent World's round goes on fro
     CHECK(p->Failure()->world == "Sim");
 }
 
+// ---- The window's mode (window-mode-vsync declaration, section 4.1 and 4.2).
+
+TEST_CASE("sdl_window: entering and leaving fullscreen become WindowModeChanged") {
+    auto backend = MakeBackend();
+    Drain(*backend);
+    const SDL_WindowID id = IdOf(*backend);
+    Push(WindowEvent(id, SDL_EVENT_WINDOW_ENTER_FULLSCREEN));
+    Push(WindowEvent(id + 1000, SDL_EVENT_WINDOW_ENTER_FULLSCREEN));
+    Push(WindowEvent(id, SDL_EVENT_WINDOW_LEAVE_FULLSCREEN));
+    S::EventQueue queue(1024, 256);
+    backend->Pump(queue);
+    const std::vector<S::WindowItem> window = queue.TakeWindow();
+    REQUIRE_MESSAGE(window.size() == 2, "[sw-map-mode-count] two WindowModeChanged (another window's is nothing)");
+    REQUIRE(Is<W::WindowModeChanged>(window[0]));
+    CHECK_MESSAGE(std::get<W::WindowModeChanged>(window[0]).mode == W::WindowMode::BorderlessFullscreen,
+                  "[sw-map-enter-fullscreen] entering fullscreen is BorderlessFullscreen");
+    REQUIRE(Is<W::WindowModeChanged>(window[1]));
+    CHECK_MESSAGE(std::get<W::WindowModeChanged>(window[1]).mode == W::WindowMode::Windowed, "[sw-map-leave-fullscreen] leaving it is Windowed");
+}
+
+namespace {
+
+// A shown window (SDL's dummy driver keeps a hidden window's fullscreen pending until it is shown).
+W::WindowSettings Shown(const W::WindowMode mode = W::WindowMode::Windowed) {
+    W::WindowSettings settings = Hidden();
+    settings.hidden = false;
+    settings.size = {640, 480};
+    settings.mode = mode;
+    return settings;
+}
+
+// What the test's System sends in the next frame.
+std::vector<W::SetWindowMode> modeAsks;
+std::vector<W::ResizeWindow> sizeAsks;
+K::SystemResult SendAsks(K::MessageWriter<W::SetWindowMode> modes, K::MessageWriter<W::ResizeWindow> sizes) {
+    for (const W::SetWindowMode& m : std::exchange(modeAsks, {})) modes.Send(m);
+    for (const W::ResizeWindow& r : std::exchange(sizeAsks, {})) sizes.Send(r);
+    return {};
+}
+void InsertAsks(O::Product& p) {
+    modeAsks.clear();
+    sizeAsks.clear();
+    REQUIRE(static_cast<bool>(p.InsertSystems("Main", "test", [](K::Registrar& r) { r.AddSystem<&SendAsks>(InFrameUpdate("TestAsks")); })));
+}
+// A request is applied at the end of its frame (Last); SDL's events from it are taken in the next frame's pump.
+void TwoFrames(O::Product& p) {
+    Frame(p);
+    Frame(p);
+}
+GYO::Engine::Math::Vec2i DesktopPixels(SDL_Window* window) {
+    const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(window));
+    REQUIRE(mode != nullptr);
+    return {static_cast<int>(static_cast<float>(mode->w) * mode->pixel_density), static_cast<int>(static_cast<float>(mode->h) * mode->pixel_density)};
+}
+GYO::Engine::Math::Vec2i Pixels(const GYO::Engine::Math::Vec2i logical, const float scale) {
+    return {static_cast<int>(static_cast<float>(logical.x) * scale), static_cast<int>(static_cast<float>(logical.y) * scale)};
+}
+
+} // namespace
+
+TEST_CASE("sdl_window: SetWindowMode makes the window borderless fullscreen at the screen's size, and Windowed again at its size") {
+    auto p = Make(false, Shown());
+    InsertAsks(*p);
+    Frame(*p);
+    SDL_Window* window = WindowOf(*p);
+    const float scale = Res<W::WindowState>(*p).scaleFactor;
+    REQUIRE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed);
+    REQUIRE((Res<W::WindowState>(*p).physicalSize == Pixels({640, 480}, scale)));
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::BorderlessFullscreen});
+    TwoFrames(*p);
+    CHECK_MESSAGE((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0, "[sw-mode-fullscreen-sdl] SDL's window is fullscreen");
+    const SDL_DisplayMode* fullscreenMode = SDL_GetWindowFullscreenMode(window);
+    CHECK_MESSAGE(fullscreenMode == nullptr, "[sw-mode-desktop] at the desktop's mode (borderless, no display mode set)");
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[sw-mode-fullscreen] window's state says so");
+    const GYO::Engine::Math::Vec2i screen = DesktopPixels(window);
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == screen), "[sw-mode-fullscreen-size] the size is the screen's, as it is");
+    const C::TargetSize* target = Res<C::CameraTargetSizes>(*p).Find(C::CameraTarget{0});
+    REQUIRE(target != nullptr);
+    CHECK_MESSAGE((target->physicalSize == screen), "[sw-mode-camera] the camera's main target follows it (Letterbox works from it)");
+    // A size asked while fullscreen is the Windowed size: the fullscreen picture stays.
+    sizeAsks.push_back(W::ResizeWindow{{800, 600}});
+    TwoFrames(*p);
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == screen), "[sw-mode-size-held] a size asked in fullscreen does not change it");
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[sw-mode-size-keeps-mode] and it stays fullscreen");
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::Windowed});
+    TwoFrames(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[sw-mode-windowed] Windowed again");
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({800, 600}, scale)),
+                  "[sw-mode-held-size-applied] at the size asked while fullscreen");
+    // Without a size asked in between: back to the size it had.
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::BorderlessFullscreen});
+    TwoFrames(*p);
+    REQUIRE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen);
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::Windowed});
+    sizeAsks.push_back(W::ResizeWindow{{1024, 576}});  // sent with Windowed: the mode first, then the size
+    TwoFrames(*p);
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({1024, 576}, scale)), "[sw-mode-size-with-windowed] a size sent with Windowed");
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::BorderlessFullscreen});
+    TwoFrames(*p);
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::Windowed});
+    TwoFrames(*p);
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({1024, 576}, scale)), "[sw-mode-restored] back to the Windowed size it had");
+    CHECK_MESSAGE(PumpOf(*p).RefusedRequests() == 0, "[sw-mode-none-refused] " << PumpOf(*p).LastRefusal());
+}
+
+TEST_CASE("sdl_window: a window made borderless fullscreen; Windowed gives it WindowSettings' size") {
+    auto p = Make(false, Shown(W::WindowMode::BorderlessFullscreen));
+    InsertAsks(*p);
+    Frame(*p);
+    SDL_Window* window = WindowOf(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[sw-made-fullscreen] the first round reports the mode");
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == DesktopPixels(window)), "[sw-made-fullscreen-size] at the screen's size");
+    const float scale = Res<W::WindowState>(*p).scaleFactor;
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::Windowed});
+    TwoFrames(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[sw-made-windowed] Windowed");
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({640, 480}, scale)), "[sw-made-windowed-size] at WindowSettings::size");
+    CHECK_MESSAGE(PumpOf(*p).RefusedRequests() == 0, "[sw-made-none-refused] " << PumpOf(*p).LastRefusal());
+}
+
+TEST_CASE("sdl_window: a SetWindowMode sent in a live frame waits for the next frame outside it") {
+    auto p = Make(false, Shown());
+    InsertAsks(*p);
+    Frame(*p);
+    SDL_Window* window = WindowOf(*p);
+    O::Product* product = p.get();
+    PumpOf(*p).SetLiveFrame([product] {
+        modeAsks.push_back(W::SetWindowMode{W::WindowMode::BorderlessFullscreen});
+        static_cast<void>(product->RunFrame());
+    });
+    ExposeAsk live{SDL_GetWindowID(window), 1, {}};
+    ExposeInNextPump(live);
+    PumpOf(*p).Pump();
+    PumpOf(*p).SetLiveFrame({});
+    CHECK_MESSAGE((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0, "[sw-live-mode-kept] nothing asked of the window inside the live frame");
+    Frame(*p);
+    CHECK_MESSAGE((SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0, "[sw-live-mode-next-frame] applied by the next frame");
+}
+
 } // namespace GYO::Plugins::SDLWindow

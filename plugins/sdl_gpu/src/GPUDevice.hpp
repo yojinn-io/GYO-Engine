@@ -13,10 +13,12 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "plugins/sdl/NativeWindow.hpp"
+#include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -112,6 +114,12 @@ public:
                                                                            std::span<const Engine::Render::MeshOp> meshAsks,
                                                                            const Engine::Render::RenderCommands& commands,
                                                                            Engine::Render::TargetSize size, FrameTally& tally);
+    // Sets the window's swapchain to the first present mode of mode's chain the window supports (ChoosePresentMode),
+    // waiting for the GPU (SDL_SetGPUSwapchainParameters). false: SDL refused (the text in LastError()); the mode
+    // stays. A device without a window has no swapchain: true, nothing set.
+    bool SetPresentMode(Engine::Render::PresentMode mode);
+    // The swapchain's present mode now (SDL claims the window with VSYNC).
+    [[nodiscard]] SwapchainPresentMode ActivePresentMode() const noexcept;
     // Lets every texture of the asks go (a new World's ids start again at 1). The white texture stays.
     void ForgetTextures();
     // Lets every mesh of the asks go (as ForgetTextures).
