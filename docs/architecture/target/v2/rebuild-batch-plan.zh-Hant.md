@@ -193,7 +193,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **要做**：同一 userId 帶有效 token 重連時頂掉舊連線（`v8-arch-gyo2-direct-connect-and-kick-old`；現在 Match 的 admission「這個 userId 沒有連線中」要等舊連線 `timeoutAfter` 10 秒） | 使用者 2026-11-25 | Gateway 卡做在 #340（第 4 段）；先查 net 的 `ServerHost`／lightyear netcode 再判要不要動 net |
 | 資安（Client↔Gateway 加 TLS、網路宣告 Q7 加密與認證、PV19 rate limit 與防偽造）：使用者「現在不用考慮資安」 | 使用者 2026-11-25 | 上線前再議 |
 | Gateway 的 UDP 中繼（master 的結構）：使用者「先直連」，部署時要藏 Match 位址、在入口擋攻擊時再加（Q2 留了路） | 使用者 2026-11-25 | 之後再議 |
-| `DatagramAddress` 改名（約 25 個檔；TCP 的 `StreamSocket` 也流用它，名字只說了 datagram；會碰 net 的 `NetService`）——Gateway #339 設計審查 S5 交主會話，改名要排前面、同時立規則 | Gateway #339 | 獨立的改名批（未開） |
+| `DatagramAddress` 改名（約 25 個檔；TCP 的 `StreamSocket` 也流用它，名字只說了 datagram；會碰 net 的 `NetService`）——Gateway #339 設計審查 S5 交主會話，改名要排前面、同時立規則 | Gateway #339 | **已開卡**（使用者 2026-11-25「DatagramAddress 改名的卡先開」；`local_344c0611`，Opus／medium） |
 | net 的觀察（Gateway #340 審查 N9）：`ServerHost::Respond` 先結束同一 endpoint 的舊連線再問 admission，帶過期 token 從同一 endpoint 重連會先斷掉自己還活著的連線 | Gateway #340 | 下一個碰 net 的批（`DatagramAddress` 改名批可一起看） |
 | `Sha256` 改成從位元組版 `Sha256Digest` 出 hex 後，net 的 `Handshake.cpp:95` 與 authority 的 `Registrations.cpp:79` 仍自己轉 hex（#339 沒動） | Gateway #339 | 下一個碰 net／authority 的批 |
 
