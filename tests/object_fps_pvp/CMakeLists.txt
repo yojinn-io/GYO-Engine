@@ -11,6 +11,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     ArenaTests.cpp
     ControlsTests.cpp
     HitFeedbackTests.cpp
+    InterpolationTests.cpp
     PlanarMovementTests.cpp
     PlayerSaveTests.cpp
     SaveSyncTests.cpp
