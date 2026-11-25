@@ -3,6 +3,8 @@
 # the port's own (port declaration, section 3).
 # Headless: no window, GPU, audio device or network socket.
 gyo_get_game_target(object_fps_pvp logic object_fps_pvp_logic)
+# The arena's map reader (data/ArenaMap) is in the world library, with the voxel_map Module it reads through.
+gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
 add_executable(gyo_object_fps_pvp_logic_tests
     TestMain.cpp
     AdmissionTokenTests.cpp
@@ -16,7 +18,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     SaveSyncTests.cpp
     RulesTests.cpp
     SoundCuesTests.cpp)
-target_link_libraries(gyo_object_fps_pvp_logic_tests PRIVATE ${object_fps_pvp_logic} doctest::doctest)
+target_link_libraries(gyo_object_fps_pvp_logic_tests PRIVATE ${object_fps_pvp_logic} ${object_fps_pvp_world} doctest::doctest)
 # The game's own content files the parsers are checked against.
 target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
@@ -63,7 +65,7 @@ target_include_directories(gyo_object_fps_pvp_client_tests PRIVATE "${CMAKE_CURR
 # The Gateway's tests answer as the Gateway through gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld gyo_test_loopback_listener
     doctest::doctest)
-gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render
+gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render visibility
     world_ui ui_render)
 target_compile_definitions(gyo_object_fps_pvp_client_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp")

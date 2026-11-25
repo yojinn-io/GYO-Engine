@@ -48,7 +48,7 @@ std::optional<ArenaContent> ParseArena(const std::string_view text, std::string&
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the arena");
-        if (data::Integer(data::Member(json, "version"), "version") != 2) throw std::runtime_error("unsupported arena version");
+        if (data::Integer(data::Member(json, "version"), "version") != 3) throw std::runtime_error("unsupported arena version");
         ArenaContent arena;
         arena.id = data::String(data::Member(json, "id"), "id");
         if (arena.id.empty() || arena.id.size() > 64) throw std::runtime_error("id is 1 to 64 characters");
@@ -64,7 +64,7 @@ std::optional<ArenaContent> ParseArena(const std::string_view text, std::string&
         if (arena.eyeHeight > arena.bodyHeight) throw std::runtime_error("the eye is above the top of the body");
         if (arena.bodyHeight < 2 * arena.radius) throw std::runtime_error("the body is shorter than its two caps");
         if (!std::isfinite(2 * arena.gravity * arena.jumpHeight)) throw std::runtime_error("the jump speed is not finite");
-        arena.geometry = PlainName(data::Member(json, "geometry"), "geometry");
+        arena.map = PlainName(data::Member(json, "map"), "map");
         const auto spawns = data::Member(json, "spawns").AsArray();
         if (!spawns) throw std::runtime_error("spawns is not an array");
         for (const auto item : spawns.value()) {

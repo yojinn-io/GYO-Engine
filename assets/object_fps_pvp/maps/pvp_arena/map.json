@@ -1,0 +1,17 @@
+{
+  "schema": "gyo.voxel_map",
+  "version": 1,
+  "source_sha256": "6a350f4cc481ff3529251534d6f591b1d6d3e42a7418683e11303bc560c0c1b8",
+  "build_version": "voxel_map_editor 2",
+  "origin": [-1, 0, -1],
+  "cell_size": 1.0,
+  "chunk_size": 16,
+  "region_size": 8,
+  "bounds": { "min": [0, 0, 0], "max": [1, 0, 1] },
+  "palette": [
+    { "name": "wall", "faces": [[99, 121, 134, 255], [99, 121, 134, 255], [124, 151, 168, 255], [62, 76, 84, 255], [81, 98, 109, 255], [81, 98, 109, 255]] }
+  ],
+  "regions": [
+    { "at": [0, 0], "file": "regions/r_0_0_50fa801b2d7c2f45.json", "sha256": "50fa801b2d7c2f45c66ceded4322148e18f05ce979bfc49c0b9d38a0a39f9169" }
+  ]
+}

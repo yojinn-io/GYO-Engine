@@ -1,0 +1,4 @@
+# The chunked maps (gyo.voxel_map index and gyo.voxel_region files): the index binds each region's bytes by SHA-256
+# (rule R3), so keep them exactly as committed on every platform (no line-ending conversion).
+*/map.json -text
+*/regions/*.json -text

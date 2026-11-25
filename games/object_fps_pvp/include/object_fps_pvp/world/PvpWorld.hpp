@@ -22,11 +22,12 @@
 // without input in a step (a player the Client does not control) neither moves nor turns.
 
 #include "object_fps_pvp/character/CharacterRig.hpp"
-#include "object_fps_pvp/data/VoxelMeshFile.hpp"
+#include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/world/Components.hpp"
 
 #include "engine/entity_ids/EntityIdsModule.hpp"
 #include "engine/math/geometry/Aabb.hpp"
+#include "engine/physics_3d/Shapes.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
@@ -45,11 +46,12 @@ namespace object_fps_pvp::world {
 namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 
-// An installed arena: its file, its baked geometry and its walls in world coordinates.
+// An installed arena: its file, its map (the Client draws its regions) and its walls, built once into one BoxSet that
+// every World of the Product shares (a BoxSet's body is shared and immutable; big-map declaration section 15).
 struct InstalledArena final {
     sim::ArenaContent content;
-    data::VoxelMeshFile geometry;
-    std::vector<Math::Aabb> walls;
+    std::shared_ptr<const data::ArenaMap> map;
+    GYO::Engine::Physics3d::BoxSet walls;
     std::uint64_t wallsDigest = 0;
 };
 

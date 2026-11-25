@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "default_variant": "cli",
+  "requires_games": {},
+  "variants": {
+    "cli": {
+      "components": [],
+      "packageable": false
+    }
+  }
+}
