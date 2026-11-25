@@ -42,8 +42,9 @@ Owner：產品（`games/object_fps_pvp`）。PvP 移植實作卡（GYO2 主會�
 - 本機（Intel Mac）：`ctest -R object_fps_pvp` 6/6（`logic`、`world`、`client`、`main`、`main_connect`、`match`）。
 - J5 新案 `client: J5 while the main thread stops for 250 ms…`：測試自己的「模擬執行緒」跑 Sim 的租約、Match 與 MemoryLink（MemoryLink 兩端要在同一條執行緒），主執行緒跑 Frame 的幀、中間睡 250 ms。判定：停住期間每輪一步、Match 每步都取用這個 Client 的輸入且缺 0、每步的輸入都帶著按住的 W、停住之後 Frame 的 tick 越過停住期間的最後一步（只套最新的一份）；交還之後仍連著、Match 上仍有玩家。第一版每輪睡 1 ms（本機 163 輪），審查 S3（Windows 的 1 ms 約 15.6 ms，門檻 10 太窄）後改成 `yield`；同時「玩家在 Match 上走了」改成「每步的 `PlayerInput.forward` 都大於 0」（輪數變多後，玩家在停住前就走到牆邊）。改後本機連跑三次：停住期間 3190、2938、24 輪，都缺 0。
 - 突變：新的 `pvp-exchange-press-not-accumulated`（交換只留最新的控制、按下被蓋掉）、`pvp-step-press-repeats`（`WriteStepInput` 不清按下）、`pvp-frame-mirror-kept`（Sim 沒有的玩家 Frame 不刪）、審查後加的 `pvp-exchange-add-overwrites`（`AddControls` 只留最新一幀）、`pvp-frame-arena-kept`（Frame 不跟著換競技場），與 `ClientWorld.cpp` 相關的既有 6 個（`pvp-press-lost`、`-cursor-not-locked`、`-character-not-shown`、`-hit-direction-not-drawn`、`-hit-no-shake`、`-session-end-ignored`）共 11/11 killed（審查修正後重跑）。
+- J7 實機（macOS，使用者 2026-11-25，Intel Mac）：Match＋兩個本版的 Client（user 1、2）＋一個拆開前的對照版（a33951a9，user 3）。在標題列按住約 15 秒（超過 net 的 10 秒逾時，`Handshake.hpp:123`），新舊兩版都留在遊戲裡、Match 沒有判斷線（log 只有關窗時的 `left ()`）。視窗設成不能縮放，只試了標題列。結論：macOS 拖標題列時 #331 的 live frame 已經撐住，本批沒有讓它變差；拆執行緒的效果由 J5 證明。「拖著視窗同時移動」一個人做不到（拖之前要按 Esc 放開滑鼠，按住的鍵跟著清掉），也由 J5 的「每步的輸入都帶著 W」代替。使用者：「可以，這樣記」。
 - **沒驗**：
-  - J7 實機（拖視窗角、拖標題列時畫面照跑、Match 不判斷線、自己的玩家在對手畫面上照常動）：交使用者。`client_main` 的 `ownThreadWorlds = {"Sim"}` 沒有自動測試會殺（`main_connect` 只跑幀數、不量拖動），由 J7 驗。
+  - J7 實機（Windows）：有 Windows 機器時再試。那裡的拖動、縮放會把主執行緒卡在系統的迴圈裡，live frame 只補得到一部分，才看得出拆執行緒的差別。`client_main` 的 `ownThreadWorlds = {"Sim"}` 沒有自動測試會殺（`main_connect` 只跑幀數、不量拖動）。
   - ThreadSanitizer：沒跑。
 
 ## 設計審查（Opus／high，唯讀；作者同模型，脈絡分離：只給原始需求、宣告與 diff）
