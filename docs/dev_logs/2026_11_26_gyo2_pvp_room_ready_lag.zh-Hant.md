@@ -96,8 +96,17 @@ blocker 0、should 5、nit 9。確認這個範圍沒有 Engine 的改動。
 
 使用者：「這個東西繼續觀察吧，我當時碰到的卡頓是完全無響應。」Spaces 的兩個選項都不做、Engine 不改；第一次的「完全沒反應、幾十秒」不是 Space 切換的 ~1 秒，原因未找到。
 
-- **主迴圈心跳**（`--verbose`，`client_main.cpp`，產品自己的標記，不動 Engine）：迴圈在每一段的開頭記下「現在在哪一段、從何時起」——Frame World（`Main/First`）、Render World 到畫之前（Extract）、畫（`Submit` stage，在 `GPUSubmit` 之前：GPU 的 acquire 與 present）、兩幀之間（`Cleanup` stage 之後：window 的 event pump、換場景、等待）。另一條執行緒每 200 ms 看一次：一段超過 1 秒就當下記一行「no frame for N s, in <段>」（迴圈一直不回來也留得下），之後每 5 秒再記，回來時記「going again after N s in <段>」。pump 和等待是 `sdl_window` 自己的，分不開。
-- 實測（臨時把門檻降到 300 ms，兩個全屏 Client，`20261126-062523-heartbeat-300ms-check/`）：卡住的當下記到「in the drawing (the GPU's acquire and present)」，回來時「going again after 1.1 s」。門檻 1 秒時，1.08 秒的停頓可能落在兩次檢查之間而不記（`20261126-062443-heartbeat-full-full/`）：要抓的是「完全沒反應」，1 秒以內的由 `slow frame` 記。
+- **主迴圈心跳**（`--verbose`，`client_main.cpp`，產品自己的標記，不動 Engine）：迴圈在每一段開始時記下「現在在哪一段、從何時起」——Frame World（它的 exchange in：這一輪的第一件事）、Render World 到畫之前（它的 exchange in，在 extract 之前）、`sdl_gpu` 的 `GPUSubmit`（uploads、acquire、draw、present：`Submit` stage 裡、`GPUSubmit` 之前）、換場景（`betweenFrames.run` 的前後）、其餘的兩幀之間（`Cleanup` stage 之後：window 的 event pump、等待；等待受 `minFrameInterval` 4 ms 限制，超過 1 秒的幾乎只會是 pump）。另一條執行緒每 200 ms 看一次：一段超過 1 秒就當下記一行「one part of the frame for N s, in <段>」（迴圈一直不回來也留得下），之後每 5 秒再記，回來時記「going again after about N s」（最多多算 200 ms）。每段都不到 1 秒、加起來超過 1 秒的幀不在這裡記，由 `slow frame` 事後記。
+- 實測（臨時把門檻降到 300 ms，兩個全屏 Client）：卡住的當下記到「in sdl_gpu's GPUSubmit (uploads, acquire, draw, present)」，回來時「going again after about 1.2 s」（`20261126-063417-heartbeat2-300ms-check/`）。門檻 1 秒時，1.08 秒的停頓可能落在兩次檢查之間而不記（`20261126-062443-heartbeat-full-full/`）。
+
+## 第三次設計審查（Opus／high，範圍 `81e5abc8..901aa353`，審查者只拿成果物與原始要求）
+
+blocker 0、should 2、nit 9。確認沒有 Engine 的改動。
+
+- S1（Frame World 與 Render World 的標記在 stage 的尾端：world.build 在各 unit 之後登記，同一 stage 照登記順序；exchange in、asset apply、各 extract 卡住會歸到錯的段）→ 這兩個標記改成 `ExchangeIn`（每個 World 這一輪的第一件事，Render World 的 extract 在它之後）。
+- S2（讀不出連線目標時清掉動作的話沒有測試）→ 新案「開始了的房間給的連線目標讀不出來，就說出來（蓋過『開始しています…』）」（FakeGateway 的 `BadConnect`）；突變 `pvp-room-connect-problem-hidden`。
+- N1 → `Mark` 先存時間再存段。N2 → 「going again after about」。N3 → 段名「sdl_gpu's GPUSubmit (uploads, acquire, draw, present)」。N4 → 換場景單獨一段（`betweenFrames.run` 的前後）。N6 → system 名 `object_fps_pvp.Heartbeat.*`。N7 → `std::atomic<Part>`（enum class）。N8 → 看門狗一開始就記一次「the start」（啟動時卡住也看得到）。N9 → 用詞改成「one part of the frame」，上面寫明和「兩幀之間超過 1 秒」的差別。
+- 不改：N5（看門狗的判斷沒有單元測試：`client_main` 沒有測試目標，實機以降低門檻驗過）。
 
 ## 驗證
 
