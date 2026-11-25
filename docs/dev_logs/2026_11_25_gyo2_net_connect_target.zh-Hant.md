@@ -24,3 +24,18 @@ Owner：Engine（net Module）。PvP 移植實作卡（GYO2 主會話開的任�
 - `net.connect-target` 4 案：J1 沒有目標不連；J2 J3 同一個目標沿用、另一個目標開新的並關舊的、沒有目標關掉；J3 替換的 `extra` 給目標；J4 J5 UDP：server 啟動就 listen、沒有目標的 client 不開 port、種類不合不連且計一次 link failure、給位址的 client 第一幀才開 socket 並連上。
 - 突變 `nt-target-*` 5/5 killed。過程：`nt-target-none-connects` 原本是拿掉 `SetFacts` 的守門（會解參考空指標、當掉），改成「沒有目標時沿用上一個」；「換目標不關舊的」第一次 wrong_failure：同一個 endpoint 帶更大的 salt 的新握手會讓 Match 自己結束舊連線，所以觀察不到，改名 `nt-target-end-not-sent`、由「沒有目標時關掉」那一案殺。
 - **沒驗**：真的大廳（PvP 換前台 World）：等 R1b 與本批合併後在 PvP 卡接。
+
+## 設計審查（Opus／high，唯讀；作者同模型，Fable 暫停中）
+
+blocker 1、should 4、nit 7。紀錄：`build/evidence/v8-product-pvp-port/net-connect-target-design-review.zh-Hant.md`（本機）。
+
+- B1（`Close` 後馬上替換、中間沒跑一幀時，舊 session 的 Disconnect 被丟掉，Match 要等逾時；G-9 連同一個 endpoint、salt 規則遮住了它）→ `SetTarget` 不保留的 session 一律 `EndClient`（關掉、送出剩下的 datagram 給舊的位址、丟掉）。測試加「closed just before the replacement…」，突變 `nt-target-closed-dropped`。
+- S1（新連線的 epoch 變成「建 session 時的計數減一」，第一幀之前又有一次失敗的替換就錯開，B 的 Confirm 整個生命期被當 StaleEpoch）→ epoch 隨 `SetTarget` 給（`NetWorldLink::clientEpoch`），請求帶它；salt 測試同時檢查 epoch。
+- S2（net 頁沒改到的地方）→ 第 6 節第 198、205、212 行與第 9 節第 311 行改寫原句（不是附加），`UdpAddress` 註解，宣告第 4.6 節更正（net 宣告的 D-8 原文沒寫「準備時」）。
+- S3（「換目標時關掉舊的」從外面驗不到）→ 照實改宣告第 5 節的突變清單與測試註解；Disconnect 有沒有送由「沒有目標時關掉」與「Close 後馬上替換」兩案判。
+- S4（相關既有突變沒重跑）→ 重跑 epoch／resync 相關的 7 個（結果見下）。
+- N1（`SetFacts` 的 client `newWorld` 分支成了死碼）→ 拿掉，salt 測試改成「SetTarget＋SetFacts＋Close」的循環。N2（Engine 註解的產品詞）→ 改中性說法。N3（種類不合回 `Unreachable`）→ `LinkFailed`。N4（縮排）→ 改。N5、N6（開不了 socket、給 Link 卻給位址沒測）→ 加一案，突變 `nt-target-open-failure-ignored`。N7（`live` 在 Pump 之前判斷）→ 不改，和原本行為相同。
+- 要使用者決定的第 3 項（`beforeSwap` 跑了 `Main` 後替換失敗）→ 作者照 (b) 做：舊 World 的 `ReceiveNet` 發現 session 沒了而 `clientPeer` 還在時，照一般的斷線刪 Peer、發 `PeerDisconnected`。機制內的正確性，不是新規則。
+- 交使用者（主會話轉）：第 1 項（讀目標的時機：第一幀讀一次，或 Resource 第一次出現時讀，讓生成中的 World 可以「地圖載完才連」）；第 2 項（回到沒有目標的 World 之後要不要關 UDP socket：現在開了就一直開著）。
+
+修正後：`ctest -L "cpu|gpu"` 255/255、`ctest -L network` 1/1；突變：新的 `nt-target-*` 7 個（含 `nt-target-closed-dropped`、`nt-target-open-failure-ignored`）與相關既有的 epoch／resync 7 個共 14/14 killed。`nt-request-epoch-missing` 的 find 因 epoch 改由 `SetTarget` 給而 stale，照新的字面（`lastSalt_, targetEpoch_};`）改後 killed。

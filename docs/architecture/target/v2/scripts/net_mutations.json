@@ -963,7 +963,7 @@
     "net 8"
    ],
    "file": "engine/modules/net/src/NetService.cpp",
-   "find": "lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};",
+   "find": "lastSalt_, targetEpoch_};",
    "replace": "lastSalt_, 0};",
    "target": "gyo_net_tests",
    "cases": "replication:*",
@@ -1438,8 +1438,8 @@
     "net D-8 (net-connect-target declaration 5)"
    ],
    "file": "engine/modules/net/src/NetService.cpp",
-   "find": "        EndClient(now);  // to the old target: its Disconnect packets go out now",
-   "replace": "        client_.reset();",
+   "find": "    EndClient(now);\n    target_ = std::move(wanted);",
+   "replace": "    client_.reset();\n    target_ = std::move(wanted);",
    "target": "gyo_net_tests",
    "cases": "connect-target: J2 J3*",
    "expect": "\\[nt\\-target\\-none\\-closes\\]"
@@ -1469,6 +1469,32 @@
    "target": "gyo_net_tests",
    "cases": "connect-target: J4 J5*",
    "expect": "\\[nt\\-target\\-wrong\\-kind\\]"
+  },
+  {
+   "id": "nt-target-closed-dropped",
+   "what": "a session closed just before the replacement is dropped without sending its Disconnect",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    EndClient(now);\n    target_ = std::move(wanted);",
+   "replace": "    if (client_ && client_->State() != ClientState::Disconnected) EndClient(now); else client_.reset();\n    target_ = std::move(wanted);",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J3 closed just before*",
+   "expect": "\\[nt\\-target\\-closed\\-sent\\]"
+  },
+  {
+   "id": "nt-target-open-failure-ignored",
+   "what": "a client socket that cannot open is taken as opened (the target is kept)",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "            Failed(std::move(opened).error());\n            wanted.reset();",
+   "replace": "            Failed(std::move(opened).error());",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5 a client socket*",
+   "expect": "\\[nt\\-target\\-open\\-failed\\]|test case CRASHED"
   }
  ]
 }

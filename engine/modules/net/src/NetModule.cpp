@@ -52,7 +52,7 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Res<NetConnec
         // A client World's first frame (D-8): its connection. The same live one goes on (and asks for a resync when
         // it was made for an earlier World, R2); another, or none, ends it.
         world.targetPending = false;
-        service.SetTarget(target.Present() ? &*target : nullptr, service.Now());
+        service.SetTarget(target.Present() ? &*target : nullptr, service.Now(), world.clientEpoch);
         const ClientSession* client = service.Client();
         world.resyncPending = client != nullptr && client->Request().epoch != world.clientEpoch;
     }
@@ -90,7 +90,16 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Res<NetConnec
         return {};
     }
     const ClientSession* client = service.Client();
-    if (client == nullptr) return {};
+    if (client == nullptr) {
+        // The connection was ended for another World (a replacement's beforeSwap ran this World's frame, then the
+        // replacement failed and this World stayed): its Peer goes, as for any end.
+        if (world.clientPeer != 0) {
+            despawn.Entity(world.clientPeer);
+            disconnected.Send(PeerDisconnected{world.clientPeer, 0, DisconnectReason::Closed, "the connection was ended for another World"});
+            world.clientPeer = 0;
+        }
+        return {};
+    }
     const ClientState state = client->State();
     if ((state == ClientState::Connected || state == ClientState::Interrupted) && world.clientPeer == 0) {
         auto peer = spawn.New(Peer{client->Accepted()->connectionId, client->Request().userId, {}}, PeerLedger{});
@@ -162,7 +171,7 @@ void NetModule::Configure(Orchestration::ProductSetup& setup) {
     options.session.transport.channels = {{ChannelKind::OrderedReliable, 1}, {ChannelKind::Unreliable, 0}};
     std::shared_ptr<Link> link = options.link;
     // A server listens from the start; a client's socket opens with its first NetConnectTarget (net-connect-target
-    // 4.5: a game that only plays alone never opens one).
+    // 4.5: a Product whose client Worlds never name a server never opens one).
     if (!link && options.role == NetRole::Server) {
         auto opened = UdpLink::Open(options.bind);
         if (!opened) {

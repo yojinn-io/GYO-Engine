@@ -10,6 +10,7 @@
 #include "GameTestSupport.hpp"
 #include "NetTestSupport.hpp"
 #include "engine/net/MemoryLink.hpp"
+#include "engine/net/UdpLink.hpp"
 
 namespace N = GYO::Engine::Net;
 namespace OS = GYO::Engine::OS;
@@ -89,7 +90,8 @@ TEST_CASE("connect-target: J2 J3 the same target keeps the connection, another o
     *pair.want = ToServer(8);
     REQUIRE(static_cast<bool>(pair.client->ReplaceWorld("Net", {})));
     pair.Frames(30);
-    // The old one was closed at once (its Disconnect sent, not left to time out): the server has the new one only.
+    // The server has the new one only. (Over one endpoint the new handshake's larger salt also ends the old one at the
+    // server, S2 (a): that its Disconnect is sent is judged by the World without a target below and by the next case.)
     const auto& ended = SeenIn(pair.server->World("Net").GetWorld()).disconnected;
     CHECK_MESSAGE((ended.size() == 1 && ended[0].reason == N::DisconnectReason::ClosedByRemote && pair.ServerPeers().size() == 1),
                   "[nt-target-other-closes] ended " << ended.size() << ", peers " << pair.ServerPeers().size());
@@ -166,4 +168,46 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
     const auto peers = PeersOf((*s)->World("Net").GetWorld());
     REQUIRE_MESSAGE(peers.size() == 1, "the client connected over UDP");
     CHECK(peers[0].userId == 11);
+}
+
+TEST_CASE("connect-target: J3 closed just before the replacement, its Disconnect still goes out (not left to time out)") {
+    Pair pair(ToServer(7));
+    pair.Frames(40);
+    REQUIRE(pair.ServerPeers().size() == 1);
+    // The product closes and replaces the World at once, with no frame between (D-8's way), to a World without a target.
+    pair.ClientService().Close();
+    pair.want->reset();
+    REQUIRE(static_cast<bool>(pair.client->ReplaceWorld("Net", {})));
+    pair.Frames(5);
+    const auto& ended = SeenIn(pair.server->World("Net").GetWorld()).disconnected;
+    CHECK_MESSAGE((ended.size() == 1 && ended[0].reason == N::DisconnectReason::ClosedByRemote && pair.ServerPeers().empty()),
+                  "[nt-target-closed-sent] the server took the player off at once: ended " << ended.size());
+}
+
+TEST_CASE("connect-target: J4 J5 a client socket that cannot open, and an address over a given Link, connect to nothing") {
+    // The port is taken: the client's socket cannot open; told as a link failure, no connection.
+    auto taken = N::UdpLink::Open(OS::DatagramAddress::Loopback(0));
+    REQUIRE(static_cast<bool>(taken));
+    const auto port = taken->LocalAddress()->port;
+    End blocked = GameEnd(N::NetRole::Client, GameRules{});
+    blocked.net.bind = OS::DatagramAddress::Loopback(port);
+    blocked.target.server = OS::DatagramAddress::Loopback(1);
+    auto b = O::Product::Build(Describe(blocked), Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(b), Reported(b));
+    for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>((*b)->RunFrame()));
+    N::NetService& blockedService = *(*b)->Buffer().Find<N::NetService>();
+    CHECK_MESSAGE((blockedService.Client() == nullptr && blockedService.LinkFailures() == 1 && !blockedService.UdpAddress()),
+                  "[nt-target-open-failed] no socket, no connection, one link failure");
+
+    // An address over a Link the product gave: the other kind.
+    auto links = N::MemoryLink::Pair({});
+    End wrong = GameEnd(N::NetRole::Client, GameRules{});
+    wrong.net.link = std::make_shared<N::MemoryLink>(links.second);
+    wrong.target.server = OS::DatagramAddress::Loopback(40000);
+    auto w = O::Product::Build(Describe(wrong), Units(true));
+    REQUIRE_MESSAGE(static_cast<bool>(w), Reported(w));
+    for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>((*w)->RunFrame()));
+    N::NetService& wrongService = *(*w)->Buffer().Find<N::NetService>();
+    CHECK(wrongService.Client() == nullptr);
+    CHECK(wrongService.LinkFailures() == 1);
 }

@@ -278,16 +278,18 @@ TEST_CASE("module: each new handshake of a client carries a larger salt (S2's pr
     options.link = std::make_shared<N::MemoryLink>(links.second);
     N::NetService service(options, options.link, 1, 2);
     const N::NetConnectTarget target{N::MemoryLink::EndpointA(), 1, {}};
-    service.SetTarget(&target, Ms(0));
     N::HandshakeFacts facts;
     std::uint64_t previous = 0;
     for (int i = 0; i < 4; ++i) {
-        // The clock moves on for some handshakes and stands still for others.
+        // The clock moves on for some handshakes and stands still for others. Each round is a new client World: its
+        // target (the closed session is dropped), then its first facts open a new session.
         const N::NetTime now = Ms(i < 2 ? 5 : 5 + i);
-        service.SetFacts(facts, now, true);
+        service.SetTarget(&target, now, static_cast<std::uint32_t>(i));
+        service.SetFacts(facts, now, false);
         REQUIRE(service.Client() != nullptr);
         const std::uint64_t salt = service.Client()->Request().salt;
         CHECK_MESSAGE(salt > previous, "recheck small thing b: a new handshake's salt is larger than the one before");
+        CHECK(service.Client()->Request().epoch == static_cast<std::uint32_t>(i));
         previous = salt;
         service.Close();
         REQUIRE(service.Client()->State() == N::ClientState::Disconnected);

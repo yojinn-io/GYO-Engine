@@ -42,17 +42,19 @@
 2. **`NetProductOptions`** 拿掉 `server`、`serverEndpoint`、`userId`、`token`；留 `role`、`bind`、`link`、`session`、`admission`、`clock`、`seed`。
 3. **讀的時機**：net 的準備函式在作者的準備函式與 `extra` 之前跑（O-7），所以不在那裡讀。client World 的第一幀，`ReceiveNet` 最前面讀一次：`NetService::SetTarget(target 或 null)`。
 4. **`SetTarget` 的規則**：
-   - 沒有目標（或位址種類和傳輸不合）：還活著的 session 關掉（Disconnect 封包當場送出），之後不連。種類不合計一次 link failure（`Unreachable`），照 E2 由 `NetLinkFailed` 告訴 World。
+   - 沒有目標（或位址種類和傳輸不合）：還活著的 session 關掉（Disconnect 封包當場送出），之後不連。種類不合計一次 link failure（`LinkFailed`，審查 N3：`Unreachable` 是 OS 的「不可達」），照 E2 由 `NetLinkFailed` 告訴 World。
    - 和還活著的 session 同一個目標（位址、userId、token 都相同）：沿用，新 World 照 R2 送 resync（原本在準備函式裡判，搬到第一幀，同一個條件：請求帶的 epoch 不是這個 World 的）。
    - 不同的目標：舊 session 關掉、Disconnect 送給舊的位址，下一次 `SetFacts` 開新的 session。
-   - 已經斷掉的 session：丟掉，下一次 `SetFacts` 開新的（D-8：重連是新的 client World）。
+   - 已經斷掉的 session：還沒送完的 Disconnect 先送給舊的位址（產品 `Close` 後馬上替換、中間沒跑一幀時，Disconnect 還在 session 裡；審查 B1），再丟掉，下一次 `SetFacts` 開新的（D-8：重連是新的 client World）。
+   - 新連線的請求帶的 epoch 是 `SetTarget` 時給的這個 World 的 epoch（審查 S1：第一幀之前又有一次失敗的替換時，`BeginClientWorld` 的計數已經往前，不能用「現在的計數減一」）。
+   - 替換的 `beforeSwap` 跑了 `Main`（`ReceiveNet` 在裡面）之後替換失敗、舊 World 留下時，舊 World 的連線已被結束：舊 World 的 `ReceiveNet` 發現 session 沒了、而 `clientPeer` 還在時，照一般的斷線刪掉 Peer、發 `PeerDisconnected`（審查要使用者決定的第 3 項，作者照 (b) 做：機制內的正確性，不是新規則）。
    - 同一個 World 裡斷線之後不自己重連（D-8 不變）。
 5. **socket 延後開**：
    - Client 角色：`NetModule::Configure` 不開 socket；`SetTarget` 第一次拿到 UDP 的位址時才 `UdpLink::Open(bind)`。開不了時計一次 link failure（`NetLinkFailed` 帶 OS 的原因），不連；下一個帶目標的 World 再試。原本的啟動錯誤 NT-E4 只剩 server 角色。
    - Server 角色（Match）：照舊在 `Configure` 開（要 listen；開不了是啟動錯誤 NT-E4）。
    - 產品給 Link 時不開 socket（照舊）。
    - `NetService::UdpAddress()` 在開之前回 nullopt。
-6. **D-8 的補充**（net 頁第 6、9 節、net 宣告 D-8）：「新 World 準備時才開新的握手」改成「新 client World 的第一幀照它的 `NetConnectTarget` 開新的握手；沒有就不連」。「重連＝新的 client World」不變。
+6. **D-8 的補充**（net 頁第 6、9 節）：「新 World 準備時才開新的握手」改成「新 client World 的第一幀照它的 `NetConnectTarget` 開新的握手；沒有就不連」。「重連＝新的 client World」不變。net 宣告的 D-8 原文沒寫「準備時」，不用改（審查 S2 更正原寫的「net 宣告 D-8 也補」）。
 
 ## 5. 測試與突變（事前宣告的判定）
 
@@ -64,7 +66,7 @@
 | J4 | 目標的位址種類和傳輸不合：不連、計一次 link failure |
 | J5 | UDP：socket 在第一次拿到目標時才開；server 角色照舊在啟動時開 |
 
-突變：沒有目標時照樣連；同目標時不沿用（每次重連）；換目標時不關舊的；socket 在 Configure 就開；種類不合時照樣連。
+突變：沒有目標時沿用上一個；同目標時不沿用（每次重連）；不保留的 session 不送 Disconnect（`nt-target-end-not-sent`，原列「換目標時不關舊的」：同一個 endpoint 帶更大的 salt 的新握手也會讓 Match 結束舊連線，從外面分不出，改由「沒有目標時關掉」與「Close 後馬上替換」兩案判；審查 S3）；socket 在 Configure 就開；種類不合時照樣連；`Close` 後馬上替換時 Disconnect 不送（`nt-target-closed-dropped`）；開不了 socket 時照樣當有連線（`nt-target-open-failure-ignored`）。
 
 ## 6. 不做
 

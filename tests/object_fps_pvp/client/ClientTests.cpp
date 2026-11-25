@@ -167,9 +167,9 @@ struct Setup final {
         description.options.Set(net);
         // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
         game.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
-        w.SetResource(target);
-        return {};
-    });
+            w.SetResource(target);
+            return {};
+        });
         description.worlds.push_back(std::move(game));
         description.worlds.push_back(std::move(render));
         description.configure = [](O::ProductSetup& setup) {

@@ -34,22 +34,19 @@ void NetService::SetFacts(const HandshakeFacts& facts, const NetTime now, const 
         }
         return;
     }
+    static_cast<void>(newWorld);  // a client's new World is SetTarget's (its first frame)
     if (!target_) return;  // a client World that connects to nothing (D-8)
-    if (!client_ || (newWorld && client_->State() == ClientState::Disconnected)) {
-        // The ended session's last datagrams (its Disconnect packets after a Close) go out before the new one starts.
-        if (client_) {
-            for (auto& datagram : client_->Collect(now, {})) {
-                if (auto sent = link_->Send(target_->endpoint, datagram); !sent) Failed(std::move(sent).error());
-            }
-        }
+    // A session that ended stays until the next client World's SetTarget (D-8: no reconnect within a World).
+    if (!client_) {
         // A salt per handshake, larger than the one before (D-8, S2): the IO layer's monotonic time in nanoseconds,
         // or one more than the last when the clock has not moved. Limit: the monotonic clock is comparable only within
         // one process, so a client started again may draw a smaller salt than its previous process; its handshake is
         // then taken as an old one and dropped until the old connection times out (timeoutAfter, 10 s, shorter than
         // the handshake timeout of 15 s).
         lastSalt_ = std::max(lastSalt_ + 1, static_cast<std::uint64_t>(std::max<NetTime::rep>(now.count(), 0)));
-        // The client World's epoch goes with the connection (R2).
-        ConnectRequest request{facts, target_->userId, target_->token, lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};
+        // The epoch of the client World that asked for it goes with the connection (R2): given with the target, so a
+        // World replaced again before its first frame does not shift it.
+        ConnectRequest request{facts, target_->userId, target_->token, lastSalt_, targetEpoch_};
         client_.emplace(options_.session, std::move(request), now);
     }
 }
@@ -65,7 +62,8 @@ void NetService::EndClient(const NetTime now) {
     client_.reset();
 }
 
-void NetService::SetTarget(const NetConnectTarget* target, const NetTime now) {
+void NetService::SetTarget(const NetConnectTarget* target, const NetTime now, const std::uint32_t epoch) {
+    targetEpoch_ = epoch;
     std::optional<Target> wanted;
     if (target != nullptr) {
         // The server of this transport's kind: an address over the UDP socket the Module opened, an Endpoint over a
@@ -75,12 +73,12 @@ void NetService::SetTarget(const NetConnectTarget* target, const NetTime now) {
         } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr && options_.link) {
             wanted = Target{*endpoint, target->userId, target->token};
         } else if (!std::holds_alternative<std::monostate>(target->server)) {
-            Failed(NetFailure::Make(NetFailureCode::Unreachable,
+            Failed(NetFailure::Make(NetFailureCode::LinkFailed,
                                     options_.link ? "a NetConnectTarget over a given Link names an address, not an Endpoint"
                                                   : "a NetConnectTarget over UDP names an Endpoint, not an address"));
         }
     }
-    // A client's UDP socket opens with its first target (single-player never opens one; net-connect-target 4.5).
+    // A client's UDP socket opens with its first target (a World without one never opens it; net-connect-target 4.5).
     if (wanted && !link_) {
         auto opened = UdpLink::Open(options_.bind);
         if (!opened) {
@@ -92,11 +90,9 @@ void NetService::SetTarget(const NetConnectTarget* target, const NetTime now) {
     }
     const bool live = client_ && client_->State() != ClientState::Disconnected;
     if (wanted && target_ && *wanted == *target_ && live) return;  // the same connection goes on into the new World
-    if (live) {
-        EndClient(now);  // to the old target: its Disconnect packets go out now
-    } else {
-        client_.reset();  // an ended session: the next SetFacts opens a new one
-    }
+    // Not kept: its last datagrams go to the old target now (a live one's Disconnect; one closed just before the
+    // replacement still has its Disconnect packets to send), and the next SetFacts opens a new one.
+    EndClient(now);
     target_ = std::move(wanted);
 }
 

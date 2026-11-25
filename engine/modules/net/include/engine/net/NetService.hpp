@@ -44,12 +44,12 @@ struct NetProductOptions final {
 
 // The connection a client World makes (net page D-8, net-connect-target declaration): a Resource of the World, put
 // there by a prepare function (WorldDescription::prepare, a unit's) or a replacement's extra (ReplaceRequest::extra).
-// The net Module reads it at the World's first frame: a client World without one connects to nothing (a lobby); a
+// The net Module reads it at the World's first frame: a client World without one connects to nothing; a
 // new World with the same target as the live connection keeps it (and asks for a resync, R2); another target closes
 // the old connection and opens a new one. Like the World's other facts, it is not decided state.
 struct NetConnectTarget final {
     // Over UDP: the server's address. Over a Link the product gave: the server's Endpoint on it. The other kind, or
-    // none, connects to nothing (a wrong kind is counted as a link failure: NetFailureCode::Unreachable).
+    // none, connects to nothing (a wrong kind is counted as a link failure: NetFailureCode::LinkFailed).
     std::variant<std::monostate, OS::DatagramAddress, Endpoint> server;
     // The client's opaque user id and token (carried, not checked).
     std::uint64_t userId = 0;
@@ -70,7 +70,8 @@ public:
     // closes a live session and connects to nothing; the target of the live session keeps it; another closes it
     // (its last datagrams go out now) and the next SetFacts opens a new one; a session that ended is dropped, so the
     // next SetFacts opens a new one (a reconnect is a new client World).
-    void SetTarget(const NetConnectTarget* target, NetTime now);
+    // epoch: the World's (its NetReplicaState::epoch); the new connection's request carries it (R2).
+    void SetTarget(const NetConnectTarget* target, NetTime now, std::uint32_t epoch);
     // Takes every waiting datagram into the connection layer, then the liveness at now.
     void Pump(NetTime now);
     // Sends what the connection layer has for now.
@@ -83,7 +84,8 @@ public:
     [[nodiscard]] ClientSession* Client() noexcept { return client_ ? &*client_ : nullptr; }
     [[nodiscard]] const ClientSession* Client() const noexcept { return client_ ? &*client_ : nullptr; }
     [[nodiscard]] const NetProductOptions& Options() const noexcept { return options_; }
-    // The local address of the UDP socket the Module opened, or nullopt (a Link the product gave).
+    // The local address of the UDP socket the Module opened, or nullopt (a Link the product gave, or a client whose
+    // socket is not open yet: it opens with the first NetConnectTarget).
     [[nodiscard]] std::optional<OS::DatagramAddress> UdpAddress() const;
 
     // What the Link reported (E2: kept here and counted, the World goes on), and the service's own drops (a
@@ -116,6 +118,7 @@ private:
     NetProductOptions options_;
     std::shared_ptr<Link> link_;
     std::optional<Target> target_;
+    std::uint32_t targetEpoch_ = 0;
     std::uint64_t secret_;
     std::uint64_t idSeed_;
     std::optional<ServerHost> server_;
