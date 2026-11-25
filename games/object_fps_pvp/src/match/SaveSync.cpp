@@ -111,6 +111,7 @@ std::vector<SaveRequest> SaveSync::Due(const std::uint64_t tick) {
         ++player.attempts;
         SaveRequest request = Request(user, player);
         player.inFlight = request.id;
+        player.sentAt = tick;
         due.push_back(std::move(request));
     }
     return due;
@@ -186,6 +187,15 @@ void SaveSync::Answered(const std::uint64_t id, const SaveAnswer& answer, const 
         else TakeRead(user, player, answer, tick);
         return;
     }
+}
+
+std::vector<std::uint64_t> SaveSync::TimedOut(const std::uint64_t tick) {
+    std::vector<std::uint64_t> late;
+    for (const auto& [user, player] : players_) {
+        if (player.inFlight != 0 && tick - player.sentAt >= kAnswerTicks) late.push_back(player.inFlight);
+    }
+    for (const std::uint64_t id : late) Answered(id, SaveAnswer{}, tick);
+    return late;
 }
 
 bool SaveSync::Busy() const {

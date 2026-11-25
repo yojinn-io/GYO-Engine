@@ -59,7 +59,7 @@
 
 ## 4. Match 端（已做好，Client 不用管，但要知道的行為）
 
-- Match 驗 token：長度、版本、簽章、Match、user、到期。同一 userId 帶有效 token 再連線時（不論從哪個 endpoint：同一個 Product 換新的遊戲 World、或 Client 當掉後重開），**新的頂掉舊的**：新連線接手原本的角色（位置、HP 照舊），舊連線被 Match 關掉（使用者 2026-11-25，`v8-arch-gyo2-direct-connect-and-kick-old`）。被頂掉的那個 Client 會收到斷線。
+- Match 驗 token：長度、版本、簽章、Match、user、到期。同一 userId 帶有效 token 再連線時（不論從哪個 endpoint：同一個 Product 換新的遊戲 World、或 Client 當掉後重開），**新的頂掉舊的**：新連線接手原本的角色（位置、HP 照舊），舊連線被 Match 關掉（使用者 2026-11-25，`v8-arch-gyo2-direct-connect-and-kick-old`）。被頂掉的那個 Client 會收到斷線（`ClosedByRemote`，和 Match 結束分不出來）：**收到 `ClosedByRemote` 時不要自動重連**，否則同一個使用者開著的兩個 Client 會互相頂來頂去；要重連先 GET 房間（Match 結束時是 410 `match_ended`）。
 - 拒絕的理由在網路的 `Refused` detail（`token expired`、`token user`、`the match is full`…）。
 - Match 在沒人的狀態持續 60 秒後結束；之後 GET 房間是 410 `match_ended`。
 - 存檔：玩家連上時 Match 向 saves 讀，離開時寫回。格式 `{"saveVersion":1,"matches":N,"deaths":N,"lastMatch":ID,"lastWrite":"KEY"}`（`games/object_fps_pvp/include/object_fps_pvp/match/PlayerSave.hpp`）：`matches` 是離開過的 Match 數（同一場離開幾次都算一次，斷線重連不會多算），`deaths` 每次離開加上那段的死亡。Client 用 `GET /v1/saves/me` 讀（例：大廳顯示戰績），**只讀不寫**。

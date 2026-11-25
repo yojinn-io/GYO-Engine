@@ -78,3 +78,42 @@ TEST_CASE("world: a user's newer connection takes their player over and the olde
     CHECK_MESSAGE(Peers(GameWorld(*first)) == 0, "the replaced Client still has its connection");
     CHECK_MESSAGE(Controlled(GameWorld(*second)) == player, "the newer Client does not control the player");
 }
+
+TEST_CASE("world: a newer handshake from the same endpoint keeps the player too") {
+    auto clock = std::make_shared<N::NetTime>(0);
+    auto reader = [clock] { return *clock; };
+    N::MemoryLinkSettings settings;
+    settings.seed = 72;
+    auto links = N::MemoryLink::Pair(settings);
+    auto seats = std::make_shared<PW::Seats>(2);
+    auto match = BuildMatch(ShippedContent(), std::make_shared<N::MemoryLink>(links.first), seats, reader);
+    auto client = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(links.second), 1, reader);
+    const auto frames = [&](const int n) {
+        for (int i = 0; i < n; ++i) {
+            REQUIRE(static_cast<bool>(match->RunFrame()));
+            REQUIRE(static_cast<bool>(client->RunFrame()));
+            links.first.Advance();
+            *clock += std::chrono::milliseconds(16);
+        }
+    };
+    frames(90);
+    const K::EntityId player = PlayerOf(GameWorld(*match), 1);
+    REQUIRE(player != 0);
+    const std::uint64_t lifeTick = GameWorld(*match).Get<PW::PlayerCombat>(player)->lifeTick;
+
+    // The Client is gone without a word (it crashed); a new one on the same endpoint shakes hands again, with a
+    // larger salt: the server ends the older connection and accepts the newer one in one frame.
+    auto stale = std::move(client);
+    client = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(links.second), 1, reader);
+    frames(90);
+
+    K::World& world = GameWorld(*match);
+    CHECK(Peers(world) == 1);
+    CHECK_MESSAGE(PlayersOf(world, 1) == 1, "the user has " << PlayersOf(world, 1) << " players");
+    CHECK_MESSAGE(PlayerOf(world, 1) == player, "the same endpoint's newer handshake gave the user a new player");
+    const PW::PlayerCombat* combat = world.Get<PW::PlayerCombat>(PlayerOf(world, 1));
+    REQUIRE(combat != nullptr);
+    CHECK_MESSAGE(combat->lifeTick == lifeTick, "the player respawned instead of being taken over");
+    CHECK(seats->Taken() == 1);
+    CHECK(Controlled(GameWorld(*client)) == player);
+}

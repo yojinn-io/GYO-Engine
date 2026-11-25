@@ -13,7 +13,8 @@
 //     409         -> read again: a save that already carries this write's key is this write (the service forgot its
 //                    record, it did not lose the write); otherwise the same leave is settled on the newer save and
 //                    written again
-//     5xx, none   -> sent again, the same request, after 16, 32, 64, 128 ticks (5 times in all), then a failure
+//     5xx, none   -> sent again, the same request, after 16, 32, 64, 128 ticks (5 times in all), then a failure;
+//                    an answer that has not come kAnswerTicks after its request is none (TimedOut)
 //     other       -> a failure
 //
 // A leave's deaths and key are fixed when its write starts: a player who comes back and leaves again while it is in
@@ -54,6 +55,8 @@ class SaveSync final {
 public:
     static constexpr int kAttempts = 5;
     static constexpr std::uint64_t kFirstBackoffTicks = 16;
+    // How long a request waits for its answer (at 64 steps a second, five seconds).
+    static constexpr std::uint64_t kAnswerTicks = 320;
 
     explicit SaveSync(std::uint64_t matchId) : matchId_(matchId) {}
 
@@ -65,6 +68,8 @@ public:
     [[nodiscard]] std::vector<SaveRequest> Due(std::uint64_t tick);
     // The answer to request id (an id not in flight is ignored).
     void Answered(std::uint64_t id, const SaveAnswer& answer, std::uint64_t tick);
+    // The requests whose answer did not come in time: each is taken as no answer; the caller drops their calls.
+    [[nodiscard]] std::vector<std::uint64_t> TimedOut(std::uint64_t tick);
 
     // A read or write still to finish (a Match ending waits for it).
     [[nodiscard]] bool Busy() const;
@@ -86,6 +91,7 @@ private:
         std::uint32_t leaves = 0;
         Phase phase = Phase::Idle;
         std::uint64_t inFlight = 0;  // 0: none
+        std::uint64_t sentAt = 0;
         std::uint64_t retryAt = 0;
         int attempts = 0;
         // The leave being written.

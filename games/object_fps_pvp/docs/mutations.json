@@ -1193,7 +1193,7 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "    for (const N::PeerDisconnected* gone : disconnected.Read()) state.sync.Left(gone->userId);\n",
+   "find": "        if (gone->peer != 0) state.sync.Left(gone->userId);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the Match reads*",
@@ -1219,8 +1219,8 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (older) {\n            const K::EntityId player",
-   "replace": "        if (false) {\n            const K::EntityId player",
+   "find": "            if (older) {\n                player = byPeer.at(older->first);",
+   "replace": "            if (false && older) {\n                player = byPeer.at(older->first);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a user's newer*",
    "expect": "players|did not take the player over"
@@ -1263,6 +1263,32 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "save sync:*",
    "expect": "replaced connection was settled"
+  },
+  {
+   "id": "pvp-gw-sync-no-timeout",
+   "what": "a request whose answer never comes waits for ever",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "        if (player.inFlight != 0 && tick - player.sentAt >= kAnswerTicks) late.push_back(player.inFlight);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "never timed out"
+  },
+  {
+   "id": "pvp-gw-kick-same-endpoint-respawns",
+   "what": "a newer handshake from the same endpoint gives the user a new player",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (const auto held = released.find(joined->userId); held != released.end()) {",
+   "replace": "        if (const auto held = released.find(joined->userId); false && held != released.end()) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a newer handshake*",
+   "expect": "gave the user a new player|respawned"
   }
  ]
 }

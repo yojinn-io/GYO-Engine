@@ -566,21 +566,26 @@ K::SystemResult RespawnPlayers(K::Query<K::Write<PlayerBody>, K::Write<PlayerCom
 
 // ---- The Systems of the frame
 
-// Match: a player for each user that connects (at the farthest free spawn). A newer connection of a user who is
-// still connected takes the player over and the older connection is closed (the user's decision of 2026-11-25,
-// v8-arch-gyo2-direct-connect-and-kick-old; its PeerDisconnected comes later and removes nothing). A connection that
-// ends removes the player it controls.
+// Match: a player for each user that connects (at the farthest free spawn). A user's newer connection takes their
+// player over (the user's decision of 2026-11-25, v8-arch-gyo2-direct-connect-and-kick-old), on both paths:
+//   - from another endpoint, while the older connection is open: the older one is closed here (its PeerDisconnected
+//     comes later and removes nothing);
+//   - from the same endpoint (a newer handshake: the server ends the older connection and accepts the newer one in the
+//     same frame): the player the ended connection leaves is held until the joins of this frame are seen.
+// A connection that ends removes the player it controls, unless a newer connection of the user takes it in that frame.
 K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::MessageReader<N::PeerDisconnected> disconnected,
                             K::Query<K::Read<Owner>, K::Read<PlayerBody>, K::Read<PlayerCombat>> players,
                             K::Query<K::Read<N::Peer>> peers, Walls walls, K::Res<GameRules> rules,
-                            K::Res<MatchSeats> seats, K::Res<N::NetWorldLink> link, K::ResMut<SeatedPlayers> seated,
+                            K::Res<MatchSeats> seats, K::ResMut<N::NetWorldLink> link, K::ResMut<SeatedPlayers> seated,
                             K::Res<WT::Tick> tick,
                             K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn,
-                            K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<>> controls) {
+                            K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<N::PeerControls>> controls) {
     std::map<K::EntityId, K::EntityId>& byPeer = seated->byPeer;
+    // The players of the connections that ended this frame, by user, until the joins of this frame are seen.
+    std::map<std::uint64_t, K::EntityId> released;
     for (const N::PeerDisconnected* gone : disconnected.Read()) {
         if (const auto found = byPeer.find(gone->peer); found != byPeer.end()) {
-            despawn.Entity(found->second);
+            released[gone->userId] = found->second;
             byPeer.erase(found);
         }
         // Also a connection that ended before its Peer was made (peer 0): its admission took a seat too.
@@ -591,17 +596,26 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         if (combat.life == sim::LifeState::Alive) living.push_back(body);
     });
     for (const N::PeerConnected* joined : connected.Read()) {
-        // The user's older connection, if one is open: its player passes to the new one, and it is closed.
-        std::optional<std::pair<K::EntityId, std::uint32_t>> older;
-        peers.ForEach([&](const K::EntityId id, const N::Peer& peer) {
-            if (id != joined->peer && peer.userId == joined->userId && byPeer.contains(id)) older = {id, peer.connectionId};
-        });
-        if (older) {
-            const K::EntityId player = byPeer.at(older->first);
-            byPeer.erase(older->first);
-            byPeer[joined->peer] = player;
-            controls.Insert(joined->peer, N::PeerControls{player});
-            if (link->service != nullptr && link->service->Server() != nullptr) link->service->Server()->Close(older->second);
+        // The user's player, if another connection has it: one that ended this frame, or one still open.
+        std::optional<K::EntityId> player;
+        if (const auto held = released.find(joined->userId); held != released.end()) {
+            player = held->second;
+            released.erase(held);
+        } else {
+            std::optional<std::pair<K::EntityId, std::uint32_t>> older;
+            peers.ForEach([&](const K::EntityId id, const N::Peer& peer) {
+                if (id != joined->peer && peer.userId == joined->userId && byPeer.contains(id)) older = {id, peer.connectionId};
+            });
+            if (older) {
+                player = byPeer.at(older->first);
+                byPeer.erase(older->first);
+                controls.Remove<N::PeerControls>(older->first);
+                if (link->service != nullptr && link->service->Server() != nullptr) link->service->Server()->Close(older->second);
+            }
+        }
+        if (player) {
+            byPeer[joined->peer] = *player;
+            controls.Insert(joined->peer, N::PeerControls{*player});
             continue;
         }
         auto chosen = PickSpawn(walls, *rules, living);
@@ -617,6 +631,8 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         byPeer[joined->peer] = *id;
         living.push_back(body);
     }
+    // Nobody took them over: the players leave with their connections.
+    for (const auto& [user, player] : released) despawn.Entity(player);
     return {};
 }
 

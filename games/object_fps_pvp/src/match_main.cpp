@@ -143,8 +143,8 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--match-id" && hasValue) {
             std::uint64_t id = 0;
-            if (!ParseNumber(argv[++index], id)) {
-                Log(GYO::Engine::Base::LogLevel::Error, "--match-id takes a whole number");
+            if (!ParseNumber(argv[++index], id) || id == 0) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--match-id takes a whole number other than 0");
                 return 2;
             }
             matchId = id;

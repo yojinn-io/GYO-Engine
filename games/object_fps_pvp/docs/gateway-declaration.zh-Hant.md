@@ -124,6 +124,7 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 - **只有 Match 寫**（權威在 Match）；Client 經 gateway 只能讀自己的。
 - PvP 的存檔格式 v1（產品的）：`{"saveVersion":1,"matches":n,"deaths":d,"lastMatch":id,"lastWrite":"key"}`（`match/PlayerSave.hpp`）；版本由遊戲自己比（不是 1 就拒絕）。`matches` 是離開過的 Match 數，同一場離開幾次都只算一次（`lastMatch`）；`deaths` 每次離開都加上那段的死亡；`lastWrite` 是寫出這份存檔的冪等鍵：寫入碰到 409 時重讀，存檔已帶著自己的鍵就表示這次寫入已經在裡面（save 服務重啟、忘了冪等紀錄的情形），否則把同一次離開結算在新的存檔上再寫一次。〔第 4 段審查 B1、B2、S2、S5〕
 - 〔第 4 段動工後改〕原本寫 `kills` 與 `save_version` 的 `Policy{1,1}`。擊殺本卡不記：兇手在 `HitRecord.attacker` 有，但「一場的擊殺怎麼歸屬、怎麼結算」是之後合作／生存的結算規則（審查 S4 指出原本「規則層沒記兇手」的理由不對，更正）。`save_version` 的 `Check` 回 `OrchestrationError`、給「讀檔換 World」用，Match 裡逐個玩家讀檔不是那個場合。
+- 限制：`lastWrite` 的判定在極少見的情況下會把同一次離開套用兩次（save 服務重啟、忘了冪等紀錄，而且重讀之前另一個 Match 又寫了一次）。退避與回應期限用 tick 算（預設 64 Hz：退避合計約 3.75 秒、回應期限 5 秒），作者改步長會跟著變。玩家在場時讀檔失敗，要等他重新加入才重讀。「同一幀死亡又復活不會發生」依賴復活秒數（預設 3 秒）。〔第 4 段重做審查 N5、N6、N7〕
 - 限制：玩家斷線那一幀的固定步裡的死亡不計（`SeatPlayers` 在 Update 刪掉玩家，`SyncSaves` 在 Last 看；要準確得在判定死亡處發 Message，動到回滾步驟，本卡不做）。撤離＝玩家離開這場 Match（現在 PvP 沒有撤離點；生存模式「撤離立刻結算」的最小版本）；合作「活著的人全部撤離才結算」是之後的規則，寫入點同一個。
 
 ### D8 C++ 端怎麼講 HTTP → core/os 的 `StreamSocket`＋Engine 的 `http` Module

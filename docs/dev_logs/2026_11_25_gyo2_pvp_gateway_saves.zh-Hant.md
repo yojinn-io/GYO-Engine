@@ -49,3 +49,14 @@ blocker 2、should 7、nit 7、要使用者定的 0。報告：主 checkout `bui
 - N2 → 分段表跟著改。N3 → 註解重寫。N5 → `matches --saves` 檢查 host:port。N6 → `lastFailure` 帶 user 與讀／寫。不改：N1（Match 的位址解析和大廳的重複；大廳在 PvP 卡的 client 函式庫，留給接 Client 的卡一起搬）、N4（讀檔多轉一次文字，量小）、N7（觀察）。
 
 審查修正＋頂掉之後：`ctest -L "cpu|gpu"` 256/256、`-L "go|network"` 4/4（本機 Intel Mac）；`pvp-gw-` 的第 4 段突變（`save-*`、`sync-*`、`saves-*`）與頂掉的突變（`kick-*`、`seat-*`、`admission-token-ignored`、`sync-replaced-is-leave`）全部 killed（`seat-kept` 第一次 wrong_failure：被一個沒帶訊息的檢查殺掉，那個檢查加上訊息；`sync-reconnect-settled` 的 find 隨按連線計數改了，更新後 killed）。整份目錄沒有 stale 的 find。
+
+## 重做部分的審查（Opus／high，唯讀；作者同模型）
+
+審查 `603b80cb..d93b37f3`（`SaveSync` 抽出與頂掉）：blocker 1、should 2、nit 9、要使用者定的 0。報告：主 checkout `build/evidence/v8-product-pvp-gateway/segment4-rework-review.zh-Hant.md`。上一輪的 B1、B2、S1、S2、S3、S5 確認已解決。
+
+- B1（頂掉的兩條路角色結果不一致：同一 endpoint 的較新握手，伺服器同一幀先發舊連線的斷線、再發新連線的連上，`SeatPlayers` 先刪角色再生新的）→ 斷線時把角色先暫存（`released[userId]`），同一幀有同一使用者的新連線就接手，沒人接手的最後才刪。world 測試補「同一 endpoint 的較新握手」：同一個角色、`lifeTick` 不變（沒有重生）。
+- S1（`HttpCall` 沒有逾時，服務接了連線不回時永遠 Busy）→ `SaveSync::TimedOut`：在途超過 320 tick（5 秒）就當沒回應，走退避重試；遲到的回應不收。加單元測試。
+- S2（peer 0 的斷線沒有對應的連上，`Left` 讓連線少算）→ 驅動跳過 peer 0 的斷線（座位的 Release 照舊）。沒有自動測試（要讓連線在握手的同一次 Pump 裡結束）。
+- N1 → `NetWorldLink` 用 `ResMut`。N2 → 接手時拿掉舊 Peer 的 `PeerControls`。N3 → `--match-id 0` 拒絕。N5、N6、N7 → 寫進宣告 D7 的限制。N8 → 交接說明：收到 `ClosedByRemote` 不要自動重連。不改：N4（同一幀多次失敗只印最後一次）。N9 是網路 Module 的觀察（同一 endpoint 帶過期 token 重連會先斷掉自己還活著的連線），轉主會話。
+
+修正後：`ctest -L "cpu|gpu"` 256/256、`-L "go|network"` 4/4；突變 `kick-same-endpoint-respawns`、`sync-no-timeout` 新增並 killed，`kick-no-handover`、`saves-never-written` 的 find 隨改動更新後 killed。

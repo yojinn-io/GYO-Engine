@@ -123,6 +123,20 @@ TEST_CASE("save sync: no answer sends the same request again after growing waits
     CHECK_FALSE(sync.Busy());
 }
 
+TEST_CASE("save sync: an answer that never comes is taken as none, and the request goes out again") {
+    M::SaveSync sync = Loaded();
+    sync.Left(1);
+    const auto write = One(sync, 10);
+    CHECK(sync.TimedOut(10 + M::SaveSync::kAnswerTicks - 1).empty());
+    const auto late = sync.TimedOut(10 + M::SaveSync::kAnswerTicks);
+    REQUIRE_MESSAGE(late.size() == 1, "a request with no answer never timed out");
+    CHECK(late.front() == write.id);
+    const auto again = One(sync, 10 + M::SaveSync::kAnswerTicks + M::SaveSync::kFirstBackoffTicks);
+    CHECK(again.key == write.key);
+    sync.Answered(write.id, {200, "{\"version\":4}"}, 400);
+    CHECK_MESSAGE(sync.Report().writes == 0, "the timed-out request's late answer was taken");
+}
+
 TEST_CASE("save sync: a player who comes back and leaves again while a write is in flight has a leave of their own") {
     M::SaveSync sync = Loaded();
     sync.Left(1);

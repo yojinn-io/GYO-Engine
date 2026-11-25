@@ -49,7 +49,10 @@ K::SystemResult SyncSaves(K::MessageReader<N::PeerConnected> connected, K::Messa
     MatchSaves::State& state = *saves->state;
     // Leaves before joins: a reconnect from the same endpoint (the old connection ends and the new one comes in, in
     // one frame) leaves the player in the match.
-    for (const N::PeerDisconnected* gone : disconnected.Read()) state.sync.Left(gone->userId);
+    // A connection that ended before its Peer was made (peer 0) had no PeerConnected: it is no leave.
+    for (const N::PeerDisconnected* gone : disconnected.Read()) {
+        if (gone->peer != 0) state.sync.Left(gone->userId);
+    }
     for (const N::PeerConnected* joined : connected.Read()) state.sync.Joined(joined->userId);
     // A death is a respawn tick not seen before (it is set when the player dies).
     players.ForEach([&](K::EntityId, const Owner& owner, const PlayerCombat& combat) {
@@ -72,6 +75,7 @@ K::SystemResult SyncSaves(K::MessageReader<N::PeerConnected> connected, K::Messa
         call = state.calls.erase(call);
         state.sync.Answered(id, answer, now);
     }
+    for (const std::uint64_t id : state.sync.TimedOut(now)) state.calls.erase(id);
     for (const match::SaveRequest& request : state.sync.Due(now)) {
         auto call = H::HttpCall::Start(state.options.service, ToHttp(state, request));
         if (call) state.calls.emplace(request.id, std::move(call).value());
