@@ -2332,11 +2332,89 @@
     "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
    ],
    "file": "games/object_fps_pvp/src/client/Gateway.cpp",
-   "find": "going.started - going.call.asked.value_or(going.started)",
-   "replace": "0",
+   "find": "        next.waited = now - next.asked.value_or(now);\n",
+   "replace": "        next.waited = 0;\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: each exchange*",
    "expect": "pvp-gw-calls-waited"
+  },
+  {
+   "id": "pvp-gw-calls-asked-overwritten",
+   "what": "each Update takes the call's ask time again: its wait is lost",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "        if (!waiting.asked) waiting.asked = now;\n",
+   "replace": "        waiting.asked = now;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: each exchange*",
+   "expect": "pvp-gw-calls-waited"
+  },
+  {
+   "id": "pvp-gw-calls-timeout-not-kept",
+   "what": "an exchange that timed out is not kept for the log",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "            Note(going, 0, \"timeout\", now);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the error codes*",
+   "expect": "pvp-gw-calls-timeout"
+  },
+  {
+   "id": "pvp-room-ready-undone-by-read",
+   "what": "a read of the room asked before the ready ends the player's asked readiness (the button turns back)",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the readiness asked)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "            room.room = std::move(*read);\n",
+   "replace": "            room.room = std::move(*read);\n            if (result->tag == \"room\") room.asked.reset();\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a read of the room*",
+   "expect": "pvp-room-ready-not-undone"
+  },
+  {
+   "id": "pvp-room-start-asked-anyway",
+   "what": "a player who does not own the room asks the Gateway to start it",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "            if (OwnerOf(room, SelfOf(*gateway))) {\n",
+   "replace": "            if (true) {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a listed room is joined*",
+   "expect": "pvp-room-start-refused"
+  },
+  {
+   "id": "pvp-room-said-overwritten",
+   "what": "a read of the room clears the word on the player's action",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "            if (!action) room.problem.clear();\n",
+   "replace": "            if (!action) {\n                room.problem.clear();\n                room.said.reset();\n            }\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a listed room is joined*",
+   "expect": "pvp-room-said-stays"
+  },
+  {
+   "id": "pvp-room-start-label",
+   "what": "the start button reads the same for everyone",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "\"開始（部屋主のみ）\"",
+   "replace": "\"開始\"",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a listed room is joined*",
+   "expect": "pvp-room-start-owner"
   }
  ]
 }

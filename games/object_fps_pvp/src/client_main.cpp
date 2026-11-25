@@ -29,6 +29,7 @@
 #include "engine/base/Log.hpp"
 #include "engine/input/Input.hpp"
 #include "engine/ui/UiRoot.hpp"
+#include "engine/ui/UiRuntime.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/NetService.hpp"
@@ -100,48 +101,93 @@ K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWa
 }
 
 // --verbose, every scene: what the player did and what the program did for it, to tell from the log where a moment
-// went -- the frames that took long (and in which scene), the window's focus, the mouse presses that reached the
-// Frame World, the UI actions they made, the UI documents laid out, and each call to the Gateway (how long it waited
-// behind the others and how long it took).
+// went -- the frames that took long (and in which scene), the window's focus and mode, the events the backend dropped (a full
+// queue: every button is let go), the mouse presses and releases that reached the Frame World with what the input
+// state made of them (just pressed, the cursor known: what the UI needs to take a click; not in a game, where a click
+// is a shot), the UI actions they made, the UI documents laid out (and laid out again: a new runtime), and each call
+// to the Gateway (how long it waited behind the others and how long it took).
 constexpr std::int64_t kSlowFrame = 100'000'000;
 
 struct FrameWatch final {
     std::string scene;
-    std::vector<std::pair<K::EntityId, std::string>> laidOut;  // the roots seen with their runtime, and their canvas
+    bool game = false;
+    // The roots seen with their runtime: the entity, the canvas and the document the runtime was made for.
+    struct Seen final {
+        K::EntityId root{};
+        std::string canvas;
+        const void* document = nullptr;
+    };
+    std::vector<Seen> laidOut;
 };
 void HashValue(K::Hasher&, const FrameWatch&) {}
 
-std::string Milliseconds(const std::int64_t nanoseconds) { return std::to_string(nanoseconds / 1'000'000) + " ms"; }
+using WatchedRoots = K::Query<K::Read<GYO::Engine::Ui::UiRoot>, K::Read<GYO::Engine::Ui::UiRootState>, K::Read<GYO::Engine::Ui::UiBindings>>;
 
-K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::WindowFocused> focus, K::MessageReader<I::MouseButtonInput> buttons,
-                           K::MessageReader<GYO::Engine::Ui::UiAction> actions,
-                           K::Query<K::Read<GYO::Engine::Ui::UiRoot>, K::Read<GYO::Engine::Ui::UiRootState>> roots,
-                           K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
-    const std::string& scene = watch.Read().scene;
-    if (time->delta > kSlowFrame) Log(GYO::Engine::Base::LogLevel::Info, "slow frame: " + Milliseconds(time->delta) + " (" + scene + ")");
+// What a press at (x, y) of the window lands on: the topmost interactive element of a root that takes input, as
+// world_ui hit tests it (its viewport's physical pixels); "nothing" when no element is there.
+std::string HitAt(WatchedRoots& roots, const GYO::Engine::Math::Vec2 at) {
+    std::string hit = "nothing";
+    roots.ForEach([&](K::EntityId, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state, const GYO::Engine::Ui::UiBindings& bindings) {
+        if (!state.runtime || !root.acceptsInput) return;
+        const auto layout = state.runtime->EvaluateLayout(bindings.Table(), state.viewport);
+        if (!layout) return;
+        const GYO::Engine::Math::Vec2 point{at.x * state.scaleFactor - state.viewportPosition.x, at.y * state.scaleFactor - state.viewportPosition.y};
+        if (const auto* element = GYO::Engine::Ui::HitTestUiLayout(*layout, point, true)) hit = "'" + element->id + "' of canvas '" + root.canvas + "'";
+    });
+    return hit;
+}
+
+std::string Milliseconds(const std::int64_t nanoseconds) {
+    const std::int64_t tenths = nanoseconds / 100'000;
+    return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " ms";
+}
+
+K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::WindowFocused> focus, K::MessageReader<W::WindowModeChanged> modes,
+                           K::MessageReader<I::InputEventsDropped> dropped,
+                           K::MessageReader<I::MouseButtonInput> buttons, K::Res<I::ButtonInput<I::MouseButton>> pressed,
+                           K::Res<I::CursorPosition> cursor, K::MessageReader<GYO::Engine::Ui::UiAction> actions,
+                           WatchedRoots roots, K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
+    const std::string at = " (" + watch.Read().scene + ")";
+    if (time->delta > kSlowFrame) Log(GYO::Engine::Base::LogLevel::Info, "slow frame: " + Milliseconds(time->delta) + at);
     for (const W::WindowFocused* event : focus.Read()) {
-        Log(GYO::Engine::Base::LogLevel::Info, std::string("window: ") + (event->focused ? "focused" : "not focused") + " (" + scene + ")");
+        Log(GYO::Engine::Base::LogLevel::Info, std::string("window: ") + (event->focused ? "focused" : "not focused") + at);
+    }
+    for (const W::WindowModeChanged* event : modes.Read()) {
+        Log(GYO::Engine::Base::LogLevel::Info, std::string("window: ") + (event->mode == W::WindowMode::BorderlessFullscreen ? "fullscreen" : "windowed") + at);
+    }
+    for (const I::InputEventsDropped* event : dropped.Read()) {
+        Log(GYO::Engine::Base::LogLevel::Info, "input: " + std::to_string(event->count) + " events dropped (a full queue)" + at);
     }
     for (const I::MouseButtonInput* button : buttons.Read()) {
-        if (button->state != I::ButtonState::Pressed) continue;
-        Log(GYO::Engine::Base::LogLevel::Info, "mouse: pressed at " + std::to_string(static_cast<int>(button->position.x)) + "," +
-                                                   std::to_string(static_cast<int>(button->position.y)) + " (" + scene + ")");
-    }
-    for (const GYO::Engine::Ui::UiAction* action : actions.Read()) {
-        Log(GYO::Engine::Base::LogLevel::Info, "ui: " + action->action + " (" + scene + ")");
-    }
-    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state) {
-        if (!state.runtime) return;
-        for (const auto& [seen, canvas] : watch.Read().laidOut) {
-            if (seen == id && canvas == root.canvas) return;
+        if (watch.Read().game || button->button != I::MouseButton::Left) continue;
+        const bool down = button->state == I::ButtonState::Pressed;
+        std::string line = std::string("mouse: ") + (down ? "pressed" : "released") + " at " + std::to_string(static_cast<int>(button->position.x)) +
+                           "," + std::to_string(static_cast<int>(button->position.y));
+        if (down) {
+            line += std::string(", just pressed ") + (pressed->JustPressed(I::MouseButton::Left) ? "yes" : "no") + ", cursor " +
+                    (cursor->position ? "known" : "unknown") + ", hits " + HitAt(roots, button->position);
         }
-        Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out (" + scene + ")");
-        watch->laidOut.emplace_back(id, root.canvas);
+        Log(GYO::Engine::Base::LogLevel::Info, line + at);
+    }
+    for (const GYO::Engine::Ui::UiAction* action : actions.Read()) Log(GYO::Engine::Base::LogLevel::Info, "ui: " + action->action + at);
+    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state,
+                      const GYO::Engine::Ui::UiBindings&) {
+        if (!state.runtime) return;
+        const void* document = state.runtime->Document().get();
+        for (FrameWatch::Seen& seen : watch->laidOut) {
+            if (seen.root != id || seen.canvas != root.canvas) continue;
+            if (seen.document == document) return;
+            Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out again (a new document)" + at);
+            seen.document = document;
+            return;
+        }
+        Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out" + at);
+        watch->laidOut.push_back(FrameWatch::Seen{id, root.canvas, document});
     });
     for (const PC::GatewayCallRecord& call : gateway->TakeCalls()) {
         const std::string answer = call.status != 0 ? std::to_string(call.status) + (call.errorCode.empty() ? "" : " " + call.errorCode) : call.errorCode;
         Log(GYO::Engine::Base::LogLevel::Info, "gateway: " + call.method + " " + call.target + " (" + call.tag + (call.session ? ", its session" : "") +
-                                                   ") -> " + answer + " in " + Milliseconds(call.took) + ", waited " + Milliseconds(call.waited));
+                                                   ") -> " + answer + " in " + Milliseconds(call.took) + ", waited " + Milliseconds(call.waited) + at);
     }
     return {};
 }
@@ -246,8 +292,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
             Log(GYO::Engine::Base::LogLevel::Info, "scene: " + SceneName(scene.scene));
             setup.Registrar().Resource<FrameWatch>({.name = "FrameWatch"});
             setup.Registrar().AddSystem<&WatchFrame>(last("WatchFrame"));
-            setup.Prepare([name = SceneName(scene.scene)](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-                w.SetResource(FrameWatch{name, {}});
+            const bool game = scene.scene == PC::Scene::SoloGame || scene.scene == PC::Scene::MultiGame;
+            setup.Prepare([name = SceneName(scene.scene), game](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                w.SetResource(FrameWatch{name, game, {}});
                 return {};
             });
             const bool multi = scene.scene == PC::Scene::MultiGame;
@@ -276,6 +323,10 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     // Presentation, ClientWorld).
     window.size = resolution;
     window.mode = windowMode;
+    if (verbose) {
+        Log(GYO::Engine::Base::LogLevel::Info, std::string("window: starts ") + (windowMode == W::WindowMode::BorderlessFullscreen ? "fullscreen" : "windowed") +
+                                                   " at " + std::to_string(resolution.x) + "x" + std::to_string(resolution.y));
+    }
     window.resizable = false;
     description.options.Set(window);
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;

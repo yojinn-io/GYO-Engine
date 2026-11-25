@@ -203,16 +203,19 @@ void GatewayClient::Ask(std::string tag, GatewayRequest request) { waiting_.push
 void GatewayClient::Start(Call call, const bool session, const std::int64_t now) {
     const GatewayRequest sent = session ? SessionRequest(deviceId_) : call.request;
     auto started = H::HttpCall::Start(gateway_, ToHttp(sent, host_, session ? std::nullopt : session_));
-    current_ = Going{std::move(call), session, std::nullopt, now, {}};
+    current_ = Going{std::move(call), session, std::nullopt, now, {}, sent.method, sent.target};
     if (started) current_->http.emplace(std::move(started).value());
     else current_->failure = Base::Describe(started.error());
 }
 
-void GatewayClient::Note(const Going& going, const int status, std::string errorCode, const std::int64_t now) {
+void GatewayClient::Keep(GatewayCallRecord record) {
     if (calls_.size() == kKeptCalls) calls_.erase(calls_.begin());
-    const GatewayRequest& request = going.session ? SessionRequest(deviceId_) : going.call.request;
-    calls_.push_back(GatewayCallRecord{going.call.tag, going.session, request.method, request.target, status, std::move(errorCode),
-                                       going.started - going.call.asked.value_or(going.started), now - going.started});
+    calls_.push_back(std::move(record));
+}
+
+void GatewayClient::Note(const Going& going, const int status, std::string errorCode, const std::int64_t now) {
+    Keep(GatewayCallRecord{going.call.tag, going.session, going.method, going.target, status, std::move(errorCode), going.call.waited,
+                           now - going.started});
 }
 
 std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
@@ -223,7 +226,11 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
         if (waiting_.empty()) return std::nullopt;
         Call next = std::move(waiting_.front());
         waiting_.pop_front();
-        if (deviceId_.empty()) return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
+        next.waited = now - next.asked.value_or(now);
+        if (deviceId_.empty()) {
+            Keep(GatewayCallRecord{next.tag, false, next.request.method, next.request.target, 0, "no_device", next.waited, 0});
+            return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
+        }
         Start(std::move(next), !session_.has_value(), now);
     }
     Going& going = *current_;

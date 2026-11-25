@@ -112,8 +112,9 @@ struct GatewayResult final {
     [[nodiscard]] bool Ok() const noexcept { return status >= 200 && status < 300; }
 };
 
-// One HTTP exchange of a GatewayClient as it went, for the program's log (--verbose): what was asked, how it ended,
-// how long it waited behind the calls before it and how long it took (nanoseconds).
+// One HTTP exchange of a GatewayClient as it went, for the program's log (--verbose): what was sent, how it ended, how
+// long its call waited behind the calls asked before it (from Ask to its turn; the exchanges of one call -- its
+// session's, a retry -- share it) and how long the exchange took (nanoseconds).
 struct GatewayCallRecord final {
     std::string tag;
     bool session = false;  // the session's own call, made for the call named tag
@@ -155,6 +156,7 @@ private:
         GatewayRequest request;
         bool retried = false;  // opened the session again once already
         std::optional<std::int64_t> asked;  // the first Update that saw it waiting
+        std::int64_t waited = 0;            // from asked to its turn
     };
     struct Going {
         Call call;
@@ -162,10 +164,13 @@ private:
         std::optional<GYO::Engine::Http::HttpCall> http;
         std::int64_t started = 0;
         std::string failure;  // why the connection did not start
+        std::string method;   // what was sent (the session's own request, or the call's)
+        std::string target;
     };
 
     void Start(Call call, bool session, std::int64_t now);
     void Note(const Going& going, int status, std::string errorCode, std::int64_t now);
+    void Keep(GatewayCallRecord record);
 
     GYO::Engine::OS::SocketAddress gateway_;
     std::string host_;
