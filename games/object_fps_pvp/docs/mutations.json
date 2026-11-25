@@ -256,7 +256,7 @@
     "port-declaration 4 (segment 3)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    t.rotation = viewmodel.rotation;\n",
+   "find": "    t.rotation = recoilRadians == 0.0F ? viewmodel.rotation\n                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, -recoilRadians), viewmodel.rotation);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the first-person*",
@@ -1318,12 +1318,12 @@
   },
   {
    "id": "pvp-frame-mirror-kept",
-   "what": "the Frame World keeps the copy of a player the Sim World no longer has",
+   "what": "the Frame World keeps the copy of another player the Sim World no longer has (it is never despawned once its history is passed)",
    "guards": [
     "live-frame-sim-thread declaration 4.3"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        if (!players.contains(gone)) world.Despawn(gone);\n",
+   "find": "            despawn.Entity(id);\n            it = view.players.erase(it);\n            continue;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the other player's stand-in goes*",
@@ -1380,6 +1380,124 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: J5 while the main thread stops*",
    "expect": "pvp-sim-thread-stale-limit"
+  },
+  {
+   "id": "pvp-interp-not-blended",
+   "what": "the other players are not blended between two states: they jump a confirmed step at a time",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            shown = bracket.end ? Blend(history.samples[bracket.start], history.samples[*bracket.end], bracket.fraction)\n                                : history.samples[bracket.start];\n",
+   "replace": "            shown = history.samples[bracket.start];\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player walks smoothly*",
+   "expect": "pvp-interp-smooth"
+  },
+  {
+   "id": "pvp-interp-no-delay",
+   "what": "the interpolation timeline has no delay: it runs past the newest state and holds it",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Interpolation.cpp",
+   "find": "    return std::max(settings.sendIntervalTicks * settings.sendIntervalRatio, minimum) + settings.jitterMultiple * jitterTicks +\n           settings.jitterMarginTicks;\n",
+   "replace": "    return 0.0 * (minimum + jitterTicks);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player walks smoothly*",
+   "expect": "pvp-interp-(behind|smooth)"
+  },
+  {
+   "id": "pvp-interp-life-blended",
+   "what": "a respawn is blended: the other player walks from where it died to its spawn",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil)"
+   ],
+   "file": "games/object_fps_pvp/src/present/Interpolation.cpp",
+   "find": "    if (a.life != b.life) return a;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "interpolation: a pose blends*",
+   "expect": "pvp-interp-life"
+  },
+  {
+   "id": "pvp-interp-view-confirmed",
+   "what": "the inputs carry the confirmed tick, not the time the frame showed",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil)",
+    "net F2"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (const auto view = state.Read().viewTick; view && *view >= 0.0) {\n",
+   "replace": "    if (const auto view = std::optional<double>{}; view) {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player walks smoothly*",
+   "expect": "pvp-interp-view"
+  },
+  {
+   "id": "pvp-recoil-ignored",
+   "what": "the shot does not kick the first-person weapon",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const T::Transform placement = ViewmodelPlacement(viewmodel, recoil);\n",
+   "replace": "        const T::Transform placement = ViewmodelPlacement(viewmodel, 0.0F * recoil);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a shot kicks*",
+   "expect": "pvp-recoil"
+  },
+  {
+   "id": "pvp-interp-rtt-ignored",
+   "what": "the timeline follows the Match's tick now (lightyear's objective): with ~100 ms of RTT it runs past every state and the other player jumps a step at a time",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil); design review"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            sim->remoteTick - sim->rttTicks / 2.0 + since - present::InterpolationDelay(kTimeline, sim->jitterTicks, step / 1e9);\n",
+   "replace": "            sim->remoteTick - 0.0 * sim->rttTicks + since - present::InterpolationDelay(kTimeline, sim->jitterTicks, step / 1e9);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player walks smoothly*",
+   "expect": "pvp-interp-(smooth|behind|view)"
+  },
+  {
+   "id": "pvp-interp-life-wiring",
+   "what": "the life is not passed to the blend: a respawn is blended from the death place",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil); design review"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        return present::RemotePose{sample.body->feet, sample.body->yaw, sample.body->pitch, sample.combat ? sample.combat->lifeTick : 0};\n",
+   "replace": "        return present::RemotePose{sample.body->feet, sample.body->yaw, sample.body->pitch, 0};\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's new life*",
+   "expect": "pvp-interp-life"
+  },
+  {
+   "id": "pvp-interp-despawn-at-once",
+   "what": "a player that left is despawned at once, ahead of the timeline that still shows it",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil); design review"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (history.goneAt && (!timed || view.timeline.tick >= static_cast<double>(*history.goneAt))) {\n",
+   "replace": "        if (history.goneAt) {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's stand-in goes*",
+   "expect": "pvp-interp-despawn"
+  },
+  {
+   "id": "pvp-recoil-down",
+   "what": "the recoil turns the weapon down (the left-handed sign)",
+   "guards": [
+    "port declaration segment 6 (PV17, recoil); design review"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, -recoilRadians), viewmodel.rotation);\n",
+   "replace": "                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, recoilRadians), viewmodel.rotation);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a shot kicks*",
+   "expect": "pvp-recoil|kicks"
   }
  ]
 }

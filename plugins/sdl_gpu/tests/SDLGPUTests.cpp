@@ -15,6 +15,7 @@
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
 #include "EmbeddedShaders.hpp"
+#include "PresentModes.hpp"
 
 // The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
 namespace GYO::Plugins::SDLGPU {
@@ -102,6 +103,20 @@ TEST_CASE("sdl_gpu shaders: the 3D pass's shaders use what render's ABI says, in
                           "[g3-abi-entry] the entry point of the format (SPIRV-Cross renames main in Metal)");
         }
     }
+}
+
+TEST_CASE("sdl_gpu present: render's PresentMode falls back along Bevy's chain to what the window supports") {
+    using PM = GYO::Engine::Render::PresentMode;
+    using SM = G::SwapchainPresentMode;
+    for (const bool immediate : {false, true}) {
+        for (const bool mailbox : {false, true}) {
+            CHECK_MESSAGE(G::ChoosePresentMode(PM::AutoVsync, immediate, mailbox) == SM::Vsync, "[sg-present-vsync] VSync on is VSYNC, always");
+        }
+    }
+    CHECK_MESSAGE(G::ChoosePresentMode(PM::AutoNoVsync, true, true) == SM::Immediate, "[sg-present-immediate-first] VSync off: IMMEDIATE first");
+    CHECK_MESSAGE(G::ChoosePresentMode(PM::AutoNoVsync, true, false) == SM::Immediate, "[sg-present-immediate] IMMEDIATE without MAILBOX");
+    CHECK_MESSAGE(G::ChoosePresentMode(PM::AutoNoVsync, false, true) == SM::Mailbox, "[sg-present-mailbox] then MAILBOX");
+    CHECK_MESSAGE(G::ChoosePresentMode(PM::AutoNoVsync, false, false) == SM::Vsync, "[sg-present-last-vsync] then VSYNC");
 }
 
 } // namespace GYO::Plugins::SDLGPU

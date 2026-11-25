@@ -199,7 +199,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `Mesh3d` 只吃 `Handle<ModelData>`，遊戲不能交「一個 region 一個網格」（大地圖審查 S-6）：照 `ImageRef` 的先例讓 `Mesh3d` 也接作者持有的網格，估 +3～5 h | 大地圖 #342 | 大地圖 S4 |
 | net 的觀察（Gateway #340 審查 N9）：`ServerHost::Respond` 先結束同一 endpoint 的舊連線再問 admission，帶過期 token 從同一 endpoint 重連會先斷掉自己還活著的連線 | Gateway #340 | **已開小卡**（`v8-arch-gyo2-big-map-s4-parallel`） |
 | `Sha256` 改成從位元組版 `Sha256Digest` 出 hex 後，net 的 `Handshake.cpp:95` 與 authority 的 `Registrations.cpp:79` 仍自己轉 hex（#339 沒動） | Gateway #339 | 下一個碰 net／authority 的批 |
-| **Engine：視窗模式的請求（窗口／全屏）**（`v8-arch-gyo2-settings-resolution-fullscreen`）：`window` 加請求、`sdl_window` 套用；全屏＝無邊框全屏（`v8-arch-gyo2-window-mode-vsync-start`）；VSync 要（`sdl_gpu` 的 present mode，補回 master 的）；不做螢幕／解析度查詢（使用者選固定尺寸） | 使用者 2026-11-25 | **已開卡** |
+| **Engine：視窗模式的請求（窗口／全屏）**（`v8-arch-gyo2-settings-resolution-fullscreen`）：`window` 加請求、`sdl_window` 套用；全屏＝無邊框全屏（`v8-arch-gyo2-window-mode-vsync-start`）；VSync 要（`sdl_gpu` 的 present mode，補回 master 的）；不做螢幕／解析度查詢（使用者選固定尺寸） | 使用者 2026-11-25 | **已開卡**（#344）；**實機**：Mac 使用者已看過（2026-11-25「#344我已經在Mac上看過但是，windows還沒有」），Windows 未看 |
 
 ## 渲染管線線（全部要做，待開卡）
 

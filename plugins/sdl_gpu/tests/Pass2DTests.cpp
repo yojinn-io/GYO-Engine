@@ -21,6 +21,7 @@
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/render/Compose.hpp"
 #include "engine/render/Pipeline2d.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -417,6 +418,28 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     CHECK_MESSAGE(!status->DriverName().empty(), "[gp-frames-driver] SDL names its driver");
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-frames-texture] the texture asked for in the first frame has a GPU texture");
 
+    // VSync off and on again from render's Presentation (window-mode-vsync declaration, section 4.3).
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-default] the swapchain starts with VSYNC");
+    K::World& world = product.World("Main").GetWorld();
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    const G::SwapchainPresentMode off = status->ActivePresentMode();
+    MESSAGE("VSync off on " << status->DriverName() << ": " << std::string(G::ToString(off)));
+    CHECK_MESSAGE(status->RefusedPresentModes() == 0, "[gp-present-none-refused] " << status->LastFailure());
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoVsync;
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-back] VSync on again is VSYNC");
+    CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-present-frames] no frame failed across the changes: " << status->LastFailure());
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->PresentModeSets() == 2, "[gp-present-only-on-change] set once per change, not per frame: " << status->PresentModeSets());
+    // An environment premise, not the contract: a driver with VSYNC only keeps it for AutoNoVsync, but every driver
+    // these tests run on (Metal, Vulkan on Lavapipe under Xvfb) has IMMEDIATE or MAILBOX, so here it must have changed.
+    CHECK_MESSAGE(off != G::SwapchainPresentMode::Vsync,
+                  "[gp-present-off] VSync off left VSYNC (" << std::string(G::ToString(off)) << "; the environment premise above)");
+
     // A replacement that fails before the swap: the old World goes on drawing with its textures.
     O::ReplaceRequest failing;
     failing.extra = [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
@@ -425,9 +448,14 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     REQUIRE_FALSE(static_cast<bool>(product.ReplaceWorld("Main", std::move(failing))));
     REQUIRE(static_cast<bool>(product.RunFrame()));
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-world-failed-keeps] a failed replacement forgets no texture");
-    // A replacement that succeeds: the new World's ids start again at 1, so the old World's textures go.
+    // A replacement that succeeds: the new World's ids start again at 1, so the old World's textures go; its
+    // Presentation is the default (nothing carried over), so VSync is on again.
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
+    REQUIRE(static_cast<bool>(product.RunFrame()));
     REQUIRE(static_cast<bool>(product.ReplaceWorld("Main", O::ReplaceRequest{})));
     REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync,
+                  "[gp-present-new-world] a new World's default Presentation is applied (carry it over to keep VSync off)");
     CHECK_MESSAGE(status->TextureCount() == 0, "[gp-world-new-forgets] the new World's first frame lets the old World's textures go");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-world-frames] no frame failed");
 }

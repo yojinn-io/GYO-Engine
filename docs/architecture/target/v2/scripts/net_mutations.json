@@ -1534,6 +1534,32 @@
    "target": "gyo_net_tests",
    "cases": "handshake: a new handshake from the same endpoint is a new connection*",
    "expect": "\\[nt\\-reconnect\\-old\\-ended\\]"
+  },
+  {
+   "id": "nt-clock-remote-not-kept",
+   "what": "the clock sync does not keep its remote estimate (a product's interpolation timeline has nothing to follow)",
+   "guards": [
+    "net D-9; PvP port declaration segment 6 (Engine premise)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        sync.remoteTick = remote;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0 jumps*",
+   "expect": "\\[nt\\-clock\\-remote\\]"
+  },
+  {
+   "id": "nt-clock-rtt-not-kept",
+   "what": "the clock sync does not keep the RTT in ticks (a product cannot tell how old the newest state is)",
+   "guards": [
+    "net D-9; PvP port declaration segment 6 (Engine premise)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        sync.rttTicks = rtt / step;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0 jumps*",
+   "expect": "\\[nt\\-clock\\-remote\\]"
   }
  ]
 }
