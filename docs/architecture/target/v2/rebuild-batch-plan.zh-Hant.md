@@ -13,7 +13,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 使用者 2026-11-22（`v8-arch-gyo2-design-review-stage`）：「而是要有一個code review的階段。目的不是找bug，而是看這個設計是否合理。」底層刻意不替誤用、亂用加守衛和突變（守衛過多會把設計鎖回舊形狀，master 就是這樣），少掉的那層由這一步補上。
 
 - **時機**：實作與測試都通過之後、交使用者合併前核准之前。
-- **誰做**：和實作者不同模型的審查者（Fable／high），唯讀。
+- **誰做**：審查者 Opus／high，唯讀（和實作者同模型；換模型的檢查由純淨 Code Review（Fable）負責，`v8-arch-gyo2-navigator-fable-decided`）。這一步第 5 項要讀宣告和 Bevy 的對照，本身不是純淨審查。
 - **看什麼**（設計合不合理，不是找 bug）：
   1. **機制有沒有分散在各個實現裡**：同一件事只該有一個公開出口，各實現注入自己的那一份；呼叫的一方只用公開介面，不用知道背後是哪個實現。例：os 只有一個對外介面，Linux、Windows、macOS 各自實作；外面完全不必管 OS，只呼叫介面就能用 OS 的能力。
   2. 責任與依賴方向；有沒有用契約以外的 API、繞過連結去 include 別的單位（守衛不擋的部分在這裡看）。
@@ -186,6 +186,52 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 給使用者知悉、目前不採：由 Kernel 給 World 唯一 id（像 Bevy 的 `WorldId`），讓 Extract 參數自己偵測來源換了（R1b 實作審查提的替代做法；Kernel 要加新概念） | R1b #334 實作審查 | 不排；要用時再議 |
 | **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | **算在 PvP 移植裡**（`v8-arch-gyo2-gateway-in-pvp-port`）；待開卡 |
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
+| **遊戲流程框架（主菜單）卡**（`v8-arch-gyo2-next-game-flow-not-harness`；使用者 2026-11-25「照建議，第 4 段完成再開流程框架卡」）：主菜單 World → 單人（房間 World → 遊戲 World，不帶連線目標）／多人（Gateway 大廳 → 房間 → 遊戲 World 開始時帶 `NetConnectTarget`）／設置（使用者資料目錄）／退出；換場景用 R1b 換前台 World（不關窗）＋#332；多人一支等 Gateway 第 1、2 段合併後接（原「大廳不關窗」與 Gateway 第 3 步一併歸這張卡）；商人、任務、合作／生存只留位置與資料流；**加：loading 進度條**（使用者 2026-11-25「另外還要有loading進度條」；「加載資源、讀檔」那一步要顯示；主會話查：`world_asset` 的 `AssetView::State(handle)` 已給每個 Handle 的 `AssetState`（Queued／Loading／Loaded／Failed），遊戲數自己要載的 Handle 就能算進度，同 Bevy 的 `LoadState`＋生態的 iyes_progress；沒有「連同依賴」的整體狀態與位元組級進度，要不要補由卡判，補 Engine 先寫前提）；**loading 要擋住畫面**（使用者 2026-11-25「我是說加載、預熱階段，沒有loading擋住就什麼都看到了。例如黑底，加載順序，其他玩家的位置什麼的。」）：加載與預熱期間 loading 畫面蓋住遊戲 World，直到「就緒」才露出——就緒至少含資產載完、pipeline／shader 預熱（第一次用到時編譯造成的卡頓）、網路的初始狀態到齊（其他玩家位置確定）、第一幀畫完；主會話補一點：「其他玩家的位置」若只靠畫面擋，Client 仍收到了資料，公平性要靠 Match 在開始前不複製別人的位置（net 的相關性）——**使用者「嗯，這個需要」：要做**，納入流程框架卡 | 使用者 2026-11-25 | **PvP 第 4 段遊戲部分完成後開** |
+| 遊戲優化＝大地圖（bigMap）＋渲染管線（光照、shader、粒子等）（`v8-arch-gyo2-game-optimization-scope`） | 使用者 2026-11-25 | 待開卡（主會話提案：兩條線各先寫宣告） |
+| **渲染管線線：全部要做**（`v8-arch-gyo2-render-pipeline-scope`）：清單原樣見下面〈渲染管線線〉一節 | 使用者 2026-11-25 | 已記；開卡時機待使用者定 |
+
+## 渲染管線線（全部要做，待開卡）
+
+使用者 2026-11-25：「渲染管線 先記下來。這些都是要做的。」並指定「我說的是上面這個」（`v8-arch-gyo2-render-pipeline-scope`）。下面是使用者指定的清單原樣：
+
+```text
+渲染管線
+│
+├─ 光照與陰影
+│  ├─ 光源：方向光（太陽）、點光、聚光；環境光／天空光
+│  ├─ 材質模型：Lambert／Blinn-Phong（簡單）或 PBR（Bevy 的 StandardMaterial）
+│  ├─ 陰影：方向光的 cascaded shadow map、點光的 cube shadow
+│  └─ 環境：skybox、IBL（環境貼圖反射）、AO（SSAO）
+│
+├─ shader 與材質系統
+│  ├─ 遊戲自己的 shader（P22：走共通內容管線）
+│  └─ 材質資料：哪些參數、怎麼對應 shader、熱重載
+│
+├─ 後處理（畫完整張畫面再加工）
+│  ├─ tonemapping＋exposure／gamma（PvP 盤點本來就列了 exposure／gamma）
+│  ├─ bloom、霧、色調調整（color grading）
+│  └─ 抗鋸齒：MSAA 或 FXAA／TAA
+│
+├─ 效果
+│  ├─ 粒子（CPU 或 GPU；Bevy 生態有 bevy_hanabi）
+│  ├─ 貼花（decal：彈孔、血跡）
+│  └─ 軌跡／拖尾（子彈軌跡）
+│
+├─ 效能（大地圖一定會碰到）
+│  ├─ 視錐剔除（frustum culling）：只畫看得到的
+│  ├─ instancing：同一個網格畫很多份只送一次
+│  ├─ LOD：遠的東西用簡化網格
+│  └─ mipmap、貼圖壓縮
+│
+└─ 基礎設施
+   ├─ render target：畫到貼圖上（小地圖、鏡子、編輯器預覽、後處理都靠它）
+   ├─ 多 pass／render graph：pass 之間的順序與相依（Bevy 的 render graph）
+   └─ GPU 計時與除錯（每個 pass 花多少時間）
+```
+
+- 現況（主會話用關鍵字查 render、各 `*_render`、`sdl_gpu`，未逐檔讀）：3D 是 unlit、只有 Plugin 內建 shader，上列幾乎都沒有。
+- **排在大地圖線之後**（使用者 2026-11-25「渲染管線線…排在大地圖的後面」，`v8-arch-gyo2-render-after-big-map`）。視錐剔除、instancing、LOD 隨大地圖線先做。
+- 線內主會話建議的順序（未定）：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal。
 
 ## 不擋路的小事
 
