@@ -37,9 +37,9 @@ namespace O = GYO::Engine::Orchestration;
 // runner returns. No server: the player closed the window or chose Quit.
 struct LobbyOutcome final {
     std::optional<GYO::Engine::OS::SocketAddress> server;  // the address the player submitted
-    std::string address;                                     // its text, shown again when the lobby comes back
-    bool shown = false;                                      // the document was loaded and laid out
-    std::string failure;                                     // why it was not shown (empty: no failure seen)
+    std::string address;                                   // its text, shown again when the lobby comes back
+    bool shown = false;                                    // the document was loaded and laid out
+    std::string failure;                                   // why it was not shown (empty: no failure seen)
 };
 inline void HashValue(GYO::Kernel::Hasher&, const LobbyOutcome&) {}
 

@@ -19,7 +19,7 @@ Owner：架構。來源：`v8-product-pvp-gateway` 第 3 段（遊戲的事前�
 
 ## 不做
 
-DNS（位址是 IPv4 字面值，和 datagram socket 同一型別 `SocketAddress`）、TLS、重導、cookie、keep-alive、HTTP/2、HEAD（HEAD 的回應有長度、沒有 body，解析器會等 body）。
+DNS（位址是 IPv4 字面值，os 的 socket 位址 `SocketAddress`）、TLS、重導、cookie、keep-alive、HTTP/2、HEAD（HEAD 的回應有長度、沒有 body，解析器會等 body）。
 
 ## 測試與突變
 

@@ -13,8 +13,8 @@
 // A non-blocking IPv4 TCP client connection (docs/architecture/os.md, Stream). engine/core/os opens it, reports how the
 // connect went, and moves bytes; what the bytes mean (HTTP or anything else), when to give up and what to retry stay
 // with the caller (Design Invariant 7). Nothing here blocks: the caller asks again on its next frame. The address is
-// a SocketAddress, the same type the datagram socket takes. The OS's own connect timeout (tens of seconds) is the only
-// one here; a caller that wants a shorter one drops the socket.
+// a SocketAddress. The OS's own connect timeout (tens of seconds) is the only one here; a caller that wants a shorter
+// one drops the socket.
 
 namespace GYO::Engine::OS {
 

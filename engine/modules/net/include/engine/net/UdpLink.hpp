@@ -23,10 +23,10 @@ public:
     }
     [[nodiscard]] static constexpr OS::SocketAddress ToAddress(const Endpoint endpoint) noexcept {
         return OS::SocketAddress{{static_cast<std::uint8_t>(endpoint.value >> 40),
-                                    static_cast<std::uint8_t>(endpoint.value >> 32),
-                                    static_cast<std::uint8_t>(endpoint.value >> 24),
-                                    static_cast<std::uint8_t>(endpoint.value >> 16)},
-                                   static_cast<std::uint16_t>(endpoint.value)};
+                                  static_cast<std::uint8_t>(endpoint.value >> 32),
+                                  static_cast<std::uint8_t>(endpoint.value >> 24),
+                                  static_cast<std::uint8_t>(endpoint.value >> 16)},
+                                 static_cast<std::uint16_t>(endpoint.value)};
     }
 
     // The address the socket is bound to, with the port the OS picked.

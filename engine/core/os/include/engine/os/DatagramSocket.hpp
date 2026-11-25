@@ -5,7 +5,6 @@
 #include "engine/os/SocketAddress.hpp"
 
 #include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
