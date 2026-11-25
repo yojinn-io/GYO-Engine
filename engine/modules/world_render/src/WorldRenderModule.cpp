@@ -15,6 +15,10 @@ void WorldRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<Render::SkinPose>({.name = "SkinPose"});
     r.Component<Render::Camera3dDepth>({.name = "Camera3dDepth"});
     r.Component<Render::RenderLayers>({.name = "RenderLayers"});
+    r.Component<Render::Aabb>({.name = "Aabb"});
+    r.Component<Render::NoFrustumCulling>({.name = "NoFrustumCulling"});
+    r.Component<Render::VisibilityRange>({.name = "VisibilityRange"});
+    r.Component<Render::CulledEntities>({.name = "CulledEntities"});
     r.Component<Render::ClearColorConfig>({.name = "ClearColorConfig"});
     r.Resource<Render::ClearColor>({.name = "ClearColor"});
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {

@@ -22,6 +22,7 @@
 #include "engine/asset/Handle.hpp"
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Hash.hpp"
+#include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/geometry/Rect.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
@@ -99,13 +100,19 @@ struct ClearColor final {
     Color8 color{0, 0, 0, 255};
 };
 
-// One mesh of a model asset, drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
+// The model a Mesh3d draws: a model asset (drawn once it is loaded), or a model the author holds (geometry the game
+// makes at run time, such as a map's region; as ImageRef's held image: a new ModelData is a new model, the old one's
+// GPU meshes are let go when no Mesh3d draws it any more). Bevy adds such a mesh to Assets<Mesh> (Assets::add); gyo2's
+// asset has no run-time add, so the held form follows ImageRef instead.
+using ModelRef = std::variant<Asset::Handle<Model::ModelData>, std::shared_ptr<const Model::ModelData>>;
+
+// One mesh of a model (an asset or a held one, ModelRef), drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
 // batch r2b-3d). A mesh without a skin sits at its node (its rest pose, or the entity's SkinPose when it has one); a
 // skinned mesh's vertices are placed by its skin and the entity's SkinPose (model.zh-Hant.md section 2.1), on the CPU
 // (render.zh-Hant.md section 8.4). The entity's GlobalTransform places the model. The material is the author's:
 // color times image (none: white); the model's own material is data the author reads (model.zh-Hant.md: Material).
 struct Mesh3d final {
-    Asset::Handle<Model::ModelData> model;
+    ModelRef model;
     // An index of ModelData::meshes; past the end: nothing is drawn.
     std::uint32_t mesh = 0;
     Color8 color{255, 255, 255, 255};
@@ -134,6 +141,51 @@ struct SkinPose final {
     std::vector<Math::Matrix4> nodes;
 };
 
+// Visibility (big-map declaration section 13; after bevy_camera's visibility: Aabb in primitives.rs, NoFrustumCulling
+// in visibility/mod.rs:318, VisibilityRange in visibility/range.rs:80). The visibility Module's CheckVisibility decides,
+// per camera, which entities with an Aabb or a VisibilityRange it does not see and writes them into the camera's
+// CulledEntities; Queue3d leaves those out. Bevy keeps the positive list (VisibleEntities, :344) and lets the queue
+// read it per visibility class; the negative list keeps "which entities are culled at all" in the visibility Module
+// alone, so a renderer only asks "is it in the list". An entity with neither component is never culled, and without
+// the visibility Module no camera has a list, so everything is drawn.
+
+// The entity's bounds in its own space (Bevy's Aabb): the frustum test puts its eight corners through the entity's
+// GlobalTransform and tests the box around them.
+struct Aabb final {
+    Math::Aabb local{};
+};
+
+// The entity is not tested against the frustum (it still is against its VisibilityRange).
+struct NoFrustumCulling final {};
+
+// A half-open range of distances [start, end) (Bevy's Range<f32>).
+struct DistanceRange final {
+    float start = 0.0F;
+    float end = 0.0F;
+};
+
+// Seen only from distances in [startMargin.start, endMargin.end) (Bevy's VisibilityRange and is_visible_at_all): the
+// distance from the camera's position to the entity's (or, with useAabb, to its Aabb's centre). The margins are where
+// Bevy fades one level of detail into the next; that needs a shader (the render pipeline line), so both levels are
+// drawn there for now: zero-width margins switch at once.
+struct VisibilityRange final {
+    DistanceRange startMargin{};
+    DistanceRange endMargin{};
+    bool useAabb = false;
+};
+
+// On a camera, written by CheckVisibility: the entities with an Aabb or a VisibilityRange this camera does not see, in
+// ascending EntityId. A camera without it (no visibility Module, or not checked yet) culls nothing.
+struct CulledEntities final {
+    std::vector<std::uint64_t> entities;
+
+    friend bool operator==(const CulledEntities&, const CulledEntities&) = default;
+};
+
+inline void HashValue(Kernel::Hasher&, const Aabb&) {}
+inline void HashValue(Kernel::Hasher&, const NoFrustumCulling&) {}
+inline void HashValue(Kernel::Hasher&, const VisibilityRange&) {}
+inline void HashValue(Kernel::Hasher&, const CulledEntities&) {}
 inline void HashValue(Kernel::Hasher&, const RenderLayers&) {}
 inline void HashValue(Kernel::Hasher&, const Mesh3d&) {}
 inline void HashValue(Kernel::Hasher&, const SkinPose&) {}

@@ -4,7 +4,9 @@
 // World (with extractFrom; render_world and camera_render before it).
 //
 // - ExtractMeshes3d, in render_world's extract schedule: rebuilds render's Extracted3dItems from the source World's
-//   Mesh3ds that have a GlobalTransform and whose model is loaded (read through the source's AssetView): a mesh
+//   Mesh3ds that have a GlobalTransform and whose model is there (an asset loaded in the source's AssetView, or a model
+//   the author holds, Render::ModelRef; the source still carries world_asset); at its end the meshes of held models no
+//   Mesh3d drew this frame are let go (RenderModelMeshes::EndFrame). A mesh
 //   without a skin becomes its retained mesh (RenderModelMeshes, made on RenderMeshes the first time) placed at its
 //   node (the entity's SkinPose, else the rest pose); a skinned mesh is skinned on the CPU with the entity's SkinPose
 //   (else the rest pose) into this frame's vertices. Images through render_world's RenderImages, as sprite_render.

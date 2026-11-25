@@ -95,8 +95,8 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 | 列 | 角色 | 做什麼 |
 |---|---|---|
-| `world_render` | 來源側（`default=no`，依賴 `render`） | 登記可畫元件 `Sprite`、`Shape2d`、`RenderLayers`、相機的 `ClearColorConfig` 與 Resource `ClearColor`（沒有才放：不透明黑）。不跑 System（總宣告第 3.3 節命名 `world_<x>`） |
-| `camera_render` | 渲染側（依賴 `render`、`render_world`） | `ExtractCameras`（`Extract` schedule）：重建 `ExtractedCameras`——啟用中、`ComputedCamera` 有效、有 `GlobalTransform` 的相機，照 `order`、再照來源實體排；帶目標、視區與投影、視點、2D／3D 標記、清除色（`ClearColorConfig` 對來源的 `ClearColor`）、`RenderLayers` |
+| `world_render` | 來源側（`default=no`，依賴 `render`） | 登記可畫元件 `Sprite`、`Shape2d`、`RenderLayers`、可見性的元件 `Aabb`、`NoFrustumCulling`、`VisibilityRange` 與相機的推導值 `CulledEntities`（`visibility` 寫、`camera_render` 要抽，所以型別要在來源 World 登記；第 8.6 節）、相機的 `ClearColorConfig` 與 Resource `ClearColor`（沒有才放：不透明黑）。不跑 System（總宣告第 3.3 節命名 `world_<x>`） |
+| `camera_render` | 渲染側（依賴 `render`、`render_world`） | `ExtractCameras`（`Extract` schedule）：重建 `ExtractedCameras`——啟用中、`ComputedCamera` 有效、有 `GlobalTransform` 的相機，照 `order`、再照來源實體排；帶目標、視區與投影、視點、2D／3D 標記、清除色（`ClearColorConfig` 對來源的 `ClearColor`）、`RenderLayers`；相機的 `CulledEntities` 抽進 `ExtractedCamera::culled`（沒有就是空的，第 8.6 節） |
 | `sprite_render` | 渲染側（依賴 `render`、`render_world`、`camera_render`） | `ExtractSprites2d`（`Extract`）：重建 `Extracted2dItems`、經 `RenderImages` 建貼圖；`Queue2dPasses`（`SpriteRenderOptions`，預設 `Main`／`Update`）：每個 2D 相機一個 `Queue2d` 的 pass，接在 `RenderCommands` 後面 |
 
 - **讀相機的 extract 另立一列**（總宣告第 10.1 節「定的時候回頭驗 KeepTool」）：放進 `render_world` 的話，每個帶 `render_world` 的渲染 World 都要求來源登記相機的型別（R-E4）；KeepTool 的渲染 World 只抽 ImGui 的 draw list。驗過：來源只有 `entity_ids`、渲染 World 只有 `render_world` 時建得起來（`render.extract` 的 `[re-keeptool]`）。
@@ -177,8 +177,8 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 - **半透明不寫深度**（照 Bevy：`AlphaMode::Blend` 不寫深度，`bevy_pbr/src/render/mesh.rs:3531-3547`）：`Mesh3d::depthWrite` 沒給時，不透明寫、半透明不寫，交錯的半透明網格不會互相擋住；作者要時明給 `true`。
 - **shader**：無光照（unlit）——貼圖×`color`，同 master（盤點表 R2a 列「unlit 的 shader」）。顏色照 bytes（同 2D pass；RC-RD 3 不觸發，因為不打光）。HLSL 在 `render/shaders/mesh3d.*.hlsl`，ABI 在 `ShaderAbi.hpp`（RD-4）。
 - **先後**（RD-8）：不透明、測深度的近到遠（被近的擋住的像素少算；**偏離 Bevy**：Bevy 的 `Opaque3d` 是 binned phase，照 pipeline、材質、網格分組，不照距離，`bevy_core_pipeline/src/core_3d/mod.rs:172-188`、`:275`——照距離排的代價是 pipeline 與貼圖可能來回切換，沒有量；PvP 的 draw 數少），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
-- **`Mesh3d`**（來源側，`world_render` 登記）：模型素材的 `Handle`、網格索引、`color`、`image`（`ImageRef`，沒給是白）、混合、深度測試／寫入、`CullMode`（`Back`＝螢幕上順時針的不畫，逆時針是正面，同 Bevy 的 `FrontFace::Ccw`；預設 `None`）。模型自己的材質（`Material::baseColor`、貼圖檔名）是資料，作者讀了填進 `color`／`image`——材質系統（Bevy 的 `StandardMaterial`）不在本批。
-- **實體對應**（總宣告第 6.1 節第 8 點，逐種判的 3D 那一種）：網格每幀暫時（`Extracted3dItems`）；保留的是**模型網格**（以素材 id、life、網格索引為鍵的 `RenderModelMeshes`，RD-9）。Bevy 的 `RenderMeshInstances` 以來源實體為鍵、留每實例的 GPU 資料；GYO 的 world 矩陣與材質每個 draw 推一次 uniform，沒有每實例的 GPU 狀態要留，所以不需要對應實體——四個衝突點在 3D 段也不出現（RC-RD 5 寫了什麼時候要改）。
+- **`Mesh3d`**（來源側，`world_render` 登記）：模型（`ModelRef`：素材的 `Handle`，或作者持有的 `shared_ptr<const ModelData>`——執行期產生的幾何，例如大地圖的 region；照 `ImageRef` 的先例，Bevy 是 `Assets<Mesh>::add`，gyo2 的 asset 沒有執行期加入，`v8-arch-gyo2-mesh3d-held`）、網格索引、`color`、`image`（`ImageRef`，沒給是白）、混合、深度測試／寫入、`CullMode`（`Back`＝螢幕上順時針的不畫，逆時針是正面，同 Bevy 的 `FrontFace::Ccw`；預設 `None`）。模型自己的材質（`Material::baseColor`、貼圖檔名）是資料，作者讀了填進 `color`／`image`——材質系統（Bevy 的 `StandardMaterial`）不在本批。
+- **實體對應**（總宣告第 6.1 節第 8 點，逐種判的 3D 那一種）：網格每幀暫時（`Extracted3dItems`）；保留的是**模型網格**（以素材 id、life、網格索引為鍵，或作者持有的模型以位址、網格索引為鍵的 `RenderModelMeshes`，RD-9）。Bevy 的 `RenderMeshInstances` 以來源實體為鍵、留每實例的 GPU 資料；GYO 的 world 矩陣與材質每個 draw 推一次 uniform，沒有每實例的 GPU 狀態要留，所以不需要對應實體——四個衝突點在 3D 段也不出現（RC-RD 5 寫了什麼時候要改）。
 - **沒有蒙皮的網格**放在它的節點上（`SkinPose` 合模型的節點數就用它，否則 rest pose；`PlaceMesh`），整個模型再由實體的 `GlobalTransform` 放。
 
 ### 8.4 蒙皮（骨骼動畫第 3 層）：CPU
@@ -193,6 +193,22 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 | master | CPU（`ModelRenderer.cpp:85,131`），PvP 已經這樣跑 | — |
 
 理由：來源側的介面（`SkinPose`＝每個節點的模型空間矩陣）兩種做法都一樣，上層的遊戲、網路、動畫都不依賴它；換成 GPU 只動 `mesh_render` 與 `sdl_gpu` 的內部（RC-RD 6）。所以先選少的那一個，之後換也不會被上層的程式卡住（建機制時要提防的是「保守的選項被上層蓋住、沒人回頭改」，這一題的上層不碰它）。
+
+### 8.6 可見性（視錐剔除與距離；大地圖線 S2，`v8-arch-gyo2-big-map-s2`）
+
+宣告：[大地圖宣告](big-map-declaration.zh-Hant.md)第 13、14 節。照 Bevy 的 `bevy_camera` visibility（`check_visibility_cpu_culling`、`check_visibility_ranges`）。
+
+- **元件**（`Drawables.hpp`，`world_render` 登記，不進雜湊）：`Aabb`（實體本地座標的盒）、`NoFrustumCulling`、`VisibilityRange`（照 Bevy 的兩段 margin＋`useAabb`；看得到＝距離在 `[startMargin.start, endMargin.end)`；漸變要 shader，現在 margin 裡兩個 LOD 都畫）、相機上的 `CulledEntities`。
+- **`visibility` Module**（來源側，`default=no`，依賴 render、transform、camera）：`CheckVisibility` 在 frame／PostUpdate、`TransformPropagate` 與 `CameraUpdate` 之後，公開 set `CheckVisibility`。對每個啟用中、有效的 3D 相機，把受管（有 `Aabb` 或 `VisibilityRange`）而看不到的實體寫進該相機的 `CulledEntities`（EntityId 升冪；只在內容改變時寫；第一份用延遲指令插入）。盒子經 `GlobalTransform` 的八個角換成世界 AABB，用 `Math::Intersects(Frustum, Aabb)`。
+- **抽取與排隊**：`camera_render` 抽成 `ExtractedCamera::culled`；`Queue3d` 跳過清單裡的實體。`RenderLayers` 照舊。2D 不剔除。
+
+**Design Invariants**
+
+- **VS-1 一處決定**：哪些實體受剔除管、看不看得到，只由 `visibility` 的 `CheckVisibility` 決定；renderer 只問「在不在相機的清單裡」。守衛：審查；突變 `vs-queue-filter-off`、`vs-camera-list-not-extracted`。
+- **VS-2 選用**：沒帶 `visibility` 的 World，相機沒有清單，什麼都不剔除；沒有 `Aabb` 也沒有 `VisibilityRange` 的實體永遠畫。守衛：「without the visibility Module…」案、`[vs-frustum]` 的無盒實體。
+- **VS-3 只在變了才寫**：`CulledEntities` 內容不變就不寫，`Changed` 只在變了才亮。守衛：`[vs-write-changes]`、突變 `vs-write-every-frame`。
+
+**Replacement Criteria**：RC-VS1（要剔除很多不知道盒子的網格 → 照 Bevy 的 `calculate_bounds` 自動算）、RC-VS2（玩法要讀「這一幀有沒有被看到」→ `ViewVisibility`）、RC-VS3（量到被剔除的項目在抽取的成本超過預算，例如 CPU 蒙皮 → 把剔除移到抽取前）。另見大地圖宣告第 14 節 S-4（clip-from-world 收成一處）。
 
 ### 8.5 比過的
 
@@ -220,7 +236,7 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 - **RD-7 相機的先後、清除與 2D 的先後**（R2b，第 7.4 節）：一個目標第一個相機清整個目標，之後的相機只清自己的視區；相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`、`[p2-clear-*]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`、`[re-split-*]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
 
 - **RD-8 3D 的先後**（R2b 的 3D 段，第 8.3 節）：一個 3D 相機一個 `Pass3D`，深度從清空開始、顏色不清；先畫不透明、測深度的（近到遠），再畫半透明、測深度的（遠到近），最後畫不測深度的（遠到近）；同距離照來源實體；只畫 `RenderLayers` 有交集的。守衛：`render.pipeline3d`（`[p3-*]`）、`sdl_gpu.pass3d`（`[g3-*]`，Lavapipe 上的像素）。
-- **RD-9 模型網格以模型網格為鍵保留**（第 8.3 節）：沒有蒙皮的模型網格第一次畫時建成 `RenderMeshes` 的網格、以（素材 id、life、網格索引）為鍵；同一個素材的新 life 放掉舊的；蒙皮的網格每幀在 CPU 算、放在 pass 自己的頂點。守衛：`render.pipeline3d`（`[p3-mesh-*]`、`[p3-skin-*]`、`[p3-place-*]`）、`render.extract`（`[re-3d-*]`）。
+- **RD-9 模型網格以模型網格為鍵保留**（第 8.3 節）：沒有蒙皮的模型網格第一次畫時建成 `RenderMeshes` 的網格、以（素材 id、life、網格索引）為鍵；同一個素材的新 life 放掉舊的；作者持有的模型（`ModelRef` 的 `shared_ptr`）以（位址、網格索引）為鍵，保留期間握著它，在沒有任何 `Mesh3d` 畫它的那一幀放掉（`ExtractMeshes3d` 的結尾呼叫 `EndFrame`，release 跟著那一幀的 asks 送給後端；鍵與 holder 由 `ResolveModel` 一處產生，同 `ResolveImage`）。和 Bevy 的差別：Bevy 在最後一個 Handle 丟掉時才放 GPU 網格，就地修改 `Assets<Mesh>` 會觸發重傳；這裡是一幀沒畫就放，也不察覺就地修改——作者要換幾何就給新的 `ModelData`（持有的要當作不可變）；蒙皮的網格每幀在 CPU 算、放在 pass 自己的頂點。守衛：`render.pipeline3d`（`[p3-mesh-*]`、`[p3-skin-*]`、`[p3-place-*]`）、`render.extract`（`[re-3d-*]`）。
 
 - **RD-10 呈現方式是渲染 World 的資料、`Cleanup` 不清**（第 2 節末）：`render_world` 登記 `Presentation`、新 World 放預設（帶過去的值留著，O-7）；遊戲改的值留到它再改；後端讀它、不寫它，變了才套用。守衛：`render.world`（`[rw-present-registered]`、`[rw-present-default]`、`[rw-present-kept]`）、`sdl_gpu.frames`（`[gp-present-*]`：含 `[gp-present-only-on-change]`、`[gp-present-new-world]`）；突變 `rw-present-not-put`、`gp-present-every-frame`。
 

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "pvp_training_v1",
   "width": 20,
   "depth": 20,
@@ -8,7 +8,7 @@
   "body_height": 1.8,
   "radius": 0.25,
   "eye_height": 1.6,
-  "geometry": "pvp_arena.voxel_mesh.json",
+  "map": "pvp_arena",
   "spawns": [
     {"position": [5, 0, 5], "yaw": 0},
     {"position": [5, 0, 12], "yaw": 3.14159265},
