@@ -160,7 +160,12 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
     auto c = O::Product::Build(Describe(player), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(c), Reported(c));
     CHECK_MESSAGE(!(*c)->Buffer().Find<N::NetService>()->UdpAddress().has_value(), "[nt-target-socket-late] not open before its first frame");
-    for (int i = 0; i < 100 && PeersOf((*s)->World("Net").GetWorld()).empty(); ++i) {
+    // Until both ends have the connection (a session closed while still shaking hands has no Disconnect to send).
+    const auto connected = [&] {
+        const N::ClientSession* session = (*c)->Buffer().Find<N::NetService>()->Client();
+        return !PeersOf((*s)->World("Net").GetWorld()).empty() && session != nullptr && session->State() == N::ClientState::Connected;
+    };
+    for (int i = 0; i < 200 && !connected(); ++i) {
         REQUIRE(static_cast<bool>((*c)->RunFrame()));
         REQUIRE(static_cast<bool>((*s)->RunFrame()));
     }
@@ -168,6 +173,18 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
     const auto peers = PeersOf((*s)->World("Net").GetWorld());
     REQUIRE_MESSAGE(peers.size() == 1, "the client connected over UDP");
     CHECK(peers[0].userId == 11);
+
+    // Back in a World that names no server (single play after a match): the socket closes once the Disconnect went.
+    REQUIRE(static_cast<bool>((*c)->ReplaceWorld("Net", {.extra = [](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        world.RemoveResource<N::NetConnectTarget>();
+        return {};
+    }})));
+    for (int i = 0; i < 5; ++i) {
+        REQUIRE(static_cast<bool>((*c)->RunFrame()));
+        REQUIRE(static_cast<bool>((*s)->RunFrame()));
+    }
+    CHECK_MESSAGE(!(*c)->Buffer().Find<N::NetService>()->UdpAddress().has_value(), "[nt-target-socket-closed] no port held in single play");
+    CHECK_MESSAGE(PeersOf((*s)->World("Net").GetWorld()).empty(), "the server took the player off (the Disconnect went before the close)");
 }
 
 TEST_CASE("connect-target: J3 closed just before the replacement, its Disconnect still goes out (not left to time out)") {

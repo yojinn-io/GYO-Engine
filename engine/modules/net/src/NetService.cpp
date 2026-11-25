@@ -94,6 +94,9 @@ void NetService::SetTarget(const NetConnectTarget* target, const NetTime now, co
     // replacement still has its Disconnect packets to send), and the next SetFacts opens a new one.
     EndClient(now);
     target_ = std::move(wanted);
+    // A client World that connects to nothing closes the socket the Module opened (a Product back in a World that
+    // names no server holds no port; it opens again with the next target). A Link the product gave stays its.
+    if (!target_ && !options_.link) link_.reset();
 }
 
 void NetService::Failed(NetFailure failure) {

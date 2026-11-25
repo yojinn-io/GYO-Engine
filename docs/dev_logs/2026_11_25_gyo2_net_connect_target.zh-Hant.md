@@ -39,3 +39,14 @@ blocker 1、should 4、nit 7。紀錄：`build/evidence/v8-product-pvp-port/net-
 - 交使用者（主會話轉）：第 1 項（讀目標的時機：第一幀讀一次，或 Resource 第一次出現時讀，讓生成中的 World 可以「地圖載完才連」）；第 2 項（回到沒有目標的 World 之後要不要關 UDP socket：現在開了就一直開著）。
 
 修正後：`ctest -L "cpu|gpu"` 255/255、`ctest -L network` 1/1；突變：新的 `nt-target-*` 7 個（含 `nt-target-closed-dropped`、`nt-target-open-failure-ignored`）與相關既有的 epoch／resync 7 個共 14/14 killed。`nt-request-epoch-missing` 的 find 因 epoch 改由 `SetTarget` 給而 stale，照新的字面（`lastSalt_, targetEpoch_};`）改後 killed。
+
+## 使用者定的兩項（2026-11-25）
+
+使用者給了整體遊戲流程（單人：房間 → 載入讀檔 → 遊戲 → 撤離結算；多人：大廳 → 建房或加入 → 房間與準備 → 開始後鎖房 → 載入、讀各玩家的檔 → 遊戲 → 照模式結算），並說明 Gateway 的定位（Match 以外的入口，房間等服務放在它後面，「就像微服務的概念」）。照流程定：
+
+1. 讀目標的時機：維持第一幀讀一次（多人載入時就要連，Match 要先拿到各玩家的檔）。
+2. 回到沒有目標的 client World：送完剩下的 datagram 後關掉 UDP socket（打完多人回到單人時不留著 port），下一個帶目標的再開。突變 `nt-target-socket-kept`。`nt-target-socket-early` 的 expect 改成「第一幀之前沒開」（沒有目標的 World 現在第一幀就關掉，原本的檢查看不到）。
+
+過程中查到一件既有的行為（不是本批造成的）：session 還在握手中就被關掉時，`ClientSession::Close` 沒有 Disconnect 可送（還沒有 connection），Match 若已接受就要等逾時。測試改成等兩端都連上才替換；這件記下，要不要處理之後再看。
+
+突變（這一輪）：`nt-target-socket-kept`、`nt-target-closed-dropped`、`nt-target-end-not-sent`、`nt-target-socket-early` 4/4 killed；`ctest -L "cpu|gpu"` 255/255、`ctest -L network` 1/1。

@@ -51,6 +51,7 @@
    - 同一個 World 裡斷線之後不自己重連（D-8 不變）。
 5. **socket 延後開**：
    - Client 角色：`NetModule::Configure` 不開 socket；`SetTarget` 第一次拿到 UDP 的位址時才 `UdpLink::Open(bind)`。開不了時計一次 link failure（`NetLinkFailed` 帶 OS 的原因），不連；下一個帶目標的 World 再試。原本的啟動錯誤 NT-E4 只剩 server 角色。
+   - 回到沒有目標的 client World 時（`SetTarget` 拿到沒有目標）：送完剩下的 datagram 後關掉 socket，下一個帶目標的 World 再開（Client 的 port 每次不同）。使用者 2026-11-25 定（「單人不碰網路」：打完多人回到單人時不留著 port；Unity 的 driver 跟著 client World 銷毀）。
    - Server 角色（Match）：照舊在 `Configure` 開（要 listen；開不了是啟動錯誤 NT-E4）。
    - 產品給 Link 時不開 socket（照舊）。
    - `NetService::UdpAddress()` 在開之前回 nullopt。
