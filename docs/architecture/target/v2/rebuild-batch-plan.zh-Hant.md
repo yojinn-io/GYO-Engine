@@ -180,6 +180,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | JSON Module 加排版輸出（pretty print）：`gyo.ui` 經 JSON Module 寫出變成一行，Editor 回來前要有排版輸出，否則檔案 diff 沒法看（`v8-arch-gyo2-sdl-u-three-judgments` 2） | U #322 | Editor（工具線）回來前 |
 | `TextComposition.cursor` 改成位元組、由 `sdl_window` 的 adapter 換算（同 winit；`v8-arch-gyo2-sdl-u-three-judgments` 3） | U #322 設計審查 S2 | **已處理**：#326 bec63ca5 |
 | **已定：移植做完再開**（`v8-arch-gyo2-big-map-after-ports`）**大地圖線**（`v8-arch-gyo2-pvp-playtest-2026-11-24` 3）：master big-map（1 km²、cell 0.5 m、`gyo.voxel_map`＋`gyo.voxel_region`）做到格式、分塊工具、broadphase，scene v1 與 pa-measure 沒做；gyo2 只有單檔 v1、無剔除、無地圖編輯器；約 200 m 見方內現狀可行（未量）。開線要照 gyo2 重對層的歸屬（工具與遊戲只用資料形式交接） | PvP 卡 2026-11-24 | 兩個移植做完後 |
+| **待使用者定：R1b 做法 (A) 讀者一起重建／(B) 准許換來源**（卡建議 (B)；宣告 `sdl-extract-replace-declaration.zh-Hant.md` 修訂 1，分支 `claude/gyo2-sdl-r1b-extract-replace-8886f8` 6ff83c7b）。更正總宣告 6.1-4：只有 (B) 要改 Kernel 條文（DI-KS 13、26、37、D-E14；新增 DI-KS 38、RC 29），(A) 只改編排層 O-8、O-12 | R1b 卡 2026-11-25 | 使用者選定後實作 |
+| PvP：連線目標、userId、token 在 `NetProductOptions`（建 Product 時定）、前台 World 一準備好就握手；要「每次換前台時才給目標、大廳不連線」要由遊戲或 net 定（R1b 的用法：前台 World＋渲染 World，runner `ReplaceWorld("front", {extra})`） | R1b 卡 2026-11-25 | **主會話判 (1)**（`v8-arch-gyo2-net-connect-target-per-world`）：PvP 卡另開 net PR；PvP 改成換前台 World 要等 R1b 與它都合 |
 
 ## 不擋路的小事
 
