@@ -96,9 +96,10 @@ SystemResult WriteInputMessages(Kernel::ResMut<SDLWindowHandle> handle, Kernel::
     return {};
 }
 
-// The window half of the queue. In a new World's first round the present size, focus and clipboard come first.
+// The window half of the queue. In a new World's first round the present size, focus, mode and clipboard come first.
 SystemResult WriteWindowMessages(Kernel::ResMut<SDLWindowHandle> handle, Kernel::MessageWriter<Win::WindowResized> resized,
                                  Kernel::MessageWriter<Win::WindowFocused> focused,
+                                 Kernel::MessageWriter<Win::WindowModeChanged> modeChanged,
                                  Kernel::MessageWriter<Win::WindowCloseRequested> closeRequested,
                                  Kernel::MessageWriter<Win::ClipboardChanged> clipboard) {
     if (!handle.Present() || handle.Read().service == nullptr) return {};
@@ -110,6 +111,7 @@ SystemResult WriteWindowMessages(Kernel::ResMut<SDLWindowHandle> handle, Kernel:
             const Engine::Time::TimePoint at = Engine::Time::Now();
             resized.Send(Win::WindowResized{now.physicalSize, now.scaleFactor, at});
             focused.Send(Win::WindowFocused{now.focused, at});
+            modeChanged.Send(Win::WindowModeChanged{now.mode, at});
             clipboard.Send(Win::ClipboardChanged{std::move(now.clipboard), now.clipboardTruncated, at});
         }
     }
@@ -117,6 +119,7 @@ SystemResult WriteWindowMessages(Kernel::ResMut<SDLWindowHandle> handle, Kernel:
         std::visit(Overloaded{
                        [&](Win::WindowResized& m) { resized.Send(std::move(m)); },
                        [&](Win::WindowFocused& m) { focused.Send(std::move(m)); },
+                       [&](Win::WindowModeChanged& m) { modeChanged.Send(std::move(m)); },
                        [&](Win::WindowCloseRequested& m) { closeRequested.Send(std::move(m)); },
                        [&](Win::ClipboardChanged& m) { clipboard.Send(std::move(m)); },
                    },
@@ -128,12 +131,15 @@ SystemResult WriteWindowMessages(Kernel::ResMut<SDLWindowHandle> handle, Kernel:
 // The request side (Bevy's changed_windows in Last, bevy_winit/src/system.rs; through the adapter,
 // -sdl-system-calls-via-adapter): each field applied only when it differs from what SDL accepted last; a refusal is
 // counted and tried again next frame. It is not the System's error (the World goes on; SDLWindowPump tells it).
-// The close request is applied last: the window goes and the runner ends after this frame.
+// The one-shot ones in the order: modes, sizes, warps, copies (a mode first: a size sent with Windowed is the Windowed
+// size, given once the window left fullscreen). The close request is applied last: the window goes and the runner
+// ends after this frame.
 SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Res<In::TextInputRequest> textInput,
                                  Kernel::Res<Win::WindowRequest> window, Kernel::MessageReader<Win::WarpCursor> warps,
-                                 Kernel::MessageReader<Win::ResizeWindow> resizes,
+                                 Kernel::MessageReader<Win::SetWindowMode> modes, Kernel::MessageReader<Win::ResizeWindow> resizes,
                                  Kernel::MessageReader<Win::CopyToClipboard> copies) {
     const auto warpList = warps.Read();
+    const auto modeList = modes.Read();
     const auto resizeList = resizes.Read();
     const auto copyList = copies.Read();
     if (!handle.Present() || handle->service == nullptr) return {};
@@ -145,6 +151,7 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
     Service::DeferredRequests& deferred = service.Deferred();
     if (backend->InLiveFrame()) {
         for (const Win::WarpCursor* warp : warpList) deferred.warps.push_back(*warp);
+        for (const Win::SetWindowMode* mode : modeList) deferred.modes.push_back(*mode);
         for (const Win::ResizeWindow* resize : resizeList) deferred.resizes.push_back(*resize);
         for (const Win::CopyToClipboard* copy : copyList) deferred.copies.push_back(*copy);
         return {};
@@ -173,6 +180,9 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
         if (request.cursorGrab != applied.cursorGrab) apply(backend->SetCursorGrab(request.cursorGrab), applied.cursorGrab, request.cursorGrab);
     }
     // The kept ones first (they were sent earlier).
+    for (const Win::SetWindowMode& mode : deferred.modes) {
+        if (!backend->SetMode(mode.mode)) service.Refused(backend->LastError());
+    }
     for (const Win::ResizeWindow& resize : deferred.resizes) {
         if (!backend->SetSize(resize.size)) service.Refused(backend->LastError());
     }
@@ -183,6 +193,9 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
         if (!backend->SetClipboard(copy.text)) service.Refused(backend->LastError());
     }
     deferred = {};
+    for (const Win::SetWindowMode* mode : modeList) {
+        if (!backend->SetMode(mode->mode)) service.Refused(backend->LastError());
+    }
     for (const Win::ResizeWindow* resize : resizeList) {
         if (!backend->SetSize(resize->size)) service.Refused(backend->LastError());
     }
@@ -192,6 +205,7 @@ SystemResult ApplyWindowRequests(Kernel::Res<SDLWindowHandle> handle, Kernel::Re
     for (const Win::CopyToClipboard* copy : copyList) {
         if (!backend->SetClipboard(copy->text)) service.Refused(backend->LastError());
     }
+    if (!backend->FlushWindowedSize()) service.Refused(backend->LastError());
     if (window.Present() && window->close) service.Close();
     return {};
 }

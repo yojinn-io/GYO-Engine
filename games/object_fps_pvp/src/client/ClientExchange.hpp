@@ -57,16 +57,22 @@ public:
         seen = snapshot_->version;
         return snapshot_;
     }
-    void AddControls(const present::StepInput& step) {
+    // viewTick: the Match tick the frame showed of the other players (none: not timed yet); the newest is kept.
+    void AddControls(const present::StepInput& step, const std::optional<double> viewTick) {
         const std::lock_guard<std::mutex> lock(controlsLock_);
         Merge(controls_, step);
+        viewTick_ = viewTick;
         haveControls_ = true;
     }
+    struct Sent final {
+        present::StepInput step;
+        std::optional<double> viewTick;
+    };
     // The controls since the last take (nullopt: none came).
-    std::optional<present::StepInput> TakeControls() {
+    std::optional<Sent> TakeControls() {
         const std::lock_guard<std::mutex> lock(controlsLock_);
         if (!haveControls_) return std::nullopt;
-        present::StepInput taken = controls_;
+        Sent taken{controls_, viewTick_};
         controls_.jump = controls_.fire = controls_.reload = false;
         haveControls_ = false;
         return taken;
@@ -91,6 +97,7 @@ public:
         }
         const std::lock_guard<std::mutex> lock(controlsLock_);
         controls_ = {};
+        viewTick_.reset();
         haveControls_ = false;
     }
 
@@ -100,6 +107,7 @@ private:
     std::uint64_t version_ = 0;
     std::mutex controlsLock_;
     present::StepInput controls_;
+    std::optional<double> viewTick_;
     bool haveControls_ = false;
 };
 

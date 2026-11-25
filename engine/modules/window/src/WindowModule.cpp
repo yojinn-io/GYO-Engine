@@ -19,12 +19,13 @@ const WindowOptions& OptionsOf(const WindowOptions* given) {
     return given != nullptr ? *given : defaults;
 }
 
-// The state from this frame's Messages, each type in its order: the last size, the last focus, the last clipboard
-// text. A close request sets WindowRequest::close when closeWhenRequested is on (Bevy's close_when_requested,
+// The state from this frame's Messages, each type in its order: the last size, the last focus, the last mode, the
+// last clipboard text. A close request sets WindowRequest::close when closeWhenRequested is on (Bevy's close_when_requested,
 // bevy_window/src/system.rs).
 SystemResult UpdateWindowState(Kernel::ResMut<WindowState> state, Kernel::ResMut<Clipboard> clipboard,
                                Kernel::ResMut<WindowRequest> request, Kernel::MessageReader<WindowResized> resized,
                                Kernel::MessageReader<WindowFocused> focused,
+                               Kernel::MessageReader<WindowModeChanged> modeChanged,
                                Kernel::MessageReader<WindowCloseRequested> closeRequested,
                                Kernel::MessageReader<ClipboardChanged> clipboardChanged) {
     const auto sizes = resized.Read();
@@ -36,6 +37,8 @@ SystemResult UpdateWindowState(Kernel::ResMut<WindowState> state, Kernel::ResMut
     }
     const auto focus = focused.Read();
     if (!focus.empty()) state.Get().focused = focus.back()->focused;
+    const auto modes = modeChanged.Read();
+    if (!modes.empty()) state.Get().mode = modes.back()->mode;
     const auto texts = clipboardChanged.Read();
     if (!texts.empty()) clipboard.Get() = Clipboard{texts.back()->text, texts.back()->truncated};
     if (!closeRequested.Read().empty() && request.Read().closeWhenRequested) request.Get().close = true;
@@ -59,10 +62,12 @@ void WindowModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Message<WindowResized>({.name = "WindowResized"});
     r.Message<WindowFocused>({.name = "WindowFocused"});
+    r.Message<WindowModeChanged>({.name = "WindowModeChanged"});
     r.Message<WindowCloseRequested>({.name = "WindowCloseRequested"});
     r.Message<ClipboardChanged>({.name = "ClipboardChanged"});
     r.Message<WarpCursor>({.name = "WarpCursor"});
     r.Message<ResizeWindow>({.name = "ResizeWindow"});
+    r.Message<SetWindowMode>({.name = "SetWindowMode"});
     r.Message<CopyToClipboard>({.name = "CopyToClipboard"});
     r.Resource<WindowState>({.name = "WindowState"});
     r.Resource<Clipboard>({.name = "Clipboard"});

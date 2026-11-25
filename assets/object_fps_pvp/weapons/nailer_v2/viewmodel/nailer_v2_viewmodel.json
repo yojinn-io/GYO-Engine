@@ -21,5 +21,9 @@
   "scale": 1.0,
   "vertical_fov_degrees": 55.0,
   "near_clip": 0.01,
-  "far_clip": 5.0
+  "far_clip": 5.0,
+  "recoil": {
+    "kick_degrees": 4.0,
+    "recovery_per_second": 18.0
+  }
 }
