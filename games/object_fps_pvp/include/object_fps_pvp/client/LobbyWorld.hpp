@@ -12,7 +12,7 @@
 //   Main/Update  LobbyActions   pvp.submit_address -> a valid A.B.C.D:P asks for MultiGame connected to it; else the
 //                               status says what is wrong. pvp.quit -> back to the menu.
 
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <optional>
 #include <string_view>
@@ -20,6 +20,6 @@
 namespace object_fps_pvp::client {
 
 // An address as the lobby and --connect take it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
-[[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
+[[nodiscard]] std::optional<GYO::Engine::OS::SocketAddress> ParseMatchAddress(std::string_view text);
 
 } // namespace object_fps_pvp::client

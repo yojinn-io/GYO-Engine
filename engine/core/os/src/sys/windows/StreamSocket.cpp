@@ -21,7 +21,7 @@
 namespace GYO::Engine::OS {
 namespace {
 
-sockaddr_in ToNative(const DatagramAddress& address) noexcept {
+sockaddr_in ToNative(const SocketAddress& address) noexcept {
     sockaddr_in native{};
     native.sin_family = AF_INET;
     native.sin_port = htons(address.port);
@@ -60,7 +60,7 @@ struct StreamSocket::Impl final {
     }
 };
 
-Base::Result<StreamSocket, OSError> StreamSocket::Connect(const DatagramAddress& to) {
+Base::Result<StreamSocket, OSError> StreamSocket::Connect(const SocketAddress& to) {
     auto impl = std::make_unique<Impl>();
     WSADATA data{};
     const int startup = WSAStartup(MAKEWORD(2, 2), &data);

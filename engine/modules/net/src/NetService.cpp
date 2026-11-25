@@ -68,7 +68,7 @@ void NetService::SetTarget(const NetConnectTarget* target, const NetTime now, co
     if (target != nullptr) {
         // The server of this transport's kind: an address over the UDP socket the Module opened, an Endpoint over a
         // Link the product gave.
-        if (const auto* address = std::get_if<OS::DatagramAddress>(&target->server); address != nullptr && !options_.link) {
+        if (const auto* address = std::get_if<OS::SocketAddress>(&target->server); address != nullptr && !options_.link) {
             wanted = Target{UdpLink::ToEndpoint(*address), target->userId, target->token};
         } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr && options_.link) {
             wanted = Target{*endpoint, target->userId, target->token};
@@ -158,7 +158,7 @@ void NetService::Close() {
     }
 }
 
-std::optional<OS::DatagramAddress> NetService::UdpAddress() const {
+std::optional<OS::SocketAddress> NetService::UdpAddress() const {
     if (options_.link || !link_) return std::nullopt;  // a given Link, or a client's socket not opened yet
     const auto* udp = static_cast<const UdpLink*>(link_.get());
     auto address = udp->LocalAddress();

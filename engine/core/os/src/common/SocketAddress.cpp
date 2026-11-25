@@ -1,16 +1,16 @@
-// DatagramAddress parsing and text: no OS call, so it lives in src/common.
-#include "engine/os/DatagramSocket.hpp"
+// SocketAddress parsing and text: no OS call, so it lives in src/common.
+#include "engine/os/SocketAddress.hpp"
 
 #include <string>
 
 namespace GYO::Engine::OS {
 
-Base::Result<DatagramAddress, OSError> DatagramAddress::Parse(const std::string_view text, const std::uint16_t port) {
+Base::Result<SocketAddress, OSError> SocketAddress::Parse(const std::string_view text, const std::uint16_t port) {
     const auto invalid = [&] {
         return Base::Err(OSError::Make(OSErrorCode::InvalidAddress, "not a dotted IPv4 address",
             "text_bytes=" + std::to_string(text.size())));
     };
-    DatagramAddress address{{}, port};
+    SocketAddress address{{}, port};
     std::size_t at = 0;
     for (std::size_t part = 0; part < 4; ++part) {
         if (part > 0) {
@@ -31,7 +31,7 @@ Base::Result<DatagramAddress, OSError> DatagramAddress::Parse(const std::string_
     return address;
 }
 
-std::string DatagramAddress::ToString() const {
+std::string SocketAddress::ToString() const {
     return std::to_string(octets[0]) + "." + std::to_string(octets[1]) + "." + std::to_string(octets[2]) + "." +
            std::to_string(octets[3]) + ":" + std::to_string(port);
 }

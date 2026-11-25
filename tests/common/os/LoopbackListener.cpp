@@ -87,7 +87,7 @@ LoopbackListener::~LoopbackListener() {
 
 bool LoopbackListener::Ok() const noexcept { return impl_->listening != kNoSocket; }
 
-Engine::OS::DatagramAddress LoopbackListener::Address() const { return Engine::OS::DatagramAddress::Loopback(impl_->port); }
+Engine::OS::SocketAddress LoopbackListener::Address() const { return Engine::OS::SocketAddress::Loopback(impl_->port); }
 
 bool LoopbackListener::Accept(const std::chrono::milliseconds within) {
     CloseAccepted();

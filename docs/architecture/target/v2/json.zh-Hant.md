@@ -27,8 +27,10 @@ Engine 讀寫 JSON 的唯一入口：GYO 自己的介面（`Document`、`Value`�
 守衛：`gyo_json_tests` 只拿得到 `engine/modules/json/include`，公開標頭含組件的標頭就編不過；J-1 的掃描。
 
 <a id="j-5"></a>
-**J-5 寫出端。** `Writer` 的結構、跳脫、UTF-8 檢查由本 Module 實作，double 的文字只有一份實作（yyjson 的 `yyjson_write_number`：最短往返、整數值保留 `.0`）。輸出是 `Parse` 讀得回的嚴格 JSON，讀回的值與寫入的相同（前提：呼叫者不在同一物件寫重複鍵，`Writer` 不偵測）。不可表示的資料（非有限數、不合法 UTF-8；接受的 UTF-8 和 `Parse` 相同）由 `Finish` 回 `NotRepresentable`，並把字串截回建構時的長度；配置失敗是 `OutOfMemory`。結構誤用是斷言。字串容量足夠且深度不超過 32 時不配置記憶體。同樣的呼叫序列在三平台輸出相同的位元組。`WriteValue` 的數字照原文。
-守衛：`WriteTests.cpp`（往返 200,000、結構化 golden、斷言）、`WriteAllocationTests.cpp`（配置計數、配置失敗）、`VectorTests.cpp`（最短位數與 Python `repr` 比對 50,000）。
+**J-5 寫出端。** `Writer` 的結構、跳脫、UTF-8 檢查、排版由本 Module 實作，double 的文字只有一份實作（yyjson 的 `yyjson_write_number`：最短往返、整數值保留 `.0`）。輸出是 `Parse` 讀得回的嚴格 JSON，讀回的值與寫入的相同（前提：呼叫者不在同一物件寫重複鍵，`Writer` 不偵測）。不可表示的資料（非有限數、不合法 UTF-8；接受的 UTF-8 和 `Parse` 相同）由 `Finish` 回 `NotRepresentable`，並把字串截回建構時的長度；配置失敗是 `OutOfMemory`。結構誤用是斷言。字串容量足夠且深度不超過 32 時不配置記憶體。同樣的呼叫序列與排版在三平台輸出相同的位元組。`WriteValue` 的數字照原文。
+排版由作者選（`Writer(out, Layout)`，`v8-arch-gyo2-json-pretty`）：預設 `Layout{}` 是緊湊的一行（不加空白）；`Layout{.indent = n}`（n > 0）讓每個成員與元素各起一行、每層縮排 n 個字元（`IndentCharacter::Space` 或 `Tab`），鍵後接 `": "`，非空容器的收尾括號自成一行，空容器維持 `{}`／`[]`，單一純量不換行。排版只改 token 之間的空白：讀回的值不變，結尾不加換行（由呼叫者決定）。縮排字元用列舉，所以寫不出 JSON 以外的空白。
+別家對照：nlohmann::json `dump(indent, indent_char)`、serde_json `to_string_pretty`／`PrettyFormatter::with_indent` 是同一個形狀（空容器 `[]`、`": "`）；master 凍結的 `gyo.ui` 輸出（nlohmann `dump(2)`）：沒有指數的 `document_v1_master_canonical.json` 和 `Layout{.indent = 2}` 的輸出逐位元組相同；`golden_v1_master_canonical.json` 只差在指數的寫法（nlohmann `1e+300`、`2.5e-07`，本 Module 照最短往返寫 `1e300`、`2.5e-7`——數字文字屬 J-5 的單一實作，不跟排版改），由 `ui.contract` 檢查。Godot `JSON.stringify(data, indent)`（`core/io/json.cpp:57-190`）縮排傳字串、鍵預設排序，空容器同樣寫 `[]`／`{}`（`:124-127`、`:157-160`）——鍵的排序不照：鍵的順序是呼叫順序（J-5 往返）。`indent` 用數字＋字元列舉而不是任意字串（Godot 的形），同 nlohmann；但 `indent = 0` 就是一行，沒有 nlohmann `dump(0)` 那種「換行但不縮排」（serde_json、Godot 也沒有）。不用 yyjson 的 `YYJSON_WRITE_PRETTY`：`Writer` 的結構本來就不經 yyjson（只有數字文字經 adapter），排版也不經；adapter 不變（J-1、J-4）。
+守衛：`WriteTests.cpp`（往返 200,000、結構化 golden、斷言；排版：兩格與 tab 的 golden、空容器與純量、`Parse`→`WriteValue` 兩方向只差空白、2,000 筆生成文件的重複輸出與 FNV-1a golden、排版下的截回）、`WriteAllocationTests.cpp`（配置計數——含縮排、配置失敗）、`VectorTests.cpp`（最短位數與 Python `repr` 比對 50,000）。
 
 <a id="j-6"></a>
 **J-6 不知道 ECS 與產品。** 只依賴 Base；不依賴 Kernel、編排層、時間；不進 World；名字與註解不含遊戲或產品的概念（N5、N6）。
