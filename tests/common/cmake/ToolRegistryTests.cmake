@@ -108,9 +108,21 @@ file(WRITE "${work}/empty.csv" "${header}\n")
 # The tool registry shares the game registry's reserved names (common, toolchain).
 file(WRITE "${work}/reserved.csv" "${header}\ntoolchain,,,false,false,false,true,true,true\n")
 fails(reserved_toolchain "Reserved tool name 'toolchain'" -DCASE=read "-DCSV=${work}/reserved.csv")
-# A registry that lists tools must select a release tool on every platform.
+# A registry that lists a release tool must select a release tool on every platform. One with tools but none of
+# them released (a command-line tool for content) selects no tool on any platform and says so (the user's decision
+# of 2026-11-26: the rule applies once there is a release tool).
 file(WRITE "${work}/no_release.csv" "${header}\nidle,,,true,true,false,true,true,true\n")
-fails(no_release "No release tools selected for windows" -DCASE=export "-DCSV=${work}/no_release.csv" "-DROOT=${work}")
+execute_process(COMMAND "${CMAKE_COMMAND}" "-DGYO_TOOL_REGISTRY_FILE=${work}/no_release.csv" "-DGYO_REPOSITORY_ROOT=${work}"
+    -P "${repository}/build/cmake/ExportToolRegistry.cmake" RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT result EQUAL 0 OR NOT "${err}" MATCHES "No release tool is registered")
+    message(FATAL_ERROR "Registry without a release tool: expected success with a notice, got ${result}: ${out}${err}")
+endif()
+string(JSON no_release_rows LENGTH "${out}" include)
+equal("${no_release_rows}" 4 "Registry without a release tool: every release platform's row")
+foreach(index RANGE 0 3)
+    string(JSON selected LENGTH "${out}" include ${index} tools)
+    equal("${selected}" 0 "Registry without a release tool selects none on row ${index}")
+endforeach()
 file(WRITE "${work}/tools/linux_tool/project.json" "${valid}")
 file(WRITE "${work}/linux_release.csv" "${header}\nlinux_tool,,,true,true,true,false,true,false\n")
 fails(missing_platform_release "No release tools selected for windows" -DCASE=export

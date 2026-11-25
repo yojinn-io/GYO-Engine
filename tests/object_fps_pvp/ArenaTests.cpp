@@ -63,7 +63,7 @@ TEST_CASE("PvP map: pvp_arena's walls occupy the cells of the five v1 boxes it w
 }
 
 TEST_CASE("PvP map: every shipped arena's map reads, with pictures for its regions") {
-    for (const std::string name : {"pvp_arena", "pvp_corners", "biome"}) {
+    for (const std::string name : {"pvp_arena", "pvp_corners", "biome", "kiriyu_extraction_250m"}) {
         CAPTURE(name);
         std::string error;
         const auto map = Shipped(name, error);
@@ -112,8 +112,9 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and map") {
     std::string error;
     const auto list = sim::ParseArenaList(ReadFile(kMaps + "arenas.json"), error);
     REQUIRE_MESSAGE(list.has_value(), error);
-    REQUIRE(list->size() == 3);
+    REQUIRE(list->size() == 4);
     CHECK(list->front() == "pvp_arena.json");
+    CHECK(list->back() == "kiriyu_extraction_250m.json");
     for (const std::string& name : *list) {
         CAPTURE(name);
         const auto arena = sim::ParseArena(ReadFile(kMaps + name), error);

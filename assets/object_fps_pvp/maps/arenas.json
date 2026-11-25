@@ -1,4 +1,9 @@
 {
   "version": 1,
-  "arenas": ["pvp_arena.json", "pvp_corners.json", "biome.json"]
+  "arenas": [
+    "pvp_arena.json",
+    "pvp_corners.json",
+    "biome.json",
+    "kiriyu_extraction_250m.json"
+  ]
 }

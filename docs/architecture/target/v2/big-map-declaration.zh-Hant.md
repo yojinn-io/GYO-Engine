@@ -201,6 +201,36 @@
 
 S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預估影響、怎麼中止」給主會話轉使用者，同意後才跑。
 
+### 5.2.1 250 m 圖的 Client 畫面時間（2026-11-26，Linux 主機，使用者同意後）
+
+- **同意**：使用者原話「登入了，可以量」，經主會話轉達。範圍照 5.2 送出的計畫：4 個出生點加中央，每處 8 個方向，每方向 300 幀。
+- **開跑前檢查**：karasu 讀得到 `/dev/dri/renderD128`，`vulkaninfo` 看得到 `AMD Radeon Graphics (RADV REMBRANDT)`。
+- **機器**：AMD Ryzen 7 6800H、Radeon 680M（RADV），Ubuntu 24.04.5 的 Wayland 桌面，g++ 13.3，RelWithDebInfo。
+- **證據**：主 checkout 的 `build/evidence/gyo2-big-map/gpu/`。
+  - `s1_linux_gpu.sh`（`build`／`measure` 兩段，只寫 `~/Code/gyo2-big-map-s1`）、`probe/`（量測程式，不進 repo）。
+  - 輸出在 `linux/frames.csv`、`probe.txt`。
+- **量測程式**：照 PvP Client 的畫法，每個 region 一個 `Mesh3d`（持有的模型＋`Aabb`），經 `visibility` 剔除，由 `mesh_render` 與 `sdl_gpu`（Vulkan）畫。
+  - 視窗 1280×720，相機用 PvP 的投影（垂直視角 1.2 rad、near 0.05、far 150 m），眼睛在地面上 1.6 m。
+  - VSync 關閉，實際的 present mode 是 Mailbox。
+  - 量的是每幀 `Pump`＋`RunFrame` 的牆鐘時間。SDL GPU 有 frames-in-flight 上限，所以這個時間等於 CPU＋GPU 的出幀間隔。GPU 的 timestamp 沒有量。
+- **地圖**：`kiriyu_extraction_250m`，16 region、130,273 quads、33,022 盒。
+- **件數**：40 個方向 × 300 幀＝12,000 幀量測（加上暖機，共 13,260 幀）。13,260 幀都交給了視窗（skipped 0、failed 0），被拒的貼圖、網格請求都是 0。
+
+| 量 | 值 |
+|---|---|
+| 40 個方向的中位數，再取中位數 | 0.19 ms |
+| 最差方向的 p95（p2 朝 225°、畫 13 個 region、剔除 3 個） | 0.47 ms |
+| 所有方向的最大單幀 | 4.6 ms（p0 開頭的三個方向，暖機剛過） |
+| 每個方向畫的 region | 1～13 個（16 個裡）；看向地圖中央時畫得最多 |
+| 程序峰值 RSS | 194 MB |
+
+**讀法**（描述，不是判定）：
+
+- 250 m 這個量級，Client 的畫面時間遠在 16.7 ms（60 fps）之內。目前的著色器沒有光照，是最簡單的那一種；光照、陰影等加進來時（渲染管線線），要重量。
+- 剔除有作用：一個方向大多只畫 2～9 個 region。
+- 第一輪（`linux-run1-unverified/`）沒有記錄「實際交給視窗的幀數」，所以不採用那一輪。補上 `FramesShown`／`FramesSkipped` 重跑後，結果和第一輪一致，各方向差在 0.01 ms 以內。
+- **沒量**：km²（S5，要用 (d2) 的合成圖）、GPU timestamp、Windows 與 Mac 的 GPU、有角色和 HUD 的實際遊戲畫面。
+
 ## 6. 和 loading 的關係（流程框架卡 `local_8a21ecb9`）
 
 - 單人「開始遊戲 → 加載資源、讀檔 → 進入遊戲」、多人「開始遊戲 → 加載…（邊連 Match 邊載）」的「加載」，大地圖接在**生成世界階段**（`WorldGeneration`）：

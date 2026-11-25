@@ -70,9 +70,10 @@ def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tupl
 def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root: Path | None = None) -> dict[str, list[str]]:
     """Consume CMake's release selection, including each tool's default variant.
 
-    Every release platform selects at least one tool, except when no tool is
-    registered at all: then CMake selects none on every platform and says so.
-    A selection that is empty on some platforms only is invalid.
+    Every release platform selects at least one tool, except when no release
+    tool is registered (no tool at all, or only tools that are not released):
+    then CMake selects none on every platform and says which. A selection that
+    is empty on some platforms only is invalid.
     """
     with TemporaryDirectory(prefix="gyo-tools-registry-") as work:
         output = Path(work) / "tools.json"
@@ -104,7 +105,9 @@ def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root
     if any(selected.values()) and not all(selected.values()):
         raise ValueError("CMake tool registry exporter returned an invalid tool selection")
     if not any(selected.values()):
-        print("No tool is registered: the toolchain rows select no tool and assemble no package", file=sys.stderr)
+        # CMake's notice tells the two cases apart (GyoToolRegistry.cmake, gyo_export_tool_matrix).
+        what = "No release tool is registered" if "No release tool is registered" in result.stderr else "No tool is registered"
+        print(f"{what}: the toolchain rows select no tool and assemble no package", file=sys.stderr)
     return {platform: selected[platform] for platform in RELEASE_PLATFORMS}
 
 

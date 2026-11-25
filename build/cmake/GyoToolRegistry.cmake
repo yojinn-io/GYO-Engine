@@ -207,15 +207,31 @@ function(gyo_read_tool_project file requested_variant output)
     set(${output} "${result}" PARENT_SCOPE)
 endfunction()
 
-# Every release platform gets a toolchain row. A registry that lists tools must
-# select a release tool on every platform; an empty registry (no tool at all)
-# yields rows with no tools, announced on stderr, so the engine still builds
-# and tests on every platform. The check returns once any tool is registered.
+# Every release platform gets a toolchain row. A registry that lists a release
+# tool must select a release tool on every platform. A registry without one (no
+# tool at all, or only tools that are not released, such as a command-line
+# tool for content) yields rows with no tools, announced on stderr, so the
+# engine still builds and tests on every platform (the user's decision of
+# 2026-11-26, v8-arch-gyo2-decisions-2026-11-26-night: the rule applies once
+# there is a release tool).
 function(gyo_export_tool_matrix registry root output)
     set(entries "[]")
     string(JSON count LENGTH "${registry}" tools)
+    set(release_count 0)
+    if(count GREATER 0)
+        math(EXPR last "${count} - 1")
+        foreach(index RANGE 0 ${last})
+            string(JSON enabled GET "${registry}" tools ${index} enabled)
+            string(JSON release GET "${registry}" tools ${index} release)
+            if(enabled AND release)
+                math(EXPR release_count "${release_count} + 1")
+            endif()
+        endforeach()
+    endif()
     if(count EQUAL 0)
         message(NOTICE "No tool is registered: every release platform's toolchain row selects no tool")
+    elseif(release_count EQUAL 0)
+        message(NOTICE "No release tool is registered: every release platform's toolchain row selects no tool")
     endif()
     foreach(platform windows linux macos)
         set(tools "[]")
@@ -240,7 +256,7 @@ function(gyo_export_tool_matrix registry root output)
             endforeach()
         endif()
         string(JSON selected_count LENGTH "${tools}")
-        if(selected_count EQUAL 0 AND count GREATER 0)
+        if(selected_count EQUAL 0 AND release_count GREATER 0)
             message(FATAL_ERROR "No release tools selected for ${platform}")
         endif()
         _gyo_registry_package_platforms("${platform}" matrix_platforms)
