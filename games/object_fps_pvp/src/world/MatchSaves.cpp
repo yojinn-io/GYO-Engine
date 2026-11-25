@@ -1,6 +1,7 @@
 #include "object_fps_pvp/world/MatchSaves.hpp"
 
 #include "object_fps_pvp/world/Components.hpp"
+#include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "engine/http/Http.hpp"
 #include "engine/net/NetModule.hpp"
@@ -54,14 +55,9 @@ K::SystemResult SyncSaves(K::MessageReader<N::PeerConnected> connected, K::Messa
         if (gone->peer != 0) state.sync.Left(gone->userId);
     }
     for (const N::PeerConnected* joined : connected.Read()) state.sync.Joined(joined->userId);
-    // A death is a respawn tick not seen before (it is set when the player dies).
+    // A death as a save counts it (CountDeath: a respawn tick not seen before).
     players.ForEach([&](K::EntityId, const Owner& owner, const PlayerCombat& combat) {
-        if (combat.life != sim::LifeState::Dead) return;
-        std::uint64_t& seen = state.respawnSeen[owner.userId];
-        if (combat.respawnTick > seen) {
-            seen = combat.respawnTick;
-            state.sync.Died(owner.userId);
-        }
+        if (CountDeath(combat, state.respawnSeen[owner.userId])) state.sync.Died(owner.userId);
     });
     const std::uint64_t now = tick->value;
     for (auto call = state.calls.begin(); call != state.calls.end();) {

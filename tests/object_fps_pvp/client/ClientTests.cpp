@@ -8,8 +8,7 @@
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/client/LobbyWorld.hpp"
-#include "object_fps_pvp/client/LocalFiles.hpp"
-#include "object_fps_pvp/match/PlayerSave.hpp"
+#include "object_fps_pvp/client/SoloSave.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 
 #include "engine/audio/Mixer.hpp"
@@ -896,77 +895,87 @@ struct TempDirectory final {
 
 } // namespace
 
-TEST_CASE("client: single player: the room, a game without a server, the evacuation settles the save, the room reads it") {
+TEST_CASE("client: single player: the room, a game without a server, the pause, the evacuation settles the save") {
     TempDirectory directory;
     Setup setup(1, 4, 0, PC::SceneChange{}, directory.Utf8());
+    const auto noSocket = [&setup] { return !setup.client->Buffer().Find<N::NetService>()->UdpAddress().has_value(); };
     setup.Load();
     // The menu's first button: single player.
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloRoom, "[pvp-menu-solo]");
     setup.Load();
     CHECK_MESSAGE(setup.Binding("record") == "記録はまだありません", setup.Binding("record"));
-    // The room's first button: the game.
-    setup.Press(I::KeyCode::Enter);
-    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start]");
-    CHECK_MESSAGE(HasResource<PW::GameRules>(setup.Solo()), "[pvp-solo-world] the Solo World plays");
-    CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Sim()), "the Sim World does not");
-    for (int i = 0; i < 60 && PC::StatusOf(setup.Client()).playing == false; ++i) setup.Frame();
-    REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-solo-playing] the own player reached the Frame World");
-    CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "[pvp-solo-no-connection] no session");
-    // Take the pointer and walk forward: the Solo World moves the player.
-    const K::EntityId own = PW::OwnPlayer(setup.Solo());
-    REQUIRE(own != 0);
-    const GYO::Engine::Math::Vec3 start = setup.Solo().Get<PW::PlayerBody>(own)->feet;
-    I::MouseButtonInput click;
-    click.button = I::MouseButton::Left;
-    click.state = I::ButtonState::Pressed;
-    click.position = {640.0F, 360.0F};
-    setup.Next().buttons.push_back(click);
-    setup.Frame();
-    click.state = I::ButtonState::Released;
-    setup.Next().buttons.push_back(click);
-    setup.Frame();
-    REQUIRE(PC::StatusOf(setup.Client()).captured);
-    setup.Next().keys.push_back(Key(I::KeyCode::W));
-    setup.Frames(40);
-    CHECK_MESSAGE(GYO::Engine::Math::Length(setup.Solo().Get<PW::PlayerBody>(own)->feet - start) > 0.5F, "[pvp-solo-walks]");
-    setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
-    // Give the pointer back: the pause canvas; Enter on its button evacuates.
-    setup.Press(I::KeyCode::Escape);
-    setup.Frames(2);
-    const auto* overlay = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
-    REQUIRE(overlay != nullptr);
-    CHECK_MESSAGE(overlay->canvas == "pause", "[pvp-pause-shown] " << overlay->canvas);
-    for (int i = 0; i < 400; ++i) {
-        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
-        if (state != nullptr && state->runtime) break;
-        setup.Frames(1);
+    bool socketless = noSocket();
+    for (int game = 1; game <= 2; ++game) {
+        // The room's first button: the game.
+        setup.Press(I::KeyCode::Enter);
+        REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start]");
+        CHECK_MESSAGE(HasResource<PW::GameRules>(setup.Solo()), "[pvp-solo-world] the Solo World plays");
+        CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Sim()), "the Sim World does not");
+        for (int i = 0; i < 60 && !PC::StatusOf(setup.Client()).playing; ++i) {
+            setup.Frame();
+            socketless = socketless && noSocket();
+        }
+        REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-solo-playing] the own player reached the Frame World");
+        const K::EntityId own = PW::OwnPlayer(setup.Solo());
+        REQUIRE(own != 0);
+        if (game == 1) {
+            // Take the pointer and walk forward: the Solo World moves the player.
+            const GYO::Engine::Math::Vec3 start = setup.Solo().Get<PW::PlayerBody>(own)->feet;
+            I::MouseButtonInput click;
+            click.button = I::MouseButton::Left;
+            click.state = I::ButtonState::Pressed;
+            click.position = {640.0F, 360.0F};
+            setup.Next().buttons.push_back(click);
+            setup.Frame();
+            click.state = I::ButtonState::Released;
+            setup.Next().buttons.push_back(click);
+            setup.Frame();
+            REQUIRE(PC::StatusOf(setup.Client()).captured);
+            setup.Next().keys.push_back(Key(I::KeyCode::W));
+            setup.Frames(40);
+            CHECK_MESSAGE(GYO::Engine::Math::Length(setup.Solo().Get<PW::PlayerBody>(own)->feet - start) > 0.5F, "[pvp-solo-walks]");
+            setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
+            // Killed once (as a shot leaves it: to respawn some steps later): it respawns, and the game will settle one death.
+            PW::PlayerCombat dead = *setup.Solo().Get<PW::PlayerCombat>(own);
+            dead.hp = 0;
+            dead.life = object_fps_pvp::sim::LifeState::Dead;
+            dead.respawnTick = TickOf(setup.Solo()) + 10;
+            setup.Solo().Insert(own, dead);
+            setup.Frames(16);
+            CHECK(setup.Solo().Get<PW::PlayerCombat>(own)->life == object_fps_pvp::sim::LifeState::Alive);
+        }
+        // Give the pointer back: the pause canvas, and the Solo World's time stops.
+        setup.Press(I::KeyCode::Escape);
+        setup.Frames(2);
+        const auto* overlay = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+        REQUIRE(overlay != nullptr);
+        CHECK_MESSAGE(overlay->canvas == "pause", "[pvp-pause-shown] " << overlay->canvas);
+        const std::uint64_t pausedAt = TickOf(setup.Solo());
+        setup.Frames(10);
+        CHECK_MESSAGE(TickOf(setup.Solo()) == pausedAt, "[pvp-pause-stops] the single player's game stands still");
+        for (int i = 0; i < 400; ++i) {
+            const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+            if (state != nullptr && state->runtime) break;
+            setup.Frames(1);
+        }
+        // Enter on the focused button (撤退する) evacuates.
+        setup.Press(I::KeyCode::Enter);
+        REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-solo-evacuate] back to the menu: " << setup.Binding("status"));
+        CHECK_MESSAGE(setup.Scene().status.find("記録しました") != std::string::npos, setup.Scene().status);
+        CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Solo()), "the menu's Solo World plays nothing");
+        const auto save = PC::ReadSoloSave(PC::SoloSavePath(directory.Utf8()));
+        REQUIRE_MESSAGE((save && save->has_value()), "[pvp-solo-saved]");
+        CHECK_MESSAGE((*save)->matches == static_cast<std::uint64_t>(game), "[pvp-solo-games] " << (*save)->matches);
+        CHECK_MESSAGE((*save)->deaths == 1, "[pvp-solo-deaths] the first game's death: " << (*save)->deaths);
+        // The room reads it.
+        setup.Load();
+        setup.Press(I::KeyCode::Enter);
+        REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
+        setup.Load();
+        CHECK_MESSAGE(setup.Binding("record") == "出撃 " + std::to_string(game) + " 回・死亡 1 回", "[pvp-solo-record] " << setup.Binding("record"));
     }
-    {
-        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
-        REQUIRE(state != nullptr);
-        INFO("failure: " << (state->failure ? state->failure->message : std::string("none")) << " notes: " << setup.Notes().failure);
-        REQUIRE(state->runtime.has_value());
-        INFO("focused: " << state->runtime->InteractionState().focusedElement);
-        CHECK(state->runtime->InteractionState().focusedElement == "evacuate");
-    }
-    setup.Press(I::KeyCode::Enter);
-    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-solo-evacuate] back to the menu: " << setup.Binding("status"));
-    CHECK_MESSAGE(setup.Scene().status.find("記録しました") != std::string::npos, setup.Scene().status);
-    CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Solo()), "the menu's Solo World plays nothing");
-    std::string error;
-    const auto text = PC::ReadLocalText(directory.Utf8() + "/solo-save.json", error);
-    REQUIRE_MESSAGE(text.has_value(), "[pvp-solo-saved] " << error);
-    const auto save = object_fps_pvp::match::DecodePlayerSave(*text, error);
-    REQUIRE_MESSAGE(save.has_value(), error);
-    CHECK(save->matches == 1);
-    CHECK(save->deaths == 0);
-    // The room reads it.
-    setup.Load();
-    setup.Press(I::KeyCode::Enter);
-    REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
-    setup.Load();
-    CHECK_MESSAGE(setup.Binding("record") == "出撃 1 回・死亡 0 回", "[pvp-solo-record] " << setup.Binding("record"));
+    CHECK_MESSAGE(socketless, "[pvp-solo-no-socket] no UDP socket was opened throughout");
     CHECK_MESSAGE(setup.Notes().failure.empty(), "[pvp-solo-documents] every scene's document was shown: " << setup.Notes().failure);
 }
 

@@ -58,3 +58,22 @@ TEST_CASE("world: a Local World's spawn index wraps around the arena's spawns") 
     REQUIRE(player != 0);
     CHECK(GYO::Engine::Math::Length(world.Get<PW::PlayerBody>(player)->feet - arena.spawns[0].position) < 1e-3F);
 }
+
+TEST_CASE("world: a Local World is its own authority: its dead player respawns, and the death is counted once") {
+    auto product = BuildLocal(0);
+    K::World& world = GameWorld(*product);
+    REQUIRE(static_cast<bool>(product->RunFrame()));
+    const K::EntityId player = PlayerOf(world, 9);
+    REQUIRE(player != 0);
+    // Killed (as JudgeShots leaves a player: to respawn some steps later).
+    PW::PlayerCombat dead = *world.Get<PW::PlayerCombat>(player);
+    dead.hp = 0;
+    dead.life = object_fps_pvp::sim::LifeState::Dead;
+    dead.respawnTick = TickOf(world) + 10;
+    world.Insert(player, dead);
+    for (int i = 0; i < 16; ++i) REQUIRE(static_cast<bool>(product->RunFrame()));
+    const PW::PlayerCombat& now = *world.Get<PW::PlayerCombat>(player);
+    CHECK_MESSAGE(now.life == object_fps_pvp::sim::LifeState::Alive, "[pvp-local-respawns] RespawnPlayers runs in a Local World");
+    CHECK(now.lives == 2);
+    CHECK_MESSAGE(world.Resource<PW::LocalDeaths>()->count == 1, "[pvp-local-deaths] the death is counted once");
+}

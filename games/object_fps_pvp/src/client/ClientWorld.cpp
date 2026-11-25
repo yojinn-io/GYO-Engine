@@ -135,6 +135,8 @@ void HashValue(K::Hasher&, const ClientAssets&) {}
 
 struct ClientControls final {
     present::Controls controls;
+    // The next frame takes the pointer, as a click does (the pause's pvp.resume).
+    bool resume = false;
     // The life the view was turned to (a new life faces its spawn's yaw).
     std::uint32_t facedLife = 0;
     K::EntityId facedPlayer = 0;
@@ -401,7 +403,10 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     frame.insideWindow = cursor->position.has_value();
     frame.tab = keys->JustPressed(I::KeyCode::Tab);
     frame.escape = keys->JustPressed(I::KeyCode::Escape);
-    frame.click = mouse->JustPressed(I::MouseButton::Left);
+    // The pause's resume takes the pointer as a click would, unless the click that pressed it already took it (then a
+    // second click would be a shot).
+    const bool resume = std::exchange(c.resume, false) && !c.controls.Captured();
+    frame.click = mouse->JustPressed(I::MouseButton::Left) || resume;
     frame.jump = keys->JustPressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
     frame.forward = keys->Pressed(I::KeyCode::W);
@@ -919,39 +924,36 @@ void HashValue(K::Hasher&, const GameOrigin&) {}
 // gave it back), "play" (nothing) while the game has it.
 K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Query<K::Write<Ui::UiRoot>> roots) {
     const bool paused = !controls->controls.Captured();
-    for (const K::EntityId id : roots.Entities()) {
-        auto root = roots.GetMut<Ui::UiRoot>(id);
-        const std::string canvas = paused ? "pause" : "play";
-        if (root->canvas != canvas) root->canvas = canvas;
-        if (root->acceptsInput != paused) root->acceptsInput = paused;
+    auto root = roots.GetMut<Ui::UiRoot>(kOverlay);
+    if (!root) return {};
+    const std::string canvas = paused ? "pause" : "play";
+    if (root->canvas != canvas) root->canvas = canvas;
+    if (root->acceptsInput != paused) root->acceptsInput = paused;
+    return {};
+}
+
+// pvp.resume: the game takes the pointer again (ReadControls, next frame, as for a click).
+K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientControls> controls) {
+    for (const Ui::UiAction* action : actions.Read()) {
+        if (action->action == "pvp.resume") controls->resume = true;
     }
     return {};
 }
 
-// The deaths of the own player's game so far: each life after the first began with a death, and a dead player died
-// once more.
-std::uint64_t DeathsOf(const PW::PlayerCombat& combat) {
-    const std::uint64_t earlier = combat.lives > 0 ? combat.lives - 1 : 0;
-    return earlier + (combat.life == sim::LifeState::Dead ? 1 : 0);
-}
-
-// pvp.evacuate: the game ends here. Single player: the game is settled into the save, back to the menu with what was
-// written (or why not). Multiplayer: back to the lobby (the Sim World of the lobby has no target: the connection
-// closes, and the Match writes the save when it sees the player leave).
+// pvp.evacuate: the game ends here. Single player: the game is settled into the save (the Solo World counted the
+// deaths), back to the menu with what was written (or why not). Multiplayer: back to the lobby (the Sim World of the
+// lobby has no target: the connection closes, and the Match writes the save when it sees the player leave).
 K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
-                         K::Query<K::Read<PW::PlayerCombat>> players, K::ResMut<SceneRequest> request) {
+                         K::ResMut<SceneRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action != "pvp.evacuate" || request.Read().next) continue;
         if (origin->scene == Scene::MultiGame) {
             request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .address = origin->address};
             continue;
         }
-        const PW::PlayerCombat* combat = sim->ownPlayer != 0 ? players.Get<PW::PlayerCombat>(sim->ownPlayer) : nullptr;
-        const std::uint64_t deaths = combat != nullptr ? DeathsOf(*combat) : 0;
-        match::PlayerSave written;
-        const std::string failure = SettleSolo(origin->savePath, deaths, written);
-        const std::string status = failure.empty() ? "撤退しました（死亡 " + std::to_string(deaths) + " 回）。記録しました"
-                                                   : "撤退しました。記録できません: " + failure;
+        const auto settled = SettleSolo(origin->savePath, sim->deaths);
+        const std::string status = settled ? "撤退しました（死亡 " + std::to_string(sim->deaths) + " 回）。記録しました"
+                                           : "撤退しました。記録できません: " + SoloSaveText(settled.error());
         request->next = SceneChange{.scene = Scene::Menu, .status = status};
     }
     return {};
@@ -1049,6 +1051,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
     view.connected = link == nullptr || (link->clientPeer != 0 && world.Alive(link->clientPeer));
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
+    if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
     if (const auto* session = Find<ClientSessionEnd>(world)) {
         view.ended = session->ended;
         view.endReason = session->reason;
@@ -1154,6 +1157,10 @@ void BuildSolo(O::WorldSetup& setup) {
     });
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         TakeControls(*exchange, world);
+        // The pause: virtual time stops (world_time's TimeControl), so do the steps.
+        WT::TimeControl& time = *world.ResourceMut<WT::TimeControl>();
+        const std::uint8_t paused = exchange->Paused() ? 1 : 0;
+        if (time.paused != paused) time.paused = paused;
         return {};
     });
     setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
@@ -1209,11 +1216,12 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
     r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause"));
+    r.AddSystem<&Resume>(InUpdate("object_fps_pvp.Resume"));
     r.AddSystem<&Evacuate>(InUpdate("object_fps_pvp.Evacuate"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    GameOrigin origin{change.scene, change.address, SoloSavePath(dataDirectory)};
+    GameOrigin origin{change.scene, change.address, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
     setup.Prepare([options, port, origin](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
@@ -1310,15 +1318,21 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         overlay.acceptsInput = false;
         world.Insert(kOverlay, std::move(overlay));
         world.Insert(kOverlay, Ui::UiRootState{});
-        world.Insert(kOverlay, Ui::UiBindings{});
+        Ui::UiBindings overlayBindings;
+        overlayBindings.Set("title", std::string(origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"));
+        world.Insert(kOverlay, std::move(overlayBindings));
         return {};
     });
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ApplySnapshot(*exchange, world);
         return {};
     });
-    setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        exchange->AddControls(world.ResourceMut<ClientControls>()->controls.Take());
+    const bool solo = change.scene == Scene::SoloGame;
+    setup.ExchangeOut([exchange, solo](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        ClientControls& controls = *world.ResourceMut<ClientControls>();
+        exchange->AddControls(controls.controls.Take());
+        // Single player's pause: the Solo World stops while the pointer is the player's (a Match does not wait).
+        exchange->SetPaused(solo && !controls.controls.Captured());
         return {};
     });
 }
@@ -1552,7 +1566,7 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
 }
 
 O::WorldDescription ClientSoloWorld(ClientOptions options) {
-    O::WorldDescription world = PW::LocalWorld({options.game, options.arena, options.userId, nullptr, 0});
+    O::WorldDescription world = PW::LocalWorld({.content = options.game, .arena = options.arena, .localUser = options.userId});
     world.name = "Solo";
     // The game only in the single player's game scene; its player at a spawn picked at random for each game.
     world.build = [options](O::WorldSetup& setup) {
@@ -1560,7 +1574,8 @@ O::WorldDescription ClientSoloWorld(ClientOptions options) {
         GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
         if (!SoloPlays(director->Current().scene)) return;
         std::random_device device;
-        PW::BuildWorld(setup, {options.game, options.arena, options.userId, nullptr, device()}, PW::WorldEnd::Local);
+        PW::BuildWorld(setup, {.content = options.game, .arena = options.arena, .localUser = options.userId, .spawn = device()},
+                       PW::WorldEnd::Local);
         BuildSolo(setup);
     };
     return world;

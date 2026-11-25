@@ -5,7 +5,7 @@
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
-#include "object_fps_pvp/match/PlayerSave.hpp"
+#include "object_fps_pvp/client/SoloSave.hpp"
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
@@ -36,19 +36,6 @@ void PlaceSceneDocument(K::World& world, std::string_view documentId, std::strin
 // Every scene's part: SceneRequest, FrameNotes (carried to the next scene), the frame budget (closes the window when
 // it runs out) and the watch of the scene's document (FrameNotes::shown, failure).
 void BuildSceneCommon(O::WorldSetup& setup);
-
-// The single player's save (SoloSavePath): what was read, or why it could not be (a file not there is no error: the
-// empty save).
-struct SoloRecord final {
-    std::optional<match::PlayerSave> save;
-    std::string error;
-};
-[[nodiscard]] SoloRecord ReadSoloRecord(const std::string& path);
-// The room's line for it.
-[[nodiscard]] std::string RecordText(const SoloRecord& record);
-// One game settled into the save at path (one more game, these deaths); empty when written, else why not. after: the
-// save written.
-[[nodiscard]] std::string SettleSolo(const std::string& path, std::uint64_t deaths, match::PlayerSave& after);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);

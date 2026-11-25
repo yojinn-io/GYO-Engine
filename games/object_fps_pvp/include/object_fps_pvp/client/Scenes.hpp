@@ -85,9 +85,6 @@ struct ClientStart final {
 [[nodiscard]] bool SimPlays(Scene scene) noexcept;
 [[nodiscard]] bool SoloPlays(Scene scene) noexcept;
 
-// A game scene (SoloGame or MultiGame): the Frame World shows a game.
-[[nodiscard]] bool GameScene(Scene scene) noexcept;
-
 // The single player's save in the player's directory (empty directory: none).
 [[nodiscard]] std::string SoloSavePath(const std::string& dataDirectory);
 
