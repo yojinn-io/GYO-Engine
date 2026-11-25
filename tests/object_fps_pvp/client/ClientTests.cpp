@@ -8,6 +8,7 @@
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/client/LobbyWorld.hpp"
+#include "object_fps_pvp/client/Scenes.hpp"
 
 #include "engine/audio/Mixer.hpp"
 #include "engine/image/ImageData.hpp"
@@ -98,6 +99,14 @@ std::shared_ptr<PW::Seats> SeatsOf(const std::uint32_t capacity) {
     return std::make_shared<PW::Seats>(capacity);
 }
 
+I::KeyboardInput Key(I::KeyCode code, I::ButtonState state = I::ButtonState::Pressed);
+
+// Whether the World has a value of Resource T (an empty scene's World may not even register T).
+template <class T>
+bool HasResource(const K::World& world) {
+    return world.Types().ResourceIdOf<T>().has_value() && world.Resource<T>() != nullptr;
+}
+
 struct Setup final {
     std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
     std::pair<N::MemoryLink, N::MemoryLink> first = N::MemoryLink::Pair({});
@@ -113,8 +122,11 @@ struct Setup final {
 
     std::shared_ptr<const PC::PresentationContent> presentation;
 
-    // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it).
-    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0) : framesPerStep(perStep) {
+    // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it). first: the Client's first
+    // scene (none: the game, connected to the Match over the memory link).
+    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
+                   std::optional<PC::SceneChange> firstScene = std::nullopt)
+        : framesPerStep(perStep) {
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
@@ -169,11 +181,10 @@ struct Setup final {
         net.link = std::make_shared<N::MemoryLink>(first.second);
         net.clock = reader;
         description.options.Set(net);
-        // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
-        sim.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
-            w.SetResource(target);
-            return {};
-        });
+        // Whom it connects to (net-connect-target: the game scene's NetConnectTarget, put by the Sim World's build).
+        PC::ClientStart start;
+        start.first = firstScene.value_or(PC::SceneChange{PC::Scene::MultiGame, {}, N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}, {}});
+        description.options.Set(std::move(start));
         description.worlds.push_back(std::move(sim));
         description.worlds.push_back(std::move(game));
         description.worlds.push_back(std::move(render));
@@ -205,6 +216,11 @@ struct Setup final {
         if (step) REQUIRE(static_cast<bool>(match->RunFrame()));
         auto ran = client->RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
+        // The scene changes between two frames, as sdl_window's runner does (SDLWindowBetweenFrames).
+        if (PC::SceneChangeWanted(*client)) {
+            auto changed = PC::ChangeScene(*client);
+            REQUIRE_MESSAGE(static_cast<bool>(changed), (changed ? std::string() : changed.error().message + "\n" + changed.error().detail));
+        }
         if (step && other) REQUIRE(static_cast<bool>(other->RunFrame()));
         first.first.Advance();
         second.first.Advance();
@@ -214,6 +230,35 @@ struct Setup final {
     }
     void Frames(const int n) {
         for (int i = 0; i < n; ++i) Frame();
+    }
+    [[nodiscard]] const PC::SceneChange& Scene() { return client->Buffer().Find<PC::SceneDirector>()->Current(); }
+    [[nodiscard]] const PC::FrameNotes& Notes() { return *Client().Resource<PC::FrameNotes>(); }
+    // The scene's document root (its UiRoot, its state, its bindings), or 0.
+    K::EntityId Root() {
+        for (const K::EntityId id : Client().Entities()) {
+            if (Client().Get<GYO::Engine::Ui::UiRoot>(id) != nullptr) return id;
+        }
+        return 0;
+    }
+    std::string Binding(const std::string_view id) {
+        const auto* bindings = Client().Get<GYO::Engine::Ui::UiBindings>(Root());
+        if (bindings == nullptr) return {};
+        const auto* value = bindings->Find(id);
+        if (value == nullptr) return {};
+        const auto* text = std::get_if<std::string>(value);
+        return text != nullptr ? *text : std::string();
+    }
+    // Runs frames until the scene's document is laid out (the asset threads load it and its font in the background).
+    void Load() {
+        for (int i = 0; i < 400; ++i) {
+            Frames(1);
+            const auto* state = Client().Get<GYO::Engine::Ui::UiRootState>(Root());
+            if (state != nullptr && state->runtime) return;
+        }
+    }
+    void Press(const I::KeyCode code) {
+        Next().keys.push_back(Key(code));
+        Frames(1);
     }
 };
 
@@ -243,7 +288,7 @@ std::uint64_t SoundsSubmitted(O::Product& product) {
     return mixer != nullptr ? mixer->Stats().submitted : 0;
 }
 
-I::KeyboardInput Key(const I::KeyCode code, const I::ButtonState state = I::ButtonState::Pressed) {
+I::KeyboardInput Key(const I::KeyCode code, const I::ButtonState state) {
     I::KeyboardInput key;
     key.keyCode = code;
     key.state = state;
@@ -695,165 +740,118 @@ TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, 
     CHECK(cameraRoll() < 1e-5F);
 }
 
-TEST_CASE("client: a Match that refuses (no seat) ends the connection: the window closes and the status says why") {
+TEST_CASE("client: a Match that refuses (no seat) ends the connection: back to the lobby, which says why") {
     Setup setup(1, 0);
-    setup.Frames(120);
-    const PC::ClientStatus status = PC::StatusOf(setup.Client());
-    CHECK_FALSE(status.connected);
-    CHECK_MESSAGE(status.ended, "[pvp-session-end] the end is noted");
-    CHECK_MESSAGE(status.endReason.find("断られました") != std::string::npos, status.endReason);
-    CHECK_MESSAGE(status.endReason.find("the match is full") != std::string::npos, status.endReason);
-    CHECK_MESSAGE(setup.Client().Resource<W::WindowRequest>()->close, "the window closes (the program goes back to the lobby)");
+    const K::World* render = &setup.client->World("Render").GetWorld();
+    for (int i = 0; i < 120 && setup.Scene().scene == PC::Scene::MultiGame; ++i) setup.Frame();
+    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-session-end] the game scene went back to the lobby");
+    CHECK_MESSAGE(setup.Scene().status.find("断られました") != std::string::npos, setup.Scene().status);
+    CHECK_MESSAGE(setup.Scene().status.find("the match is full") != std::string::npos, setup.Scene().status);
+    CHECK_MESSAGE(setup.Notes().endReason.find("the match is full") != std::string::npos, "the reason is noted for the program");
+    CHECK_FALSE_MESSAGE(setup.Client().Resource<W::WindowRequest>()->close, "[pvp-scene-window-stays] the window stays open");
+    CHECK_MESSAGE(&setup.client->World("Render").GetWorld() == render, "[pvp-scene-render-stays] the Render World was not replaced");
+    // The lobby's Sim World plays nothing and connects to nothing.
+    CHECK(!HasResource<N::NetConnectTarget>(setup.Sim()));
+    CHECK(!HasResource<PW::GameRules>(setup.Sim()));
+    setup.Load();
+    CHECK_MESSAGE(setup.Binding("status").find("the match is full") != std::string::npos, "[pvp-lobby-reason] " << setup.Binding("status"));
 }
 
 namespace {
 
-// The lobby as its own Product, without a window or a GPU: the input and window Messages from the test's writer.
-struct Lobby final {
-    std::unique_ptr<GYO::Engine::Threads::WorkerPool> pool;
-    std::unique_ptr<WA::WorkerPoolExecutor> executor;
-    std::unique_ptr<O::Product> product;
+// The Client starting in the lobby (the Match and the other Client run beside it, unused).
+PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{PC::Scene::Lobby, std::move(status), std::nullopt, "127.0.0.1:40000"}; }
 
-    explicit Lobby(std::string status = {}) {
-        auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "lobby assets", .threadCount = 1});
-        REQUIRE(static_cast<bool>(started));
-        pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
-        executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
-        O::WorldDescription game = PC::LobbyGameWorld({"127.0.0.1:40000", std::move(status)}, false);
-        game.build = [inner = std::move(game.build)](O::WorldSetup& setup) {
-            inner(setup);
-            K::Registrar& r = setup.Registrar();
-            r.Resource<Pending>({.name = "test.Pending"});
-            K::SystemOptions write;
-            write.name = "test.WriteEvents";
-            K::Mount mount;
-            mount.schedule = std::string(O::DefaultSchedules::frame);
-            mount.stage = std::string(O::DefaultSchedules::preUpdate);
-            mount.before = {std::string(I::kInputSet), std::string(W::kWindowSet)};
-            write.mounts.push_back(std::move(mount));
-            r.AddSystem<&WriteEvents>(std::move(write));
-            setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-                Pending first;
-                first.focus.push_back(W::WindowFocused{true, {}});
-                first.sizes.push_back(W::WindowResized{{1280, 720}, 1.0F, {}});
-                w.SetResource(std::move(first));
-                return {};
-            });
-        };
-        O::ProductDescription description;
-        description.name = "pvp-lobby";
-        description.worlds.push_back(std::move(game));
-        O::WorldDescription render = PC::LobbyRenderWorld(false);
-        render.build = [](O::WorldSetup& setup) {
-            K::SystemOptions keep;
-            keep.name = "test.KeepPicture";
-            K::Mount mount;
-            mount.schedule = std::string(O::DefaultSchedules::frame);
-            mount.stage = std::string(GYO::Engine::RenderWorld::kSubmitStage);
-            keep.mounts.push_back(std::move(mount));
-            setup.Registrar().AddSystem<&KeepPicture>(std::move(keep));
-        };
-        description.worlds.push_back(std::move(render));
-        description.configure = [](O::ProductSetup& setup) { PC::ConfigureLobby(setup); };
-        WA::AssetOptions assets;
-        assets.contentRoot = PVP_CONTENT_ROOT;
-        assets.executor = executor.get();
-        description.options.Set(assets);
-        auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
-        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-        product = std::move(built).value();
-    }
-    ~Lobby() { product.reset(); }
-    K::World& World() { return GameWorld(*product); }
-    Pending& Next() { return *World().ResourceMut<Pending>(); }
-    const PC::LobbyOutcome& Outcome() { return *World().Resource<PC::LobbyOutcome>(); }
-    void Frames(const int n) {
-        for (int i = 0; i < n; ++i) {
-            auto ran = product->RunFrame();
-            REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-    }
-    // The lobby's root (its UiRoot, its state, its bindings).
-    K::EntityId Root() {
-        for (const K::EntityId id : World().Entities()) {
-            if (World().Get<GYO::Engine::Ui::UiRoot>(id) != nullptr) return id;
-        }
-        return 0;
-    }
-    std::string Binding(const std::string_view id) {
-        const auto* bindings = World().Get<GYO::Engine::Ui::UiBindings>(Root());
-        if (bindings == nullptr) return {};
-        const auto* value = bindings->Find(id);
-        if (value == nullptr) return {};
-        const auto* text = std::get_if<std::string>(value);
-        return text != nullptr ? *text : std::string();
-    }
-    // Loads the document and its font (the asset thread works in the background).
-    void Load() {
-        for (int i = 0; i < 400; ++i) {
-            Frames(1);
-            const auto* state = World().Get<GYO::Engine::Ui::UiRootState>(Root());
-            if (state != nullptr && state->runtime) return;
-        }
-    }
-    // Starts editing the address field, replaces its text with text and presses Enter.
-    void Submit(const std::string& text) {
-        // The field is the first in the focus order: Enter on it starts editing, select-all and the committed text
-        // replace its text, Enter submits.
-        Next().keys.push_back(Key(I::KeyCode::Enter));
-        Frames(1);
-        I::KeyboardInput all = Key(I::KeyCode::A);
-        all.modifiers.Add(I::KeyModifier::Super);
-        all.character = U'a';
-        Next().keys.push_back(all);
-        Frames(1);
-        Next().committed.push_back(I::TextCommitted{text, {}});
-        Frames(1);
-        Next().keys.push_back(Key(I::KeyCode::Enter));
-        Frames(2);
-    }
-};
+// Starts editing the address field, replaces its text with text and presses Enter.
+void Submit(Setup& setup, const std::string& text) {
+    // The field is the first in the focus order: Enter on it starts editing, select-all and the committed text
+    // replace its text, Enter submits.
+    setup.Press(I::KeyCode::Enter);
+    I::KeyboardInput all = Key(I::KeyCode::A);
+    all.modifiers.Add(I::KeyModifier::Super);
+    all.character = U'a';
+    setup.Next().keys.push_back(all);
+    setup.Frames(1);
+    setup.Next().committed.push_back(I::TextCommitted{text, {}});
+    setup.Frames(1);
+    setup.Press(I::KeyCode::Enter);
+    setup.Frames(1);
+}
 
 } // namespace
 
-TEST_CASE("client: the lobby shows its document; a valid address closes it with that server, a wrong one says why") {
-    Lobby lobby;
-    lobby.Load();
-    const auto* state = lobby.World().Get<GYO::Engine::Ui::UiRootState>(lobby.Root());
+TEST_CASE("client: the lobby shows its document; a valid address enters the game connected to it, a wrong one says why") {
+    Setup setup(1, 4, 0, LobbyFirst());
+    setup.Load();
+    const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
     REQUIRE_MESSAGE((state != nullptr && state->runtime), "[pvp-lobby-loaded] the document and its font load");
     CHECK_MESSAGE(!state->failure, (state->failure ? state->failure->message : std::string()));
     CHECK_MESSAGE(!state->drawList.commands.empty(), "the lobby is laid out");
-    CHECK_MESSAGE(lobby.Outcome().shown, "[pvp-lobby-shown]");
-    CHECK(lobby.Outcome().failure.empty());
+    setup.Frames(1);
+    CHECK_MESSAGE(setup.Notes().shown, "[pvp-lobby-shown]");
+    CHECK(setup.Notes().failure.empty());
     CHECK_MESSAGE((lastPicture.passes2d >= 1 && lastPicture.draws2d >= 1), "[pvp-lobby-drawn] the render World draws its UI pass");
-    CHECK(lobby.Binding("status").find("アドレス") != std::string::npos);
+    CHECK(setup.Binding("status").find("アドレス") != std::string::npos);
     CHECK(state->runtime->InteractionState().focusedElement == "address");
+    CHECK_MESSAGE(!HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-lobby-no-net] the lobby connects to nothing");
 
-    // A wrong form: the status says so, the window stays.
-    lobby.Submit("192.168.0");
-    CHECK_FALSE(lobby.Outcome().server.has_value());
-    CHECK_MESSAGE(lobby.Binding("status").find("形が違います") != std::string::npos, lobby.Binding("status"));
-    CHECK_FALSE(lobby.World().Resource<W::WindowRequest>()->close);
+    // A wrong form: the status says so, the scene stays.
+    Submit(setup, "192.168.0");
+    CHECK(setup.Scene().scene == PC::Scene::Lobby);
+    CHECK_MESSAGE(setup.Binding("status").find("形が違います") != std::string::npos, setup.Binding("status"));
 
     // Full-width digits and the ideographic full stop from an input method become ASCII (the game's filter); a valid
-    // address closes the window with the server.
-    lobby.Submit("１９２。１６８．０．１０：４００００");
-    REQUIRE_MESSAGE(lobby.Outcome().server.has_value(), "[pvp-lobby-submit] " << lobby.Binding("status") << " / typed: " << lobby.Binding("address"));
-    CHECK(lobby.Outcome().server->ToString() == "192.168.0.10:40000");
-    CHECK(lobby.Outcome().address == "192.168.0.10:40000");
-    CHECK(lobby.World().Resource<W::WindowRequest>()->close);
+    // address enters the game with the Sim World's target at it.
+    Submit(setup, "１９２。１６８．０．１０：４００００");
+    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::MultiGame, "[pvp-lobby-submit] " << setup.Binding("status"));
+    REQUIRE(setup.Scene().connect.has_value());
+    const auto* server = std::get_if<GYO::Engine::OS::DatagramAddress>(&setup.Scene().connect->server);
+    REQUIRE(server != nullptr);
+    CHECK(server->ToString() == "192.168.0.10:40000");
+    CHECK(setup.Scene().address == "192.168.0.10:40000");
+    REQUIRE_MESSAGE(HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-scene-sim-target] the game scene's Sim World has the target");
+    CHECK(HasResource<PW::GameRules>(setup.Sim()));
+    CHECK_FALSE(setup.Client().Resource<W::WindowRequest>()->close);
 }
 
-TEST_CASE("client: the lobby's Quit closes it with nothing; a reason given to it is its first status") {
-    Lobby lobby("Match に断られました（the match is full）");
-    lobby.Load();
-    CHECK(lobby.Binding("status") == "Match に断られました（the match is full）");
-    // Tab from the address field to Quit; Enter presses it.
-    lobby.Next().keys.push_back(Key(I::KeyCode::Tab));
-    lobby.Frames(1);
-    lobby.Next().keys.push_back(Key(I::KeyCode::Enter));
-    lobby.Frames(2);
-    CHECK_FALSE(lobby.Outcome().server.has_value());
-    CHECK_MESSAGE(lobby.World().Resource<W::WindowRequest>()->close, "[pvp-lobby-quit] the window closes with no server");
+TEST_CASE("client: the menu goes to the lobby and back; the Render World stays and is told of each new Frame World") {
+    Setup setup(1, 4, 0, PC::SceneChange{});
+    setup.Load();
+    REQUIRE(setup.Scene().scene == PC::Scene::Menu);
+    CHECK(setup.Binding("status") == "モードを選んでください");
+    CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Sim()), "[pvp-menu-sim-empty] the menu's Sim World plays nothing");
+    CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "[pvp-menu-no-connection]");
+    const K::World* render = &setup.client->World("Render").GetWorld();
+    const std::uint64_t swaps = render->Resource<O::ExtractSourceSwaps>()->count;
+    // Solo and settings are not there yet: the status says so.
+    setup.Press(I::KeyCode::Enter);
+    CHECK(setup.Scene().scene == PC::Scene::Menu);
+    CHECK(setup.Binding("status") == "準備中です");
+    // Tab to multiplayer, Enter: the lobby.
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-menu-multi]");
+    CHECK_MESSAGE(&setup.client->World("Render").GetWorld() == render, "[pvp-scene-render-stays]");
+    CHECK_MESSAGE(render->Resource<O::ExtractSourceSwaps>()->count == swaps + 1, "[pvp-scene-swaps] the Render World was told");
+    setup.Load();
+    // The lobby's Back (Tab from the address field, Enter): the menu again.
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-lobby-back]");
+    setup.Load();
+    CHECK(setup.Binding("status") == "モードを選んでください");
+    CHECK_FALSE(setup.Client().Resource<W::WindowRequest>()->close);
+}
+
+TEST_CASE("client: the menu's Quit closes the window; a reason given to the lobby is its first status") {
+    {
+        Setup setup(1, 4, 0, PC::SceneChange{});
+        setup.Load();
+        for (int i = 0; i < 3; ++i) setup.Press(I::KeyCode::Tab);
+        setup.Press(I::KeyCode::Enter);
+        CHECK_MESSAGE(setup.Client().Resource<W::WindowRequest>()->close, "[pvp-menu-quit] the window closes");
+    }
+    Setup setup(1, 4, 0, LobbyFirst("Match に断られました（the match is full）"));
+    setup.Load();
+    CHECK(setup.Binding("status") == "Match に断られました（the match is full）");
 }

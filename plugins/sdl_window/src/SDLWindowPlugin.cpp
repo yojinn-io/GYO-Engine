@@ -282,6 +282,10 @@ public:
         worlds_.clear();
     }
 
+    // After ReturnAll: a lent World stopped on its own (its error or exception is kept for Outcome), or the Product
+    // ended.
+    [[nodiscard]] bool Broken() const { return exception_ != nullptr || failure_.has_value() || product_.Failure() != nullptr; }
+
     // After ReturnAll, on the main thread: an exception that left a lent World's round goes on here (as one leaving
     // RunFrame would); else the exit, made a Failure when a lent World stopped with an error or the Product ended.
     O::RunnerExit Outcome(O::RunnerExit exit) {
@@ -369,6 +373,15 @@ O::RunnerExit RunWindow(O::Product& product, Service& service, const SDLWindowOp
         if (lent.AnyStopped()) return finish(O::RunnerExit{});
         auto ran = product.RunFrame();
         if (!ran) return finish(FailedExit(ran.error()));
+        // The product's replacements (SDLWindowBetweenFrames): the lent Worlds back first, lent again after.
+        const SDLWindowBetweenFrames& between = options.betweenFrames;
+        if (between.wanted && between.run && between.wanted(product)) {
+            lent.ReturnAll();
+            if (lent.Broken()) return finish(O::RunnerExit{});
+            auto replaced = between.run(product);
+            if (!replaced) return finish(FailedExit(replaced.error()));
+            if (auto refused = lent.Lend(options.ownThreadWorlds, options.ownThreadIdle)) return finish(*refused);
+        }
         if (options.minFrameInterval.count() > 0 && !service.Closed()) {
             const auto left = options.minFrameInterval - (Clock::now() - frameStart);
             if (left.count() > 0 && service.Backend() != nullptr) {

@@ -15,6 +15,7 @@
 #include <thread>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -883,6 +884,122 @@ TEST_CASE("sdl_window: an exception that leaves a lent World's round goes on fro
     CHECK_THROWS_WITH_MESSAGE(static_cast<void>(p->Run()), "the lent World's System threw", "[sw-own-thread-exception]");
     REQUIRE(p->Failure() != nullptr);
     CHECK(p->Failure()->world == "Sim");
+}
+
+
+namespace {
+
+// The Sim World's builds and the thread its last round ran on.
+std::atomic<int> simBuilds{0};
+std::atomic<int> simRoundsAfterReplace{0};
+std::atomic<bool> simOffMain{true};
+std::thread::id mainThread;
+int replaceAt = 0;  // the main frame whose end asks for a replacement (0: never)
+K::SystemResult SimRoundWhere() {
+    simRounds.fetch_add(1);
+    if (std::this_thread::get_id() == mainThread) simOffMain = false;
+    return {};
+}
+K::SystemResult CloseAtTen(K::ResMut<W::WindowRequest> request) {
+    ++mainFrames;
+    if (mainFrames == 10) request->close = true;
+    return {};
+}
+
+// Main (sdl_window) and Sim (lent), with the product's replacements between frames.
+std::unique_ptr<O::Product> WithBetweenFrames(S::SDLWindowBetweenFrames between) {
+    static_cast<void>(dummyDriver);
+    O::ProductDescription d;
+    d.name = "game";
+    S::SDLWindowOptions options;
+    options.ownThreadWorlds = {"Sim"};
+    options.ownThreadIdle = std::chrono::milliseconds(2);
+    options.betweenFrames = std::move(between);
+    d.options.Set(options);
+    d.options.Set(Hidden());
+    O::WorldDescription main;
+    main.name = "Main";
+    main.units = {"transform", "camera", "input", "window", "window_camera", "sdl_window"};
+    main.build = [](O::WorldSetup& setup) { setup.Registrar().AddSystem<&CloseAtTen>(InFrameUpdate("CloseAtTen")); };
+    d.worlds.push_back(std::move(main));
+    O::WorldDescription sim;
+    sim.name = "Sim";
+    sim.units = {"transform"};
+    sim.build = [](O::WorldSetup& setup) {
+        simBuilds.fetch_add(1);
+        setup.Registrar().AddSystem<&SimRoundWhere>(InFrameUpdate("SimRoundWhere"));
+    };
+    d.worlds.push_back(std::move(sim));
+    auto built = O::Product::Build(std::move(d), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
+    return std::move(*built);
+}
+
+void ResetBetweenFrames() {
+    simRounds = 0;
+    simBuilds = 0;
+    simRoundsAfterReplace = 0;
+    simOffMain = true;
+    mainFrames = 0;
+    mainThread = std::this_thread::get_id();
+}
+
+} // namespace
+
+TEST_CASE("sdl_window: betweenFrames: run is not called while wanted says no") {
+    ResetBetweenFrames();
+    int asked = 0;
+    int ran = 0;
+    auto p = WithBetweenFrames({[&asked](O::Product&) {
+                                    ++asked;
+                                    return false;
+                                },
+                                [&ran](O::Product&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                                    ++ran;
+                                    return {};
+                                }});
+    const O::RunnerExit exit = p->Run();
+    CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, exit.reason);
+    CHECK_MESSAGE(asked == 10, "[sw-between-asked] wanted is asked after every frame: " << asked);
+    CHECK_MESSAGE(ran == 0, "[sw-between-not-wanted] run is not called");
+    CHECK(simBuilds.load() == 1);
+}
+
+TEST_CASE("sdl_window: betweenFrames: a lent World is taken back, replaced, and lent again") {
+    ResetBetweenFrames();
+    std::optional<std::string> refused;
+    auto p = WithBetweenFrames({[](O::Product&) { return mainFrames == 3; },
+                                [&refused](O::Product& product) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                                    simRoundsAfterReplace = 0;
+                                    auto replaced = product.ReplaceWorld("Sim", {});
+                                    if (!replaced) {
+                                        refused = std::string(O::ToString(replaced.error().code));
+                                        return GYO::Engine::Base::Err(std::move(replaced).error());
+                                    }
+                                    simRounds = 0;
+                                    return {};
+                                }});
+    const O::RunnerExit exit = p->Run();
+    CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, exit.reason);
+    CHECK_MESSAGE(!refused.has_value(), "[sw-between-returned] the replacement found the World in the Product's hands: " << refused.value_or(""));
+    CHECK_MESSAGE(simBuilds.load() == 2, "[sw-between-replaced] Sim was built again: " << simBuilds.load());
+    CHECK_MESSAGE(simRounds.load() > 0, "[sw-between-lent-again] the new Sim World ran after the replacement");
+    CHECK_MESSAGE(simOffMain.load(), "[sw-between-off-main] ... on its own thread, never the main one");
+    CHECK(mainFrames == 10);
+}
+
+TEST_CASE("sdl_window: betweenFrames: run's error ends the runner with a Failure carrying its text") {
+    ResetBetweenFrames();
+    auto p = WithBetweenFrames({[](O::Product&) { return mainFrames == 2; },
+                                [](O::Product&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                                    return GYO::Engine::Base::Err(
+                                        O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the scene would not load"));
+                                }});
+    const O::RunnerExit exit = p->Run();
+    CHECK(exit.code == O::RunnerExitCode::Failure);
+    CHECK_MESSAGE(exit.reason.find("the scene would not load") != std::string::npos, "[sw-between-error] " << exit.reason);
+    CHECK_MESSAGE(mainFrames == 2, "[sw-between-error-stops] no frame after the failed replacement: " << mainFrames);
+    CHECK(p->HasWorld("Sim"));
 }
 
 } // namespace GYO::Plugins::SDLWindow

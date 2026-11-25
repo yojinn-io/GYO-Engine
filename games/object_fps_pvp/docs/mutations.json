@@ -338,20 +338,20 @@
    "replace": "if (const auto server = ParseMatchAddress(\"127.0.0.1:1\")) {",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the lobby shows*",
-   "expect": "has_value"
+   "expect": "Scene::Lobby"
   },
   {
    "id": "pvp-lobby-quit-ignored",
-   "what": "Quit does not close the lobby",
+   "what": "the lobby's Back does not go back to the menu",
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
    "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "        if (action->action == \"pvp.quit\") {\n            request->close = true;\n",
+   "find": "        if (action->action == \"pvp.quit\") {\n            request->next = SceneChange{Scene::Menu, {}, std::nullopt, {}};\n",
    "replace": "        if (action->action == \"pvp.quit\") {\n",
    "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the lobby's Quit*",
-   "expect": "pvp-lobby-quit"
+   "cases": "client: the menu goes*",
+   "expect": "pvp-lobby-back"
   },
   {
    "id": "pvp-session-end-ignored",
@@ -368,13 +368,13 @@
   },
   {
    "id": "pvp-lobby-ui-not-drawn",
-   "what": "the lobby's render World has no ui_render (nothing on screen)",
+   "what": "the Render World has no ui_render (no scene's document on screen)",
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\", \"ui_render\"};",
-   "replace": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\"};",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "\"mesh_render\", \"ui_render\"};",
+   "replace": "\"mesh_render\"};",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the lobby shows*",
    "expect": "pvp-lobby-drawn"
@@ -1380,6 +1380,71 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: J5 while the main thread stops*",
    "expect": "pvp-sim-thread-stale-limit"
+  },
+  {
+   "id": "pvp-scene-sim-kept",
+   "what": "a scene change does not replace the Sim World (the game's World stays, or never comes)",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    if (simBefore || simAfter) {",
+   "replace": "    if (false) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby shows*",
+   "expect": "pvp-scene-sim-target"
+  },
+  {
+   "id": "pvp-scene-sim-always-plays",
+   "what": "the Sim World plays the game in every scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "bool SimPlays(const Scene scene) noexcept { return scene == Scene::MultiGame; }",
+   "replace": "bool SimPlays(const Scene) noexcept { return true; }",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the menu goes*",
+   "expect": "pvp-menu-sim-empty"
+  },
+  {
+   "id": "pvp-scene-end-stays",
+   "what": "the game scene stays when its connection ends",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    request->next = SceneChange{Scene::Lobby, std::move(reason), std::nullopt, origin->address};",
+   "replace": "    static_cast<void>(origin);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a Match that refuses*",
+   "expect": "pvp-session-end"
+  },
+  {
+   "id": "pvp-menu-multi-ignored",
+   "what": "the menu's multiplayer goes nowhere",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            request->next = SceneChange{Scene::Lobby, {}, std::nullopt, {}};",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the menu goes*",
+   "expect": "pvp-menu-multi"
+  },
+  {
+   "id": "pvp-menu-quit-ignored",
+   "what": "the menu's Quit does not close the window",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            window->close = true;",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the menu's Quit*",
+   "expect": "pvp-menu-quit"
   }
  ]
 }

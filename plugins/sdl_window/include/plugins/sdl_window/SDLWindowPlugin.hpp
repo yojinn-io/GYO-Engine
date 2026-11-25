@@ -17,7 +17,8 @@
 //   While the OS holds the pump in its modal loop (a live resize, a dragged title bar) it runs the frame from SDL's
 //   live-resize expose (SDLWindowOptions::liveFrame; SDL declaration R3). The Worlds named in ownThreadWorlds it
 //   lends to threads of their own (O-13; R5): each runs its rounds there, waiting for its next fixed step, while the
-//   main thread pumps and runs the others; they are stopped, joined and returned before the runner returns.
+//   main thread pumps and runs the others; they are stopped, joined and returned before the runner returns. Between
+//   two frames it lets the product replace Worlds (SDLWindowOptions::betweenFrames), the lent ones taken back first.
 //
 // One World of a Product lists sdl_window (SDL declaration section 9.1): its queue is one, so a second World would
 // take nothing, and the requests of the World that runs later would win. Another World that wants input gets it
@@ -31,7 +32,10 @@
 #include <string>
 #include <vector>
 
+#include "engine/base/Result.hpp"
+#include "engine/orchestration/OrchestrationError.hpp"
 #include "engine/orchestration/Plugin.hpp"
+#include "engine/orchestration/Product.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 
@@ -52,6 +56,21 @@ enum class MouseMotionUnit : std::uint8_t {
     // Logical pixels, with the OS's pointer speed also while the cursor is locked (SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE,
     // held while the window lives): what the cursor would have moved. For a cursor the game draws.
     LogicalPixels,
+};
+
+// The product's World replacements between two frames of the window's runner (O-8; a scene change: Godot's
+// SceneTree flushes its pending scene after a frame's processing the same way). Replacing needs every World in the
+// Product's hands (O-13: a lent one is refused), and the lent Worlds' threads are the runner's, so the runner offers
+// the moment: after a frame, on the main thread, it asks `wanted`; when that is true it takes the Worlds of
+// ownThreadWorlds back (each finishes its round), calls `run`, and lends them again. The live frame (the OS's modal
+// loop) never replaces.
+struct SDLWindowBetweenFrames final {
+    // Whether the product wants to replace Worlds now; called after every frame, the lent Worlds still lent (it reads
+    // only the main thread's Worlds and the Product's buffer). Empty: never.
+    std::function<bool(Engine::Orchestration::Product&)> wanted;
+    // The replacements (Product::ReplaceWorld), with every World in the Product's hands. An Err (a refused
+    // replacement passed on, or the product's own) ends the runner with a Failure carrying it.
+    std::function<Engine::Base::Result<void, Engine::Orchestration::OrchestrationError>(Engine::Orchestration::Product&)> run;
 };
 
 // The Plugin's settings (ProductDescription::options; none given: these defaults). The window itself is described
@@ -76,6 +95,8 @@ struct SDLWindowOptions final {
     std::vector<std::string> ownThreadWorlds;
     // A lent World without a fixed step to wait for (or paused, or at scale 0) waits this long between rounds.
     std::chrono::nanoseconds ownThreadIdle{std::chrono::milliseconds(4)};
+    // The product's World replacements between two frames (none: the runner replaces nothing).
+    SDLWindowBetweenFrames betweenFrames;
     // Longer clipboard texts are cut (window's ClipboardChanged::truncated).
     std::size_t clipboardLimit = 1U << 20U;
     // SDL_HINT_IME_IMPLEMENTED_UI "composition": the program draws the input method's composition itself (Windows).
