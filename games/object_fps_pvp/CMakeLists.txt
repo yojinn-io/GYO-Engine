@@ -5,14 +5,16 @@
 # logic: the game's rules that need no World, window, input, renderer, audio
 # device or network: the arena files and the baked voxel geometry, the
 # movement, stance and combat rules, the planar movement input, the hit
-# feedback and the client view, the sound cues and the lobby's address filter.
+# feedback and the client view, the sound cues, the lobby's address filter and the Match's admission token
+# (include/object_fps_pvp/match/AdmissionToken.hpp, the services' token/token.go in C++).
 # character: the player's character for the Match and the Client: the body's skeleton, its clips retargeted from
 # the animation library, the pose of a moment (the game's layering over the model library's sampling), the hit
 # shapes on its bones and the third-person weapon's mount (include/object_fps_pvp/character/CharacterRig.hpp).
 # world: the game in a GYO World, the same at the Match and every Client
 # (include/object_fps_pvp/world/PvpWorld.hpp): the players' components and
 # input, the fixed-step Systems on physics_3d, the server authority, the
-# replication and the rollback the Client predicts with.
+# replication and the rollback the Client predicts with; the Match's saves through the save service
+# (include/object_fps_pvp/world/MatchSaves.hpp, GYO::Http).
 # client: the Client's World around the game's (include/object_fps_pvp/client/ClientWorld.hpp): the controls, the
 # first-person camera, the arena's model and the other players' stand-in bodies (render's 3D pipeline), the HUD
 # (its 2D layer), the sounds, and the World that draws (extracts from it).
@@ -31,6 +33,9 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     SOURCES
     src/data/JsonFields.cpp
     src/data/VoxelMeshFile.cpp
+    src/match/AdmissionToken.cpp
+    src/match/PlayerSave.cpp
+    src/match/SaveSync.cpp
     src/present/Controls.cpp
     src/present/HitFeedback.cpp
     src/present/SoundCues.cpp
@@ -51,8 +56,9 @@ target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
         GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d
-    PRIVATE_LIBRARIES GYO::IO
+    PRIVATE_LIBRARIES GYO::IO GYO::Http
     SOURCES
+    src/world/MatchSaves.cpp
     src/world/PvpWorld.cpp)
 
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client

@@ -1,0 +1,2 @@
+# The admission vectors are compared byte for byte by the Go and the C++ checks; no line ending conversion.
+* -text

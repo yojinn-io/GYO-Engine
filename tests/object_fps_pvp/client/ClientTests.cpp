@@ -95,9 +95,7 @@ K::SystemResult KeepPicture(K::Res<R::RenderCommands> commands) {
 }
 
 std::shared_ptr<PW::Seats> SeatsOf(const std::uint32_t capacity) {
-    auto seats = std::make_shared<PW::Seats>();
-    seats->capacity = capacity;
-    return seats;
+    return std::make_shared<PW::Seats>(capacity);
 }
 
 struct Setup final {

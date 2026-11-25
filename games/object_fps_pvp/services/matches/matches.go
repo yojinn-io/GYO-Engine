@@ -27,13 +27,17 @@ type Spec struct {
 	Capacity int
 	Mode     string
 	Map      string
+	// Saves is the save service's address (host:port) the Match reads and
+	// writes its players' saves at; empty: the Match keeps no saves.
+	Saves string
 }
 
-// Running is a Match a provider started: where players connect, and a channel
-// closed when it ends.
+// Running is a Match a provider started: where players connect, a channel
+// closed when it ends, and how to end it early.
 type Running struct {
 	Address string
 	Ended   <-chan struct{}
+	Stop    func()
 }
 
 // Provider starts Matches (D6): the local one starts processes on this
@@ -44,6 +48,8 @@ type Provider interface {
 
 type Config struct {
 	Provider Provider
+	// Saves is the save service's address (host:port) each Match is given.
+	Saves string
 	// TokenTTL: how long one admission token is good for; a player who needs
 	// one later (a reconnect, D-8) asks for a new one (Reissue).
 	TokenTTL time.Duration
@@ -131,7 +137,7 @@ func (s *Service) allocate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	running, err := s.config.Provider.Start(r.Context(), Spec{MatchID: matchID, Key: key,
-		Capacity: request.Capacity, Mode: request.Mode, Map: request.Map})
+		Capacity: request.Capacity, Mode: request.Mode, Map: request.Map, Saves: s.config.Saves})
 	if err != nil {
 		api.WriteError(w, http.StatusServiceUnavailable, "no_match_available")
 		return

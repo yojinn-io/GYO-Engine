@@ -1,0 +1,191 @@
+{
+ "version": 1,
+ "description": "Declared mutants of engine/core/os StreamSocket and the http Module (docs/architecture/os.md Stream; docs/architecture/target/v2/http.zh-Hant.md). A mutant is killed only when the named test case fails with the expected message. Run: python3 tests/common/mutation/run_mutations.py --build-dir build/target/_build/test --catalog docs/architecture/target/v2/scripts/http_mutations.json",
+ "mutants": [
+  {
+   "id": "os-stream-failure-unseen",
+   "what": "a failed connect is reported as connected",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/core/os/src/sys/StreamSocket.cpp",
+   "find": "    if (error != 0) {\n        impl_->failed = ConnectError(error);",
+   "replace": "    if (false) {\n        impl_->failed = ConnectError(error);",
+   "target": "gyo_os_tests",
+   "cases": "stream socket:*",
+   "expect": "closed port succeeded",
+   "platforms": [
+    "darwin",
+    "linux"
+   ]
+  },
+  {
+   "id": "os-stream-close-unseen",
+   "what": "the peer's close is not reported as 0 bytes",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/core/os/src/sys/StreamSocket.cpp",
+   "find": "        if (received >= 0) return std::optional<std::size_t>(static_cast<std::size_t>(received));",
+   "replace": "        if (received > 0) return std::optional<std::size_t>(static_cast<std::size_t>(received));",
+   "target": "gyo_os_tests",
+   "cases": "stream socket:*",
+   "expect": "peer",
+   "platforms": [
+    "darwin",
+    "linux"
+   ]
+  },
+  {
+   "id": "http-length-ignored",
+   "what": "an answer with a length is read until the close",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "        stage_ = size == 0 ? Stage::Done : Stage::Sized;",
+   "replace": "        stage_ = size == 0 ? Stage::Done : Stage::UntilClose;",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "an answer with a length|a call sends"
+  },
+  {
+   "id": "http-chunk-size-decimal",
+   "what": "a chunk size is read as decimal",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "line.data() + line.size(), size, 16);",
+   "replace": "line.data() + line.size(), size, 10);",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "a chunked answer"
+  },
+  {
+   "id": "http-truncation-unseen",
+   "what": "a body cut short by the close is taken",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "    failed_ = Fail(HttpFailureCode::Truncated, \"the connection closed before the answer was complete\");\n    return Base::Err(*failed_);",
+   "replace": "    return {};",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "Truncated"
+  },
+  {
+   "id": "http-body-limit-ignored",
+   "what": "a body past the limit is taken",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "        if (size > limits_.body) return Base::Err(Fail(HttpFailureCode::TooLarge, \"the body is larger than the limit\"));\n        remaining_ = size;",
+   "replace": "        remaining_ = size;",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "past the limit"
+  },
+  {
+   "id": "http-interim-taken",
+   "what": "an interim answer is taken as the answer",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "    if (status < 200) {",
+   "replace": "    if (false) {",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "interim"
+  },
+  {
+   "id": "http-empty-post-unsized",
+   "what": "an empty POST is sent without Content-Length",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "    if (sendsBody) out +=",
+   "replace": "    if (!request.body.empty()) out +=",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "an empty POST says 0"
+  },
+  {
+   "id": "os-stream-sigpipe",
+   "what": "a send to a reset connection raises SIGPIPE (MSG_NOSIGNAL not passed; this C library has it, so SO_NOSIGPIPE is not set either; the test process is killed, any output)",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/core/os/src/sys/StreamSocket.cpp",
+   "find": "constexpr int kSendFlags = MSG_NOSIGNAL;",
+   "replace": "constexpr int kSendFlags = 0;",
+   "target": "gyo_os_tests",
+   "cases": "stream socket:*",
+   "expect": "[\\s\\S]*",
+   "platforms": [
+    "darwin",
+    "linux"
+   ]
+  },
+  {
+   "id": "os-stream-full-is-error",
+   "what": "no room to send is an error, not 0 bytes",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/core/os/src/sys/StreamSocket.cpp",
+   "find": "        if (error == EAGAIN || error == EWOULDBLOCK) return std::size_t{0};\n",
+   "replace": "",
+   "target": "gyo_os_tests",
+   "cases": "stream socket:*",
+   "expect": "OS has no room",
+   "platforms": [
+    "darwin",
+    "linux"
+   ]
+  },
+  {
+   "id": "http-parser-not-sticky",
+   "what": "a failed parser takes more bytes",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "    if (failed_) return Base::Err(*failed_);\n    if (stage_ == Stage::Done) return {};\n    pending_.append",
+   "replace": "    if (stage_ == Stage::Done) return {};\n    pending_.append",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "a failed parser took more bytes"
+  },
+  {
+   "id": "http-unreachable-lost",
+   "what": "a peer that cannot be reached is not Unreachable",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "error.code == OS::OSErrorCode::Unreachable ? HttpFailureCode::Unreachable : code;",
+   "replace": "code;",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "nobody listens on is Unreachable"
+  },
+  {
+   "id": "http-cause-dropped",
+   "what": "the OS's code and detail are dropped",
+   "guards": [
+    "http.zh-Hant.md; os.md Stream"
+   ],
+   "file": "engine/modules/http/src/Http.cpp",
+   "find": "return HttpFailure::Make(carried, std::move(message), Base::CauseDetail(error));",
+   "replace": "return HttpFailure::Make(carried, std::move(message));",
+   "target": "gyo_http_tests",
+   "cases": "http:*",
+   "expect": "lost the OS's code"
+  }
+ ]
+}

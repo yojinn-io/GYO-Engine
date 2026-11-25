@@ -7,7 +7,21 @@
 //   gyo_object_fps_pvp --ticks N             stops after N fixed steps (the tests)
 //   gyo_object_fps_pvp --content DIR         reads the content from DIR (default: next to the executable)
 //   gyo_object_fps_pvp --verbose             logs who joins and leaves and every kill
+//   gyo_object_fps_pvp --capacity N          seats N players (default 4)
+//
+// Started by the matches service (gateway declaration D5, D6):
+//   --match-id ID --admission-key-stdin      admits only a Client whose admission token this Match's key signed for
+//                                            ID; the key is the first line of the standard input (hex), so it is in
+//                                            neither the command line nor the environment
+//   --saves A.B.C.D:P                        reads a player's save from the save service when they join and writes it
+//                                            back, settled, when they leave (with --match-id)
+//   --idle-seconds N                         ends once no player has been in the match for N seconds, from the start
+//                                            or since the last one left (a player who drops may come back within
+//                                            it); the matches service then frees the port
 
+#include "object_fps_pvp/data/Hex.hpp"
+#include "object_fps_pvp/match/AdmissionToken.hpp"
+#include "object_fps_pvp/world/MatchSaves.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "gyo/GameConfig.hpp"
@@ -23,6 +37,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -79,6 +94,16 @@ bool ParseNumber(const std::string_view text, T& value) {
     return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size();
 }
 
+// "A.B.C.D:P" (port 1 to 65535).
+std::optional<GYO::Engine::OS::DatagramAddress> ParseAddress(const std::string_view text) {
+    const std::size_t colon = text.rfind(':');
+    std::uint16_t port = 0;
+    if (colon == std::string_view::npos || !ParseNumber(text.substr(colon + 1), port) || port == 0) return std::nullopt;
+    auto address = GYO::Engine::OS::DatagramAddress::Parse(text.substr(0, colon), port);
+    if (!address) return std::nullopt;
+    return *address;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -87,6 +112,11 @@ int main(int argc, char** argv) {
     std::string arenaId;
     std::optional<std::string> contentRoot;
     bool verbose = false;
+    std::uint32_t capacity = 4;
+    std::optional<std::uint64_t> matchId;
+    bool keyOnStdin = false;
+    std::optional<std::int64_t> idleSeconds;
+    std::optional<GYO::Engine::OS::DatagramAddress> saves;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         const bool hasValue = index + 1 < argc;
@@ -106,11 +136,65 @@ int main(int argc, char** argv) {
             contentRoot = argv[++index];
         } else if (argument == "--verbose") {
             verbose = true;
+        } else if (argument == "--capacity" && hasValue) {
+            if (!ParseNumber(argv[++index], capacity) || capacity == 0) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--capacity takes a positive whole number");
+                return 2;
+            }
+        } else if (argument == "--match-id" && hasValue) {
+            std::uint64_t id = 0;
+            if (!ParseNumber(argv[++index], id) || id == 0) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--match-id takes a whole number other than 0");
+                return 2;
+            }
+            matchId = id;
+        } else if (argument == "--admission-key-stdin") {
+            keyOnStdin = true;
+        } else if (argument == "--saves" && hasValue) {
+            saves = ParseAddress(argv[++index]);
+            if (!saves) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--saves takes A.B.C.D:P");
+                return 2;
+            }
+        } else if (argument == "--idle-seconds" && hasValue) {
+            std::int64_t seconds = 0;
+            if (!ParseNumber(argv[++index], seconds) || seconds <= 0) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--idle-seconds takes a positive whole number");
+                return 2;
+            }
+            idleSeconds = seconds;
         } else {
             Log(GYO::Engine::Base::LogLevel::Error,
-                "unknown argument '" + std::string(argument) + "' (--port P, --arena ID, --ticks N, --content DIR, --verbose)");
+                "unknown argument '" + std::string(argument) +
+                    "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --match-id ID, "
+                    "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N)");
             return 2;
         }
+    }
+    if (keyOnStdin != matchId.has_value()) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--match-id and --admission-key-stdin go together");
+        return 2;
+    }
+    if (saves && !matchId) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--saves needs --match-id (the save keys name the Match)");
+        return 2;
+    }
+    std::optional<PW::AdmissionCheck> admission;
+    if (keyOnStdin) {
+        std::string line;
+        std::getline(std::cin, line);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        auto key = object_fps_pvp::data::DecodeHex(line);
+        if (!key || key->empty()) {
+            Log(GYO::Engine::Base::LogLevel::Error, "the standard input's first line is not a hexadecimal key");
+            return 2;
+        }
+        // The wall clock: tokens expire in Unix seconds (an admission is not decision data, net D-9).
+        admission = PW::AdmissionCheck{std::move(*key), *matchId, [] {
+                                            return std::chrono::duration_cast<std::chrono::seconds>(
+                                                       std::chrono::system_clock::now().time_since_epoch())
+                                                .count();
+                                        }};
     }
     if (!contentRoot) contentRoot = ContentRoot();
     if (!contentRoot) {
@@ -134,15 +218,16 @@ int main(int argc, char** argv) {
         arena = static_cast<std::size_t>(found - shared->arenas.data());
     }
 
-    auto seats = std::make_shared<PW::Seats>();
+    auto seats = std::make_shared<PW::Seats>(capacity);
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
     net.role = N::NetRole::Server;
     net.bind = GYO::Engine::OS::DatagramAddress::Any(port);
-    net.admission = PW::SeatAdmission(seats);
+    net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({shared, arena, 0, seats});
+    if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
             inner(setup);
@@ -180,6 +265,9 @@ int main(int argc, char** argv) {
     // A frame every 4 ms: the time Module runs the fixed steps the real time has made due.
     constexpr auto kFrame = std::chrono::milliseconds(4);
     auto next = GYO::Engine::Time::MonotonicClock::now();
+    auto emptySince = next;
+    std::uint64_t failuresLogged = 0;
+    std::optional<GYO::Engine::Time::MonotonicClock::time_point> endingSince;
     while (true) {
         auto ran = product->RunFrame();
         if (!ran) {
@@ -189,6 +277,31 @@ int main(int argc, char** argv) {
         if (ticks > 0) {
             const WT::Tick* tick = product->World("Game").GetWorld().Resource<WT::Tick>();
             if (tick != nullptr && tick->value >= static_cast<std::uint64_t>(ticks)) break;
+        }
+        const PW::MatchSaves* matchSaves = saves ? product->World("Game").GetWorld().Resource<PW::MatchSaves>() : nullptr;
+        if (matchSaves != nullptr) {
+            const auto report = matchSaves->Report();
+            if (report.failures > failuresLogged) {
+                failuresLogged = report.failures;
+                Log(GYO::Engine::Base::LogLevel::Warning, "a save was not kept: " + report.lastFailure);
+            }
+        }
+        if (idleSeconds) {
+            const auto now = GYO::Engine::Time::MonotonicClock::now();
+            if (seats->Taken() > 0) {
+                emptySince = now;
+                endingSince.reset();
+            } else if (now - emptySince >= std::chrono::seconds(*idleSeconds)) {
+                // The saves still in flight finish first (at most five seconds).
+                if (!endingSince) endingSince = now;
+                const bool savesBusy = matchSaves != nullptr && matchSaves->Busy();
+                if (!savesBusy || now - *endingSince >= std::chrono::seconds(5)) {
+                    if (savesBusy) Log(GYO::Engine::Base::LogLevel::Warning, "the match ends with saves not written");
+                    Log(GYO::Engine::Base::LogLevel::Info,
+                        "no player for " + std::to_string(*idleSeconds) + " s: the match ends");
+                    break;
+                }
+            }
         }
         next += kFrame;
         const auto now = GYO::Engine::Time::MonotonicClock::now();
