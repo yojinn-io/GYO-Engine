@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -152,6 +153,12 @@ func run(name string, arguments []string) error {
 		provider, err := match.provider()
 		if err != nil {
 			return err
+		}
+		if *savesAddress != "" {
+			// The Match takes A.B.C.D:P (no URL): a wrong one would end every Match at its start.
+			if _, _, err := net.SplitHostPort(*savesAddress); err != nil || strings.Contains(*savesAddress, "/") {
+				return fmt.Errorf("--saves takes host:port (no http://): %q", *savesAddress)
+			}
 		}
 		service, err := matches.New(matches.Config{Provider: provider, Saves: *savesAddress})
 		if err != nil {

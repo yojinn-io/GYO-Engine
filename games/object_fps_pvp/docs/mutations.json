@@ -665,25 +665,6 @@
    "expect": "another user's key"
   },
   {
-   "id": "pvp-gw-saves-no-version-check",
-   "what": "a write over a newer save is taken",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/services/saves/saves.go",
-   "find": "if current.Version != request.Version {",
-   "replace": "if false {",
-   "command": [
-    "go",
-    "-C",
-    "games/object_fps_pvp",
-    "test",
-    "-count=1",
-    "./services/saves/"
-   ],
-   "expect": "a write over version 1"
-  },
-  {
    "id": "pvp-gw-gateway-session-unchecked",
    "what": "the gateway takes a session token it could not verify",
    "guards": [
@@ -971,30 +952,17 @@
    "expect": "long_key"
   },
   {
-   "id": "pvp-gw-seat-twice",
-   "what": "one user takes two seats",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (seated->second.endpoint != from) return \"the user is already in the match\";\n",
-   "replace": "",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
-   "expect": "from another endpoint"
-  },
-  {
    "id": "pvp-gw-seat-kept",
    "what": "a seat stays taken after its user left",
    "guards": [
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "    if (--seated->second.connections == 0) seats_.erase(seated);",
-   "replace": "    --seated->second.connections;",
+   "find": "    if (--seated->second == 0) connections_.erase(seated);",
+   "replace": "    --seated->second;",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
-   "expect": "a user who left"
+   "cases": "world: a seat per user*,world: a keyed*,world: a Match without*",
+   "expect": "still holds a seat"
   },
   {
    "id": "pvp-gw-admission-token-ignored",
@@ -1006,7 +974,7 @@
    "find": "        if (const auto refused = match::VerifyAdmission(check.key, request.token, check.nowUnixSeconds(), check.matchId, request.userId)) {",
    "replace": "        if (const auto refused = std::optional<match::AdmissionRefusal>{}) {",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "cases": "world: a seat per user*,world: a keyed*,world: a Match without*",
    "expect": "another user's token"
   },
   {
@@ -1056,19 +1024,6 @@
    "expect": "services say version"
   },
   {
-   "id": "pvp-gw-seat-reconnect-refused",
-   "what": "a reconnect from the same endpoint is refused",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        ++seated->second.connections;\n        return std::nullopt;",
-   "replace": "        return \"the user is already in the match\";",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
-   "expect": "same endpoint is refused"
-  },
-  {
    "id": "pvp-gw-match-never-idle",
    "what": "the Match never ends when nobody is in it",
    "guards": [
@@ -1089,71 +1044,6 @@
    "expect": "no player for 1 s"
   },
   {
-   "id": "pvp-gw-saves-never-read",
-   "what": "the Match does not read a joining player's save",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "        if (!player.loaded && !player.pending && !player.gaveUp) Want(state, player, joined->userId, CallKind::Read);\n",
-   "replace": "",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the Match reads*",
-   "expect": "never read"
-  },
-  {
-   "id": "pvp-gw-saves-never-written",
-   "what": "the Match does not write a leaving player's save",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "        if (found != state.players.end()) found->second.leaving = true;\n",
-   "replace": "",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the Match reads*",
-   "expect": "never written"
-  },
-  {
-   "id": "pvp-gw-saves-unsettled",
-   "what": "the Match writes the save as it was read",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "\",\\\"body\\\":\" + match::EncodePlayerSave(match::Settled(player.save, player.sessionDeaths)) + \"}\";",
-   "replace": "\",\\\"body\\\":\" + match::EncodePlayerSave(player.save) + \"}\";",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the Match reads*",
-   "expect": "settled save is not"
-  },
-  {
-   "id": "pvp-gw-saves-version-dropped",
-   "what": "the Match writes over version 0",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "player.writeBody = \"{\\\"version\\\":\" + std::to_string(player.version) +",
-   "replace": "player.writeBody = \"{\\\"version\\\":\" + std::to_string(0) +",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the Match reads*",
-   "expect": "settled save is not"
-  },
-  {
-   "id": "pvp-gw-saves-key-repeats",
-   "what": "each leave of a player has the same key",
-   "guards": [
-    "gateway-declaration 5"
-   ],
-   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
-   "find": "\"-leave-\" + std::to_string(player.leaves + 1)}",
-   "replace": "\"-leave-\" + std::to_string(player.leaves)}",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the Match reads*",
-   "expect": "leave-1"
-  },
-  {
    "id": "pvp-gw-save-version-unchecked",
    "what": "a save of another version is read",
    "guards": [
@@ -1167,17 +1057,212 @@
    "expect": "saveVersion is 2"
   },
   {
-   "id": "pvp-gw-save-not-settled",
-   "what": "a match does not count",
+   "id": "pvp-gw-save-match-counted-twice",
+   "what": "each leave of the same Match counts a match",
    "guards": [
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/match/PlayerSave.cpp",
-   "find": "    ++save.matches;\n",
-   "replace": "",
+   "find": "    if (save.lastMatch != matchId) ++save.matches;",
+   "replace": "    ++save.matches;",
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "player save:*",
-   "expect": "player save: written"
+   "expect": "counted a match"
+  },
+  {
+   "id": "pvp-gw-sync-reconnect-settled",
+   "what": "a leave and a join in one frame are settled as a leave",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "    ++player.connections;\n    player.leaving = false;",
+   "replace": "    ++player.connections;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "reconnect in one frame was settled"
+  },
+  {
+   "id": "pvp-gw-sync-conflict-gives-up",
+   "what": "a conflict is a failure, the leave is lost",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "        player.phase = Phase::Rereading;\n        player.retryAt = tick;\n        return;",
+   "replace": "        return Fail(user, player, \"409\");",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "expected one request|settled on the newer save"
+  },
+  {
+   "id": "pvp-gw-sync-own-write-twice",
+   "what": "a write the save already carries is written again",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "        if (read->save.lastWrite == player.leaveKey) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "already in the save was written again"
+  },
+  {
+   "id": "pvp-gw-sync-no-backoff",
+   "what": "a request with no answer is sent again at once",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "    player.retryAt = tick + (kFirstBackoffTicks << (player.attempts - 1));",
+   "replace": "    player.retryAt = tick;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "sent again before its wait"
+  },
+  {
+   "id": "pvp-gw-sync-5xx-not-retried",
+   "what": "a 5xx answer is not sent again",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "bool Retryable(const int status) { return status == 0 || status >= 500; }",
+   "replace": "bool Retryable(const int status) { return status == 0; }",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "expected one request"
+  },
+  {
+   "id": "pvp-gw-sync-leave-settled-late",
+   "what": "a leave is settled with the deaths at its answer, not at its start",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "    player.save = player.leaveSave;\n    player.phase = Phase::Idle;\n    ++report_.writes;",
+   "replace": "    player.save = Settled(player.save, player.deaths, matchId_, player.leaveKey);\n    player.phase = Phase::Idle;\n    ++report_.writes;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "lost its death or counted"
+  },
+  {
+   "id": "pvp-gw-sync-key-repeats",
+   "what": "each leave has the same key",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "                ++player.leaves;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "match-9-user-1-leave-1"
+  },
+  {
+   "id": "pvp-gw-sync-read-not-retried",
+   "what": "a refused read is not tried again when the player comes back",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "    if (!player.loaded && player.phase == Phase::Idle) player.gaveUp = false;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "expected one request"
+  },
+  {
+   "id": "pvp-gw-saves-never-read",
+   "what": "the Match does not tell SaveSync who joined",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "    for (const N::PeerConnected* joined : connected.Read()) state.sync.Joined(joined->userId);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "never read"
+  },
+  {
+   "id": "pvp-gw-saves-never-written",
+   "what": "the Match does not tell SaveSync who left",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "    for (const N::PeerDisconnected* gone : disconnected.Read()) state.sync.Left(gone->userId);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "never written"
+  },
+  {
+   "id": "pvp-gw-kick-not-closed",
+   "what": "a user's older connection is left open",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            if (link->service != nullptr && link->service->Server() != nullptr) link->service->Server()->Close(older->second);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a user's newer*",
+   "expect": "older connection was not closed"
+  },
+  {
+   "id": "pvp-gw-kick-no-handover",
+   "what": "a user's newer connection gets a new player",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (older) {\n            const K::EntityId player",
+   "replace": "        if (false) {\n            const K::EntityId player",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a user's newer*",
+   "expect": "players|did not take the player over"
+  },
+  {
+   "id": "pvp-gw-kick-old-removes-player",
+   "what": "the older connection's end removes the player the newer one took over",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            byPeer.erase(older->first);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a user's newer*",
+   "expect": "players|did not take the player over|does not control"
+  },
+  {
+   "id": "pvp-gw-seat-newer-refused",
+   "what": "a user's newer connection is refused a seat",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        ++seated->second;\n        return std::nullopt;",
+   "replace": "        return \"the user is already in the match\";",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a seat per user*,world: a keyed*,world: a Match without*",
+   "expect": "newer connection was refused"
+  },
+  {
+   "id": "pvp-gw-sync-replaced-is-leave",
+   "what": "a replaced connection's end is settled as a leave",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/SaveSync.cpp",
+   "find": "    if (--found->second.connections == 0) found->second.leaving = true;",
+   "replace": "    --found->second.connections;\n    found->second.leaving = true;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "save sync:*",
+   "expect": "replaced connection was settled"
   }
  ]
 }

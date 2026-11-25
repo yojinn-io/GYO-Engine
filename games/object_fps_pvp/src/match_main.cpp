@@ -266,6 +266,8 @@ int main(int argc, char** argv) {
     constexpr auto kFrame = std::chrono::milliseconds(4);
     auto next = GYO::Engine::Time::MonotonicClock::now();
     auto emptySince = next;
+    std::uint64_t failuresLogged = 0;
+    std::optional<GYO::Engine::Time::MonotonicClock::time_point> endingSince;
     while (true) {
         auto ran = product->RunFrame();
         if (!ran) {
@@ -276,14 +278,29 @@ int main(int argc, char** argv) {
             const WT::Tick* tick = product->World("Game").GetWorld().Resource<WT::Tick>();
             if (tick != nullptr && tick->value >= static_cast<std::uint64_t>(ticks)) break;
         }
+        const PW::MatchSaves* matchSaves = saves ? product->World("Game").GetWorld().Resource<PW::MatchSaves>() : nullptr;
+        if (matchSaves != nullptr) {
+            const auto report = matchSaves->Report();
+            if (report.failures > failuresLogged) {
+                failuresLogged = report.failures;
+                Log(GYO::Engine::Base::LogLevel::Warning, "a save was not kept: " + report.lastFailure);
+            }
+        }
         if (idleSeconds) {
             const auto now = GYO::Engine::Time::MonotonicClock::now();
             if (seats->Taken() > 0) {
                 emptySince = now;
+                endingSince.reset();
             } else if (now - emptySince >= std::chrono::seconds(*idleSeconds)) {
-                Log(GYO::Engine::Base::LogLevel::Info,
-                    "no player for " + std::to_string(*idleSeconds) + " s: the match ends");
-                break;
+                // The saves still in flight finish first (at most five seconds).
+                if (!endingSince) endingSince = now;
+                const bool savesBusy = matchSaves != nullptr && matchSaves->Busy();
+                if (!savesBusy || now - *endingSince >= std::chrono::seconds(5)) {
+                    if (savesBusy) Log(GYO::Engine::Base::LogLevel::Warning, "the match ends with saves not written");
+                    Log(GYO::Engine::Base::LogLevel::Info,
+                        "no player for " + std::to_string(*idleSeconds) + " s: the match ends");
+                    break;
+                }
             }
         }
         next += kFrame;

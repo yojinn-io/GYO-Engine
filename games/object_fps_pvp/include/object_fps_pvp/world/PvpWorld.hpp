@@ -76,31 +76,36 @@ void HashValue(K::Hasher&, const ContentMismatch&);
 // spawn is not free of its walls.
 [[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error);
 
-// The seats of a Match: the admission takes one per user (Take), refusing a full Match and a user already seated from
-// another endpoint; SeatPlayers gives it back when the user's connection ends (Release). A reconnect from the same
-// endpoint (a newer handshake: the server ends the old connection and asks the admission at once, before the World
-// has seen the old one go) is let in, and the seat is counted per connection, so the old one's release later does
+// The seats of a Match: the admission takes one per user (Take), refusing a full Match. A user who connects again
+// while their connection is still open (from any endpoint: the Client crashed and came back, or reconnected) is let
+// in, and the newer connection replaces the older one (SeatPlayers: the user's decision of 2026-11-25,
+// v8-arch-gyo2-direct-connect-and-kick-old). The seat is counted per connection, so the old connection's release does
 // not free the new one's seat. The admission runs in the World's net System, and the Match's main loop reads Taken
 // (the World may run on its own thread, so the state is behind a lock).
 class Seats final {
 public:
     explicit Seats(std::uint32_t capacity = 4) : capacity_(capacity) {}
 
-    // nullopt: seated; else why not ("the match is full", "the user is already in the match").
-    [[nodiscard]] std::optional<std::string> Take(std::uint64_t userId, N::Endpoint from);
+    // nullopt: seated; else why not ("the match is full").
+    [[nodiscard]] std::optional<std::string> Take(std::uint64_t userId);
     void Release(std::uint64_t userId);
     // The users seated.
     [[nodiscard]] std::uint32_t Taken() const;
 
 private:
-    struct Seat final {
-        N::Endpoint endpoint;
-        std::uint32_t connections = 0;
-    };
     std::uint32_t capacity_;
     mutable std::mutex mutex_;
-    std::map<std::uint64_t, Seat> seats_;
+    // Each seated user's open connections.
+    std::map<std::uint64_t, std::uint32_t> connections_;
 };
+
+// Match: which player each connection (its Peer entity) controls. A newer connection of the same user takes the
+// player over from the older one; a connection that ends removes only the player it still controls.
+struct SeatedPlayers final {
+    std::map<K::EntityId, K::EntityId> byPeer;
+};
+void HashValue(K::Hasher&, const SeatedPlayers&);
+
 struct MatchSeats final {
     std::shared_ptr<Seats> seats;
 };
@@ -117,7 +122,8 @@ struct AdmissionCheck final {
     std::function<std::int64_t()> nowUnixSeconds;
 };
 
-// The token (match/AdmissionToken.hpp: Refused with the failed field as the detail), then the seats.
+// The token (match/AdmissionToken.hpp: Refused with the failed field as the detail), then the seats. Security is not
+// in this line (the user, 2026-11-25: "現在不用考慮資安"): no TLS, no rate limit.
 [[nodiscard]] N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionCheck check);
 
 // The allotter ranges: the Match's entities and every Client's own (render, sound) ones; kArenaEntity is outside both.

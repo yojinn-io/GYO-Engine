@@ -30,11 +30,18 @@
 | `POST /v1/rooms/{id}/leave` | Bearer、Idempotency-Key | — | `{"left":true}` |
 | `GET /v1/saves/me` | Bearer | — | `{"userId","version","body"}`；body 是存檔（從沒寫過是 `null`） |
 
-- `Bearer`＝`Authorization: Bearer <sessionToken>`（24 小時）。`Idempotency-Key`：Client 自己產生（每個操作一把，重試用同一把）；同一把鍵的成功結果會原樣再回一次，被拒絕的不記，可以用同一把鍵再試。
+- `Bearer`＝`Authorization: Bearer <sessionToken>`（24 小時）。`Idempotency-Key`：Client 自己產生（每個操作一把，重試用同一把；最長 128 字元）；同一把鍵的成功結果會原樣再回一次，被拒絕的不記，可以用同一把鍵再試。
+- 請求 body 最大 4096 bytes、不收未知欄位。
 - `connect`＝`{"server":"A.B.C.D:P","userId":7,"token":"<114 個 hex>"}`。**只有 started 房間的成員、而且只有呼叫者自己的那一份**。token 2 分鐘到期；成員每次 GET started 房間都會拿到新的一張（Match 還在就重簽），所以**建遊戲 World 之前、以及重連之前，先 GET 一次房間**拿新的 connect。
 - 房間的變化用輪詢 `GET /v1/rooms/{id}`（建議 0.5～1 秒一次）。
-- 常見的錯誤碼：`no_session`、`invalid_session`、`session_expired`（401，重新 `POST /v1/session`）；`room_not_found`（404）；`room_full`、`room_started`、`room_starting`、`not_all_ready`（409）；`not_owner`、`not_member`（403）；`unknown_mode`、`unknown_map`、`invalid_room`（400）；`no_match_available`、`allocation_failed`（503，房間回到 open）；`match_ended`（410：Match 已結束，房間刪掉；之後是 404）；`unknown_route`、`unsupported_version`（404，後者附 `"versions":[1]`）；`service_unavailable`（502，Gateway 後面的服務連不上）。
+- 錯誤碼（全部）：
+  - 401：`no_session`、`invalid_session`、`session_expired`（重新 `POST /v1/session`）；`no_user`（不該從 Gateway 出現）。
+  - 400：`invalid_device`（`/v1/session` 的 deviceId 不合）、`invalid_room`（id 不是數字、建房的 body 不合）、`unknown_mode`、`unknown_map`、`invalid_ready`、`invalid_idempotency_key`（超過 128）。
+  - 403：`not_owner`、`not_member`。404：`room_not_found`、`unknown_route`、`unsupported_version`（附 `"versions":[1]`）。
+  - 409：`room_full`、`room_started`、`room_starting`、`not_all_ready`。410：`match_ended`（Match 已結束，房間刪掉；之後是 404）。413：`body_too_large`。
+  - 500：`identity_store_failed`、`save_store_failed`、`key_failed`、`encode_failed`（服務自己壞了）。502：`service_unavailable`（Gateway 後面的服務連不上）。503：`no_match_available`、`allocation_failed`（房間回到 open，可以再按開始）。
 - 開始：房主＋**所有成員（含房主）都 ready**。開始後房間不能加入、不在列表。
+- started 房間也能 `leave`，但**離開後就拿不到 connect、不能重連**（不再是成員）。Client 進遊戲 World 時不要對房間送 leave；回大廳時再送（或不送：started 房間在 Match 結束後由下一次 GET 刪掉，最遲 6 小時）。
 
 ## 3. Client 這邊可以直接用的
 
@@ -52,10 +59,12 @@
 
 ## 4. Match 端（已做好，Client 不用管，但要知道的行為）
 
-- Match 驗 token：長度、版本、簽章、Match、user、到期；同一 userId **從別的 endpoint** 的第二條連線拒絕（「the user is already in the match」）。從同一個 endpoint 重連照收（#332：同目標沿用 socket，所以「同一個 Product 裡換新的遊戲 World 重連」是同一個 endpoint）。Client 換了 socket（例如整個 Product 重建）時，要等 Match 上舊的連線逾時（10 秒）才進得去（宣告 L5）。
+- Match 驗 token：長度、版本、簽章、Match、user、到期。同一 userId 帶有效 token 再連線時（不論從哪個 endpoint：同一個 Product 換新的遊戲 World、或 Client 當掉後重開），**新的頂掉舊的**：新連線接手原本的角色（位置、HP 照舊），舊連線被 Match 關掉（使用者 2026-11-25，`v8-arch-gyo2-direct-connect-and-kick-old`）。被頂掉的那個 Client 會收到斷線。
 - 拒絕的理由在網路的 `Refused` detail（`token expired`、`token user`、`the match is full`…）。
 - Match 在沒人的狀態持續 60 秒後結束；之後 GET 房間是 410 `match_ended`。
-- 存檔：玩家連上時 Match 向 saves 讀，離開時寫回（`matches + 1`、`deaths` 加上這場的）。格式 `{"saveVersion":1,"matches":N,"deaths":N}`（`games/object_fps_pvp/include/object_fps_pvp/match/PlayerSave.hpp`）。Client 用 `GET /v1/saves/me` 讀（例：大廳顯示戰績）。
+- 存檔：玩家連上時 Match 向 saves 讀，離開時寫回。格式 `{"saveVersion":1,"matches":N,"deaths":N,"lastMatch":ID,"lastWrite":"KEY"}`（`games/object_fps_pvp/include/object_fps_pvp/match/PlayerSave.hpp`）：`matches` 是離開過的 Match 數（同一場離開幾次都算一次，斷線重連不會多算），`deaths` 每次離開加上那段的死亡。Client 用 `GET /v1/saves/me` 讀（例：大廳顯示戰績），**只讀不寫**。
+  - 寫入的時機：Match 看到玩家離開才寫。Client 主動關連線時 Match 很快就知道；Client 直接消失（當掉、拔網路）時要等網路的逾時（10 秒）。所以剛回大廳時讀到的可能還是舊的；要顯示最新戰績就過幾秒再讀一次，或比 `version`。
+  - 讀到不認得的 `saveVersion`（比 1 新）：這個 Client 太舊，照「版本不合」處理（提示更新），不要嘗試解讀。
 
 ## 5. 本機跑起來
 

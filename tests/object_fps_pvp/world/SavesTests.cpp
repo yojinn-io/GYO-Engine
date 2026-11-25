@@ -49,7 +49,7 @@ TEST_CASE("world: the Match reads a player's save when they join and writes it b
     std::thread answering([&] {
         if (!service.Accept()) return;
         read = service.ReceiveRequest().value_or("");
-        if (!service.Send(Answer("{\"userId\":1,\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":2,\"deaths\":1}}"))) return;
+        if (!service.Send(Answer("{\"userId\":1,\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":2,\"deaths\":1,\"lastMatch\":4,\"lastWrite\":\"x\"}}"))) return;
         service.CloseAccepted();
         if (!service.Accept()) return;
         write = service.ReceiveRequest().value_or("");
@@ -96,7 +96,7 @@ TEST_CASE("world: the Match reads a player's save when they join and writes it b
     CHECK(read.rfind("GET /internal/v1/saves/1 HTTP/1.1\r\n", 0) == 0);
     CHECK(write.rfind("PUT /internal/v1/saves/1 HTTP/1.1\r\n", 0) == 0);
     CHECK_MESSAGE(write.find("Idempotency-Key: match-77-user-1-leave-1\r\n") != std::string::npos, write);
-    CHECK_MESSAGE(write.find("{\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":3,\"deaths\":1}}") != std::string::npos,
+    CHECK_MESSAGE(write.find("{\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":3,\"deaths\":1,\"lastMatch\":77,\"lastWrite\":\"match-77-user-1-leave-1\"}}") != std::string::npos,
                   "the settled save is not the one read plus one match: " << write);
     CHECK(report().failures == 0);
 }

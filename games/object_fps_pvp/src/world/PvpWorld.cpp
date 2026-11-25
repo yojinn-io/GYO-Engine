@@ -94,6 +94,7 @@ void HashValue(K::Hasher&, const GameRules&) {}
 void HashValue(K::Hasher&, const MatchInfo&) {}
 void HashValue(K::Hasher&, const LocalUser&) {}
 void HashValue(K::Hasher&, const MatchSeats&) {}
+void HashValue(K::Hasher&, const SeatedPlayers&) {}
 void HashValue(K::Hasher&, const ContentRef&) {}
 void HashValue(K::Hasher&, const ContentMismatch&) {}
 
@@ -565,17 +566,23 @@ K::SystemResult RespawnPlayers(K::Query<K::Write<PlayerBody>, K::Write<PlayerCom
 
 // ---- The Systems of the frame
 
-// Match: a player for each Peer that connects (at the farthest free spawn), gone with its Peer.
+// Match: a player for each user that connects (at the farthest free spawn). A newer connection of a user who is
+// still connected takes the player over and the older connection is closed (the user's decision of 2026-11-25,
+// v8-arch-gyo2-direct-connect-and-kick-old; its PeerDisconnected comes later and removes nothing). A connection that
+// ends removes the player it controls.
 K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::MessageReader<N::PeerDisconnected> disconnected,
-                            K::Query<K::Read<Owner>, K::Read<PlayerBody>, K::Read<PlayerCombat>> players, Walls walls,
-                            K::Res<GameRules> rules, K::Res<MatchSeats> seats,
+                            K::Query<K::Read<Owner>, K::Read<PlayerBody>, K::Read<PlayerCombat>> players,
+                            K::Query<K::Read<N::Peer>> peers, Walls walls, K::Res<GameRules> rules,
+                            K::Res<MatchSeats> seats, K::Res<N::NetWorldLink> link, K::ResMut<SeatedPlayers> seated,
                             K::Res<WT::Tick> tick,
                             K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn,
                             K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<>> controls) {
+    std::map<K::EntityId, K::EntityId>& byPeer = seated->byPeer;
     for (const N::PeerDisconnected* gone : disconnected.Read()) {
-        players.ForEach([&](const K::EntityId id, const Owner& owner, const PlayerBody&, const PlayerCombat&) {
-            if (owner.userId == gone->userId) despawn.Entity(id);
-        });
+        if (const auto found = byPeer.find(gone->peer); found != byPeer.end()) {
+            despawn.Entity(found->second);
+            byPeer.erase(found);
+        }
         // Also a connection that ended before its Peer was made (peer 0): its admission took a seat too.
         if (seats->seats) seats->seats->Release(gone->userId);
     }
@@ -584,6 +591,19 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         if (combat.life == sim::LifeState::Alive) living.push_back(body);
     });
     for (const N::PeerConnected* joined : connected.Read()) {
+        // The user's older connection, if one is open: its player passes to the new one, and it is closed.
+        std::optional<std::pair<K::EntityId, std::uint32_t>> older;
+        peers.ForEach([&](const K::EntityId id, const N::Peer& peer) {
+            if (id != joined->peer && peer.userId == joined->userId && byPeer.contains(id)) older = {id, peer.connectionId};
+        });
+        if (older) {
+            const K::EntityId player = byPeer.at(older->first);
+            byPeer.erase(older->first);
+            byPeer[joined->peer] = player;
+            controls.Insert(joined->peer, N::PeerControls{player});
+            if (link->service != nullptr && link->service->Server() != nullptr) link->service->Server()->Close(older->second);
+            continue;
+        }
         auto chosen = PickSpawn(walls, *rules, living);
         if (!chosen) return PhysicsFailed(chosen.error());
         // No free spawn now: the first one (a spawn is never inside a wall; bodies may overlap until they move).
@@ -594,6 +614,7 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         auto id = spawn.New(body, combat, ShotRecord{}, HitRecord{}, Owner{joined->userId}, PlayerInput{}, PlayerMotion{});
         if (!id) return Base::Err(std::move(id).error());
         controls.Insert(joined->peer, N::PeerControls{*id});
+        byPeer[joined->peer] = *id;
         living.push_back(body);
     }
     return {};
@@ -773,33 +794,32 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     return content;
 }
 
-std::optional<std::string> Seats::Take(const std::uint64_t userId, const N::Endpoint from) {
+std::optional<std::string> Seats::Take(const std::uint64_t userId) {
     const std::lock_guard lock(mutex_);
-    if (const auto seated = seats_.find(userId); seated != seats_.end()) {
-        if (seated->second.endpoint != from) return "the user is already in the match";
-        ++seated->second.connections;
+    if (const auto seated = connections_.find(userId); seated != connections_.end()) {
+        ++seated->second;
         return std::nullopt;
     }
-    if (seats_.size() >= capacity_) return "the match is full";
-    seats_.emplace(userId, Seat{from, 1});
+    if (connections_.size() >= capacity_) return "the match is full";
+    connections_.emplace(userId, 1);
     return std::nullopt;
 }
 
 void Seats::Release(const std::uint64_t userId) {
     const std::lock_guard lock(mutex_);
-    const auto seated = seats_.find(userId);
-    if (seated == seats_.end()) return;
-    if (--seated->second.connections == 0) seats_.erase(seated);
+    const auto seated = connections_.find(userId);
+    if (seated == connections_.end()) return;
+    if (--seated->second == 0) connections_.erase(seated);
 }
 
 std::uint32_t Seats::Taken() const {
     const std::lock_guard lock(mutex_);
-    return static_cast<std::uint32_t>(seats_.size());
+    return static_cast<std::uint32_t>(connections_.size());
 }
 
 N::ServerHost::Admission SeatAdmission(std::shared_ptr<Seats> seats) {
-    return [seats = std::move(seats)](const N::ConnectRequest& request, const N::Endpoint from) -> N::NetResult<void> {
-        if (auto refused = seats->Take(request.userId, from)) {
+    return [seats = std::move(seats)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
+        if (auto refused = seats->Take(request.userId)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
         }
         return {};
@@ -807,11 +827,11 @@ N::ServerHost::Admission SeatAdmission(std::shared_ptr<Seats> seats) {
 }
 
 N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionCheck check) {
-    return [seats = std::move(seats), check = std::move(check)](const N::ConnectRequest& request, const N::Endpoint from) -> N::NetResult<void> {
+    return [seats = std::move(seats), check = std::move(check)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
         if (const auto refused = match::VerifyAdmission(check.key, request.token, check.nowUnixSeconds(), check.matchId, request.userId)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::string(match::AdmissionRefusalName(*refused))));
         }
-        if (auto refused = seats->Take(request.userId, from)) {
+        if (auto refused = seats->Take(request.userId)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
         }
         return {};
@@ -833,6 +853,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
     r.Resource<MatchInfo>({.name = "MatchInfo"});
     r.Resource<LocalUser>({.name = "LocalUser"});
     r.Resource<MatchSeats>({.name = "MatchSeats"});
+    r.Resource<SeatedPlayers>({.name = "SeatedPlayers"});
     r.Resource<ContentRef>({.name = "ContentRef"});
     r.Resource<ContentMismatch>({.name = "ContentMismatch"});
 
@@ -870,6 +891,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
+        world.SetResource(SeatedPlayers{});
         world.SetResource(ContentRef{options.content});
         world.SetResource(ContentMismatch{});
         // The Match says which arena it plays; a Client's MatchInfo comes from the Match.

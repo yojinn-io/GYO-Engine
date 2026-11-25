@@ -35,6 +35,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/data/VoxelMeshFile.cpp
     src/match/AdmissionToken.cpp
     src/match/PlayerSave.cpp
+    src/match/SaveSync.cpp
     src/present/Controls.cpp
     src/present/HitFeedback.cpp
     src/present/SoundCues.cpp
@@ -55,7 +56,7 @@ target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
         GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d
-    PRIVATE_LIBRARIES GYO::IO GYO::Http GYO::Json
+    PRIVATE_LIBRARIES GYO::IO GYO::Http
     SOURCES
     src/world/MatchSaves.cpp
     src/world/PvpWorld.cpp)

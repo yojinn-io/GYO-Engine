@@ -5,14 +5,17 @@
 #include "engine/json/Writer.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 namespace object_fps_pvp::match {
 
 namespace J = GYO::Engine::Json;
 
-PlayerSave Settled(PlayerSave save, const std::uint64_t deaths) noexcept {
-    ++save.matches;
+PlayerSave Settled(PlayerSave save, const std::uint64_t deaths, const std::uint64_t matchId, std::string key) {
+    if (save.lastMatch != matchId) ++save.matches;
     save.deaths += deaths;
+    save.lastMatch = matchId;
+    save.lastWrite = std::move(key);
     return save;
 }
 
@@ -26,6 +29,10 @@ std::string EncodePlayerSave(const PlayerSave& save) {
     writer.Uint(save.matches);
     writer.Key("deaths");
     writer.Uint(save.deaths);
+    writer.Key("lastMatch");
+    writer.Uint(save.lastMatch);
+    writer.Key("lastWrite");
+    writer.String(save.lastWrite);
     writer.EndObject();
     (void)writer.Finish();
     return out;
@@ -44,6 +51,8 @@ std::optional<PlayerSave> DecodePlayerSave(const std::string_view body, std::str
         PlayerSave save;
         save.matches = data::Unsigned(data::Member(object, "matches"), "matches");
         save.deaths = data::Unsigned(data::Member(object, "deaths"), "deaths");
+        save.lastMatch = data::Unsigned(data::Member(object, "lastMatch"), "lastMatch");
+        save.lastWrite = data::String(data::Member(object, "lastWrite"), "lastWrite");
         return save;
     } catch (const std::runtime_error& failure) {
         error = failure.what();
