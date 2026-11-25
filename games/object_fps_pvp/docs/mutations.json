@@ -313,6 +313,71 @@
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a hit shows*"
+  },
+  {
+   "id": "pvp-lobby-filter-off",
+   "what": "the address field takes every character (the game's filter is not given)",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
+   "find": "return element == \"address\" ? lobby::FilterAddressText(text) : std::string(text);",
+   "replace": "return std::string(text);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby shows*",
+   "expect": "pvp-lobby-submit"
+  },
+  {
+   "id": "pvp-lobby-any-address",
+   "what": "the lobby takes any text as an address",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
+   "find": "if (const auto server = ParseMatchAddress(typed)) {",
+   "replace": "if (const auto server = ParseMatchAddress(\"127.0.0.1:1\")) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby shows*",
+   "expect": "has_value"
+  },
+  {
+   "id": "pvp-lobby-quit-ignored",
+   "what": "Quit does not close the lobby",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
+   "find": "        if (action->action == \"pvp.quit\") {\n            request->close = true;\n",
+   "replace": "        if (action->action == \"pvp.quit\") {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby's Quit*",
+   "expect": "pvp-lobby-quit"
+  },
+  {
+   "id": "pvp-session-end-ignored",
+   "what": "the connection's end is not noted (the program would not go back to the lobby)",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        session->ended = true;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a Match that refuses*",
+   "expect": "pvp-session-end"
+  },
+  {
+   "id": "pvp-lobby-ui-not-drawn",
+   "what": "the lobby's render World has no ui_render (nothing on screen)",
+   "guards": [
+    "port-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
+   "find": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\", \"ui_render\"};",
+   "replace": "    world.units = {\"entity_ids\", \"render_world\", \"camera_render\"};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the lobby shows*",
+   "expect": "pvp-lobby-drawn"
   }
  ]
 }

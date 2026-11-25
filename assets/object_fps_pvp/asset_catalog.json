@@ -19,6 +19,7 @@
     {"id": "object_fps_pvp.audio.gun_reload", "type": "sound", "path": "audio/gun_reload.wav"},
     {"id": "object_fps_pvp.audio.player_footstep", "type": "sound", "path": "audio/player_footstep.wav"},
     {"id": "object_fps_pvp.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf"},
+    {"id": "object_fps_pvp.ui.lobby", "type": "ui", "path": "ui/pvp_lobby.json"},
     {"id": "object_fps_pvp.player.character", "type": "text", "path": "characters/player/character.json"},
     {"id": "object_fps_pvp.player.presentation", "type": "text", "path": "characters/player/presentation.json"},
     {"id": "object_fps_pvp.player.hitbox", "type": "text", "path": "characters/player/hitbox.json"},

@@ -16,7 +16,10 @@
 # client: the Client's World around the game's (include/object_fps_pvp/client/ClientWorld.hpp): the controls, the
 # first-person camera, the arena's model and the other players' stand-in bodies (render's 3D pipeline), the HUD
 # (its 2D layer), the sounds, and the World that draws (extracts from it).
-# main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins.
+# The client library also has the lobby (include/object_fps_pvp/client/LobbyWorld.hpp): a Product of its own, without
+# net, where the player gives the Match's address (ui, world_ui, ui_render).
+# main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the lobby, then the
+# Client with the address it gave, back to the lobby when that connection ends.
 # match: the Match (src/match_main.cpp), headless, listening on UDP.
 gyo_game_project()
 
@@ -52,10 +55,11 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
 
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PUBLIC_LIBRARIES ${object_fps_pvp_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Model GYO::Render
-        GYO::Text GYO::Window GYO::WorldAsset
+        GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS
     PRIVATE_LIBRARIES GYO::IO GYO::Json
     SOURCES
     src/client/ClientWorld.cpp
+    src/client/LobbyWorld.cpp
     src/client/VoxelModelLoader.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
@@ -64,6 +68,7 @@ gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main
     SOURCES
     src/client_main.cpp)
 gyo_product_units(${object_fps_pvp_main} MODULES physics_3d render_world world_render camera_render sprite_render mesh_render
+    world_ui ui_render
     PLUGINS sdl_window sdl_audio sdl_gpu)
 
 gyo_game_add_executable(match OUT_TARGET object_fps_pvp_match
