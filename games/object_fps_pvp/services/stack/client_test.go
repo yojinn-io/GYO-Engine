@@ -40,3 +40,31 @@ func TestTheRealClientPlaysThroughTheGateway(t *testing.T) {
 		t.Fatal("the Client's network case did not run")
 	}
 }
+
+// TestTwoClientsInARoom runs the Client's "network-room:" case against every
+// service in this process: two Clients, B joining A's room, A getting ready at
+// once (the player's report of 2026-11-26: after B joined, A could not get
+// ready for tens of seconds).
+func TestTwoClientsInARoom(t *testing.T) {
+	match, content, client := os.Getenv("GYO_PVP_MATCH"), os.Getenv("GYO_PVP_CONTENT"), os.Getenv("GYO_PVP_CLIENT_TESTS")
+	if match == "" || content == "" || client == "" {
+		t.Skip("GYO_PVP_MATCH, GYO_PVP_CONTENT or GYO_PVP_CLIENT_TESTS is not set")
+	}
+	local := &matches.Local{Command: match, Arguments: []string{"--content", content}, Advertise: "127.0.0.1",
+		FirstPort: 47860, LastPort: 47869, IdleSeconds: 5}
+	s, err := Start(Config{Provider: local, Maps: []string{"pvp_training_v1", "pvp_corners_v1", "biome_trial"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	command := exec.Command(client, "--test-case=network-room:*")
+	command.Env = append(os.Environ(), "GYO_PVP_GATEWAY="+strings.TrimPrefix(s.GatewayURL, "http://"))
+	output, err := command.CombinedOutput()
+	t.Logf("%s", output)
+	if err != nil {
+		t.Fatalf("the Client's run failed: %v", err)
+	}
+	if !regexp.MustCompile(`test cases: +1 \| +1 passed`).Match(output) {
+		t.Fatal("the Client's network-room case did not run")
+	}
+}

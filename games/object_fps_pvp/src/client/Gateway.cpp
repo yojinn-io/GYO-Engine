@@ -208,7 +208,17 @@ void GatewayClient::Start(Call call, const bool session, const std::int64_t now)
     else current_->failure = Base::Describe(started.error());
 }
 
+void GatewayClient::Note(const Going& going, const int status, std::string errorCode, const std::int64_t now) {
+    if (calls_.size() == kKeptCalls) calls_.erase(calls_.begin());
+    const GatewayRequest& request = going.session ? SessionRequest(deviceId_) : going.call.request;
+    calls_.push_back(GatewayCallRecord{going.call.tag, going.session, request.method, request.target, status, std::move(errorCode),
+                                       going.started - going.call.asked.value_or(going.started), now - going.started});
+}
+
 std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
+    for (Call& waiting : waiting_) {
+        if (!waiting.asked) waiting.asked = now;
+    }
     if (!current_) {
         if (waiting_.empty()) return std::nullopt;
         Call next = std::move(waiting_.front());
@@ -223,14 +233,19 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
     };
     GatewayResult result;
     result.tag = going.call.tag;
-    if (!going.http) return finish({result.tag, 0, {}, "unreachable", going.failure});
+    if (!going.http) {
+        Note(going, 0, "unreachable", now);
+        return finish({result.tag, 0, {}, "unreachable", going.failure});
+    }
     auto polled = going.http->Poll();
     if (!polled) {
         const bool unreachable = polled.error().code == H::HttpFailureCode::Unreachable || polled.error().code == H::HttpFailureCode::ConnectFailed;
+        Note(going, 0, unreachable ? "unreachable" : "http", now);
         return finish({result.tag, 0, {}, unreachable ? "unreachable" : "http", Base::Describe(polled.error())});
     }
     if (!polled->has_value()) {
         if (now - going.started > timeout_) {
+            Note(going, 0, "timeout", now);
             return finish({result.tag, 0, {}, "timeout", "no answer within " + std::to_string(timeout_ / 1'000'000'000) + " s"});
         }
         return std::nullopt;
@@ -239,6 +254,7 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
     result.status = response.status;
     result.body = response.body;
     if (!result.Ok()) result.errorCode = ErrorCodeOf(response.body);
+    Note(going, result.status, result.errorCode, now);
     if (going.session) {
         if (!result.Ok()) return finish(std::move(result));
         std::string error;

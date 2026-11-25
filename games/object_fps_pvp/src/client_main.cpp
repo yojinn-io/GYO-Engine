@@ -27,6 +27,8 @@
 #include "gyo/GameConfig.hpp"
 
 #include "engine/base/Log.hpp"
+#include "engine/input/Input.hpp"
+#include "engine/ui/UiRoot.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/NetService.hpp"
@@ -53,6 +55,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -61,6 +64,8 @@ namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
+namespace WT = GYO::Engine::WorldTime;
+namespace I = GYO::Engine::Input;
 namespace PC = object_fps_pvp::client;
 namespace PW = object_fps_pvp::world;
 
@@ -92,6 +97,65 @@ K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWa
         seen->playing = playing;
     }
     return {};
+}
+
+// --verbose, every scene: what the player did and what the program did for it, to tell from the log where a moment
+// went -- the frames that took long (and in which scene), the window's focus, the mouse presses that reached the
+// Frame World, the UI actions they made, the UI documents laid out, and each call to the Gateway (how long it waited
+// behind the others and how long it took).
+constexpr std::int64_t kSlowFrame = 100'000'000;
+
+struct FrameWatch final {
+    std::string scene;
+    std::vector<std::pair<K::EntityId, std::string>> laidOut;  // the roots seen with their runtime, and their canvas
+};
+void HashValue(K::Hasher&, const FrameWatch&) {}
+
+std::string Milliseconds(const std::int64_t nanoseconds) { return std::to_string(nanoseconds / 1'000'000) + " ms"; }
+
+K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::WindowFocused> focus, K::MessageReader<I::MouseButtonInput> buttons,
+                           K::MessageReader<GYO::Engine::Ui::UiAction> actions,
+                           K::Query<K::Read<GYO::Engine::Ui::UiRoot>, K::Read<GYO::Engine::Ui::UiRootState>> roots,
+                           K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
+    const std::string& scene = watch.Read().scene;
+    if (time->delta > kSlowFrame) Log(GYO::Engine::Base::LogLevel::Info, "slow frame: " + Milliseconds(time->delta) + " (" + scene + ")");
+    for (const W::WindowFocused* event : focus.Read()) {
+        Log(GYO::Engine::Base::LogLevel::Info, std::string("window: ") + (event->focused ? "focused" : "not focused") + " (" + scene + ")");
+    }
+    for (const I::MouseButtonInput* button : buttons.Read()) {
+        if (button->state != I::ButtonState::Pressed) continue;
+        Log(GYO::Engine::Base::LogLevel::Info, "mouse: pressed at " + std::to_string(static_cast<int>(button->position.x)) + "," +
+                                                   std::to_string(static_cast<int>(button->position.y)) + " (" + scene + ")");
+    }
+    for (const GYO::Engine::Ui::UiAction* action : actions.Read()) {
+        Log(GYO::Engine::Base::LogLevel::Info, "ui: " + action->action + " (" + scene + ")");
+    }
+    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state) {
+        if (!state.runtime) return;
+        for (const auto& [seen, canvas] : watch.Read().laidOut) {
+            if (seen == id && canvas == root.canvas) return;
+        }
+        Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out (" + scene + ")");
+        watch->laidOut.emplace_back(id, root.canvas);
+    });
+    for (const PC::GatewayCallRecord& call : gateway->TakeCalls()) {
+        const std::string answer = call.status != 0 ? std::to_string(call.status) + (call.errorCode.empty() ? "" : " " + call.errorCode) : call.errorCode;
+        Log(GYO::Engine::Base::LogLevel::Info, "gateway: " + call.method + " " + call.target + " (" + call.tag + (call.session ? ", its session" : "") +
+                                                   ") -> " + answer + " in " + Milliseconds(call.took) + ", waited " + Milliseconds(call.waited));
+    }
+    return {};
+}
+
+std::string SceneName(const PC::Scene scene) {
+    switch (scene) {
+    case PC::Scene::Menu: return "menu";
+    case PC::Scene::SoloRoom: return "single player room";
+    case PC::Scene::SoloGame: return "single player game";
+    case PC::Scene::Lobby: return "lobby";
+    case PC::Scene::Room: return "room";
+    case PC::Scene::MultiGame: return "multiplayer game";
+    }
+    return "?";
 }
 
 std::optional<std::string> ContentRoot() {
@@ -170,11 +234,6 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
             const auto* director = setup.ProductBuffer().Find<PC::SceneDirector>();
             if (director == nullptr) return;
             const PC::SceneChange& scene = director->Current();
-            const bool multi = scene.scene == PC::Scene::MultiGame;
-            if (!multi && scene.scene != PC::Scene::SoloGame) return;
-            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + scene.map +
-                                                       "' chosen" + (multi ? " in room " + std::to_string(scene.room) : std::string()));
-            setup.Registrar().Resource<VerboseWatch>({.name = "VerboseWatch"});
             const auto last = [](std::string name) {
                 K::SystemOptions watch;
                 watch.name = std::move(name);
@@ -184,6 +243,18 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                 watch.mounts.push_back(std::move(mount));
                 return watch;
             };
+            Log(GYO::Engine::Base::LogLevel::Info, "scene: " + SceneName(scene.scene));
+            setup.Registrar().Resource<FrameWatch>({.name = "FrameWatch"});
+            setup.Registrar().AddSystem<&WatchFrame>(last("WatchFrame"));
+            setup.Prepare([name = SceneName(scene.scene)](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                w.SetResource(FrameWatch{name, {}});
+                return {};
+            });
+            const bool multi = scene.scene == PC::Scene::MultiGame;
+            if (!multi && scene.scene != PC::Scene::SoloGame) return;
+            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + scene.map +
+                                                       "' chosen" + (multi ? " in room " + std::to_string(scene.room) : std::string()));
+            setup.Registrar().Resource<VerboseWatch>({.name = "VerboseWatch"});
             setup.Registrar().AddSystem<&WatchArena>(last("WatchArena"));
             if (multi) setup.Registrar().AddSystem<&WatchConnection>(last("WatchConnection"));
             setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {

@@ -2311,6 +2311,32 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-survival"
+  },
+  {
+   "id": "pvp-gw-calls-not-kept",
+   "what": "an answered exchange is not kept for the log",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    Note(going, result.status, result.errorCode, now);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: each exchange*",
+   "expect": "pvp-gw-calls-kept"
+  },
+  {
+   "id": "pvp-gw-calls-no-wait",
+   "what": "the time a call waited behind the others is not measured",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "going.started - going.call.asked.value_or(going.started)",
+   "replace": "0",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: each exchange*",
+   "expect": "pvp-gw-calls-waited"
   }
  ]
 }
