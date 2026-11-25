@@ -17,6 +17,8 @@ namespace {
 // user 9, expiring at 1800000600.
 constexpr std::uint64_t kMatch = 0x8877665544332211ULL;
 constexpr std::int64_t kBeforeExpiry = 1'800'000'599;
+constexpr N::Endpoint kHere{1};
+constexpr N::Endpoint kThere{2};
 
 std::vector<std::byte> Key() { return std::vector<std::byte>(32, std::byte{0xa7}); }
 
@@ -32,16 +34,29 @@ std::string Detail(const N::NetResult<void>& result) { return result ? std::stri
 } // namespace
 
 TEST_CASE("world: a seat per user") {
-    PW::Seats seats;
-    seats.capacity = 2;
-    CHECK_FALSE(seats.Take(1).has_value());
-    CHECK_MESSAGE(seats.Take(1).value_or("seated") == "the user is already in the match", "a second seat for one user");
-    CHECK_FALSE(seats.Take(2).has_value());
-    CHECK_MESSAGE(seats.Take(3).value_or("seated") == "the match is full", "a seat past the capacity");
-    CHECK(seats.taken.load() == 2);
+    PW::Seats seats(2);
+    CHECK_FALSE(seats.Take(1, kHere).has_value());
+    CHECK_MESSAGE(seats.Take(1, kThere).value_or("seated") == "the user is already in the match",
+                  "a second seat for one user from another endpoint");
+    CHECK_FALSE(seats.Take(2, kThere).has_value());
+    CHECK_MESSAGE(seats.Take(3, kHere).value_or("seated") == "the match is full", "a seat past the capacity");
+    CHECK(seats.Taken() == 2);
     seats.Release(1);
-    CHECK(seats.taken.load() == 1);
-    CHECK_MESSAGE(!seats.Take(1).has_value(), "a user who left cannot come back");
+    CHECK(seats.Taken() == 1);
+    CHECK_MESSAGE(!seats.Take(1, kThere).has_value(), "a user who left cannot come back");
+}
+
+TEST_CASE("world: a reconnect from the same endpoint keeps its seat") {
+    // The server ends the old connection and asks the admission before the World has seen the old one go: the new
+    // connection comes in, and the old one's release afterwards leaves the new one seated.
+    PW::Seats seats(1);
+    CHECK_FALSE(seats.Take(5, kHere).has_value());
+    CHECK_MESSAGE(!seats.Take(5, kHere).has_value(), "a reconnect from the same endpoint is refused");
+    seats.Release(5);
+    CHECK_MESSAGE(seats.Taken() == 1, "the old connection's release freed the new one's seat");
+    CHECK_MESSAGE(seats.Take(6, kThere).value_or("seated") == "the match is full", "the seat was given away");
+    seats.Release(5);
+    CHECK(seats.Taken() == 0);
 }
 
 TEST_CASE("world: a keyed Match admits only its tokens") {
@@ -59,23 +74,23 @@ TEST_CASE("world: a keyed Match admits only its tokens") {
     const auto mac = object_fps_pvp::match::HmacSha256(Key(), token);
     token.insert(token.end(), mac.begin(), mac.end());
 
-    const auto admission = PW::MatchAdmission(seats, PW::AdmissionKey{Key(), kMatch, [&] { return now; }});
-    CHECK_MESSAGE(Detail(admission(Request(8, token), {})) == "token user", "another user's token");
-    CHECK_MESSAGE(Detail(admission(Request(9, {}), {})) == "token length", "no token");
-    CHECK(seats->taken.load() == 0);
-    CHECK_MESSAGE(Detail(admission(Request(9, token), {})) == "admitted", "the user's own token");
-    CHECK_MESSAGE(Detail(admission(Request(9, token), {})) == "the user is already in the match", "the token used twice");
+    const auto admission = PW::MatchAdmission(seats, PW::AdmissionCheck{Key(), kMatch, [&] { return now; }});
+    CHECK_MESSAGE(Detail(admission(Request(8, token), kHere)) == "token user", "another user's token");
+    CHECK_MESSAGE(Detail(admission(Request(9, {}), kHere)) == "token length", "no token");
+    CHECK(seats->Taken() == 0);
+    CHECK_MESSAGE(Detail(admission(Request(9, token), kHere)) == "admitted", "the user's own token");
+    CHECK_MESSAGE(Detail(admission(Request(9, token), kThere)) == "the user is already in the match",
+                  "the token used again from another endpoint");
     seats->Release(9);
     now = 1'800'000'600;
-    CHECK_MESSAGE(Detail(admission(Request(9, token), {})) == "token expired", "a token at its expiry");
-    const auto otherMatch = PW::MatchAdmission(seats, PW::AdmissionKey{Key(), kMatch + 1, [] { return kBeforeExpiry; }});
-    CHECK_MESSAGE(Detail(otherMatch(Request(9, token), {})) == "token match", "another Match's token");
+    CHECK_MESSAGE(Detail(admission(Request(9, token), kHere)) == "token expired", "a token at its expiry");
+    const auto otherMatch = PW::MatchAdmission(seats, PW::AdmissionCheck{Key(), kMatch + 1, [] { return kBeforeExpiry; }});
+    CHECK_MESSAGE(Detail(otherMatch(Request(9, token), kHere)) == "token match", "another Match's token");
 }
 
 TEST_CASE("world: a Match without a key admits by seat") {
-    auto seats = std::make_shared<PW::Seats>();
-    seats->capacity = 1;
+    auto seats = std::make_shared<PW::Seats>(1);
     const auto admission = PW::SeatAdmission(seats);
-    CHECK(Detail(admission(Request(5, {}), {})) == "admitted");
-    CHECK(Detail(admission(Request(6, {}), {})) == "the match is full");
+    CHECK(Detail(admission(Request(5, {}), kHere)) == "admitted");
+    CHECK(Detail(admission(Request(6, {}), kThere)) == "the match is full");
 }

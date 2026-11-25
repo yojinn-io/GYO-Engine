@@ -91,6 +91,6 @@ gyo_get_game_target(object_fps_pvp match object_fps_pvp_match_target)
 add_test(NAME object_fps_pvp.match_process
     COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "GYO_PVP_MATCH=$<TARGET_FILE:${object_fps_pvp_match_target}>"
         "GYO_PVP_CONTENT=${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
-        "${GYO_GO_EXECUTABLE}" test -count=1 -run "TestTheRealMatch" ./services/matches/
+        "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealMatch" ./services/matches/
     WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
 set_tests_properties(object_fps_pvp.match_process PROPERTIES LABELS "network" TIMEOUT 120)
