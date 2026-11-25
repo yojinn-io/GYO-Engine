@@ -95,7 +95,7 @@ Bevy 6a911653f（`~/Code/GitHome/bevy`）；第二家 Godot（`~/Code/GitHome/go
 
 - 照 master（`engine/ui/include/engine/ui/UiDocument.hpp`、`UiDocumentCodec.cpp`、`UiValidation.cpp`、`UiSerialization.cpp`）：`schema`＝`"gyo.ui"`，`version` 1 或 2（v2 加 `text_field` 與字串 payload）；元素八種（container、panel、image、text、button、horizontal_slider、fixed_step_list、text_field）；顏色 `#RRGGBBAA`（sRGB）；文字來源 literal／binding／item_field／compose／select；顏色來源 color／select；binding 六種型別；`design_canvas` 的 `scale_mode` 只有 `fit`。
 - **讀**經 JSON Module 的 `Parse`（RFC 8259 嚴格：BOM、註解、重複鍵、數字溢位都拒）。master 用 nlohmann 時這些多半也拒或未定義；**版本不升**（卡片照 L17 判：合法的 v1／v2 文件讀出的值不變；只有本來就不合規的文件從「未定義」變成「拒」）。JSON 宣告第 452 行要求「各契約回到 gyo2 時寫明經 JSON Module 讀的行為、版本升不升，交使用者」——寫在這裡，回報主會話（第 10 節）。
-- **寫**經 `Json::Writer`：欄位順序固定、顏色大寫 `#RRGGBBAA`、結尾一個換行。**偏離 master**：master 用兩格縮排；JSON Module 只有一種輸出格式（J-5，緊湊），所以寫出的是一行。讀回的值與 master 相同（資料契約不含排版）。
+- **寫**經 `Json::Writer`，排版 `Layout{.indent = 2}`：欄位順序固定、顏色大寫 `#RRGGBBAA`、兩格縮排、結尾一個換行——master（nlohmann `dump(2)`）的排版。master 寫的檔案寫回時，排版不變，改動在 diff 裡只出現在改到的行；唯一的差別是指數的寫法（master `1e+300`、`2.5e-07`，現在 `1e300`、`2.5e-7`，J-5 的數字文字），一般的 UI 檔沒有指數，`document_v1` 寫回逐位元組相同（`v8-arch-gyo2-json-pretty`；之前 JSON Module 只有緊湊一種，寫出的是一行）。排版不屬資料契約，版本維持 2。
 - 驗證照 master 的規則（id 唯一、引用存在、binding 型別、`focus_order` 只列可互動元素等），錯誤帶 JSON Pointer。
 - 錯誤型別 `UiFailure`（N25：E2，這一份文件沒讀成，其他都健康），欄位 `code`、`message`、`detail`、`source`、`jsonPointer`。
 
@@ -181,7 +181,7 @@ System（都在公開的 set `kUiSet`）：
 
 | ctest | 內容 |
 |---|---|
-| `ui.contract` | master 的 golden 文件（v1、v2）讀、寫、再讀相同；每條驗證規則的反例與 JSON Pointer；`pvp_lobby.json` 讀得進來 |
+| `ui.contract` | master 的 golden 文件（v1、v2）讀、寫、再讀相同，`document_v1` 的寫出和 master 凍結的輸出逐位元組相同，`golden_v1` 只差指數的寫法；每條驗證規則的反例與 JSON Pointer；`pvp_lobby.json` 讀得進來 |
 | `ui.runtime` | 焦點（Tab、Shift+Tab、指標、`default_focus`）、button、slider（指標拖曳、鍵盤調整、量化）、`fixed_step_list`、`cancel_action`、binding 錯誤 |
 | `ui.text_field` | 插入、退格、刪除、移動、全選、`max_length`、過濾函式、組字只畫不進、確定、送出、取消、binding 被改時丟棄、點擊放游標 |
 | `ui.layout` | anchor／pivot／`fit`、裁切、對齊、字形的精確位置（真的字型） |
@@ -250,4 +250,4 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 
 - 節點模型照 L17 選了文件樹（第 3.1 節）；總宣告第 6.6 節寫的是「U 的宣告比、交使用者」——新 AGENTS 下卡片自己判，請主會話判要不要再交使用者。
 - `gyo.ui` 經 JSON Module 讀的行為與版本不升（第 4.1 節）：JSON 宣告第 452 行寫「交使用者」，同上。
-- 寫出由兩格縮排改成一行（J-5）：Editor 回來時，`gyo.ui` 檔的 diff 會變成整行；要恢復縮排得在 JSON Module 加一種輸出格式（動 J-5）。
+- ~~寫出由兩格縮排改成一行（J-5）~~：`v8-arch-gyo2-json-pretty` 在 JSON Module 加了排版（`Layout`），`gyo.ui` 恢復 master 的兩格縮排（指數的寫法除外）。

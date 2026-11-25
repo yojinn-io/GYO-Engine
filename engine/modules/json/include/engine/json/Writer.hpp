@@ -23,7 +23,7 @@
 //     writer.EndObject();
 //     if (auto done = writer.Finish(); !done) { ... line is back to its old length ... }
 //
-// Output is compact, strict JSON that Parse reads back to the same values
+// Output is strict JSON that Parse reads back to the same values
 // (doubles bit for bit, strings byte for byte, keys in order), provided the
 // caller does not write one key twice in an object: the Writer does not look
 // (that would need memory per object), and Parse rejects the result.
@@ -33,14 +33,29 @@
 // represent (a non-finite number, invalid UTF-8) and allocation failure are
 // Runtime Errors that Finish reports. With enough capacity in the string and
 // no more than kInlineDepth levels, writing allocates nothing.
+//
+// The layout is the caller's choice (Layout): compact on one line by default,
+// or indented. Either way the bytes depend only on the calls and the Layout.
 
 namespace GYO::Engine::Json {
+
+enum class IndentCharacter : char { Space = ' ', Tab = '\t' };
+
+// How the Writer lays out the text. With indent 0 (the default) everything is
+// on one line with no spaces. With indent n > 0 every member and element starts
+// a line indented n characters per level, a key is followed by ": ", the
+// closing bracket of a non-empty container has its own line, and an empty
+// container stays "{}" or "[]".
+struct Layout final {
+    std::size_t indent = 0;
+    IndentCharacter character = IndentCharacter::Space;
+};
 
 class Writer final {
 public:
     static constexpr std::size_t kInlineDepth = 32;
 
-    explicit Writer(std::string& out) noexcept;
+    explicit Writer(std::string& out, Layout layout = {}) noexcept;
     Writer(const Writer&) = delete;
     Writer& operator=(const Writer&) = delete;
 
@@ -76,6 +91,10 @@ private:
     };
 
     void BeforeValue();
+    // Before a member or an element: the comma after the previous one and, when
+    // indenting, the new line.
+    void Separate(Frame& frame);
+    void NewLine(std::size_t level);
     void BeginContainer(Container container, char open);
     void EndContainer(Container container, char close);
     // The text of a number already known to be valid JSON (WriteValue).
@@ -86,6 +105,7 @@ private:
     void Pop();
 
     std::string& out_;
+    Layout layout_;
     std::size_t startLength_;
     std::array<Frame, kInlineDepth> inline_{};
     std::vector<Frame> deeper_;
