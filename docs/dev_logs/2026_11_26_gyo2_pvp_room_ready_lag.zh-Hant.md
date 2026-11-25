@@ -72,18 +72,37 @@ blocker 0、should 8、nit 9。
 ### 2. 非房主按「開始」沒有回饋
 
 原因：被拒（`403 not_owner`）的話寫在狀態列，但下一次成功的房間讀取（0.75 秒內）就把它蓋回邀請的話。改成：
-- 「開始」只給房主：不是房主時按鈕寫「開始（部屋主のみ）」，按了不問 Gateway，狀態列說「開始できるのは部屋主だけです」。
-- 狀態列分三層：玩家上一個動作的話（留到下一個動作：被拒的理由看得到）→ 上一次讀取的問題 → 邀請的話。
+- 「開始」只給房主：知道房主之後（第一次讀取起），不是房主時按鈕寫「開始（部屋主のみ）」，按了不問 Gateway，狀態列說「開始できるのは部屋主だけです」（和 Gateway 的 `not_owner` 同一句）。
+- 狀態列顯示最新的一句：玩家動作的話（成功的讀取不清掉它：被拒的理由看得到）或讀取出的問題（它會取代動作的話，下一次成功的讀取清掉）；兩者都沒有時是邀請的話。
 - 突變 `pvp-room-start-asked-anyway`、`pvp-room-said-overwritten`、`pvp-room-start-label`。
 
 ### 3. 點擊有沒有命中按鈕
 
 A 在大廳 (714,322) 點兩下都沒有 UI 動作。log 的 `mouse: pressed` 加「hits '元素' of canvas '…'」或「hits nothing」（照 world_ui 的算法：視窗的點換成 viewport 的實體像素，`HitTestUiLayout` 只看可互動的元素）。實機上的結果未驗（要使用者點）。
 
+## 第二次設計審查（Opus／high，範圍 `34457ca8..81e5abc8`，審查者只拿成果物與原始要求）
+
+blocker 0、should 5、nit 9。確認這個範圍沒有 Engine 的改動。
+
+- S1（玩家動作的話永遠蓋過讀取的問題：「開始しています…」之後連線目標讀不出來就看不到，比改前退步）→ 狀態列顯示最新的一句：讀取出問題時清掉動作的話。新檢查 `[pvp-room-problem-shown]`（FakeGateway 讓房間讀取回 503）；突變 `pvp-room-problem-hidden`。
+- S2（`readyCalls` 沒有測試）→ 新案「答案回來前按兩次準備，結果照第二次」（FakeGateway 扣住 ready）；突變 `pvp-room-ready-count-ignored`。
+- S3（Gateway 拒絕動作的話沒有測試）→ 同一案：房主沒準備就開始，409 `not_all_ready` 的話撐過兩次讀取；突變 `pvp-room-refusal-cleared`。
+- S4（命中用了事件的位置，world_ui 用的是 `CursorPosition`）→ 改用游標位置（不知道時寫明）；bindings 是場景改過之後的，註解寫明可能和 world_ui 那時不同。
+- S5（「重做」只靠文件指標：同一個 root 拿掉再放回、或同一位址的新文件抓不到）→ 每幀以現有的 root 為準，不在的就忘掉：放回時再記一次「laid out」。
+- N1 → `not_owner` 的話統一成「開始できるのは部屋主だけです」，本地的拒絕也用 `GatewayErrorText`。N4 → `waited` 的註解照實寫（從 Ask 之後第一次 Update 起算）。N5 → bindings 另開 query（沒有 bindings 的 root 也看得到）。N6 → 命中列出每個收輸入的 root 的元素。N8 → e2e 的 ready 記錄先收下，再檢查狀態碼。N9 → FakeGateway 自己數被扣住的呼叫（`Held()`），測試等它，不再和讀取的時機賽跑。
+- 不改：N2（第一次讀取之前加入者看到「開始」：按了會問 Gateway、得到同一句話；要更早知道房主得讓大廳把房間帶過來，之後需要再做）、N3（房主換人後舊的話留到下一個動作）、N7（遊戲場景的 overlay 按鈕點擊不記：UI action 有記）。
+
+## 使用者的決定與主迴圈心跳
+
+使用者：「這個東西繼續觀察吧，我當時碰到的卡頓是完全無響應。」Spaces 的兩個選項都不做、Engine 不改；第一次的「完全沒反應、幾十秒」不是 Space 切換的 ~1 秒，原因未找到。
+
+- **主迴圈心跳**（`--verbose`，`client_main.cpp`，產品自己的標記，不動 Engine）：迴圈在每一段的開頭記下「現在在哪一段、從何時起」——Frame World（`Main/First`）、Render World 到畫之前（Extract）、畫（`Submit` stage，在 `GPUSubmit` 之前：GPU 的 acquire 與 present）、兩幀之間（`Cleanup` stage 之後：window 的 event pump、換場景、等待）。另一條執行緒每 200 ms 看一次：一段超過 1 秒就當下記一行「no frame for N s, in <段>」（迴圈一直不回來也留得下），之後每 5 秒再記，回來時記「going again after N s in <段>」。pump 和等待是 `sdl_window` 自己的，分不開。
+- 實測（臨時把門檻降到 300 ms，兩個全屏 Client，`20261126-062523-heartbeat-300ms-check/`）：卡住的當下記到「in the drawing (the GPU's acquire and present)」，回來時「going again after 1.1 s」。門檻 1 秒時，1.08 秒的停頓可能落在兩次檢查之間而不記（`20261126-062443-heartbeat-full-full/`）：要抓的是「完全沒反應」，1 秒以內的由 `slow frame` 記。
+
 ## 驗證
 
 - 本機（Intel Mac）`ctest -L "cpu|gpu"` 262/262、`-L "go|network"` 5/5（`object_fps_pvp.gateway_client` 跑兩個 Go 測試：一個 Client 的，和兩個 Client 的）。
-- 突變：`pvp-gw-*`、`pvp-room-*`、`pvp-lobby-*` 79/79 killed（`pvp-room-ready-undone-by-read` 的 find 跟著程式改了一次，重跑 killed）。
+- 突變：`pvp-gw-*`、`pvp-room-*`、`pvp-lobby-*` 82/82 killed（`pvp-room-ready-undone-by-read` 的 find 跟著程式改了一次，重跑 killed）。
 
 ## 沒驗
 

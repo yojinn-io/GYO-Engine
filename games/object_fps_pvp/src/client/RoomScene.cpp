@@ -40,8 +40,9 @@ struct RoomState final {
     std::optional<std::int64_t> polled;
     bool leaving = false;
     std::string gateway;
-    // The status line: the word on the player's last action (kept until the next one: a refusal stays to be read),
-    // else what the last read of the room said went wrong, else the invitation.
+    // The status line: the newest word -- on the player's last action (a refusal stays to be read: a read that goes
+    // well does not clear it), or on a read that went wrong (it takes the line, and goes with the next good read);
+    // with neither, the invitation.
     std::optional<std::string> said;
     std::string problem;
 };
@@ -97,7 +98,7 @@ K::SystemResult RoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<Ro
                 gateway->Ask("start", StartRequest(room.id, RandomHex(16)));
                 room.said = "開始しています…";
             } else {
-                room.said = "開始できるのは部屋主だけです";
+                room.said = GatewayErrorText(GatewayResult{"start", 0, {}, "not_owner", {}}, room.gateway);
             }
         } else if (action->action == "pvp.leave") {
             gateway->Ask("leave", LeaveRequest(room.id, RandomHex(16)));
@@ -128,8 +129,12 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
     // A word on the player's action stays; one on a read lasts until the next read.
     const bool action = result->tag == "ready" || result->tag == "start";
     const auto tell = [&](std::string text) {
-        if (action) room.said = std::move(text);
-        else room.problem = std::move(text);
+        if (action) {
+            room.said = std::move(text);
+        } else {
+            room.problem = std::move(text);
+            room.said.reset();
+        }
     };
     if (!result->Ok()) {
         // This player is no longer in the room (it is gone, its match ended, or it was left elsewhere): the lobby.
@@ -161,6 +166,7 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
             return {};
         }
         room.problem = "Gateway の接続先を読めません: " + connect.server;
+        room.said.reset();
     }
     for (const K::EntityId id : bindings.Entities()) ShowRoom(room, SelfOf(*gateway), *bindings.GetMut<Ui::UiBindings>(id));
     return {};

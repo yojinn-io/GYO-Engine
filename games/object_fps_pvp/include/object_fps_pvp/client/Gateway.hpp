@@ -113,8 +113,8 @@ struct GatewayResult final {
 };
 
 // One HTTP exchange of a GatewayClient as it went, for the program's log (--verbose): what was sent, how it ended, how
-// long its call waited behind the calls asked before it (from Ask to its turn; the exchanges of one call -- its
-// session's, a retry -- share it) and how long the exchange took (nanoseconds).
+// long its call waited behind the calls asked before it (from the first Update after its Ask to its turn; the
+// exchanges of one call -- its session's, a retry -- share it) and how long the exchange took (nanoseconds).
 struct GatewayCallRecord final {
     std::string tag;
     bool session = false;  // the session's own call, made for the call named tag

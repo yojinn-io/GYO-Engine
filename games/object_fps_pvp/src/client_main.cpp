@@ -39,6 +39,7 @@
 #include "engine/os/Files.hpp"
 #include "engine/os/SocketAddress.hpp"
 #include "engine/os/Process.hpp"
+#include "engine/render_world/RenderWorldModule.hpp"
 #include "engine/threads/WorkerPool.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/world_asset/WorkerPoolExecutor.hpp"
@@ -47,14 +48,19 @@
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <random>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -121,20 +127,28 @@ struct FrameWatch final {
 };
 void HashValue(K::Hasher&, const FrameWatch&) {}
 
-using WatchedRoots = K::Query<K::Read<GYO::Engine::Ui::UiRoot>, K::Read<GYO::Engine::Ui::UiRootState>, K::Read<GYO::Engine::Ui::UiBindings>>;
+using WatchedRoots = K::Query<K::Read<GYO::Engine::Ui::UiRoot>, K::Read<GYO::Engine::Ui::UiRootState>>;
+using WatchedBindings = K::Query<K::Read<GYO::Engine::Ui::UiBindings>>;
 
-// What a press at (x, y) of the window lands on: the topmost interactive element of a root that takes input, as
-// world_ui hit tests it (its viewport's physical pixels); "nothing" when no element is there.
-std::string HitAt(WatchedRoots& roots, const GYO::Engine::Math::Vec2 at) {
-    std::string hit = "nothing";
-    roots.ForEach([&](K::EntityId, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state, const GYO::Engine::Ui::UiBindings& bindings) {
+// What the cursor is on as world_ui hit tests a press: the topmost interactive element of each root that takes input
+// (world_ui gives a press to every such root), in that root's viewport's physical pixels; "nothing" when none is
+// there, or the cursor is not known. The bindings are this frame's as the scenes left them (world_ui laid the press
+// out before them: a list that changed in the frame may differ).
+std::string HitAt(WatchedRoots& roots, WatchedBindings& bindings, const std::optional<GYO::Engine::Math::Vec2>& cursor) {
+    if (!cursor) return "nothing (the cursor is not known)";
+    std::string hits;
+    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state) {
         if (!state.runtime || !root.acceptsInput) return;
-        const auto layout = state.runtime->EvaluateLayout(bindings.Table(), state.viewport);
+        const auto* values = bindings.Get<GYO::Engine::Ui::UiBindings>(id);
+        const auto layout = state.runtime->EvaluateLayout(values != nullptr ? values->Table() : GYO::Engine::Ui::UiBindingTable{}, state.viewport);
         if (!layout) return;
-        const GYO::Engine::Math::Vec2 point{at.x * state.scaleFactor - state.viewportPosition.x, at.y * state.scaleFactor - state.viewportPosition.y};
-        if (const auto* element = GYO::Engine::Ui::HitTestUiLayout(*layout, point, true)) hit = "'" + element->id + "' of canvas '" + root.canvas + "'";
+        const GYO::Engine::Math::Vec2 point{cursor->x * state.scaleFactor - state.viewportPosition.x,
+                                            cursor->y * state.scaleFactor - state.viewportPosition.y};
+        const auto* element = GYO::Engine::Ui::HitTestUiLayout(*layout, point, true);
+        if (element == nullptr) return;
+        hits += (hits.empty() ? "" : ", ") + std::string("'") + element->id + "' of canvas '" + root.canvas + "'";
     });
-    return hit;
+    return hits.empty() ? "nothing" : hits;
 }
 
 std::string Milliseconds(const std::int64_t nanoseconds) {
@@ -146,7 +160,7 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
                            K::MessageReader<I::InputEventsDropped> dropped,
                            K::MessageReader<I::MouseButtonInput> buttons, K::Res<I::ButtonInput<I::MouseButton>> pressed,
                            K::Res<I::CursorPosition> cursor, K::MessageReader<GYO::Engine::Ui::UiAction> actions,
-                           WatchedRoots roots, K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
+                           WatchedRoots roots, WatchedBindings bindings, K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
     const std::string at = " (" + watch.Read().scene + ")";
     if (time->delta > kSlowFrame) Log(GYO::Engine::Base::LogLevel::Info, "slow frame: " + Milliseconds(time->delta) + at);
     for (const W::WindowFocused* event : focus.Read()) {
@@ -165,25 +179,31 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
                            "," + std::to_string(static_cast<int>(button->position.y));
         if (down) {
             line += std::string(", just pressed ") + (pressed->JustPressed(I::MouseButton::Left) ? "yes" : "no") + ", cursor " +
-                    (cursor->position ? "known" : "unknown") + ", hits " + HitAt(roots, button->position);
+                    (cursor->position ? "known" : "unknown") + ", hits " + HitAt(roots, bindings, cursor->position);
         }
         Log(GYO::Engine::Base::LogLevel::Info, line + at);
     }
     for (const GYO::Engine::Ui::UiAction* action : actions.Read()) Log(GYO::Engine::Base::LogLevel::Info, "ui: " + action->action + at);
-    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state,
-                      const GYO::Engine::Ui::UiBindings&) {
+    // A root seen with its runtime last frame and not now (taken away, or its runtime dropped) is forgotten: when it
+    // comes back, its new runtime is told again.
+    std::vector<FrameWatch::Seen> now;
+    roots.ForEach([&](const K::EntityId id, const GYO::Engine::Ui::UiRoot& root, const GYO::Engine::Ui::UiRootState& state) {
         if (!state.runtime) return;
         const void* document = state.runtime->Document().get();
-        for (FrameWatch::Seen& seen : watch->laidOut) {
-            if (seen.root != id || seen.canvas != root.canvas) continue;
-            if (seen.document == document) return;
+        const auto seen = std::find_if(watch.Read().laidOut.begin(), watch.Read().laidOut.end(),
+                                       [&](const FrameWatch::Seen& s) { return s.root == id && s.canvas == root.canvas; });
+        if (seen == watch.Read().laidOut.end()) {
+            Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out" + at);
+        } else if (seen->document != document) {
             Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out again (a new document)" + at);
-            seen.document = document;
-            return;
         }
-        Log(GYO::Engine::Base::LogLevel::Info, "ui: canvas '" + root.canvas + "' laid out" + at);
-        watch->laidOut.push_back(FrameWatch::Seen{id, root.canvas, document});
+        now.push_back(FrameWatch::Seen{id, root.canvas, document});
     });
+    if (now.size() != watch.Read().laidOut.size() ||
+        !std::equal(now.begin(), now.end(), watch.Read().laidOut.begin(),
+                    [](const FrameWatch::Seen& a, const FrameWatch::Seen& b) { return a.root == b.root && a.canvas == b.canvas && a.document == b.document; })) {
+        watch->laidOut = std::move(now);
+    }
     for (const PC::GatewayCallRecord& call : gateway->TakeCalls()) {
         const std::string answer = call.status != 0 ? std::to_string(call.status) + (call.errorCode.empty() ? "" : " " + call.errorCode) : call.errorCode;
         Log(GYO::Engine::Base::LogLevel::Info, "gateway: " + call.method + " " + call.target + " (" + call.tag + (call.session ? ", its session" : "") +
@@ -191,6 +211,124 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
     }
     return {};
 }
+
+// --verbose: the main loop's heartbeat. The loop marks where it is (systems at the edges of each part of a frame:
+// the Frame World, the Render World up to the drawing, the drawing -- the GPU's acquire and present --, and the rest
+// between two frames: the window's event pump, a scene change, the wait); a watcher on its own thread tells when one
+// part lasts over a second -- while it lasts (a loop that never comes back leaves its line), and how long it lasted.
+// The parts are the product's marks: the pump and the wait are not told apart (they are sdl_window's own).
+struct Heartbeat final {
+    enum Part : int { Starting = 0, FrameWorld, RenderWorld, Drawing, BetweenFrames };
+    std::atomic<int> part{Starting};
+    std::atomic<std::int64_t> since{0};  // steady clock, nanoseconds
+
+    static std::int64_t Now() {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+    void Mark(const Part at) {
+        part.store(at);
+        since.store(Now());
+    }
+};
+struct HeartbeatRef final {
+    std::shared_ptr<Heartbeat> beat;
+};
+void HashValue(K::Hasher&, const HeartbeatRef&) {}
+
+const char* PartName(const int part) {
+    switch (part) {
+    case Heartbeat::FrameWorld: return "the Frame World";
+    case Heartbeat::RenderWorld: return "the Render World before the drawing";
+    case Heartbeat::Drawing: return "the drawing (the GPU's acquire and present)";
+    case Heartbeat::BetweenFrames: return "between frames (the window's event pump, a scene change, the wait)";
+    default: return "the start";
+    }
+}
+
+template <Heartbeat::Part At>
+K::SystemResult Beat(K::Res<HeartbeatRef> heartbeat) {
+    heartbeat->beat->Mark(At);
+    return {};
+}
+
+// The World's HeartbeatRef (once per World, before its beats).
+void AddHeartbeat(O::WorldSetup& setup, const std::shared_ptr<Heartbeat>& heartbeat) {
+    setup.Registrar().Resource<HeartbeatRef>({.name = "HeartbeatRef"});
+    setup.Prepare([heartbeat](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        w.SetResource(HeartbeatRef{heartbeat});
+        return {};
+    });
+}
+
+// A Beat<At> system at schedule/stage (before the systems named in before).
+template <Heartbeat::Part At>
+void AddBeat(O::WorldSetup& setup, std::string_view schedule, std::string_view stage, std::vector<std::string> before = {}) {
+    K::Registrar& r = setup.Registrar();
+    K::SystemOptions beat;
+    beat.name = std::string("Beat.") + std::to_string(static_cast<int>(At));
+    K::Mount mount;
+    mount.schedule = std::string(schedule);
+    mount.stage = std::string(stage);
+    mount.before = std::move(before);
+    beat.mounts.push_back(std::move(mount));
+    r.AddSystem<&Beat<At>>(std::move(beat));
+}
+
+// The watcher: every 200 ms; a part over a second is told at once, again every five seconds, and when it ends.
+class HeartbeatWatch final {
+public:
+    explicit HeartbeatWatch(std::shared_ptr<Heartbeat> beat) : beat_(std::move(beat)), thread_([this] { Run(); }) {}
+    ~HeartbeatWatch() {
+        {
+            const std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        wake_.notify_all();
+        thread_.join();
+    }
+    HeartbeatWatch(const HeartbeatWatch&) = delete;
+    HeartbeatWatch& operator=(const HeartbeatWatch&) = delete;
+
+private:
+    void Run() {
+        constexpr std::int64_t kStuck = 1'000'000'000;
+        constexpr std::int64_t kAgain = 5'000'000'000;
+        std::int64_t stuckSince = -1;  // the since of the part told as stuck
+        int stuckPart = Heartbeat::Starting;
+        std::int64_t told = 0;
+        std::unique_lock<std::mutex> lock(mutex_);
+        while (!wake_.wait_for(lock, std::chrono::milliseconds(200), [this] { return stop_; })) {
+            const int part = beat_->part.load();
+            const std::int64_t since = beat_->since.load();
+            const std::int64_t now = Heartbeat::Now();
+            if (stuckSince >= 0 && since != stuckSince) {
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: going again after ") + Seconds(since - stuckSince) + " in " +
+                                                           PartName(stuckPart));
+                stuckSince = -1;
+            }
+            if (since == 0 || now - since < kStuck) continue;
+            if (stuckSince != since) {
+                stuckSince = since;
+                stuckPart = part;
+                told = now;
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: no frame for ") + Seconds(now - since) + ", in " + PartName(part));
+            } else if (now - told >= kAgain) {
+                told = now;
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: still no frame after ") + Seconds(now - since) + ", in " + PartName(part));
+            }
+        }
+    }
+    static std::string Seconds(const std::int64_t nanoseconds) {
+        const std::int64_t tenths = nanoseconds / 100'000'000;
+        return std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " s";
+    }
+
+    std::shared_ptr<Heartbeat> beat_;
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    bool stop_ = false;
+    std::thread thread_;
+};
 
 std::string SceneName(const PC::Scene scene) {
     switch (scene) {
@@ -274,8 +412,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
             return {};
         });
     };
+    const auto heartbeat = std::make_shared<Heartbeat>();
     if (verbose) {
-        frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
+        frameWorld.build = [inner = std::move(frameWorld.build), heartbeat](O::WorldSetup& setup) {
             inner(setup);
             const auto* director = setup.ProductBuffer().Find<PC::SceneDirector>();
             if (director == nullptr) return;
@@ -290,6 +429,8 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                 return watch;
             };
             Log(GYO::Engine::Base::LogLevel::Info, "scene: " + SceneName(scene.scene));
+            AddHeartbeat(setup, heartbeat);
+            AddBeat<Heartbeat::FrameWorld>(setup, O::DefaultSchedules::frame, O::DefaultSchedules::first);
             setup.Registrar().Resource<FrameWatch>({.name = "FrameWatch"});
             setup.Registrar().AddSystem<&WatchFrame>(last("WatchFrame"));
             const bool game = scene.scene == PC::Scene::SoloGame || scene.scene == PC::Scene::MultiGame;
@@ -313,7 +454,17 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     description.worlds.push_back(PC::ClientSoloWorld(options));
     description.worlds.push_back(PC::ClientSimWorld(options));
     description.worlds.push_back(std::move(frameWorld));
-    description.worlds.push_back(PC::ClientRenderWorld());
+    O::WorldDescription renderWorld = PC::ClientRenderWorld();
+    if (verbose) {
+        renderWorld.build = [inner = std::move(renderWorld.build), heartbeat](O::WorldSetup& setup) {
+            inner(setup);
+            AddHeartbeat(setup, heartbeat);
+            AddBeat<Heartbeat::RenderWorld>(setup, GYO::Engine::RenderWorld::kExtractSchedule, GYO::Engine::RenderWorld::kExtractSchedule);
+            AddBeat<Heartbeat::Drawing>(setup, O::DefaultSchedules::frame, GYO::Engine::RenderWorld::kSubmitStage, {"GPUSubmit"});
+            AddBeat<Heartbeat::BetweenFrames>(setup, O::DefaultSchedules::frame, GYO::Engine::RenderWorld::kCleanupStage);
+        };
+    }
+    description.worlds.push_back(std::move(renderWorld));
     description.configure = [](O::ProductSetup& setup) { PC::ConfigureClient(setup); };
 
     W::WindowSettings window;
@@ -356,7 +507,10 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     }
     const auto* gpu = std::as_const(product->Buffer()).Find<GYO::Plugins::SDLGPU::SDLGPUStatus>();
     if (gpu != nullptr && verbose) Log(GYO::Engine::Base::LogLevel::Info, "drawing on the " + gpu->DriverName() + " GPU driver");
+    std::optional<HeartbeatWatch> watch;
+    if (verbose) watch.emplace(heartbeat);
     const O::RunnerExit exit = product->Run();
+    watch.reset();
     // The window closed: tell the Match now (the disconnect packets, sent at once), so it takes the player off
     // without waiting for the timeout (lightyear's netcode client sends its disconnect packets the same way).
     if (auto* service = product->Buffer().Find<N::NetService>(); service != nullptr && product->HasWorld("Sim")) {

@@ -1221,8 +1221,19 @@ public:
         const std::lock_guard<std::mutex> lock(mutex_);
         other_ = id;
     }
-    // Reads of room 3 are held (not answered) until released: a read in flight while the player acts.
-    void HoldRoomReads(const bool hold) { holdRoomReads_ = hold; }
+    // Calls of method to target are held (not answered) until released: a call in flight while the player acts.
+    // Held() counts the calls that came while held.
+    void Hold(std::string method, std::string target) {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        held_ = {std::move(method), std::move(target)};
+    }
+    void Release() {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        held_.reset();
+    }
+    [[nodiscard]] int Held() const { return heldCount_; }
+    // Reads of room 3 answer 503 busy (the Gateway's trouble) while on.
+    void FailRoomReads(const bool fail) { failRoomReads_ = fail; }
     // The room's match has ended: reads of the room answer 410 match_ended.
     void EndMatch() {
         const std::lock_guard<std::mutex> lock(mutex_);
@@ -1285,6 +1296,7 @@ private:
             return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[{\"userId\":9,\"ready\":true},{\"userId\":7,\"ready\":false}]}"};
         }
         if (method == "GET" && target == "/v1/rooms/3") {
+            if (failRoomReads_) return {503, "{\"error\":\"busy\"}"};
             if (ended_) return {410, "{\"error\":\"match_ended\"}"};
             return {200, RoomJson(true)};
         }
@@ -1318,8 +1330,13 @@ private:
                 const std::lock_guard<std::mutex> lock(mutex_);
                 seen_.push_back({method, target, Header(*request, "authorization"), Header(*request, "idempotency-key")});
             }
-            while (holdRoomReads_ && !stop_ && method == "GET" && target == "/v1/rooms/3") {
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            const auto holding = [&] {
+                const std::lock_guard<std::mutex> lock(mutex_);
+                return held_ && held_->first == method && held_->second == target;
+            };
+            if (holding()) {
+                ++heldCount_;
+                while (!stop_ && holding()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
             const auto [status, answer] = Route(method, target, body);
             (void)listener_.Send(Answer(status, answer));
@@ -1329,7 +1346,9 @@ private:
 
     GYO::Test::LoopbackListener listener_;
     std::atomic<bool> stop_{false};
-    std::atomic<bool> holdRoomReads_{false};
+    std::optional<std::pair<std::string, std::string>> held_;
+    std::atomic<int> heldCount_{0};
+    std::atomic<bool> failRoomReads_{false};
     std::thread thread_;
     std::mutex mutex_;
     std::vector<Seen> seen_;
@@ -1568,24 +1587,18 @@ TEST_CASE("client: gateway: a read of the room asked before the player got ready
     Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Room, .room = 3}, directory.Utf8(), gateway.Address());
     setup.Load();
     REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する" && Asked(gateway, "GET", "/v1/rooms/3"); }));
-    const auto reads = [&gateway] {
-        std::size_t n = 0;
-        for (const FakeGateway::Seen& seen : gateway.Requests()) n += seen.method == "GET" && seen.target == "/v1/rooms/3" ? 1 : 0;
-        return n;
-    };
     // A read of the room goes out and is held: the player gets ready meanwhile.
-    gateway.HoldRoomReads(true);
-    const std::size_t before = reads();
+    gateway.Hold("GET", "/v1/rooms/3");
     const auto begin = std::chrono::steady_clock::now();
-    while (reads() == before && std::chrono::steady_clock::now() - begin < std::chrono::seconds(5)) {
+    while (gateway.Held() == 0 && std::chrono::steady_clock::now() - begin < std::chrono::seconds(5)) {
         setup.Frame();
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    REQUIRE(reads() > before);
+    REQUIRE(gateway.Held() == 1);
     setup.Press(I::KeyCode::Enter);
     REQUIRE(setup.Binding("ready") == "準備をやめる");
     // The held read answers (the room as it was: not ready), then the ready call goes and answers.
-    gateway.HoldRoomReads(false);
+    gateway.Release();
     bool turnedBack = false;
     for (int i = 0; i < 200 && !Asked(gateway, "POST", "/v1/rooms/3/ready"); ++i) {
         setup.Frame();
@@ -1600,6 +1613,42 @@ TEST_CASE("client: gateway: a read of the room asked before the player got ready
     REQUIRE(Asked(gateway, "POST", "/v1/rooms/3/ready"));
     CHECK_MESSAGE(!turnedBack, "[pvp-room-ready-not-undone] the read asked before the ready turned the button back");
     CHECK(setup.Binding("ready") == "準備をやめる");
+}
+
+TEST_CASE("client: gateway: two presses of ready before an answer end as the second asks; a refusal of an action stays") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Room, .room = 3}, directory.Utf8(), gateway.Address());
+    setup.Load();
+    REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する" && Asked(gateway, "GET", "/v1/rooms/3"); }));
+    const auto run = [&setup](const int milliseconds, const std::function<void()>& each) {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(milliseconds);
+        while (std::chrono::steady_clock::now() < until) {
+            setup.Frame();
+            each();
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    };
+    // Ready, then not ready again, before the first answer: the first answer (ready) does not turn the button.
+    gateway.Hold("POST", "/v1/rooms/3/ready");
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE(FramesUntil(setup, [&] { return gateway.Held() == 1; }));
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE(setup.Binding("ready") == "準備する");
+    gateway.Release();
+    bool turned = false;
+    run(1000, [&] { turned = turned || setup.Binding("ready") != "準備する"; });
+    CHECK_MESSAGE(!turned, "[pvp-room-ready-last-asked] the first answer turned the button");
+    // The owner starts while not ready: the Gateway refuses (not_all_ready), and the word stays through the reads.
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE(FramesUntil(setup, [&] { return Asked(gateway, "POST", "/v1/rooms/3/start"); }));
+    run(1600, [] {});
+    CHECK_MESSAGE(setup.Binding("status") == "全員の準備がまだです", "[pvp-room-refusal-stays] " << setup.Binding("status"));
+    // A read that goes wrong after it is the newer word: it takes the line.
+    gateway.FailRoomReads(true);
+    run(1600, [] {});
+    CHECK_MESSAGE(setup.Binding("status") == "Gateway: busy", "[pvp-room-problem-shown] " << setup.Binding("status"));
 }
 
 TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, its answer, how long it waited and took") {
@@ -1689,7 +1738,7 @@ TEST_CASE("client: gateway: the error codes in the player's words; a call withou
     CHECK(text("room_not_found", 404) == "部屋がありません");
     CHECK(text("not_member", 403) == "この部屋のメンバーではありません");
     CHECK(text("match_ended", 410) == "対戦は終わりました");
-    CHECK(text("not_owner", 403) == "開始できるのは部屋を作った人だけです");
+    CHECK(text("not_owner", 403) == "開始できるのは部屋主だけです");
     CHECK(text("not_all_ready") == "全員の準備がまだです");
     CHECK(text("no_match_available", 503) == "対戦を始められませんでした。もう一度開始してください");
     CHECK(text("unknown_map", 400) == "Gateway がこのマップかモードを知りません");
@@ -2290,7 +2339,10 @@ TEST_CASE("network-room: A plays alone on the big map, then B joins A's room; A 
         std::optional<std::int64_t> readyCall;
         const auto sent = [&] {
             for (const PC::GatewayCallRecord& call : a.Frame().ResourceMut<PC::GatewayClient>()->TakeCalls()) {
-                if (call.tag == "ready" && !call.session && call.status == 200) readyCall = call.waited + call.took;
+                if (call.tag == "ready" && !call.session) {
+                    CHECK_MESSAGE(call.status == 200, "[pvp-room-ready-quick] round " << round << ": " << call.status << " " << call.errorCode);
+                    readyCall = call.waited + call.took;
+                }
             }
             return readyCall.has_value();
         };

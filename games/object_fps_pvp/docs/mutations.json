@@ -2415,6 +2415,45 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: a listed room is joined*",
    "expect": "pvp-room-start-owner"
+  },
+  {
+   "id": "pvp-room-ready-count-ignored",
+   "what": "the first ready answer ends the readiness asked, though a later ready call is still going",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "if (result->tag == \"ready\" && --room.readyCalls == 0) room.asked.reset();",
+   "replace": "if (result->tag == \"ready\") room.asked.reset();",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: two presses of ready*",
+   "expect": "pvp-room-ready-last-asked"
+  },
+  {
+   "id": "pvp-room-refusal-cleared",
+   "what": "the Gateway's refusal of an action is cleared by the next good read",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "        if (action) {\n            room.said = std::move(text);",
+   "replace": "        if (false) {\n            room.said = std::move(text);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: two presses of ready*",
+   "expect": "pvp-room-refusal-stays"
+  },
+  {
+   "id": "pvp-room-problem-hidden",
+   "what": "a read that goes wrong does not show while an older word on an action is there",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "            room.problem = std::move(text);\n            room.said.reset();\n",
+   "replace": "            room.problem = std::move(text);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: two presses of ready*",
+   "expect": "pvp-room-problem-shown"
   }
  ]
 }
