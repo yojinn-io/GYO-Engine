@@ -194,6 +194,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 資安（Client↔Gateway 加 TLS、網路宣告 Q7 加密與認證、PV19 rate limit 與防偽造）：使用者「現在不用考慮資安」 | 使用者 2026-11-25 | 上線前再議 |
 | Gateway 的 UDP 中繼（master 的結構）：使用者「先直連」，部署時要藏 Match 位址、在入口擋攻擊時再加（Q2 留了路） | 使用者 2026-11-25 | 之後再議 |
 | `DatagramAddress` 改名（約 25 個檔；TCP 的 `StreamSocket` 也流用它，名字只說了 datagram；會碰 net 的 `NetService`）——Gateway #339 設計審查 S5 交主會話，改名要排前面、同時立規則 | Gateway #339 | **已開卡**（使用者 2026-11-25「DatagramAddress 改名的卡先開」；`local_344c0611`，Opus／medium） |
+| **待使用者定**：`voxel_map_editor`（CLI：build-map、verify-map、inspect、inspect-map、import-boxes、import-gox、synthesize，#342 632437a6）要不要登記進 `config/tools.csv`——`build/cmake/GyoToolRegistry.cmake:242-245` 要求有登記工具時每個平台都選到一個 release 工具（`tests/common/cmake/ToolRegistryTests.cmake:111-113` 的 no_release 鎖住），gyo2 現在沒有 release 工具，登記就讓 CI 失敗。(a) 改規則：只有登記了 release 工具時才要求每個平台都有（卡建議）／(b) 把 voxel_map_editor 設成 release 可打包／(c) 先不登記、工具不進 CI | 大地圖卡 2026-11-25 | 使用者明早定 |
 | clip-from-world 在三處各自計算（大地圖 #342 S1／S2 設計審查 S-4）：收斂要改 camera 推導值的條文 | 大地圖 #342 | 下一個動 camera／render 的批（渲染管線線可一起看） |
 | `Mesh3d` 只吃 `Handle<ModelData>`，遊戲不能交「一個 region 一個網格」（大地圖審查 S-6）：照 `ImageRef` 的先例讓 `Mesh3d` 也接作者持有的網格，估 +3～5 h | 大地圖 #342 | 大地圖 S4 |
 | net 的觀察（Gateway #340 審查 N9）：`ServerHost::Respond` 先結束同一 endpoint 的舊連線再問 admission，帶過期 token 從同一 endpoint 重連會先斷掉自己還活著的連線 | Gateway #340 | **已開小卡**（`v8-arch-gyo2-big-map-s4-parallel`） |
