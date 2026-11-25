@@ -1,6 +1,6 @@
 # 渲染（`engine/modules/render`）與 `render_world`
 
-更新：2026-11-24（R2b 的 3D 段 `v8-arch-gyo2-sdl-r2b-3d`：第 8 節的 3D pass、合成、`mesh_render`、CPU 蒙皮，`RenderCommands::passes` 改成 2D／3D 的 variant，RD-8、RD-9）；2026-11-24（R2b 的 2D 段 `v8-arch-gyo2-sdl-r2b-2d`：`Pass2D::viewport`、extract schedule、第 7 節的 2D 管線、RD-5～RD-7；新頁是 SDL 線子批 R2a `v8-arch-gyo2-sdl-r2a`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.3、6.1、9.2、10.2 節的 R2a 列；Q7＝(a)（`-plugin-in-world-rule-removed`）、讀法 2（`-sdl-system-calls-via-adapter`）。後端 `sdl_gpu` 寫在 [SDL 的 Plugin 頁](sdl.zh-Hant.md)第 7 節。Design Invariants 照新 AGENTS §2.6：沒有推翻使用者決定的條文，不逐條核准（主會話 2026-11-24）。
+更新：2026-11-25（VSync `v8-arch-gyo2-window-mode-vsync`，[事前宣告](window-mode-vsync-declaration.zh-Hant.md)第 4.3 節：第 2 節末的 `Presentation`、第 5 節的登記、RD-10）；2026-11-24（R2b 的 3D 段 `v8-arch-gyo2-sdl-r2b-3d`：第 8 節的 3D pass、合成、`mesh_render`、CPU 蒙皮，`RenderCommands::passes` 改成 2D／3D 的 variant，RD-8、RD-9）；2026-11-24（R2b 的 2D 段 `v8-arch-gyo2-sdl-r2b-2d`：`Pass2D::viewport`、extract schedule、第 7 節的 2D 管線、RD-5～RD-7；新頁是 SDL 線子批 R2a `v8-arch-gyo2-sdl-r2a`）。由來：[SDL 總宣告](sdl-declaration.zh-Hant.md)修訂 21（使用者 2026-11-23 動工前核准「SDL 照建議核准」，HANDOFF `v8-arch-gyo2-sdl-declaration-approved`）第 3.3、6.1、9.2、10.2 節的 R2a 列；Q7＝(a)（`-plugin-in-world-rule-removed`）、讀法 2（`-sdl-system-calls-via-adapter`）。後端 `sdl_gpu` 寫在 [SDL 的 Plugin 頁](sdl.zh-Hant.md)第 7 節。Design Invariants 照新 AGENTS §2.6：沒有推翻使用者決定的條文，不逐條核准（主會話 2026-11-24）。
 
 Owner：架構。程式：`engine/modules/render/`（`GYO::Engine::Render`，target `GYO::Render`，函式庫）、`engine/modules/render_world/`（`GYO::Engine::RenderWorld`，target `GYO::RenderWorld`，登記單位 `RenderWorldModule`）；R2b 的 2D 段加 `world_render`、`camera_render`、`sprite_render`（第 7 節）。行為測試：`tests/common/render/`（ctest `render.data`、`render.world`、`render.pipeline2d`、`render.extract`）、`plugins/sdl_gpu/tests/`（`sdl_gpu.pass2d` 等）。
 
@@ -43,6 +43,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 - **白貼圖**：`TextureId{}`（0）一直都在、不建也不放，畫出來就是頂點色（不貼圖的純色形狀，Object_Connect 盤點的 R2a 項）。
 - **R2a 不帶的欄位**：總宣告 P27 列的 shader id、實例數——沒有消費者（2D pass 只有一組內建 shader、沒有實例），R2b 的 3D 段（3D、自訂 shader）有需要時加。視區是 R2b 的 2D 段加的 `viewport`；相機不進 `RenderCommands`（2D 管線在 CPU 把頂點換成 `viewport` 的像素，第 7.4 節）。
 - **幀時間的預算**（總宣告第 10.2 節 R2a 列「幀時間的預算先宣告」）：Object_Connect 大小的一幀——1280×720、一個 pass、2,000 個各自一次 draw 的半透明矩形——經 `sdl_gpu` 的 `Capture`（套用、上傳、畫、讀回並等 GPU，比畫到視窗多了讀回）**8 ms 以內**（60 Hz 一幀的一半）。量法：`sdl_gpu.budget`（label `gpu`，只印、不判：GPU 與 driver 決定它，Lavapipe 比任何玩家的 GPU 都慢）。本機（macOS Intel、Metal、不開 SDL 的驗證）2026-11-24 量三次：4.89、4.97、5.25 ms。超過時看 RC-RD 2。
+- **呈現方式 `Presentation`**（使用者 2026-11-25「VSync 要」）：渲染 World 的 Resource（`render_world` 登記，新 World 放預設；不在 `RenderCommands` 裡，`Cleanup` 不清它）——主目標（目標 0＝視窗）的畫面怎麼送上螢幕。欄位 `presentMode`：`AutoVsync`（預設；等螢幕更新、不撕裂）、`AutoNoVsync`（不等：立即，不支援時 mailbox，再不行退回 `AutoVsync`）——Bevy 的 `PresentMode` 裡會自己退回的兩個值（`bevy_window/src/window.rs:1229`；欄位 `Window::present_mode` 在 `:166`；退回鏈 `bevy_render/src/view/window/mod.rs:882-911`）。遊戲中改它即時生效：後端（`sdl_gpu`）每幀讀、變了才改 swapchain、實際取到的模式由後端回報（[SDL 的 Plugin 頁](sdl.zh-Hant.md)第 7 節）。**新 World** 是預設值（替換時 VSync 回到開）：要保留就照 O-7 帶過去，或由遊戲的設定重寫——Bevy 的 `present_mode` 在 `Window` 實體上、換場景不重設，GYO 的渲染 World 被替換時資料跟著換（設計審查 S1 選 (a)）。**偏離 Bevy**：Bevy 的 `present_mode` 在 `Window` 上、`bevy_render` 抽出視窗來讀；GYO 的視窗不是實體、`window` 在列 `sdl_window` 的 World，渲染 World 沒有視窗（[window 頁](window.zh-Hant.md)偏離表第 1 列），`sdl_gpu` 只讀渲染 World（SDL-5）；present mode 是 swapchain 的性質、swapchain 歸渲染這一側，所以放渲染 World。衝突點：設定放在遊戲 World 的雙 World 遊戲，要在渲染 World 的 `Extract` 用 `ExtractRes<自己的設定>` 寫 `Presentation`（一個 System）；單一 World 直接寫。膠水量：一個 Resource。`Fifo`、`Immediate`、`Mailbox` 的指定值沒有消費者，不帶（加值不破壞相容）。
 - **契約**：draw 的索引範圍超出 pass 的 `indices` 是 Programmer Error（後端斷言）；索引值指到 pass 外的頂點不檢查（每個索引都查是逐值的守衛，Bevy／wgpu 也不查；由寫的一方保證）。
 
 ## 3. `RenderTextures`：CPU 像素的貼圖（id 由資料這一側配）
@@ -66,7 +67,7 @@ GYO::Render、GYO::RenderWorld、GYO::SDL ◄── GYO::SDLGPU（plugins/sdl_gp
 
 照 Bevy 的 RenderApp（`bevy_render/src/lib.rs`）：
 
-- **登記**：`render` 的 `RenderCommands`、`RenderTextures`（新 World 是空的）。雜湊函式什麼都不寫（渲染 World 不是被判定的狀態）。
+- **登記**：`render` 的 `RenderCommands`、`RenderTextures`（新 World 是空的）、`Presentation`（新 World 是預設 `AutoVsync`；帶過來的值留著）。雜湊函式什麼都不寫（渲染 World 不是被判定的狀態）。
 - **stage**：在 `RenderWorldOptions::schedule`（預設 `Main`）的 `after`（預設 `Last`）之後插兩個 stage：`Submit`（後端畫、送出；Bevy 的 `RenderSystems::Render`，`bevy_render/src/lib.rs:231`）、`Cleanup`（`ClearRenderFrame` 清掉這一幀的 pass 與貼圖要求；Bevy 的 `RenderSystems::Cleanup`，`:233`）。寫 `RenderCommands` 的 System 放在 `Submit` 之前的任何 stage。
 - **清在幀尾、不在幀頭**：Bevy 也是在 `Cleanup` 清。若在 `First` 清，開局清單或準備函式提的貼圖要求會在第一個 `Submit` 前被清掉。
 - **extract schedule**（R2b 的 2D 段加）：World 的描述有 `extractFrom` 時，`render_world` 宣告 extract schedule `Extract`（一個同名的 stage）、插在 `RenderWorldOptions::schedule`（預設 `Main`）之前（總宣告第 6.1 節第 3 點；Bevy 的 `ExtractSchedule` 由 `SubApp::extract` 在渲染的 schedule 之前跑，`bevy_render/src/lib.rs:438`）。`camera_render`、`sprite_render`（之後 K 的 draw list）把 extract 的 System 掛在這裡。**沒有 `extractFrom` 的 World 不宣告**：自己的 System 寫 `RenderCommands` 的 World（R2a 的測試、Object_Connect 移植的單一 World）照舊，不會因為帶了 `render_world` 就變成 O-E9。判斷靠編排層新給的 `WorldSetup::ExtractFrom()`（O-12 的描述欄位，讓單位看得到；`orchestration.extract` 的 `[or-ex-setup-*]`）。
@@ -220,6 +221,8 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 
 - **RD-8 3D 的先後**（R2b 的 3D 段，第 8.3 節）：一個 3D 相機一個 `Pass3D`，深度從清空開始、顏色不清；先畫不透明、測深度的（近到遠），再畫半透明、測深度的（遠到近），最後畫不測深度的（遠到近）；同距離照來源實體；只畫 `RenderLayers` 有交集的。守衛：`render.pipeline3d`（`[p3-*]`）、`sdl_gpu.pass3d`（`[g3-*]`，Lavapipe 上的像素）。
 - **RD-9 模型網格以模型網格為鍵保留**（第 8.3 節）：沒有蒙皮的模型網格第一次畫時建成 `RenderMeshes` 的網格、以（素材 id、life、網格索引）為鍵；同一個素材的新 life 放掉舊的；蒙皮的網格每幀在 CPU 算、放在 pass 自己的頂點。守衛：`render.pipeline3d`（`[p3-mesh-*]`、`[p3-skin-*]`、`[p3-place-*]`）、`render.extract`（`[re-3d-*]`）。
+
+- **RD-10 呈現方式是渲染 World 的資料、`Cleanup` 不清**（第 2 節末）：`render_world` 登記 `Presentation`、新 World 放預設（帶過去的值留著，O-7）；遊戲改的值留到它再改；後端讀它、不寫它，變了才套用。守衛：`render.world`（`[rw-present-registered]`、`[rw-present-default]`、`[rw-present-kept]`）、`sdl_gpu.frames`（`[gp-present-*]`：含 `[gp-present-only-on-change]`、`[gp-present-new-world]`）；突變 `rw-present-not-put`、`gp-present-every-frame`。
 
 ## Replacement Criteria
 

@@ -24,12 +24,24 @@
 
 namespace GYO::Engine::Window {
 
+// How the window lies on the screen (Bevy's WindowMode, bevy_window/src/window.rs:1348, without the exclusive
+// Fullscreen: no display mode is changed).
+enum class WindowMode : std::uint8_t {
+    // A window of its own size, with the OS's frame.
+    Windowed = 0,
+    // No frame, the whole screen the window is on, at the screen's own size (Bevy's BorderlessFullscreen with
+    // MonitorSelection::Current).
+    BorderlessFullscreen,
+};
+
 // How the window is made (ProductDescription::options; read by the backend in its Configure; Bevy's
 // WindowPlugin::primary_window). None given: these defaults.
 struct WindowSettings final {
     std::string title = "GYO";
-    // The size asked for, in logical pixels.
+    // The size asked for, in logical pixels; in BorderlessFullscreen the size it takes when it becomes Windowed.
     Math::Vec2i size{1280, 720};
+    // How it lies on the screen when made (Bevy's Window::mode).
+    WindowMode mode = WindowMode::Windowed;
     // false: the player cannot resize it (Bevy's Window::resizable).
     bool resizable = true;
     // Made hidden (tests on a headless machine).
@@ -82,6 +94,13 @@ struct WindowFocused final {
     Time::TimePoint time{};
 };
 
+// The window entered or left fullscreen, whoever asked (the game's SetWindowMode, or the player: macOS's green button).
+// The size it got comes as a WindowResized.
+struct WindowModeChanged final {
+    WindowMode mode = WindowMode::Windowed;
+    Time::TimePoint time{};
+};
+
 // Who asked to close.
 enum class CloseSource : std::uint8_t {
     // The window's close button (or the OS's close shortcut for the window).
@@ -117,9 +136,16 @@ struct WarpCursor final {
 };
 
 // Sets the window's size, in logical pixels (Bevy's Window::resolution set by the game). A Message, not a field of
-// WindowRequest: the player resizes too, and a standing request would fight the player every frame.
+// WindowRequest: the player resizes too, and a standing request would fight the player every frame. In
+// BorderlessFullscreen it sets the size the window takes when it becomes Windowed (the fullscreen picture stays).
 struct ResizeWindow final {
     Math::Vec2i size{};
+};
+
+// Puts the window in a mode (Bevy's Window::mode set by the game). A Message for the reason ResizeWindow is one: the
+// player changes the mode too. Leaving fullscreen gives the window back its Windowed size.
+struct SetWindowMode final {
+    WindowMode mode = WindowMode::Windowed;
 };
 
 // Puts text on the system clipboard (ImGui's copy).
@@ -133,6 +159,8 @@ struct WindowState final {
     Math::Vec2i physicalSize{};
     float scaleFactor = 1.0F;
     bool focused = false;
+    // From WindowModeChanged.
+    WindowMode mode = WindowMode::Windowed;
     // A WindowResized has arrived since the World was made (the size is known).
     bool known = false;
 
@@ -166,10 +194,12 @@ struct WindowRequest final {
 // ---- Hashing: nothing (see the top of the file).
 inline void HashValue(Kernel::Hasher&, const WindowResized&) {}
 inline void HashValue(Kernel::Hasher&, const WindowFocused&) {}
+inline void HashValue(Kernel::Hasher&, const WindowModeChanged&) {}
 inline void HashValue(Kernel::Hasher&, const WindowCloseRequested&) {}
 inline void HashValue(Kernel::Hasher&, const ClipboardChanged&) {}
 inline void HashValue(Kernel::Hasher&, const WarpCursor&) {}
 inline void HashValue(Kernel::Hasher&, const ResizeWindow&) {}
+inline void HashValue(Kernel::Hasher&, const SetWindowMode&) {}
 inline void HashValue(Kernel::Hasher&, const CopyToClipboard&) {}
 inline void HashValue(Kernel::Hasher&, const WindowState&) {}
 inline void HashValue(Kernel::Hasher&, const Clipboard&) {}

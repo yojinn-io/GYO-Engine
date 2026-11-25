@@ -80,10 +80,13 @@ TEST_CASE("clock: a client at tick 0 jumps to the Match at 5000 on connecting, t
     for (int i = 0; i < 240; ++i) game.Frame();
     double worst = 0.0;
     std::int64_t leadMin = 1 << 20, leadMax = -(1 << 20);
+    double remoteWorst = 0.0;  // the remote estimate against the Match's tick
     const std::uint64_t jumpsSettled = game.Sync().jumps;
     for (int i = 0; i < 300; ++i) {
         game.Frame();
         worst = std::max(worst, std::abs(game.Sync().lastError));
+        // (SyncClock runs at the client's Last stage; the Match ran this frame before it.)
+        remoteWorst = std::max(remoteWorst, std::abs(game.Sync().remoteTick - static_cast<double>(game.ServerTick())));
         const auto lead = static_cast<std::int64_t>(game.ClientTick()) - static_cast<std::int64_t>(game.ServerTick());
         leadMin = std::min(leadMin, lead);
         leadMax = std::max(leadMax, lead);
@@ -94,6 +97,10 @@ TEST_CASE("clock: a client at tick 0 jumps to the Match at 5000 on connecting, t
     CHECK_MESSAGE(worst <= 2.0, "once settled the client stays within 2 ticks of its sync target");
     CHECK_MESSAGE(game.Sync().jumps == jumpsSettled, "once settled the clock follows by speed, without jumping");
     CHECK(leadMin > 0);
+    CHECK_MESSAGE(remoteWorst <= 2.0, "[nt-clock-remote] the remote estimate stays within 2 ticks of the Match's tick: " << remoteWorst);
+    CHECK_MESSAGE(game.Sync().jitterTicks > 0.0, "[nt-clock-remote] the jitter is kept (a third of the datagrams come late)");
+    // Three steps each way plus the late third: the RTT is six ticks and a little more.
+    CHECK_MESSAGE((game.Sync().rttTicks >= 5.0 && game.Sync().rttTicks <= 10.0), "[nt-clock-remote] the RTT in ticks: " << game.Sync().rttTicks);
 }
 
 TEST_CASE("clock: when the latency grows the speed goes up, and back to 1 once caught up") {

@@ -25,7 +25,7 @@ using InputItem = std::variant<Engine::Input::KeyboardInput, Engine::Input::Keyb
                                Engine::Input::CursorMoved, Engine::Input::MouseMotion, Engine::Input::CursorEntered,
                                Engine::Input::CursorLeft, Engine::Input::MouseWheel, Engine::Input::TextComposition,
                                Engine::Input::TextCommitted>;
-using WindowItem = std::variant<Engine::Window::WindowResized, Engine::Window::WindowFocused,
+using WindowItem = std::variant<Engine::Window::WindowResized, Engine::Window::WindowFocused, Engine::Window::WindowModeChanged,
                                 Engine::Window::WindowCloseRequested, Engine::Window::ClipboardChanged>;
 
 // The Messages one OS event becomes (0, 1 or 2 per the mapping table, sdl.zh-Hant.md SDL-7).
