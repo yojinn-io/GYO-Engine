@@ -204,9 +204,31 @@ private:
 };
 
 // The Sim World: the controls the Frame World sent, until a step takes them (WriteStepInput).
+//
+// The controls go stale when the Frame World has sent none for a while (it is held: a dragged window, a long load).
+// Until then the steps keep the last held keys and view; past it the movement is neutral and the presses are dropped,
+// the view and the crouch stay (the user's decision 2026-11-25, after master's D30). The limit follows how often the
+// Frame World sends: the longest of the recent intervals between two arrivals times kStaleIntervals, and at least
+// kStaleMinimum, so one long frame does not stop the player midway. An interval past the limit was a stop, not the
+// Frame World's pace, and is not counted. The time is the Sim World's RealTime.
 struct SimControls final {
     present::StepInput pending;
+    std::optional<WT::Nanoseconds> lastArrival;  // when controls last came (none yet: stale)
+    std::vector<WT::Nanoseconds> recent;         // the recent intervals between two arrivals, oldest first
+    bool stale = true;
 };
+
+// The game's own numbers (not master's): 200 ms is four frames at 20 frames a second (taken here as the lowest rate
+// the Client plays at); four intervals of the Frame World's own pace; sixteen of them make "recent".
+constexpr WT::Nanoseconds kStaleMinimum = 200'000'000;
+constexpr WT::Nanoseconds kStaleIntervals = 4;
+constexpr std::size_t kRecentIntervals = 16;
+
+WT::Nanoseconds StaleLimit(const SimControls& state) {
+    const WT::Nanoseconds longest = state.recent.empty() ? 0 : *std::max_element(state.recent.begin(), state.recent.end());
+    return std::max(kStaleMinimum, kStaleIntervals * longest);
+}
+
 void HashValue(K::Hasher&, const SimControls&) {}
 
 // The Frame World: the players it shows (the Sim World's, by their ids) and the last picture applied.
@@ -475,9 +497,15 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
 K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
                                K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
     if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    // The held keys and the view as last sent; the presses go to this step only.
-    const present::StepInput step = state.Read().pending;
+    // The held keys and the view as last sent; the presses go to this step only. Stale controls (SimControls): no
+    // movement, no press; the view and the crouch stay.
+    present::StepInput step = state.Read().pending;
     state->pending.jump = state->pending.fire = state->pending.reload = false;
+    if (state.Read().stale) {
+        step.forward = step.right = 0.0F;
+        step.present = false;
+        step.jump = step.fire = step.reload = false;
+    }
     PW::PlayerInput input;
     input.forward = step.forward;
     input.right = step.right;
@@ -951,7 +979,21 @@ void Mount(K::SystemOptions& options, const std::string_view schedule, const std
 
 // ---- The Sim World's exchange: in takes the controls, out puts the picture.
 void TakeControls(ClientExchange& exchange, K::World& world) {
-    if (const auto controls = exchange.TakeControls()) ClientExchange::Merge(world.ResourceMut<SimControls>()->pending, *controls);
+    SimControls& state = *world.ResourceMut<SimControls>();
+    const auto* real = world.Resource<WT::RealTime>();
+    const WT::Nanoseconds now = real != nullptr ? real->elapsed : 0;
+    if (const auto controls = exchange.TakeControls()) {
+        if (state.lastArrival) {
+            const WT::Nanoseconds interval = now - *state.lastArrival;
+            if (interval <= StaleLimit(state)) {
+                state.recent.push_back(interval);
+                if (state.recent.size() > kRecentIntervals) state.recent.erase(state.recent.begin());
+            }
+        }
+        state.lastArrival = now;
+        ClientExchange::Merge(state.pending, *controls);
+    }
+    state.stale = !state.lastArrival || now - *state.lastArrival > StaleLimit(state);
 }
 
 WorldSnapshot SnapshotOf(K::World& world) {

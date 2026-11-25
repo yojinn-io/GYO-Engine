@@ -443,6 +443,32 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the Frame World follows*",
    "expect": "pvp-frame-arena"
+  },
+  {
+   "id": "pvp-stale-ignored",
+   "what": "stale controls still move the player: a held window keeps the held W walking",
+   "guards": [
+    "live-frame-sim-thread declaration 4.3 item 7 (the user's decision 2026-11-25, after master's D30)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (state.Read().stale) {\n        step.forward = step.right = 0.0F;\n",
+   "replace": "    if (false) {\n        step.forward = step.right = 0.0F;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: J5 while the main thread stops*",
+   "expect": "pvp-sim-thread-stale\\]"
+  },
+  {
+   "id": "pvp-stale-limit-zero",
+   "what": "the stale limit is zero: the controls go stale as soon as a round brings none",
+   "guards": [
+    "live-frame-sim-thread declaration 4.3 item 7 (the user's decision 2026-11-25, after master's D30)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    return std::max(kStaleMinimum, kStaleIntervals * longest);\n",
+   "replace": "    return longest * 0;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: J5 while the main thread stops*",
+   "expect": "pvp-sim-thread-stale-limit"
   }
  ]
 }

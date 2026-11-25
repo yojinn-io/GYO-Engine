@@ -365,9 +365,12 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
 }
 
 // live-frame-sim-thread declaration J5 (R5): the program lends the Sim World to a thread of its own; here the test's
-// "Sim thread" runs its rounds with the Match and the MemoryLink (whose ends are used from one thread), while the main
-// thread runs the Frame World's frames and stops 250 ms between two of them, as when the OS holds the window.
-TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World steps on and the Match gets its input every step") {
+// "Sim thread" runs its rounds with the Match and the MemoryLink (whose ends are used from one thread), one round a
+// step in real time, while the main thread runs the Frame World's frames and stops 600 ms between two of them, as
+// when the OS holds the window. The stop is longer than J5's 250 ms so it also passes the controls' stale limit
+// (SimControls: 200 ms here): first the held W goes on, then the movement is neutral and the view stays (the
+// user's decision 2026-11-25, after master's D30); the Match gets an input every step all the while.
+TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, the Match gets its input every step, and stale controls stop the movement") {
     Setup setup;
     setup.other.reset();
     setup.Frames(120);
@@ -383,7 +386,7 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
     setup.Next().buttons.push_back(click);
     setup.Frame();
     REQUIRE(PC::StatusOf(setup.Client()).captured);
-    // W held from here on: every step's input walks forward.
+    // W held from here on: every step's input walks forward while the controls are fresh.
     setup.Next().keys.push_back(Key(I::KeyCode::W));
     setup.Frames(2);
 
@@ -395,12 +398,16 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
         std::uint64_t simTick = 0;
         std::uint64_t consumed = 0, missing = 0;  // the Match's counts of this Client's inputs
         float forward = 0.0F;                     // the input the Match gave the own player this step
+        std::uint8_t present = 0;
+        float yaw = 0.0F;                         // the own player's view at the Match
     };
     std::vector<Round> rounds;
     std::atomic<int> phase{0};
     std::atomic<bool> stop{false};
     std::string simFailure;
     std::thread simThread([&] {
+        // A round a step of real time (the Sim World's time is the test's step a round: ManualDelta).
+        auto next = std::chrono::steady_clock::now();
         while (!stop.load()) {
             Round round;
             round.phase = phase.load();
@@ -420,10 +427,15 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
                     round.missing = inputs->counts.missing;
                 }
             }
-            if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) round.forward = input->forward;
+            if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) {
+                round.forward = input->forward;
+                round.present = input->present;
+            }
+            if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.yaw = body->yaw;
             round.simTick = TickOf(lease.World());
             rounds.push_back(round);
-            std::this_thread::yield();
+            next += std::chrono::nanoseconds(kStep);
+            std::this_thread::sleep_until(next);
         }
     });
     std::string mainFailure;
@@ -436,9 +448,9 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
     };
     frames(20);
     phase = 1;
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
     phase = 2;
-    frames(20);
+    frames(40);
     stop = true;
     simThread.join();
     setup.client->Return(std::move(lease));
@@ -457,11 +469,26 @@ TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World
     CHECK_MESSAGE(last.consumed - first.consumed == stopped.size() - 1,
                   "[pvp-sim-thread-input] the Match took this Client's input every step: " << last.consumed - first.consumed);
     CHECK_MESSAGE(last.missing == first.missing, "[pvp-sim-thread-input] no step without its input: " << last.missing - first.missing);
-    std::size_t walking = 0;
-    for (const Round& round : stopped) walking += round.forward > 0.0F ? 1 : 0;
-    CHECK_MESSAGE(walking == stopped.size(), "[pvp-sim-thread-input] the held W in every step's input at the Match: " << walking << "/" << stopped.size());
-    // After the stop the Frame World shows the newest picture, not the ones it missed.
+    // Fresh at the stop's start: the held W goes on. Stale by its end (600 ms past the last controls): no movement,
+    // and once stale it stays so; the view stays where it was.
+    CHECK_MESSAGE(first.forward > 0.0F, "[pvp-sim-thread-input] the held W goes on at the stop's start");
+    CHECK_MESSAGE((last.forward == 0.0F && last.present == 0), "[pvp-sim-thread-stale] stale controls move nothing: forward " << last.forward);
+    std::size_t neutralAt = stopped.size();
+    for (std::size_t i = 0; i < stopped.size(); ++i) {
+        if (stopped[i].forward == 0.0F && neutralAt == stopped.size()) neutralAt = i;
+        if (neutralAt < i) CHECK_MESSAGE(stopped[i].forward == 0.0F, "[pvp-sim-thread-stale] W again at round " << i << " of the stop");
+    }
+    // The limit is 200 ms of the Sim World's time, 12.8 of its steps after the last controls (which came at most a
+    // round or so before the stop), and the Match applies the input of a tick the Client sent a few steps ahead (its
+    // prediction's lead): neither at once nor much later.
+    CHECK_MESSAGE((neutralAt >= 8 && neutralAt <= 20), "[pvp-sim-thread-stale-limit] neutral from round " << neutralAt << " of the stop");
+    CHECK_MESSAGE(last.yaw == doctest::Approx(first.yaw), "[pvp-sim-thread-stale] the view stays");
+    // After the stop the Frame World shows the newest picture, not the ones it missed; its controls come again and the
+    // held W with them.
     CHECK_MESSAGE(frameTick > last.simTick, "[pvp-sim-thread-newest] the Frame World's tick " << frameTick << " after the stop's last " << last.simTick);
+    bool walksAgain = false;
+    for (const Round& round : rounds) walksAgain = walksAgain || (round.phase == 2 && round.forward > 0.0F);
+    CHECK_MESSAGE(walksAgain, "[pvp-sim-thread-stale] fresh controls walk again after the stop");
     // The Sim World is back on the main thread; still connected, still playing.
     setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
     setup.Frames(10);

@@ -35,7 +35,7 @@ Owner：產品（`games/object_fps_pvp`）。PvP 移植實作卡（GYO2 主會�
 - 既有的 client 測試沒有因為這一幀改等待的幀數（J6：全部原樣通過，含一步四幀的 4／4 點擊）。
 - Escape／失去焦點不再取消已經交出的按下（審查 N1）：以前按下留在 `Controls` 裡直到某一步取走，之間按 Escape 會把它清掉；現在每幀結束就交進交換物件，`Release` 管不到，那一下照樣送出。
 - 只留最新快照（審查 N7，和以前「一幀跑多步」同一類，拖窗或低 fps 時更常見）：兩次套用之間若有兩槍只響一聲；重生後 Sim 若已用舊的視角跑了下一步，「面向出生點」可能失效。
-- Frame 停住時，Sim 一直沿用最後一份按住的鍵與視角（宣告的寫法）：拖窗數秒時按著 W 的玩家會一直跑。要不要「停住超過某個時間就清成中立」是玩法的決定，交使用者。
+- Frame 停住時，Sim 沿用最後一份按住的鍵與視角，到期限為止；過了期限移動歸零、按下丟掉、視角與蹲姿保留（使用者 2026-11-25 定，見下「使用者定的兩項」）。
 
 ## 驗證
 
@@ -63,3 +63,14 @@ blocker 0、should 3、nit 7。審查者自己做了兩個臨時突變（都存�
 - 交主會話／使用者：
   1. 宣告第 4.3 節「遊戲」第 6 項的偏離（Frame 登記五個元件當複本，和第 2 項原寫的「Frame 裡沒有 PvP 的元件」不同），作者實作時補註記、沒有事先問。
   2. Frame 停住時 Sim 沿用最後一份按住的鍵與視角（拖窗數秒、按著 W 會一直跑）。參考：master 的 D30 是「意圖超過一個依最近發佈間隔算的期限就算過期：移動歸零、視角保留、按下丟掉」（`apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp:60-66`）；只查了做法，沒有搬常數。
+
+## 使用者定的兩項（2026-11-25）
+
+1. 宣告第 4.3 節「遊戲」第 6 項的偏離（Frame 登記五個元件當複本）：「第6項接受」。
+2. Frame 停住時的操作：「第2項照master D30的做法改」。
+   - 做法（`SimControls`、`TakeControls`、`WriteStepInput`）：Sim 的「進」記下控制送達的時刻（Sim 的 `RealTime.elapsed`）與最近 16 次送達間隔；`now - 上次送達 > 期限` 就算過期。期限＝最近間隔中最長的 × 4，至少 200 ms；超過期限的間隔是停住，不算進最近。過期時 `WriteStepInput` 送出 `forward = right = 0`、`present = false`、按下 false；`yaw`、`pitch`、`crouch` 保留（`present = false` 時 Match 的 `StepBody` 本來就保留視角與蹲姿）。
+   - 常數是遊戲自己的（200 ms＝20 fps 的四幀、4 倍、16 次），沒有照搬 master；只讀了 D30 的做法（`ClientSimulationLoop::StaleLimitSeconds`、`IntentStale`）。
+   - 和 master 的不同：master 的意圖帶取樣時刻，送到時已過期的按下會被丟掉；這裡的送達時刻就是取樣的時刻（每幀的「出」），按下總是跟著新的控制來，沒有「過期的按下」這種情況。
+   - J5 改寫：模擬執行緒改成照真實時間一步一輪（`sleep_until`），停住 600 ms（超過 J5 的 250 ms 與期限）。判定加上：停住一開始按住的 W 照送、停住末尾移動歸零且 `present = 0`、一旦歸零就不再有 W、視角不變、歸零的時刻在停住後第 8～20 輪（200 ms＝12.8 步，加上 Client 的預測超前；本機連跑五次都是第 15～16 輪）、停住後控制再來就又走。
+   - 突變：`pvp-stale-ignored`（過期照樣走）、`pvp-stale-limit-zero`（期限為 0）與相關的既有 4 個（`pvp-press-lost`、`pvp-exchange-press-not-accumulated`、`pvp-step-press-repeats`、`pvp-exchange-add-overwrites`）共 6/6 killed。
+   - **沒測**：「超過期限的間隔不算進最近」（要第二次停住才看得出來）。
