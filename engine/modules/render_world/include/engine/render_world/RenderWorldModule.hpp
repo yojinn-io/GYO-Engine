@@ -4,7 +4,8 @@
 // Invariants RD-2, RD-3): the core of a World that draws, Bevy's RenderApp (bevy_render/src/lib.rs). It joins the
 // World that draws (renderer side; default=no) and:
 //
-// - registers render's RenderCommands, RenderTextures, RenderMeshes and RenderImages (empty in a new World);
+// - registers render's RenderCommands, RenderTextures, RenderMeshes and RenderImages (empty in a new World) and
+//   Presentation (the default in a new World; a value carried over stays);
 // - inserts two stages after the frame schedule's last stage: kSubmitStage, where a backend draws and shows the
 //   frame (sdl_gpu's GPUSubmit), and kCleanupStage, where ClearRenderFrame empties the passes and the asks for the next frame (Bevy's
 //   RenderSystems::Render and Cleanup). A producer writes RenderCommands and asks for textures anywhere before

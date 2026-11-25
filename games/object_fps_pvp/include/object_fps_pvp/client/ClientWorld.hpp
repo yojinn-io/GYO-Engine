@@ -65,6 +65,10 @@ struct ViewmodelDefinition final {
     float verticalFov = 0.96F;
     float nearClip = 0.01F;
     float farClip = 5.0F;
+    // The shot's kick (its "recoil": kick_degrees, recovery_per_second): the weapon turns up about the viewmodel
+    // camera's X axis by kick x exp(-recovery x seconds since the shot). The view and the aim do not move.
+    float recoilKickRadians = 0.0F;
+    float recoilRecoveryPerSecond = 0.0F;
     std::vector<std::string> materialImages;                   // per material: the image's asset id (empty: none)
     float magazineInSeconds = 0.0F;                            // the event's time in the Reload clip
     std::string reloadSound;                                   // its sound's asset id
@@ -75,9 +79,13 @@ struct ViewmodelDefinition final {
     std::string heldImage;
 };
 
-// Where the first-person weapon sits under the viewmodel camera (its fixed local Transform): the anchor node of the
-// idle pose's start at the offset, turned by the rotation.
-[[nodiscard]] GYO::Engine::Transform::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel);
+// Where the first-person weapon sits under the viewmodel camera (its local Transform): the anchor node of the idle
+// pose's start at the offset, turned by the rotation, and by recoilRadians up about the camera's X axis (the anchor
+// stays where it is).
+[[nodiscard]] GYO::Engine::Transform::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel, float recoilRadians = 0.0F);
+
+// The recoil seconds after a shot (ViewmodelDefinition's recoil), in radians.
+[[nodiscard]] float RecoilRadians(const ViewmodelDefinition& viewmodel, double seconds);
 
 // What the Client reads before it starts, besides the game's content: the sound and hit feedback settings, the
 // arenas' palette pictures (by arena index) and the first-person weapon.
@@ -120,6 +128,10 @@ struct ClientView final {
     std::uint64_t tick = 0;                         // the Sim World's step
     std::uint64_t stepNanoseconds = 0;              // its length
     std::optional<std::uint64_t> latestConfirmed;   // the newest step the Match confirmed (NetReplicaState)
+    bool synced = false;                            // the clock sync has an estimate of the Match's tick (ClockSync)
+    double remoteTick = 0.0;                        // the Match's tick now, estimated (ClockSync::remoteTick)
+    double rttTicks = 0.0;                          // ClockSync::rttTicks
+    double jitterTicks = 0.0;                       // ClockSync::jitterTicks
     bool connected = false;                         // the own Peer is there
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
     std::string mismatch;                           // world::ContentMismatch
