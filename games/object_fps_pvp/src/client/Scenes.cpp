@@ -149,8 +149,8 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     r.Resource<SceneRequest>({.name = "object_fps_pvp.SceneRequest"});
     r.Resource<FrameNotes>({.name = "object_fps_pvp.FrameNotes"});
     setup.CarryOver<FrameNotes>("object_fps_pvp.FrameNotes");
-    r.Resource<GatewayState>({.name = "object_fps_pvp.GatewayState"});
-    setup.CarryOver<GatewayState>("object_fps_pvp.GatewayState");
+    r.Resource<GatewayClient>({.name = "object_fps_pvp.GatewayClient"});
+    setup.CarryOver<GatewayClient>("object_fps_pvp.GatewayClient");
     r.AddSystem<&CountFrames>(InSceneUpdate("object_fps_pvp.CountFrames"));
     K::SystemOptions watch;
     watch.name = "object_fps_pvp.WatchDocument";
@@ -162,11 +162,11 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     // The first World's notes start from the product's budget; a replaced World's come carried (O-7: a prepare
     // function that puts a default does not overwrite a value already there).
     const auto* start = setup.ProductBuffer().Find<ClientStart>();
-    const std::int64_t frames = start != nullptr ? start->frames : -1;
-    setup.Prepare([frames](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+    GYO_ASSERT(start != nullptr && "the Client's Product needs ConfigureClient (it keeps its ClientStart)");
+    setup.Prepare([start = *start](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SceneRequest{});
-        if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{frames, false, {}, {}, {}});
-        if (w.Resource<GatewayState>() == nullptr) w.SetResource(GatewayState{});
+        if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
+        PlaceGatewayClient(w, start.gateway, start.dataDirectory);
         return {};
     });
 }

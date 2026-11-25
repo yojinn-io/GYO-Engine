@@ -39,6 +39,10 @@
     {
       "id": "pvp.progress",
       "payload": "number"
+    },
+    {
+      "id": "pvp.abort",
+      "payload": "none"
     }
   ],
   "bindings": [
@@ -63,6 +67,7 @@
       "id": "loading",
       "backdrop_color": "backdrop",
       "focus_order": [
+        "abort",
         "progress"
       ],
       "children": [
@@ -187,8 +192,50 @@
           },
           "horizontal_align": "center",
           "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "abort",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              510,
+              480
+            ],
+            "size_delta": [
+              260,
+              52
+            ]
+          },
+          "text": {
+            "literal": "中止"
+          },
+          "point_size": 20,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.abort",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
         }
-      ]
+      ],
+      "default_focus": "abort"
     },
     {
       "id": "play",

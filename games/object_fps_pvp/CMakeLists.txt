@@ -70,6 +70,7 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     SOURCES
     src/client/ClientWorld.cpp
     src/client/Gateway.cpp
+    src/client/GatewayScene.cpp
     src/client/LobbyScene.cpp
     src/client/LocalFiles.cpp
     src/client/RoomScene.cpp

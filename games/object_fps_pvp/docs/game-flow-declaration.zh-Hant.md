@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-25（修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-25（修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -181,3 +181,8 @@ struct SDLWindowBetweenFrames final {
   - 3.3：本機玩家由 `SpawnLocalPlayer`（`Main/Update`，沒有玩家時生一次）生，不在準備函式：生實體要經 `entity_ids` 的分配器（`K::Spawn`），準備函式沒有那條路。死亡數由 Solo World 照 Match 的同一條規則（`CountDeath`：沒看過的 respawn tick）數（`LocalDeaths`），Frame 撤退時只拿它的數字結算——結算是權威端的事（審查 S1）。
   - 3.3：暫停（指標還給玩家）時單人的 Solo World 停下（world_time 的 `TimeControl::paused`，經交換帶過去）；多人不停（Match 不等人），暫停畫面的標題寫「メニュー（対戦は続いています）」。暫停畫面有「続ける」「撤退する」（審查 S2）。
   - 第 4 節第 2 段的突變「Local 帶 net」換成「Local 把權威端的 System 掛上 `net.OnServer`」（`pvp-local-authority-conditioned`）：沒有 net 角色的 World 帶 net 單位什麼也不登記（G-1），那個突變守不到行為；守的是「權威端的 System 在 Local 也跑」。
+- 修訂 3（第 3 段實作、設計審查之後）：
+  - 3.4：`GatewayClient` 在 client 函式庫（它用 `GYO::Http` 與 Kernel 的 Resource；邏輯庫不連這兩個），請求的組成與回應的解析是純函式、測試直接叫。
+  - 3.4：session 不放 `SceneDirector`：`GatewayClient` 本身是 Frame World 的 Resource，`CarryOver` 帶過每個場景（進行中的呼叫也帶著），第一個場景放入（裝置 id 讀或第一次產生；拿不到時每個呼叫立刻以 `no_device` 結束並說明）。
+  - 3.4：只有玩家自己撤退時離開房間（撤退在遊戲場景 `Ask` leave，呼叫隨 `GatewayClient` 帶到大廳完成）；連線自己結束（被拒、逾時、`ClosedByRemote`）時不離開：玩家還是房間的成員，Match 還在時房間會給新的 connect（掉線規則「位子保留」；審查 B1）。
+  - 3.4：列表最多 6 列（文件的 `max_items`），選房是 ▲▼＋「参加する」（`fixed_step_list` 的樣板不能放按鈕）；選中的房間以 id 記，列表更新後找回位置。房間收到 404、410、`not_member` 回大廳。

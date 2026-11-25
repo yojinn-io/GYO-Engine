@@ -7,8 +7,8 @@
 //   - the messages: the requests (GatewayRequest) and what their answers say (ParseSession, ParseRooms, ParseRoom,
 //     ParseSave, ErrorCodeOf). Pure: no socket, no clock.
 //   - GatewayClient: one call at a time over GYO::Http, driven by the caller's Update once a frame (it never blocks);
-//     it opens the session first, and opens it again once when an answer says it is gone (401). A scene's World keeps
-//     it in a Resource.
+//     it opens the session first, and opens it again once when an answer says it is gone (401). The Frame World keeps
+//     it in a Resource carried from scene to scene (the session, and a call still going, go along).
 //
 // What an error code means for the player is the scene's (the codes only say what happened).
 
@@ -30,7 +30,6 @@ struct GatewaySession final {
     std::string token;
     std::int64_t expiresAt = 0;  // Unix seconds
 };
-inline void HashValue(GYO::Kernel::Hasher&, const GatewaySession&) {}
 
 struct RoomMember final {
     std::uint64_t userId = 0;
@@ -105,27 +104,31 @@ struct GatewayResult final {
     std::string tag;          // the caller's name for the call
     int status = 0;           // the HTTP status (0: no answer)
     std::string body;
-    std::string errorCode;    // the Gateway's error code (an answer of 400 or more), or "unreachable" / "timeout" / "http"
+    // The Gateway's error code (an answer of 400 or more), or this side's: "unreachable", "timeout", "http" (an answer
+    // that is not HTTP or not the protocol's), "no_device" (no device id: nothing is sent).
+    std::string errorCode;
     std::string detail;       // when there was no answer: why
     [[nodiscard]] bool Ok() const noexcept { return status >= 200 && status < 300; }
 };
 
 class GatewayClient final {
 public:
-    // gateway: its address; deviceId: this player's; session: one opened before (carried from another scene).
-    GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::optional<GatewaySession> session);
+    // gateway: its address; deviceId: this player's (empty: none, unavailable says why; every call then ends at once
+    // with "no_device"); timeout: how long a call may go without its answer.
+    GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::string unavailable = {},
+                  std::int64_t timeout = kDefaultTimeout);
 
     // Asks for a call; calls go one at a time in the order asked, after the session.
     void Ask(std::string tag, GatewayRequest request);
     // Whether a call is waiting or going.
     [[nodiscard]] bool Busy() const noexcept { return current_.has_value() || !waiting_.empty(); }
     // One step at now (nanoseconds on any steady clock): starts the next call, polls the current one. A call with no
-    // answer within timeout ends with errorCode "timeout". The session's own call is not returned unless it failed
+    // answer within the timeout ends with errorCode "timeout". The session's own call is not returned unless it failed
     // (then it is returned under the asked call's tag, and that call is dropped).
     [[nodiscard]] std::optional<GatewayResult> Update(std::int64_t now);
     [[nodiscard]] const std::optional<GatewaySession>& Session() const noexcept { return session_; }
 
-    static constexpr std::int64_t kTimeout = 5'000'000'000;
+    static constexpr std::int64_t kDefaultTimeout = 5'000'000'000;
 
 private:
     struct Call {
@@ -138,6 +141,7 @@ private:
         bool session = false;  // the session's own call, made for call
         std::optional<GYO::Engine::Http::HttpCall> http;
         std::int64_t started = 0;
+        std::string failure;  // why the connection did not start
     };
 
     void Start(Call call, bool session, std::int64_t now);
@@ -145,6 +149,8 @@ private:
     GYO::Engine::OS::DatagramAddress gateway_;
     std::string host_;
     std::string deviceId_;
+    std::string unavailable_;
+    std::int64_t timeout_;
     std::optional<GatewaySession> session_;
     std::deque<Call> waiting_;
     std::optional<Going> current_;
