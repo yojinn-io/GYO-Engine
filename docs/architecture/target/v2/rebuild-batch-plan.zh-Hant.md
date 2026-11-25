@@ -230,7 +230,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 ```
 
 - 現況（主會話用關鍵字查 render、各 `*_render`、`sdl_gpu`，未逐檔讀）：3D 是 unlit、只有 Plugin 內建 shader，上列幾乎都沒有。
-- 主會話建議的順序（未定）：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal；視錐剔除、instancing、LOD 可隨大地圖線做。開卡時機待使用者定。
+- **排在大地圖線之後**（使用者 2026-11-25「渲染管線線…排在大地圖的後面」，`v8-arch-gyo2-render-after-big-map`）。視錐剔除、instancing、LOD 隨大地圖線先做。
+- 線內主會話建議的順序（未定）：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal。
 
 ## 不擋路的小事
 
