@@ -13,6 +13,7 @@
 #include "engine/os/Files.hpp"
 #include "engine/os/OSError.hpp"
 #include "engine/os/Process.hpp"
+#include "engine/os/StreamSocket.hpp"
 #include "engine/os/Thread.hpp"
 #include "engine/os/WakeSignal.hpp"
 

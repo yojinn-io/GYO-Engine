@@ -1,7 +1,5 @@
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 
-#include "object_fps_pvp/data/Hex.hpp"
-
 #include "engine/base/Sha256.hpp"
 
 namespace object_fps_pvp::match {
@@ -12,14 +10,6 @@ std::uint64_t ReadU64(const std::span<const std::byte> bytes, const std::size_t 
     std::uint64_t value = 0;
     for (std::size_t i = 0; i < 8; ++i) value = (value << 8U) | std::to_integer<std::uint64_t>(bytes[at + i]);
     return value;
-}
-
-std::array<std::byte, 32> Sha256Digest(const std::span<const std::byte> bytes) {
-    const std::string text = GYO::Engine::Base::Sha256(bytes);
-    const auto decoded = data::DecodeHex(text);
-    std::array<std::byte, 32> digest{};
-    for (std::size_t i = 0; i < digest.size(); ++i) digest[i] = (*decoded)[i];
-    return digest;
 }
 
 } // namespace
@@ -40,7 +30,7 @@ std::array<std::byte, 32> HmacSha256(std::span<const std::byte> key, const std::
     constexpr std::size_t kBlock = 64;
     std::array<std::byte, 32> hashedKey{};
     if (key.size() > kBlock) {
-        hashedKey = Sha256Digest(key);
+        hashedKey = GYO::Engine::Base::Sha256Digest(key);
         key = hashedKey;
     }
     std::vector<std::byte> inner(kBlock + message.size());
@@ -51,9 +41,9 @@ std::array<std::byte, 32> HmacSha256(std::span<const std::byte> key, const std::
         outer[i] = k ^ std::byte{0x5c};
     }
     for (std::size_t i = 0; i < message.size(); ++i) inner[kBlock + i] = message[i];
-    const auto innerDigest = Sha256Digest(inner);
+    const auto innerDigest = GYO::Engine::Base::Sha256Digest(inner);
     for (std::size_t i = 0; i < innerDigest.size(); ++i) outer[kBlock + i] = innerDigest[i];
-    return Sha256Digest(outer);
+    return GYO::Engine::Base::Sha256Digest(outer);
 }
 
 std::optional<AdmissionRefusal> VerifyAdmission(const std::span<const std::byte> key, const std::span<const std::byte> token,

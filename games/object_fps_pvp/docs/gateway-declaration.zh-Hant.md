@@ -131,6 +131,7 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 - 形狀照 core/os 現有的 `DatagramSocket`（非阻塞、中性錯誤碼、不判斷哪些可重試）；`http` 是 library-only Module（像 `save_version`），請求物件放在 Resource，System 每幀 `Poll`。
 - 別家：Godot 的 `HTTPClient` 是輪詢式的非阻塞 client（`~/Code/GitHome/godot/core/io/http_client.h:37`、`:192` `poll()`），Unity 的 `UnityWebRequest`、Unreal 的 `FHttpModule` 也是 Engine 內建；Bevy 核心沒有 HTTP（生態裡的 `bevy_http_client` 包 ehttp）。偏離 Bevy 的理由：GYO 的 OS socket 只能在 core/os，產品自己包第三方 HTTP 庫要開 Plugin，比一個小 Module 的膠水多。
 - 不用 cpp-httplib＋asio（master 的作法）：要下載第三方、阻塞式、要包成 Plugin。
+- 〔第 3 段動工後補〕位址沿用 `DatagramAddress`（IPv4＋port，和 UDP 同一型別；改名成通用的名字會動到網路 Module，不在本卡）。core/os 只給 client（`StreamSocket`），不給 listener：伺服器是 Go 的服務，C++ 沒有用途；測試的 listener 放在 `tests/common/os/LoopbackListener.hpp`（OS 標頭只在 `tests/common/os`）。Base 加 `Sha256Digest`（位元組版；第 2 段審查 S5），HMAC 留在產品。
 
 ### D9 Client 的流程（第 5 段）
 

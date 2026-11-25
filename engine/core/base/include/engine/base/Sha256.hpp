@@ -9,8 +9,8 @@
 
 namespace GYO::Engine::Base {
 
-// Portable content fingerprint shared by offline tools and asset consumers.
-[[nodiscard]] inline std::string Sha256(std::span<const std::byte> bytes) {
+// SHA-256 (FIPS 180-4): the 32 digest bytes, for a caller that keys or compares bytes (an HMAC, a challenge).
+[[nodiscard]] inline std::array<std::byte, 32> Sha256Digest(std::span<const std::byte> bytes) {
     constexpr std::array<std::uint32_t, 64> constants{
         0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
         0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -55,10 +55,22 @@ namespace GYO::Engine::Base {
     for (std::size_t i=0;i<8;++i) tail[padded-1-i]=static_cast<std::byte>((bits>>(8*i))&255U);
     compress(tail.data());
     if (padded==128) compress(tail.data()+64);
-    constexpr char digits[]="0123456789abcdef";
-    std::string result(64,'0');
+    std::array<std::byte,32> digest{};
     for (std::size_t i=0;i<8;++i)
-        for (std::size_t j=0;j<8;++j) result[i*8+j]=digits[(hash[i]>>(28-4*j))&15U];
+        for (std::size_t j=0;j<4;++j) digest[i*4+j]=static_cast<std::byte>((hash[i]>>(24-8*j))&255U);
+    return digest;
+}
+
+// Portable content fingerprint shared by offline tools and asset consumers: the digest as 64 lower-case hex digits.
+[[nodiscard]] inline std::string Sha256(std::span<const std::byte> bytes) {
+    constexpr char digits[]="0123456789abcdef";
+    const std::array<std::byte,32> digest=Sha256Digest(bytes);
+    std::string result(64,'0');
+    for (std::size_t i=0;i<32;++i) {
+        const auto value=std::to_integer<unsigned>(digest[i]);
+        result[i*2]=digits[value>>4U];
+        result[i*2+1]=digits[value&15U];
+    }
     return result;
 }
 
