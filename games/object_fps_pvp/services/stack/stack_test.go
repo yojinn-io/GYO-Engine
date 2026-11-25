@@ -148,6 +148,10 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 		t.Fatalf("the provider was asked %+v, want one survival pvp_training_v1 Match of 2", provider.specs)
 	}
 	spec := provider.specs[0]
+	if len(spec.Players) != 2 || spec.Players[0] == spec.Players[1] ||
+		(spec.Players[0] != host.user && spec.Players[1] != host.user) || (spec.Players[0] != guest.user && spec.Players[1] != guest.user) {
+		t.Fatalf("the Match waits for %v, want the room's members %d and %d", spec.Players, host.user, guest.user)
+	}
 	if spec.Saves != strings.TrimPrefix(s.SavesURL, "http://") {
 		t.Fatalf("the Match is given the save service at %q, want %s", spec.Saves, s.SavesURL)
 	}

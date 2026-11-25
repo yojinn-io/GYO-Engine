@@ -113,6 +113,9 @@ struct PlayerInput final {
     std::uint8_t crouch = 0;
     std::uint8_t fire = 0;
     std::uint8_t reload = 0;
+    // The Client has loaded the game and drawn it (held: every input after says so); the Match starts when every
+    // expected player is ready (game-flow declaration 3.5).
+    std::uint8_t ready = 0;
     friend bool operator==(const PlayerInput&, const PlayerInput&) = default;
 };
 
@@ -136,10 +139,18 @@ struct GameRules final {
 };
 void HashValue(K::Hasher&, const GameRules&);
 
-// The Match tells every Client which arena it plays and the digest of its walls (replicated; port declaration PV14).
+// Before the start the players wait where they stand and see only themselves; then the match is played (game-flow
+// declaration 3.5).
+enum class MatchPhase : std::uint8_t { Waiting = 0, Playing = 1 };
+
+// The Match tells every Client which arena it plays and the digest of its walls (replicated; port declaration PV14),
+// and whether the match has started.
 struct MatchInfo final {
     std::string arenaId;
     std::uint64_t wallsDigest = 0;
+    MatchPhase phase = MatchPhase::Waiting;
+    // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
+    std::uint64_t startTick = 0;
     friend bool operator==(const MatchInfo&, const MatchInfo&) = default;
 };
 void HashValue(K::Hasher&, const MatchInfo&);

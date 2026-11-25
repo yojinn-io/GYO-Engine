@@ -42,6 +42,8 @@ struct StepInput final {
     bool crouch = false;
     bool fire = false;
     bool reload = false;
+    // Not the player's: the Frame World's readiness (the game loaded and drawn), carried with the controls.
+    bool ready = false;
 };
 
 class Controls final {

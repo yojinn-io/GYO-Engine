@@ -1,29 +1,403 @@
 {
-  "schema": "gyo.ui", "version": 2,
-  "design_canvas": {"size": [1280, 720], "scale_mode": "fit"},
-  "fonts": {"ui": "object_fps_pvp.font.ui"}, "default_font": "ui",
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": {
+    "size": [
+      1280,
+      720
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "object_fps_pvp.font.ui"
+  },
+  "default_font": "ui",
   "colors": {
-    "clear": "#00000000", "shade": "#0A0F18B0", "panel": "#1D2A3AF0", "accent": "#66D9EFFF",
-    "text": "#EAF1FAFF", "muted": "#A3B7CBFF", "button": "#2B4159FF",
-    "focused": "#285F84FF", "pressed": "#307EA2FF"
+    "clear": "#00000000",
+    "shade": "#0A0F18B0",
+    "panel": "#1D2A3AF0",
+    "accent": "#66D9EFFF",
+    "text": "#EAF1FAFF",
+    "muted": "#A3B7CBFF",
+    "button": "#2B4159FF",
+    "focused": "#285F84FF",
+    "pressed": "#307EA2FF",
+    "backdrop": "#101724FF",
+    "track": "#24354AFF",
+    "fill": "#66D9EFFF",
+    "thumb": "#EAF1FAFF"
   },
   "actions": [
-    {"id": "pvp.resume", "payload": "none"},
-    {"id": "pvp.evacuate", "payload": "none"}
+    {
+      "id": "pvp.resume",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.evacuate",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.progress",
+      "payload": "number"
+    },
+    {
+      "id": "pvp.abort",
+      "payload": "none"
+    }
   ],
   "bindings": [
-    {"id": "title", "type": "string", "preview": "一時停止"}
+    {
+      "id": "title",
+      "type": "string",
+      "preview": "一時停止"
+    },
+    {
+      "id": "loading",
+      "type": "string",
+      "preview": "データを読み込んでいます…"
+    },
+    {
+      "id": "progress",
+      "type": "number",
+      "preview": 0.4
+    }
   ],
   "canvases": [
-    {"id": "play", "backdrop_color": "clear", "focus_order": [], "children": []},
     {
-      "id": "pause", "backdrop_color": "shade", "default_focus": "evacuate",
-      "focus_order": ["evacuate", "resume"],
+      "id": "loading",
+      "backdrop_color": "backdrop",
+      "focus_order": [
+        "abort",
+        "progress"
+      ],
       "children": [
-        {"type": "panel", "id": "panel", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [440, 220], "size_delta": [400, 280]}, "color": {"color": "panel"}},
-        {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [460, 244], "size_delta": [360, 44]}, "text": {"binding": "title"}, "point_size": 24, "text_color": {"color": "accent"}, "horizontal_align": "center", "vertical_align": "center"},
-        {"type": "button", "id": "resume", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [510, 320], "size_delta": [260, 56]}, "text": {"literal": "続ける"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.resume", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
-        {"type": "button", "id": "evacuate", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [510, 400], "size_delta": [260, 56]}, "text": {"literal": "撤退する"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.evacuate", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}}
+        {
+          "type": "text",
+          "id": "loading_title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              340,
+              250
+            ],
+            "size_delta": [
+              600,
+              56
+            ]
+          },
+          "text": {
+            "literal": "読み込み中"
+          },
+          "point_size": 32,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "horizontal_slider",
+          "id": "progress",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              340,
+              340
+            ],
+            "size_delta": [
+              600,
+              36
+            ]
+          },
+          "text": {
+            "literal": ""
+          },
+          "point_size": 14,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center",
+          "action": "pvp.progress",
+          "background": {
+            "normal": "backdrop",
+            "focused": "backdrop",
+            "pressed": "backdrop"
+          },
+          "binding": "progress",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "step": 0.01,
+          "value_format": {
+            "decimals": 0,
+            "show_plus": false
+          },
+          "track_color": "track",
+          "fill_color": "fill",
+          "thumb_color": "thumb"
+        },
+        {
+          "type": "text",
+          "id": "loading_status",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              340,
+              400
+            ],
+            "size_delta": [
+              600,
+              36
+            ]
+          },
+          "text": {
+            "binding": "loading"
+          },
+          "point_size": 18,
+          "text_color": {
+            "color": "muted"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "abort",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              510,
+              480
+            ],
+            "size_delta": [
+              260,
+              52
+            ]
+          },
+          "text": {
+            "literal": "中止"
+          },
+          "point_size": 20,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.abort",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ],
+      "default_focus": "abort"
+    },
+    {
+      "id": "play",
+      "backdrop_color": "clear",
+      "focus_order": [],
+      "children": []
+    },
+    {
+      "id": "pause",
+      "backdrop_color": "shade",
+      "default_focus": "evacuate",
+      "focus_order": [
+        "evacuate",
+        "resume"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "panel",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              220
+            ],
+            "size_delta": [
+              400,
+              280
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              244
+            ],
+            "size_delta": [
+              360,
+              44
+            ]
+          },
+          "text": {
+            "binding": "title"
+          },
+          "point_size": 24,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "resume",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              510,
+              320
+            ],
+            "size_delta": [
+              260,
+              56
+            ]
+          },
+          "text": {
+            "literal": "続ける"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.resume",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "evacuate",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              510,
+              400
+            ],
+            "size_delta": [
+              260,
+              56
+            ]
+          },
+          "text": {
+            "literal": "撤退する"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.evacuate",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
       ]
     }
   ]

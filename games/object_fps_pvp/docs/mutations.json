@@ -1617,8 +1617,8 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    const std::string canvas = paused ? \"pause\" : \"play\";",
-   "replace": "    const std::string canvas = \"play\";",
+   "find": "    const std::string canvas = loading ? \"loading\" : paused ? \"pause\" : \"play\";",
+   "replace": "    const std::string canvas = loading ? \"loading\" : \"play\";",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-pause-shown"
@@ -1656,8 +1656,8 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        exchange->SetPaused(solo && !controls.controls.Captured());",
-   "replace": "        exchange->SetPaused(false && solo);",
+   "find": "        exchange->SetPaused(solo && readiness.ready && started && !controls.controls.Captured());",
+   "replace": "        exchange->SetPaused(false && solo && readiness.ready && started);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-pause-stops"
@@ -1804,6 +1804,123 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the error codes*",
    "expect": "pvp-gw-device-kept"
+  },
+  {
+   "id": "pvp-start-ignores-ready",
+   "what": "the match starts with every expected player there, ready or not",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
+   "replace": "        if (std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: before the start*",
+   "expect": "pvp-start-hidden"
+  },
+  {
+   "id": "pvp-start-not-hidden",
+   "what": "before the start a connection sees every player",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (playing) {\n            if (now != nullptr) commands.Remove<N::PeerVisibility>(peer);",
+   "replace": "        if (true) {\n            if (now != nullptr) commands.Remove<N::PeerVisibility>(peer);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: before the start*",
+   "expect": "pvp-start-hidden"
+  },
+  {
+   "id": "pvp-start-not-frozen",
+   "what": "before the start the players move",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;",
+   "replace": "    return info.phase == MatchPhase::Playing || tick >= 0 ? input : none;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: before the start*",
+   "expect": "pvp-start-frozen"
+  },
+  {
+   "id": "pvp-start-no-deadline",
+   "what": "an expected player who never comes holds the start for ever",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (ready.size() >= waiting.expect.size() || late) {",
+   "replace": "    static_cast<void>(late);\n    if (ready.size() >= waiting.expect.size()) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: an expected player who never comes*",
+   "expect": "pvp-start-deadline"
+  },
+  {
+   "id": "pvp-loading-not-shown",
+   "what": "the game shows from its first frame (no loading screen)",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const bool loading = !readiness->ready || !sim->started;\n    const bool paused = !loading && !controls->controls.Captured();",
+   "replace": "    const bool loading = false && !readiness->ready && !sim->started;\n    const bool paused = !loading && !controls->controls.Captured();",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen*",
+   "expect": "pvp-loading-covers"
+  },
+  {
+   "id": "pvp-loading-not-told",
+   "what": "the Match is never told the Client is ready",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        step.ready = readiness.ready;",
+   "replace": "        step.ready = false && readiness.ready;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen*",
+   "expect": "pvp-loading-told"
+  },
+  {
+   "id": "pvp-start-fires-before",
+   "what": "before the start the players fire",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const PlayerInput& input = Playable(given, *info, now);",
+   "replace": "        const PlayerInput& input = given;\n        static_cast<void>(info);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: before the start*",
+   "expect": "pvp-start-no-shot"
+  },
+  {
+   "id": "pvp-loading-no-wait-start",
+   "what": "the loading screen goes when the Client is ready, before the match has started",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const bool loading = !readiness->ready || !sim->started;\n    const bool paused",
+   "replace": "    const bool loading = !readiness->ready;\n    const bool paused",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen waits*",
+   "expect": "pvp-loading-waits-start"
+  },
+  {
+   "id": "pvp-loading-skip-network",
+   "what": "readiness does not wait for the own player",
+   "guards": [
+    "game-flow-declaration 4 (segment 4)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        next.network = sim->ownPlayer != 0 && sim->mismatch.empty();",
+   "replace": "        next.network = true;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: without its own player*",
+   "expect": "pvp-loading-needs-player"
   },
   {
    "id": "pvp-map-colliders-dropped",

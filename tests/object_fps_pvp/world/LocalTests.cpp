@@ -41,6 +41,7 @@ TEST_CASE("world: a Local World seats its own player at the spawn it was given, 
     for (int i = 0; i < 32; ++i) {
         PW::PlayerInput input;
         input.present = 1;
+        input.ready = 1;  // the Client is ready: the Local World starts (StartMatch) and the input counts
         input.forward = 1.0F;
         input.yaw = world.Get<PW::PlayerBody>(player)->yaw;
         world.Insert(player, input);

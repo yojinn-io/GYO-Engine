@@ -138,6 +138,18 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     description.options.Set(std::move(start));
     PC::ClientOptions options{game, presentation, 0, userId};
     O::WorldDescription frameWorld = PC::ClientFrameWorld(options);
+    // The loading screen's warm-up reads what sdl_gpu has shown (DrawnFrames), between the Frame World's rounds.
+    frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
+        inner(setup);
+        const auto* gpu = std::as_const(setup.ProductBuffer()).Find<GYO::Plugins::SDLGPU::SDLGPUStatus>();
+        if (gpu == nullptr) return;
+        setup.ExchangeIn([gpu](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            const PC::DrawnFrames now{true, gpu->FramesShown(), gpu->SkippedDraws()};
+            const auto* drawn = w.Resource<PC::DrawnFrames>();
+            if (drawn == nullptr || drawn->shown != now.shown || drawn->skipped != now.skipped || !drawn->known) w.SetResource(now);
+            return {};
+        });
+    };
     if (verbose) {
         frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
             inner(setup);

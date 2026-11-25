@@ -91,7 +91,8 @@ std::string Reported(const Built& built) {
 // A Match Product on a link (an unused memory link end when alone).
 inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                               std::shared_ptr<PW::Seats> seats, std::function<N::NetTime()> clock,
-                                              const std::size_t arena = 0) {
+                                              const std::size_t arena = 0, std::vector<std::uint64_t> expectUsers = {},
+                                              const std::uint32_t startDeadlineSeconds = 60) {
     O::ProductDescription description;
     description.name = "pvp-match";
     N::NetProductOptions net;
@@ -101,7 +102,9 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
     net.seed = 7;
     net.admission = PW::SeatAdmission(seats);
     description.options.Set(net);
-    description.worlds.push_back(Stepped(PW::MatchWorld({std::move(content), arena, 0, seats})));
+    description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .seats = seats,
+                                                         .expectUsers = std::move(expectUsers),
+                                                         .startDeadlineSeconds = startDeadlineSeconds})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     return std::move(built).value();

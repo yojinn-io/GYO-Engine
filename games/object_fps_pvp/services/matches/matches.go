@@ -30,6 +30,9 @@ type Spec struct {
 	// Saves is the save service's address (host:port) the Match reads and
 	// writes its players' saves at; empty: the Match keeps no saves.
 	Saves string
+	// Players are the room's members: the Match starts when each one's
+	// Client is ready (game-flow declaration 3.5); none: played at once.
+	Players []uint64
 }
 
 // Running is a Match a provider started: where players connect, a channel
@@ -137,7 +140,7 @@ func (s *Service) allocate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	running, err := s.config.Provider.Start(r.Context(), Spec{MatchID: matchID, Key: key,
-		Capacity: request.Capacity, Mode: request.Mode, Map: request.Map, Saves: s.config.Saves})
+		Capacity: request.Capacity, Mode: request.Mode, Map: request.Map, Saves: s.config.Saves, Players: request.Players})
 	if err != nil {
 		api.WriteError(w, http.StatusServiceUnavailable, "no_match_available")
 		return

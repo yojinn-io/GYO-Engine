@@ -86,6 +86,7 @@ namespace WT = GYO::Engine::WorldTime;
 namespace PW = object_fps_pvp::world;
 
 void HashValue(K::Hasher&, const ClientView&) {}
+void HashValue(K::Hasher&, const DrawnFrames&) {}
 
 namespace {
 
@@ -143,6 +144,31 @@ struct ClientControls final {
     K::EntityId facedPlayer = 0;
 };
 void HashValue(K::Hasher&, const ClientControls&) {}
+
+// Whether the cameras were given their layers back (RevealUnderCover).
+struct CoverState final {
+    bool revealed = false;
+};
+void HashValue(K::Hasher&, const CoverState&) {}
+
+// The world camera's clear colour once the game shows (black before).
+const R::ClearColorConfig kSky{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}};
+
+// The loading of the game scene (game-flow declaration 3.5). The steps are judged again every frame until ready, so
+// a later change (the Match's arena, a new model to load) undoes the steps after it; the progress never goes back.
+struct GameReadiness final {
+    double progress = 0.0;
+    bool covered = false;                   // the overlay is shown: the game may be drawn under it
+    bool assets = false;                    // the game's assets finished, the arena shown the one the World plays
+    std::optional<std::uint64_t> warmFrom;  // DrawnFrames::shown when the assets were done (or a draw was last skipped)
+    std::optional<std::uint64_t> warmStart; // ... when they were first done: the warm-up's limit counts from here
+    std::uint64_t skippedAt = 0;            // DrawnFrames::skipped at warmFrom
+    bool warmed = false;
+    bool network = false;                   // the own player is there, and the arena is this Client's
+    std::optional<std::uint64_t> lastFrom;  // shown when the rest was done: the next shown frame is the first
+    bool ready = false;
+};
+void HashValue(K::Hasher&, const GameReadiness&) {}
 
 // The Sim World: the controls the Frame World sent, until a step takes them (WriteStepInput).
 //
@@ -423,7 +449,8 @@ K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientS
 // of this frame run after it.
 K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::ButtonInput<I::MouseButton>> mouse,
                              K::Res<I::AccumulatedMouseMotion> motion, K::Res<I::CursorPosition> cursor,
-                             K::Res<W::WindowState> window, K::Res<PW::LocalUser> user,
+                             K::Res<W::WindowState> window, K::Res<PW::LocalUser> user, K::Res<GameReadiness> readiness,
+                             K::Res<ClientView> sim,
                              K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
                              K::ResMut<ClientControls> state, K::ResMut<W::WindowRequest> request) {
     ClientControls& c = state.Get();
@@ -436,15 +463,17 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
             c.facedLife = combat.lives;
         }
     });
+    // While the loading screen is up the pointer stays the player's: a click or Tab is for the screen (its 中止).
+    const bool loading = !readiness->ready || !sim->started;
     present::ControlsFrame frame;
     frame.focused = !window->known || window->focused;
     frame.insideWindow = cursor->position.has_value();
-    frame.tab = keys->JustPressed(I::KeyCode::Tab);
+    frame.tab = !loading && keys->JustPressed(I::KeyCode::Tab);
     frame.escape = keys->JustPressed(I::KeyCode::Escape);
     // The pause's resume takes the pointer as a click would, unless the click that pressed it already took it (then a
     // second click would be a shot).
     const bool resume = std::exchange(c.resume, false) && !c.controls.Captured();
-    frame.click = mouse->JustPressed(I::MouseButton::Left) || resume;
+    frame.click = !loading && (mouse->JustPressed(I::MouseButton::Left) || resume);
     frame.jump = keys->JustPressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
     frame.forward = keys->Pressed(I::KeyCode::W);
@@ -491,6 +520,8 @@ PW::PlayerInput StepInputOf(SimControls& state) {
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
+    // Readiness is not the player's input: stale controls keep it.
+    input.ready = state.pending.ready ? 1 : 0;
     return input;
 }
 
@@ -997,15 +1028,135 @@ struct GameOrigin final {
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
 
-// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "pause" while the pointer is the player's (Tab or Esc
-// gave it back), "play" (nothing) while the game has it.
-K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Query<K::Write<Ui::UiRoot>> roots) {
-    const bool paused = !controls->controls.Captured();
+// The share of the bar each step reaches, and how many frames the warm-up waits at most for draws to stop being
+// skipped (a texture or a pipeline that cannot be made would hold it for ever).
+constexpr double kAssetsShare = 0.8;
+constexpr double kWarmShare = 0.85;
+constexpr double kNetworkShare = 0.9;
+constexpr std::uint64_t kWarmFramesAtMost = 120;
+
+// The steps of the loading, in order; each waits for the ones before it.
+K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<DrawnFrames> drawn,
+                               K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::ResMut<GameReadiness> readiness) {
+    if (readiness.Read().ready) return {};
+    GameReadiness next = readiness.Read();
+    next.covered = next.covered || (roots.Get<Ui::UiRootState>(kOverlay) != nullptr && roots.Get<Ui::UiRootState>(kOverlay)->runtime.has_value());
+    // The assets: the game's and the overlay's document. The arena's regions are models the Client holds (read with the
+    // content): ShowArena, before this, shows the arena the World plays at once, with nothing to wait for.
+    bool assetsDone = false;
+    if (assets->requested) {
+        std::vector<WA::UntypedHandle> handles;
+        const auto add = [&handles](const WA::UntypedHandle handle) {
+            if (!handle.Id().Empty()) handles.push_back(handle);  // an empty Handle names nothing to wait for
+        };
+        const ClientAssets& a = *assets;
+        add(a.body);
+        add(a.heldWeapon);
+        add(a.viewmodel);
+        add(a.heldWeaponImage);
+        add(a.font);
+        for (const auto& image : a.viewmodelImages) add(image);
+        for (const auto& [id, clip] : a.clips) add(clip);
+        if (const Ui::UiRoot* overlay = roots.Get<Ui::UiRoot>(kOverlay)) {
+            if (const auto* document = std::get_if<A::Handle<Ui::UiAsset>>(&overlay->document)) add(*document);
+        }
+        const WA::AssetReadiness ready = view->Ready(handles);
+        // A failed asset does not hold the game: it shows without it (game-flow declaration, revision 4).
+        const double done = handles.empty() ? 0.0 : static_cast<double>(ready.loaded + ready.failed) / static_cast<double>(handles.size());
+        next.progress = std::max(next.progress, kAssetsShare * done);
+        assetsDone = ready.allFinished && ready.dependenciesFinished;
+    }
+    if (!assetsDone) {
+        // Not (or no more): everything after it again.
+        next.assets = next.warmed = next.network = false;
+        next.warmFrom.reset();
+        next.lastFrom.reset();
+        readiness.Get() = std::move(next);
+        return {};
+    }
+    next.assets = true;
+    // The warm-up: the game drawn under the overlay until two frames are shown with no draw skipped (the textures,
+    // meshes and pipelines made), at most kWarmFramesAtMost frames after the assets were done.
+    if (next.covered && !next.warmed) {
+        if (!drawn->known) {
+            next.warmed = true;
+        } else if (!next.warmFrom) {
+            next.warmFrom = drawn->shown;
+            if (!next.warmStart) next.warmStart = drawn->shown;
+            next.skippedAt = drawn->skipped;
+        } else if (drawn->skipped != next.skippedAt) {
+            next.warmFrom = drawn->shown;
+            next.skippedAt = drawn->skipped;
+        }
+        if (drawn->known && next.warmFrom &&
+            (drawn->shown >= *next.warmFrom + 2 || drawn->shown >= *next.warmStart + kWarmFramesAtMost)) {
+            next.warmed = true;
+        }
+        next.progress = std::max(next.progress, kWarmShare);
+    }
+    if (next.warmed) {
+        next.network = sim->ownPlayer != 0 && sim->mismatch.empty();
+        if (next.network) next.progress = std::max(next.progress, kNetworkShare);
+    }
+    if (next.network) {
+        // One more frame drawn with all of it: the first frame the player will see.
+        if (!next.lastFrom) {
+            next.lastFrom = drawn->known ? drawn->shown : 0;
+        } else if (!drawn->known || drawn->shown > *next.lastFrom) {
+            next.ready = true;
+            next.progress = 1.0;
+        }
+    } else {
+        next.lastFrom.reset();
+    }
+    readiness.Get() = std::move(next);
+    return {};
+}
+
+// Nothing of the game is drawn before the overlay covers it (its document loads first): the cameras see no layer and
+// the world camera clears to black; then they see theirs.
+K::SystemResult RevealUnderCover(K::Res<GameReadiness> readiness, K::Query<K::Write<R::RenderLayers>, K::Write<R::ClearColorConfig>> cameras,
+                                 K::ResMut<CoverState> cover) {
+    if (cover.Read().revealed || !readiness->covered) return {};
+    cover->revealed = true;
+    if (auto layers = cameras.GetMut<R::RenderLayers>(kCamera)) layers->mask = 1;
+    if (auto layers = cameras.GetMut<R::RenderLayers>(kViewCamera)) layers->mask = 1U << kViewLayer;
+    if (auto layers = cameras.GetMut<R::RenderLayers>(kHudCamera)) layers->mask = 1U << kHudLayer;
+    if (auto clear = cameras.GetMut<R::ClearColorConfig>(kCamera)) *clear = kSky;
+    return {};
+}
+
+// The player's words for where the loading is.
+std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const Scene scene) {
+    if (!readiness.assets) return "データを読み込んでいます…";
+    if (!readiness.warmed) return "描画の準備をしています…";
+    if (!readiness.network) return scene == Scene::MultiGame ? "対戦に接続しています…" : "準備しています…";
+    if (!readiness.ready) return "最初の画面を描いています…";
+    if (!sim.started) return "ほかのプレイヤーを待っています…";
+    return {};
+}
+
+// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "loading" until the game is ready and the match has
+// started; then "pause" while the pointer is the player's (Tab or Esc gave it back), "play" (nothing) while the game
+// has it.
+K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Res<GameReadiness> readiness, K::Res<ClientView> sim,
+                          K::Res<GameOrigin> origin, K::Query<K::Write<Ui::UiRoot>, K::Write<Ui::UiBindings>> roots) {
     auto root = roots.GetMut<Ui::UiRoot>(kOverlay);
     if (!root) return {};
-    const std::string canvas = paused ? "pause" : "play";
+    const bool loading = !readiness->ready || !sim->started;
+    const bool paused = !loading && !controls->controls.Captured();
+    const std::string canvas = loading ? "loading" : paused ? "pause" : "play";
     if (root->canvas != canvas) root->canvas = canvas;
-    if (root->acceptsInput != paused) root->acceptsInput = paused;
+    // The loading screen takes input too (its 中止).
+    if (root->acceptsInput != (paused || loading)) root->acceptsInput = paused || loading;
+    if (loading) {
+        auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
+        const std::string text = LoadingText(*readiness, *sim, origin->scene);
+        const auto* shown = bindings->Find("loading");
+        if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
+        const auto* progress = bindings->Find("progress");
+        if (progress == nullptr || std::get<double>(*progress) != readiness->progress) bindings->Set("progress", readiness->progress);
+    }
     return {};
 }
 
@@ -1023,7 +1174,14 @@ K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientC
 K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
                          K::ResMut<GatewayClient> gateway, K::ResMut<SceneRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
-        if (action->action != "pvp.evacuate" || request.Read().next) continue;
+        if (request.Read().next) continue;
+        // pvp.abort (the loading screen's 中止): no game was played. Single player: back to its room, nothing settled;
+        // multiplayer: as an evacuation (the room is left).
+        if (action->action == "pvp.abort" && origin->scene == Scene::SoloGame) {
+            request->next = SceneChange{.scene = Scene::SoloRoom, .status = "中止しました"};
+            continue;
+        }
+        if (action->action != "pvp.evacuate" && action->action != "pvp.abort") continue;
         if (origin->scene == Scene::MultiGame) {
             // The player leaves the room too (it gives no connect any more: a later game is a new room). The call
             // goes on in the lobby, which the GatewayClient is carried to.
@@ -1141,6 +1299,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
     if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
+    if (const auto* info = Find<PW::MatchInfo>(world)) view.started = info->phase == PW::MatchPhase::Playing;
     if (const auto* session = Find<ClientSessionEnd>(world)) {
         view.ended = session->ended;
         view.endReason = session->reason;
@@ -1388,6 +1547,9 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
     r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
+    r.Resource<GameReadiness>({.name = "object_fps_pvp.GameReadiness"});
+    r.Resource<CoverState>({.name = "object_fps_pvp.CoverState"});
+    r.Resource<DrawnFrames>({.name = "object_fps_pvp.DrawnFrames"});
 }
 
 void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
@@ -1414,7 +1576,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
-    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause"));
+    r.AddSystem<&TrackReadiness>(InUpdate("object_fps_pvp.TrackReadiness", {"object_fps_pvp.RequestAssets", "object_fps_pvp.ShowArena"}));
+    r.AddSystem<&RevealUnderCover>(InUpdate("object_fps_pvp.RevealUnderCover", {"object_fps_pvp.TrackReadiness"}));
+    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause", {"object_fps_pvp.TrackReadiness"}));
     r.AddSystem<&Resume>(InUpdate("object_fps_pvp.Resume"));
     r.AddSystem<&Evacuate>(InUpdate("object_fps_pvp.Evacuate"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
@@ -1424,6 +1588,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     const std::uint64_t user = LocalUserOf(change, options);
     setup.Prepare([options, port, origin, user](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
+        world.SetResource(GameReadiness{});
+        world.SetResource(CoverState{});
+        if (world.Resource<DrawnFrames>() == nullptr) world.SetResource(DrawnFrames{});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
         PW::GameRules rules;
@@ -1456,7 +1623,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kCamera, C::CameraTarget{});
         world.Insert(kCamera, C::Projection{perspective});
         world.Insert(kCamera, C::ComputedCamera{});
-        world.Insert(kCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}});
+        // Black, seeing no layer, until the overlay covers the game (RevealUnderCover).
+        world.Insert(kCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::Custom, R::Color8{0, 0, 0, 255}});
+        world.Insert(kCamera, R::RenderLayers{0});
         Place(world, kCamera, T::Transform{});
         // The viewmodel camera: after the world camera, its own depth, the first-person weapon's layer only.
         const ViewmodelDefinition& vm = options.presentation->viewmodel;
@@ -1472,7 +1641,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kViewCamera, C::Projection{close});
         world.Insert(kViewCamera, C::ComputedCamera{});
         world.Insert(kViewCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
-        world.Insert(kViewCamera, R::RenderLayers{1U << kViewLayer});
+        world.Insert(kViewCamera, R::RenderLayers{0});
         Place(world, kViewCamera, T::Transform{});
         // The HUD camera: 2D, after the world camera, clears nothing, sees the HUD layer only.
         C::OrthographicProjection flat = C::OrthographicProjection::Default2d();
@@ -1485,7 +1654,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kHudCamera, C::Projection{flat});
         world.Insert(kHudCamera, C::ComputedCamera{});
         world.Insert(kHudCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
-        world.Insert(kHudCamera, R::RenderLayers{1U << kHudLayer});
+        world.Insert(kHudCamera, R::RenderLayers{0});
         Place(world, kHudCamera, T::Transform{});
         const auto hudThing = [&world](const K::EntityId id, const Math::Vec3 at) {
             T::Transform t;
@@ -1512,13 +1681,15 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         // The overlay (pause, evacuate) over the HUD camera; ShowPause picks its canvas.
         Ui::UiRoot overlay;
         overlay.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game"));
-        overlay.canvas = "play";
+        overlay.canvas = "loading";
         overlay.camera = kHudCamera;
         overlay.acceptsInput = false;
         world.Insert(kOverlay, std::move(overlay));
         world.Insert(kOverlay, Ui::UiRootState{});
         Ui::UiBindings overlayBindings;
         overlayBindings.Set("title", std::string(origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"));
+        overlayBindings.Set("loading", std::string("データを読み込んでいます…"));
+        overlayBindings.Set("progress", 0.0);
         world.Insert(kOverlay, std::move(overlayBindings));
         return {};
     });
@@ -1529,10 +1700,15 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     const bool solo = change.scene == Scene::SoloGame;
     setup.ExchangeOut([exchange, solo](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ClientControls& controls = *world.ResourceMut<ClientControls>();
+        present::StepInput step = controls.controls.Take();
+        const GameReadiness& readiness = *world.Resource<GameReadiness>();
+        step.ready = readiness.ready;
         const RemoteView& remote = *world.Resource<RemoteView>();
-        exchange->AddControls(controls.controls.Take(), remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
-        // Single player's pause: the Solo World stops while the pointer is the player's (a Match does not wait).
-        exchange->SetPaused(solo && !controls.controls.Captured());
+        exchange->AddControls(step, remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
+        // Single player's pause: the Solo World stops while the pointer is the player's, once the game is on (a Match
+        // does not wait; the loading neither: the start waits for the player's readiness in the steps).
+        const bool started = world.Resource<ClientView>()->started;
+        exchange->SetPaused(solo && readiness.ready && started && !controls.controls.Captured());
         return {};
     });
 }
@@ -1848,6 +2024,13 @@ ClientStatus StatusOf(K::World& world) {
         status.endReason = view->endReason;
     }
     if (const auto* controls = world.Resource<ClientControls>()) status.captured = controls->controls.Captured();
+    if (world.Types().ResourceIdOf<GameReadiness>()) {
+        if (const auto* readiness = world.Resource<GameReadiness>()) {
+            status.ready = readiness->ready;
+            status.progress = readiness->progress;
+        }
+    }
+    if (const auto* view = world.Resource<ClientView>()) status.started = view->started;
     return status;
 }
 

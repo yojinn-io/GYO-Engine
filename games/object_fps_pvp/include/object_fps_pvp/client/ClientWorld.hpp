@@ -35,8 +35,13 @@
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
 //                    LeaveOnEnd     the connection ended, or the Match's content differs: back to the lobby
-//                    ShowPause      the overlay's pause canvas while the pointer is the player's (single player: the
-//                                   Solo World's time stops meanwhile, through the exchange)
+//                    TrackReadiness the loading (game-flow declaration 3.5): the game's assets with their
+//                                   dependencies (the progress), the warm-up (two frames shown with no draw skipped
+//                                   after them, DrawnFrames), the own player from the Match, then one more frame: ready
+//                                   (carried to the Match in the input, PlayerInput::ready)
+//                    ShowPause      the overlay: "loading" until ready and the match started; then the pause canvas
+//                                   while the pointer is the player's (single player: the Solo World's time stops
+//                                   meanwhile, through the exchange)
 //                    Resume         pvp.resume: the game takes the pointer again (as a click does)
 //                    Evacuate       pvp.evacuate: single player settles the game (the Solo World's deaths) into the
 //                                   save and goes to the menu; multiplayer goes back to the lobby (the connection closes)
@@ -156,6 +161,7 @@ struct ClientView final {
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
     std::string mismatch;                           // world::ContentMismatch
     std::uint64_t deaths = 0;                       // a Local World's: its player's deaths so far (world::LocalDeaths)
+    bool started = false;                           // the match has started (world::MatchInfo::phase)
     bool ended = false;                             // the connection ended (refused, timed out, closed by the Match)
     std::string endReason;                          // why, in the player's words
 };
@@ -164,6 +170,9 @@ void HashValue(GYO::Kernel::Hasher&, const ClientView&);
 // What the Client shows, for its program and its tests.
 struct ClientStatus final {
     bool connected = false;
+    bool ready = false;     // loaded and drawn (the loading screen's work is done; the Match is told)
+    double progress = 0.0;  // the loading's share done, 0 to 1
+    bool started = false;   // the match has started (the loading screen is gone)
     bool playing = false;  // its own player is there
     bool captured = false; // it has the pointer
     std::string mismatch;  // the content mismatch, if any
@@ -172,5 +181,15 @@ struct ClientStatus final {
 };
 // Of the Frame World.
 [[nodiscard]] ClientStatus StatusOf(GYO::Kernel::World& world);
+
+// What the World that draws has shown (a Resource of the game scene's Frame World): the program writes it between
+// frames from the drawing's status (sdl_gpu's SDLGPUStatus, through an exchange function), for the loading screen's
+// warm-up (game-flow declaration 3.5). Not known (a test without a device): the warm-up is not waited for.
+struct DrawnFrames final {
+    bool known = false;
+    std::uint64_t shown = 0;    // frames drawn and shown
+    std::uint64_t skipped = 0;  // draws skipped (a texture, mesh or pipeline not there yet)
+};
+void HashValue(GYO::Kernel::Hasher&, const DrawnFrames&);
 
 } // namespace object_fps_pvp::client
