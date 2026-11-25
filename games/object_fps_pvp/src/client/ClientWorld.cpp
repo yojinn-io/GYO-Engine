@@ -1,9 +1,8 @@
 #include "object_fps_pvp/client/ClientWorld.hpp"
 
-#include "object_fps_pvp/client/VoxelModelLoader.hpp"
 #include "client/ClientExchange.hpp"
 #include "client/SceneBuilds.hpp"
-#include "object_fps_pvp/data/VoxelMeshFile.hpp"
+#include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
 #include "object_fps_pvp/present/Interpolation.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
@@ -93,7 +92,6 @@ namespace {
 // in by the prepare function before the first step; the stand-in bodies come from the Client's allotter.
 constexpr K::EntityId kCamera = 3'000'010;
 constexpr K::EntityId kHudCamera = 3'000'011;
-constexpr K::EntityId kArenaPicture = 3'000'012;
 constexpr K::EntityId kCrosshair = 3'000'013;
 constexpr K::EntityId kFlash = 3'000'014;
 constexpr K::EntityId kHpText = 3'000'015;
@@ -250,6 +248,8 @@ void HashValue(K::Hasher&, const ClientCharacters&) {}
 struct ClientScene final {
     std::shared_ptr<const PresentationContent> presentation;
     std::string shownArena;
+    // The entities that show the arena's map, one per region.
+    std::vector<K::EntityId> regionEntities;
 };
 void HashValue(K::Hasher&, const ClientScene&) {}
 
@@ -306,8 +306,8 @@ void Place(K::World& world, const K::EntityId id, const T::Transform& transform)
     world.Insert(id, T::GlobalTransform{T::ToMatrix(transform)});
 }
 
-std::shared_ptr<const IM::ImageData> PaletteOf(const data::VoxelMeshFile& file) {
-    const data::VoxelPaletteImage image = data::PaletteImage(file);
+std::shared_ptr<const IM::ImageData> PaletteOf(const data::ArenaMap& map) {
+    const GYO::Engine::VoxelMap::VoxelPaletteImage image = GYO::Engine::VoxelMap::ExpandVoxelPalette(map.index);
     return std::make_shared<const IM::ImageData>(image.width, image.height, IM::ColorSpace::Srgb, image.pixels);
 }
 
@@ -415,16 +415,6 @@ K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientS
         if (!cue.clip.empty() && a.clips.count(cue.clip) == 0) a.clips[cue.clip] = requests->Load<AU::Clip>(A::AssetId(cue.clip));
     }
     return {};
-}
-
-// The arena's model asset id: the game's catalog names it after its geometry file.
-std::string ArenaModelId(const sim::ArenaContent& arena) {
-    std::string name = arena.geometry;
-    const std::string suffix = ".voxel_mesh.json";
-    if (name.size() > suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0) {
-        name.resize(name.size() - suffix.size());
-    }
-    return "object_fps_pvp.model." + name;
 }
 
 // The frame's keys and mouse into the controls (the pointer, the view, the held keys, the presses), and the window
@@ -535,22 +525,31 @@ K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::Player
     return {};
 }
 
-// The arena's picture: the model of the arena the World plays (FollowMatchArena may have changed it).
-K::SystemResult ShowArena(K::Res<PW::GameRules> rules, K::Res<WA::AssetRequests> requests, K::Res<PW::ContentRef> content,
-                          K::ResMut<ClientScene> scene, K::CommandsFor<K::Inserts<R::Mesh3d>, K::Removes<>> commands) {
+// The arena's picture: one entity per region of the arena the World plays (FollowMatchArena may have changed it), each
+// a Mesh3d of the region's model the Client holds, with the region's box so the visibility Module culls it. The
+// entities come from the Frame World's allotter; the previous arena's go when the arena changes.
+K::SystemResult ShowArena(K::Res<PW::GameRules> rules, K::Res<PW::ContentRef> content, K::ResMut<ClientScene> scene,
+                          K::Spawn<K::Bundle<T::Transform, R::Mesh3d, R::Aabb>> spawn, K::Despawn despawn) {
     const sim::ArenaContent& arena = rules->arena;
-    if (scene.Read().shownArena == arena.id || !content->content) return {};
+    if (scene.Read().shownArena == arena.id || !scene.Read().presentation || !content->content) return {};
+    for (const K::EntityId id : scene.Read().regionEntities) despawn.Entity(id);
+    scene->regionEntities.clear();
     const auto& arenas = content->content->arenas;
-    for (std::size_t i = 0; i < arenas.size(); ++i) {
+    for (std::size_t i = 0; i < arenas.size() && i < scene.Read().presentation->arenaPictures.size(); ++i) {
         if (arenas[i].content.id != arena.id) continue;
-        R::Mesh3d mesh;
-        mesh.model = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(ArenaModelId(arena)));
-        if (i < scene->presentation->arenaPalettes.size()) mesh.image = scene->presentation->arenaPalettes[i];
-        mesh.filter = R::TextureFilter::Nearest;
-        commands.Insert(kArenaPicture, std::move(mesh));
-        scene->shownArena = arena.id;
+        const ArenaPicture& picture = scene.Read().presentation->arenaPictures[i];
+        for (const data::RegionPicture& region : picture.regions) {
+            R::Mesh3d mesh;
+            mesh.model = region.model;
+            mesh.image = picture.palette;
+            mesh.filter = R::TextureFilter::Nearest;
+            auto id = spawn.New(T::Transform{}, std::move(mesh), R::Aabb{region.bounds});
+            if (!id) return Base::Err(std::move(id).error());
+            scene->regionEntities.push_back(*id);
+        }
         break;
     }
+    scene->shownArena = arena.id;
     return {};
 }
 
@@ -1461,8 +1460,6 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kViewCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
         world.Insert(kViewCamera, R::RenderLayers{1U << kViewLayer});
         Place(world, kViewCamera, T::Transform{});
-        // The arena's picture (its Mesh3d comes with the model).
-        Place(world, kArenaPicture, T::Transform{});
         // The HUD camera: 2D, after the world camera, clears nothing, sees the HUD layer only.
         C::OrthographicProjection flat = C::OrthographicProjection::Default2d();
         flat.scalingMode = C::ScalingFixed{kHudWidth, kHudHeight};
@@ -1702,7 +1699,9 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, con
         error = exception.what();
         return std::nullopt;
     }
-    for (const world::InstalledArena& arena : game.arenas) content.arenaPalettes.push_back(PaletteOf(arena.geometry));
+    for (const world::InstalledArena& arena : game.arenas) {
+        content.arenaPictures.push_back(ArenaPicture{data::RegionPictures(*arena.map), PaletteOf(*arena.map)});
+    }
     return content;
 }
 
@@ -1724,7 +1723,6 @@ void ConfigureClient(O::ProductSetup& setup) {
         setup.Report("LoaderRefused", std::string("the ") + what + " loader was refused: " + Base::Describe(result.error()));
         return true;
     };
-    if (refused("voxel model", registry->template Register<VoxelModelLoader>())) return;
     if (refused("fbx", registry->template Register<GYO::Engine::Model::FbxLoader>())) return;
     if (refused("png", registry->template Register<IM::PngLoader>())) return;
     if (refused("font", registry->template Register<TX::FontLoader>())) return;
@@ -1786,7 +1784,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
     O::WorldDescription world;
     world.name = "Frame";
     world.units = {"entity_ids", "world_time", "transform", "world_asset", "camera", "input", "window", "window_camera",
-                   "world_render", "world_ui"};
+                   "world_render", "visibility", "world_ui"};
     if (window) world.units.push_back("sdl_window");
     world.options.Set(kFrameIds);
     // Per-frame Systems only: the steps are the Sim World's.
