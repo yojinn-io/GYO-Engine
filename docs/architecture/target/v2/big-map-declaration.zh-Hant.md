@@ -376,3 +376,51 @@ v8-arch-gyo2-big-map
 | N-5 | 兩個 loader 共用 settings 型別名 | 採用：分成 `VoxelMapLoaderSettings`、`VoxelRegionLoaderSettings` |
 | N-6 | 第 9 節的雜湊測試候選沒進判定 | 不改：元件照可畫元件不進雜湊，沒有可測的行為 |
 | N-7 | region 清單在索引與 catalog 各一份 | 採用：契約頁寫明 catalog 由烘焙工具一起產生（(d1)） |
+
+## 15. S4 小宣告：PvP 接分塊地圖（`v8-arch-gyo2-big-map-s4`）
+
+2026-11-25。使用者「S4 同步做」（`v8-arch-gyo2-big-map-s4-parallel`）。Opus／high（上段：資料契約、Match 判定）。Engine 的缺口（`Mesh3d` 接作者持有的模型）另成 PR #348，S4 疊在 #342＋#348 上。
+
+### 15.1 現況（程式）
+
+- `LoadGameContent`（`PvpWorld.cpp:732`）在建 World 之前，同步讀**全部** arena 的 v1 單檔，`GameContent` 由所有 World 共用。Client 在 `ApplySnapshot` 尾段跟著 Match 的 `MatchInfo{arenaId, wallsDigest}` 換競技場（#338）。
+- 同一份碰撞盒的 `BoxSet` 建三次（`:674`、`:778`、`:915`）。S0：103 萬盒建一次要 2.4 s。
+- Client：`ShowArena` 為整張地圖做一個 `Mesh3d`（`ArenaModelId`、`VoxelModelLoader`），palette 圖由 `PaletteOf` 給。
+
+### 15.2 改成（卡片判）
+
+1. **arena 檔 v3**：`geometry`（v1 單檔）換成 `map`，也就是地圖索引在 catalog 裡的 id。`width`／`depth` 刪掉，範圍由地圖的 bounds 導出（事實只在一處，2.5）。出生點、角色參數留在 arena 檔（場景）。`arenas.json` 照舊，只列 arena 檔。
+2. **地圖不在建 World 之前讀**：`GameContent` 只留 arena 檔、規則、角色。地圖由**這個 World 要玩的那一張**在**生成世界階段**讀：
+   - 送出索引的請求；索引宣告的 region 參照由 asset 一起讀（VM-6）。
+   - region 沒全到之前 `Hold()`。
+   - 全部到齊後 `CheckVoxelMap`。
+   - 用 `ExpandVoxelChunk` 的碰撞盒建**一次** `BoxSet`。建構在 worker 上做，建好前 `Hold()`。
+   - Match 不留 quads。
+3. **Client 的網格**：每個 region 用 `AppendVoxelChunk` 合成一個 `ModelData`，經 #348 的 `ModelRef` 持有，交給一個 `Mesh3d`；`Aabb` 是 region 的世界盒；palette 圖是持有的 `ImageData`（`ImageRef`）。Client World 帶 `visibility` Module。
+4. **身分**：沿用 `MatchInfo{arenaId, wallsDigest}`，`wallsDigest` 由那一次建好的 `BoxSet` 導出。wire 不變。
+5. **遷移與退役**：
+   - 三張地圖用 (d1) 的 `build-map`／`import-boxes` 轉成分塊格式，catalog 的 region 條目由工具一起產生（契約頁 2.4）。
+   - 遷移完畢後刪掉 `data/VoxelMeshFile.*`、`client/VoxelModelLoader.*`。
+   - `Town_Graybox`（fixture）當第四張測試地圖。
+
+### 15.3 要和流程框架卡對齊的一點
+
+「Client 跟著 Match 換競技場」（#338）在大地圖下行不通：換一張要重新讀幾百 MB，不能在 `ApplySnapshot` 裡同步做。卡片的方向：
+- 要玩哪張圖，在**建 World 時**就決定。來源是流程框架的房間或選圖，World 的 options 帶 arena id。
+- Match 說的 arena 和自己的不同時，照現有路徑記 `ContentMismatch`，不在同一個 World 裡換。
+- 要換圖就換 World（`-replace-order-author-choice` 的「先丟舊的」）。
+
+這會改 #338 寫的那一段，已告知 PvP 卡；選圖的接點等流程框架卡回覆。
+
+### 15.4 判定（合併前）
+
+- L1：每張地圖（三張遷移的加上 `Town_Graybox`）的碰撞盒集合，遷移前後相同。用遷移前後的移動、射擊 golden 確認（現有的 PvP 測試不改）。
+- L2：生成期間 region 沒到齊不結束生成；到齊後一幀內結束；進度單調不減。
+- L3：缺 region、sha 不合 → 載入失敗並帶原因，不 assert。
+- L4：`BoxSet` 每個 World 只建一次。Match 與 Client 的 `wallsDigest` 相同。
+- L5：Client 每個 region 一個 `Mesh3d`，帶 `Aabb`；相機背後的 region 不排進 pass（端到端）。
+- L6：突變全部 killed，L1 三平台。
+
+### 15.5 不做
+
+串流、LOD 代理、GPU 量測（量之前先問）、場景標記的轉換（`.gox` 的場景圖層照舊排除）、Seats 的上限。
