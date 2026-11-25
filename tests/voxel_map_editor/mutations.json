@@ -1,0 +1,773 @@
+{
+ "version": 1,
+ "description": "Mutants of the voxel map editor's headless part (tools/voxel_map_editor: gyo.voxel_grid, the chunked bake, the box and Goxel imports, the synthetic maps, the command line); big-map declaration section 4.1 (d1), (c) and (d2). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). Run from the repository root: python3 -B tests/common/mutation/run_mutations.py --build-dir <build> --cmake <cmake> --catalog tests/voxel_map_editor/mutations.json. The vme-cli- mutants find the executable at <build>/../../_tools/voxel_map_editor/bin (the default GYO_OUTPUT_ROOT with the build tree under build/target/_build) and run on macOS and Linux only. Not added (with the reason): WriteMap's comparison of the read-back chunks with the baked ones (the writer and the reader agree, so no test can make them differ: an equivalent mutant); the order of SaveMap's steps (regions, index, stale removal: a test would need a failure in the middle of a save; each step is tested on its own); the per-rule mutants of the voxel_map Module itself (tests/common/voxel_map/mutations.json).",
+ "mutants": [
+  {
+   "id": "vme-grid-schema",
+   "what": "a grid with another schema is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (!schema || *schema != kGridSchema)",
+   "replace": "if (!schema)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: fields*",
+   "expect": "TEST CASE:\\s+grid rule: fields"
+  },
+  {
+   "id": "vme-grid-version",
+   "what": "a grid of another version is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "|| version != kGridVersion)",
+   "replace": ")",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: fields*",
+   "expect": "TEST CASE:\\s+grid rule: fields"
+  },
+  {
+   "id": "vme-grid-text-cap",
+   "what": "a grid text over 16 MiB is read",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (text.size() > kMaxGridTextBytes) return Broken(\"the text exceeds 16 MiB\", \"\");\n    auto document = Json::Parse(text);\n    if (!document) return Broken(\"not JSON: \"",
+   "replace": "auto document = Json::Parse(text);\n    if (!document) return Broken(\"not JSON: \"",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: nested*",
+   "expect": "TEST CASE:\\s+grid rule: nested"
+  },
+  {
+   "id": "vme-grid-origin-y",
+   "what": "an origin off the y = 0 floor is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (result.origin[1] != 0)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: origin*",
+   "expect": "TEST CASE:\\s+grid rule: origin"
+  },
+  {
+   "id": "vme-grid-origin-range",
+   "what": "an origin beyond +-2^16 cells is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (origin[axis] < -kCellLimit || origin[axis] > kCellLimit)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: origin*",
+   "expect": "TEST CASE:\\s+grid rule: origin"
+  },
+  {
+   "id": "vme-grid-cell-size",
+   "what": "a cell size outside [2^-16, 2^16] is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (!(result.cellSize >= kMinCellSize) || !(result.cellSize <= kMaxCellSize))",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: origin*",
+   "expect": "TEST CASE:\\s+grid rule: origin"
+  },
+  {
+   "id": "vme-grid-shape-box-range",
+   "what": "a shape box past the cell's 16 units is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (maximum[axis] < 0 || maximum[axis] > kUnits)",
+   "replace": "if (maximum[axis] < 0 || maximum[axis] > kUnits + 1)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: shapes*",
+   "expect": "TEST CASE:\\s+grid rule: shapes"
+  },
+  {
+   "id": "vme-grid-block-name-repeat",
+   "what": "two blocks of one name are accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (!names.insert(block.name).second) return Broken",
+   "replace": "if (!names.insert(block.name).second && false) return Broken",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: blocks*",
+   "expect": "TEST CASE:\\s+grid rule: blocks"
+  },
+  {
+   "id": "vme-grid-empty-orientation",
+   "what": "an empty cell with an orientation is accepted (two forms of empty)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (block == 0 && orientation != 0)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-run-repeat",
+   "what": "a run equal to the run before it is accepted (two texts of one grid)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (r > 0 && cell == last)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-run-cover",
+   "what": "runs that cover fewer than 4096 cells are accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (filled != kChunkCells) return Broken",
+   "replace": "if (false) return Broken",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-chunk-all-empty",
+   "what": "a chunk without a block is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (!anyBlock)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-chunk-order",
+   "what": "chunks out of order are accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (previous && !(*previous < key))",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-cell-range",
+   "what": "a filled cell at 2^16 (one past the range) is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "cell[axis] > kCellLimit - 1)",
+   "replace": "cell[axis] > kCellLimit)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid rule: chunks*",
+   "expect": "TEST CASE:\\s+grid rule: chunks"
+  },
+  {
+   "id": "vme-grid-write-runs",
+   "what": "the writer does not merge equal cells into one run, so a written grid does not read back",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+   "find": "if (i < cells.size() && cells[i] == cells[start]) continue;",
+   "replace": "if (false) continue;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "grid: the minimal*",
+   "expect": "TEST CASE:\\s+grid: the minimal"
+  },
+  {
+   "id": "vme-orientation-yaw",
+   "what": "a quarter turn about up goes the other way (the table is part of the format)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/Orientation.cpp",
+   "find": "{{{0, 0, 1}, {0, 1, 0}, {-1, 0, 0}}},\n    {{{-1, 0, 0}",
+   "replace": "{{{0, 0, -1}, {0, 1, 0}, {1, 0, 0}}},\n    {{{-1, 0, 0}",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "orientation: the table*",
+   "expect": "TEST CASE:\\s+orientation: the table"
+  },
+  {
+   "id": "vme-orientation-centre",
+   "what": "a box turns about the cell's corner instead of its centre",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/Orientation.cpp",
+   "find": "const Vec3i d{p[0] - kUnits / 2, p[1] - kUnits / 2, p[2] - kUnits / 2};",
+   "replace": "const Vec3i d{p[0], p[1], p[2]};",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "orientation: a stair*",
+   "expect": "TEST CASE:\\s+orientation: a stair"
+  },
+  {
+   "id": "vme-merge-upward",
+   "what": "a rectangle that goes on into the next slab starts a new box instead of growing upward",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MergeBoxes.cpp",
+   "find": "if (continued != open.end()) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "merge: a 2x1x1*",
+   "expect": "TEST CASE:\\s+merge: a 2x1x1"
+  },
+  {
+   "id": "vme-merge-along-x",
+   "what": "a strip the next column repeats starts a new box instead of going on along x",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MergeBoxes.cpp",
+   "find": "previous != strips.end() ? previous->second : x",
+   "replace": "x",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "merge: a 2x1x1*",
+   "expect": "TEST CASE:\\s+merge: a 2x1x1"
+  },
+  {
+   "id": "vme-bake-cullface-off",
+   "what": "faces against a neighbour's whole side are kept",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "if (other.block != 0 && shapes.Get(other).coversSide[static_cast<std::size_t>(dir ^ 1)])\n                                continue;",
+   "replace": "if (false)\n                                continue;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: cullface?*",
+   "expect": "TEST CASE:\\s+map: cullface,"
+  },
+  {
+   "id": "vme-bake-cullface-side",
+   "what": "cullface reads the neighbour's side facing away instead of the side that touches",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "coversSide[static_cast<std::size_t>(dir ^ 1)]",
+   "replace": "coversSide[static_cast<std::size_t>(dir)]",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: cullface?*",
+   "expect": "TEST CASE:\\s+map: cullface,"
+  },
+  {
+   "id": "vme-bake-covers-whole",
+   "what": "a neighbour covering part of a side hides the face",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "return std::all_of(covered.begin(), covered.end(), [](const bool c) { return c; });",
+   "replace": "return std::any_of(covered.begin(), covered.end(), [](const bool c) { return c; });",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: cullface?*",
+   "expect": "TEST CASE:\\s+map: cullface,"
+  },
+  {
+   "id": "vme-bake-greedy-u",
+   "what": "greedy does not grow a rectangle along u",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "while (u1 < nu && open[at(u1, v)]) ++u1;",
+   "replace": "",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: cullface?*",
+   "expect": "TEST CASE:\\s+map: cullface,"
+  },
+  {
+   "id": "vme-bake-greedy-v",
+   "what": "greedy does not grow a rectangle along v (master's bytes differ)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "if (!whole) break;\n                ++v1;",
+   "replace": "break;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: master*",
+   "expect": "TEST CASE:\\s+map: master"
+  },
+  {
+   "id": "vme-bake-quad-order",
+   "what": "a chunk's quads are not sorted; the voxel_map Module refuses the chunk (C5)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)",
+    "voxel-map VM-7"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "std::sort(chunk.quads.begin(), chunk.quads.end(),",
+   "replace": "std::stable_sort(chunk.quads.rbegin(), chunk.quads.rend(),",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: cullface?*",
+   "expect": "TEST CASE:\\s+map: cullface,"
+  },
+  {
+   "id": "vme-bake-shade",
+   "what": "the face brightness of +Y and -Y is swapped",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "kFaceBrightnessPercent{80, 80, 100, 50, 65, 65}",
+   "replace": "kFaceBrightnessPercent{80, 80, 50, 100, 65, 65}",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a palette*",
+   "expect": "TEST CASE:\\s+map: a palette"
+  },
+  {
+   "id": "vme-bake-shade-rounding",
+   "what": "shading truncates instead of rounding half up",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "(channel * percent + 50u) / 100u",
+   "replace": "(channel * percent) / 100u",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a palette*",
+   "expect": "TEST CASE:\\s+map: a palette"
+  },
+  {
+   "id": "vme-bake-empty-map",
+   "what": "a grid without a filled cell is reported as refused by the Module, not as an empty map",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "Error::Make(ErrorCode::EmptyMap, \"the grid has no filled cell\"",
+   "replace": "Error::Make(ErrorCode::BuildRefused, \"the grid has no filled cell\"",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: an empty*",
+   "expect": "TEST CASE:\\s+map: an empty"
+  },
+  {
+   "id": "vme-bake-validate-chunk",
+   "what": "BakeMap keeps a chunk without asking the Module (ValidateVoxelChunk)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)",
+    "voxel-map VM-3"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "if (auto valid = VM::ValidateVoxelChunk(chunk, *index); !valid) return Base::Err(Refused(\"a chunk\", valid.error()));",
+   "replace": "",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a chunk the*",
+   "expect": "TEST CASE:\\s+map: a chunk the"
+  },
+  {
+   "id": "vme-write-region-readback",
+   "what": "WriteMap does not take the Module's word on a region (ParseVoxelRegion)",
+   "guards": [
+    "big-map-declaration 4.1 (d1)",
+    "voxel-map VM-3"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "if (!region) return Base::Err(Refused(text.regions[r].file, region.error()));",
+   "replace": "if (!region) continue;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a region the*",
+   "expect": "TEST CASE:\\s+map: a region the"
+  },
+  {
+   "id": "vme-write-source-sha",
+   "what": "the index's source_sha256 is not the source's bytes",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "const auto sourceSha256 = Base::Sha256(sourceBytes);",
+   "replace": "const auto sourceSha256 = kPlaceholderSha;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: the index names*",
+   "expect": "TEST CASE:\\s+map: the index names"
+  },
+  {
+   "id": "vme-write-region-name",
+   "what": "a region file's name carries 15 digits of its sha256",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "sha256.substr(0, 16) + \".json\"",
+   "replace": "sha256.substr(0, 15) + \".json\"",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: the index names*",
+   "expect": "TEST CASE:\\s+map: the index names"
+  },
+  {
+   "id": "vme-save-same-bytes",
+   "what": "a region file already holding the same bytes is written again",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "existing && AsText(*existing) == region.text)\n            continue;",
+   "replace": "false)\n            continue;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: saving the same*",
+   "expect": "TEST CASE:\\s+map: saving the same"
+  },
+  {
+   "id": "vme-save-stale-form",
+   "what": "stale removal takes any listed name, not only the region file form",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "!IsRegionFileName(std::string_view(file).substr(prefix.size())))",
+   "replace": "false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a save stopped*",
+   "expect": "TEST CASE:\\s+map: a save stopped"
+  },
+  {
+   "id": "vme-save-stale-listed",
+   "what": "stale removal also removes the files the new index lists",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+   "find": "if (listed.contains(file) || !file.starts_with(prefix) ||",
+   "replace": "if (!file.starts_with(prefix) ||",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "map: a save stopped*",
+   "expect": "TEST CASE:\\s+map: a save stopped"
+  },
+  {
+   "id": "vme-boxes-whole-cells",
+   "what": "a box coordinate off the whole cells is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/BoxImport.cpp",
+   "find": "|| std::floor(*number) != *number ||",
+   "replace": "||",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "import-boxes*",
+   "expect": "TEST CASE:\\s+import-boxes"
+  },
+  {
+   "id": "vme-boxes-floor",
+   "what": "a box below the floor (y < 0) is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/BoxImport.cpp",
+   "find": "if (box[1] < 0) return Broken",
+   "replace": "if (false) return Broken",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "import-boxes*",
+   "expect": "TEST CASE:\\s+import-boxes"
+  },
+  {
+   "id": "vme-boxes-origin",
+   "what": "the imported grid's origin is not the boxes' lowest x and z",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/BoxImport.cpp",
+   "find": "grid.origin = {static_cast<std::int32_t>(lowest[0]), 0, static_cast<std::int32_t>(lowest[2])};",
+   "replace": "grid.origin = {0, 0, 0};",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "import-boxes*",
+   "expect": "TEST CASE:\\s+import-boxes"
+  },
+  {
+   "id": "vme-gox-axes",
+   "what": "a Goxel voxel (x, y, z) becomes the cell (x, y, z): Goxel's up is not gyo's up",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "const std::array<std::int64_t, 3> cell{goxel[0], goxel[2], goxel[1]};",
+   "replace": "const std::array<std::int64_t, 3> cell{goxel[0], goxel[1], goxel[2]};",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: a Goxel voxel*",
+   "expect": "TEST CASE:\\s+gox: a Goxel voxel"
+  },
+  {
+   "id": "vme-gox-alpha",
+   "what": "alpha 127 is empty (Goxel's exports keep it)",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "if (rgba[3] < kSolidAlpha) continue;",
+   "replace": "if (rgba[3] <= kSolidAlpha) continue;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: alpha*",
+   "expect": "TEST CASE:\\s+gox: alpha"
+  },
+  {
+   "id": "vme-gox-later-layer-over",
+   "what": "an earlier layer's voxel stays under a later layer's (first wins)",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "            slot = colour + 1;",
+   "replace": "            if (slot == 0) slot = colour + 1;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: geometry is*",
+   "expect": "TEST CASE:\\s+gox: geometry is"
+  },
+  {
+   "id": "vme-gox-hidden",
+   "what": "a hidden layer is geometry",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "if (!layer.visible) report.use = GoxLayerUse::Hidden;\n        else if",
+   "replace": "if",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: geometry is*",
+   "expect": "TEST CASE:\\s+gox: geometry is"
+  },
+  {
+   "id": "vme-gox-clone",
+   "what": "a clone or procedural layer (base_id, shape) is geometry",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "AnyNonZero(value)) layer.ownBlocks = false;",
+   "replace": "AnyNonZero(value)) layer.ownBlocks = true;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: geometry is*",
+   "expect": "TEST CASE:\\s+gox: geometry is"
+  },
+  {
+   "id": "vme-gox-exclude",
+   "what": "an excluded layer name is geometry",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "else if (excluded) report.use = GoxLayerUse::Excluded;",
+   "replace": "",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: geometry is*",
+   "expect": "TEST CASE:\\s+gox: geometry is"
+  },
+  {
+   "id": "vme-gox-palette-cap",
+   "what": "257 colours reach the grid, which refuses them for another reason",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "if (colours.size() > kMaxColours)",
+   "replace": "if (colours.size() > kMaxColours + 1)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: more than 256*",
+   "expect": "TEST CASE:\\s+gox: more than 256"
+  },
+  {
+   "id": "vme-gox-block-shape",
+   "what": "--block's shape is not given to the colour's block",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "shape = static_cast<std::uint32_t>(found - shapes.begin());",
+   "replace": "",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: one block per colour*",
+   "expect": "TEST CASE:\\s+gox: one block per colour"
+  },
+  {
+   "id": "vme-gox-version",
+   "what": "a .gox of another version is read",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "if (!file.Int32(version) || version != kGoxVersion)",
+   "replace": "if (!file.Int32(version))",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: what is not*",
+   "expect": "TEST CASE:\\s+gox: what is not"
+  },
+  {
+   "id": "vme-gox-block-index",
+   "what": "a layer naming the block one past the BL16s read is accepted",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "static_cast<std::size_t>(block.index) >= blockCount)",
+   "replace": "static_cast<std::size_t>(block.index) > blockCount)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: a layer naming*",
+   "expect": "TEST CASE:\\s+gox: a layer naming"
+  },
+  {
+   "id": "vme-gox-block-size",
+   "what": "a BL16 image of another size than 64 x 64 is read",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "if (image->Width() != kBlockImageEdge || image->Height() != kBlockImageEdge)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: a BL16 image*",
+   "expect": "TEST CASE:\\s+gox: a BL16 image"
+  },
+  {
+   "id": "vme-gox-pattern-one",
+   "what": "'?' in a layer pattern is a literal, not one character",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "(pattern[p] == '?' || pattern[p] == name[n])",
+   "replace": "(pattern[p] == name[n])",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: layer name patterns*",
+   "expect": "TEST CASE:\\s+gox: layer name patterns"
+  },
+  {
+   "id": "vme-gox-pattern-trailing-star",
+   "what": "a pattern ending in '*' does not match when the name is used up",
+   "guards": [
+    "big-map-declaration 4.1 (c)"
+   ],
+   "file": "tools/voxel_map_editor/src/GoxImport.cpp",
+   "find": "while (p < pattern.size() && pattern[p] == '*') ++p;",
+   "replace": "",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "gox: layer name patterns*",
+   "expect": "TEST CASE:\\s+gox: layer name patterns"
+  },
+  {
+   "id": "vme-synthetic-size",
+   "what": "a km2 map ignores its size",
+   "guards": [
+    "big-map-declaration 4.1 (d2)"
+   ],
+   "file": "tools/voxel_map_editor/src/Synthetic.cpp",
+   "find": "if (name == \"km2-ground\") return GroundGrid(size);",
+   "replace": "if (name == \"km2-ground\") return GroundGrid();",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "synthetic: the km2*",
+   "expect": "TEST CASE:\\s+synthetic: the km2"
+  },
+  {
+   "id": "vme-synthetic-whole-chunks",
+   "what": "a km2 size that is not whole chunks is taken",
+   "guards": [
+    "big-map-declaration 4.1 (d2)"
+   ],
+   "file": "tools/voxel_map_editor/src/Synthetic.cpp",
+   "find": "|| size % kChunkSize != 0) return std::nullopt;",
+   "replace": ") return std::nullopt;",
+   "target": "gyo_voxel_map_editor_tests",
+   "cases": "synthetic: the km2*",
+   "expect": "TEST CASE:\\s+synthetic: the km2"
+  },
+  {
+   "id": "vme-cli-read-failed",
+   "what": "a file that cannot be read exits 1 instead of 3",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/Main.cpp",
+   "find": "case ErrorCode::ReadFailed:\n    case ErrorCode::WriteFailed: return 3;",
+   "replace": "case ErrorCode::WriteFailed: return 3;",
+   "target": "gyo_voxel_map_editor",
+   "command": [
+    "{cmake}",
+    "-DEDITOR={build}/../../_tools/voxel_map_editor/bin/gyo_voxel_map_editor",
+    "-DWORK={build}/vme-mutation-cli",
+    "-DFIXTURES=tests/voxel_map_editor/fixtures",
+    "-P",
+    "tests/voxel_map_editor/CliTests.cmake"
+   ],
+   "platforms": [
+    "darwin",
+    "linux"
+   ],
+   "expect": "verify_map_missing: exit 1, expected 3",
+   "timeout": 300
+  },
+  {
+   "id": "vme-cli-verify-different",
+   "what": "verify-map exits 0 on a different map",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/Main.cpp",
+   "find": "        return 4;\n    }\n    std::cout << \"same: \"",
+   "replace": "        return 0;\n    }\n    std::cout << \"same: \"",
+   "target": "gyo_voxel_map_editor",
+   "command": [
+    "{cmake}",
+    "-DEDITOR={build}/../../_tools/voxel_map_editor/bin/gyo_voxel_map_editor",
+    "-DWORK={build}/vme-mutation-cli",
+    "-DFIXTURES=tests/voxel_map_editor/fixtures",
+    "-P",
+    "tests/voxel_map_editor/CliTests.cmake"
+   ],
+   "platforms": [
+    "darwin",
+    "linux"
+   ],
+   "expect": "verify_map_different: exit 0, expected 4",
+   "timeout": 300
+  },
+  {
+   "id": "vme-cli-exclude-layer",
+   "what": "import-gox drops --exclude-layer",
+   "guards": [
+    "big-map-declaration 4.1 (d1)"
+   ],
+   "file": "tools/voxel_map_editor/src/Main.cpp",
+   "find": "options.excludeLayers.push_back(value);",
+   "replace": "",
+   "target": "gyo_voxel_map_editor",
+   "command": [
+    "{cmake}",
+    "-DEDITOR={build}/../../_tools/voxel_map_editor/bin/gyo_voxel_map_editor",
+    "-DWORK={build}/vme-mutation-cli",
+    "-DFIXTURES=tests/voxel_map_editor/fixtures",
+    "-P",
+    "tests/voxel_map_editor/CliTests.cmake"
+   ],
+   "platforms": [
+    "darwin",
+    "linux"
+   ],
+   "expect": "import_gox: the output does not match",
+   "timeout": 300
+  }
+ ]
+}

@@ -1,0 +1,435 @@
+# 事前宣告：大地圖線（`v8-arch-gyo2-big-map`）
+
+更新：2026-11-25（修訂 0）。Owner：大地圖線的任務卡（GYO2 主會話開，`v8-arch-gyo2-big-map-and-json-pretty-start`）。
+**狀態：事前宣告，等使用者選第 4 節「地圖從哪來」。** 照新 AGENTS，不依賴地圖來源的段（第 8 節的 S0 量現狀、S1 格式 Module、S2 可見性）可以先動工；依賴的段（S3 起）等選定。
+
+**核心一句**（每一項都拿來對照）：**大地圖是「同一張地圖變大」，不是新玩法。Engine 只補「只有 Engine 做得到」的機制（看不到的不畫、遠的換簡化、同一網格畫很多份）；格式是工具與遊戲之間的資料契約；地圖怎麼切、載哪些、場景放什麼，是作者的。**
+
+**用詞**：標「**卡片判**」的是這張卡照命名規範、別家原始碼與已定原則自己判的，不是使用者的話。每一項都寫前提：**〔Engine〕**＝只有 Engine 做得到；**〔作者〕**＝作者（遊戲或工具）能處理。
+
+## 0. 根據與讀的版本
+
+- 工作樹 `gyo2-big-map-declaration-65f33f`，基底 `origin/gyo2` 895c1a08。
+- master 的 big-map（`git show master:docs/architecture/plans/big-map/…`）：README、proposal-v0.1、survey、engine-grid、engine-format、engine-map、todo、HANDOFF「決定」與「product-arena-v3（核准版）」。共用筆記 `big-map-status-for-gyo2.zh-Hant.md`（PvP 卡 11-24 整理）。
+- master 的量測證據（主 checkout `build/evidence/tool-v8-voxel-map/editor-next/scale/`，11-07）：合成圖 km2-building＝46,875 區塊、4,402 萬格、256 region、487 萬 quads、103 萬碰撞盒、區塊化地圖 242 MB、工具烘焙中位數 46.6 s、峰值 RSS 3.1 GB。**只當比較基準**（11-01 之後的數據，`gyo2-no-master-algorithms-data`）；這條線不碰權威與回滾的算法。
+- gyo2 已定的決定（HANDOFF）：`-asset-large-map-like-bevy`（照 Bevy 不內建串流；asset 只給上限與 region 級 id；「後續如果需要，我們可以使用 Module 來增加地圖」）、`-build-world-phase-is-mechanism`、world-gen（`WorldGeneration`、`Hold()`）、`-replace-order-author-choice`（換大圖時可先丟舊的）、`-render-after-big-map`（視錐剔除、instancing、LOD 隨大地圖線）、`-game-flow-and-gateway`（「加載資源、讀檔 → 進入遊戲」）、`-pvp-playtest-2026-11-24` 3。
+- gyo2 程式（本卡讀過）：
+  - `games/object_fps_pvp/src/world/PvpWorld.cpp:732-813` `LoadGameContent`：程序啟動時同步讀 **全部** arena（`arenas.json` 三張），每張讀 v1 單檔、`BoxSet::Build` 一次；`:674`、`:915` 再各建一次。`PvpWorld.hpp:45` 的 `InstalledArena` 連 quads 一起留在 Match。
+  - `client/VoxelModelLoader.hpp:45`：v1 文字上限 16 MiB。biome（63 m 見方）1.38 MiB → **v1 契約本身在約 210 m 見方就到頂**（面積 ×11.6）。共用筆記的「約 200 m 見方以內可行」與這個上限重合，效能那一面沒量過。
+  - `engine/modules/mesh_render/src/MeshRenderModule.cpp:45-95`：`ExtractMeshes3d` 把每個 `Mesh3d` 都抽出、`Queue3dPasses` 全部排進 pass，**沒有剔除**。`engine/core/math/.../Frustum.hpp` 有 `MakeFrustum`／`Intersects`，沒有消費端。render 沒有 instancing。`Vertex3D` 32 B（`RenderCommands.hpp:121-126`）。
+  - `engine/modules/physics_3d`：`BoxSet` 是 BVH（`Shapes.cpp:24` 葉 4 個、`:48` 中位數切分），`FixInternalEdges` 的鄰接只在同一個 `BoxSet` 之內（`BoxSetData.hpp:30-37`）；`SpatialQuery.hpp` 依 EntityId 升冪逐一看每個 collider 實體（實體層沒有 broadphase）。
+  - `engine/modules/json`：adapter 是 yyjson（master 的 450 ms／5.3 MB 是 nlohmann 的數字，不適用）。
+  - `engine/orchestration/.../WorldGeneration.hpp`（`Hold()`、`WhileGenerating`／`AfterGenerating`）；`engine/modules/world_asset/.../AssetView.hpp:66-131`（`Ready()` 回 `loaded`、`failed`、`ids`，可算進度）。
+- 別家原始碼：Bevy `6a911653f`（本機）、Godot `94fc09c`（本機）、Goxel（本機，GPL-3.0，只讀設計）；bevy_voxel_world `main`（0.19.3，網頁讀源碼，行號是估計）、minecraft.wiki 與 Epic 文件（網頁）。第 3 節逐項列。
+
+## 1. master 的 big-map 取什麼、不取什麼
+
+| master 的內容 | gyo2 | 理由 |
+|---|---|---|
+| 目標約 1 km²、cell 0.5 m、4 人房、高建築密度（`-density`） | **取**（規劃尺度） | 使用者的目標，不是算法 |
+| `gyo.voxel_map` v1＋`gyo.voxel_region` v1（區塊 16³、region 8×8 柱×全高、索引綁每個 region 的 sha256、JSON 唯一編碼） | **取格式，wire 一字不改**（卡片判） | 格式是資料契約，不是權威算法；一字不改讓 master 的工具（第 4 節 (a)、(d1)）與已烘好的資料直接可用。規則逐條在 S1 重審，要改就升版本 |
+| Engine 擁有格式（`GYO::VoxelMesh`） | **改**：可選的 Module（第 2.1 節） | gyo2 的 Module／Plugin 分法與 `-asset-large-map-like-bevy` |
+| `GYO::MapMarkers`（Engine 的標記層） | **現在不取** | 標記屬場景；gyo2 沒有第二個讀者（場景編輯器未開），PvP 的 arena 檔已帶出生點。RC-BM4 |
+| `StaticAabbGrid`（Match 的 broadphase） | **不取** | gyo2 的 `BoxSet` 自帶 BVH，同一角色 |
+| Match 整張載入、沒有「已載入集合」（`-sim-model`） | **取**（第 2.3 節） | 4 人房、權威簡單；量到才加分區（RC-BM2） |
+| Client 每 region 一個 mesh＋視錐／距離剔除；LOD 量到才做（`-lod`） | **取方向，機制照 Bevy 重劃**（第 2.4 節） | 剔除與距離是 Engine 機制；LOD 代理是工具烘的資產 |
+| 地圖＝幾何、場景＝放在幾何上的東西（`-map-scene-split`） | **取** | 第 2.5 節 |
+| 視錐數學進 Engine（`-frustum-in-math`） | gyo2 已有 `Frustum.hpp` | — |
+| 量測等真的大地圖做出來（`-measure-after-real-map`） | **改**：先量現狀（S0），km² 等地圖來源（S5） | 使用者這次要先知道現狀撐到多大 |
+
+## 2. 照 gyo2 的分層重劃
+
+### 2.1 分塊格式：資料契約 〔作者〕＋一份共用的讀者
+
+- **前提**：讀一張地圖檔，遊戲自己做得到（PvP 現在就自己讀 v1，PV8）。所以不是「只有 Engine 做得到」。
+- 但這份格式有**兩端以上的讀者**：工具（寫完自查）、PvP、之後的遊戲。master 定 `marker_kinds` 時的理由同樣適用：兩個讀者共用一個驗證者，規則才不會分岔。
+- **放法**（卡片判，依使用者 11-21「後續如果需要，我們可以使用 Module 來增加地圖」）：新 Module **`voxel_map`**（`engine/modules/voxel_map/`），作者選用，Engine 核心不認得它。名字是概念（voxel 地圖），不是產品。
+  - 內容：`ParseVoxelMap`、`ParseVoxelRegion`、`ValidateVoxelChunk`、`ExpandVoxelChunk`（世界座標的頂點、碰撞盒）、`ExpandVoxelPalette`、座標換算；兩個 asset loader（索引、region），照 image Module 的 `PngLoader` 那樣由 Product 註冊。
+  - 只讀不寫：烘焙、greedy、編輯留在工具（`engine-not-tool-duties`）。工具持有寫的知識，用「產出要通過 `voxel_map` 的驗證」當對齊測試。
+  - 依賴：Base、Math、json、asset。不依賴 render、physics_3d、Kernel（展開出的是純資料，遊戲自己放進 `Mesh3d`／`Collider`）。
+- region 是一個 asset id（asset 宣告 F8、決定 8）。region 的平行解析交給 asset 的 worker pool，不在 Module 裡另開執行緒。
+- 單檔 `gyo.voxel_mesh` v1：PvP 的讀者（`data/VoxelMeshFile.cpp`）在三張地圖遷移完時退役（S4），不搬進 Module。
+
+### 2.2 讀取器放哪一層
+
+| 部件 | 層 | 前提 |
+|---|---|---|
+| 文字 → 文件、驗證、展開 | Module `voxel_map` | 〔作者〕能做，但多讀者共用一份（2.1） |
+| 讀檔、排程、worker | asset／world_asset（已有） | 〔Engine〕已有機制，不另做 |
+| 讀哪張地圖、讀哪些 region、什麼時候算好 | 遊戲 | 〔作者〕 |
+| region → `Mesh3d` 實體、→ `Collider` | 遊戲（先）；第二個遊戲出現再看要不要進 Module | 〔作者〕；bevy_voxel_world 把這層做成生態 crate，但它是程序生成＋相機串流，和我們的整張讀不同 |
+
+### 2.3 Match 的載入與碰撞
+
+- **前提**：碰撞查詢已是 Engine 機制（physics_3d）；整張載入還是分區，是〔作者〕的選擇。
+- **`BoxSet` 撐不撐得住 km²**（推算，未量）：103 萬盒 × 盒 24 B＋節點（約 N/2 × 36 B）＋順序 4 B＋面鄰接（faceStart 6N × 4 B＋鄰接）≈ 100 MB；查詢深度約 log₂(10⁶/4) ≈ 18 層。上限 2³²−1。**記憶體與查詢看起來撐得住，建構時間沒量**（中位數切分每層排序，約 O(N log² N)）。S0 量。
+- **要不要分區：建議不分，整張一個 `BoxSet`**（卡片判）。理由：
+  - `FixInternalEdges` 的鄰接只在同一個 `BoxSet` 內。每個 region 一個 `BoxSet` 的話，每 64 m 的 region 邊界上會出現「內部邊」，角色貼地滑過接縫會被卡（Godot GridMap 每個 octant 一個 static body，接縫正是這個問題）。
+  - `SpatialQuery` 在實體層沒有 broadphase；256 個 region 實體每次查詢都要逐一看，一個實體反而簡單。
+- **改的是載入路徑**（S4）：只讀這一局的地圖（不再啟動時讀全部）；在生成世界階段讀，region 全部 Loaded 才建 `BoxSet`（在 worker 建，建好前 `Hold()`）；Match 不留 quads（只要碰撞盒）；同一份 `BoxSet` 不重建三次。
+- **RC-BM2**（分區或睡眠）：S5 量到 Match 的載入時間、記憶體或 tick 超過 S5 宣告的值 → 先查是哪一項，再選分區（要先替 physics_3d 寫跨集合的鄰接）或遠處睡眠（master `-sim-model` 的形狀：睡眠是權威元件）。
+
+### 2.4 Client：分區網格、視錐剔除、instancing、LOD
+
+| 項目 | 層 | 前提 | 照誰 |
+|---|---|---|---|
+| 每個 region 一個 `Mesh3d` 實體 | 遊戲（用 `voxel_map` 的展開） | 〔作者〕 | master `-lod`、Godot octant、bevy_voxel_world 每 chunk 一個實體 |
+| **視錐剔除** | Engine：bounds 元件＋每個相機的剔除清單，排隊時跳過（第 13 節） | 〔Engine〕作者伸不進 `ExtractMeshes3d` | Bevy `bevy_camera/src/visibility/mod.rs`：`Aabb`（`calculate_bounds` :557）、`ViewVisibility` :226、`VisibleEntities` :344、`NoFrustumCulling` :318、`check_visibility_cpu_culling` :748 |
+| **距離剔除**＝最簡單的 LOD | Engine：`VisibilityRange` | 〔Engine〕同上 | Bevy `visibility/range.rs:80`、`check_visibility_ranges` :230；Godot `visibility_range_begin`（`visual_instance_3d.h:128`） |
+| **LOD 代理網格**（遠處 region 的簡化網格） | 工具烘（另一個 asset，不改 region 格式）＋Engine 的 `VisibilityRange` 切換 | 產生網格〔作者〕（工具）；切換〔Engine〕 | Unreal HLOD（編輯器／commandlet 離線建，未載入的格子用 HLOD 代替）；master `-lod` 的 RC |
+| **instancing** | Engine：render＋`sdl_gpu` 的 instanced draw | 〔Engine〕 | Bevy 的自動 batching；Godot GridMap 每種 item 一個 MultiMesh（`grid_map.cpp:946`） |
+
+- **instancing 對 voxel 幾何沒有幫助**：每個 region 的網格都不一樣（greedy 後更是）。它幫的是場景裡重複的東西（箱子、樹、路燈）。所以排在剔除之後，測試場景用重複的模型，不用地圖。
+- **Client 的記憶體是 km² 的第一個風險**（推算，未量）：km2-building 487 萬 quads × 4 頂點 × 32 B ≈ 623 MB 頂點＋117 MB 索引；`ModelData` 在 CPU 端還有一份同大小。合計可能 1.5 GB 以上。對策候選（S5 量到才選）：上傳後放掉 CPU 端的頂點、voxel 專用的壓縮頂點（要遊戲自己的 shader，屬渲染管線線）、LOD 代理、背景串流（RC-BM3）。
+- 剔除的放法：判斷照 Bevy 在**來源 World** 做（`CheckVisibility`），結果是每個相機一份清單，`Queue3d` 排隊時跳過清單裡的。抽取仍照抽（gyo2 的抽取每幀重建、多相機共用一份）。取捨與膠水見第 13.3 節。
+
+### 2.5 地圖和場景分開
+
+- **前提**：〔作者〕。地圖＝幾何（`voxel_map` 目錄）；場景＝「用哪張地圖、放了什麼、規則」，是遊戲的檔。
+- PvP：arena 檔升版本（v3），`geometry` 換成地圖目錄；出生點等仍在 arena 檔；`width`／`depth` 從地圖的 bounds 導出（事實只在一處）。名字照 PvP 自己的詞，不在 Engine 立「scene」概念。
+- 地圖的身分：索引文字的 sha256（索引已綁每個 region 的 sha）；Match 與 Client 對照沿用現有的 `MatchInfo{arenaId, wallsDigest}`（`wallsDigest` 由 `BoxSet` 的內容導出），不改 wire。
+- Unreal 的 Data Layers 是同一個想法（同一個世界上疊不同組的 actor）；我們用「場景檔指向地圖」做到，不做圖層機制。
+
+## 3. 別家對照
+
+| 項目 | Bevy（主參考）＋生態 | Minecraft | Godot | Unreal World Partition | gyo2 的選擇 |
+|---|---|---|---|---|---|
+| 分塊 | 核心沒有；bevy_voxel_world `CHUNK_SIZE` 32³、`ChunkKey{IVec3, lod}`（chunk.rs，估 :20-60） | chunk 16×16 柱、section 16³；region 檔 32×32 chunk（`r.x.z.mca`） | GridMap octant 預設 8³（`grid_map.h:176`） | 2D runtime grid，格長例 256 m | 區塊 16³、region 8×8 柱（master 的格式，和 MC 的 section／region 同型） |
+| 載入 | 生態：相機距離＋視錐決定生成／回收（`ChunkSpawnStrategy::CloseAndInView`） | server 依 ticket 按需載入；client 從 server 收 chunk | 整個節點 | 依 streaming source（玩家）距離載入格子 | **整張載入**（4 人、權威簡單）；串流是 RC-BM3 |
+| 檔案 | 生態沒有地圖格式（存「編輯差分＋種子」） | region 檔：4 KiB sector、位置表、Zlib | 場景資源 | One File Per Actor（編輯器端） | JSON 索引＋region 檔（契約）；二進位快取是 RC-BM1 |
+| 碰撞 | 生態不提供（範例用 avian） | 每 chunk | 每 octant 一個 static body | 跟著 actor | 整張一個 `BoxSet`（2.3） |
+| 剔除 | 核心 `check_visibility`（Aabb、Frustum） | 不畫空 section（wiki）；其他未從讀到的頁確認 | 渲染伺服器的實例剔除 | — | 照 Bevy |
+| LOD | 核心 `VisibilityRange`；生態 chunk LOD（降取樣再放大） | — | `visibility_range` | HLOD（離線建、代替未載入格子） | `VisibilityRange`＋工具烘的代理 |
+| instancing | 自動 batching | — | MultiMesh | HLOD 的 Instancing 層 | 照 Bevy，排在後面 |
+
+**偏離 Bevy 的地方與膠水**：
+1. **整張載入、不照 bevy_voxel_world 的相機串流**：衝突點是權威——Match 要整張碰撞，Client 的「看不到的先不載」和 Match 的狀態無關，但 region 何時進碰撞要決定性（asset RC-AS1）。不串流就沒有這個膠水。這不是偏離 Bevy 核心（核心沒有串流），是不採用一個生態 crate 的策略。
+2. **格式自己定（master 的）**：Bevy 生態沒有檔案格式可照；接合點是 Bevy 式的 asset loader（我們的 asset Module 已照 Bevy），膠水只有兩個 loader。
+3. **Match 碰撞整張一個 `BoxSet`**：avian 有實體層 broadphase、我們沒有（physics_3d 的取捨，3D 物理卡已定）。一張地圖一個實體正好繞開這個差異，不寫膠水。
+4. 剔除、`VisibilityRange`、instancing 照 Bevy，沒有偏離。
+
+## 4. 地圖從哪來（交使用者選）
+
+**先用遊戲的例子**：想做一張 1 km² 的工廠區，四個人在裡面打。地圖要「有人畫出來」，畫好再「烘」成遊戲讀的區塊檔。問題是：畫在哪裡、誰負責烘？
+
+| 選項 | 畫在哪 | 烘 | 能多大 | 代價 | 對大地圖線的影響 |
+|---|---|---|---|---|---|
+| **(a)** 等 master 的 `voxel_map_editor` 整個移植 | GYO 自己的編輯器（照 Goxel 的操作） | 編輯器內建 | km²（master 的 tool-chunked 已支援區塊存檔） | 排在工具線後面（ImGui 接法→編輯器，master 原始碼約 286 KB，含 1,135 行的視窗） | S3～S5 全部等工具線；這段期間只能用合成圖 |
+| **(b)** 轉換器：現有資料 → 新格式 | 不畫，轉現有的 | 轉換器 | 現有三張（最大 63 m 見方） | 小（估 4～6 h）。biome 有原始格子（證據夾 `biome.voxel_grid.json`）；pvp_arena、pvp_corners 只有 v1 成品，要從 v1 切成區塊 | 只能遷移舊圖、驗證格式管線，**給不出大地圖** |
+| **(c)** Goxel 畫、匯出再轉 | Goxel | 轉換器＋烘焙 | Goxel 本身無界；`.vox` 匯出每軸 < 255 格（`vox.c:589-591` 的 assert）＝127 m；`.txt` 匯出無界（一格一行 `X Y Z RRGGBB`，`txt.c:94-101`） | 只有顏色，沒有 slab／stair 等形狀與方塊名；km² 的 `.txt` 是數千萬行；Goxel 編輯 4,000 萬格順不順沒驗過 | 使用者現在就能開始畫；仍要一個烘焙器（見 (d1)） |
+| **(d1)** 先只移植 master 編輯器的**無視窗烘焙命令**（`build-map`、`import-boxes`），不帶視窗 | 任何能產出 `gyo.voxel_grid` 的來源 | 移植的 CLI | km²（master 的烘焙器已處理過 km2-building） | 估 8～12 h（master `Build.cpp`＋`MapBuild.cpp`＋`GridDocument.cpp`＋`BoxImport.cpp` 約 1.15k 行，改接 gyo2 的 `voxel_map` Module 與 json Module） | 大地圖線不再等工具線；之後的編輯器移植直接重用它 |
+| **(d2)** 程式生成（合成城市） | 不畫 | 生成器＋(d1) | 任意 | master 有 `Synthetic.cpp`（約 100 行）可參考 | 給量測用的 km² 圖；**不是能玩的地圖** |
+
+**建議：(d1)＋(c)＋(d2)，(b) 併進 (d1)。**
+- (d1) 是所有路都要的「烘焙」那一段，先做就不被工具線卡住；pvp_arena、pvp_corners 用 (d1) 的 `import-boxes` 或一個 v1→格子的小轉換器遷移，biome 用它的原始格子重烘（＝(b)）。
+- (c) 讓你現在就能在 Goxel 畫真的地圖：加一個 Goxel `.txt`（無界）／`.vox`（≤127 m）→ `gyo.voxel_grid` 的匯入命令（master 用過一次性腳本 `vox_to_grid.py`）。形狀（slab、stair）Goxel 表達不了，用顏色對照表指定（例：某個顏色＝stair），對照表是匯入命令的參數。
+- (d2) 給 S5 的 km² 量測，在真的大地圖畫好之前就能量。
+- (a) 照原排程在後面，接上 (d1) 的烘焙核心。
+- 選 (a) 的代價：大地圖線在 S2 之後停下等工具線。
+
+### 4.1 已定（`v8-arch-gyo2-big-map-source`，2026-11-25）
+
+使用者原話：「照建議，(d1)＋(c)＋(d2)」。(b) 併進 (d1)：biome 用原始格子重烘，另外兩張用 `import-boxes` 遷移。(a) 照原排程，放在後面的 tools 移植。
+
+**使用者的三張 Goxel 圖**（`~/Code/GitHome/Map/`，使用者：「你可以當成大地圖的測試」）。下表由卡片自寫的分析腳本照 `.gox` 的格式說明讀出（只讀 GitHome 的路徑，沒有複製進 repo）：
+
+| 檔（大小） | 格子（x×y×高，Goxel 的 z 朝上） | 0.5 m 換算 | 可見格數 | 顏色 | 圖層 |
+|---|---|---|---|---|---|
+| `Kiriyu_Town_Graybox.gox`（0.2 MB） | 200×200×40 | 100×100 m，高 20 m | 653,642 | 88 | 11 |
+| `Kiriyu_Incident.gox`（1.0 MB） | 500×500×64 | 250×250 m，高 32 m | 3,247,851 | 32 | 27 |
+| `Kiriyu_Extraction_250m.gox`（1.0 MB） | 500×500×64 | 250×250 m，高 32 m | 3,241,046 | 29 | 21 |
+
+- **127 m 的限制有影響**：兩張 250 m 的圖每軸 500 格，Goxel 的 `.vox` 匯出會擋下（每軸要小於 255 格）。`.txt` 匯出沒有上限，但一行一格（約 324 萬行），而且圖層會被合併。
+- **圖層裡有場景的東西**：除了幾何以外，還有「Spawns and exits」「M1～M6」（怪物佔位，「Boss hands only - exclude from count」）、「REF | Player 2x2x4」「Story 01～06」等。照「地圖＝幾何、場景＝放在幾何上的東西」（2.5），這些不該烘進碰撞。
+- **卡片判：直接讀 `.gox`**，不經 `.vox`／`.txt`。理由有三：250 m 的圖過不了 `.vox`；圖層名要留著，才能把幾何和場景標記分開；檔案只有 1 MB。
+  - 格式照 `.gox` 的格式說明自己寫，不抄 Goxel 的碼（GPL-3.0）。
+  - 匯入命令的參數：
+    - 哪些圖層當幾何（排除圖層名的樣式）。
+    - 顏色 → 方塊的對照（Goxel 表達不了 slab／stair）。
+    - 座標換軸（Goxel 的 z 朝上、右手系 → gyo 的 y 朝上、左手系：y、z 互換，形狀不鏡像）。
+  - 場景圖層的取出（轉成場景的標記）屬場景線，現在只排除，不轉。
+- **fixture**（`v8-arch-gyo2-big-map-gox-fixture`，使用者「照建議 (ii)」）：只把 `Kiriyu_Town_Graybox.gox`（0.2 MB）放進 repo，當 CI 的 fixture。兩張 250 m 的圖留在 GitHome，只在本機與 Linux 量測時用。
+- **和量測的關係**：250 m 見方、324 萬格是 S0「現狀能撐到多大」與 S5 之間的真實資料點（km2-building 是 4,402 萬格）。
+
+## 5. 量測
+
+### 5.1 S0：先量現狀能撐到多大（**輕量，不需要同意**）
+
+- **地圖**：把 biome（真資料，63 m）的 v1 平鋪 1×1、2×2、3×3（3×3＝189 m、約 12.5 MB，在 v1 的 16 MiB 之內；4×4 超過契約上限，現狀讀不了）。
+- **Match（無視窗、只用 CPU）**：載入時間（讀檔、解析、`BoxSet::Build`）、峰值 RSS、一個 tick 的移動與射擊查詢時間（中位數、p95）。另外把碰撞盒放大到 10⁴～10⁶（平鋪、與 master km2-building 同量級的 103 萬盒）只量 `BoxSet::Build` 與查詢，回答「`BoxSet` 撐不撐得住 km²」。預估峰值 RSS < 2 GB。
+- **性質**：探索與描述，不設門檻、不判過與不過；方法在看結果前寫進 S0 的紀錄，看了不改。件數照實記。
+- 證據放主 checkout `build/evidence/gyo2-big-map/s0/`。
+
+### 5.1.1 S0 的結果（2026-11-25，Linux 主機）
+
+- 機器：AMD Ryzen 7 6800H（16 執行緒）、30 GiB、Ubuntu 24.04.5、g++ 13.3，preset `core`（RelWithDebInfo），量測程式 `-O2`。原始碼 `220378f9`。證據在主 checkout 的 `build/evidence/gyo2-big-map/s0/`：腳本 `s0_linux.sh`、`probe.cpp`、`tile_v1.py`，輸出在 `linux/`。
+- 方法照 5.1。biome 的平鋪間距是 1,824 單位＝57 m（照碰撞盒與面的最大座標取整）。查詢在範圍內的亂數點各做 2,000 次：
+  - 向下的射線（找地面）、水平一槍的射線。
+  - 膠囊（半徑 0.3、半高 0.6）的小位移 cast 與接觸查詢。
+- 件數：每項 asked 2000、done 2000。
+
+| 地圖 | 文字 | quads | 碰撞盒 | 解析 | `BoxSet::Build` | 展開網格（CPU） | 峰值 RSS |
+|---|---|---|---|---|---|---|---|
+| biome 1×1（57 m） | 1.0 MB | 38,214 | 1,260 | 12.7 ms | 1.6 ms | 4.6 ms | 17 MB |
+| 2×2（114 m） | 4.1 MB | 152,856 | 5,040 | 50.8 ms | 6.6 ms | 21.9 ms | 57 MB |
+| 3×3（171 m） | 9.3 MB | 343,926 | 11,340 | 111 ms | 17.8 ms | 50.8 ms | 101 MB |
+
+| 只放碰撞盒（biome 的盒平鋪） | 碰撞盒 | 範圍 | `BoxSet::Build` | 峰值 RSS | 射線（槍）p95 | 膠囊 cast p95 | 接觸 p95 |
+|---|---|---|---|---|---|---|---|
+| 4×4 | 20,160 | 204 m | 31 ms | 16 MB | 2.6 µs | 1.1 µs | 0.8 µs |
+| 8×8 | 80,640 | 408 m | 141 ms | 27 MB | 3.5 µs | 1.4 µs | 0.8 µs |
+| 16×16 | 322,560 | 816 m | 637 ms | 74 MB | 4.7 µs | 1.7 µs | 0.8 µs |
+| 29×29 | 1,059,660 | 1,479 m | 2,385 ms | 244 MB | 7.6 µs | 2.1 µs | 0.9 µs |
+
+**讀法**（描述，不是判定）：
+
+- **Match 的碰撞撐得住 km²**。103 萬盒（master km2-building 的量級）時，每次查詢的 p95 都在 8 µs 以內。一個 tick 4 個玩家做幾十次查詢，算出來不到 1 ms。2.3 節「整張一個 `BoxSet`」不必改。
+- **要處理的是建構時間**。103 萬盒要 2.4 s，而 PvP 現在每張地圖建三次（`PvpWorld.cpp:674、:778、:915`），載入時就是 7 s 以上。S4 要改成只建一次，並放在生成世界階段的 worker 上。
+- **解析隨文字線性成長**，約 12 ms/MB（單執行緒，yyjson 之下）。照這個推，km2-building 的 242 MB 約 3 s；分成 region 由 asset 的 worker 平行解析，可以再縮短。RC-BM1（二進位快取）目前沒有壓力。
+- **現狀的上限是契約，不是效能**。v1 單檔的 16 MiB 大約對應 biome 密度下 200 m 見方。在那以內，解析、建構、記憶體都很小。
+- **沒量的**：
+  - Client 的 GPU 與幀率，要同意才跑（5.2）。
+  - 高建築密度的面數。biome 是地形密度，km2-building 有 487 萬 quads；Client 的記憶體推算見 2.4。
+  - Mac。
+
+### 5.2 要同意才跑的（**本機重 GPU 或大記憶體**）
+
+| 量測 | 段 | 影響（先講） |
+|---|---|---|
+| Client 幀率：biome 平鋪 1×1～3×3，開視窗、最壞角度 | S0 的 Client 部分 | GPU 滿載數分鐘；3×3 約 35 萬 quads，預估不會卡機，但 11-07 曾在 km² 預覽卡死，所以先問 |
+| km² 合成圖（(d2)）的 Match 載入／記憶體、Client 幀率 p95 | S5 | 預估 Client 1.5 GB 以上 RAM＋數百 MB VRAM；工具烘焙約 47 s、峰值 3 GB（master 的數字）。會先從 1/4 km² 往上，每一級看 RSS 再決定下一級 |
+
+S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預估影響、怎麼中止」給主會話轉使用者，同意後才跑。
+
+## 6. 和 loading 的關係（流程框架卡 `local_8a21ecb9`）
+
+- 單人「開始遊戲 → 加載資源、讀檔 → 進入遊戲」、多人「開始遊戲 → 加載…（邊連 Match 邊載）」的「加載」，大地圖接在**生成世界階段**（`WorldGeneration`）：
+  - 遊戲在生成期間發出索引與全部 region 的 asset 請求；地圖的系統在「region 全部 Loaded 且碰撞／網格建好」前呼叫 `Hold()`。
+  - **進度**＝`AssetView::Ready(region handles)` 的 `loaded`／`ids.size()`（`AssetView.hpp:66-131`），再加「驗證」「建碰撞」「建網格」三步。大地圖給的是數字，畫面與進度條是流程框架卡的。
+  - **合法**：asset 的 Loaded 只代表 region 過了第 1 步。整張地圖合不合法，由 `CheckVoxelMap(map, regions)` 一次回答（R3 的 sha、bounds、palette，設計審查 S-2）。它的錯誤和 asset 的 failures 一樣交給流程。
+  - **就緒條件**：Match＝碰撞建好；Client＝網格實體已生成（碰撞在 Client 預測也要，同一份）。失敗（缺 region、sha 不合）→ `failures` 交給流程，怎麼顯示由流程決定（異常只告訴發生了什麼）。
+  - 換地圖時兩張大圖不能同時在記憶體：用 `-replace-order-author-choice` 的「先丟舊的」。
+- 要和流程框架卡對齊的只有介面形狀（進度怎麼取、就緒怎麼判、失敗怎麼交）。本宣告交出後我直接傳訊息給那張卡。
+
+## 7. 不做
+
+- 串流（Client 背景串流、Match 活動範圍）、二進位快取、Match 遠處睡眠、LOD 代理網格：各有 RC，量到才做。
+- 地圖編輯器的視窗（工具線）、場景編輯器、`MapMarkers`、水方塊、光照／AO（渲染管線線）。
+- 權威與回滾的任何改動；net wire 的改動。
+- 改 `gyo.voxel_map`／`gyo.voxel_region` 的 wire（要改就升版本，另寫宣告）。
+
+## 8. 分段計畫
+
+```text
+v8-arch-gyo2-big-map
+├── S0 量現狀           Opus／medium｜探索｜不依賴來源｜估 4～6 h      biome 平鋪＋BoxSet 放大；Client 部分要同意
+├── S1 格式 Module      Opus／high（上段：資料契約、新 Module）｜不依賴來源｜估 8～12 h   voxel_map：解析、驗證、展開、兩個 loader
+├── S2 可見性機制       Opus／high（上段：Engine 公開介面）｜不依賴來源｜估 8～12 h   bounds、視錐剔除、VisibilityRange、NoFrustumCulling
+├── S3 地圖工具         Opus／high｜依賴第 4 節｜估 8～14 h（選 (d1)＋(c)＋(d2) 時）  烘焙 CLI、Goxel 匯入、合成圖
+├── S4 PvP 接分塊地圖   Opus／high（上段：資料契約、Match 判定）｜依賴 S1、S3（S2 給剔除）｜估 14～20 h
+│                       arena v3、只讀這局的地圖、生成階段載入＋進度、整張一個 BoxSet、每 region 一個 Mesh3d、三張遷移、v1 讀者退役
+├── S5 量 km²           Opus／medium｜依賴 S3 (d2)、S4｜估 4～6 h｜要同意      結果決定 RC-BM1～BM3、頂點壓縮
+├── S6 instancing       Opus／high（上段：Engine 公開介面）｜估 8～12 h        測試場景用重複模型
+└── S7 LOD 代理網格     只在 S5 超過宣告值時開（RC）
+```
+
+| 段 | 實作者 | 審查者（每批的設計審查） | 驗證者 | 段別根據 |
+|---|---|---|---|---|
+| S0、S5 | Opus／medium | — | 同實作者 | 下段：只量、不改程式 |
+| S1 | Opus／high | Opus／high | Opus | 上段：資料契約、新 Module |
+| S2、S6 | Opus／high | Opus／high | Opus | 上段：Engine 公開介面 |
+| S3 | Opus／high | Opus／high | Opus | 下段：工具（不改契約） |
+| S4 | Opus／high | Opus／high | Opus | 上段：資料契約、Match 判定 |
+
+- 先後：S0、S1、S2 可以並行（S2 碰 render／mesh_render／camera；視窗模式卡碰 window／`sdl_window`／`sdl_gpu`，碰到同檔再協調）。S6 可在 S2 之後任何時候。
+- 每段開工前寫該段的小宣告（判定、測試、突變），照批次表〈每批的設計審查〉在合併前核准前審查；純淨 Code Review 照主會話排。
+- PR：S0～S2 各自一個 PR 或併成一條線，照 `fewer-prs` 由主會話定；本宣告先以 draft PR 交出。
+
+## 9. 測試與突變清單（候選；各段小宣告時定稿）
+
+**S1 `voxel_map`**
+- 測試：M1～M10、R1～R5、C1～C5 每條一個反例＋一個正例；世界座標公式（±2²⁰ 邊界精確）；`ValidateVoxelChunk` 與 Parse 走同一條規則；master `tests/common/voxel_mesh/VoxelMapTests.cpp` 裡的文字向量（格式的資料，不是算法）原樣通過；兩個 loader 在 asset 上讀到同一份結果；依賴守衛（不依賴 render、physics_3d、Kernel）。
+- 突變：`vmap-schema-name`、`vmap-version`、`vmap-region-order`（`at` 嚴格遞增）、`vmap-region-file-charset`、`vregion-sha-skip`、`vregion-at-not-in-index`、`vchunk-outside-region`、`vchunk-local-range`（[0, 256]）、`vchunk-empty-accepted`（C1）、`vmap-int-range`（±2³⁰）、`vmap-text-cap`（1 MiB／16 MiB）、`vexpand-world-formula`、`vexpand-palette-uv`。
+
+**S2 可見性**
+- 測試：完全在視錐外的不抽、跨平面的保留（保守）、`NoFrustumCulling` 永遠保留、沒有 bounds 的保留、兩個相機各算各的、`VisibilityRange` 邊界（含／不含）、RenderLayers 不受影響、剔除不改任何來源 World 的狀態雜湊。
+- 突變：`vis-cull-off`（全部保留時測試要失敗）、`vis-plane-sign`、`vis-no-cull-ignored`、`vis-range-inclusive`、`vis-camera-mixup`。
+
+**S4 PvP**
+- 測試：只讀這局的地圖；region 未全到時 `Hold()`、全到後一幀內結束生成；進度單調不減；缺 region／sha 不合→載入失敗且帶原因；Match 與 Client 的 `wallsDigest` 相同；遷移後三張地圖的碰撞盒集合與 v1 等價（遷移前後的移動 golden 不變）；Match 不留 quads。
+- 突變：`bm-hold-skip`、`bm-load-all-arenas`、`bm-digest-from-index-only`、`bm-region-missing-accepted`。
+
+**S0、S5**：只量，沒有突變。
+
+不加擋誤用的守衛（`no-guards-against-misuse`）；守衛只守寫明的契約（依賴方向、格式規則）。
+
+## 10. Replacement Criteria（候選）
+
+- **RC-BM1** 二進位快取：S5 量到 Client 或 Match 的解析時間超過 S5 宣告值（yyjson 之下）→ 快取（RC，不是契約；契約仍只有 JSON）。
+- **RC-BM2** Match 分區或睡眠：見 2.3。
+- **RC-BM3** Client 背景串流：S5 量到 Client 的載入時間或記憶體超過宣告值，且頂點壓縮、放掉 CPU 端頂點、LOD 代理都不夠 → 串流（region 進碰撞的決定性要先寫，asset RC-AS1）。
+- **RC-BM4** `MapMarkers` 類的通用標記層：出現第二個讀者（場景編輯器或第二個遊戲）。
+- **RC-BM5** region → 實體的那一層進 `voxel_map` Module：第二個遊戲也用分塊地圖。
+
+## 11. 交使用者的事
+
+1. **第 4 節地圖從哪來**：建議 (d1)＋(c)＋(d2)，(b) 併進 (d1)，(a) 照原排程。
+2. 確認（卡片判、你可推翻）：格式放可選 Module `voxel_map`（2.1，依你 11-21「用 Module 來增加地圖」）；Match 整張一個 `BoxSet`（2.3）；`MapMarkers` 現在不做（RC-BM4）。
+3. S0 的 Client 部分、S5：到時候先問（5.2）。
+
+## 12. S1 小宣告：`voxel_map` Module（`v8-arch-gyo2-big-map-s1`）
+
+2026-11-25 開工（主會話轉達：S1、S2 不依賴地圖來源，現在動工）。Opus／high。
+
+### 12.1 範圍
+
+- 新 Module `engine/modules/voxel_map`（`GYO::VoxelMap`，`library_only`，作者選用）。依賴：`GYO::Base`、`GYO::Math`、`GYO::Asset`（公開，loader 介面）、`GYO::Json`（私有）。
+- 格式：`gyo.voxel_map` v1、`gyo.voxel_region` v1，規則 M1～M10、R1～R5、C1～C5 照 master `docs/architecture/voxel-mesh.md`（wire 一字不改）。契約頁在 gyo2 寫 `docs/architecture/target/v2/voxel-map.zh-Hant.md`。
+- 不做：v1 單檔（PvP 自己的讀者照舊，S4 退役）、`MapMarkers`、烘焙、平行解析（asset 的 worker 負責）。
+
+### 12.2 和 master 不同的兩處（卡片判）
+
+1. **region 的驗證拆成兩步**：asset 的 loader 只拿得到位元組與 settings，拿不到索引（`LoadContext.hpp`）。
+   - `ParseVoxelRegion(text)`：不需要索引的規則（R1、R2、R4 的結構、順序與「區塊屬於 `at`」、R5、C1 的非空、C2 的形狀、C3、C4、C5），並記下文字的 SHA-256。
+   - `CheckVoxelRegion(region, map, expected)`：要對照索引的規則（R3 的 `at`＝`expected` 與 sha、R4／C1 的 bounds、C2 的 palette 範圍）。
+   - `ValidateVoxelChunk(chunk, map)`＝兩步的區塊規則一起。三者呼叫同一組規則函式（master DI 3「一個驗證者」照守）。
+2. **索引的 loader 宣告每個 region 為參照**（`ReferencePath`，依索引順序）：讀索引就會讀整張（整張載入，2.3）；就緒用 asset 的「連同依賴 Complete」。Product 的 catalog 要列出每個 region 檔（asset 決定 8 的「region 級 id」）。
+3. 展開多給法線（由面的方向導出，不是新資料），輸出形狀直接對上 `Model::Mesh`（positions、normals、uvs、indices），並提供「附加到既有幾何」的版本，讓遊戲把一個 region 的區塊併成一個網格不必再複製。三角形照 gyo2 的正面（螢幕上逆時針，`RenderCommands.hpp:140`）；gyo2 是左手系，所以 (v1−v0)×(v2−v0) 背向面的法線（和 master 的順序相反）。
+
+### 12.3 判定（合併前）
+
+- J1：每條規則（M1～M10、R1～R5、C1～C5）各有一個「違反就被拒、路徑指到那個值」的測試，與一個通過的例子。
+- J2：同一個違規，`ParseVoxelRegion`＋`CheckVoxelRegion` 與 `ValidateVoxelChunk` 給同一個規則結論（錯誤路徑前綴不同）。
+- J3：世界座標在 ±2²⁰ 兩端逐位元等於公式 `float(local + 256 × key + 16 × origin) × cell_size / 16`；三角形朝外；uv 指到 palette 圖的格中心。
+- J4：兩個 loader 經 asset 讀到與直接 Parse 相同的結果；索引的參照依索引順序、路徑相對於索引檔。
+- J5：連結守衛：`gyo_voxel_map` 的連結恰為 Base、Math、Asset、Json（不連 render、physics_3d、Kernel）。
+- J6：第 9 節 S1 的突變全部 killed（件數照實記）；建置與 `cpu` 標籤測試通過；L1 三平台。
+
+### 12.4 測試與突變
+
+- 測試：`tests/common/voxel_map/VoxelMapTests.cpp`（doctest，標籤 `cpu`）。
+- 突變：`tests/common/voxel_map/mutations.json`，id 前綴 `vmap-`（索引）、`vreg-`（region）、`vchunk-`（區塊）、`vexp-`（展開）、`vload-`（loader）、`vlink-`（連結）。第 9 節的候選為準，加減照 `tests/common/mutation/README.md`，數量與理由寫 dev_log。
+
+## 13. S2 小宣告：可見性（`v8-arch-gyo2-big-map-s2`）
+
+2026-11-25 開工。Opus／high（上段：Engine 公開介面、新 Module）。
+
+### 13.1 放哪裡（卡片判）
+
+- **不放 camera**：camera 的 CM-1 寫明「不做可見性」。**不放 `world_render` 的 System**：render 頁第 97 行寫明它「不跑 System」。改這兩條都是 Architecture Delta。
+- **照 Bevy 的分法**：Bevy 的元件（`Aabb`、`NoFrustumCulling`、`VisibilityRange`、`VisibleEntities`）是 bevy_camera 的 visibility，System `check_visibility_cpu_culling`（`bevy_camera/src/visibility/mod.rs:748`）在 PostUpdate、傳播與相機更新之後。gyo2：
+  - **元件**是可畫物的設定，型別在 `render` 的 `Drawables.hpp`，由 `world_render` 登記（它的職責「登記可畫元件與相機的繪製設定」）。和其他可畫元件一樣不進雜湊（不是決定的狀態）。
+  - **System** `CheckVisibility` 在新 Module **`visibility`**（來源側，依賴 render、transform、camera；`default=no`），掛在 frame／PostUpdate，排在 `TransformPropagate` 與 `CameraUpdate` 之後，公開 set `CheckVisibility`。
+  - **抽取與排隊**：`camera_render` 把相機的 `CulledEntities` 抽進 `ExtractedCamera::culled`；`Queue3d` 跳過清單裡的實體。修訂 1（設計審查 S-3）把清單由正向（看得到的）改成反向（受管而看不到的）：「哪些實體受剔除管」只在 `visibility` 一處決定，`mesh_render` 不再標旗標。
+- **沒帶 `visibility` 的 World**：相機沒有清單 → 全部照畫（和現在一樣）。PvP、Object_Connect 不必改。
+
+### 13.2 規則
+
+- **`Aabb`**（實體本地座標的盒）：有它的實體由 `CheckVisibility` 逐相機判斷。盒子經 `GlobalTransform` 的八個角換成世界 AABB（保守），用 `Math::Intersects(Frustum, Aabb)`；視錐是 `MakeFrustum(clipFromView × viewFromWorld)`。
+- **`NoFrustumCulling`**：不做視錐判斷（仍受 `VisibilityRange` 管）。
+- **`VisibilityRange`**（照 Bevy 的形狀：`startMargin`、`endMargin` 兩段、`useAabb`）：相機位置到實體位置（或盒心）的距離在 `[startMargin.start, endMargin.end)` 內才看得到（Bevy 的 `is_visible_at_all`）。漸變（crossfade）要 shader，屬渲染管線線；現在兩段 margin 重疊時兩個 LOD 都會畫，作者把 margin 設成零寬即是硬切換。
+- **`CulledEntities`**（相機上的推導值，`CheckVisibility` 寫）：受剔除管（有 `Aabb` 或 `VisibilityRange`）而這個相機看不到的實體，EntityId 升冪。沒有 `Aabb` 也沒有 `VisibilityRange` 的實體永遠不在清單裡（Bevy：沒有 Aabb 的不被視錐剔除）。只在內容改變時寫（同 CM-3 的做法）；第一份清單用延遲指令插入，所以相機第一幀沒有清單、照畫全部。
+- `RenderLayers` 照舊在 `Queue3d` 判斷，與可見性無關。
+- **不做**：自動算 `Aabb`（Bevy 的 `calculate_bounds`；大地圖的 region 盒由 `ChunkWorldBounds` 精確給出，RC-VS1）、2D 的剔除、遮擋剔除、GPU 剔除、`ViewVisibility`（給玩法讀的「這一幀有沒有被看到」，RC-VS2）。
+
+### 13.3 和 Bevy 的差別與膠水
+
+| Bevy | gyo2 | 膠水 |
+|---|---|---|
+| `Aabb` 由 `calculate_bounds` 自動算 | 作者給 | 無；RC-VS1 |
+| 正向的 `VisibleEntities`，按 `VisibilityClass` 分類、queue 每個 view 讀它 | 反向的 `CulledEntities`，只列受管而看不到的；renderer 只問「在不在清單裡」 | 無旗標；camera 與 renderer 都不必認得可畫物的種類。代價：Bevy 剛生成、還沒檢查的實體先藏一幀，這裡先畫一幀 |
+| `ViewVisibility`、`InheritedVisibility`、`Visibility` 階層 | 不做 | RC-VS2 |
+| 抽取前就剔除（只抽看得到的） | 每幀照抽、排隊時剔除 | gyo2 的抽取每幀重建、多相機共用一份；被剔除的蒙皮網格仍在 CPU 蒙皮（RC-VS3） |
+
+### 13.4 判定（合併前）
+
+- K1：視錐外的不排、跨平面的保留、`NoFrustumCulling` 不做視錐判斷、沒有 `Aabb` 的永遠排、兩個相機各算各的、`VisibilityRange` 的兩端（含下界、不含上界）、`useAabb`。
+- K2：沒帶 `visibility` 的 World 照舊全部排（既有的 render 測試不變）。
+- K3：`CulledEntities` 只在內容改變時寫（`Changed` 不每幀亮）。
+- K4：連結：`gyo_visibility` 的連結恰為 Base、Kernel、Orchestration、Math 與 render、transform、camera。
+- K5：突變全部 killed；既有 render、camera、transform 的測試通過；L1 三平台。
+
+### 13.5 RC
+
+- **RC-VS1**：要畫很多個不知道盒子的網格（角色、道具）且要剔除 → 加自動 bounds（照 Bevy 的 `calculate_bounds`）。
+- **RC-VS2**：玩法要讀「這一幀有沒有被看到」（動畫降頻、AI 降頻）→ 加 `ViewVisibility`。
+- **RC-VS3**：量到被剔除的項目在抽取的成本（CPU 蒙皮）超過預算 → 把剔除移到抽取前。
+
+## 14. S1／S2 的設計審查（2026-11-25）
+
+審查者 Opus／high，只拿成果物與原始要求。報告在主 checkout 的 `build/evidence/gyo2-big-map/s1-s2/design-review.md`：B 0、S 6、N 7。
+
+| 項 | 內容 | 處置 |
+|---|---|---|
+| (a) | 捲繞方向與 render 的正面、`math.md` 的座標系 | 一致（推導，另有 `sdl_gpu` 的 Pass3D cull 測試支撐；GPU 測試這次沒跑） |
+| (b) | region 兩步是否仍是一個驗證者 | 是；缺的是整張的出口 → S-2 |
+| S-1 | `AppendVoxelChunk` 的 assert 每次重跑整套規則（擋誤用、還有成本） | 採用：只留展開依賴的前提（bounds、方向、palette 索引、32 位元索引上限） |
+| S-2 | asset 的 Loaded 不等於合法，沒有「整張合法」的出口 | 採用：`CheckVoxelMap(map, regions)`，第 6 節的就緒改用它 |
+| S-3 | 「受剔除管」的判斷在 visibility 與 mesh_render 各寫一次 | 採用 (i)：反向清單 `CulledEntities`，拿掉 `visibilityChecked` |
+| S-4 | clip-from-world 在 visibility、Pipeline2d、Pipeline3d 各算一次（Bevy 在 `update_frusta` 一處） | 不在本批：其中兩處是既有程式；收斂要改 camera 的推導值（CM 條文）。記為後續 |
+| S-5 | 第 2.4 節與第 13 節矛盾 | 採用：2.4 改寫 |
+| S-6 | render 頁沒更新、visibility 沒有 DI；`Mesh3d` 只吃 `Handle<ModelData>`，S4 的「每 region 一個 `Mesh3d`」作者做不到 | 採用：render 頁補第 8.6 節（VS-1～VS-3）。`Mesh3d` 的缺口記進 S4：候選是照 `ImageRef` 的先例讓 `Mesh3d` 也接受作者持有的 `shared_ptr<const ModelData>`（Engine 改動，S4 宣告時定） |
+| N-1 | palette 的負值在第 1 步拒、越界在第 2 步拒 | 不改：負值是「表示不了」，越界是「要對照索引」，分法本身就是 12.2 的兩步 |
+| N-2 | 每個相機重查所有候選 | 採用：候選在相機迴圈外建一次 |
+| N-3 | `Visibility.hpp` 為了測試公開了純規則 | 不改：純規則公開讓作者也能用（例如工具的預覽） |
+| N-4 | `Render::Aabb` 與 `Math::Aabb` 同名 | 不改：照 Bevy 的名字，namespace 分開 |
+| N-5 | 兩個 loader 共用 settings 型別名 | 採用：分成 `VoxelMapLoaderSettings`、`VoxelRegionLoaderSettings` |
+| N-6 | 第 9 節的雜湊測試候選沒進判定 | 不改：元件照可畫元件不進雜湊，沒有可測的行為 |
+| N-7 | region 清單在索引與 catalog 各一份 | 採用：契約頁寫明 catalog 由烘焙工具一起產生（(d1)） |
+
+## 15. S4 小宣告：PvP 接分塊地圖（`v8-arch-gyo2-big-map-s4`）
+
+2026-11-25。使用者「S4 同步做」（`v8-arch-gyo2-big-map-s4-parallel`）。Opus／high（上段：資料契約、Match 判定）。Engine 的缺口（`Mesh3d` 接作者持有的模型）另成 PR #348，S4 疊在 #342＋#348 上。
+
+### 15.1 現況（程式）
+
+- `LoadGameContent`（`PvpWorld.cpp:732`）在建 World 之前，同步讀**全部** arena 的 v1 單檔，`GameContent` 由所有 World 共用。Client 在 `ApplySnapshot` 尾段跟著 Match 的 `MatchInfo{arenaId, wallsDigest}` 換競技場（#338）。
+- 同一份碰撞盒的 `BoxSet` 建三次（`:674`、`:778`、`:915`）。S0：103 萬盒建一次要 2.4 s。
+- Client：`ShowArena` 為整張地圖做一個 `Mesh3d`（`ArenaModelId`、`VoxelModelLoader`），palette 圖由 `PaletteOf` 給。
+
+### 15.2 改成（卡片判）
+
+1. **arena 檔 v3**：`geometry`（v1 單檔）換成 `map`，也就是地圖索引在 catalog 裡的 id。出生點、角色參數留在 arena 檔（場景）。`arenas.json` 照舊，只列 arena 檔。
+   - **`width`／`depth` 留著**（修訂：第一版寫成刪掉，是錯的）。它們不只是範圍，也定義「y＝0、[0, width]×[0, depth] 的地板」這條遊戲規則（`Arena.hpp`）；地圖的 bounds 以 16 格的區塊為單位，對不上 20×20 這種尺寸。要不要拿掉隱藏地板是 PvP 的移動規則（master `-gravity` 那一類），不在這批。
+2. **地圖不在建 World 之前讀**：`GameContent` 只留 arena 檔、規則、角色。地圖由**這個 World 要玩的那一張**在**生成世界階段**讀：
+   - 送出索引的請求；索引宣告的 region 參照由 asset 一起讀（VM-6）。
+   - region 沒全到之前 `Hold()`。
+   - 全部到齊後 `CheckVoxelMap`。
+   - 用 `ExpandVoxelChunk` 的碰撞盒建**一次** `BoxSet`。建構在 worker 上做，建好前 `Hold()`。
+   - Match 不留 quads。
+3. **Client 的網格**：每個 region 用 `AppendVoxelChunk` 合成一個 `ModelData`，經 #348 的 `ModelRef` 持有，交給一個 `Mesh3d`；`Aabb` 是 region 的世界盒；palette 圖是持有的 `ImageData`（`ImageRef`）。Client World 帶 `visibility` Module。
+4. **身分**：沿用 `MatchInfo{arenaId, wallsDigest}`，`wallsDigest` 由那一次建好的 `BoxSet` 導出。wire 不變。
+5. **遷移與退役**：
+   - 三張地圖用 (d1) 的 `build-map`／`import-boxes` 轉成分塊格式，catalog 的 region 條目由工具一起產生（契約頁 2.4）。
+   - 遷移完畢後刪掉 `data/VoxelMeshFile.*`、`client/VoxelModelLoader.*`。
+   - `Town_Graybox`（fixture）當第四張測試地圖。
+
+### 15.2.1 分兩階段（卡片判，2026-11-25）
+
+- **B（本批）**：照 15.2 的 1、3、4、5 做，讀的時點不變，仍在建 World 之前同步讀全部 arena。
+  - 碰撞盒在 `LoadGameContent` 建**一次**；`BoxSet` 的本體是共用、不可變的，所有 World 共用同一份。三次建構的問題（S0）就此消失。
+  - Client 每個 region 一個 `Mesh3d`（持有的模型＋`Aabb`），region 實體由 Frame World 的配發器生成，換圖時移除。
+  - 小地圖（三張遷移的圖）在這個時點讀沒有問題。
+- **C（等 15.3 對齊）**：改成「這個 World 要玩的那一張、在生成世界階段讀」（15.2 的 2）。250 m 以上的圖要靠這一步。
+
+### 15.3 要和流程框架卡對齊的一點
+
+「Client 跟著 Match 換競技場」（#338）在大地圖下行不通：換一張要重新讀幾百 MB，不能在 `ApplySnapshot` 裡同步做。卡片的方向：
+- 要玩哪張圖，在**建 World 時**就決定。來源是流程框架的房間或選圖，World 的 options 帶 arena id。
+- Match 說的 arena 和自己的不同時，照現有路徑記 `ContentMismatch`，不在同一個 World 裡換。
+- 要換圖就換 World（`-replace-order-author-choice` 的「先丟舊的」）。
+
+這會改 #338 寫的那一段，已告知 PvP 卡；選圖的接點等流程框架卡回覆。
+
+### 15.4 判定（合併前）
+
+- L1：三張遷移的地圖，**被碰撞盒佔住的格子**遷移前後相同。盒子的切法會變，因為工具會在區塊內合併。現有的 PvP 測試不改、照舊要通過；如果有 golden 因為盒子的切法而變，停下來回報，不改 golden。`Town_Graybox` 是新加的地圖，沒有「遷移前」。
+- L2：生成期間 region 沒到齊不結束生成；到齊後一幀內結束；進度單調不減。
+- L3：缺 region、sha 不合 → 載入失敗並帶原因，不 assert。
+- L4：`BoxSet` 每個 World 只建一次。Match 與 Client 的 `wallsDigest` 相同。
+- L5：Client 每個 region 一個 `Mesh3d`，帶 `Aabb`；相機背後的 region 不排進 pass（端到端）。
+- L6：突變全部 killed，L1 三平台。
+
+### 15.5 不做
+
+串流、LOD 代理、GPU 量測（量之前先問）、場景標記的轉換（`.gox` 的場景圖層照舊排除）、Seats 的上限。

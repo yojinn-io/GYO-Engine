@@ -671,9 +671,7 @@ K::SystemResult FollowMatchArena(K::ExclusiveWorld<> world) {
         if (!set) return Base::Err(std::move(set).error());
         return {};
     }
-    auto boxes = P::BoxSet::Build(arena->walls);
-    if (!boxes) return PhysicsFailed(boxes.error());
-    auto inserted = world.Insert(kArenaEntity, P::Collider{P::Shape{std::move(*boxes)}});
+    auto inserted = world.Insert(kArenaEntity, P::Collider{P::Shape{arena->walls}});
     if (!inserted) return Base::Err(std::move(inserted).error());
     GameRules rules = world.Read<GameRules>([](const GameRules& r) { return r; })->value_or(GameRules{});
     rules.arena = arena->content;
@@ -764,28 +762,33 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": the movement rules do not fit the arena's body";
             return std::nullopt;
         }
-        auto meshText = ReadText(fs, maps + arena->geometry, error);
-        if (!meshText) return std::nullopt;
-        auto mesh = data::ParseVoxelMeshFile(*meshText, error);
-        if (!mesh) {
-            error = maps + arena->geometry + ": " + error;
+        // The map: its index, then each region file the index names (relative to the map's directory).
+        const std::string mapDir = maps + arena->map + "/";
+        auto indexText = ReadText(fs, mapDir + "map.json", error);
+        if (!indexText) return std::nullopt;
+        auto map = data::ReadArenaMap(
+            *indexText, [&](const std::string& file, std::string& readError) { return ReadText(fs, mapDir + file, readError); },
+            error);
+        if (!map) {
+            error = mapDir + ": " + error;
             return std::nullopt;
         }
         InstalledArena installed;
         installed.content = std::move(*arena);
-        installed.walls = data::ColliderBoxes(*mesh);
-        installed.geometry = std::move(*mesh);
-        auto boxes = P::BoxSet::Build(installed.walls);
+        // The walls are built once here; every World shares this BoxSet (S0: a million boxes take seconds to build).
+        auto boxes = P::BoxSet::Build(data::MapColliders(*map));
         if (!boxes) {
             error = maps + name + ": the walls do not build: " + Base::Describe(boxes.error());
             return std::nullopt;
         }
-        installed.wallsDigest = boxes->Digest();
+        installed.map = std::make_shared<const data::ArenaMap>(std::move(*map));
+        installed.walls = std::move(*boxes);
+        installed.wallsDigest = installed.walls.Digest();
         // Every spawn is free of the walls (whether bodies overlap is decided when they spawn).
         for (const sim::SpawnPoint& spawn : installed.content.spawns) {
             const float height = installed.content.bodyHeight;
             const auto found = P::FindBoxContacts(BodyShape(height, installed.content.radius), BodyPose(spawn.position, height),
-                                                  *boxes, P::Pose{}, 0.0F);
+                                                  installed.walls, P::Pose{}, 0.0F);
             bool inside = !found;
             if (found) {
                 for (const P::BoxContact& contact : *found) inside = inside || contact.contact.distance < -kTouch;
@@ -800,7 +803,7 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     // The character, for the arenas' body (they share one: the character is drawn and judged at that height).
     for (const InstalledArena& arena : content.arenas) {
         if (arena.content.bodyHeight != content.arenas.front().content.bodyHeight) {
-            error = maps + arena.content.geometry + ": the arenas do not share one body height";
+            error = maps + arena.content.map + ": the arenas do not share one body height";
             return std::nullopt;
         }
     }
@@ -912,9 +915,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
         world.SetResource(ContentMismatch{});
         // The Match says which arena it plays; a Client's MatchInfo comes from the Match.
         world.SetResource(options.localUser == 0 ? MatchInfo{arena.content.id, arena.wallsDigest} : MatchInfo{});
-        auto boxes = P::BoxSet::Build(arena.walls);
-        GYO_ASSERT(static_cast<bool>(boxes) && "LoadGameContent built these walls");
-        world.Insert(kArenaEntity, P::Collider{P::Shape{std::move(*boxes)}});
+        world.Insert(kArenaEntity, P::Collider{P::Shape{arena.walls}});
         world.Insert(kArenaEntity, T::Transform{});
         return {};
     });

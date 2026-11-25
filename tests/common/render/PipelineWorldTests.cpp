@@ -31,6 +31,7 @@
 #include "engine/transform/Transform.hpp"
 #include "engine/transform/TransformModule.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
+#include "engine/visibility/VisibilityModule.hpp"
 #include "engine/world_render/WorldRenderModule.hpp"
 #include "engine/image/PngLoader.hpp"
 #include "engine/mesh_render/MeshRenderModule.hpp"
@@ -130,13 +131,15 @@ O::RegisteredUnits Units() {
     Add<GYO::Engine::CameraRender::CameraRenderModule>(units, "camera_render", {"render", "render_world"});
     Add<GYO::Engine::SpriteRender::SpriteRenderModule>(units, "sprite_render", {"render", "render_world", "camera_render"});
     Add<GYO::Engine::MeshRender::MeshRenderModule>(units, "mesh_render", {"render", "render_world", "camera_render"});
+    Add<GYO::Engine::Visibility::VisibilityModule>(units, "visibility", {"render", "transform", "camera"});
     return units;
 }
 
-O::WorldDescription Game() {
+O::WorldDescription Game(std::vector<std::string> more = {}) {
     O::WorldDescription w;
     w.name = "Game";
     w.units = {"entity_ids", "world_asset", "transform", "camera", "world_render"};
+    for (std::string& unit : more) w.units.push_back(std::move(unit));
     return w;
 }
 
@@ -149,13 +152,14 @@ O::WorldDescription Render(std::vector<std::string> units = {"entity_ids", "rend
     return w;
 }
 
-std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GYO::Engine::WorldAsset::AssetOptions* assets = nullptr) {
+std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GYO::Engine::WorldAsset::AssetOptions* assets = nullptr,
+                                 O::WorldDescription game = Game()) {
     seen.clear();
     trail.clear();
     O::ProductDescription d;
     d.name = "draws";
     if (assets != nullptr) d.options.Set(*assets);
-    d.worlds.push_back(Game());
+    d.worlds.push_back(std::move(game));
     d.worlds.push_back(std::move(render));
     auto built = O::Product::Build(std::move(d), Units());
     REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
@@ -464,6 +468,56 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
                   "[re-3d-alpha-no-depth-write] a blended mesh writes no depth unless asked");
     const auto* overlay = std::get_if<R::Pass2D>(&all[2]);
     CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
+}
+
+TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of the camera's frustum is not drawn") {
+    WorldAssetTest::Content content("render-mesh-visibility");
+    std::ifstream file(GYO_RENDER_TEST_FBX, std::ios::binary);
+    REQUIRE(file.good());
+    const std::string bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    content.Add("model.bar", "model", "model/skinned_bar.fbx", bytes).Write();
+    AssetTest::ControlledExecutor executor;
+    GYO::Engine::WorldAsset::AssetOptions options;
+    options.contentRoot = content.Root();
+    options.executor = &executor;
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "mesh_render"}), &options, Game({"visibility"}));
+    const auto* registry = std::as_const(p->Buffer()).Find<GYO::Engine::Asset::AssetLoaderRegistry>();
+    REQUIRE(registry != nullptr);
+    REQUIRE(static_cast<bool>(registry->Register<GYO::Engine::Model::FbxLoader>()));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    const auto model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(
+        GYO::Engine::Asset::AssetId("model.bar"));
+    const R::Aabb box{{{-1.0F, -1.0F, -1.0F}, {1.0F, 1.0F, 1.0F}}};
+    const auto mesh = [&](const K::EntityId id, const float z) {
+        R::Mesh3d m;
+        m.model = model;
+        game.Insert(id, m);
+        Place(game, id, 0.0F, 0.0F, z);
+    };
+    mesh(2, 0.0F);    // in front, with a box: drawn
+    game.Insert(2, box);
+    mesh(3, -20.0F);  // behind, with a box: left out
+    game.Insert(3, box);
+    mesh(4, -20.0F);  // behind, with a box and NoFrustumCulling: drawn
+    game.Insert(4, box);
+    game.Insert(4, R::NoFrustumCulling{});
+    mesh(5, -20.0F);  // behind, without a box: drawn (nothing to test)
+    Frames(*p);
+    executor.RunAll();
+    Frames(*p);
+    const R::Pass3D* scene = nullptr;
+    for (const R::RenderPass& pass : seen.back().all) {
+        if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) scene = p3;
+    }
+    REQUIRE(scene != nullptr);
+    CHECK_MESSAGE(scene->draws.size() == 3, "[vs-extract] the mesh behind the camera with a box is left out, the other three drawn");
 }
 
 namespace {

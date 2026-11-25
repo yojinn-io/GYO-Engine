@@ -32,7 +32,6 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     PRIVATE_LIBRARIES GYO::Json
     SOURCES
     src/data/JsonFields.cpp
-    src/data/VoxelMeshFile.cpp
     src/match/AdmissionToken.cpp
     src/match/PlayerSave.cpp
     src/match/SaveSync.cpp
@@ -56,9 +55,10 @@ target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_
 
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
-        GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d
+        GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d GYO::VoxelMap
     PRIVATE_LIBRARIES GYO::IO GYO::Http
     SOURCES
+    src/data/ArenaMap.cpp
     src/world/MatchSaves.cpp
     src/world/PvpWorld.cpp)
 
@@ -68,15 +68,14 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PRIVATE_LIBRARIES GYO::IO GYO::Json
     SOURCES
     src/client/ClientWorld.cpp
-    src/client/LobbyWorld.cpp
-    src/client/VoxelModelLoader.cpp)
+    src/client/LobbyWorld.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main
     LIBRARIES ${object_fps_pvp_client} GYO::OS GYO::Threads
     SOURCES
     src/client_main.cpp)
-gyo_product_units(${object_fps_pvp_main} MODULES physics_3d render_world world_render camera_render sprite_render mesh_render
+gyo_product_units(${object_fps_pvp_main} MODULES physics_3d render_world world_render camera_render sprite_render mesh_render visibility
     world_ui ui_render
     PLUGINS sdl_window sdl_audio sdl_gpu)
 

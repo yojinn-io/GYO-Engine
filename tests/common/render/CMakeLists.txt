@@ -1,8 +1,8 @@
 # Tests of the render Module and render_world (docs/architecture/target/v2/render.zh-Hant.md, RD-1 to RD-4). Data and
 # arithmetic only: no backend, no GPU (the 2D pass on a GPU is sdl_gpu's test, label gpu).
-add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp)
+add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp VisibilityTests.cpp)
 target_link_libraries(gyo_render_tests PRIVATE GYO::Render GYO::RenderWorld GYO::WorldRender GYO::CameraRender GYO::SpriteRender GYO::MeshRender
-    GYO::EntityIds gyo_test_support doctest::doctest)
+    GYO::Visibility GYO::EntityIds gyo_test_support doctest::doctest)
 # The asset path of sprite_render reads a real PNG through world_asset (the store's test executor and content).
 target_link_libraries(gyo_render_tests PRIVATE GYO::WorldAsset GYO::Image GYO::Model)
 target_include_directories(gyo_render_tests PRIVATE "${GYO_REPOSITORY_ROOT}/tests/common/asset" "${GYO_REPOSITORY_ROOT}/tests/common/world_asset")
@@ -20,7 +20,8 @@ add_test(NAME render.world COMMAND gyo_render_tests "--test-case=render_world:*"
 add_test(NAME render.pipeline2d COMMAND gyo_render_tests "--test-case=pipeline2d:*")
 add_test(NAME render.extract COMMAND gyo_render_tests "--test-case=render_extract:*")
 add_test(NAME render.pipeline3d COMMAND gyo_render_tests "--test-case=pipeline3d:*,compose:*")
-set_tests_properties(render.data render.world render.pipeline2d render.extract render.pipeline3d PROPERTIES LABELS "cpu" TIMEOUT 60
+add_test(NAME render.visibility COMMAND gyo_render_tests "--test-case=visibility:*")
+set_tests_properties(render.data render.world render.pipeline2d render.extract render.pipeline3d render.visibility PROPERTIES LABELS "cpu" TIMEOUT 60
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
 include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
@@ -34,5 +35,8 @@ function(gyo_expect_render_links)
     gyo_expect_links(gyo_camera_render GYO::Base GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)
     gyo_expect_links(gyo_sprite_render GYO::Base GYO::CameraRender GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)
     gyo_expect_links(gyo_mesh_render GYO::Base GYO::CameraRender GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)
+    # big-map declaration K4: the visibility Module links render, transform and camera (types and set names) and the
+    # core; no render World unit.
+    gyo_expect_links(gyo_visibility GYO::Base GYO::Camera GYO::Kernel GYO::Math GYO::Orchestration GYO::Render GYO::Transform)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_render_links)

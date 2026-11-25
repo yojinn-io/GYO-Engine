@@ -1,0 +1,609 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the voxel_map Module (docs/architecture/target/v2/voxel-map.zh-Hant.md; big-map declaration section 12, v8-arch-gyo2-big-map-s1). vmap- the index, vreg- a region, vchunk- a chunk, vexp- the expansion, vload- the loaders, vlink- the links. One per independently wrong decision of VM-1 to VM-7 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): rule M1's exact fields, M7's six faces and C2's seven integers (Json shape checks of one helper each, ExactObject and Integers, whose removal reads members that are not there); R2's version and M2's schema kind (the same comparison as the schema mutants, criterion 1); the division by 16 (exact, so a multiplication by 1/16 is an equivalent mutant). Retired in S1: vmap-file-leading-slash (a leading / makes an empty first segment, so the empty-segment rule already refuses it; the separate check was removed, vmap-file-empty-segment guards it).",
+ "mutants": [
+  {
+   "id": "vmap-schema-name",
+   "what": "M2: an index with another schema is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!schema || *schema != kMapSchema)",
+   "replace": "if (!schema)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M2*",
+   "expect": "TEST CASE:\\s+M2:"
+  },
+  {
+   "id": "vmap-version",
+   "what": "M2: an index of another version is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (version != kMapVersion)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M2*",
+   "expect": "TEST CASE:\\s+M2:"
+  },
+  {
+   "id": "vmap-text-cap",
+   "what": "M10: an index one byte over 1 MiB is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "text.size() > kMaxMapTextBytes",
+   "replace": "text.size() > kMaxMapTextBytes + 1",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M10*",
+   "expect": "TEST CASE:\\s+M10:"
+  },
+  {
+   "id": "vmap-source-sha-form",
+   "what": "M3: a source_sha256 that is not 64 lowercase hex digits is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!source || !IsLowerHex64(*source))",
+   "replace": "if (!source)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M3*",
+   "expect": "TEST CASE:\\s+M3:"
+  },
+  {
+   "id": "vmap-build-version-form",
+   "what": "M3: a build_version with a character outside printable ASCII is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "return c >= 0x20 && c <= 0x7E;",
+   "replace": "return c != 0;",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M3*",
+   "expect": "TEST CASE:\\s+M3:"
+  },
+  {
+   "id": "vmap-origin-limit",
+   "what": "M4: 16 x origin outside +-2^20 is accepted",
+   "guards": [
+    "voxel-map VM-4",
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (kUnitsPerCell * origin[axis] < -kCoordinateLimit || kUnitsPerCell * origin[axis] > kCoordinateLimit) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M4*",
+   "expect": "TEST CASE:\\s+M4:"
+  },
+  {
+   "id": "vmap-cell-range",
+   "what": "M4: a cell_size outside [2^-16, 2^16] is accepted",
+   "guards": [
+    "voxel-map VM-4",
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!(cellSize >= std::ldexp(1.0F, -16) && cellSize <= std::ldexp(1.0F, 16))) {",
+   "replace": "if (!(cellSize >= 0.0F)) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M4*",
+   "expect": "TEST CASE:\\s+M4:"
+  },
+  {
+   "id": "vmap-chunk-size",
+   "what": "M5: a chunk_size other than 16 is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (chunkSize != kChunkCells)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M5*",
+   "expect": "TEST CASE:\\s+M5:"
+  },
+  {
+   "id": "vmap-region-size",
+   "what": "M5: a region_size other than 8 is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (regionSize != kRegionChunks)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M5*",
+   "expect": "TEST CASE:\\s+M5:"
+  },
+  {
+   "id": "vmap-bounds-order",
+   "what": "M6: bounds with min above max are accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (minimum[axis] > maximum[axis])",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M6*",
+   "expect": "TEST CASE:\\s+M6:"
+  },
+  {
+   "id": "vmap-bounds-corner",
+   "what": "M6: the far side of the bounds (+ 256) is left out of the +-2^20 check",
+   "guards": [
+    "voxel-map VM-4",
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "kChunkUnits * maximum[axis] + kChunkUnits;",
+   "replace": "kChunkUnits * maximum[axis];",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M6*",
+   "expect": "TEST CASE:\\s+M6:"
+  },
+  {
+   "id": "vmap-palette-count",
+   "what": "M7: a palette of 257 entries is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "entries->Size() > kMaxPaletteEntries",
+   "replace": "entries->Size() > kMaxPaletteEntries + 1",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M7*",
+   "expect": "TEST CASE:\\s+M7:"
+  },
+  {
+   "id": "vmap-palette-name-unique",
+   "what": "M7: a palette name that repeats is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!names.emplace(*name).second)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M7*",
+   "expect": "TEST CASE:\\s+M7:"
+  },
+  {
+   "id": "vmap-palette-name-form",
+   "what": "M7: a palette name with a capital letter is accepted",
+   "guards": [
+    "voxel-map VM-4",
+    "voxel-map VM-1"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "bool IsNameCharacter(const char c) { return (c >= 'a' && c <= 'z')",
+   "replace": "bool IsNameCharacter(const char c) { return (c >= 'A' && c <= 'z')",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M7*",
+   "expect": "TEST CASE:\\s+M7:"
+  },
+  {
+   "id": "vmap-colour-range",
+   "what": "M7: a colour component of 256 is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (components[c] < 0 || components[c] > 255) {",
+   "replace": "if (components[c] < 0) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M7*",
+   "expect": "TEST CASE:\\s+M7:"
+  },
+  {
+   "id": "vmap-region-order",
+   "what": "M8: regions out of order (or repeated) are accepted",
+   "guards": [
+    "voxel-map VM-7"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!out.empty() && !(out.back().at < region.at)) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-region-in-bounds",
+   "what": "M8: a region outside the bounds' regions is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (at[0] < minimumX || at[0] > maximumX || at[1] < minimumZ || at[1] > maximumZ) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-file-unique",
+   "what": "M8: two regions with one file are accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!files.emplace(*file).second)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-file-trailing-dot",
+   "what": "M8: a segment ending in '.' (so '.' and '..') is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (segment.empty() || segment.back() == '.' || IsDeviceName(segment)) return false;",
+   "replace": "if (segment.empty() || IsDeviceName(segment)) return false;",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-file-empty-segment",
+   "what": "M8: an empty segment ('a//b', a trailing '/') is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (segment.empty() || segment.back() == '.' || IsDeviceName(segment)) return false;",
+   "replace": "if (!segment.empty() && (segment.back() == '.' || IsDeviceName(segment))) return false;",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-file-device",
+   "what": "M8: a Windows device name before an extension ('con.json') is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "const std::string_view stem = segment.substr(0, segment.find('.'));",
+   "replace": "const std::string_view stem = segment;",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M8*",
+   "expect": "TEST CASE:\\s+M8:"
+  },
+  {
+   "id": "vmap-int-range",
+   "what": "M9 and R5: an integer outside +-2^30 is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!number || *number < -kIntegerLimit || *number > kIntegerLimit) {",
+   "replace": "if (!number) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "M9*,R5*",
+   "expect": "TEST CASE:\\s+(?:M9|R5):"
+  },
+  {
+   "id": "vmap-check-map-skips",
+   "what": "CheckVoxelMap: the whole-map exit does not check its regions",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "        auto checked = CheckVoxelRegion(*regions[i], map, map.regions[i].at);",
+   "replace": "        VoxelMapResult<void> checked{};",
+   "target": "gyo_voxel_map_tests",
+   "cases": "CheckVoxelMap*",
+   "expect": "TEST CASE:\\s+CheckVoxelMap:"
+  },
+  {
+   "id": "vreg-schema-name",
+   "what": "R2: a region with another schema is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!schema || *schema != kRegionSchema)",
+   "replace": "if (!schema)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R2*",
+   "expect": "TEST CASE:\\s+R2:"
+  },
+  {
+   "id": "vreg-at-expected",
+   "what": "R3: a region whose at is not the entry's is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (region.at != expected) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R3*",
+   "expect": "TEST CASE:\\s+R3:"
+  },
+  {
+   "id": "vreg-sha-skip",
+   "what": "R3: a region whose text is not the entry's (SHA-256) is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (region.textSha256 != entry->sha256) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R3*",
+   "expect": "TEST CASE:\\s+R3:"
+  },
+  {
+   "id": "vreg-chunk-in-region",
+   "what": "R4: a chunk outside its region is accepted",
+   "guards": [
+    "voxel-map VM-6"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (RegionOf(chunk.at) != region.at)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R4*",
+   "expect": "TEST CASE:\\s+R4:"
+  },
+  {
+   "id": "vreg-chunk-order",
+   "what": "R4: chunks out of key order (or repeated) are accepted",
+   "guards": [
+    "voxel-map VM-7"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!region.chunks.empty() && !(region.chunks.back().at < chunk.at)) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R4*",
+   "expect": "TEST CASE:\\s+R4:"
+  },
+  {
+   "id": "vreg-text-cap",
+   "what": "R5: a region one byte over 16 MiB is accepted",
+   "guards": [
+    "voxel-map VM-4"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "text.size() > kMaxRegionTextBytes",
+   "replace": "text.size() > kMaxRegionTextBytes + 1",
+   "target": "gyo_voxel_map_tests",
+   "cases": "R5*",
+   "expect": "TEST CASE:\\s+R5:"
+  },
+  {
+   "id": "vchunk-nonempty",
+   "what": "C1: a chunk without quads and colliders is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (chunk.quads.empty() && chunk.colliders.empty())",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C1*",
+   "expect": "TEST CASE:\\s+C1:"
+  },
+  {
+   "id": "vchunk-bounds",
+   "what": "C1: a chunk outside the map's bounds is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!InBounds(chunk.at, map)) return Broken(",
+   "replace": "if (false) return Broken(",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C1*,R4*",
+   "expect": "TEST CASE:\\s+(?:C1|R4):"
+  },
+  {
+   "id": "vchunk-direction",
+   "what": "C2: a direction outside 0 to 5 is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (static_cast<std::uint8_t>(quad.face) >= kFaceCount)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C2*",
+   "expect": "TEST CASE:\\s+C2:"
+  },
+  {
+   "id": "vchunk-width",
+   "what": "C2: a width below 1 is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (quad.width < 1)",
+   "replace": "if (false)",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C2*",
+   "expect": "TEST CASE:\\s+C2:"
+  },
+  {
+   "id": "vchunk-palette-range",
+   "what": "C2: a palette index outside the map's palette is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (chunk.quads[i].palette >= map.palette.size()) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C2*",
+   "expect": "TEST CASE:\\s+C2:"
+  },
+  {
+   "id": "vchunk-box-min-max",
+   "what": "C3: a collider with min not below max is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (!(box.minimum.x < box.maximum.x) || !(box.minimum.y < box.maximum.y) || !(box.minimum.z < box.maximum.z)) {",
+   "replace": "if (!(box.minimum.x < box.maximum.x) || !(box.minimum.y < box.maximum.y)) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C3*",
+   "expect": "TEST CASE:\\s+C3:"
+  },
+  {
+   "id": "vchunk-corner",
+   "what": "C4: a corner at 257 is accepted",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "bool InChunk(const std::int64_t value) { return value >= 0 && value <= kChunkUnits; }",
+   "replace": "bool InChunk(const std::int64_t value) { return value >= 0 && value <= kChunkUnits + 1; }",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C4*",
+   "expect": "TEST CASE:\\s+C4:"
+  },
+  {
+   "id": "vchunk-far-corner-axes",
+   "what": "C4 and the expansion: an X face's width runs along Y instead of Z",
+   "guards": [
+    "voxel-map VM-3",
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "case VoxelFace::NegativeX: return {x, y + h, z + w};",
+   "replace": "case VoxelFace::NegativeX: return {x, y + w, z + h};",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C4*,Expansion: every face*",
+   "expect": "TEST CASE:\\s+(?:C4|Expansion)"
+  },
+  {
+   "id": "vchunk-quad-order",
+   "what": "C5: two equal quads are accepted",
+   "guards": [
+    "voxel-map VM-7"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (i > 0 && !(QuadOrder(chunk.quads[i - 1]) < QuadOrder(quad))) {",
+   "replace": "if (i > 0 && !(QuadOrder(chunk.quads[i - 1]) <= QuadOrder(quad))) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C5*",
+   "expect": "TEST CASE:\\s+C5:"
+  },
+  {
+   "id": "vchunk-box-order",
+   "what": "C5: colliders out of order are accepted",
+   "guards": [
+    "voxel-map VM-7"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (i > 0 && !(BoxOrder(chunk.colliders[i - 1]) < BoxOrder(box))) {",
+   "replace": "if (false) {",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C5*",
+   "expect": "TEST CASE:\\s+C5:"
+  },
+  {
+   "id": "vchunk-validate-skips-rules",
+   "what": "VM-3: ValidateVoxelChunk does not run the rules a region's text runs",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "if (Check broken = ChunkRules(chunk)) return Fail<void>(VoxelMapErrorCode::InvalidVoxelChunk, std::move(*broken));",
+   "replace": "",
+   "target": "gyo_voxel_map_tests",
+   "cases": "C3*",
+   "expect": "TEST CASE:\\s+C3:"
+  },
+  {
+   "id": "vexp-origin-term",
+   "what": "VM-5: the world formula leaves out 16 x origin",
+   "guards": [
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "return {ToWorld(x + kUnitsPerCell * map.origin.x, map.cellSize),",
+   "replace": "return {ToWorld(x + map.origin.x, map.cellSize),",
+   "target": "gyo_voxel_map_tests",
+   "cases": "Expansion: world coordinates?*",
+   "expect": "TEST CASE:\\s+Expansion: world coordinates, corners"
+  },
+  {
+   "id": "vexp-winding",
+   "what": "VM-5: a +X face's triangles go clockwise seen from outside",
+   "guards": [
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "corners = {at(x0, y0, z1), at(x0, y1, z1), at(x0, y1, z0), at(x0, y0, z0)};",
+   "replace": "corners = {at(x0, y0, z1), at(x0, y0, z0), at(x0, y1, z0), at(x0, y1, z1)};",
+   "target": "gyo_voxel_map_tests",
+   "cases": "Expansion: every face*",
+   "expect": "TEST CASE:\\s+Expansion: every face"
+  },
+  {
+   "id": "vexp-uv-centre",
+   "what": "VM-5: uv at a texel's corner instead of its centre",
+   "guards": [
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "const Math::Vec2 uv{(static_cast<float>(quad.palette) + 0.5F) / columns,",
+   "replace": "const Math::Vec2 uv{static_cast<float>(quad.palette) / columns,",
+   "target": "gyo_voxel_map_tests",
+   "cases": "Expansion: world coordinates?*",
+   "expect": "TEST CASE:\\s+Expansion: world coordinates, corners"
+  },
+  {
+   "id": "vexp-index-base",
+   "what": "VM-5: appended indices start again at 0",
+   "guards": [
+    "voxel-map VM-5"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "for (const std::uint32_t i : {0U, 1U, 2U, 0U, 2U, 3U}) geometry.indices.push_back(base + i);",
+   "replace": "for (const std::uint32_t i : {0U, 1U, 2U, 0U, 2U, 3U}) geometry.indices.push_back(i + 0U * base);",
+   "target": "gyo_voxel_map_tests",
+   "cases": "Expansion: AppendVoxelChunk*",
+   "expect": "TEST CASE:\\s+Expansion: AppendVoxelChunk"
+  },
+  {
+   "id": "vload-no-references",
+   "what": "VM-6: the index loader does not declare its regions, so loading the index does not load the map",
+   "guards": [
+    "voxel-map VM-6"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMapLoaders.cpp",
+   "find": "asset.regions.push_back(context.ReferencePath<VoxelRegionDocument>(region.file));",
+   "replace": "asset.regions.emplace_back();",
+   "target": "gyo_voxel_map_tests",
+   "cases": "Loaders*",
+   "expect": "TEST CASE:\\s+Loaders:"
+  },
+  {
+   "id": "vlink-physics",
+   "what": "VM-1: the Module links physics_3d",
+   "guards": [
+    "voxel-map VM-1"
+   ],
+   "file": "engine/modules/voxel_map/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_voxel_map PUBLIC GYO::Base GYO::Math)",
+   "replace": "target_link_libraries(gyo_voxel_map PUBLIC GYO::Base GYO::Math GYO::Physics3d)",
+   "target": "gyo_voxel_map_tests",
+   "expect": "gyo_voxel_map links",
+   "expect_build_failure": true
+  }
+ ]
+}
