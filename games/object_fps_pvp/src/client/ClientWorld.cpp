@@ -907,10 +907,11 @@ K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::Re
     return {};
 }
 
-// Which game the scene is and where it goes back to: the lobby's address text (multiplayer), the single player's save.
+// Which game the scene is and where it goes back to: the Gateway's room the lobby leaves (multiplayer), the single
+// player's save.
 struct GameOrigin final {
     Scene scene = Scene::MultiGame;
-    std::string address;
+    std::uint64_t room = 0;
     std::string savePath;
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
@@ -943,7 +944,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action != "pvp.evacuate" || request.Read().next) continue;
         if (origin->scene == Scene::MultiGame) {
-            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .address = origin->address};
+            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .room = origin->room};
             continue;
         }
         const PW::PlayerCombat* combat = sim->ownPlayer != 0 ? players.Get<PW::PlayerCombat>(sim->ownPlayer) : nullptr;
@@ -971,7 +972,7 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K:
     } else {
         return {};
     }
-    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .room = origin->room};
     return {};
 }
 
@@ -1213,7 +1214,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    GameOrigin origin{change.scene, change.address, SoloSavePath(dataDirectory)};
+    GameOrigin origin{change.scene, change.room, SoloSavePath(dataDirectory)};
     setup.Prepare([options, port, origin](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
@@ -1584,11 +1585,15 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         RegisterFrameTypes(setup);
         BuildSceneCommon(setup);
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
-        const std::string directory = start != nullptr ? start->dataDirectory : std::string();
+        GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
+        const std::string& directory = start->dataDirectory;
+        GatewayContext gateway{directory, start->gateway, {}};
+        for (const PW::InstalledArena& arena : options.game->arenas) gateway.maps.push_back(arena.content.id);
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
         case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory); break;
-        case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
+        case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
+        case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:
         case Scene::MultiGame: BuildGame(setup, options, scene, directory); break;
         }

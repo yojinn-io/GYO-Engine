@@ -23,6 +23,7 @@
     {"id": "object_fps_pvp.ui.menu", "type": "ui", "path": "ui/pvp_menu.json"},
     {"id": "object_fps_pvp.ui.solo_room", "type": "ui", "path": "ui/pvp_solo_room.json"},
     {"id": "object_fps_pvp.ui.game", "type": "ui", "path": "ui/pvp_game.json"},
+    {"id": "object_fps_pvp.ui.room", "type": "ui", "path": "ui/pvp_room.json"},
     {"id": "object_fps_pvp.player.character", "type": "text", "path": "characters/player/character.json"},
     {"id": "object_fps_pvp.player.presentation", "type": "text", "path": "characters/player/presentation.json"},
     {"id": "object_fps_pvp.player.hitbox", "type": "text", "path": "characters/player/hitbox.json"},

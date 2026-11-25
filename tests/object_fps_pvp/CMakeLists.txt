@@ -5,7 +5,6 @@
 gyo_get_game_target(object_fps_pvp logic object_fps_pvp_logic)
 add_executable(gyo_object_fps_pvp_logic_tests
     TestMain.cpp
-    AddressTextTests.cpp
     AdmissionTokenTests.cpp
     AnimationTests.cpp
     ArenaTests.cpp

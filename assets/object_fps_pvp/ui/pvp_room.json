@@ -1,0 +1,625 @@
+{
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": {
+    "size": [
+      1280,
+      720
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "object_fps_pvp.font.ui"
+  },
+  "default_font": "ui",
+  "colors": {
+    "backdrop": "#101724FF",
+    "panel": "#1D2A3AFF",
+    "slot": "#24354AFF",
+    "accent": "#66D9EFFF",
+    "text": "#EAF1FAFF",
+    "muted": "#A3B7CBFF",
+    "button": "#2B4159FF",
+    "focused": "#285F84FF",
+    "pressed": "#307EA2FF"
+  },
+  "actions": [
+    {
+      "id": "pvp.ready",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.start",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.leave",
+      "payload": "none"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "title",
+      "type": "string",
+      "preview": "部屋 #3  協力  pvp_training_v1"
+    },
+    {
+      "id": "members",
+      "type": "list<object>",
+      "item_fields": {
+        "line": "string"
+      },
+      "preview": [
+        {
+          "line": "Player 7（部屋主）（自分）  準備完了"
+        },
+        {
+          "line": "Player 9  準備中"
+        }
+      ]
+    },
+    {
+      "id": "ready",
+      "type": "string",
+      "preview": "準備する"
+    },
+    {
+      "id": "status",
+      "type": "string",
+      "preview": "全員が準備したら、部屋主が開始します"
+    }
+  ],
+  "canvases": [
+    {
+      "id": "room",
+      "backdrop_color": "backdrop",
+      "default_focus": "ready",
+      "focus_order": [
+        "ready",
+        "start",
+        "leave"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "panel",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              120,
+              48
+            ],
+            "size_delta": [
+              1040,
+              624
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              160,
+              72
+            ],
+            "size_delta": [
+              960,
+              52
+            ]
+          },
+          "text": {
+            "binding": "title"
+          },
+          "point_size": 30,
+          "text_color": {
+            "color": "accent"
+          },
+          "vertical_align": "center"
+        },
+        {
+          "type": "panel",
+          "id": "members_panel",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              160,
+              140
+            ],
+            "size_delta": [
+              600,
+              300
+            ]
+          },
+          "color": {
+            "color": "slot"
+          }
+        },
+        {
+          "type": "text",
+          "id": "members_title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              180,
+              148
+            ],
+            "size_delta": [
+              560,
+              30
+            ]
+          },
+          "text": {
+            "literal": "メンバー"
+          },
+          "point_size": 18,
+          "text_color": {
+            "color": "muted"
+          }
+        },
+        {
+          "type": "fixed_step_list",
+          "id": "members",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              180,
+              188
+            ],
+            "size_delta": [
+              560,
+              240
+            ]
+          },
+          "binding": "members",
+          "max_items": 4,
+          "item_step": [
+            0,
+            52
+          ],
+          "template": [
+            {
+              "type": "text",
+              "id": "members_row",
+              "rect": {
+                "anchor_min": [
+                  0,
+                  0
+                ],
+                "anchor_max": [
+                  1,
+                  0
+                ],
+                "pivot": [
+                  0,
+                  0
+                ],
+                "position": [
+                  0,
+                  0
+                ],
+                "size_delta": [
+                  0,
+                  46
+                ]
+              },
+              "text": {
+                "item_field": "line"
+              },
+              "point_size": 19,
+              "text_color": {
+                "color": "text"
+              },
+              "vertical_align": "center"
+            }
+          ]
+        },
+        {
+          "type": "panel",
+          "id": "merchant",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              790,
+              140
+            ],
+            "size_delta": [
+              330,
+              140
+            ]
+          },
+          "color": {
+            "color": "slot"
+          }
+        },
+        {
+          "type": "text",
+          "id": "merchant_title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              810,
+              150
+            ],
+            "size_delta": [
+              290,
+              30
+            ]
+          },
+          "text": {
+            "literal": "商人"
+          },
+          "point_size": 20,
+          "text_color": {
+            "color": "text"
+          }
+        },
+        {
+          "type": "text",
+          "id": "merchant_body",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              810,
+              190
+            ],
+            "size_delta": [
+              290,
+              28
+            ]
+          },
+          "text": {
+            "literal": "準備中"
+          },
+          "point_size": 17,
+          "text_color": {
+            "color": "muted"
+          }
+        },
+        {
+          "type": "panel",
+          "id": "tasks",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              790,
+              300
+            ],
+            "size_delta": [
+              330,
+              140
+            ]
+          },
+          "color": {
+            "color": "slot"
+          }
+        },
+        {
+          "type": "text",
+          "id": "tasks_title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              810,
+              310
+            ],
+            "size_delta": [
+              290,
+              30
+            ]
+          },
+          "text": {
+            "literal": "任務"
+          },
+          "point_size": 20,
+          "text_color": {
+            "color": "text"
+          }
+        },
+        {
+          "type": "text",
+          "id": "tasks_body",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              810,
+              350
+            ],
+            "size_delta": [
+              290,
+              28
+            ]
+          },
+          "text": {
+            "literal": "準備中"
+          },
+          "point_size": 17,
+          "text_color": {
+            "color": "muted"
+          }
+        },
+        {
+          "type": "text",
+          "id": "status",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              160,
+              470
+            ],
+            "size_delta": [
+              960,
+              40
+            ]
+          },
+          "text": {
+            "binding": "status"
+          },
+          "point_size": 18,
+          "text_color": {
+            "color": "accent"
+          }
+        },
+        {
+          "type": "button",
+          "id": "ready",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              160,
+              584
+            ],
+            "size_delta": [
+              280,
+              52
+            ]
+          },
+          "text": {
+            "binding": "ready"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.ready",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "start",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              584
+            ],
+            "size_delta": [
+              280,
+              52
+            ]
+          },
+          "text": {
+            "literal": "開始"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.start",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "leave",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              860,
+              584
+            ],
+            "size_delta": [
+              260,
+              52
+            ]
+          },
+          "text": {
+            "literal": "退出"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.leave",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        }
+      ]
+    }
+  ]
+}

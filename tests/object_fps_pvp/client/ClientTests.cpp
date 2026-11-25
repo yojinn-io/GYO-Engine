@@ -7,7 +7,6 @@
 #include "../world/WorldTestSupport.hpp"
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
-#include "object_fps_pvp/client/LobbyWorld.hpp"
 #include "object_fps_pvp/client/LocalFiles.hpp"
 #include "object_fps_pvp/match/PlayerSave.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"

@@ -6,20 +6,22 @@
 //
 //   gyo_object_fps_pvp                         the menu first
 //   gyo_object_fps_pvp --connect A.B.C.D:P     starts in a game connected to the Match at that address
-//   gyo_object_fps_pvp --user N                connects with user id N (default: a random one)
+//   gyo_object_fps_pvp --user N                with --connect: the user id (default: a random one; through the
+//                                              Gateway the user id is the Gateway's)
 //   gyo_object_fps_pvp --frames N              closes itself after N frames (the tests): the menu, or the game with
 //                                              --connect; a frame must have been shown
 //   gyo_object_fps_pvp --content DIR           reads the content from DIR (default: next to the executable)
+//   gyo_object_fps_pvp --gateway A.B.C.D:P     the Gateway multiplayer talks to (default 127.0.0.1:7700)
 //   gyo_object_fps_pvp --profile NAME          keeps this player's files (the single player's save) under NAME in
-//                                              the user's data directory (default: "default"); two Clients on one
-//                                              machine take two names
+//                                              the user's data directory (default: "default"): the single player's
+//                                              save and the device id the Gateway knows this player by; two Clients
+//                                              on one machine take two names
 //   gyo_object_fps_pvp --verbose               logs the connection, the own player and the drawing driver
 //
 // Controls: click (or Tab) to take the mouse; W A S D to move, mouse to look, Space to jump, left Ctrl to crouch,
 // left click to fire, R to reload; Tab or Esc gives the mouse back.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
-#include "object_fps_pvp/client/LobbyWorld.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 
 #include "gyo/GameConfig.hpp"
@@ -236,6 +238,7 @@ int main(int argc, char** argv) {
     std::int64_t frames = -1;
     std::optional<std::string> contentRoot;
     std::string profile = "default";
+    GYO::Engine::OS::DatagramAddress gateway = GYO::Engine::OS::DatagramAddress::Loopback(7700);
     bool verbose = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -259,6 +262,13 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--content" && hasValue) {
             contentRoot = argv[++index];
+        } else if (argument == "--gateway" && hasValue) {
+            const auto address = PC::ParseMatchAddress(argv[++index]);
+            if (!address) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--gateway takes an IPv4 address and a port, A.B.C.D:P");
+                return 2;
+            }
+            gateway = *address;
         } else if (argument == "--profile" && hasValue) {
             profile = argv[++index];
             if (profile.empty() || profile == "." || profile == ".." || profile.find_first_of("/\\") != std::string::npos) {
@@ -269,7 +279,7 @@ int main(int argc, char** argv) {
             verbose = true;
         } else {
             Log(GYO::Engine::Base::LogLevel::Error, "unknown argument '" + std::string(argument) +
-                                                        "' (--connect A.B.C.D:P, --user N, --frames N, --content DIR, --profile NAME, --verbose)");
+                                                        "' (--connect A.B.C.D:P, --user N, --frames N, --content DIR, --gateway A.B.C.D:P, --profile NAME, --verbose)");
             return 2;
         }
     }
@@ -304,6 +314,7 @@ int main(int argc, char** argv) {
 
     PC::ClientStart start;
     start.frames = frames;
+    start.gateway = gateway;
     // This player's files: <the user's data directory>/<profile>. None found: nothing is saved (the scenes say so).
     if (auto data = GYO::Engine::OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)) {
         start.dataDirectory = *data + "/" + profile;
@@ -311,7 +322,7 @@ int main(int argc, char** argv) {
         Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
     }
     if (connect) {
-        start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}, .address = connect->ToString()};
+        start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     }
     return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
 }

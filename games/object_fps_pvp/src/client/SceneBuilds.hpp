@@ -4,6 +4,7 @@
 // scene's.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 #include "object_fps_pvp/match/PlayerSave.hpp"
 
@@ -54,7 +55,24 @@ struct SoloRecord final {
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
 // dataDirectory: the player's (ClientStart).
 void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory);
-// user: the user id the lobby connects with.
-void BuildLobby(O::WorldSetup& setup, const SceneChange& change, std::uint64_t user);
+// What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a
+// room can be made with (the installed arenas, by id).
+struct GatewayContext final {
+    std::string dataDirectory;
+    GYO::Engine::OS::DatagramAddress gateway;
+    std::vector<std::string> maps;
+};
+void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
+void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
+
+// The Gateway's scenes' common part: the GatewayClient (a Resource) made from the carried session and the device id,
+// and its results handed to the scene's System. Each returns what the player should read for an error (empty: none).
+[[nodiscard]] std::string GatewayErrorText(const GatewayResult& result, const std::string& gateway);
+// The device id file in the player's directory.
+[[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
+// Puts the GatewayClient into the World (a prepare function's part); false with error when there is no device id.
+[[nodiscard]] bool PlaceGatewayClient(K::World& world, const GatewayContext& context, std::string& error);
+// Registers GatewayClient (the scene's).
+void RegisterGatewayClient(O::WorldSetup& setup);
 
 } // namespace object_fps_pvp::client

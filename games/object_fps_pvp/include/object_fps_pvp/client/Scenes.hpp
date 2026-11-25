@@ -14,12 +14,16 @@
 // SceneChangeWanted and, when it is true, calls ChangeScene (sdl_window's SDLWindowBetweenFrames).
 
 #include "engine/kernel/Kernel.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
+
 #include "engine/net/NetService.hpp"
+#include "engine/os/DatagramSocket.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace object_fps_pvp::client {
 
@@ -29,7 +33,8 @@ enum class Scene : std::uint8_t {
     Menu,       // the main menu: solo, multiplayer, settings, quit
     SoloRoom,   // single player: the room before a game (the merchant and the tasks have their place), the record
     SoloGame,   // a single player's game: no server
-    Lobby,      // multiplayer: where the player says whom to play with
+    Lobby,      // multiplayer: the Gateway's rooms (create one, or join one)
+    Room,       // multiplayer: a room's members get ready; its owner starts it
     MultiGame,  // a game connected to a Match
 };
 
@@ -40,8 +45,9 @@ struct SceneChange final {
     std::string status;
     // MultiGame: whom the Sim World connects to.
     std::optional<GYO::Engine::Net::NetConnectTarget> connect;
-    // Lobby: the address field's text.
-    std::string address;
+    // The Gateway's room: Room, the room entered; MultiGame, the room the game came from; Lobby, a room to leave first
+    // (0: none).
+    std::uint64_t room = 0;
 };
 
 // The Frame World's request for the next scene (written by a scene's System; the runner reads it between frames).
@@ -79,7 +85,19 @@ struct ClientStart final {
     std::int64_t frames = -1;
     // The directory of this player's files (the user's data directory and the profile); empty: none.
     std::string dataDirectory;
+    // The Gateway (its HTTP address).
+    GYO::Engine::OS::DatagramAddress gateway = GYO::Engine::OS::DatagramAddress::Loopback(7700);
 };
+
+// The Gateway's session, carried from scene to scene (a Resource of the Frame World, CarryOver): opened by the first
+// scene that calls the Gateway.
+struct GatewayState final {
+    std::optional<GatewaySession> session;
+};
+inline void HashValue(GYO::Kernel::Hasher&, const GatewayState&) {}
+
+// An address as --connect and a room's connect give it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
+[[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
 
 // Whether the Sim World plays (connects) in this scene; whether the Solo World plays.
 [[nodiscard]] bool SimPlays(Scene scene) noexcept;

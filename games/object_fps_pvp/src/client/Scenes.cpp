@@ -150,6 +150,8 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     r.Resource<SceneRequest>({.name = "object_fps_pvp.SceneRequest"});
     r.Resource<FrameNotes>({.name = "object_fps_pvp.FrameNotes"});
     setup.CarryOver<FrameNotes>("object_fps_pvp.FrameNotes");
+    r.Resource<GatewayState>({.name = "object_fps_pvp.GatewayState"});
+    setup.CarryOver<GatewayState>("object_fps_pvp.GatewayState");
     r.AddSystem<&CountFrames>(InSceneUpdate("object_fps_pvp.CountFrames"));
     K::SystemOptions watch;
     watch.name = "object_fps_pvp.WatchDocument";
@@ -165,6 +167,7 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     setup.Prepare([frames](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SceneRequest{});
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{frames, false, {}, {}, {}});
+        if (w.Resource<GatewayState>() == nullptr) w.SetResource(GatewayState{});
         return {};
     });
 }
