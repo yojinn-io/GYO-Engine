@@ -62,20 +62,39 @@ struct MapReading final {
                                  const GYO::Engine::Asset::Handle<GYO::Engine::VoxelMap::VoxelMapAsset>& map);
 
 // A value made on an executor and taken by a System once it is there (Bevy's Task, polled each frame:
-// bevy/examples/async_tasks/async_compute.rs). Without an executor it is made at once, on the caller's thread. The job
-// owns what it reads; a World gone before the job ends leaves only the job.
+// bevy/examples/async_tasks/async_compute.rs:66, :128). Without an executor it is made at once, on the caller's thread.
+// The job owns what it reads; a World gone before the job ends leaves only the job. Dropping the task cancels a job
+// that has not started (Bevy's Task cancels on drop: bevy_tasks/src/task_pool.rs:558); one already running finishes
+// and its value is dropped.
 template <class T>
 class WorkerTask final {
 public:
+    WorkerTask() = default;
+    WorkerTask(const WorkerTask&) = delete;
+    WorkerTask& operator=(const WorkerTask&) = delete;
+    WorkerTask(WorkerTask&&) noexcept = default;
+    WorkerTask& operator=(WorkerTask&& other) noexcept {
+        if (this != &other) {
+            Cancel();
+            state_ = std::move(other.state_);
+        }
+        return *this;
+    }
+    ~WorkerTask() { Cancel(); }
+
     // make: T(), not throwing.
     template <class F>
     [[nodiscard]] static WorkerTask Start(GYO::Engine::Asset::AssetExecutor* executor, F make) {
         WorkerTask task;
         task.state_ = std::make_shared<State>();
         auto job = [state = task.state_, make = std::move(make)]() mutable {
+            {
+                const std::lock_guard lock(state->mutex);
+                if (state->cancelled) return;
+            }
             T value = make();
             const std::lock_guard lock(state->mutex);
-            state->value.emplace(std::move(value));
+            if (!state->cancelled) state->value.emplace(std::move(value));
         };
         if (executor != nullptr) {
             executor->Submit(std::move(job));
@@ -84,8 +103,6 @@ public:
         }
         return task;
     }
-
-    [[nodiscard]] bool Started() const noexcept { return state_ != nullptr; }
 
     // The value, once made: taken once (the task is then empty); nullopt before.
     [[nodiscard]] std::optional<T> Take() {
@@ -102,8 +119,17 @@ public:
 private:
     struct State {
         std::mutex mutex;
+        bool cancelled = false;
         std::optional<T> value;
     };
+
+    void Cancel() noexcept {
+        if (state_ == nullptr) return;
+        const std::lock_guard lock(state_->mutex);
+        state_->cancelled = true;
+        state_->value.reset();
+    }
+
     std::shared_ptr<State> state_;
 };
 

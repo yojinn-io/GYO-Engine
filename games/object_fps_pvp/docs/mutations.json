@@ -2532,6 +2532,32 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the Match keeps none of its map*",
    "expect": "pvp-map-released"
+  },
+  {
+   "id": "pvp-loading-no-sim-walls",
+   "what": "the loading screen ends with the Frame World's picture while the Sim World's walls are still being built",
+   "guards": [
+    "big-map declaration 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": " &&\n                     sim->mapLoad.stage == PW::MapStage::Done;\n",
+   "replace": ";\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen waits for the Sim World's walls*",
+   "expect": "pvp-loading-sim-walls"
+  },
+  {
+   "id": "pvp-seat-ended-connection",
+   "what": "a connection that came and ended while the Match generated is seated once it has walls (a player nobody controls)",
+   "guards": [
+    "big-map declaration 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (peers.Get<N::Peer>(joined->peer) == nullptr) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client that comes and goes while the Match generates*",
+   "expect": "pvp-seat-gone"
   }
  ]
 }

@@ -17,6 +17,8 @@
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <chrono>
+#include <deque>
+#include <mutex>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,10 +36,55 @@ namespace PW = object_fps_pvp::world;
 inline constexpr std::int64_t kStep = 15'625'000;
 
 // The asset store's jobs run at once, on the thread that submits them: a World generates in the same number of frames
-// every run (the store's results still reach a World at its apply point).
+// every run (the store's results still reach a World at its apply point). A Submit made from inside a job is queued and
+// run after it, never recursively (AssetExecutor's contract).
 class InlineJobs final : public GYO::Engine::Asset::AssetExecutor {
 public:
-    void Submit(Job job) override { job(); }
+    void Submit(Job job) override {
+        queued_.push_back(std::move(job));
+        if (running_) return;
+        running_ = true;
+        while (!queued_.empty()) {
+            Job next = std::move(queued_.front());
+            queued_.pop_front();
+            next();
+        }
+        running_ = false;
+    }
+
+private:
+    std::deque<Job> queued_;
+    bool running_ = false;
+};
+
+// Jobs that wait until the test runs them: the oldest (RunOne) or a chosen one (RunAt, by submission order among the
+// waiting).
+class HeldJobs final : public GYO::Engine::Asset::AssetExecutor {
+public:
+    void Submit(Job job) override {
+        const std::lock_guard lock(mutex_);
+        jobs_.push_back(std::move(job));
+    }
+    bool RunOne() { return RunAt(0); }
+    bool RunAt(const std::size_t index) {
+        Job job;
+        {
+            const std::lock_guard lock(mutex_);
+            if (index >= jobs_.size()) return false;
+            job = std::move(jobs_[index]);
+            jobs_.erase(jobs_.begin() + static_cast<std::ptrdiff_t>(index));
+        }
+        job();
+        return true;
+    }
+    std::size_t Waiting() {
+        const std::lock_guard lock(mutex_);
+        return jobs_.size();
+    }
+
+private:
+    std::mutex mutex_;
+    std::deque<Job> jobs_;
 };
 
 inline GYO::Engine::Asset::AssetExecutor& TestJobs() {

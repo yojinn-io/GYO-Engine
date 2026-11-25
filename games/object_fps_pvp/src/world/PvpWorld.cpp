@@ -622,7 +622,8 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
                             K::Res<WT::Tick> tick, K::Res<O::WorldGeneration> generation,
                             K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn,
                             K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<N::PeerControls>> controls) {
-    // No walls yet: the connections wait, unread (a reader's records are kept until it reads them).
+    // No walls yet: the connections wait, unread. This System runs every frame, so its readers' cursors exist from the
+    // first frame and hold the records (a reader that has never run holds none: a mount condition would lose them).
     if (generation->Generating()) return {};
     std::map<K::EntityId, K::EntityId>& byPeer = seated->byPeer;
     // The players of the connections that ended this frame, by user, until the joins of this frame are seen.
@@ -640,6 +641,8 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         if (combat.life == sim::LifeState::Alive) living.push_back(body);
     });
     for (const N::PeerConnected* joined : connected.Read()) {
+        // A connection that ended since it came (read late, after the World generated): nothing to seat.
+        if (peers.Get<N::Peer>(joined->peer) == nullptr) continue;
         // The user's player, if another connection has it: one that ended this frame, or one still open.
         std::optional<K::EntityId> player;
         if (const auto held = released.find(joined->userId); held != released.end()) {
@@ -774,15 +777,17 @@ K::SystemResult ControlOwnPlayer(K::Query<K::Read<N::Peer>, K::Without<N::PeerCo
     return {};
 }
 
-// Client: whether it plays the Match's arena (MatchInfo), once the Match has said its walls and this World has its own.
+// Client: whether it plays the Match's arena (MatchInfo), once the Match has said its walls.
 // Another arena, or the same one with other walls, is a content mismatch (ContentMismatch): a World plays one arena, so
 // the program builds another World or leaves (big-map declaration 15.3).
 K::SystemResult FollowMatchArena(K::Res<MatchInfo> info, K::Res<GameRules> rules, K::Res<MapLoad> load,
                                  K::ResMut<ContentMismatch> mismatch) {
     const MatchInfo& match = *info;
-    if (load->stage != MapStage::Done || match.arenaId.empty() || match.wallsDigest == 0 || !mismatch.Read().reason.empty()) return {};
+    if (match.arenaId.empty() || match.wallsDigest == 0 || !mismatch.Read().reason.empty()) return {};
     const GameRules& own = *rules;
-    if (match.arenaId == own.arena.id && match.wallsDigest == own.wallsDigest) return {};
+    // Another arena is known at once (this World need not read its own map first); the same arena's walls are
+    // compared once this World has built its own.
+    if (match.arenaId == own.arena.id && (load->stage != MapStage::Done || match.wallsDigest == own.wallsDigest)) return {};
     ContentMismatch& found = mismatch.Get();
     found.matchArena = match.arenaId;
     found.reason = match.arenaId != own.arena.id ? "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'"

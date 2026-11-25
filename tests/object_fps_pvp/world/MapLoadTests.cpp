@@ -7,6 +7,7 @@
 #include "WorldTestSupport.hpp"
 
 #include "engine/asset/AssetStore.hpp"
+#include "engine/net/NetService.hpp"
 #include "engine/physics_3d/Collider.hpp"
 
 #include <algorithm>
@@ -22,34 +23,6 @@ namespace WA = GYO::Engine::WorldAsset;
 namespace fs = std::filesystem;
 
 namespace {
-
-// Jobs that wait until the test runs them, one at a time.
-class HeldJobs final : public AS::AssetExecutor {
-public:
-    void Submit(Job job) override {
-        const std::lock_guard lock(mutex_);
-        jobs_.push_back(std::move(job));
-    }
-    bool RunOne() {
-        Job job;
-        {
-            const std::lock_guard lock(mutex_);
-            if (jobs_.empty()) return false;
-            job = std::move(jobs_.front());
-            jobs_.pop_front();
-        }
-        job();
-        return true;
-    }
-    std::size_t Waiting() {
-        const std::lock_guard lock(mutex_);
-        return jobs_.size();
-    }
-
-private:
-    std::mutex mutex_;
-    std::deque<Job> jobs_;
-};
 
 std::size_t ArenaIndex(const std::string& id) {
     const auto* arena = ShippedContent()->Find(id);
@@ -198,51 +171,119 @@ TEST_CASE("world: an arena whose spawn is inside its map's walls fails, naming t
     CHECK(load.failure.find("spawn 1") != std::string::npos);
 }
 
-TEST_CASE("world: a Client that connects while the Match generates is seated once its walls are built") {
+namespace {
+
+// A Match whose map waits for the test (its asset jobs held), on one memory link, with Clients the test adds.
+struct HeldMatch {
     HeldJobs assets;
     std::pair<N::MemoryLink, N::MemoryLink> link = N::MemoryLink::Pair({});
-    auto clock = std::make_shared<N::NetTime>(0);
-    auto reader = [clock] { return *clock; };
-    O::ProductDescription description;
-    description.name = "pvp-match";
-    N::NetProductOptions net;
-    net.role = N::NetRole::Server;
-    net.link = std::make_shared<N::MemoryLink>(link.first);
-    net.clock = reader;
-    net.seed = 7;
-    auto seats = std::make_shared<PW::Seats>();
-    net.admission = PW::SeatAdmission(seats);
-    description.options.Set(net);
-    WA::AssetOptions options;
-    options.contentRoot = PVP_CONTENT_ROOT;
-    options.executor = &assets;
-    description.options.Set(options);
-    description.configure = [](O::ProductSetup& setup) { PW::ConfigureGame(setup); };
-    description.worlds.push_back(Stepped(PW::MatchWorld({.content = ShippedContent(), .arena = 0, .seats = seats})));
-    auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
-    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-    auto match = std::move(built).value();
-    auto client = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(link.second), 1, reader);
+    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
+    std::shared_ptr<PW::Seats> seats = std::make_shared<PW::Seats>();
+    std::unique_ptr<O::Product> match;
+    std::vector<std::unique_ptr<O::Product>> clients;
+
+    HeldMatch() {
+        O::ProductDescription description;
+        description.name = "pvp-match";
+        N::NetProductOptions net;
+        net.role = N::NetRole::Server;
+        net.link = std::make_shared<N::MemoryLink>(link.first);
+        net.clock = [c = clock] { return *c; };
+        net.seed = 7;
+        net.admission = PW::SeatAdmission(seats);
+        description.options.Set(net);
+        WA::AssetOptions options;
+        options.contentRoot = PVP_CONTENT_ROOT;
+        options.executor = &assets;
+        description.options.Set(options);
+        description.configure = [](O::ProductSetup& setup) { PW::ConfigureGame(setup); };
+        description.worlds.push_back(Stepped(PW::MatchWorld({.content = ShippedContent(), .arena = 0, .seats = seats})));
+        auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
+        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+        match = std::move(built).value();
+    }
+    void AddClient(const std::uint64_t user) {
+        clients.push_back(BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(link.second), user, [c = clock] { return *c; }));
+    }
+    // The last Client closes as its program does (the disconnect packets at once) and goes.
+    void CloseLastClient() {
+        auto* service = clients.back()->Buffer().Find<N::NetService>();
+        REQUIRE(service != nullptr);
+        service->Close();
+        service->Flush(service->Now(), N::Stamp{});
+        clients.pop_back();
+    }
+    void Frames(const int n) {
+        for (int frame = 0; frame < n; ++frame) {
+            REQUIRE(static_cast<bool>(match->RunFrame()));
+            for (auto& client : clients) REQUIRE(static_cast<bool>(client->RunFrame()));
+            *clock += Ms(16);
+        }
+    }
+    // The map's jobs run: the Match generates.
+    void Generate() {
+        for (int frame = 0; frame < 64 && match->Generating("Game"); ++frame) {
+            while (assets.RunOne()) {
+            }
+            Frames(1);
+        }
+        REQUIRE_FALSE(match->Generating("Game"));
+    }
+    std::size_t PlayersOf(const std::uint64_t user) {
+        std::size_t count = 0;
+        K::World& world = GameWorld(*match);
+        for (const K::EntityId id : world.Entities()) {
+            const PW::Owner* owner = world.Get<PW::Owner>(id);
+            count += owner != nullptr && owner->userId == user ? 1 : 0;
+        }
+        return count;
+    }
+};
+
+} // namespace
+
+TEST_CASE("world: a Client that connects while the Match generates is seated once its walls are built") {
+    HeldMatch held;
+    held.AddClient(1);
     // The Match's map waits: the Client connects, and has no player yet.
-    for (int frame = 0; frame < 60; ++frame) {
-        REQUIRE(static_cast<bool>(match->RunFrame()));
-        REQUIRE(static_cast<bool>(client->RunFrame()));
-        *clock += Ms(16);
+    held.Frames(60);
+    REQUIRE(held.match->Generating("Game"));
+    CHECK(held.seats->Taken() == 1);
+    CHECK_MESSAGE(held.PlayersOf(1) == 0, "[pvp-seat-waits] no player before the walls");
+    held.Generate();
+    held.Frames(60);
+    CHECK_MESSAGE(held.PlayersOf(1) == 1, "[pvp-seat-waits] seated once the walls are there");
+    CHECK(GameWorld(*held.clients[0]).Resource<PW::ContentMismatch>()->reason.empty());
+}
+
+TEST_CASE("world: a Client that comes and goes while the Match generates leaves no player; one that comes again has one") {
+    {
+        HeldMatch held;
+        held.AddClient(1);
+        held.Frames(60);
+        REQUIRE(held.seats->Taken() == 1);
+        held.CloseLastClient();
+        held.Frames(30);
+        REQUIRE(held.match->Generating("Game"));
+        held.Generate();
+        held.Frames(30);
+        CHECK_MESSAGE(held.PlayersOf(1) == 0, "[pvp-seat-gone] a connection that ended while the Match generated is not seated");
+        CHECK(held.seats->Taken() == 0);
     }
-    REQUIRE(match->Generating("Game"));
-    CHECK(seats->Taken() == 1);
-    CHECK_MESSAGE(PlayerOf(GameWorld(*match), 1) == 0, "[pvp-seat-waits] no player before the walls");
-    while (assets.RunOne()) {
+    {
+        HeldMatch held;
+        held.AddClient(1);
+        held.Frames(60);
+        held.CloseLastClient();
+        held.Frames(30);
+        held.AddClient(1);
+        held.Frames(60);
+        REQUIRE(held.match->Generating("Game"));
+        held.Generate();
+        held.Frames(60);
+        CHECK_MESSAGE(held.PlayersOf(1) == 1, "[pvp-seat-gone] the user who came again has one player");
+        CHECK(held.seats->Taken() == 1);
     }
-    for (int frame = 0; frame < 60; ++frame) {
-        (void)assets.RunOne();
-        REQUIRE(static_cast<bool>(match->RunFrame()));
-        REQUIRE(static_cast<bool>(client->RunFrame()));
-        *clock += Ms(16);
-    }
-    REQUIRE_FALSE(match->Generating("Game"));
-    CHECK_MESSAGE(PlayerOf(GameWorld(*match), 1) != 0, "[pvp-seat-waits] seated once the walls are there");
-    CHECK(GameWorld(*client).Resource<PW::ContentMismatch>()->reason.empty());
 }
 
 TEST_CASE("world: the Match keeps none of its map once its walls are built") {
@@ -252,6 +293,9 @@ TEST_CASE("world: the Match keeps none of its map once its walls are built") {
     for (int frame = 0; frame < 4; ++frame) REQUIRE(static_cast<bool>(match->RunFrame()));
     const auto* diagnostics = std::as_const(match->Buffer()).Find<AS::AssetStoreDiagnostics>();
     REQUIRE(diagnostics != nullptr);
-    const AS::AssetProbe probe = diagnostics->Probe(AS::AssetId(ShippedContent()->arenas[0].map));
-    CHECK_MESSAGE(probe.state != AS::AssetState::Loaded, "[pvp-map-released] the map's index is not held: " << AS::ToString(probe.state));
+    const AS::AssetProbe index = diagnostics->Probe(AS::AssetId(ShippedContent()->arenas[0].map));
+    CHECK_MESSAGE(index.state != AS::AssetState::Loaded, "[pvp-map-released] the map's index is not held: " << AS::ToString(index.state));
+    // Its region (the faces are there): pvp_arena has one.
+    const AS::AssetProbe region = diagnostics->Probe(AS::AssetId(ShippedContent()->arenas[0].map + ".r_0_0"));
+    CHECK_MESSAGE(region.state != AS::AssetState::Loaded, "[pvp-map-released] the map's region is not held: " << AS::ToString(region.state));
 }

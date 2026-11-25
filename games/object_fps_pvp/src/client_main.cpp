@@ -397,7 +397,7 @@ int CheckDrawing(O::Product& product, const std::int64_t frames, const O::Runner
 // The Client's Product from its first scene, until its window closes.
 int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::shared_ptr<const PW::GameContent>& game,
                const std::shared_ptr<const PC::PresentationContent>& presentation, const std::string& contentRoot,
-               WA::WorkerPoolExecutor& executor, const bool verbose) {
+               WA::WorkerPoolExecutor& executor, WA::WorkerPoolExecutor& compute, const bool verbose) {
     const std::int64_t frames = start.frames;
     const GYO::Engine::Math::Vec2i resolution = start.settings.resolution;
     const W::WindowMode windowMode = start.settings.window;
@@ -407,7 +407,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     net.role = N::NetRole::Client;
     description.options.Set(net);
     description.options.Set(std::move(start));
-    PC::ClientOptions options{game, presentation, 0, userId, &executor};
+    PC::ClientOptions options{game, presentation, 0, userId, &compute};
     O::WorldDescription frameWorld = PC::ClientFrameWorld(options);
     // The loading screen's warm-up reads what sdl_gpu has shown (DrawnFrames), between the Frame World's rounds.
     frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
@@ -636,6 +636,14 @@ int main(int argc, char** argv) {
         return 1;
     }
     WA::WorkerPoolExecutor executor(*pool);
+    // The map's walls and pictures are made on their own thread, not behind the files the asset threads read (Bevy
+    // keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
+    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp compute", .threadCount = 1});
+    if (!computePool) {
+        Log(GYO::Engine::Base::LogLevel::Error, "the compute thread did not start: " + GYO::Engine::Base::Describe(computePool.error()));
+        return 1;
+    }
+    WA::WorkerPoolExecutor compute(*computePool);
 
     PC::ClientStart start;
     start.frames = frames;
@@ -654,5 +662,5 @@ int main(int argc, char** argv) {
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     }
-    return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
+    return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, compute, verbose);
 }

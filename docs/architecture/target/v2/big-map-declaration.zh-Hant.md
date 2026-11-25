@@ -492,12 +492,14 @@ v8-arch-gyo2-big-map
    - 讀不了（缺 region、sha 不合、出生點在牆裡）：維持生成，`MapLoad{done, total, stage, failure}` 寫原因。Match 的 main 記錄後結束；Client 帶原因回上一頁。
 4. Client 的 Frame World 用同一個 asset（store 只讀一次），在生成期間把 faces 交給 worker 做每個 region 的模型，再生成每個 region 一個 `Mesh3d`。loading 畫面等兩邊的 `MapLoad` 都是 Done；region 數計入進度。
 5. 固定步在生成結束前不跑（`WorldTimeOptions::fixedStepConditions = {AfterGenerating()}`），Match 與 Client 條件相同。生成期間來的連線，`SeatPlayers` 先不讀（未讀的紀錄不會被裁掉），牆好了才入座。
-6. Match 玩的圖和自己的不同：記 `ContentMismatch{reason, matchArena}`，不在 World 裡換。Client 有那張圖（`--connect` 直連時才會發生）就以那張重建遊戲；沒有就離開。
-7. worker 由產品給（`WorldOptions::jobs`、`ClientOptions::jobs`，產品的 `WorkerPool`）；沒給時在 System 內同步建。
+6. Match 玩的圖和自己的不同：記 `ContentMismatch{reason, matchArena}`，不在 World 裡換。arena id 不同時一收到 `MatchInfo` 就判（不必先讀完自己的圖）；同一張圖則等自己的牆建好再比 digest。Client 有那張圖就以那張重建遊戲，沒有就離開。只要 Match 的圖和這局的不同就會重建；Gateway 的房間照理不會遇到（房間的圖就是 Match 的圖），程式沒有另外限制。
+7. worker 由產品給（`WorldOptions::jobs`、`ClientOptions::jobs`）；沒給時在 System 內同步建。產品給的是**計算用**的執行緒，和 asset 讀檔的執行緒分開（Bevy 的 `IoTaskPool`／`AsyncComputeTaskPool`：`bevy_tasks/src/usages.rs:67`、`:75`）。介面借用 `AssetExecutor`（只是「交一個 job」），不經 asset store。
+8. 生成期間累積的連線紀錄，牆好後才讀：讀到時已經斷掉的連線不入座（設計審查 B1：否則會留下沒人控制的玩家）。
 
 **照誰**
 
-- 背景建、每幀取結果：Bevy `examples/async_tasks/async_compute.rs:66`（`AsyncComputeTaskPool` 上 spawn）、`:128`（`check_ready` 每幀取）。Godot `WorkerThreadPool::add_task`／`is_task_completed`（`core/object/worker_thread_pool.h:246`、`:249`）同型。不偏離。
+- 背景建、每幀取結果：Bevy `examples/async_tasks/async_compute.rs:66`（`AsyncComputeTaskPool` 上 spawn）、`:128`（`check_ready` 每幀取）。Godot `WorkerThreadPool::add_task`／`is_task_completed`（`core/object/worker_thread_pool.h:246`、`:249`）同型。丟掉 task 時取消還沒開始的 job（Bevy 的 `Task` drop 即取消：`bevy_tasks/src/task_pool.rs:558`）；已在跑的跑完後丟掉結果（Bevy 會在下一個 await 點停，我們的 job 沒有 await 點）。
+- 生成期間的連線改用「牆好後讀積壓的訊息」，而不是 Bevy 常見的「照狀態入座」（每個還在、沒有玩家的 Peer 給一個）：`SeatPlayers` 原本就以訊息處理換手（同一使用者的新連線接手玩家），改成照狀態要重寫整個 System，不在本批。積壓造成的問題（已斷的連線）在讀時排除。
 - 生成期間讀＋`Hold()`：gyo2 world-gen，沒有別家對應（Bevy 用 States 自己寫 loading，同樣是作者的系統等資產）。
 
 **判定（合併前）**

@@ -247,14 +247,16 @@ int main(int argc, char** argv) {
         arena = static_cast<std::size_t>(found - shared->arenas.data());
     }
 
-    // The map is read while the World generates: the asset store reads its files on this pool, and the walls are built
-    // on it (one World, so one thread).
-    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match", .threadCount = 1});
-    if (!pool) {
-        Log(GYO::Engine::Base::LogLevel::Error, "no worker thread: " + GYO::Engine::Base::Describe(pool.error()));
+    // The map is read while the World generates: the asset store reads its files on one thread, the walls are built on
+    // another (Bevy keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
+    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = 1});
+    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match compute", .threadCount = 1});
+    if (!pool || !computePool) {
+        Log(GYO::Engine::Base::LogLevel::Error, "no worker thread: " + GYO::Engine::Base::Describe(!pool ? pool.error() : computePool.error()));
         return 1;
     }
     WA::WorkerPoolExecutor executor(*pool);
+    WA::WorkerPoolExecutor compute(*computePool);
     auto seats = std::make_shared<PW::Seats>(capacity);
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
@@ -269,7 +271,7 @@ int main(int argc, char** argv) {
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .seats = seats, .expectUsers = expectUsers,
-                                                .startDeadlineSeconds = startDeadline, .jobs = &executor});
+                                                .startDeadlineSeconds = startDeadline, .jobs = &compute});
     if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {

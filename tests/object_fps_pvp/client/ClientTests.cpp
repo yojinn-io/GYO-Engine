@@ -181,7 +181,8 @@ struct Setup final {
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
                    std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, std::vector<std::uint64_t> expectUsers = {},
-                   const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {})
+                   const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {},
+                   GYO::Engine::Asset::AssetExecutor* jobs = nullptr)
         : framesPerStep(perStep) {
         if (delayAdvances != 0) {
             N::MemoryLinkSettings link;
@@ -202,7 +203,7 @@ struct Setup final {
         auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
         this->presentation = std::make_shared<const PC::PresentationContent>(std::move(*presentation));
-        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1};
+        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1, jobs};
         O::WorldDescription solo = Stepped(PC::ClientSoloWorld(options), kStep / framesPerStep);
         O::WorldDescription sim = Stepped(PC::ClientSimWorld(options), kStep / framesPerStep);
         O::WorldDescription game = Stepped(PC::ClientFrameWorld(options, false), kStep / framesPerStep);
@@ -839,6 +840,26 @@ bool FramesUntil(Setup& setup, Done done, const int n = 600) {
 }
 
 } // namespace
+
+// The loading waits for both Worlds' maps: the picture made in the Frame World is not enough while the Sim World's
+// walls are still being built (its fixed steps have not started).
+TEST_CASE("client: the loading screen waits for the Sim World's walls, not only for the Frame World's picture") {
+    HeldJobs jobs;
+    Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
+    // The Sim World reads the map first (it runs before the Frame World): its walls are the first job, the picture
+    // the second.
+    REQUIRE(FramesUntil(setup, [&] { return jobs.Waiting() == 2; }));
+    REQUIRE(jobs.RunAt(1));
+    REQUIRE(FramesUntil(setup, [&] { return setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Done; }));
+    REQUIRE(setup.Client().Resource<PC::ClientView>()->mapLoad.stage == PW::MapStage::Building);
+    for (int i = 0; i < 120; ++i) {
+        setup.Frame();
+        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-sim-walls] not ready before the Sim World's walls");
+    }
+    CHECK(setup.Binding("loading") == "地図を組み立てています…");
+    REQUIRE(jobs.RunOne());
+    CHECK(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
+}
 
 // The Match plays another arena than the one the Client starts with (a Match reached by its address): a World plays one
 // arena, so the game is built again on the Match's (big-map declaration 15.3).
