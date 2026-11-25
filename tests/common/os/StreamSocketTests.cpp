@@ -153,7 +153,7 @@ TEST_CASE("stream socket: a Send after the peer reset fails, it does not end the
 }
 
 TEST_CASE("stream socket: a port nobody listens on is Unreachable") {
-    DatagramAddress closedPort{};
+    SocketAddress closedPort{};
     {
         LoopbackListener listener;
         REQUIRE(listener.Ok());

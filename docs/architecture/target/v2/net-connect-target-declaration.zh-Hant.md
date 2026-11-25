@@ -38,7 +38,7 @@
 
 ## 4. 設計
 
-1. **`NetConnectTarget`**（`engine/net/NetService.hpp`，net 在每個帶角色的 World 登記的 Resource）：`server`（`std::variant<std::monostate, OS::DatagramAddress, Endpoint>`：UDP 時是位址、產品給的 Link 時是 Endpoint）、`userId`、`token`。由產品的準備函式（`WorldDescription::prepare`）或替換的 `ReplaceRequest::extra` 放入。不是判定資料（和 World 的其他 facts 一樣）。
+1. **`NetConnectTarget`**（`engine/net/NetService.hpp`，net 在每個帶角色的 World 登記的 Resource）：`server`（`std::variant<std::monostate, OS::SocketAddress, Endpoint>`：UDP 時是位址、產品給的 Link 時是 Endpoint）、`userId`、`token`。由產品的準備函式（`WorldDescription::prepare`）或替換的 `ReplaceRequest::extra` 放入。不是判定資料（和 World 的其他 facts 一樣）。
 2. **`NetProductOptions`** 拿掉 `server`、`serverEndpoint`、`userId`、`token`；留 `role`、`bind`、`link`、`session`、`admission`、`clock`、`seed`。
 3. **讀的時機**：net 的準備函式在作者的準備函式與 `extra` 之前跑（O-7），所以不在那裡讀。client World 的第一幀，`ReceiveNet` 最前面讀一次：`NetService::SetTarget(target 或 null)`。
 4. **`SetTarget` 的規則**：

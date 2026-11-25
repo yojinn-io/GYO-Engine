@@ -14,7 +14,7 @@
 
 #include "engine/http/Http.hpp"
 #include "engine/kernel/Kernel.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <cstdint>
 #include <deque>
@@ -115,7 +115,7 @@ class GatewayClient final {
 public:
     // gateway: its address; deviceId: this player's (empty: none, unavailable says why; every call then ends at once
     // with "no_device"); timeout: how long a call may go without its answer.
-    GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::string unavailable = {},
+    GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string unavailable = {},
                   std::int64_t timeout = kDefaultTimeout);
 
     // Asks for a call; calls go one at a time in the order asked, after the session.
@@ -146,7 +146,7 @@ private:
 
     void Start(Call call, bool session, std::int64_t now);
 
-    GYO::Engine::OS::DatagramAddress gateway_;
+    GYO::Engine::OS::SocketAddress gateway_;
     std::string host_;
     std::string deviceId_;
     std::string unavailable_;

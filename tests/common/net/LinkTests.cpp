@@ -15,15 +15,15 @@ namespace O = GYO::Engine::Orchestration;
 using GYO::Test::Net::Bytes;
 
 TEST_CASE("link: an Endpoint packs an IPv4 address and a port and gives them back") {
-    const OS::DatagramAddress address{{192, 168, 0, 10}, 40123};
+    const OS::SocketAddress address{{192, 168, 0, 10}, 40123};
     const N::Endpoint endpoint = N::UdpLink::ToEndpoint(address);
     CHECK(endpoint.value == 0xC0A8000A9CBBull);
     CHECK(N::UdpLink::ToAddress(endpoint) == address);
 }
 
 TEST_CASE("link: a datagram goes over UDP loopback with its sender") {
-    auto a = N::UdpLink::Open(OS::DatagramAddress::Loopback(0));
-    auto b = N::UdpLink::Open(OS::DatagramAddress::Loopback(0));
+    auto a = N::UdpLink::Open(OS::SocketAddress::Loopback(0));
+    auto b = N::UdpLink::Open(OS::SocketAddress::Loopback(0));
     REQUIRE(a.has_value());
     REQUIRE(b.has_value());
     const auto aAddress = a->LocalAddress();
@@ -66,7 +66,7 @@ void Shake(O::Product& server, O::Product& client) {
 std::unique_ptr<O::Product> UdpServer() {
     GYO::Test::Net::End server;
     server.net.role = N::NetRole::Server;
-    server.net.bind = OS::DatagramAddress::Loopback(0);
+    server.net.bind = OS::SocketAddress::Loopback(0);
     server.role = N::NetWorldOptions{N::NetRole::Server, std::nullopt};
     server.range = {1, 1000};
     auto built = O::Product::Build(GYO::Test::Net::Describe(server), GYO::Test::Net::Units(true));
@@ -74,10 +74,10 @@ std::unique_ptr<O::Product> UdpServer() {
     return std::move(*built);
 }
 
-std::unique_ptr<O::Product> UdpClient(const OS::DatagramAddress& server, const GYO::Engine::WorldTime::StepLength step) {
+std::unique_ptr<O::Product> UdpClient(const OS::SocketAddress& server, const GYO::Engine::WorldTime::StepLength step) {
     GYO::Test::Net::End client;
     client.net.role = N::NetRole::Client;
-    client.net.bind = OS::DatagramAddress::Loopback(0);
+    client.net.bind = OS::SocketAddress::Loopback(0);
     client.target.server = server;
     client.target.userId = 7;
     client.role = N::NetWorldOptions{N::NetRole::Client, std::nullopt};
@@ -94,14 +94,14 @@ TEST_CASE("link: two Products shake hands over UDP loopback, and a step length t
     auto server = UdpServer();
     const auto address = server->Buffer().Find<N::NetService>()->UdpAddress();
     REQUIRE(address.has_value());
-    auto client = UdpClient(OS::DatagramAddress::Loopback(address->port), {});
+    auto client = UdpClient(OS::SocketAddress::Loopback(address->port), {});
     Shake(*server, *client);
     const auto peers = GYO::Test::Net::PeersOf(server->World("Net").GetWorld());
     REQUIRE_MESSAGE(peers.size() == 1, "the client connects over UDP loopback");
     CHECK(peers[0].userId == 7);
     CHECK(GYO::Test::Net::PeersOf(client->World("Net").GetWorld()).size() == 1);
 
-    auto other = UdpClient(OS::DatagramAddress::Loopback(address->port), GYO::Engine::WorldTime::StepLength::FromHz(60.0));
+    auto other = UdpClient(OS::SocketAddress::Loopback(address->port), GYO::Engine::WorldTime::StepLength::FromHz(60.0));
     Shake(*server, *other);
     const auto ended = GYO::Test::Net::SeenIn(other->World("Net").GetWorld()).disconnected;
     REQUIRE(ended.size() == 1);
@@ -113,14 +113,14 @@ TEST_CASE("link: a small G-5 over UDP loopback: the client ends equal to the ser
     using namespace GYO::Test::Net;
     const GameRules rules{90, true};
     End server = GameEnd(N::NetRole::Server, rules);
-    server.net.bind = OS::DatagramAddress::Loopback(0);
+    server.net.bind = OS::SocketAddress::Loopback(0);
     auto builtServer = O::Product::Build(Describe(server), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));
     const auto address = (*builtServer)->Buffer().Find<N::NetService>()->UdpAddress();
     REQUIRE(address.has_value());
     End client = GameEnd(N::NetRole::Client, rules);
-    client.net.bind = OS::DatagramAddress::Loopback(0);
-    client.target.server = OS::DatagramAddress::Loopback(address->port);
+    client.net.bind = OS::SocketAddress::Loopback(0);
+    client.target.server = OS::SocketAddress::Loopback(address->port);
     client.target.userId = 9;
     auto builtClient = O::Product::Build(Describe(client), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(builtClient), Reported(builtClient));

@@ -34,7 +34,7 @@
 namespace GYO::Engine::OS {
 namespace {
 
-sockaddr_in ToNative(const DatagramAddress& address) noexcept {
+sockaddr_in ToNative(const SocketAddress& address) noexcept {
     sockaddr_in native{};
     native.sin_family = AF_INET;
     native.sin_port = htons(address.port);
@@ -44,8 +44,8 @@ sockaddr_in ToNative(const DatagramAddress& address) noexcept {
     return native;
 }
 
-DatagramAddress FromNative(const sockaddr_in& native) noexcept {
-    DatagramAddress address;
+SocketAddress FromNative(const sockaddr_in& native) noexcept {
+    SocketAddress address;
     const std::uint32_t host = ntohl(native.sin_addr.s_addr);
     address.octets = {static_cast<std::uint8_t>(host >> 24), static_cast<std::uint8_t>(host >> 16),
         static_cast<std::uint8_t>(host >> 8), static_cast<std::uint8_t>(host)};
@@ -83,7 +83,7 @@ struct DatagramSocket::Impl final {
     }
 };
 
-Base::Result<DatagramSocket, OSError> DatagramSocket::Open(const DatagramAddress& local) {
+Base::Result<DatagramSocket, OSError> DatagramSocket::Open(const SocketAddress& local) {
     auto impl = std::make_unique<Impl>();
     WSADATA data{};
     const int startup = WSAStartup(MAKEWORD(2, 2), &data);
@@ -111,7 +111,7 @@ DatagramSocket::DatagramSocket(DatagramSocket&& other) noexcept = default;
 DatagramSocket& DatagramSocket::operator=(DatagramSocket&& other) noexcept = default;
 DatagramSocket::~DatagramSocket() = default;
 
-Base::Result<DatagramAddress, OSError> DatagramSocket::LocalAddress() const {
+Base::Result<SocketAddress, OSError> DatagramSocket::LocalAddress() const {
     GYO_ASSERT(impl_ != nullptr);
     sockaddr_in native{};
     int length = sizeof native;
@@ -121,7 +121,7 @@ Base::Result<DatagramAddress, OSError> DatagramSocket::LocalAddress() const {
     return FromNative(native);
 }
 
-Base::Result<void, OSError> DatagramSocket::Send(const DatagramAddress& to, const std::span<const std::byte> data) {
+Base::Result<void, OSError> DatagramSocket::Send(const SocketAddress& to, const std::span<const std::byte> data) {
     GYO_ASSERT(impl_ != nullptr);
     if (data.size() > static_cast<std::size_t>(INT_MAX))
         return Base::Err(OSError::Make(OSErrorCode::TooLarge, "datagram too large to send",

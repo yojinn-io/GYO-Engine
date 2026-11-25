@@ -18,7 +18,7 @@
 #include "object_fps_pvp/client/Gateway.hpp"
 
 #include "engine/net/NetService.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
 #include <cstdint>
@@ -86,12 +86,12 @@ struct ClientStart final {
     // The directory of this player's files (the user's data directory and the profile); empty: none.
     std::string dataDirectory;
     // The Gateway (its HTTP address).
-    GYO::Engine::OS::DatagramAddress gateway = GYO::Engine::OS::DatagramAddress::Loopback(7700);
+    GYO::Engine::OS::SocketAddress gateway = GYO::Engine::OS::SocketAddress::Loopback(7700);
 };
 
 
 // An address as --connect and a room's connect give it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
-[[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
+[[nodiscard]] std::optional<GYO::Engine::OS::SocketAddress> ParseMatchAddress(std::string_view text);
 
 // The Gateway's scenes' words (GatewayScene.cpp): what the player reads for a call that went wrong (gateway: its
 // address), and for a room's mode.
