@@ -1,5 +1,5 @@
-// The Client (client/ClientWorld.hpp) without a window or a GPU: its Game World with the Client's Systems, its
-// Render World without sdl_gpu (what it would draw is read at the Submit stage), a Match and a second plain Client
+// The Client (client/ClientWorld.hpp) without a window or a GPU: its Sim World (the client World), its Frame World
+// with the Client's Systems (both on the test's thread here: the frame runs Sim, then Frame), its Render World without sdl_gpu (what it would draw is read at the Submit stage), a Match and a second plain Client
 // over memory links, the content read from assets/object_fps_pvp through the asset Module. The input and window
 // Messages are written by a test System where sdl_window writes them.
 #include <doctest/doctest.h>
@@ -28,6 +28,7 @@
 #include "engine/world_asset/WorkerPoolExecutor.hpp"
 #include "engine/world_asset/WorldAssetModule.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <thread>
 #include <variant>
@@ -126,7 +127,8 @@ struct Setup final {
         auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
         PC::ClientOptions options{ShippedContent(), std::make_shared<const PC::PresentationContent>(std::move(*presentation)), 0, 1};
-        O::WorldDescription game = Stepped(PC::ClientGameWorld(options, false), kStep / framesPerStep);
+        O::WorldDescription sim = Stepped(PC::ClientSimWorld(options), kStep / framesPerStep);
+        O::WorldDescription game = Stepped(PC::ClientFrameWorld(options, false), kStep / framesPerStep);
         game.build = [inner = std::move(game.build)](O::WorldSetup& setup) {
             inner(setup);
             K::Registrar& r = setup.Registrar();
@@ -166,10 +168,11 @@ struct Setup final {
         net.clock = reader;
         description.options.Set(net);
         // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
-        game.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        sim.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
             w.SetResource(target);
             return {};
         });
+        description.worlds.push_back(std::move(sim));
         description.worlds.push_back(std::move(game));
         description.worlds.push_back(std::move(render));
         description.configure = [](O::ProductSetup& setup) {
@@ -191,7 +194,9 @@ struct Setup final {
         other.reset();
         match.reset();
     }
-    K::World& Client() { return GameWorld(*client); }
+    // The Frame World (what the player sees) and the Sim World (the client World).
+    K::World& Client() { return client->World("Frame").GetWorld(); }
+    K::World& Sim() { return client->World("Sim").GetWorld(); }
     Pending& Next() { return *Client().ResourceMut<Pending>(); }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
@@ -267,7 +272,7 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
                   "the other player's body (every mesh of the model) where it stands");
     CHECK_MESSAGE(lastPicture.passes3d >= 2, "the world camera and the viewmodel camera each draw a 3D pass");
     // The camera at the own player's eye.
-    const K::EntityId own = PW::OwnPlayer(setup.Client());
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
     const PW::PlayerBody before = *setup.Client().Get<PW::PlayerBody>(own);
     bool cameraAtEye = false;
     for (const K::EntityId id : setup.Client().Entities()) {
@@ -330,7 +335,7 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
     Setup setup(4);
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
-    const K::EntityId own = PW::OwnPlayer(setup.Client());
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -355,6 +360,107 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
     CHECK(setup.Client().Get<PW::PlayerCombat>(own)->shots == 4);
 }
 
+// live-frame-sim-thread declaration J5 (R5): the program lends the Sim World to a thread of its own; here the test's
+// "Sim thread" runs its rounds with the Match and the MemoryLink (whose ends are used from one thread), while the main
+// thread runs the Frame World's frames and stops 250 ms between two of them, as when the OS holds the window.
+TEST_CASE("client: J5 while the main thread stops for 250 ms, the lent Sim World steps on and the Match gets its input every step") {
+    Setup setup;
+    setup.other.reset();
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.position = {640.0F, 360.0F};
+    click.state = I::ButtonState::Pressed;
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    // W held from here on: every step's input walks forward.
+    setup.Next().keys.push_back(Key(I::KeyCode::W));
+    setup.Frames(2);
+
+    auto lent = setup.client->Lend("Sim");
+    REQUIRE_MESSAGE(static_cast<bool>(lent), (lent ? std::string() : lent.error().message));
+    O::WorldLease lease = std::move(lent).value();
+    struct Round final {
+        int phase = 0;  // 0 before the stop, 1 during it, 2 after
+        std::uint64_t simTick = 0;
+        std::uint64_t consumed = 0, missing = 0;  // the Match's counts of this Client's inputs
+        GYO::Engine::Math::Vec3 feet{};           // the own player at the Match
+    };
+    std::vector<Round> rounds;
+    std::atomic<int> phase{0};
+    std::atomic<bool> stop{false};
+    std::string simFailure;
+    std::thread simThread([&] {
+        while (!stop.load()) {
+            Round round;
+            round.phase = phase.load();
+            auto match = setup.match->RunFrame();
+            auto sim = lease.RunRound();
+            if (!match || !sim) {
+                simFailure = !match ? match.error().message : sim.error().message;
+                return;
+            }
+            setup.first.first.Advance();
+            setup.second.first.Advance();
+            *setup.clock += N::NetTime(std::chrono::nanoseconds(kStep));
+            K::World& matchWorld = GameWorld(*setup.match);
+            for (const K::EntityId id : matchWorld.Entities()) {
+                if (const auto* inputs = matchWorld.Get<N::PeerInput<PW::PlayerInput>>(id)) {
+                    round.consumed = inputs->counts.consumed;
+                    round.missing = inputs->counts.missing;
+                }
+            }
+            if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.feet = body->feet;
+            round.simTick = TickOf(lease.World());
+            rounds.push_back(round);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+    std::string mainFailure;
+    const auto frames = [&](const int n) {
+        for (int i = 0; i < n && mainFailure.empty(); ++i) {
+            auto ran = setup.client->RunFrame();
+            if (!ran) mainFailure = ran.error().message;
+            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+    };
+    frames(20);
+    phase = 1;
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    phase = 2;
+    frames(20);
+    stop = true;
+    simThread.join();
+    setup.client->Return(std::move(lease));
+    REQUIRE_MESSAGE(simFailure.empty(), simFailure);
+    REQUIRE_MESSAGE(mainFailure.empty(), mainFailure);
+
+    std::vector<Round> stopped;
+    for (const Round& round : rounds) {
+        if (round.phase == 1) stopped.push_back(round);
+    }
+    // (sleep_for(1 ms) is about 15 ms on Windows: 250 ms is still more than ten rounds.)
+    REQUIRE_MESSAGE(stopped.size() >= 10, "[pvp-sim-thread-steps] rounds while the main thread stopped: " << stopped.size());
+    const Round& first = stopped.front();
+    const Round& last = stopped.back();
+    CHECK_MESSAGE(last.simTick - first.simTick == stopped.size() - 1, "[pvp-sim-thread-steps] a step a round: " << first.simTick << ".." << last.simTick);
+    CHECK_MESSAGE(last.consumed - first.consumed == stopped.size() - 1,
+                  "[pvp-sim-thread-input] the Match took this Client's input every step: " << last.consumed - first.consumed);
+    CHECK_MESSAGE(last.missing == first.missing, "[pvp-sim-thread-input] no step without its input: " << last.missing - first.missing);
+    CHECK_MESSAGE(GYO::Engine::Math::Length(last.feet - first.feet) > 0.5F, "[pvp-sim-thread-input] the held W walked the player at the Match");
+    // The Sim World is back on the main thread; still connected, still playing.
+    setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
+    setup.Frames(10);
+    CHECK(PC::StatusOf(setup.Client()).connected);
+    CHECK(PlayerOf(GameWorld(*setup.match), 1) != 0);
+}
+
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
     Setup setup;
     setup.Frames(120);
@@ -370,7 +476,7 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     setup.other.reset();
     setup.Frames(20);
     CHECK_MESSAGE(PlayerOf(GameWorld(*setup.match), 2) == 0, "the Match took the player off without waiting for the timeout");
-    CHECK(PlayerOf(setup.Client(), 2) == 0);
+    CHECK_MESSAGE(PlayerOf(setup.Client(), 2) == 0, "[pvp-frame-mirror] the Frame World's copy went with the Sim World's player");
     CHECK(BodiesAt(setup.Client(), at) == 0);
 }
 
@@ -428,7 +534,7 @@ TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, 
     Setup setup;
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
-    const K::EntityId own = PW::OwnPlayer(setup.Client());
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
     const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
     REQUIRE(rival != 0);
     // The Match records a hit on the own player by the other one (as JudgeShots does).

@@ -43,11 +43,15 @@
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/AssetView.hpp"
 #include "engine/world_time/TimeTypes.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <mutex>
+#include <set>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace object_fps_pvp::client {
@@ -70,6 +74,8 @@ namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
 namespace WT = GYO::Engine::WorldTime;
 namespace PW = object_fps_pvp::world;
+
+void HashValue(K::Hasher&, const ClientView&) {}
 
 namespace {
 
@@ -125,6 +131,87 @@ struct ClientControls final {
     K::EntityId facedPlayer = 0;
 };
 void HashValue(K::Hasher&, const ClientControls&) {}
+
+// What the Sim World and the Frame World hand each other (live-frame-sim-thread declaration 4.3, O-13 (3)): one object
+// of the Product, each side behind its own lock, neither side waiting for the other. The Sim World's "out" puts the
+// newest picture of the game (only the newest is kept: a frame wants the latest); the Frame World's "out" adds the
+// controls (the held keys and the view are the newest; the presses add up, so none is lost however the two clocks
+// run), and the Sim World's "in" takes them.
+struct PlayerSnapshot final {
+    K::EntityId id = 0;
+    PW::Owner owner;
+    std::optional<PW::PlayerBody> body;
+    std::optional<PW::PlayerCombat> combat;
+    std::optional<PW::HitRecord> hits;
+    std::optional<PW::ShotRecord> shot;
+};
+struct WorldSnapshot final {
+    std::uint64_t version = 0;
+    std::vector<PlayerSnapshot> players;  // every entity with an Owner
+    std::string arenaId;                  // the arena the Sim World plays (GameRules)
+    std::uint64_t wallsDigest = 0;
+    ClientView view;
+};
+class ClientExchange final {
+public:
+    void PutSnapshot(WorldSnapshot snapshot) {
+        const std::lock_guard<std::mutex> lock(snapshotLock_);
+        snapshot.version = ++version_;
+        snapshot_ = std::move(snapshot);
+    }
+    // The newest picture when it is newer than seen (nullopt otherwise).
+    std::optional<WorldSnapshot> TakeSnapshot(std::uint64_t& seen) {
+        const std::lock_guard<std::mutex> lock(snapshotLock_);
+        if (!snapshot_ || snapshot_->version == seen) return std::nullopt;
+        seen = snapshot_->version;
+        return snapshot_;
+    }
+    void AddControls(const present::StepInput& step) {
+        const std::lock_guard<std::mutex> lock(controlsLock_);
+        Merge(controls_, step);
+        haveControls_ = true;
+    }
+    // The controls since the last take (nullopt: none came).
+    std::optional<present::StepInput> TakeControls() {
+        const std::lock_guard<std::mutex> lock(controlsLock_);
+        if (!haveControls_) return std::nullopt;
+        present::StepInput taken = controls_;
+        controls_.jump = controls_.fire = controls_.reload = false;
+        haveControls_ = false;
+        return taken;
+    }
+    // The newest held keys and view; the presses of either add up.
+    static void Merge(present::StepInput& into, const present::StepInput& newer) {
+        const bool jump = into.jump || newer.jump;
+        const bool fire = into.fire || newer.fire;
+        const bool reload = into.reload || newer.reload;
+        into = newer;
+        into.jump = jump;
+        into.fire = fire;
+        into.reload = reload;
+    }
+
+private:
+    std::mutex snapshotLock_;
+    std::optional<WorldSnapshot> snapshot_;
+    std::uint64_t version_ = 0;
+    std::mutex controlsLock_;
+    present::StepInput controls_;
+    bool haveControls_ = false;
+};
+
+// The Sim World: the controls the Frame World sent, until a step takes them (WriteStepInput).
+struct SimControls final {
+    present::StepInput pending;
+};
+void HashValue(K::Hasher&, const SimControls&) {}
+
+// The Frame World: the players it shows (the Sim World's, by their ids) and the last picture applied.
+struct FrameMirror final {
+    std::set<K::EntityId> players;
+    std::uint64_t seen = 0;
+};
+void HashValue(K::Hasher&, const FrameMirror&) {}
 
 // One mesh of a player's body (its index in the body model), or the weapon in its hand (mesh: kHeld).
 inline constexpr std::uint32_t kHeld = 0xFFFF'FFFFU;
@@ -333,11 +420,9 @@ std::string ArenaModelId(const sim::ArenaContent& arena) {
 // of this frame run after it.
 K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::ButtonInput<I::MouseButton>> mouse,
                              K::Res<I::AccumulatedMouseMotion> motion, K::Res<I::CursorPosition> cursor,
-                             K::Res<W::WindowState> window, K::Res<N::NetWorldLink> link, K::Res<PW::LocalUser> user,
+                             K::Res<W::WindowState> window, K::Res<PW::LocalUser> user,
                              K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
-                             K::Query<K::Read<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<ClientControls> state,
-                             K::ResMut<W::WindowRequest> request,
-                             K::CommandsFor<K::Inserts<N::PeerInput<PW::PlayerInput>>, K::Removes<>> commands) {
+                             K::ResMut<ClientControls> state, K::ResMut<W::WindowRequest> request) {
     ClientControls& c = state.Get();
     // A new life of the own player (joined or respawned) faces its spawn.
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat) {
@@ -369,7 +454,12 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
         request->cursorVisible = !captured;
         request->cursorGrab = captured ? W::CursorGrab::Locked : W::CursorGrab::None;
     }
-    // The own Peer's input buffer, for WriteStepInput.
+    return {};
+}
+
+// Sim World: the own Peer's input buffer, for WriteStepInput (Main/PreUpdate, after the net Module made the Peer).
+K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N::PeerInput<PW::PlayerInput>>> inputs,
+                                K::CommandsFor<K::Inserts<N::PeerInput<PW::PlayerInput>>, K::Removes<>> commands) {
     if (link->clientPeer != 0 && !inputs.Contains(link->clientPeer)) commands.Insert(link->clientPeer, N::PeerInput<PW::PlayerInput>{});
     return {};
 }
@@ -380,9 +470,11 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
 // rollback writes the recorded inputs back then). lightyear's client input System in FixedPreUpdate
 // (crates/inputs/inputs/src/client.rs:41, 186-190, 418-445).
 K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
-                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<ClientControls> state) {
+                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
     if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    const present::StepInput step = state->controls.Take();
+    // The held keys and the view as last sent; the presses go to this step only.
+    const present::StepInput step = state.Read().pending;
+    state->pending.jump = state->pending.fire = state->pending.reload = false;
     PW::PlayerInput input;
     input.forward = step.forward;
     input.right = step.right;
@@ -478,22 +570,20 @@ R::Color8 MaterialColor(const GYO::Engine::Model::ModelData& model, const std::u
     return R::Color8{byte(c[0]), byte(c[1]), byte(c[2]), static_cast<std::uint8_t>(std::lround(std::clamp(c[3], 0.0F, 1.0F) * 255.0F))};
 }
 
-std::uint64_t StepOf(const WT::FixedTime& fixed) { return static_cast<std::uint64_t>(fixed.accumulator.Step()); }
 
 // Every other living player's body parts follow its pose; the parts of a player gone or dead... stay for the death
 // (the death clip plays), and go with the player.
-K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<WT::Tick> tick, K::Res<WT::FixedTime> fixed,
-                               K::Res<N::NetReplicaState> replica,
+K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim,
                                K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
                                K::Query<K::Read<CharacterPart>> parts, K::Query<K::Write<T::Transform>> transforms,
                                K::Query<K::Write<R::SkinPose>> poses, K::ResMut<ClientCharacters> characters, K::Despawn despawn) {
     if (!rules->character) return {};
     const character::CharacterRig& rig = *rules->character;
-    const std::uint64_t step = StepOf(*fixed);
+    const std::uint64_t step = sim->stepNanoseconds;
     // The other players stand at the confirmed point (the Match's step their state belongs to), not at this Client's
     // predicted step: their shots, hits and lives are timed on it (lightyear: an interpolated entity has its own
     // timeline, crates/replication/interpolation/src/timeline.rs).
-    const std::uint64_t seen = replica->latestConfirmed ? *replica->latestConfirmed : tick->value;
+    const std::uint64_t seen = sim->latestConfirmed ? *sim->latestConfirmed : sim->tick;
     // Each shown player's pose this frame.
     std::map<K::EntityId, std::vector<Math::Matrix4>> modelSpace;
     std::map<K::EntityId, const PW::PlayerBody*> bodies;
@@ -536,8 +626,8 @@ K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser
 K::SystemResult AddCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets,
                               K::Res<WA::AssetView> view,
                               K::Query<K::Read<PW::Owner>> players, K::Query<K::Read<CharacterPart>> parts,
-                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, CharacterPart, RB::KeepThroughRollback>> spawnBody,
-                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, CharacterPart, RB::KeepThroughRollback>> spawnHeld) {
+                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, CharacterPart>> spawnBody,
+                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, CharacterPart>> spawnHeld) {
     const GYO::Engine::Model::ModelData* body = view->Get(assets->body);
     if (body == nullptr) return {};
     // The poses are the rig's (read from the same file): the drawn copy must have its nodes.
@@ -553,15 +643,13 @@ K::SystemResult AddCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
             mesh.model = assets->body;
             mesh.mesh = m;
             mesh.color = MaterialColor(*body, body->meshes[m].material);
-            auto spawned = spawnBody.New(std::move(mesh), T::Transform{}, T::GlobalTransform{}, R::SkinPose{}, CharacterPart{player, m},
-                                         RB::KeepThroughRollback{});
+            auto spawned = spawnBody.New(std::move(mesh), T::Transform{}, T::GlobalTransform{}, R::SkinPose{}, CharacterPart{player, m});
             if (!spawned) return Base::Err(std::move(spawned).error());
         }
         R::Mesh3d held;
         held.model = assets->heldWeapon;
         held.image = assets->heldWeaponImage;
-        auto spawned = spawnHeld.New(std::move(held), T::Transform{}, T::GlobalTransform{}, CharacterPart{player, kHeld},
-                                     RB::KeepThroughRollback{});
+        auto spawned = spawnHeld.New(std::move(held), T::Transform{}, T::GlobalTransform{}, CharacterPart{player, kHeld});
         if (!spawned) return Base::Err(std::move(spawned).error());
     }
     return {};
@@ -586,17 +674,17 @@ std::pair<std::uint32_t, float> ViewmodelClip(const ViewmodelDefinition& viewmod
 
 // The first-person weapon's pose from the own player's state (it hangs under the viewmodel camera with a fixed
 // placement: ViewmodelPlacement), hidden while the player is dead, and the reload's sound at the clip's magazine_in.
-K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<WT::Tick> tick, K::Res<WT::FixedTime> fixed,
+K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim,
                               K::Res<ClientScene> scene, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientSound> sound,
                               K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
                               K::Query<K::Read<ViewmodelPart>, K::Write<R::SkinPose>, K::Write<R::RenderLayers>> parts,
                               K::ResMut<ClientCharacters> characters) {
     const ViewmodelDefinition& viewmodel = scene->presentation->viewmodel;
     if (!viewmodel.model) return {};
-    const std::uint64_t step = StepOf(*fixed);
+    const std::uint64_t step = sim->stepNanoseconds;
     players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat, const PW::HitRecord& hits) {
         if (owner.userId != user->userId) return;
-        const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, tick->value, step);
+        const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, sim->tick, step);
         const auto [clip, seconds] = ViewmodelClip(viewmodel, input);
         std::vector<GYO::Engine::Model::LocalTransform> local(viewmodel.model->nodes.size());
         GYO::Engine::Model::SampleClip(viewmodel.model->nodes, viewmodel.model->clips[clip], seconds,
@@ -632,7 +720,7 @@ K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
 K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Query<K::Read<ViewmodelPart>> parts,
                              K::Res<ClientScene> scene,
                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, ViewmodelPart, R::RenderLayers,
-                                                K::ChildOf, RB::KeepThroughRollback>> spawn) {
+                                                K::ChildOf>> spawn) {
     if (parts.Count() != 0) return {};
     const GYO::Engine::Model::ModelData* model = view->Get(assets->viewmodel);
     if (model == nullptr) return {};
@@ -650,15 +738,14 @@ K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> 
         // examples/camera/first_person_view_model.rs: the arms are a child of the camera).
         const T::Transform placement = ViewmodelPlacement(scene->presentation->viewmodel);
         auto spawned = spawn.New(std::move(mesh), placement, T::GlobalTransform{T::ToMatrix(placement)}, R::SkinPose{}, ViewmodelPart{m},
-                                 R::RenderLayers{1U << kViewLayer}, K::ChildOf{kViewCamera}, RB::KeepThroughRollback{});
+                                 R::RenderLayers{1U << kViewLayer}, K::ChildOf{kViewCamera});
         if (!spawned) return Base::Err(std::move(spawned).error());
     }
     return {};
 }
 
 K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
-                        K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<N::NetWorldLink> link,
-                        K::Res<PW::ContentMismatch> mismatch, K::Res<WT::ActiveTime> time,
+                        K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<WT::ActiveTime> time,
                         K::Res<ClientScene> scene,
                         K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
                         K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes, K::ResMut<ClientHud> hud) {
@@ -702,9 +789,9 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     std::string hpText;
     std::string ammoText;
     std::string status;
-    if (!mismatch->reason.empty()) {
-        status = "内容が Match と違います: " + mismatch->reason;
-    } else if (link->clientPeer == 0) {
+    if (!sim->mismatch.empty()) {
+        status = "内容が Match と違います: " + sim->mismatch;
+    } else if (!sim->connected) {
         status = "Match に接続しています…";
     } else if (body == nullptr) {
         status = "参加しています…";
@@ -826,13 +913,18 @@ std::string EndText(const N::PeerDisconnected& end) {
 
 // The connection's end, as the program and the lobby show it: the window closes (the program goes back to the
 // lobby with the reason).
-K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session,
-                               K::ResMut<W::WindowRequest> request) {
+K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session) {
     for (const N::PeerDisconnected* end : ends.Read()) {
         session->ended = true;
         session->reason = EndText(*end);
-        request->close = true;
     }
+    return {};
+}
+
+// Frame World: the connection ended (the Sim World's picture says so): the window closes (the program goes back to
+// the lobby with the reason).
+K::SystemResult CloseOnEnd(K::Res<ClientView> sim, K::ResMut<W::WindowRequest> request) {
+    if (sim->ended && !request.Read().close) request->close = true;
     return {};
 }
 
@@ -847,16 +939,160 @@ K::SystemOptions InUpdate(std::string name, std::vector<std::string> after = {})
     return options;
 }
 
-void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
+void Mount(K::SystemOptions& options, const std::string_view schedule, const std::string_view stage) {
+    K::Mount mount;
+    mount.schedule = std::string(schedule);
+    mount.stage = std::string(stage);
+    options.mounts.push_back(std::move(mount));
+}
+
+Base::Result<void, O::OrchestrationError> NoExchange() {
+    return Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed,
+                                           "the Client's Worlds need ConfigureClient (their ClientExchange)"));
+}
+
+// ---- The Sim World's exchange: in takes the controls, out puts the picture.
+void TakeControls(ClientExchange& exchange, K::World& world) {
+    if (const auto controls = exchange.TakeControls()) ClientExchange::Merge(world.ResourceMut<SimControls>()->pending, *controls);
+}
+
+WorldSnapshot SnapshotOf(K::World& world) {
+    WorldSnapshot snapshot;
+    for (const K::EntityId id : world.Keys<PW::Owner>()) {
+        PlayerSnapshot player;
+        player.id = id;
+        player.owner = *world.Get<PW::Owner>(id);
+        const auto copy = [&world, id](auto& into) {
+            using T = typename std::remove_reference_t<decltype(into)>::value_type;
+            if (const T* value = world.Get<T>(id)) into = *value;
+        };
+        copy(player.body);
+        copy(player.combat);
+        copy(player.hits);
+        copy(player.shot);
+        snapshot.players.push_back(std::move(player));
+    }
+    if (const auto* rules = world.Resource<PW::GameRules>()) {
+        snapshot.arenaId = rules->arena.id;
+        snapshot.wallsDigest = rules->wallsDigest;
+    }
+    ClientView& view = snapshot.view;
+    if (const auto* tick = world.Resource<WT::Tick>()) view.tick = tick->value;
+    if (const auto* fixed = world.Resource<WT::FixedTime>()) view.stepNanoseconds = static_cast<std::uint64_t>(fixed->accumulator.Step());
+    if (const auto* replica = world.Resource<N::NetReplicaState>()) {
+        if (replica->latestConfirmed) view.latestConfirmed = *replica->latestConfirmed;
+    }
+    if (const auto* link = world.Resource<N::NetWorldLink>()) view.connected = link->clientPeer != 0 && world.Alive(link->clientPeer);
+    view.ownPlayer = PW::OwnPlayer(world);
+    if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
+    if (const auto* session = world.Resource<ClientSessionEnd>()) {
+        view.ended = session->ended;
+        view.endReason = session->reason;
+    }
+    return snapshot;
+}
+
+// ---- The Frame World's exchange: in applies the picture, out adds the controls.
+void ApplySnapshot(ClientExchange& exchange, K::World& world) {
+    FrameMirror& mirror = *world.ResourceMut<FrameMirror>();
+    auto snapshot = exchange.TakeSnapshot(mirror.seen);
+    if (!snapshot) return;
+    // Written only when changed: the Frame World's Systems see what changed as it changes.
+    const auto put = [&world](const K::EntityId id, const auto& value) {
+        using T = std::remove_cvref_t<decltype(value)>;
+        const T* now = world.Get<T>(id);
+        if (now == nullptr || !(*now == value)) world.Insert(id, value);
+    };
+    const auto putOptional = [&world, &put](const K::EntityId id, const auto& value) {
+        using T = typename std::remove_cvref_t<decltype(value)>::value_type;
+        if (value) {
+            put(id, *value);
+        } else if (world.Get<T>(id) != nullptr) {
+            world.Remove<T>(id);
+        }
+    };
+    std::set<K::EntityId> players;
+    for (const PlayerSnapshot& player : snapshot->players) {
+        players.insert(player.id);
+        put(player.id, player.owner);
+        putOptional(player.id, player.body);
+        putOptional(player.id, player.combat);
+        putOptional(player.id, player.hits);
+        putOptional(player.id, player.shot);
+    }
+    for (const K::EntityId gone : mirror.players) {
+        if (!players.contains(gone)) world.Despawn(gone);
+    }
+    mirror.players = std::move(players);
+    // The arena the Sim World follows (FollowMatchArena); one this Client does not have stays as it is (the Sim
+    // World's ContentMismatch says why).
+    PW::GameRules* rules = world.ResourceMut<PW::GameRules>();
+    if (!snapshot->arenaId.empty() && (rules->arena.id != snapshot->arenaId || rules->wallsDigest != snapshot->wallsDigest)) {
+        const auto* content = world.Resource<PW::ContentRef>();
+        const PW::InstalledArena* arena = content != nullptr && content->content ? content->content->Find(snapshot->arenaId) : nullptr;
+        if (arena != nullptr && arena->wallsDigest == snapshot->wallsDigest) {
+            rules->arena = arena->content;
+            rules->wallsDigest = arena->wallsDigest;
+        }
+    }
+    world.SetResource(std::move(snapshot->view));
+}
+
+void BuildSim(O::WorldSetup& setup) {
     K::Registrar& r = setup.Registrar();
+    r.Resource<SimControls>({.name = "object_fps_pvp.SimControls"});
+    r.Resource<ClientSessionEnd>({.name = "object_fps_pvp.ClientSessionEnd"});
+    K::SystemOptions own;
+    own.name = "object_fps_pvp.PrepareOwnInput";
+    Mount(own, O::DefaultSchedules::frame, O::DefaultSchedules::preUpdate);
+    r.AddSystem<&PrepareOwnInput>(std::move(own));
+    K::SystemOptions write;
+    write.name = "object_fps_pvp.WriteStepInput";
+    K::Mount writeMount;
+    writeMount.schedule = std::string(O::DefaultSchedules::fixed);
+    writeMount.stage = std::string(O::DefaultSchedules::first);
+    writeMount.before = {"ApplyInput:PlayerInput"};
+    write.mounts.push_back(std::move(writeMount));
+    RB::RollbackEntry(setup).SkipDuringResimulation(write);
+    r.AddSystem<&WriteStepInput>(std::move(write));
+    r.AddSystem<&NoteSessionEnd>(InUpdate("object_fps_pvp.NoteSessionEnd"));
+    ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
+    setup.Prepare([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        if (exchange == nullptr) return NoExchange();
+        world.SetResource(SimControls{});
+        world.SetResource(ClientSessionEnd{});
+        return {};
+    });
+    if (exchange == nullptr) return;
+    setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        TakeControls(*exchange, world);
+        return {};
+    });
+    setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        exchange->PutSnapshot(SnapshotOf(world));
+        return {};
+    });
+}
+
+void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
+    K::Registrar& r = setup.Registrar();
+    // The Sim World's players, as copies (the same names: one game, two Worlds).
+    r.Component<PW::Owner>({.name = "Owner"});
+    r.Component<PW::PlayerBody>({.name = "PlayerBody"});
+    r.Component<PW::PlayerCombat>({.name = "PlayerCombat"});
+    r.Component<PW::HitRecord>({.name = "HitRecord"});
+    r.Component<PW::ShotRecord>({.name = "ShotRecord"});
+    r.Resource<PW::GameRules>({.name = "GameRules"});
+    r.Resource<PW::LocalUser>({.name = "LocalUser"});
+    r.Resource<PW::ContentRef>({.name = "ContentRef"});
+    r.Resource<ClientView>({.name = "object_fps_pvp.ClientView"});
+    r.Resource<FrameMirror>({.name = "object_fps_pvp.FrameMirror"});
     r.Resource<ClientAssets>({.name = "object_fps_pvp.ClientAssets"});
     r.Resource<ClientControls>({.name = "object_fps_pvp.ClientControls"});
     r.Resource<ClientScene>({.name = "object_fps_pvp.ClientScene"});
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
-    r.Resource<ClientSessionEnd>({.name = "object_fps_pvp.ClientSessionEnd"});
-    r.AddSystem<&NoteSessionEnd>(InUpdate("object_fps_pvp.NoteSessionEnd"));
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
@@ -868,15 +1104,6 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     readMount.after = {std::string(I::kInputSet), std::string(W::kWindowSet)};
     read.mounts.push_back(std::move(readMount));
     r.AddSystem<&ReadControls>(std::move(read));
-    K::SystemOptions write;
-    write.name = "object_fps_pvp.WriteStepInput";
-    K::Mount writeMount;
-    writeMount.schedule = std::string(O::DefaultSchedules::fixed);
-    writeMount.stage = std::string(O::DefaultSchedules::first);
-    writeMount.before = {"ApplyInput:PlayerInput"};
-    write.mounts.push_back(std::move(writeMount));
-    RB::RollbackEntry(setup).SkipDuringResimulation(write);
-    r.AddSystem<&WriteStepInput>(std::move(write));
     r.AddSystem<&ShowArena>(InUpdate("object_fps_pvp.ShowArena"));
     r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera", {"object_fps_pvp.ShowHud"}));
     r.AddSystem<&PoseCharacters>(InUpdate("object_fps_pvp.PoseCharacters"));
@@ -885,14 +1112,29 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     r.AddSystem<&AddViewmodel>(InUpdate("object_fps_pvp.AddViewmodel", {"object_fps_pvp.PoseViewmodel", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
+    r.AddSystem<&CloseOnEnd>(InUpdate("object_fps_pvp.CloseOnEnd"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
-    setup.Prepare([options, port](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
+    setup.Prepare([options, port, exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        if (exchange == nullptr) return NoExchange();
+        // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
+        const PW::InstalledArena& arena = options.game->arenas[options.arena];
+        PW::GameRules rules;
+        rules.arena = arena.content;
+        rules.stance = options.game->stance;
+        rules.combat = options.game->combat;
+        rules.wallsDigest = arena.wallsDigest;
+        rules.character = options.game->character;
+        world.SetResource(std::move(rules));
+        world.SetResource(PW::LocalUser{options.userId});
+        world.SetResource(PW::ContentRef{options.game});
+        world.SetResource(ClientView{});
+        world.SetResource(FrameMirror{});
         world.SetResource(ClientAssets{});
         world.SetResource(ClientControls{});
         world.SetResource(ClientScene{options.presentation, {}});
         world.SetResource(ClientHud{});
         world.SetResource(ClientCharacters{});
-        world.SetResource(ClientSessionEnd{});
         ClientSound sound;
         sound.submitter = port != nullptr ? &port->submitter : nullptr;
         world.SetResource(std::move(sound));
@@ -908,7 +1150,6 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.Insert(kCamera, C::ComputedCamera{});
         world.Insert(kCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}});
         Place(world, kCamera, T::Transform{});
-        world.Insert(kCamera, RB::KeepThroughRollback{});
         // The viewmodel camera: after the world camera, its own depth, the first-person weapon's layer only.
         const ViewmodelDefinition& vm = options.presentation->viewmodel;
         C::PerspectiveProjection close;
@@ -925,10 +1166,8 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.Insert(kViewCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
         world.Insert(kViewCamera, R::RenderLayers{1U << kViewLayer});
         Place(world, kViewCamera, T::Transform{});
-        world.Insert(kViewCamera, RB::KeepThroughRollback{});
         // The arena's picture (its Mesh3d comes with the model).
         Place(world, kArenaPicture, T::Transform{});
-        world.Insert(kArenaPicture, RB::KeepThroughRollback{});
         // The HUD camera: 2D, after the world camera, clears nothing, sees the HUD layer only.
         C::OrthographicProjection flat = C::OrthographicProjection::Default2d();
         flat.scalingMode = C::ScalingFixed{kHudWidth, kHudHeight};
@@ -942,13 +1181,11 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.Insert(kHudCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
         world.Insert(kHudCamera, R::RenderLayers{1U << kHudLayer});
         Place(world, kHudCamera, T::Transform{});
-        world.Insert(kHudCamera, RB::KeepThroughRollback{});
         const auto hudThing = [&world](const K::EntityId id, const Math::Vec3 at) {
             T::Transform t;
             t.translation = at;
             Place(world, id, t);
             world.Insert(id, R::RenderLayers{1U << kHudLayer});
-            world.Insert(id, RB::KeepThroughRollback{});
         };
         hudThing(kFlash, {0, 0, 0});
         world.Insert(kFlash, R::Shape2d{});
@@ -966,6 +1203,15 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         text(kHpText, {-kHudWidth / 2 + 24, -kHudHeight / 2 + 20, 2}, {-0.5F, -0.5F});
         text(kAmmoText, {kHudWidth / 2 - 24, -kHudHeight / 2 + 20, 2}, {0.5F, -0.5F});
         text(kStatusText, {0, kHudHeight / 2 - 80, 2}, {0.0F, 0.5F});
+        return {};
+    });
+    if (exchange == nullptr) return;
+    setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        ApplySnapshot(*exchange, world);
+        return {};
+    });
+    setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        exchange->AddControls(world.ResourceMut<ClientControls>()->controls.Take());
         return {};
     });
 }
@@ -1139,6 +1385,8 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, con
 }
 
 void ConfigureClient(O::ProductSetup& setup) {
+    // First: the Sim and Frame Worlds need it whether or not the rest is there.
+    setup.Buffer().Create<ClientExchange>();
     const auto* registry = setup.Buffer().Find<A::AssetLoaderRegistry>();
     if (registry == nullptr) {
         setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried)");
@@ -1164,21 +1412,34 @@ void ConfigureClient(O::ProductSetup& setup) {
     setup.Buffer().Create<SoundPort>(std::move(submitter).value());
 }
 
-O::WorldDescription ClientGameWorld(ClientOptions options, const bool window) {
+O::WorldDescription ClientSimWorld(ClientOptions options) {
     O::WorldDescription world = PW::ClientWorld({options.game, options.arena, options.userId, nullptr});
-    for (const char* unit : {"world_asset", "camera", "input", "window", "window_camera", "world_render"}) world.units.push_back(unit);
-    if (window) world.units.push_back("sdl_window");
-    world.build = [inner = std::move(world.build), options = std::move(options)](O::WorldSetup& setup) {
+    world.name = "Sim";
+    world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
         inner(setup);
-        BuildClient(setup, options);
+        BuildSim(setup);
     };
+    return world;
+}
+
+O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
+    O::WorldDescription world;
+    world.name = "Frame";
+    world.units = {"entity_ids", "world_time", "transform", "world_asset", "camera", "input", "window", "window_camera", "world_render"};
+    if (window) world.units.push_back("sdl_window");
+    world.options.Set(kFrameIds);
+    // Per-frame Systems only: the steps are the Sim World's.
+    WT::WorldTimeOptions time;
+    time.fixedStep = false;
+    world.options.Set(std::move(time));
+    world.build = [options = std::move(options)](O::WorldSetup& setup) { BuildFrame(setup, options); };
     return world;
 }
 
 O::WorldDescription ClientRenderWorld(const bool gpu) {
     O::WorldDescription world;
     world.name = "Render";
-    world.extractFrom = "Game";
+    world.extractFrom = "Frame";
     world.units = {"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"};
     if (gpu) world.units.push_back("sdl_gpu");
     return world;
@@ -1186,14 +1447,14 @@ O::WorldDescription ClientRenderWorld(const bool gpu) {
 
 ClientStatus StatusOf(K::World& world) {
     ClientStatus status;
-    if (const auto* link = world.Resource<N::NetWorldLink>()) status.connected = link->clientPeer != 0 && world.Alive(link->clientPeer);
-    status.playing = PW::OwnPlayer(world) != 0;
-    if (const auto* controls = world.Resource<ClientControls>()) status.captured = controls->controls.Captured();
-    if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) status.mismatch = mismatch->reason;
-    if (const auto* session = world.Resource<ClientSessionEnd>()) {
-        status.ended = session->ended;
-        status.endReason = session->reason;
+    if (const auto* view = world.Resource<ClientView>()) {
+        status.connected = view->connected;
+        status.playing = view->ownPlayer != 0;
+        status.mismatch = view->mismatch;
+        status.ended = view->ended;
+        status.endReason = view->endReason;
     }
+    if (const auto* controls = world.Resource<ClientControls>()) status.captured = controls->controls.Captured();
     return status;
 }
 

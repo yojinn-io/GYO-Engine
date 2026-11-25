@@ -116,6 +116,7 @@ Linux（X11、Wayland）沒有這種 modal 迴圈，watch 裝了也不會收到 
 3. 跨 World 的時間：`Frame` 的動畫、HUD 用快照裡 `Sim` 的 tick 與步長（時間設計 5.5（三）「兩條執行緒的 `RealTime` 不同步時以誰為準」：以模擬的為準）；`Frame` 自己的 `RealTime` 只用在幀的取樣（聲音的時刻、受擊特效的淡出）。
 4. Product 一份的物件誰碰（RC-O10）：`NetService`（交出期間只有 `Sim` 的執行緒；`Return` 之後主執行緒在 `client_main` 裡 `Close`＋`Flush`）、`SDL::NativeWindows`、`SDLWindowPump`、混音器（只有主執行緒）、`ClientExchange`（兩邊，自己的鎖）。每個 World 一份的 `ModuleBuffer` 照 CCR-5。沒有兩條執行緒都碰、又沒有鎖的物件——實作時逐一列進 dev_log。
 5. 暫停：PvP 沒有暫停，不做。
+6. 〔2026-11-25 實作註記，遊戲部分（dev_log `2026_11_25_gyo2_pvp_sim_thread`）〕快照不帶 `LocalUser`（`Frame` 從 `ClientOptions` 自己放）與整份 `GameRules`（只帶競技場 id 與 walls digest，`Frame` 從 `ContentRef` 換）；多帶 `OwnPlayer`（`world::OwnPlayer` 看 `PlayerInput`，`Frame` 沒有）。**和第 2 項原寫的「`Frame` 裡沒有 PvP 的元件」不同**：`Frame` 登記五個元件當 Sim 的玩家的複本（同名、同 id，只有交換的「進」寫），不登記判定的 System 與 `authority`、`net`；既有的呈現 System 照讀元件，不必改寫成讀快照的另一套。只有 tick、步長、`latestConfirmed`、連線、內容不符、結束改讀 `ClientView`。同一條執行緒時（測試）一幀是 Sim → Frame，輸入晚一幀才用；既有測試不必改幀數。
 
 ## 5. 測試與驗收（事前宣告的判定）
 
