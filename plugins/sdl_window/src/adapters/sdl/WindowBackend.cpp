@@ -378,14 +378,15 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
     }
     auto state = std::make_unique<State>();
     state->fullscreenPending = fullscreen;
-    // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
-    // is set again at the display's scale (made fullscreen: held for when it becomes Windowed).
-    if (Adapter::LogicalPerWindowCoordinate(window) != 1.0F) {
-        if (fullscreen) {
-            state->heldWindowedSize = settings.window.size;
-        } else {
-            static_cast<void>(Adapter::SetWindowSizeLogical(window, settings.window.size));
-        }
+    // Made fullscreen: WindowSettings::size is held for when it becomes Windowed. SDL's own Windowed size is not
+    // enough: on macOS a window made fullscreen leaves its fullscreen Space at the frame it was made with, the
+    // screen's (SDL_cocoawindow.m:1578-1584 sets a size only when one is pending).
+    if (fullscreen) {
+        state->heldWindowedSize = settings.window.size;
+    } else if (Adapter::LogicalPerWindowCoordinate(window) != 1.0F) {
+        // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical
+        // pixels is set again at the display's scale.
+        static_cast<void>(Adapter::SetWindowSizeLogical(window, settings.window.size));
     }
     state->window = window;
     state->clipboardLimit = settings.clipboardLimit;

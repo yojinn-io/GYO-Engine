@@ -84,11 +84,15 @@ const char* ModeName(const W::WindowMode mode) {
 void Script(const std::int64_t frame, K::MessageWriter<W::SetWindowMode>& modes, K::MessageWriter<W::ResizeWindow>& sizes,
             R::Presentation& presentation) {
     switch (frame) {
+    // Fullscreen and back without a size (the size the window had, or WindowSettings::size when made fullscreen),
+    // then fullscreen, a size while fullscreen, VSync off and on, and back (the size asked).
     case 10: modes.Send(W::SetWindowMode{W::WindowMode::BorderlessFullscreen}); break;
-    case 70: sizes.Send(W::ResizeWindow{kSizes[1]}); break;
-    case 80: presentation.presentMode = R::PresentMode::AutoNoVsync; break;
-    case 100: presentation.presentMode = R::PresentMode::AutoVsync; break;
-    case 120: modes.Send(W::SetWindowMode{W::WindowMode::Windowed}); break;
+    case 80: modes.Send(W::SetWindowMode{W::WindowMode::Windowed}); break;
+    case 150: modes.Send(W::SetWindowMode{W::WindowMode::BorderlessFullscreen}); break;
+    case 210: sizes.Send(W::ResizeWindow{kSizes[1]}); break;
+    case 220: presentation.presentMode = R::PresentMode::AutoNoVsync; break;
+    case 240: presentation.presentMode = R::PresentMode::AutoVsync; break;
+    case 260: modes.Send(W::SetWindowMode{W::WindowMode::Windowed}); break;
     default: break;
     }
 }

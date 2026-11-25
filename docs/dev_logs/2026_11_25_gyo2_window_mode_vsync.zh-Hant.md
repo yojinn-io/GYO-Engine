@@ -20,6 +20,11 @@ Owner：Engine（`window`、`render` 的契約）＋Plugin（`sdl_window`、`sdl
 - 突變：第一輪 window 側 10 個中 8 killed——`wn-mode-first`（測試的序列頭尾相同）、`sw-snapshot-mode-missing`（建窗時 SDL 自己送 ENTER，蓋過第一輪的寫入）存活，改測試（替換後的 World 第一輪知道是全屏）；gpu 側 4/4。修正後重跑見 PR。
 - 設計審查（Opus／high，同模型）：B1（玩家自己離開全屏後大小一直被扣住：改成一律問 SDL 的旗標，先寫失敗的測試再修）、S1（替換 World 時 VSync 回到開：選 (a)，寫明、補測試）、S2（「變了才改」沒人守：加 `PresentModeSets()` 與突變）、N1～N8（N6「enum 從 1 起」不改：同檔 `FrameOutcome`、錯誤碼的慣例）。報告在主 checkout `build/evidence/gyo2-window-mode-vsync/`。
 
-## 交實機（這台 Mac＋Windows）
+## Mac 實機驗收（2026-11-25，Intel、5K、縮放 2）
+
+- 驗收程式 `examples/window_mode`＋`acceptance_macos.sh`（日誌在主 checkout `build/evidence/gyo2-window-mode-vsync/`）。
+- 使用者跑 `--fullscreen` 抓到：以全屏建的窗按 W 回到 5120×2756（螢幕大小），不是 1280×720——macOS 離開 Space 時回到建窗時的 frame。修：建窗就是全屏時一律記住 `WindowSettings::size`。修後自動流程兩種開法都對（回窗口 2560×1440 px；全屏中的 1600×900 回窗口後 3200×1800）；live resize 中照常畫。使用者：「沒問題。」
+
+## 交實機（Windows）
 
 真的進出無邊框全屏（Spaces 動畫、非同步離開）、全屏的 `Letterbox` 黑邊、回窗口的大小與位置、全屏中改解析度後回窗口、VSync 關時幀率不被鎖（Windows D3D12／Vulkan 取到哪一個）、macOS 綠色按鈕後 `WindowState::mode` 跟著變、Windows 縮放下建窗就是全屏時回窗口的大小。

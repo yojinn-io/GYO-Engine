@@ -17,9 +17,12 @@ stamp="$(date +%Y%m%d-%H%M%S)"
 "$cmake" --build "$build" --target gyo_example_window_mode
 exe="$build/examples/window_mode/gyo_example_window_mode"
 
-echo "== automatic pass (about 4 seconds; the window goes fullscreen and back by itself)"
-"$exe" --frames 200 2>&1 | tee "$evidence/macos-auto-$stamp.log"
+echo "== automatic pass (about 6 seconds; the window goes fullscreen and back by itself)"
+"$exe" --frames 340 2>&1 | tee "$evidence/macos-auto-$stamp.log"
 echo "exit=${PIPESTATUS[0]}" | tee -a "$evidence/macos-auto-$stamp.log"
+echo "== automatic pass, made fullscreen"
+"$exe" --fullscreen --frames 340 2>&1 | tee "$evidence/macos-auto-fullscreen-$stamp.log"
+echo "exit=${PIPESTATUS[0]}" | tee -a "$evidence/macos-auto-fullscreen-$stamp.log"
 [[ "${1:-}" == "--auto" ]] && exit 0
 
 echo
