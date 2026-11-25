@@ -201,7 +201,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 |---|---|---|
 | `pvp-lobby-filter-off` | 位址欄不用遊戲的字元過濾 | client：全形數字送出後成為有效位址 |
 | `pvp-lobby-any-address` | 任何文字都當位址 | client：形不對的位址不關窗 |
-| `pvp-lobby-quit-ignored` | 「終了」不關大廳 | client：終了 |
+| `pvp-lobby-quit-ignored` | 大廳的「戻る」不回主菜單（遊戲流程框架第 1 段改寫：大廳成為場景） | client：主菜單 → 大廳 → 主菜單 |
 | `pvp-lobby-ui-not-drawn` | 大廳的渲染 World 沒有 `ui_render` | client：渲染 World 畫出 UI 的 pass |
 | `pvp-session-end-ignored` | 連線結束沒記下（程式不會回大廳） | client：Match 拒絕時狀態寫明理由 |
 

@@ -9,6 +9,10 @@
 //            cameras, the HUD, the characters, the sounds. It shows the Sim World's players as copies by their ids.
 //   "Render" extracts from "Frame".
 //
+// They are the game scene of the Client's scenes (Scenes.hpp): the descriptions below read the Product's
+// SceneDirector, and register the game only in Scene::MultiGame (the Sim World elsewhere is empty; the Frame World is
+// the scene's).
+//
 // Sim and Frame hand each other two things through one object of the Product (ClientExchange, each half behind its
 // own lock): the Sim World's "out" puts the newest picture (its players, the arena, ClientView); the Frame World's
 // "in" applies it. The Frame World's "out" adds the controls (the held keys and the view: the newest; the presses
@@ -30,7 +34,7 @@
 //                    MoveBodies     a stand-in body for every other living player follows it (or goes)
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
-//                    CloseOnEnd     the connection ended: the window closes
+//                    LeaveOnEnd     the connection ended, or the Match's content differs: back to the lobby
 //
 // The pictures are drawn by "Render" (render_world, camera_render, sprite_render, mesh_render and sdl_gpu). The
 // Frame World has no rollback: what it makes stays until it takes it away.
@@ -115,17 +119,19 @@ struct ClientOptions final {
     std::uint64_t userId = 0;
 };
 
-// The Product's part (its configure): the game's loaders join the asset store (the voxel model loader, fonts,
-// sounds), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
+// The Product's part (its configure): the ClientExchange and the SceneDirector (from the product option ClientStart;
+// none: the menu), the game's loaders join the asset store (the voxel model loader, fbx, png, fonts, sounds, gyo.ui
+// documents), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
 void ConfigureClient(O::ProductSetup& setup);
 
 // The Frame World's own entities (the stand-in bodies): outside the Match's and the Sim World's ranges, whose
 // players it copies by their ids.
 inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3'000'000};
 
-// The three Worlds: "Sim" (the client World and the Client's input), "Frame" (units listed: the Modules it needs
-// and sdl_window when window is true) and "Render" (extracts from "Frame"; with sdl_gpu when gpu is true, false for
-// a test without a device). Sim and Frame need ConfigureClient (their ClientExchange).
+// The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the scene's connect),
+// "Frame" (units listed: the Modules it needs and sdl_window when window is true) and "Render" (extracts from "Frame";
+// with sdl_gpu when gpu is true, false for a test without a device). Sim and Frame need ConfigureClient (their
+// ClientExchange and SceneDirector).
 [[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
 [[nodiscard]] O::WorldDescription ClientFrameWorld(ClientOptions options, bool window = true);
 [[nodiscard]] O::WorldDescription ClientRenderWorld(bool gpu = true);

@@ -1,5 +1,7 @@
 #include "object_fps_pvp/client/ClientWorld.hpp"
 
+#include "client/ClientExchange.hpp"
+#include "client/SceneBuilds.hpp"
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
 #include "object_fps_pvp/present/Interpolation.hpp"
@@ -33,6 +35,7 @@
 #include "engine/render/Drawables.hpp"
 #include "engine/rollback/Registrations.hpp"
 #include "engine/text/FontLoader.hpp"
+#include "engine/ui/UiDocumentLoader.hpp"
 #include "engine/text/GlyphAtlas.hpp"
 #include "engine/text/TextContext.hpp"
 #include "engine/text/TextLayout.hpp"
@@ -132,83 +135,6 @@ struct ClientControls final {
     K::EntityId facedPlayer = 0;
 };
 void HashValue(K::Hasher&, const ClientControls&) {}
-
-// What the Sim World and the Frame World hand each other (live-frame-sim-thread declaration 4.3, O-13 (3)): one object
-// of the Product, each side behind its own lock, neither side waiting for the other. The Sim World's "out" puts the
-// newest picture of the game (only the newest is kept: a frame wants the latest); the Frame World's "out" adds the
-// controls (the held keys and the view are the newest; the presses add up, so none is lost however the two clocks
-// run), and the Sim World's "in" takes them.
-struct PlayerSnapshot final {
-    K::EntityId id = 0;
-    PW::Owner owner;
-    std::optional<PW::PlayerBody> body;
-    std::optional<PW::PlayerCombat> combat;
-    std::optional<PW::HitRecord> hits;
-    std::optional<PW::ShotRecord> shot;
-};
-struct WorldSnapshot final {
-    std::uint64_t version = 0;
-    std::vector<PlayerSnapshot> players;  // every entity with an Owner
-    std::string arenaId;                  // the arena the Sim World plays (GameRules)
-    std::uint64_t wallsDigest = 0;
-    ClientView view;
-};
-class ClientExchange final {
-public:
-    // (Made outside the lock; the lock only swaps the pointer.)
-    void PutSnapshot(WorldSnapshot snapshot) {
-        auto shared = std::make_shared<WorldSnapshot>(std::move(snapshot));
-        const std::lock_guard<std::mutex> lock(snapshotLock_);
-        shared->version = ++version_;
-        snapshot_ = std::move(shared);
-    }
-    // The newest picture when it is newer than seen (nullptr otherwise).
-    std::shared_ptr<const WorldSnapshot> TakeSnapshot(std::uint64_t& seen) {
-        const std::lock_guard<std::mutex> lock(snapshotLock_);
-        if (!snapshot_ || snapshot_->version == seen) return nullptr;
-        seen = snapshot_->version;
-        return snapshot_;
-    }
-    // viewTick: the Match tick the frame showed of the other players (none: not timed yet); the newest is kept.
-    void AddControls(const present::StepInput& step, const std::optional<double> viewTick) {
-        const std::lock_guard<std::mutex> lock(controlsLock_);
-        Merge(controls_, step);
-        viewTick_ = viewTick;
-        haveControls_ = true;
-    }
-    struct Sent final {
-        present::StepInput step;
-        std::optional<double> viewTick;
-    };
-    // The controls since the last take (nullopt: none came).
-    std::optional<Sent> TakeControls() {
-        const std::lock_guard<std::mutex> lock(controlsLock_);
-        if (!haveControls_) return std::nullopt;
-        Sent taken{controls_, viewTick_};
-        controls_.jump = controls_.fire = controls_.reload = false;
-        haveControls_ = false;
-        return taken;
-    }
-    // The newest held keys and view; the presses of either add up.
-    static void Merge(present::StepInput& into, const present::StepInput& newer) {
-        const bool jump = into.jump || newer.jump;
-        const bool fire = into.fire || newer.fire;
-        const bool reload = into.reload || newer.reload;
-        into = newer;
-        into.jump = jump;
-        into.fire = fire;
-        into.reload = reload;
-    }
-
-private:
-    std::mutex snapshotLock_;
-    std::shared_ptr<const WorldSnapshot> snapshot_;
-    std::uint64_t version_ = 0;
-    std::mutex controlsLock_;
-    present::StepInput controls_;
-    std::optional<double> viewTick_;
-    bool haveControls_ = false;
-};
 
 // The Sim World: the controls the Frame World sent, until a step takes them (WriteStepInput).
 //
@@ -1024,8 +950,8 @@ std::string EndText(const N::PeerDisconnected& end) {
     }
 }
 
-// The connection's end, as the program and the lobby show it: the window closes (the program goes back to the
-// lobby with the reason).
+// The connection's end, as the program and the lobby show it (the Frame World's LeaveOnEnd goes back to the lobby with
+// the reason).
 K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session) {
     for (const N::PeerDisconnected* end : ends.Read()) {
         session->ended = true;
@@ -1034,10 +960,27 @@ K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::Re
     return {};
 }
 
-// Frame World: the connection ended (the Sim World's picture says so): the window closes (the program goes back to
-// the lobby with the reason).
-K::SystemResult CloseOnEnd(K::Res<ClientView> sim, K::ResMut<W::WindowRequest> request) {
-    if (sim->ended && !request.Read().close) request->close = true;
+// Where the game scene came from: the lobby's address text, given back when the scene ends.
+struct GameOrigin final {
+    std::string address;
+};
+void HashValue(K::Hasher&, const GameOrigin&) {}
+
+// Frame World: the connection ended or the Match's content differs (the Sim World's picture says so): back to the
+// lobby with the reason, noted for the program (FrameNotes).
+K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
+    if (request.Read().next) return {};
+    std::string reason;
+    if (!sim->mismatch.empty()) {
+        notes->mismatch = sim->mismatch;
+        reason = "Match の内容がこの Client と違います: " + sim->mismatch;
+    } else if (sim->ended) {
+        notes->endReason = sim->endReason;
+        reason = sim->endReason;
+    } else {
+        return {};
+    }
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};
     return {};
 }
 
@@ -1301,7 +1244,9 @@ void BuildSim(O::WorldSetup& setup) {
     });
 }
 
-void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
+// The game scene's types, registered in every scene: the Render World reads them (an extracted type must be
+// registered in the source, R1b declaration section 8 point 3).
+void RegisterFrameTypes(O::WorldSetup& setup) {
     K::Registrar& r = setup.Registrar();
     // The Sim World's players, as copies (the same names: one game, two Worlds).
     r.Component<PW::Owner>({.name = "Owner"});
@@ -1323,6 +1268,11 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
+    r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
+}
+
+void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change) {
+    K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
     read.name = "object_fps_pvp.ReadControls";
@@ -1344,11 +1294,12 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
     r.AddSystem<&AddViewmodel>(InUpdate("object_fps_pvp.AddViewmodel", {"object_fps_pvp.PoseViewmodel", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
-    r.AddSystem<&CloseOnEnd>(InUpdate("object_fps_pvp.CloseOnEnd"));
+    r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    setup.Prepare([options, port](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    setup.Prepare([options, port, address = change.address](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        world.SetResource(GameOrigin{address});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
         PW::GameRules rules;
@@ -1631,8 +1582,13 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, con
 }
 
 void ConfigureClient(O::ProductSetup& setup) {
-    // First: the Sim and Frame Worlds need it whether or not the rest is there.
+    // First: the Worlds need them whether or not the rest is there. The scene the Product starts in (ClientStart;
+    // none: the menu).
     setup.Buffer().Create<ClientExchange>();
+    const ClientStart* start = setup.Options<ClientStart>();
+    const ClientStart first = start != nullptr ? *start : ClientStart{};
+    setup.Buffer().Create<ClientStart>(first);
+    setup.Buffer().Create<SceneDirector>(first.first);
     const auto* registry = setup.Buffer().Find<A::AssetLoaderRegistry>();
     if (registry == nullptr) {
         setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried)");
@@ -1646,6 +1602,7 @@ void ConfigureClient(O::ProductSetup& setup) {
     if (refused("fbx", registry->template Register<GYO::Engine::Model::FbxLoader>())) return;
     if (refused("png", registry->template Register<IM::PngLoader>())) return;
     if (refused("font", registry->template Register<TX::FontLoader>())) return;
+    if (refused("ui", registry->template Register<GYO::Engine::Ui::UiDocumentLoader>())) return;
     if (refused("wav", registry->template Register<AU::WavLoader>())) return;
     AU::Mixer* mixer = setup.Buffer().Find<AU::Mixer>();
     if (mixer == nullptr) return;  // no sdl_audio: silent
@@ -1660,9 +1617,25 @@ void ConfigureClient(O::ProductSetup& setup) {
 O::WorldDescription ClientSimWorld(ClientOptions options) {
     O::WorldDescription world = PW::ClientWorld({options.game, options.arena, options.userId, nullptr});
     world.name = "Sim";
+    // The game only in the scene that plays it; elsewhere the World is its units alone, without a target (no
+    // connection: net-connect-target).
     world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
+        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
+        const SceneChange& scene = director->Current();
+        if (!SimPlays(scene.scene)) {
+            // The rollback strategy of the description still asks which schedule is the step (RB-E10).
+            RB::RollbackEntry(setup).StepSchedule();
+            return;
+        }
         inner(setup);
         BuildSim(setup);
+        if (scene.connect) {
+            setup.Prepare([target = *scene.connect](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+                w.SetResource(target);
+                return {};
+            });
+        }
     };
     return world;
 }
@@ -1670,15 +1643,26 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
 O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
     O::WorldDescription world;
     world.name = "Frame";
-    world.units = {"entity_ids", "world_time", "transform", "world_asset", "camera", "input", "window", "window_camera", "world_render",
-                   "visibility"};
+    world.units = {"entity_ids", "world_time", "transform", "world_asset", "camera", "input", "window", "window_camera",
+                   "world_render", "visibility", "world_ui"};
     if (window) world.units.push_back("sdl_window");
     world.options.Set(kFrameIds);
     // Per-frame Systems only: the steps are the Sim World's.
     WT::WorldTimeOptions time;
     time.fixedStep = false;
     world.options.Set(std::move(time));
-    world.build = [options = std::move(options)](O::WorldSetup& setup) { BuildFrame(setup, options); };
+    world.build = [options = std::move(options)](O::WorldSetup& setup) {
+        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
+        const SceneChange& scene = director->Current();
+        RegisterFrameTypes(setup);
+        BuildSceneCommon(setup);
+        switch (scene.scene) {
+        case Scene::Menu: BuildMenu(setup, scene); break;
+        case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
+        case Scene::MultiGame: BuildGame(setup, options, scene); break;
+        }
+    };
     return world;
 }
 
@@ -1686,7 +1670,7 @@ O::WorldDescription ClientRenderWorld(const bool gpu) {
     O::WorldDescription world;
     world.name = "Render";
     world.extractFrom = "Frame";
-    world.units = {"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"};
+    world.units = {"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render", "ui_render"};
     if (gpu) world.units.push_back("sdl_gpu");
     return world;
 }

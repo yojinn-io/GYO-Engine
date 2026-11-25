@@ -18,10 +18,11 @@
 # client: the Client's World around the game's (include/object_fps_pvp/client/ClientWorld.hpp): the controls, the
 # first-person camera, the arena's model and the other players' stand-in bodies (render's 3D pipeline), the HUD
 # (its 2D layer), the sounds, and the World that draws (extracts from it).
-# The client library also has the lobby (include/object_fps_pvp/client/LobbyWorld.hpp): a Product of its own, without
-# net, where the player gives the Match's address (ui, world_ui, ui_render).
-# main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the lobby, then the
-# Client with the address it gave, back to the lobby when that connection ends.
+# The client library also has the scenes (include/object_fps_pvp/client/Scenes.hpp: one Product, its Worlds replaced
+# when the scene changes, the window open throughout; docs/game-flow-declaration.zh-Hant.md): the menu, the lobby
+# where the player gives the Match's address (ui, world_ui, ui_render), the game.
+# main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the menu first; the
+# scenes change between two frames of sdl_window's runner.
 # match: the Match (src/match_main.cpp), headless, listening on UDP.
 # services: the Gateway and the services behind it (docs/gateway-declaration.zh-Hant.md), a Go module of its own
 # (go.mod here, the packages in services/): one executable, a subcommand per service. Native builds never need Go.
@@ -68,7 +69,8 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PRIVATE_LIBRARIES GYO::IO GYO::Json
     SOURCES
     src/client/ClientWorld.cpp
-    src/client/LobbyWorld.cpp)
+    src/client/LobbyWorld.cpp
+    src/client/Scenes.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main
