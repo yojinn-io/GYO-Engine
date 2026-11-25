@@ -39,9 +39,10 @@
 //                                   dependencies (the progress), the warm-up (two frames shown with no draw skipped
 //                                   after them, DrawnFrames), the own player from the Match, then one more frame: ready
 //                                   (carried to the Match in the input, PlayerInput::ready)
-//                    ShowPause      the overlay: "loading" until ready and the match started; then the pause canvas
-//                                   while the pointer is the player's (single player: the Solo World's time stops
-//                                   meanwhile, through the exchange)
+//                    ShowLoading    GamePage::Loading (client/Pages.hpp: the overlay's pages, Bevy's States): the loading
+//                                   screen's words and bar; Playing once ready and the match started
+//                    PauseOnRelease Playing -> Paused when the pointer is the player's; PlayOnCapture back (single
+//                                   player: the Solo World's time stops on the pause page, through the exchange)
 //                    Resume         pvp.resume: the game takes the pointer again (as a click does)
 //                    Evacuate       pvp.evacuate: single player settles the game (the Solo World's deaths) into the
 //                                   save and goes to the menu; multiplayer goes back to the lobby (the connection closes)
@@ -140,7 +141,8 @@ inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3
 
 // The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the scene's connect),
 // "Frame" (units listed: the Modules it needs and sdl_window when window is true) and "Render" (extracts from "Frame";
-// with sdl_gpu when gpu is true, false for a test without a device). Sim and Frame need ConfigureClient (their
+// with sdl_gpu when gpu is true, false for a test without a device; its Extract copies the player's VSync into render's
+// Presentation). Sim and Frame need ConfigureClient (their
 // ClientExchange and SceneDirector).
 [[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
 // "Solo": the game's Local World (world::LocalWorld; no net), the single player's game; the same exchange as "Sim".

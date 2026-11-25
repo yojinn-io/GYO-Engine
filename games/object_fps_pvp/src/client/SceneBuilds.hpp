@@ -29,7 +29,9 @@ inline constexpr K::EntityId kSceneRoot = 3'000'031;
 // A System in Main/Update (after the given Systems).
 [[nodiscard]] K::SystemOptions InSceneUpdate(std::string name, std::vector<std::string> after = {});
 
-// A 2D camera on the window for a scene's document, and the document's root entity (its UiRoot, asked for by its asset
+// A 2D camera on the window for a scene's documents (kSceneCamera).
+void PlaceSceneCamera(K::World& world);
+// That camera, and the document's root entity (its UiRoot, asked for by its asset
 // id, with the text fields' filter, and UiBindings).
 void PlaceSceneDocument(K::World& world, std::string_view documentId, std::string_view canvas, GYO::Engine::Ui::UiBindings bindings,
                         GYO::Engine::Ui::UiTextFilter filter);
@@ -40,8 +42,8 @@ void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
-// dataDirectory: the player's (ClientStart).
-void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory);
+// dataDirectory: the player's (ClientStart); maps: the installed arenas, by id.
+void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps);
 // What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a
 // room can be made with (the installed arenas, by id).
 struct GatewayContext final {
@@ -54,8 +56,10 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
 
 // The device id file in the player's directory.
 [[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
-// The Frame World's GatewayClient, when the World has none yet (the first scene: later ones get it carried): with this
-// player's device id (read, or made the first time), or without one (it then calls nothing and says why).
-void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory);
+// The Frame World's GatewayClient, when the World has none that can call (later scenes get it carried): needed (a
+// scene that calls the Gateway), with this player's device id (read, or made the first time) or without one (it then
+// calls nothing and says why); not needed, one that calls nothing (no file is read or made for the menu or single
+// player).
+void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory, bool needed);
 
 } // namespace object_fps_pvp::client

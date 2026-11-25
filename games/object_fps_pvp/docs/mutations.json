@@ -1251,7 +1251,7 @@
    "guards": [
     "live-frame-sim-thread declaration 4.3, J6"
    ],
-   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "file": "games/object_fps_pvp/src/client/ClientExchange.hpp",
    "find": "        into = newer;\n        into.jump = jump;\n        into.fire = fire;\n        into.reload = reload;\n",
    "replace": "        into = newer;\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1265,7 +1265,7 @@
     "live-frame-sim-thread declaration 4.3, J6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    state->pending.jump = state->pending.fire = state->pending.reload = false;\n",
+   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = false;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a click in a frame that runs no step*",
@@ -1290,7 +1290,7 @@
    "guards": [
     "live-frame-sim-thread declaration 4.3; design review S1"
    ],
-   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "file": "games/object_fps_pvp/src/client/ClientExchange.hpp",
    "find": "        Merge(controls_, step);\n",
    "replace": "        controls_ = step;\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1317,7 +1317,7 @@
     "live-frame-sim-thread declaration 4.3 item 7 (the user's decision 2026-11-25, after master's D30)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    if (state.Read().stale) {\n        step.forward = step.right = 0.0F;\n",
+   "find": "    if (state.stale) {\n        step.forward = step.right = 0.0F;\n",
    "replace": "    if (false) {\n        step.forward = step.right = 0.0F;\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: J5 while the main thread stops*",
@@ -1500,7 +1500,7 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::Lobby};",
+   "find": "        if (id == \"pvp.multi\") request->next = SceneChange{.scene = Scene::Lobby};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
@@ -1513,7 +1513,7 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "            window->close = true;",
+   "find": "        if (id == \"pvp.quit\") window->close = true;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu's Quit*",
@@ -1560,7 +1560,7 @@
   },
   {
    "id": "pvp-solo-input-ignored",
-   "what": "the Solo World does not write the step's input into its player",
+   "what": "the Solo World does not write the step's input into its player (nor its readiness: the game never starts)",
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
@@ -1569,7 +1569,7 @@
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
-   "expect": "pvp-solo-walks"
+   "expect": "pvp-solo-started"
   },
   {
    "id": "pvp-solo-never-plays",
@@ -1591,7 +1591,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame};\n",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -1612,13 +1612,13 @@
   },
   {
    "id": "pvp-pause-not-shown",
-   "what": "the overlay never shows the pause canvas",
+   "what": "the pause page is never entered (the pointer given back shows nothing)",
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    const std::string canvas = loading ? \"loading\" : paused ? \"pause\" : \"play\";",
-   "replace": "    const std::string canvas = loading ? \"loading\" : \"play\";",
+   "find": "    if (controls->pauseAsked) page->Request(GamePage::Paused);\n",
+   "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-pause-shown"
@@ -1656,8 +1656,8 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        exchange->SetPaused(solo && readiness.ready && started && !controls.controls.Captured());",
-   "replace": "        exchange->SetPaused(false && solo && readiness.ready && started);",
+   "find": "        exchange->SetPaused(solo && world.Resource<GamePageState>()->Current() == GamePage::Paused);",
+   "replace": "        exchange->SetPaused(false && solo);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-pause-stops"
@@ -1859,16 +1859,16 @@
   },
   {
    "id": "pvp-loading-not-shown",
-   "what": "the game shows from its first frame (no loading screen)",
+   "what": "the loading page puts no root (the game shows from its first frame)",
    "guards": [
     "game-flow-declaration 4 (segment 4)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    const bool loading = !readiness->ready || !sim->started;\n    const bool paused = !loading && !controls->controls.Captured();",
-   "replace": "    const bool loading = false && !readiness->ready && !sim->started;\n    const bool paused = !loading && !controls->controls.Captured();",
+   "find": "    PutOverlay(roots, *overlay, \"loading\", std::move(bindings));\n",
+   "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the loading screen*",
-   "expect": "pvp-loading-covers"
+   "expect": "pvp-loading-first"
   },
   {
    "id": "pvp-loading-not-told",
@@ -1903,8 +1903,8 @@
     "game-flow-declaration 4 (segment 4)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    const bool loading = !readiness->ready || !sim->started;\n    const bool paused",
-   "replace": "    const bool loading = !readiness->ready;\n    const bool paused",
+   "find": "    if (readiness->ready && sim->started) {",
+   "replace": "    if (readiness->ready) {",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the loading screen waits*",
    "expect": "pvp-loading-waits-start"
@@ -1921,6 +1921,240 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: without its own player*",
    "expect": "pvp-loading-needs-player"
+  },
+  {
+   "id": "pvp-settings-no-resize",
+   "what": "applying a new size does not ask the window for it",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-resize"
+  },
+  {
+   "id": "pvp-settings-not-saved",
+   "what": "applied settings are not saved",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            } else if (auto saved = SaveSettings(edit.Read().path, edited); !saved) {",
+   "replace": "            } else if (auto saved = Base::Result<void, GYO::Engine::IO::IOError>{}; !saved) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-saved"
+  },
+  {
+   "id": "pvp-settings-not-carried",
+   "what": "the settings start again with each scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    setup.CarryOver<ClientSettings>(\"object_fps_pvp.ClientSettings\");\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-carried"
+  },
+  {
+   "id": "pvp-settings-any-size",
+   "what": "a saved size not offered is read as it is",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "        if (std::find(kResolutions.begin(), kResolutions.end(), settings.resolution) == kResolutions.end()) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-fixed-sizes"
+  },
+  {
+   "id": "pvp-settings-no-mode",
+   "what": "applying does not ask the window for the mode",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            mode.Send(W::SetWindowMode{edited.window});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the sizes*",
+   "expect": "pvp-settings-mode"
+  },
+  {
+   "id": "pvp-settings-no-vsync",
+   "what": "VSync never reaches render's Presentation",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (presentation.Read().presentMode != wanted) presentation->presentMode = wanted;",
+   "replace": "    static_cast<void>(wanted);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the sizes*",
+   "expect": "pvp-settings-vsync"
+  },
+  {
+   "id": "pvp-settings-not-dropped",
+   "what": "leaving the settings page keeps what was not applied",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    edit->edited = *settings;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the start's*",
+   "expect": "pvp-settings-dropped"
+  },
+  {
+   "id": "pvp-settings-start-ignored",
+   "what": "the first scene starts from the default settings, not the program's",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "        if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);",
+   "replace": "        if (w.Resource<ClientSettings>() == nullptr) w.SetResource(ClientSettings{});",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the start's*",
+   "expect": "pvp-settings-start"
+  },
+  {
+   "id": "pvp-page-loading-stays",
+   "what": "the loading page is never left",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        page->Request(GamePage::Playing);\n        return {};",
+   "replace": "        return {};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen covers*",
+   "expect": "pvp-loading-gone"
+  },
+  {
+   "id": "pvp-map-not-carried",
+   "what": "the room's map does not reach the game scene",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "                                        .room = room.id,\n                                        .map = room.room->map};",
+   "replace": "                                        .room = room.id};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map"
+  },
+  {
+   "id": "pvp-map-sim-ignored",
+   "what": "the Sim World plays the Client's own arena, not the room's",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": ".arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options)}",
+   "replace": ".arena = options.arena, .localUser = LocalUserOf(scene, options)}",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map-sim"
+  },
+  {
+   "id": "pvp-map-frame-ignored",
+   "what": "the Frame World's rules start with the Client's own arena, not the room's",
+   "guards": [
+    "game-flow-declaration 3.4 (the room's map)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const std::size_t played = ArenaOf(change, options);",
+   "replace": "    const std::size_t played = options.arena;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-map-frame"
+  },
+  {
+   "id": "pvp-solo-map-ignored",
+   "what": "the single player's game is not given the map chosen in its room",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};",
+   "replace": "request->next = SceneChange{.scene = Scene::SoloGame};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map"
+  },
+  {
+   "id": "pvp-solo-map-not-cycled",
+   "what": "the single player's room's map button does nothing",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "            if (!room.maps.empty()) room.map = (room.map + 1) % room.maps.size();\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map-next"
+  },
+  {
+   "id": "pvp-solo-map-not-kept",
+   "what": "back from a game, the single player's room forgets the map it was played on",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": ".status = \"中止しました\", .map = origin->map};",
+   "replace": ".status = \"中止しました\"};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map-kept"
+  },
+  {
+   "id": "pvp-room-map-not-shown",
+   "what": "the multiplayer's room does not show its map",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "        bindings.Set(\"map\", \"マップ: \" + state.room->map);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-room-map"
+  },
+  {
+   "id": "pvp-settings-physical-ignored",
+   "what": "the window is not resized when it says its scale factor",
+   "guards": [
+    "game-flow-declaration 3.6 (revision 6: physical pixels)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    resize.Send(W::ResizeWindow{WindowSizeFor(settings->resolution, window->scaleFactor)});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-physical"
+  },
+  {
+   "id": "pvp-settings-apply-logical",
+   "what": "applying sends the physical size as a logical one",
+   "guards": [
+    "game-flow-declaration 3.6 (revision 6: physical pixels)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});",
+   "replace": "resize.Send(W::ResizeWindow{edited.resolution});",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-apply-physical"
   },
   {
    "id": "pvp-map-colliders-dropped",
@@ -1960,6 +2194,123 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: the rules of an arena file",
    "expect": "version\\\": 2"
+  },
+  {
+   "id": "pvp-pause-when-not-held",
+   "what": "the game pauses whenever the pointer is not its own (so at once when it begins)",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the pause)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape || focusLost;\n",
+   "replace": "    c.pauseAsked = !c.controls.Captured();\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen covers*",
+   "expect": "pvp-play-not-paused"
+  },
+  {
+   "id": "pvp-pause-esc-ignored",
+   "what": "Esc does not pause a game whose pointer was never taken",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the pause)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape || focusLost;\n",
+   "replace": "    c.pauseAsked = (before && !c.controls.Captured()) || focusLost;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room? a game without a server*",
+   "expect": "pvp-pause-shown"
+  },
+  {
+   "id": "pvp-loading-rewarm-skipped",
+   "what": "an arena shown after the warm-up is not warmed up again",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const bool otherArena = next.assets && next.arena != scene->shownArena;\n",
+   "replace": "    const bool otherArena = false;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an arena changed after the warm-up*",
+   "expect": "pvp-loading-rewarm"
+  },
+  {
+   "id": "pvp-pause-focus-ignored",
+   "what": "losing the focus before the pointer was taken does not pause",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape || focusLost;\n",
+   "replace": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the pause comes*",
+   "expect": "pvp-pause-focus"
+  },
+  {
+   "id": "pvp-pause-tab-ignored",
+   "what": "giving the pointer back with Tab does not pause",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape || focusLost;\n",
+   "replace": "    c.pauseAsked = frame.escape || focusLost;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the pause comes*",
+   "expect": "pvp-pause-tab"
+  },
+  {
+   "id": "pvp-settings-fit-once",
+   "what": "the window is fitted to its scale only the first time it says one",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    if (!window->known || window->scaleFactor == fit.Read().scale) return {};\n",
+   "replace": "    if (!window->known || window->scaleFactor == fit.Read().scale || fit.Read().scale != 1.0F) return {};\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-rescaled"
+  },
+  {
+   "id": "pvp-settings-fit-every-frame",
+   "what": "the fit is not remembered: the window is resized every frame",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    fit->scale = window->scaleFactor;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-physical"
+  },
+  {
+   "id": "pvp-solo-moves-ignored",
+   "what": "the Solo World takes the step's readiness but not its moves",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "*players.GetMut<PW::PlayerInput>(id) = input;",
+   "replace": "players.GetMut<PW::PlayerInput>(id)->ready = input.ready;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room? a game without a server*",
+   "expect": "pvp-solo-walks"
+  },
+  {
+   "id": "pvp-solo-mode-not-survival",
+   "what": "the single player's room shows another mode than survival",
+   "guards": [
+    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "constexpr std::string_view kSoloMode = \"survival\";",
+   "replace": "constexpr std::string_view kSoloMode = \"coop\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-survival"
   }
  ]
 }

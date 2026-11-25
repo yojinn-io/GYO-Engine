@@ -238,12 +238,6 @@
       "default_focus": "abort"
     },
     {
-      "id": "play",
-      "backdrop_color": "clear",
-      "focus_order": [],
-      "children": []
-    },
-    {
       "id": "pause",
       "backdrop_color": "shade",
       "default_focus": "evacuate",

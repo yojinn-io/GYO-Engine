@@ -66,19 +66,31 @@ namespace PW = object_fps_pvp::world;
 
 void Log(const GYO::Engine::Base::LogLevel level, const std::string& text) { GYO::Engine::Base::Log(level, GYO_GAME_ID, text); }
 
-// --verbose: the connection and the own player as they change (the game scene's ClientView).
+// --verbose: the connection and the own player as they change (the game scene's ClientView), and the arena the game
+// plays (the Frame World's rules: the room's map at first, then the Match's).
 struct VerboseWatch final {
     bool connected = false;
     bool playing = false;
+    std::string arena;
 };
 void HashValue(K::Hasher&, const VerboseWatch&) {}
+
+K::SystemResult WatchArena(K::Res<PW::GameRules> rules, K::ResMut<VerboseWatch> seen) {
+    if (rules->arena.id == seen.Read().arena) return {};
+    Log(GYO::Engine::Base::LogLevel::Info, "the game plays arena " + rules->arena.id);
+    seen->arena = rules->arena.id;
+    return {};
+}
 
 K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWatch> seen) {
     const bool connected = view->connected;
     const bool playing = view->ownPlayer != 0;
     if (connected != seen.Read().connected) Log(GYO::Engine::Base::LogLevel::Info, connected ? "connected" : "not connected");
     if (playing != seen.Read().playing) Log(GYO::Engine::Base::LogLevel::Info, playing ? "playing" : "not playing");
-    if (connected != seen.Read().connected || playing != seen.Read().playing) *seen = VerboseWatch{connected, playing};
+    if (connected != seen.Read().connected || playing != seen.Read().playing) {
+        seen->connected = connected;
+        seen->playing = playing;
+    }
     return {};
 }
 
@@ -130,6 +142,8 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                const std::shared_ptr<const PC::PresentationContent>& presentation, const std::string& contentRoot,
                WA::WorkerPoolExecutor& executor, const bool verbose) {
     const std::int64_t frames = start.frames;
+    const GYO::Engine::Math::Vec2i resolution = start.settings.resolution;
+    const W::WindowMode windowMode = start.settings.window;
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
@@ -154,15 +168,24 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
         frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
             inner(setup);
             const auto* director = setup.ProductBuffer().Find<PC::SceneDirector>();
-            if (director == nullptr || director->Current().scene != PC::Scene::MultiGame) return;
+            if (director == nullptr) return;
+            const PC::SceneChange& scene = director->Current();
+            const bool multi = scene.scene == PC::Scene::MultiGame;
+            if (!multi && scene.scene != PC::Scene::SoloGame) return;
+            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + scene.map +
+                                                       "' chosen" + (multi ? " in room " + std::to_string(scene.room) : std::string()));
             setup.Registrar().Resource<VerboseWatch>({.name = "VerboseWatch"});
-            K::SystemOptions watch;
-            watch.name = "WatchConnection";
-            K::Mount mount;
-            mount.schedule = std::string(O::DefaultSchedules::frame);
-            mount.stage = std::string(O::DefaultSchedules::last);
-            watch.mounts.push_back(std::move(mount));
-            setup.Registrar().AddSystem<&WatchConnection>(std::move(watch));
+            const auto last = [](std::string name) {
+                K::SystemOptions watch;
+                watch.name = std::move(name);
+                K::Mount mount;
+                mount.schedule = std::string(O::DefaultSchedules::frame);
+                mount.stage = std::string(O::DefaultSchedules::last);
+                watch.mounts.push_back(std::move(mount));
+                return watch;
+            };
+            setup.Registrar().AddSystem<&WatchArena>(last("WatchArena"));
+            if (multi) setup.Registrar().AddSystem<&WatchConnection>(last("WatchConnection"));
             setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 w.SetResource(VerboseWatch{});
                 return {};
@@ -177,7 +200,11 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
 
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
-    window.size = {1280, 720};
+    // The size and the mode the player's settings give (the size is physical pixels: the window opens at it as logical
+    // ones and is resized once it says its scale factor, Scenes.cpp FitWindow; their VSync: the Render World's
+    // Presentation, ClientWorld).
+    window.size = resolution;
+    window.mode = windowMode;
     window.resizable = false;
     description.options.Set(window);
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
@@ -330,6 +357,11 @@ int main(int argc, char** argv) {
     // This player's files: <the user's data directory>/<profile>. None found: nothing is saved (the scenes say so).
     if (auto data = GYO::Engine::OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)) {
         start.dataDirectory = *data + "/" + profile;
+        // The settings are the machine's, not the profile's.
+        start.settingsPath = *data + "/settings.json";
+        PC::LoadedSettings loaded = PC::LoadSettings(start.settingsPath);
+        if (!loaded.problem.empty()) Log(GYO::Engine::Base::LogLevel::Warning, "the settings were not read, the defaults are used: " + loaded.problem);
+        start.settings = loaded.settings;
     } else {
         Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
     }

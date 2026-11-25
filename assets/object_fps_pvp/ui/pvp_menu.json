@@ -1,32 +1,684 @@
 {
-  "schema": "gyo.ui", "version": 2,
-  "design_canvas": {"size": [1280, 720], "scale_mode": "fit"},
-  "fonts": {"ui": "object_fps_pvp.font.ui"}, "default_font": "ui",
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": {
+    "size": [
+      1280,
+      720
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "object_fps_pvp.font.ui"
+  },
+  "default_font": "ui",
   "colors": {
-    "backdrop": "#101724FF", "panel": "#1D2A3AFF", "accent": "#66D9EFFF",
-    "text": "#EAF1FAFF", "muted": "#A3B7CBFF", "button": "#2B4159FF",
-    "focused": "#285F84FF", "pressed": "#307EA2FF"
+    "backdrop": "#101724FF",
+    "panel": "#1D2A3AFF",
+    "accent": "#66D9EFFF",
+    "text": "#EAF1FAFF",
+    "muted": "#A3B7CBFF",
+    "button": "#2B4159FF",
+    "focused": "#285F84FF",
+    "pressed": "#307EA2FF"
   },
   "actions": [
-    {"id": "pvp.solo", "payload": "none"},
-    {"id": "pvp.multi", "payload": "none"},
-    {"id": "pvp.settings", "payload": "none"},
-    {"id": "pvp.quit", "payload": "none"}
+    {
+      "id": "pvp.solo",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.multi",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.settings",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.quit",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.resolution",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.window_mode",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.vsync",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.apply",
+      "payload": "none"
+    },
+    {
+      "id": "pvp.settings_back",
+      "payload": "none"
+    }
   ],
   "bindings": [
-    {"id": "status", "type": "string", "preview": "モードを選んでください"}
+    {
+      "id": "status",
+      "type": "string",
+      "preview": "モードを選んでください"
+    },
+    {
+      "id": "resolution",
+      "type": "string",
+      "preview": "解像度: 1280 × 720"
+    },
+    {
+      "id": "window_mode",
+      "type": "string",
+      "preview": "画面: ウィンドウ"
+    },
+    {
+      "id": "vsync",
+      "type": "string",
+      "preview": "VSync: オン"
+    },
+    {
+      "id": "settings_status",
+      "type": "string",
+      "preview": "変更したら「適用」を押してください"
+    }
   ],
-  "canvases": [{
-    "id": "menu", "backdrop_color": "backdrop", "default_focus": "solo",
-    "focus_order": ["solo", "multi", "settings", "quit"],
-    "children": [
-      {"type": "panel", "id": "panel", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [380, 64], "size_delta": [520, 592]}, "color": {"color": "panel"}},
-      {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [420, 96], "size_delta": [440, 56]}, "text": {"literal": "OBJECT FPS / PVP"}, "point_size": 36, "text_color": {"color": "accent"}, "horizontal_align": "center", "vertical_align": "center"},
-      {"type": "button", "id": "solo", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [460, 200], "size_delta": [360, 56]}, "text": {"literal": "シングルプレイ"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.solo", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
-      {"type": "button", "id": "multi", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [460, 276], "size_delta": [360, 56]}, "text": {"literal": "マルチプレイ"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.multi", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
-      {"type": "button", "id": "settings", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [460, 352], "size_delta": [360, 56]}, "text": {"literal": "設定"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.settings", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
-      {"type": "button", "id": "quit", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [460, 428], "size_delta": [360, 56]}, "text": {"literal": "終了"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.quit", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
-      {"type": "text", "id": "status", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [420, 540], "size_delta": [440, 60]}, "text": {"binding": "status"}, "point_size": 18, "text_color": {"color": "accent"}, "horizontal_align": "center"}
-    ]
-  }]
+  "canvases": [
+    {
+      "id": "menu",
+      "backdrop_color": "backdrop",
+      "default_focus": "solo",
+      "focus_order": [
+        "solo",
+        "multi",
+        "settings",
+        "quit"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "panel",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              380,
+              64
+            ],
+            "size_delta": [
+              520,
+              592
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              420,
+              96
+            ],
+            "size_delta": [
+              440,
+              56
+            ]
+          },
+          "text": {
+            "literal": "OBJECT FPS / PVP"
+          },
+          "point_size": 36,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "solo",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              200
+            ],
+            "size_delta": [
+              360,
+              56
+            ]
+          },
+          "text": {
+            "literal": "シングルプレイ"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.solo",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "multi",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              276
+            ],
+            "size_delta": [
+              360,
+              56
+            ]
+          },
+          "text": {
+            "literal": "マルチプレイ"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.multi",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "settings",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              352
+            ],
+            "size_delta": [
+              360,
+              56
+            ]
+          },
+          "text": {
+            "literal": "設定"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.settings",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "quit",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              460,
+              428
+            ],
+            "size_delta": [
+              360,
+              56
+            ]
+          },
+          "text": {
+            "literal": "終了"
+          },
+          "point_size": 22,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.quit",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "text",
+          "id": "status",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              420,
+              540
+            ],
+            "size_delta": [
+              440,
+              60
+            ]
+          },
+          "text": {
+            "binding": "status"
+          },
+          "point_size": 18,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center"
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "backdrop_color": "backdrop",
+      "default_focus": "resolution",
+      "focus_order": [
+        "resolution",
+        "window_mode",
+        "vsync",
+        "apply",
+        "settings_back"
+      ],
+      "children": [
+        {
+          "type": "panel",
+          "id": "settings_panel",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              380,
+              64
+            ],
+            "size_delta": [
+              520,
+              592
+            ]
+          },
+          "color": {
+            "color": "panel"
+          }
+        },
+        {
+          "type": "text",
+          "id": "settings_title",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              420,
+              96
+            ],
+            "size_delta": [
+              440,
+              56
+            ]
+          },
+          "text": {
+            "literal": "設定"
+          },
+          "point_size": 34,
+          "text_color": {
+            "color": "accent"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "button",
+          "id": "resolution",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              184
+            ],
+            "size_delta": [
+              400,
+              56
+            ]
+          },
+          "text": {
+            "binding": "resolution"
+          },
+          "point_size": 21,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.resolution",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "window_mode",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              256
+            ],
+            "size_delta": [
+              400,
+              56
+            ]
+          },
+          "text": {
+            "binding": "window_mode"
+          },
+          "point_size": 21,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.window_mode",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "vsync",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              328
+            ],
+            "size_delta": [
+              400,
+              56
+            ]
+          },
+          "text": {
+            "binding": "vsync"
+          },
+          "point_size": 21,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.vsync",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "apply",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              420
+            ],
+            "size_delta": [
+              400,
+              56
+            ]
+          },
+          "text": {
+            "literal": "適用"
+          },
+          "point_size": 21,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.apply",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "button",
+          "id": "settings_back",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              440,
+              492
+            ],
+            "size_delta": [
+              400,
+              56
+            ]
+          },
+          "text": {
+            "literal": "戻る"
+          },
+          "point_size": 21,
+          "text_color": {
+            "color": "text"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "pvp.settings_back",
+          "background": {
+            "normal": "button",
+            "focused": "focused",
+            "pressed": "pressed"
+          }
+        },
+        {
+          "type": "text",
+          "id": "settings_status",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              400,
+              570
+            ],
+            "size_delta": [
+              480,
+              60
+            ]
+          },
+          "text": {
+            "binding": "settings_status"
+          },
+          "point_size": 16,
+          "text_color": {
+            "color": "muted"
+          },
+          "horizontal_align": "center"
+        }
+      ]
+    }
+  ]
 }

@@ -120,6 +120,8 @@ public:
 
     // Asks for a call; calls go one at a time in the order asked, after the session.
     void Ask(std::string tag, GatewayRequest request);
+    // Without a device id: every call ends at once with "no_device".
+    [[nodiscard]] bool Offline() const noexcept { return deviceId_.empty(); }
     // Whether a call is waiting or going.
     [[nodiscard]] bool Busy() const noexcept { return current_.has_value() || !waiting_.empty(); }
     // One step at now (nanoseconds on any steady clock): starts the next call, polls the current one. A call with no
