@@ -26,13 +26,13 @@ blocker 2、should 7、nit 9。紀錄：`build/evidence/v8-product-pvp-port/segm
 - B2（交出的執行緒停下時主執行緒不知道：E2、例外、關窗前才壞的 World）→ 每條執行緒的「已停」旗標（release／acquire），主迴圈每圈看；例外不逃出 `RoleThread`、`ReturnAll` 之後在主執行緒丟；`Outcome` 在 Success 但有錯誤或 `Product::Failure()` 時改回 Failure。測試加 E2 與例外兩案。
 - S1（`WaitForEvent` 也會泵）→ 等事件時也設定佇列、也能跑 live frame。
 - S2（live frame 裡的一次性請求被讀掉後丟棄）→ 存在 Service、下一個 modal 外的幀照順序先套用。
-- S3（合成的 `WindowResized` 與 SDL-7）→ 已問主會話（要不要列例外 (3)）；宣告的「值不同才送」改成和實作一致的「每次都寫」。
+- S3（合成的 `WindowResized` 與 SDL-7）→ 問了主會話，使用者 2026-11-25「照建議 (a)」（HANDOFF `v8-arch-gyo2-sdl7-live-frame-resize`）：sdl.zh-Hant.md 的 SDL-7 加例外 (3)、對應表加一列；宣告的「值不同才送」改成和實作一致的「每次都寫」。
 - S4（等待期限不是取樣時刻＋差距）→ 用這一輪開始的時刻；轉換夾到一秒（N9）。
 - S5（沒驗的行為）→ 加「live frame 先寫現在的大小」「有 world_time 時一步一輪、不空轉」「E2」「例外」四案與突變 `sw-live-size-not-written`、`sw-own-thread-spins`、`sw-own-thread-stop-unseen`、`sw-own-thread-exception-lost`。
 - S6 → `config/plugins.csv` 的 `private_depends` 加 `world_time`。
 - S7 → 宣告與 sdl 頁寫明 live frame 在 watcher 鎖裡的限制。
 - N1 → 重入的測試只在第一次進入時推 expose，`sw-live-reentered` 的 expect 拿掉 CRASHED；`sw-live-outside-pump` 的 CRASHED 是突變本身（空佇列）造成，登記裡寫明。N2 → 拿掉錯的註解與那一行。N3 → `WorldLease::RunRound` 包 trace span。N4 → 宣告更正、本 dev_log 補新碼的理由。N5 → `SDL_AddEventWatch` 失敗記為一次拒絕。N6 → 註解寫明「一幀」不能呼叫 `SetLiveFrame`。N7 → 門檻 20 → 5。N8 → live frame 的函式由 RAII 在每條出口（含例外）拿掉。
-- 交使用者：U1（SDL-7 例外 (3)）。可選、不擋合併：交出 World 的迴圈之後是否抽成 helper 給無畫面的 runner（目前沒有第二個使用者）。
+- U1（SDL-7 例外 (3)）：已定，見 S3。可選、不擋合併：交出 World 的迴圈之後是否抽成 helper 給無畫面的 runner（目前沒有第二個使用者）。
 
 修正後：`ctest -L "cpu|gpu"` 253/253；`or-lend-` 4/4、`sw-live-*`＋`sw-own-thread-*` 9/9 killed（`sw-own-thread-stop-unseen` 第一次 wrong_failure：沒看到「已停」時 runner 到第 10 幀才結束、`Outcome` 照樣回 Failure，標籤移到「幀數小於 10」的檢查後 killed）。
 
