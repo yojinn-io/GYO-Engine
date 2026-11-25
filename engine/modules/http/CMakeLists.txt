@@ -1,6 +1,6 @@
-# A small HTTP/1.1 client (the PvP Gateway port's declaration D8, games/object_fps_pvp/docs/gateway-declaration.zh-Hant.md):
-# the request's bytes, an answer read as its bytes arrive, and one call on an engine/core/os StreamSocket polled by its
-# caller. A library (config/modules.csv library_only=yes): no registration unit.
+# A small HTTP/1.1 client (docs/architecture/target/v2/http.zh-Hant.md): the request's bytes, an answer read as its bytes
+# arrive, and one call on an engine/core/os StreamSocket polled by its caller. A library (config/modules.csv
+# library_only=yes): no registration unit.
 add_library(gyo_http STATIC
     src/Http.cpp
 )

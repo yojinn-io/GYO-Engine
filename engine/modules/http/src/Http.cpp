@@ -27,11 +27,19 @@ std::string_view Trim(std::string_view text) noexcept {
 
 HttpFailure Fail(const HttpFailureCode code, std::string message) { return HttpFailure::Make(code, std::move(message)); }
 
+// An OS error carried on (rule 5 of docs/architecture/error-handling.md): the OS's code and detail in the detail;
+// a peer that cannot be reached is Unreachable.
+HttpFailure FromOS(const OS::OSError& error, const HttpFailureCode code, std::string message) {
+    const HttpFailureCode carried = error.code == OS::OSErrorCode::Unreachable ? HttpFailureCode::Unreachable : code;
+    return HttpFailure::Make(carried, std::move(message), Base::CauseDetail(error));
+}
+
 } // namespace
 
 const char* ToString(const HttpFailureCode code) noexcept {
     switch (code) {
     case HttpFailureCode::ConnectFailed: return "ConnectFailed";
+    case HttpFailureCode::Unreachable: return "Unreachable";
     case HttpFailureCode::TransferFailed: return "TransferFailed";
     case HttpFailureCode::MalformedResponse: return "MalformedResponse";
     case HttpFailureCode::Truncated: return "Truncated";
@@ -58,22 +66,30 @@ std::string EncodeRequest(const HttpRequest& request) {
 }
 
 HttpResult<void> ResponseParser::Feed(const std::span<const std::byte> bytes) {
+    if (failed_) return Base::Err(*failed_);
     if (stage_ == Stage::Done) return {};
     pending_.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
-    return Step();
+    auto stepped = Step();
+    if (!stepped) failed_ = stepped.error();
+    return stepped;
 }
 
 HttpResult<void> ResponseParser::Close() {
+    if (failed_) return Base::Err(*failed_);
     if (stage_ == Stage::Done) return {};
     if (stage_ == Stage::UntilClose) {
         building_.body += pending_;
         pending_.clear();
-        if (building_.body.size() > limits_.body) return Base::Err(Fail(HttpFailureCode::TooLarge, "the body is larger than the limit"));
+        if (building_.body.size() > limits_.body) {
+            failed_ = Fail(HttpFailureCode::TooLarge, "the body is larger than the limit");
+            return Base::Err(*failed_);
+        }
         stage_ = Stage::Done;
         response_ = std::move(building_);
         return {};
     }
-    return Base::Err(Fail(HttpFailureCode::Truncated, "the connection closed before the answer was complete"));
+    failed_ = Fail(HttpFailureCode::Truncated, "the connection closed before the answer was complete");
+    return Base::Err(*failed_);
 }
 
 HttpResult<void> ResponseParser::ReadHead(const std::string_view head) {
@@ -227,7 +243,7 @@ HttpCall::HttpCall(OS::StreamSocket socket, std::string request, const ResponseL
 HttpResult<HttpCall> HttpCall::Start(const OS::DatagramAddress& to, const HttpRequest& request, const ResponseLimits limits) {
     auto socket = OS::StreamSocket::Connect(to);
     if (!socket) {
-        return Base::Err(Fail(HttpFailureCode::ConnectFailed, "the connection did not start: " + socket.error().message));
+        return Base::Err(FromOS(socket.error(), HttpFailureCode::ConnectFailed, "the connection did not start"));
     }
     return HttpCall(std::move(socket).value(), EncodeRequest(request), limits);
 }
@@ -240,18 +256,18 @@ HttpResult<std::optional<HttpResponse>> HttpCall::Poll() {
         return Base::Err(std::move(failure));
     };
     auto state = socket_.State();
-    if (!state) return fail(Fail(HttpFailureCode::ConnectFailed, "the connection did not open: " + state.error().message));
+    if (!state) return fail(FromOS(state.error(), HttpFailureCode::ConnectFailed, "the connection did not open"));
     if (*state == OS::StreamState::Connecting) return std::optional<HttpResponse>();
     while (sent_ < request_.size()) {
         auto sent = socket_.Send(std::as_bytes(std::span(request_.data() + sent_, request_.size() - sent_)));
-        if (!sent) return fail(Fail(HttpFailureCode::TransferFailed, "the request did not go out: " + sent.error().message));
+        if (!sent) return fail(FromOS(sent.error(), HttpFailureCode::TransferFailed, "the request did not go out"));
         if (*sent == 0) break;
         sent_ += *sent;
     }
     std::array<std::byte, 4096> buffer{};
     for (;;) {
         auto received = socket_.Receive(buffer);
-        if (!received) return fail(Fail(HttpFailureCode::TransferFailed, "the answer did not come in: " + received.error().message));
+        if (!received) return fail(FromOS(received.error(), HttpFailureCode::TransferFailed, "the answer did not come in"));
         if (!*received) break;
         if (**received == 0) {
             if (auto closed = parser_.Close(); !closed) return fail(closed.error());

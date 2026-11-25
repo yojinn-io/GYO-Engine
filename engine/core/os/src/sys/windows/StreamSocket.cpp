@@ -112,7 +112,9 @@ Base::Result<StreamState, OSError> StreamSocket::State() {
         int length = sizeof error;
         if (getsockopt(impl_->handle, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&error), &length) != 0)
             error = WSAGetLastError();
-        impl_->failed = ConnectError(error == 0 ? WSAECONNREFUSED : error);
+        impl_->failed = error != 0 ? ConnectError(error)
+                                   : OSError::Make(OSErrorCode::IOFailed, "connect() failed",
+                                                   "select reported the connect failed without an error");
         return Base::Err(*impl_->failed);
     }
     impl_->connected = true;
@@ -121,6 +123,12 @@ Base::Result<StreamState, OSError> StreamSocket::State() {
 
 Base::Result<std::size_t, OSError> StreamSocket::Send(const std::span<const std::byte> data) {
     GYO_ASSERT(impl_ != nullptr);
+    // The connection's own state first, so every platform answers the same before Connected and after a failure.
+    if (!impl_->connected) {
+        auto state = State();
+        if (!state) return Base::Err(state.error());
+        if (*state != StreamState::Connected) return std::size_t{0};
+    }
     const int size = data.size() > static_cast<std::size_t>(INT_MAX) ? INT_MAX : static_cast<int>(data.size());
     const int sent = send(impl_->handle, reinterpret_cast<const char*>(data.data()), size, 0);
     if (sent != SOCKET_ERROR) return static_cast<std::size_t>(sent);
@@ -131,6 +139,11 @@ Base::Result<std::size_t, OSError> StreamSocket::Send(const std::span<const std:
 
 Base::Result<std::optional<std::size_t>, OSError> StreamSocket::Receive(const std::span<std::byte> buffer) {
     GYO_ASSERT(impl_ != nullptr);
+    if (!impl_->connected) {
+        auto state = State();
+        if (!state) return Base::Err(state.error());
+        if (*state != StreamState::Connected) return std::optional<std::size_t>();
+    }
     const int capacity = buffer.size() > static_cast<std::size_t>(INT_MAX) ? INT_MAX : static_cast<int>(buffer.size());
     const int received = recv(impl_->handle, reinterpret_cast<char*>(buffer.data()), capacity, 0);
     if (received != SOCKET_ERROR) return std::optional<std::size_t>(static_cast<std::size_t>(received));

@@ -1,17 +1,18 @@
 #pragma once
 
-// A small HTTP/1.1 client (the PvP Gateway port's declaration D8, games/object_fps_pvp/docs/gateway-declaration.zh-Hant.md):
-// a game talks to its backend services. A library (config/modules.csv library_only=yes): a product that wants it
-// links GYO::Http; nothing is registered.
+// A small HTTP/1.1 client (docs/architecture/target/v2/http.zh-Hant.md): a game talks to its backend services. A library
+// (config/modules.csv library_only=yes): a product that wants it links GYO::Http; nothing is registered.
 //
 // Two parts:
 //   - the message: EncodeRequest writes a request's bytes; ResponseParser reads an answer from bytes as they come
 //     (Content-Length, chunked, or until the connection closes). Pure: no socket, no clock.
 //   - HttpCall: one request on one connection (engine/core/os StreamSocket, "Connection: close"), driven by the
-//     caller's Poll, one step a frame; it never blocks. When to give up is the caller's: dropping the call closes it.
-//     A World keeps the call in a Resource and a System polls it.
+//     caller's Poll, one step a frame; it never blocks. When to give up is the caller's: dropping the call closes it
+//     (the only timeout below is the OS's connect timeout, tens of seconds). A World keeps the call in a Resource and
+//     a System polls it.
 //
-// Not: DNS (an IPv4 literal address, as the datagram socket takes), TLS, redirects, cookies, keep-alive, HTTP/2.
+// Not: DNS (an IPv4 literal address, as the datagram socket takes), TLS, redirects, cookies, keep-alive, HTTP/2, HEAD
+// (an answer to HEAD has a length and no body: the parser would wait for the body).
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
@@ -30,9 +31,11 @@ namespace GYO::Engine::Http {
 
 // Zero is not a valid code; the numeric values are not a data contract.
 enum class HttpFailureCode : std::uint16_t {
-    // The connection did not open: the OS refused it or the peer cannot be reached (the detail has the OS's error).
+    // The connection did not open: the OS refused to start it, or it failed (the detail has the OS's code and error).
     ConnectFailed = 1,
-    // The connection broke while the request went out or the answer came in.
+    // The peer cannot be reached: refused, no route, timed out (the detail has the OS's code and error).
+    Unreachable,
+    // The connection broke while the request went out or the answer came in (the detail has the OS's code and error).
     TransferFailed,
     // The answer is not HTTP/1.1 this client reads (the detail says where it stopped).
     MalformedResponse,
@@ -77,7 +80,8 @@ struct HttpResponse final {
 };
 
 // The request's bytes: the request line, Host, Connection: close, Content-Length when there is a body (or the method
-// is POST, PUT or PATCH), the other headers, the body.
+// is POST, PUT or PATCH), the other headers, the body. The text is taken as given: a CR or LF in a target, a name or a
+// value is the caller's to keep out.
 [[nodiscard]] std::string EncodeRequest(const HttpRequest& request);
 
 // The largest head and body ResponseParser takes.
@@ -86,8 +90,8 @@ struct ResponseLimits final {
     std::size_t body = 1024 * 1024;
 };
 
-// Reads one answer from bytes as they arrive. Feed the bytes, then Close when the connection ended; Result says
-// whether the answer is complete.
+// Reads one answer from bytes as they arrive. Feed the bytes, then Close when the connection ended; Response says
+// whether the answer is complete. After a failure every Feed and Close returns that failure again.
 class ResponseParser final {
 public:
     explicit ResponseParser(ResponseLimits limits = {}) : limits_(limits) {}
@@ -106,6 +110,7 @@ private:
 
     ResponseLimits limits_;
     Stage stage_ = Stage::Head;
+    std::optional<HttpFailure> failed_;
     std::string pending_;
     HttpResponse building_;
     std::size_t remaining_ = 0;
@@ -120,7 +125,7 @@ public:
                                                     ResponseLimits limits = {});
 
     // One step: the connect, the bytes the OS takes, the bytes waiting. The answer once it is complete (the call is
-    // then finished; later polls give it again), nullopt while it is not.
+    // then finished; later polls give a copy of it again), nullopt while it is not.
     [[nodiscard]] HttpResult<std::optional<HttpResponse>> Poll();
 
 private:

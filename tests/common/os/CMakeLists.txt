@@ -6,6 +6,16 @@ add_executable(gyo_os_tests OSErrorTests.cpp FilesTests.cpp FileWriterTests.cpp 
 # GYO::Threads: ThreadTests reads a role's priority back on the role's thread.
 target_link_libraries(gyo_os_tests PRIVATE GYO::OS GYO::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
+# A loopback TCP listener for tests of StreamSocket and what is built on it (the http Module, a game's calls to its
+# services): the header is neutral, the native socket code stays here in tests/common/os.
+add_library(gyo_test_loopback_listener STATIC LoopbackListener.cpp)
+target_include_directories(gyo_test_loopback_listener PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/listener_include")
+target_link_libraries(gyo_test_loopback_listener PUBLIC GYO::OS)
+if(WIN32)
+    target_link_libraries(gyo_test_loopback_listener PRIVATE ws2_32)
+    target_compile_definitions(gyo_test_loopback_listener PRIVATE NOMINMAX)
+endif()
+target_link_libraries(gyo_os_tests PRIVATE gyo_test_loopback_listener)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 # CaseTiming.cpp (v8-arch-gyo2-os-test-timeout) times each case and keeps the
 # log of a failed, slow or killed run here; it changes no check.
