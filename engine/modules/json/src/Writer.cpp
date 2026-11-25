@@ -95,7 +95,20 @@ bool AppendString(std::string& out, const std::string_view text) {
 
 } // namespace
 
-Writer::Writer(std::string& out) noexcept : out_(out), startLength_(out.size()) {}
+Writer::Writer(std::string& out, const Layout layout) noexcept
+    : out_(out), layout_(layout), startLength_(out.size()) {}
+
+void Writer::NewLine(const std::size_t level) {
+    if (layout_.indent == 0) return;
+    out_ += '\n';
+    out_.append(level * layout_.indent, static_cast<char>(layout_.character));
+}
+
+void Writer::Separate(Frame& frame) {
+    if (!frame.first) out_ += ',';
+    frame.first = false;
+    NewLine(depth_);
+}
 
 Writer::Frame& Writer::Top() {
     GYO_ASSERT(depth_ > 0);
@@ -144,8 +157,7 @@ void Writer::BeforeValue() {
         frame.awaitingValue = false;
         return;
     }
-    if (!frame.first) out_ += ',';
-    frame.first = false;
+    Separate(frame);
 }
 
 void Writer::BeginContainer(const Container container, const char open) {
@@ -168,8 +180,10 @@ void Writer::EndContainer(const Container container, const char close) {
     const Frame& frame = Top();
     GYO_ASSERT(frame.container == container && "the end does not match the open container");
     GYO_ASSERT(!frame.awaitingValue && "a Key without its value");
+    const bool empty = frame.first;
     Pop();
     try {
+        if (!empty) NewLine(depth_);
         out_ += close;
     } catch (const std::bad_alloc&) {
         Fail(JsonErrorCode::OutOfMemory, "out of memory");
@@ -194,13 +208,12 @@ void Writer::Key(const std::string_view key) {
     ++values_;
     frame.awaitingValue = true;
     try {
-        if (!frame.first) out_ += ',';
-        frame.first = false;
+        Separate(frame);
         if (!AppendString(out_, key)) {
             Fail(JsonErrorCode::NotRepresentable, "invalid UTF-8");
             return;
         }
-        out_ += ':';
+        out_ += layout_.indent == 0 ? ":" : ": ";
     } catch (const std::bad_alloc&) {
         Fail(JsonErrorCode::OutOfMemory, "out of memory");
     }

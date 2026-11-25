@@ -2454,7 +2454,7 @@
       ],
       "file": "engine/core/os/src/sys/DatagramSocket.cpp",
       "find": "            return std::optional<ReceivedDatagram>(ReceivedDatagram{static_cast<std::size_t>(received),\n                FromNative(native)});",
-      "replace": "            return std::optional<ReceivedDatagram>(ReceivedDatagram{static_cast<std::size_t>(received),\n                DatagramAddress{}});",
+      "replace": "            return std::optional<ReceivedDatagram>(ReceivedDatagram{static_cast<std::size_t>(received),\n                SocketAddress{}});",
       "target": "gyo_os_tests",
       "cases": "*arrives whole*",
       "timeout": 120,
@@ -2485,7 +2485,7 @@
         "net-module-declaration D-1",
         "net-module-declaration 判定 G-7"
       ],
-      "file": "engine/core/os/src/common/DatagramAddress.cpp",
+      "file": "engine/core/os/src/common/SocketAddress.cpp",
       "find": "if (digits == 0 || value > 255 || (digits > 1 && text[begin] == '0')) return invalid();",
       "replace": "if (digits == 0 || value > 255) return invalid();",
       "target": "gyo_os_tests",
@@ -2500,7 +2500,7 @@
         "net-module-declaration D-1",
         "net-module-declaration 判定 G-7"
       ],
-      "file": "engine/core/os/src/common/DatagramAddress.cpp",
+      "file": "engine/core/os/src/common/SocketAddress.cpp",
       "find": "    if (at != text.size()) return invalid();\n",
       "replace": "",
       "target": "gyo_os_tests",

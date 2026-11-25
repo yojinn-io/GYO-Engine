@@ -12,7 +12,7 @@
 #include "engine/net/Handshake.hpp"
 #include "engine/net/Link.hpp"
 #include "engine/net/ServerHost.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 // The Product's network object (declaration D-3, the transport object; orchestration O-15): the Link and the
 // connection layer, one per Product, in the Product's buffer. NetModule makes it in Configure when the product
@@ -27,7 +27,7 @@ enum class NetRole : std::uint8_t { Server = 1, Client };
 struct NetProductOptions final {
     NetRole role = NetRole::Server;
     // UDP: the local address to bind (a server's listening port; a client usually any address, port 0).
-    OS::DatagramAddress bind = OS::DatagramAddress::Any(0);
+    OS::SocketAddress bind = OS::SocketAddress::Any(0);
     // Instead of UDP: a Link the product or a test gives (a MemoryLink end).
     std::shared_ptr<Link> link;
     // Whom a client connects to is not here: each client World says it (NetConnectTarget, net page D-8).
@@ -50,7 +50,7 @@ struct NetProductOptions final {
 struct NetConnectTarget final {
     // Over UDP: the server's address. Over a Link the product gave: the server's Endpoint on it. The other kind, or
     // none, connects to nothing (a wrong kind is counted as a link failure: NetFailureCode::LinkFailed).
-    std::variant<std::monostate, OS::DatagramAddress, Endpoint> server;
+    std::variant<std::monostate, OS::SocketAddress, Endpoint> server;
     // The client's opaque user id and token (carried, not checked).
     std::uint64_t userId = 0;
     std::vector<std::byte> token;
@@ -86,7 +86,7 @@ public:
     [[nodiscard]] const NetProductOptions& Options() const noexcept { return options_; }
     // The local address of the UDP socket the Module opened, or nullopt (a Link the product gave, or a client whose
     // socket is not open yet: it opens with the first NetConnectTarget).
-    [[nodiscard]] std::optional<OS::DatagramAddress> UdpAddress() const;
+    [[nodiscard]] std::optional<OS::SocketAddress> UdpAddress() const;
 
     // What the Link reported (E2: kept here and counted, the World goes on), and the service's own drops (a
     // client's datagram from another endpoint: UnknownSource).

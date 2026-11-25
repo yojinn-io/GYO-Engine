@@ -95,11 +95,11 @@ bool ParseNumber(const std::string_view text, T& value) {
 }
 
 // "A.B.C.D:P" (port 1 to 65535).
-std::optional<GYO::Engine::OS::DatagramAddress> ParseAddress(const std::string_view text) {
+std::optional<GYO::Engine::OS::SocketAddress> ParseAddress(const std::string_view text) {
     const std::size_t colon = text.rfind(':');
     std::uint16_t port = 0;
     if (colon == std::string_view::npos || !ParseNumber(text.substr(colon + 1), port) || port == 0) return std::nullopt;
-    auto address = GYO::Engine::OS::DatagramAddress::Parse(text.substr(0, colon), port);
+    auto address = GYO::Engine::OS::SocketAddress::Parse(text.substr(0, colon), port);
     if (!address) return std::nullopt;
     return *address;
 }
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     std::optional<std::uint64_t> matchId;
     bool keyOnStdin = false;
     std::optional<std::int64_t> idleSeconds;
-    std::optional<GYO::Engine::OS::DatagramAddress> saves;
+    std::optional<GYO::Engine::OS::SocketAddress> saves;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         const bool hasValue = index + 1 < argc;
@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
     net.role = N::NetRole::Server;
-    net.bind = GYO::Engine::OS::DatagramAddress::Any(port);
+    net.bind = GYO::Engine::OS::SocketAddress::Any(port);
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({shared, arena, 0, seats});

@@ -18,7 +18,7 @@ public:
 
     [[nodiscard]] static UiResult<void> Validate(const UiDocument& document);
 
-    // UTF-8 JSON in one line (the JSON Module's one format): fixed field ordering, uppercase #RRGGBBAA colours and
+    // UTF-8 JSON with two-space indentation (master's layout): fixed field ordering, uppercase #RRGGBBAA colours and
     // one trailing newline. A document that does not validate is not written.
     [[nodiscard]] static UiResult<std::string> Serialize(const UiDocument& document);
 };

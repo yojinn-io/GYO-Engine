@@ -240,7 +240,7 @@ HttpResult<void> ResponseParser::Step() {
 HttpCall::HttpCall(OS::StreamSocket socket, std::string request, const ResponseLimits limits)
     : socket_(std::move(socket)), request_(std::move(request)), parser_(limits) {}
 
-HttpResult<HttpCall> HttpCall::Start(const OS::DatagramAddress& to, const HttpRequest& request, const ResponseLimits limits) {
+HttpResult<HttpCall> HttpCall::Start(const OS::SocketAddress& to, const HttpRequest& request, const ResponseLimits limits) {
     auto socket = OS::StreamSocket::Connect(to);
     if (!socket) {
         return Base::Err(FromOS(socket.error(), HttpFailureCode::ConnectFailed, "the connection did not start"));
