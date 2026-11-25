@@ -14,7 +14,8 @@ v8-product-pvp-port
 ├─ 第 2 段 client   high｜Client：視窗、輸入、連線入口、3D 畫面（arena、角色先用方塊）、HUD、聲音 → 能實際對戰
 ├─ 第 3 段 model    high｜角色模型與骨骼動畫、viewmodel、第三人稱武器、骨頭上的 hitbox（PV2）、換彈事件聲
 ├─ 第 4 段 engine   high｜PV10 live resize、PV11 模擬在自己的執行緒（Engine：SDL 總宣告 R3、R5），單獨的 PR
-└─ 第 5 段 lobby    high｜大廳（PV12）：輸入 Match 的位址、連上；用 U 卡的 ui、world_ui、ui_render（2026-11-24 主會話加）
+├─ 第 5 段 lobby    high｜大廳（PV12）：輸入 Match 的位址、連上；用 U 卡的 ui、world_ui、ui_render（2026-11-24 主會話加）
+└─ 第 6 段 present  high｜遠端玩家內插（PV17）、viewmodel 後座力（2026-11-25 使用者定「移植完成＝和 master 功能一樣」後加）
 ```
 
 〔2026-11-24 主會話加第 5 段〕大廳在移植範圍內，原本四段沒排，用 `--connect host:port` 代替。加段是主會話判的，不是使用者的決定。**先後：第 5 段先、第 4 段後**（卡自己判）：第 5 段只等 #322、#326 合進 gyo2，接法已由 U 卡寫好、驗過，是產品的接線；第 4 段改編排層與 `sdl_window`（R3、R5、O-13），開工前另寫前提與別家的對照。主會話 2026-11-24 確認這個先後，並說第 4 段的前提與對照寫完就動工、不必先交使用者：R3、R5、O-13 都在已核准的 SDL 總宣告裡，照它實作不算推翻使用者的決定；只有「要改總宣告已定的內容」或「要動 AGENTS §1」時停下問主會話。
@@ -66,7 +67,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - **對手的時刻**（設計審查 S5）：Client 畫對手用最新確認的 tick（`NetReplicaState::latestConfirmed`），不用自己預測的 tick；對手的開槍、受擊、這一命的起點都是那個 tick 上的值。
 - **viewmodel 掛在相機下**（設計審查 S6）：第一人稱武器是 viewmodel 相機的子實體（`ChildOf`），固定的局部 `Transform`（`ViewmodelPlacement`），每幀只寫 `SkinPose`；死亡時離開 viewmodel 的 layer。照 Bevy 的 `examples/camera/first_person_view_model.rs`。
 - **手臂不判定**（試玩後確認）：試玩時提到手臂以前打得到（傷害同身體）。那是膠囊判定時期（master 11-01 前、本移植第 1、2 段）的行為；`v8-product-hit-rules-three-parts`（2026-10-31）定的是手臂不設判定。使用者 2026-11-24：「先不改了」，維持三部位。
-- **沒搬**：viewmodel 的後座力（master 的 recoil 曲線；不影響判定，之後要時再加）。
+- **沒搬**：viewmodel 的後座力（master 的 recoil 曲線；不影響判定，之後要時再加）。〔2026-11-25 改成第 6 段做，見下面「第 6 段」〕
 - **替身拿掉**：第 2 段的方塊替身換成 Player_V20，替身檔與 catalog 列一起刪。
 
 ### PV10、PV11 → **第 4 段，單獨的 PR**
@@ -105,11 +106,41 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - **玩家的生成**：Match 在 `PeerConnected` 時生成玩家實體（`OnServer()`），斷線時刪掉。玩家實體帶複製的 `Owner{userId}`；Client 找自己 userId 的那個寫進 `PeerControls`。系譜：lightyear `examples/fps/src/server.rs:54-84`（連上時 spawn、`PlayerId`／`ControlledBy`）。
 - **K3**：Client 選回滾策略（`StateRollbackStrategy`），預測自己的玩家。
 - **遠端玩家**：網路不送別人的輸入（網路宣告 Q7）。Client 上遠端玩家沒有輸入元件（輸入元件只有 Client 自己控制的玩家有：`ControlOwnPlayer` 加上），`MovePlayers` 不跑它們，所以它們停在確認點的值（約晚一個來回，連重力也不算）。〔動工後改，設計審查 S5〕原寫「輸入是預設值、重力照算」，和程式不符。遊戲規則「這一步沒有輸入就不移動、不轉向」用在 Match 上還沒收到輸入的玩家。內插（PV17）是遊戲的事；lightyear 把遠端玩家當 interpolated（`InterpolationTarget`），GYO 的 K3 目前全部走回滾，這是和 lightyear 的差。判定用 Match 當 tick 的位置（PV3），所以 Client 要提前量；第 2 段實機試玩前，交使用者選「先做內插或回溯其中一個」還是「接受提前量」。
-  〔2026-11-24 主會話〕**遠端玩家內插（PV17）這一卡不做**：對手停在最新確認的值（第 3 段起對手的動畫也用最新確認的 tick）。這是主會話的判斷；使用者試玩時覺得礙事，再另外排。
+  〔2026-11-24 主會話〕**遠端玩家內插（PV17）這一卡不做**：對手停在最新確認的值（第 3 段起對手的動畫也用最新確認的 tick）。這是主會話的判斷；使用者試玩時覺得礙事，再另外排。〔2026-11-25 改成第 6 段做，見下面「第 6 段」〕
 - **只在 Match 跑的**：命中判定與傷害、死亡、重生、生成與刪除玩家（`OnServer()`，兩端登記同一個 System，一致性指紋相同；`net.zh-Hant.md` 第 8 節 D-13）。Client 預測的是移動、彈藥、冷卻、換彈（開槍聲與彈藥數字不等伺服器）。
 - **時間**：tick 照 `world_time`（網路預設 64 Hz）；master 的 60 Hz tick 數換成秒（冷卻 10 tick → 1/6 s，換彈 90 → 1.5 s，重生 180 → 3 s），每步的秒數讀 `FixedTime` 的步長。
 - **地板**：arena 有隱含的地板 y＝0（master 的規則，盤點 PV1）；遊戲規則，不放 collider。
 - **數學**：判定資料用 float（同 master）；Match 與 Client 不同平台時只是多修正，不會壞（伺服器權威）。
+
+### 第 6 段：遠端玩家內插（PV17）與 viewmodel 後座力（2026-11-25 加）
+
+**使用者的決定**（HANDOFF `v8-arch-gyo2-pvp-port-done-criteria`）：主會話問「(a) 和 master 功能一樣／(b) 核心玩法能打就算」，使用者「照建議 (a)，合併 #338」。所以上面寫「這一卡不做」的 PV17 與後座力改成這一段做。主會話轉達的範圍：內插只取概念、照 lightyear 對照，不照搬 master 的常數與算法；權威、回滾的鐵則照舊；內插是畫面上的事，不改判定。
+
+**前提**
+- 內插與後座力：**作者能處理**。兩者都只在 Client 的畫面（Frame World），不碰判定資料；網路宣告 Q7 定「網路不做內插」（`docs/architecture/target/v2/net-module-declaration.zh-Hant.md` 第 615 行「PvP Client 移植時再問」），這一段照它：歷史、取樣、混合都在遊戲。lightyear 把內插放在函式庫裡（`crates/replication/interpolation`）；GYO 先由遊戲做，第二個產品要時再看要不要搬進 Engine（交主會話記）。
+- 「現在 Match 大概到哪個 tick」：**Engine 要解決**。這個估計只有 net 算得出來（`ClockSync` 用封包的到達時刻、RTT、jitter 平滑出的 offset，`engine/modules/net/src/Replication.cpp` 的 `SyncClock`），但算完沒存下來；作者只能照抄 net 的公式（`now / step + offset`）。改法：`ClockSync` 多存三個值——這一幀的估計 `remoteTick`、RTT `rttTicks`、jitter `jitterTicks`（lightyear 的 `RemoteTimeline::current_estimate()` 是公開的，`crates/core/sync/src/timeline/remote.rs`）。只多存、不改同步的行為。〔設計審查 B1 後加 `rttTicks`〕
+
+**別家**
+| | 時間軸 | 延遲 | 沒有更新的資料時 | 重生、瞬移 |
+|---|---|---|---|---|
+| lightyear | `InterpolationTimeline`：server 時間的估計減延遲，用和 input timeline 同一個調速控制器跟上（`crates/replication/interpolation/src/timeline.rs:189-215`、`crates/core/sync/src/timeline/sync.rs:73-135`） | `max(送出間隔 × 1.2, 5 ms)` ＋ jitter × 4 ＋ 1 tick（`timeline.rs:50-75`、`sync.rs:205-220`） | 停在最後一筆，不外插（`registry.rs:553-559`） | 不處理（作者用 `disabled()` 等規則） |
+| master | 只看封包到達的時刻（到達時間的最小包絡線），游標只前進、誤差大就跳（`SnapshotTimeline.hpp`） | 一個 tick | 停在最後一筆 | 換了一命或瞬移就切段，不跨段混合 |
+
+**設計**（只取概念；數字取 lightyear 的預設，或遊戲自己定，不用 master 的）
+1. **時間軸**（Frame）：`Sim` 的「出」把 `ClockSync::remoteTick`、`rttTicks`、`jitterTicks` 放進 `ClientView`。Frame 每幀用自己的 `RealTime` 推進一個內插用的 tick（小數），目標＝`remoteTick − rttTicks / 2`（能拿到的最新狀態；加上快照到了之後過了多久）減延遲；〔設計審查 B1：原寫照 lightyear 用 `remoteTick` 本身，單程時間比延遲長（RTT 約 86 ms 以上）時時間軸跑到所有狀態前面、停在最新一筆，又變回一步一跳；lightyear 唯一的測試是 RTT 0。這裡偏離 lightyear，減去半個 RTT〕延遲＝`max(1.2 個送出間隔, 5 ms)` ＋ 4 × jitter ＋ 1 tick（Match 每一步送一次）。跟上目標用和 `ClockSync` 相同的規則：第一次或誤差超過 10 tick 就跳；同方向超過 1 tick 連續 3 次就以 1.05 倍加速或減速；否則照常速。還沒同步（沒有 `remoteTick`）時，對手照舊用最新確認的值。
+2. **歷史**（Frame）：每個遠端玩家一份 `(確認的 tick, PlayerBody, PlayerCombat, HitRecord, ShotRecord)`，快照的 `latestConfirmed` 前進時加一筆（遠端玩家在 Client 不模擬，快照裡就是那個 tick 的值）。修剪照 lightyear：至少 3 筆、而且第二舊那筆已被越過時才丟最舊的。
+3. **取樣**：找「≤ 內插 tick 的最後一筆」與下一筆；位置、pitch 線性，yaw 取最短角度；其他（戰鬥、受擊、開槍紀錄、蹲、著地）取前一筆。沒有下一筆就停在最後一筆，不外插。兩筆之間換了一命（`lifeTick` 不同）就不混合，越過後一筆的 tick 才換過去（master 的切段，只取概念）。
+4. **寫到哪裡**：遠端玩家的複本元件改由內插的 System 每幀寫（Frame 的 PreUpdate，畫面、HUD、聲音之前）；自己的玩家照舊由快照寫（預測值）。對手的動畫時刻用內插 tick（不再用 `latestConfirmed`）；對手的開槍聲、受擊在內插 tick 越過那一刻才觸發，和畫面同一條時間軸（master 也是這樣排聲音）。Sim 沒有的玩家，等內插 tick 越過它消失的那個確認 tick 才刪（lightyear 的延遲刪除）。
+5. **畫面的時間**（net 的 F2「玩家按下時畫面看到的 Match tick＋小數」）：Frame 把內插 tick 隨控制交給 Sim，`WriteStepInput` 寫進 `ViewTime`（小數一個 byte）。Match 還沒用它（PV3 不做，master 也只記錄），但欄位的定義是畫面的時間，這裡讓它照定義。
+6. **後座力**：開槍的那一刻（Frame 第一次看到自己的 `lastShotTick` 變大，用 Frame 的時鐘；預測收回的一槍不踢），viewmodel 繞相機的 X 軸往上踢（左手系、+Z 朝前：繞 +X 正轉是往下，所以取負角；設計審查 B2）、指數回復：`踢的角度 × exp(−回復率 × 經過的秒數)`。只轉 viewmodel，不動世界相機、不動瞄準（master 的註解也是這樣）。兩個數字放進 `nailer_v2_viewmodel.json` 的 `recoil`（`kick_degrees`、`recovery_per_second`），值是遊戲自己定的。
+7. **後果**：命中仍由 Match 用當 tick 的位置判定（PV3 不做，master 也沒有），對手在畫面上比之前多晚一點（約 2～3 tick），瞄準要多提前一點；和 master 相同。
+8. **不處理**（設計審查 S3、N3、N4）：Sim 的回滾在權威領先或放棄（長時間卡頓）時，遠端玩家的值沒更新而 `latestConfirmed` 前進，歷史會記一筆「舊值標新 tick」，之後跳回正確的值；剛出現的玩家在時間軸追上它的第一筆前先顯示最新值；Match 的 World 被替換、tick 重來時同 id 的玩家會凍住（這個遊戲沒有替換 Match 的 World）。機率低或目前不會發生，寫明不處理。
+
+**測試與突變**
+- `logic`：時間軸的跟上規則（第一次跳、連續 3 次才調速、誤差小照常速）、取樣（混合、yaw 最短角度、停在最後一筆、換命不混合、修剪留兩筆）。
+- `client`：對手在一步四幀時每幀都有不同的位置（不再一步一跳），而且落後最新確認值；Match 收到的 `ViewTime` 是畫面的時間（落後最新確認值、不超前）；開槍後 viewmodel 往上轉、之後回到原位；既有的案照樣過（對手離開後替身消失）。
+- `net`：`ClockSync::remoteTick` 連上後接近 Match 的 tick。
+- 突變：不混合（停在前一筆）、延遲為 0、換命照樣混合、後座力不套用、`ViewTime` 照舊用最新確認值、`remoteTick` 不存。
 
 ## 3. 測試
 

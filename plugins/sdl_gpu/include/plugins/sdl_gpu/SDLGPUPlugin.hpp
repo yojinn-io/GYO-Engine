@@ -13,8 +13,10 @@
 //   GPUSubmit in render_world's Submit stage. Each prepared World gets its own number: when a World other than the
 //   last one that drew submits, the earlier World's textures and meshes go first (a new World's ids start again at
 //   1).
-// - GPUSubmit, each frame (Bevy's render_system, bevy_render/src/renderer/mod.rs:82): applies this frame's texture
-//   and mesh asks, draws the passes (2D and 3D, in their order) on the window and shows the picture, through the
+// - GPUSubmit, each frame (Bevy's render_system, bevy_render/src/renderer/mod.rs:82): sets the swapchain's present
+//   mode when render's Presentation changed (Bevy's present_mode_changed, bevy_render/src/view/window/mod.rs:220),
+//   applies this frame's texture and mesh asks, draws the passes (2D and 3D, in their order) on the window and shows
+//   the picture, through the
 //   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It only reads the render World (SDL-5). What went wrong is told
 //   through SDLGPUStatus and is never the System's error: a System's error would break the World and end the
 //   Product (O-11), and a minimized window or a refused texture is no reason for that.
@@ -33,6 +35,25 @@
 namespace GYO::Plugins::SDLGPU {
 
 class Service;
+
+// The present mode the window's swapchain has (SDL_GPUPresentMode in GYO's words), picked from render's Presentation
+// (render's PresentMode falls back along a chain; window-mode-vsync declaration, section 4.3).
+enum class SwapchainPresentMode : std::uint8_t {
+    // Waits for the display (SDL_GPU_PRESENTMODE_VSYNC; every driver has it).
+    Vsync = 1,
+    // Shows a picture at once, may tear (SDL_GPU_PRESENTMODE_IMMEDIATE).
+    Immediate,
+    // The newest picture at the display's refresh, no tearing (SDL_GPU_PRESENTMODE_MAILBOX).
+    Mailbox,
+};
+[[nodiscard]] constexpr const char* ToString(const SwapchainPresentMode mode) noexcept {
+    switch (mode) {
+    case SwapchainPresentMode::Vsync: return "Vsync";
+    case SwapchainPresentMode::Immediate: return "Immediate";
+    case SwapchainPresentMode::Mailbox: return "Mailbox";
+    }
+    return "Unknown";
+}
 
 // What became of the frames, in the Product's buffer (the counts are since the device was made).
 class SDLGPUStatus final {
@@ -55,6 +76,13 @@ public:
     [[nodiscard]] std::uint64_t UnmappedPasses() const;
     // The GPU driver SDL chose ("vulkan", "direct3d12", "metal").
     [[nodiscard]] const std::string& DriverName() const;
+    // The swapchain's present mode now (Vsync until render's Presentation asks for another).
+    [[nodiscard]] SwapchainPresentMode ActivePresentMode() const;
+    // Times the swapchain's present mode was set (each waits for the GPU): once per change of Presentation, never per
+    // frame. Of these, the ones SDL refused (the text in LastFailure()); a refused one is not tried again until
+    // Presentation changes.
+    [[nodiscard]] std::uint64_t PresentModeSets() const;
+    [[nodiscard]] std::uint64_t RefusedPresentModes() const;
     // The textures of render's asks that have a GPU texture now (the white one not counted).
     [[nodiscard]] std::size_t TextureCount() const;
     // The meshes of render's asks that have GPU buffers now.

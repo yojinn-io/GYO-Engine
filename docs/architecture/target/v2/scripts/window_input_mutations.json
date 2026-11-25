@@ -641,6 +641,139 @@
    "expect": "\\[sw\\-own\\-thread\\-exception\\]"
   },
   {
+   "id": "wn-mode-ignored",
+   "what": "WindowModeChanged does not reach WindowState::mode",
+   "guards": [
+    "window WN-2"
+   ],
+   "file": "engine/modules/window/src/WindowModule.cpp",
+   "find": "    if (!modes.empty()) state.Get().mode = modes.back()->mode;\n",
+   "replace": "",
+   "target": "gyo_input_tests",
+   "cases": "window: the mode*",
+   "expect": "\\[wn\\-mode\\]"
+  },
+  {
+   "id": "wn-mode-first",
+   "what": "the first WindowModeChanged of the frame wins",
+   "guards": [
+    "window WN-2"
+   ],
+   "file": "engine/modules/window/src/WindowModule.cpp",
+   "find": "state.Get().mode = modes.back()->mode;",
+   "replace": "state.Get().mode = modes.front()->mode;",
+   "target": "gyo_input_tests",
+   "cases": "window: the mode*",
+   "expect": "\\[wn\\-mode\\-last\\]"
+  },
+  {
+   "id": "sw-map-enter-ignored",
+   "what": "entering fullscreen becomes nothing",
+   "guards": [
+    "sdl SDL-7",
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "        out.window.emplace_back(Win::WindowModeChanged{Win::WindowMode::BorderlessFullscreen, time});\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: entering and leaving*",
+   "expect": "\\[sw\\-map\\-mode\\-count\\]"
+  },
+  {
+   "id": "sw-snapshot-mode-missing",
+   "what": "a new World's first round does not write the mode",
+   "guards": [
+    "window WN-3",
+    "sdl SDL-7 exception (2)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "            modeChanged.Send(Win::WindowModeChanged{now.mode, at});\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a window made borderless*",
+   "expect": "\\[sw\\-replaced\\-mode\\]"
+  },
+  {
+   "id": "sw-made-windowed",
+   "what": "WindowSettings::mode BorderlessFullscreen makes a Windowed window",
+   "guards": [
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (fullscreen) flags |= SDL_WINDOW_FULLSCREEN;\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a window made borderless*",
+   "expect": "\\[sw\\-made\\-fullscreen\\]"
+  },
+  {
+   "id": "sw-mode-never-fullscreen",
+   "what": "SetWindowMode never makes SDL's window fullscreen",
+   "guards": [
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "SDL_SetWindowFullscreen(state_->window, fullscreen)",
+   "replace": "SDL_SetWindowFullscreen(state_->window, false)",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: SetWindowMode makes*",
+   "expect": "\\[sw\\-mode\\-fullscreen\\-sdl\\]"
+  },
+  {
+   "id": "sw-size-not-held",
+   "what": "a size asked in fullscreen goes to SDL at once",
+   "guards": [
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (state_->fullscreenPending || Adapter::IsFullscreen(state_->window)) {\n        state_->heldWindowedSize = logicalSize;\n        return true;\n    }\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: SetWindowMode makes*",
+   "expect": "\\[sw\\-mode\\-size\\-held\\]"
+  },
+  {
+   "id": "sw-held-size-dropped",
+   "what": "the held Windowed size is never given",
+   "guards": [
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    const Engine::Math::Vec2i size = *std::exchange(state_->heldWindowedSize, std::nullopt);\n    return Done(Adapter::SetWindowSizeLogical(state_->window, size), lastError_);",
+   "replace": "    return true;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: SetWindowMode makes*",
+   "expect": "\\[sw\\-mode\\-held\\-size\\-applied\\]"
+  },
+  {
+   "id": "sw-flush-not-called",
+   "what": "the request side never gives the held size",
+   "guards": [
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "    if (!backend->FlushWindowedSize()) service.Refused(backend->LastError());\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: SetWindowMode makes*",
+   "expect": "\\[sw\\-mode\\-held\\-size\\-applied\\]"
+  },
+  {
+   "id": "sw-live-mode-dropped",
+   "what": "a SetWindowMode sent in a live frame is lost",
+   "guards": [
+    "sdl_window R3",
+    "window-mode-vsync declaration 4.1/4.2"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "        for (const Win::SetWindowMode* mode : modeList) deferred.modes.push_back(*mode);\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a SetWindowMode sent in a live frame*",
+   "expect": "\\[sw\\-live\\-mode\\-next\\-frame\\]"
+  },
+  {
    "id": "sw-between-not-returned",
    "what": "the product's replacements run with the lent Worlds still lent",
    "guards": [
