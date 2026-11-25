@@ -14,7 +14,7 @@
 gyo_game_project()
 
 #
-# fast_float (third_party/, already fetched for the json Module) replaces the
+# fast_float (third_party/) is this product's own dependency: it replaces the
 # floating-point std::from_chars the macOS 13.3 target lacks; its header appears
 # only in src/adapters/fast_float/.
 gyo_game_add_library(logic OUT_TARGET object_connect_logic

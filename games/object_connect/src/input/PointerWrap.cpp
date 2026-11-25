@@ -97,10 +97,10 @@ PointerWrapResult PointerWrap::Sample(const PointerWrapSample& sample, const Axi
         // half the client back toward where the cursor was is the warp not
         // applied (the cursor is still at the old place), not the player's
         // motion: the baseline moves to the cursor and the pointer stays.
-        if (suppressX && std::abs(clientDelta.x) > clientSize.x * 0.5f) {
+        if (!sample.warpsApplyAtOnce && suppressX && std::abs(clientDelta.x) > clientSize.x * 0.5f) {
             clientDelta.x = 0.0f;
         }
-        if (suppressY && std::abs(clientDelta.y) > clientSize.y * 0.5f) {
+        if (!sample.warpsApplyAtOnce && suppressY && std::abs(clientDelta.y) > clientSize.y * 0.5f) {
             clientDelta.y = 0.0f;
         }
         unwrapped_ += ClientToPlayfieldDelta(clientDelta, playfield, clientSize);

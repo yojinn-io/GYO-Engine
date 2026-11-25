@@ -1,9 +1,9 @@
 include(FetchContent)
 
-# Decimal-to-double conversion for the JSON Module's raw-number path
-# (decision v8-arch-json-fast-float: the floating-point std::from_chars is not
-# available for the macOS 13.3 deployment target). Header-only; only gyo_json
-# links it, privately (Design Invariant J-1). Used under its MIT licence
+# Decimal-to-double conversion (decision v8-arch-json-fast-float: the
+# floating-point std::from_chars is not available for the macOS 13.3 deployment
+# target). Header-only. A target of its own: each unit that uses it links it
+# itself (the json Module does, privately, Design Invariant J-1). Used under its MIT licence
 # (LICENSE-MIT; the project is also offered under Apache-2.0 and BSL-1.0).
 # Pinned to the commit of the v8.3.3 release.
 FetchContent_Declare(fast_float
