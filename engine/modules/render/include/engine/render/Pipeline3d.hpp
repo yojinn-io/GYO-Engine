@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -51,29 +52,50 @@ struct Extracted3dItems final {
     std::vector<Extracted3dItem> items;
 };
 
-// The key of a model mesh's retained GPU mesh: the asset (id and life) and the mesh's index.
+// The key of a model mesh's retained GPU mesh: the asset (id and life) or the model the author holds (its address,
+// the model kept alive by RenderModelMeshes while it has a mesh), and the mesh's index.
 struct ModelMeshKey final {
     std::string asset;
     std::uint64_t life = 0;
+    const Model::ModelData* held = nullptr;
     std::uint32_t mesh = 0;
 
     friend auto operator<=>(const ModelMeshKey&, const ModelMeshKey&) = default;
 };
 
+// A model as this frame draws it: its key (the mesh index still 0), its data (null: an asset not loaded yet, or no
+// source asset view), and for a model the author holds, the holder that keeps it alive (as ResolveImage).
+struct ResolvedModel final {
+    ModelMeshKey key;
+    const Model::ModelData* data = nullptr;
+    std::shared_ptr<const Model::ModelData> holder;
+};
+// view: the source World's AssetView (read through ExtractRes), or null when the source has none (an asset then does
+// not resolve; a held model does).
+[[nodiscard]] ResolvedModel ResolveModel(const ModelRef& model, const WorldAsset::AssetView* view);
+
 // render's Resource in the render World (mesh_render): the retained meshes made from model meshes, made the first
 // time one is drawn (Bevy's RenderAssets<RenderMesh>). As RenderImages: a new life of an asset lets the old life's
-// meshes go; the rest stay while the render World lives.
+// meshes go, and an asset's stay while the render World lives; a held model's go after a frame in which no Mesh3d drew
+// it (EndFrame).
 class RenderModelMeshes final {
 public:
-    // The retained mesh of this model mesh, made on meshes when there is none; its index count in indexCount. A mesh
-    // without vertices or whole triangles: nullopt (nothing to draw).
-    std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, RenderMeshes& meshes, std::uint32_t& indexCount);
+    // The retained mesh of this model mesh, made on meshes when there is none; its index count in indexCount. holder
+    // keeps a held model alive while its mesh is kept (null for an asset). A mesh without vertices or whole triangles:
+    // nullopt (nothing to draw).
+    std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const Model::ModelData> holder,
+                              RenderMeshes& meshes, std::uint32_t& indexCount);
+    // At the end of the frame's extract (ExtractMeshes3d, the one user): the meshes of held models no Mesh3d drew this
+    // frame are released (their release goes with this frame's asks).
+    void EndFrame(RenderMeshes& meshes);
     [[nodiscard]] std::size_t Count() const noexcept { return entries_.size(); }
 
 private:
     struct Entry {
         MeshId mesh;
         std::uint32_t indexCount = 0;
+        std::shared_ptr<const Model::ModelData> holder;
+        bool used = false;
     };
     std::map<ModelMeshKey, Entry> entries_;
 };

@@ -22,6 +22,8 @@
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
+#include "engine/render/Pipeline3d.hpp"
+#include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -59,11 +61,12 @@ struct Seen {
     std::vector<R::Color8> clears;
     std::vector<R::Pass2D> passes;
     std::vector<R::TextureOp> asks;
+    std::vector<R::MeshOp> meshAsks;
 };
 std::vector<Seen> seen;
 std::vector<std::string> trail;
 
-K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures) {
+K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
     Seen s;
     s.all = commands->passes;
     for (const R::RenderPass& pass : commands->passes) {
@@ -76,6 +79,7 @@ K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextu
         }
     }
     s.asks.assign(textures->Pending().begin(), textures->Pending().end());
+    s.meshAsks.assign(meshes->Pending().begin(), meshes->Pending().end());
     seen.push_back(std::move(s));
     return {};
 }
@@ -460,4 +464,71 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
                   "[re-3d-alpha-no-depth-write] a blended mesh writes no depth unless asked");
     const auto* overlay = std::get_if<R::Pass2D>(&all[2]);
     CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
+}
+
+namespace {
+
+// A model the game makes at run time: one node at the origin, one mesh of one triangle (no skin).
+std::shared_ptr<const GYO::Engine::Model::ModelData> HeldTriangle(const float size) {
+    GYO::Engine::Model::ModelData model;
+    model.nodes.push_back(GYO::Engine::Model::Node{});
+    GYO::Engine::Model::Mesh mesh;
+    mesh.positions = {{0.0F, 0.0F, 0.0F}, {size, 0.0F, 0.0F}, {0.0F, size, 0.0F}};
+    mesh.indices = {0, 1, 2};
+    model.meshes.push_back(std::move(mesh));
+    return std::make_shared<const GYO::Engine::Model::ModelData>(std::move(model));
+}
+
+// How many of this frame's mesh asks (what the backend is told at Submit) are of each kind: 0 MeshCreate, 1 MeshRelease.
+std::size_t MeshAsks(const std::size_t kind) {
+    std::size_t n = 0;
+    for (const R::MeshOp& op : seen.back().meshAsks) n += op.index() == kind ? 1 : 0;
+    return n;
+}
+
+std::size_t Draws3d() {
+    std::size_t draws = 0;
+    for (const R::RenderPass& pass : seen.back().all) {
+        if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) draws += p3->draws.size();
+    }
+    return draws;
+}
+
+} // namespace
+
+TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without an asset; its GPU mesh is kept while drawn, let go after") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "mesh_render"}));
+    K::World& game = GameOf(*p);
+    K::World& render = p->World("Render").GetWorld();
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    R::Mesh3d mesh;
+    mesh.model = HeldTriangle(1.0F);
+    game.Insert(2, mesh);
+    Place(game, 2, 0.0F, 0.0F, 0.0F);
+    const auto kept = [&render] { return render.Resource<R::RenderModelMeshes>()->Count(); };
+    const auto live = [&render] { return render.Resource<R::RenderMeshes>()->LiveCount(); };
+
+    Frames(*p, 2);
+    CHECK_MESSAGE(Draws3d() == 1, "[mh-held-drawn] a held model is drawn with no asset store");
+    CHECK_MESSAGE((kept() == 1 && live() == 1), "[mh-held-kept] its GPU mesh is made once and kept while it is drawn");
+
+    // A new ModelData is a new model: its mesh is made, the old one's let go after the frame.
+    mesh.model = HeldTriangle(2.0F);
+    game.Insert(2, mesh);
+    Frames(*p);
+    CHECK_MESSAGE(Draws3d() == 1, "[mh-held-replaced] the new model is drawn");
+    CHECK_MESSAGE((kept() == 1 && live() == 1), "[mh-held-let-go] the old model's GPU mesh is let go after the frame");
+    CHECK_MESSAGE((MeshAsks(0) == 1 && MeshAsks(1) == 1), "[mh-held-released] the backend is told: the new mesh made, the old one released");
+
+    // No Mesh3d draws it any more: its mesh goes too.
+    game.Remove<R::Mesh3d>(2);
+    Frames(*p);
+    CHECK_MESSAGE((kept() == 0 && live() == 0), "[mh-held-let-go] a held model no Mesh3d draws is let go");
+    CHECK_MESSAGE(MeshAsks(1) == 1, "[mh-held-released] the backend is told its mesh is released");
 }
