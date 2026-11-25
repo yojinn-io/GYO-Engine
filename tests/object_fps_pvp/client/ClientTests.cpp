@@ -282,16 +282,18 @@ struct Setup final {
     K::World& Solo() { return client->World("Solo").GetWorld(); }
     Pending& Next() { return *Client().ResourceMut<Pending>(); }
     // Runs frames until the game scene's Worlds have their map (they generate until then; the map is read on the asset
-    // threads), at most a few seconds.
+    // threads) and the own player is there, at most a few seconds: the frames a test counts start from a game that is
+    // played.
     void Loaded() {
-        const auto generating = [this] {
-            return client->Generating("Sim") || client->Generating("Solo") || client->Generating("Frame");
+        const auto waiting = [this] {
+            return client->Generating("Sim") || client->Generating("Solo") || client->Generating("Frame") ||
+                   !PC::StatusOf(Client()).playing;
         };
-        for (int i = 0; i < 2000 && generating(); ++i) {
+        for (int i = 0; i < 2000 && waiting(); ++i) {
             Frame();
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        REQUIRE_FALSE(generating());
+        REQUIRE_FALSE(waiting());
     }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
