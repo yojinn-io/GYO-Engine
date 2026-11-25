@@ -19,7 +19,7 @@
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <memory>
 #include <optional>
@@ -31,12 +31,12 @@ namespace object_fps_pvp::client {
 namespace O = GYO::Engine::Orchestration;
 
 // An address as the lobby and --connect take it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
-[[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
+[[nodiscard]] std::optional<GYO::Engine::OS::SocketAddress> ParseMatchAddress(std::string_view text);
 
 // What the lobby ended with: a Resource of its Game World, written by its Systems; the program reads it after the
 // runner returns. No server: the player closed the window or chose Quit.
 struct LobbyOutcome final {
-    std::optional<GYO::Engine::OS::DatagramAddress> server;  // the address the player submitted
+    std::optional<GYO::Engine::OS::SocketAddress> server;  // the address the player submitted
     std::string address;                                     // its text, shown again when the lobby comes back
     bool shown = false;                                      // the document was loaded and laid out
     std::string failure;                                     // why it was not shown (empty: no failure seen)

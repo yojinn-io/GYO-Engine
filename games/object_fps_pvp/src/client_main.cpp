@@ -27,7 +27,7 @@
 #include "engine/net/Replication.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/orchestration/Orchestration.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/threads/WorkerPool.hpp"
 #include "engine/window/Window.hpp"
@@ -237,7 +237,7 @@ std::optional<PC::LobbyOutcome> RunLobby(const std::string& address, const std::
 }
 
 // The Client's Product connected to server, until its window closes (by the player, or when the connection ended).
-ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::uint64_t userId,
+ClientRun RunClient(const GYO::Engine::OS::SocketAddress& server, const std::uint64_t userId,
                     const std::shared_ptr<const PW::GameContent>& game, const std::shared_ptr<const PC::PresentationContent>& presentation,
                     const std::string& contentRoot, WA::WorkerPoolExecutor& executor, const std::int64_t frames, const bool verbose) {
     ClientRun run;
@@ -320,7 +320,7 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
 }
 
 int main(int argc, char** argv) {
-    std::optional<GYO::Engine::OS::DatagramAddress> connect;
+    std::optional<GYO::Engine::OS::SocketAddress> connect;
     std::uint64_t userId = 0;
     std::int64_t frames = -1;
     std::optional<std::string> contentRoot;
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
     // one Product runs and the program ends (the lobby, or the Client with --connect).
     std::string address = connect ? connect->ToString() : "127.0.0.1:40000";
     std::string status;
-    std::optional<GYO::Engine::OS::DatagramAddress> server = connect;
+    std::optional<GYO::Engine::OS::SocketAddress> server = connect;
     while (true) {
         if (!server) {
             int exitCode = 0;

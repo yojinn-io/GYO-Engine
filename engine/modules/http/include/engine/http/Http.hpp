@@ -11,7 +11,7 @@
 //     (the only timeout below is the OS's connect timeout, tens of seconds). A World keeps the call in a Resource and
 //     a System polls it.
 //
-// Not: DNS (an IPv4 literal address, as the datagram socket takes), TLS, redirects, cookies, keep-alive, HTTP/2, HEAD
+// Not: DNS (the address is an IPv4 literal SocketAddress), TLS, redirects, cookies, keep-alive, HTTP/2, HEAD
 // (an answer to HEAD has a length and no body: the parser would wait for the body).
 
 #include "engine/base/Error.hpp"
@@ -121,7 +121,7 @@ private:
 class HttpCall final {
 public:
     // Starts connecting to `to` with the request's bytes ready. ConnectFailed when the OS refuses to start.
-    [[nodiscard]] static HttpResult<HttpCall> Start(const OS::DatagramAddress& to, const HttpRequest& request,
+    [[nodiscard]] static HttpResult<HttpCall> Start(const OS::SocketAddress& to, const HttpRequest& request,
                                                     ResponseLimits limits = {});
 
     // One step: the connect, the bytes the OS takes, the bytes waiting. The answer once it is complete (the call is

@@ -154,7 +154,7 @@ TEST_CASE("http: a call sends its request and reads the answer over loopback") {
 }
 
 TEST_CASE("http: a call to a port nobody listens on is Unreachable, with the OS's error in the detail") {
-    GYO::Engine::OS::DatagramAddress closed{};
+    GYO::Engine::OS::SocketAddress closed{};
     {
         GYO::Test::LoopbackListener listener;
         REQUIRE(listener.Ok());

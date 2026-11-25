@@ -94,14 +94,14 @@ void PlaceAt(K::World& world, const K::EntityId id) {
 
 } // namespace
 
-std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(const std::string_view text) {
+std::optional<GYO::Engine::OS::SocketAddress> ParseMatchAddress(const std::string_view text) {
     const std::size_t colon = text.rfind(':');
     if (colon == std::string_view::npos) return std::nullopt;
     const std::string_view portText = text.substr(colon + 1);
     std::uint16_t port = 0;
     const auto parsed = std::from_chars(portText.data(), portText.data() + portText.size(), port);
     if (parsed.ec != std::errc{} || parsed.ptr != portText.data() + portText.size() || port == 0) return std::nullopt;
-    auto address = GYO::Engine::OS::DatagramAddress::Parse(text.substr(0, colon), port);
+    auto address = GYO::Engine::OS::SocketAddress::Parse(text.substr(0, colon), port);
     if (!address) return std::nullopt;
     return *address;
 }
