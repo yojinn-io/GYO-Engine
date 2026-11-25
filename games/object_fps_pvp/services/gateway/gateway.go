@@ -1,0 +1,145 @@
+// Package gateway is the entry to everything but the Match (gateway
+// declaration D2, D3): the external protocol's adapter. It keeps no state: it
+// checks the session token (self-contained, no lookup), puts the user it names
+// and the client's idempotency key on an internal request (D4), sends it to the
+// service behind and hands the answer back as it is.
+package gateway
+
+import (
+	"bytes"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"gyo.local/object_fps_pvp/services/internal/api"
+	"gyo.local/object_fps_pvp/services/token"
+)
+
+// ProtocolVersion is the external protocol's version, the first segment of
+// every path (/v1/...). A Client of another version gets 404 for its paths.
+const ProtocolVersion = 1
+
+type Config struct {
+	// The services behind it (base URLs of the internal protocol).
+	Identity, Rooms, Saves string
+	SessionKey             []byte
+	Now                    func() time.Time
+	HTTP                   *http.Client
+}
+
+type Gateway struct {
+	config Config
+}
+
+func New(config Config) (*Gateway, error) {
+	if len(config.SessionKey) == 0 {
+		return nil, errors.New("gateway needs the session key")
+	}
+	if config.Now == nil {
+		config.Now = time.Now
+	}
+	if config.HTTP == nil {
+		config.HTTP = &http.Client{Timeout: 15 * time.Second}
+	}
+	return &Gateway{config: config}, nil
+}
+
+func (g *Gateway) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/session", func(w http.ResponseWriter, r *http.Request) {
+		g.forward(w, r, g.config.Identity, "/internal/v1/sessions", 0)
+	})
+	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+	}))
+	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+	}))
+	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+		if id, ok := roomID(w, r); ok {
+			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, user)
+		}
+	}))
+	for _, action := range []string{"join", "leave", "ready", "start"} {
+		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+			if id, ok := roomID(w, r); ok {
+				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, user)
+			}
+		}))
+	}
+	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user, 10), user)
+	}))
+	return mux
+}
+
+// signedIn checks the bearer session token before the route.
+func (g *Gateway) signedIn(route func(http.ResponseWriter, *http.Request, uint64)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !found {
+			api.WriteError(w, http.StatusUnauthorized, "no_session")
+			return
+		}
+		user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())
+		if err != nil {
+			code := "invalid_session"
+			if errors.Is(err, token.ErrExpired) {
+				code = "session_expired"
+			}
+			api.WriteError(w, http.StatusUnauthorized, code)
+			return
+		}
+		route(w, r, user)
+	}
+}
+
+// roomID is the path's room id: digits only, so it cannot change the
+// internal path.
+func roomID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := r.PathValue("id")
+	if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+		api.WriteError(w, http.StatusBadRequest, "invalid_room")
+		return "", false
+	}
+	return id, true
+}
+
+// forward sends the request to a service as user, with the client's body and
+// idempotency key, and copies the answer back.
+func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, base, path string, user uint64) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, api.MaxBody))
+	if err != nil {
+		api.WriteError(w, http.StatusRequestEntityTooLarge, "body_too_large")
+		return
+	}
+	request, err := http.NewRequestWithContext(r.Context(), r.Method, base+path, bytes.NewReader(body))
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "forward_failed")
+		return
+	}
+	request.Header.Set(api.HeaderUser, strconv.FormatUint(user, 10))
+	if key := r.Header.Get(api.HeaderIdempotency); key != "" {
+		request.Header.Set(api.HeaderIdempotency, key)
+	}
+	if len(body) > 0 {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	response, err := g.config.HTTP.Do(request)
+	if err != nil {
+		log.Printf("gateway forward failed path=%s error=%v", path, err)
+		api.WriteError(w, http.StatusBadGateway, "service_unavailable")
+		return
+	}
+	defer response.Body.Close()
+	answer, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		api.WriteError(w, http.StatusBadGateway, "service_unavailable")
+		return
+	}
+	api.WriteRaw(w, response.StatusCode, answer)
+}
