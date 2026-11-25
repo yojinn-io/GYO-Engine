@@ -8,6 +8,7 @@
 #include "engine/kernel/World.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/Pipeline2d.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderMeshes.hpp"
 #include "engine/render/RenderTextures.hpp"
 
@@ -48,6 +49,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     r.Resource<Render::RenderTextures>({.name = "RenderTextures"});
     r.Resource<Render::RenderMeshes>({.name = "RenderMeshes"});
     r.Resource<Render::RenderImages>({.name = "RenderImages"});
+    r.Resource<Render::Presentation>({.name = "Presentation"});
     r.InsertStage(options.schedule, options.after, Kernel::StagePlace::After, std::string(kSubmitStage));
     r.InsertStage(options.schedule, kSubmitStage, Kernel::StagePlace::After, std::string(kCleanupStage));
     Kernel::SystemOptions clear;
@@ -70,6 +72,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
         PutIfAbsent<Render::RenderTextures>(world);
         PutIfAbsent<Render::RenderMeshes>(world);
         PutIfAbsent<Render::RenderImages>(world);
+        PutIfAbsent<Render::Presentation>(world);
         return {};
     });
 }

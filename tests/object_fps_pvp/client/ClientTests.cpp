@@ -129,12 +129,22 @@ struct Setup final {
     int frame = 0;
 
     std::shared_ptr<const PC::PresentationContent> presentation;
+    // The other Client's input every step (none: it stands).
+    std::optional<PW::PlayerInput> otherInput;
 
     // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it). first: the Client's first
-    // scene (none: the game, connected to the Match over the memory link).
+    // scene (none: the game, connected to the Match over the memory link). delayAdvances: a fixed latency of this many
+    // Advance calls each way between the Match and this Client (one Advance a frame).
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
-                   std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {})
+                   std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
+                   const std::uint32_t delayAdvances = 0)
         : framesPerStep(perStep) {
+        if (delayAdvances != 0) {
+            N::MemoryLinkSettings link;
+            link.aToB.fixedDelaySteps = delayAdvances;
+            link.bToA.fixedDelaySteps = delayAdvances;
+            first = N::MemoryLink::Pair(link);
+        }
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
@@ -233,7 +243,16 @@ struct Setup final {
             auto changed = PC::ChangeScene(*client);
             REQUIRE_MESSAGE(static_cast<bool>(changed), (changed ? std::string() : changed.error().message + "\n" + changed.error().detail));
         }
-        if (step && other) REQUIRE(static_cast<bool>(other->RunFrame()));
+        if (step && other) {
+            // The other Client's input for its next step, when the test steers it.
+            if (otherInput) {
+                if (auto* local = N::LocalInput<PW::PlayerInput>(GameWorld(*other))) {
+                    const auto target = static_cast<std::uint32_t>(TickOf(GameWorld(*other)) + 1);
+                    local->Set(target, *otherInput, N::ViewTime{target, 0});
+                }
+            }
+            REQUIRE(static_cast<bool>(other->RunFrame()));
+        }
         first.first.Advance();
         second.first.Advance();
         *clock += N::NetTime(std::chrono::nanoseconds(kStep / framesPerStep));
@@ -601,6 +620,142 @@ TEST_CASE("client: with the Sim World lent, a click among several frames between
                   "[pvp-exchange-accumulates] one click, one shot: " << GameWorld(*setup.match).Get<PW::PlayerCombat>(own)->shots - shotsBefore);
 }
 
+// PV17 (port declaration, segment 6): the other player walks; at four frames a step the Frame World shows it at a new
+// place every frame (blended between two confirmed states, not a step at a time), behind the newest confirmed state;
+// the inputs this Client sends carry the time the frame showed (a tick and its fraction).
+TEST_CASE("client: the other player walks smoothly, a little behind the Match, and the inputs carry the time shown") {
+  // No latency, and 13 Advance calls each way (about 100 ms of RTT at 64 Hz: the design review's case where a timeline
+  // following the Match's tick now, as lightyear's does, runs past every state it has).
+  for (const std::uint32_t delay : {0U, 13U}) {
+    CAPTURE(delay);
+    Setup setup(4, 4, 0, std::nullopt, {}, delay);
+    setup.Frames(480);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId rival = PlayerOf(setup.Client(), 2);
+    REQUIRE(rival != 0);
+    PW::PlayerInput walk;
+    walk.forward = 1.0F;
+    walk.present = 1;
+    walk.yaw = setup.Sim().Get<PW::PlayerBody>(rival)->yaw;
+    setup.otherInput = walk;
+    setup.Frames(4 * 6);
+    // Our own Peer at the Match: the one that controls our player.
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    const auto ownView = [&setup, own]() -> std::optional<N::ViewTime> {
+        K::World& match = GameWorld(*setup.match);
+        for (const K::EntityId id : match.Entities()) {
+            const auto* controls = match.Get<N::PeerControls>(id);
+            const auto* inputs = match.Get<N::PeerInput<PW::PlayerInput>>(id);
+            if (controls != nullptr && inputs != nullptr && controls->entity == own) return inputs->lastView;
+        }
+        return std::nullopt;
+    };
+    int moved = 0, behind = 0, fractions = 0, viewsAhead = 0;
+    const int frames = 4 * 20;
+    GYO::Engine::Math::Vec3 last = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+    for (int i = 0; i < frames; ++i) {
+        setup.Frame();
+        const GYO::Engine::Math::Vec3 shown = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+        const GYO::Engine::Math::Vec3 newest = setup.Sim().Get<PW::PlayerBody>(rival)->feet;
+        if (GYO::Engine::Math::Length(shown - last) > 1e-4F) ++moved;
+        if (GYO::Engine::Math::Length(newest - shown) > 0.01F) ++behind;
+        last = shown;
+        if (const auto view = ownView()) {
+            if (view->overstep != 0) ++fractions;
+            const auto confirmed = setup.Sim().Resource<N::NetReplicaState>()->latestConfirmed;
+            if (confirmed && view->tick > *confirmed) ++viewsAhead;
+        }
+    }
+    setup.otherInput.reset();
+    CHECK_MESSAGE(moved >= frames * 3 / 4, "[pvp-interp-smooth] the other player moved in " << moved << " of " << frames << " frames");
+    CHECK_MESSAGE(behind >= frames * 3 / 4, "[pvp-interp-behind] shown behind the newest confirmed state in " << behind << " of " << frames << " frames");
+    CHECK_MESSAGE(fractions > 0, "[pvp-interp-view] the view time sent carries the timeline's fraction");
+    CHECK_MESSAGE(viewsAhead == 0, "[pvp-interp-view] the view time sent is never past the confirmed tick: " << viewsAhead);
+  }
+}
+
+// A respawn (a new life somewhere else) is a jump, not a walk: the Frame World's copy is at the old place or at the
+// new one, never between (port declaration, segment 6, design 3).
+TEST_CASE("client: the other player's new life is not blended from where it was") {
+    Setup setup(4);
+    setup.Frames(480);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId rival = PlayerOf(setup.Client(), 2);
+    REQUIRE(rival != 0);
+    K::World& match = GameWorld(*setup.match);
+    const GYO::Engine::Math::Vec3 from = match.Get<PW::PlayerBody>(rival)->feet;
+    // Another spawn, far from where it stands.
+    GYO::Engine::Math::Vec3 to = from;
+    for (const auto& spawn : ShippedContent()->arenas[0].content.spawns) {
+        if (GYO::Engine::Math::Length(spawn.position - from) > GYO::Engine::Math::Length(to - from)) to = spawn.position;
+    }
+    REQUIRE(GYO::Engine::Math::Length(to - from) > 2.0F);
+    match.GetMut<PW::PlayerBody>(rival)->feet = to;
+    match.GetMut<PW::PlayerCombat>(rival)->lifeTick = static_cast<std::uint32_t>(TickOf(match));
+    int between = 0, atNew = 0;
+    for (int i = 0; i < 4 * 20; ++i) {
+        setup.Frame();
+        const GYO::Engine::Math::Vec3 shown = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+        const bool old = GYO::Engine::Math::Length(shown - from) < 0.05F;
+        const bool fresh = GYO::Engine::Math::Length(shown - to) < 0.05F;
+        if (!old && !fresh) ++between;
+        if (fresh) ++atNew;
+    }
+    CHECK_MESSAGE(between == 0, "[pvp-interp-life] frames between the death place and the spawn: " << between);
+    CHECK(atNew > 0);
+}
+
+// The viewmodel's recoil (port declaration, segment 6): a shot turns the weapon up, the anchor stays, and it comes back.
+TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
+    Setup setup;
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const PC::ViewmodelDefinition& viewmodel = setup.presentation->viewmodel;
+    REQUIRE(viewmodel.recoilKickRadians > 0.0F);
+    CHECK(PC::RecoilRadians(viewmodel, 0.0) == doctest::Approx(viewmodel.recoilKickRadians));
+    CHECK(PC::RecoilRadians(viewmodel, 1.0) < viewmodel.recoilKickRadians * 0.01F);
+    // The kicked placement keeps the anchor where it is and turns the weapon's forward up.
+    const T::Transform rest = PC::ViewmodelPlacement(viewmodel);
+    const T::Transform kicked = PC::ViewmodelPlacement(viewmodel, viewmodel.recoilKickRadians);
+    const auto anchorAt = [&viewmodel](const T::Transform& t) { return GYO::Engine::Math::Rotate(t.rotation, viewmodel.anchor) + t.translation; };
+    CHECK(GYO::Engine::Math::Length(anchorAt(kicked) - anchorAt(rest)) < 1e-4F);
+    // The weapon's forward: what points ahead (+Z, left-handed) at rest.
+    const GYO::Engine::Math::Vec3 forward =
+        GYO::Engine::Math::Rotate(GYO::Engine::Math::Conjugate(rest.rotation), GYO::Engine::Math::Vec3{0.0F, 0.0F, 1.0F});
+    CHECK(GYO::Engine::Math::Rotate(kicked.rotation, forward).y > 0.0F);
+    // The weapon's parts in the Frame World.
+    const auto partRotationY = [&setup, forward]() -> std::optional<float> {
+        for (const K::EntityId id : setup.Client().Entities()) {
+            const auto* t = setup.Client().Get<T::Transform>(id);
+            const auto* layers = setup.Client().Get<R::RenderLayers>(id);
+            if (t != nullptr && layers != nullptr && setup.Client().Get<R::SkinPose>(id) != nullptr &&
+                setup.Client().Get<K::ChildOf>(id) != nullptr) {
+                return GYO::Engine::Math::Rotate(t->rotation, forward).y;
+            }
+        }
+        return std::nullopt;
+    };
+    REQUIRE(partRotationY().has_value());
+    CHECK(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-4));
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.position = {640.0F, 360.0F};
+    const auto press = [&](const I::ButtonState state) {
+        click.state = state;
+        setup.Next().buttons.push_back(click);
+        setup.Frame();
+    };
+    press(I::ButtonState::Pressed);  // takes the pointer
+    press(I::ButtonState::Released);
+    setup.Frames(4);
+    press(I::ButtonState::Pressed);  // fires
+    press(I::ButtonState::Released);
+    setup.Frames(2);
+    CHECK_MESSAGE(*partRotationY() > 0.01F, "[pvp-recoil] the weapon turned up after the shot: " << *partRotationY());
+    setup.Frames(64);
+    CHECK_MESSAGE(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-3), "[pvp-recoil] back at rest a second later: " << *partRotationY());
+}
+
 // The Match plays another arena than the one the Client starts with: the Frame World follows the Sim World's.
 TEST_CASE("client: the Frame World follows the arena the Match plays") {
     Setup setup(1, 4, 1);
@@ -633,7 +788,14 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     service->Close();
     service->Flush(service->Now(), N::Stamp{});
     setup.other.reset();
-    setup.Frames(20);
+    // The Frame World's copy goes after the Sim World's player: when the timeline passes the tick it left at.
+    int simGone = -1, frameGone = -1;
+    for (int i = 0; i < 20; ++i) {
+        setup.Frame();
+        if (simGone < 0 && !setup.Sim().Alive(rival)) simGone = i;
+        if (frameGone < 0 && !setup.Client().Alive(rival)) frameGone = i;
+    }
+    CHECK_MESSAGE((simGone >= 0 && frameGone > simGone), "[pvp-interp-despawn] the copy goes after the Sim World's player: sim " << simGone << ", frame " << frameGone);
     CHECK_MESSAGE(PlayerOf(GameWorld(*setup.match), 2) == 0, "the Match took the player off without waiting for the timeout");
     CHECK_MESSAGE(PlayerOf(setup.Client(), 2) == 0, "[pvp-frame-mirror] the Frame World's copy went with the Sim World's player");
     CHECK(BodiesAt(setup.Client(), at) == 0);
@@ -649,7 +811,13 @@ TEST_CASE("client: the first-person weapon's idle pose sits before the viewmodel
     GYO::Engine::Model::SampleClip(model.nodes, model.clips[viewmodel.idle], 0.0F, GYO::Engine::Model::Wrap::Loop, local);
     std::vector<Math::Matrix4> nodes(local.size());
     GYO::Engine::Model::ComputeModelSpace(model.nodes, local, nodes);
-    const Math::Matrix4 toCamera = T::ToMatrix(PC::ViewmodelPlacement(viewmodel));
+    const T::Transform placement = PC::ViewmodelPlacement(viewmodel);
+    // At rest it is turned by the definition's rotation, with the anchor at the offset.
+    for (const Math::Vec3 axis : {Math::Vec3{1, 0, 0}, Math::Vec3{0, 1, 0}, Math::Vec3{0, 0, 1}}) {
+        CHECK(Math::Length(Math::Rotate(placement.rotation, axis) - Math::Rotate(viewmodel.rotation, axis)) < 1e-5F);
+    }
+    CHECK(Math::Length(Math::Rotate(placement.rotation, viewmodel.anchor) + placement.translation - viewmodel.offset) < 1e-4F);
+    const Math::Matrix4 toCamera = T::ToMatrix(placement);
     // Every skinned vertex in the camera's space (+Z ahead, +Y up, +X right).
     Math::Vec3 sum{};
     std::size_t count = 0;

@@ -44,6 +44,7 @@ public:
     // for the next frame outside it, in order (the output side's own cache, SDL-7).
     struct DeferredRequests final {
         std::vector<Engine::Window::WarpCursor> warps;
+        std::vector<Engine::Window::SetWindowMode> modes;
         std::vector<Engine::Window::ResizeWindow> resizes;
         std::vector<Engine::Window::CopyToClipboard> copies;
     };

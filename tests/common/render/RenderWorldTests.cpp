@@ -11,6 +11,7 @@
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -128,4 +129,15 @@ TEST_CASE("render_world: without a backend the World runs and the data is still 
     Frame(*p);
     const K::World& world = p->World("Render").GetWorld();
     CHECK_MESSAGE(world.Resource<R::RenderCommands>()->passes.empty(), "[rw-no-backend] nobody draws, nothing piles up");
+}
+
+TEST_CASE("render_world: Presentation is the default in a new World and stays as the game set it, frame after frame") {
+    auto p = Make();
+    K::World& world = p->World("Render").GetWorld();
+    REQUIRE_MESSAGE(world.Resource<R::Presentation>() != nullptr, "[rw-present-registered] render_world puts a Presentation");
+    CHECK_MESSAGE(world.Resource<R::Presentation>()->presentMode == R::PresentMode::AutoVsync, "[rw-present-default] VSync on by default");
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
+    Frame(*p);
+    Frame(*p);
+    CHECK_MESSAGE(world.Resource<R::Presentation>()->presentMode == R::PresentMode::AutoNoVsync, "[rw-present-kept] Cleanup leaves it");
 }
