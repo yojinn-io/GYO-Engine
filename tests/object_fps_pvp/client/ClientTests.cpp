@@ -153,10 +153,13 @@ struct Setup final {
         N::NetProductOptions net;
         net.role = N::NetRole::Client;
         net.link = std::make_shared<N::MemoryLink>(first.second);
-        net.serverEndpoint = N::MemoryLink::EndpointA();
-        net.userId = 1;
         net.clock = reader;
         description.options.Set(net);
+        // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
+        game.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        w.SetResource(target);
+        return {};
+    });
         description.worlds.push_back(std::move(game));
         description.worlds.push_back(std::move(render));
         description.configure = [](O::ProductSetup& setup) {

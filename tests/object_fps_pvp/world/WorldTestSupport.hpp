@@ -115,11 +115,15 @@ inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameCon
     N::NetProductOptions net;
     net.role = N::NetRole::Client;
     net.link = std::move(link);
-    net.serverEndpoint = N::MemoryLink::EndpointA();
-    net.userId = userId;
     net.clock = std::move(clock);
     description.options.Set(net);
-    description.worlds.push_back(Stepped(PW::ClientWorld({std::move(content), arena, userId, nullptr})));
+    O::WorldDescription world = Stepped(PW::ClientWorld({std::move(content), arena, userId, nullptr}));
+    // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
+    world.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        w.SetResource(target);
+        return {};
+    });
+    description.worlds.push_back(std::move(world));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     return std::move(built).value();
