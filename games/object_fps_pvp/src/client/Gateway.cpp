@@ -203,17 +203,34 @@ void GatewayClient::Ask(std::string tag, GatewayRequest request) { waiting_.push
 void GatewayClient::Start(Call call, const bool session, const std::int64_t now) {
     const GatewayRequest sent = session ? SessionRequest(deviceId_) : call.request;
     auto started = H::HttpCall::Start(gateway_, ToHttp(sent, host_, session ? std::nullopt : session_));
-    current_ = Going{std::move(call), session, std::nullopt, now, {}};
+    current_ = Going{std::move(call), session, std::nullopt, now, {}, sent.method, sent.target};
     if (started) current_->http.emplace(std::move(started).value());
     else current_->failure = Base::Describe(started.error());
 }
 
+void GatewayClient::Keep(GatewayCallRecord record) {
+    if (calls_.size() == kKeptCalls) calls_.erase(calls_.begin());
+    calls_.push_back(std::move(record));
+}
+
+void GatewayClient::Note(const Going& going, const int status, std::string errorCode, const std::int64_t now) {
+    Keep(GatewayCallRecord{going.call.tag, going.session, going.method, going.target, status, std::move(errorCode), going.call.waited,
+                           now - going.started});
+}
+
 std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
+    for (Call& waiting : waiting_) {
+        if (!waiting.asked) waiting.asked = now;
+    }
     if (!current_) {
         if (waiting_.empty()) return std::nullopt;
         Call next = std::move(waiting_.front());
         waiting_.pop_front();
-        if (deviceId_.empty()) return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
+        next.waited = now - next.asked.value_or(now);
+        if (deviceId_.empty()) {
+            Keep(GatewayCallRecord{next.tag, false, next.request.method, next.request.target, 0, "no_device", next.waited, 0});
+            return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
+        }
         Start(std::move(next), !session_.has_value(), now);
     }
     Going& going = *current_;
@@ -223,14 +240,19 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
     };
     GatewayResult result;
     result.tag = going.call.tag;
-    if (!going.http) return finish({result.tag, 0, {}, "unreachable", going.failure});
+    if (!going.http) {
+        Note(going, 0, "unreachable", now);
+        return finish({result.tag, 0, {}, "unreachable", going.failure});
+    }
     auto polled = going.http->Poll();
     if (!polled) {
         const bool unreachable = polled.error().code == H::HttpFailureCode::Unreachable || polled.error().code == H::HttpFailureCode::ConnectFailed;
+        Note(going, 0, unreachable ? "unreachable" : "http", now);
         return finish({result.tag, 0, {}, unreachable ? "unreachable" : "http", Base::Describe(polled.error())});
     }
     if (!polled->has_value()) {
         if (now - going.started > timeout_) {
+            Note(going, 0, "timeout", now);
             return finish({result.tag, 0, {}, "timeout", "no answer within " + std::to_string(timeout_ / 1'000'000'000) + " s"});
         }
         return std::nullopt;
@@ -239,6 +261,7 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
     result.status = response.status;
     result.body = response.body;
     if (!result.Ok()) result.errorCode = ErrorCodeOf(response.body);
+    Note(going, result.status, result.errorCode, now);
     if (going.session) {
         if (!result.Ok()) return finish(std::move(result));
         std::string error;
