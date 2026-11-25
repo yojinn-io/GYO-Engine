@@ -31,7 +31,7 @@ std::string GatewayErrorText(const GatewayResult& result, const std::string& gat
     if (code == "room_not_found") return "部屋がありません";
     if (code == "not_member") return "この部屋のメンバーではありません";
     if (code == "match_ended") return "対戦は終わりました";
-    if (code == "not_owner") return "開始できるのは部屋を作った人だけです";
+    if (code == "not_owner") return "開始できるのは部屋主だけです";
     if (code == "not_all_ready") return "全員の準備がまだです";
     if (code == "no_match_available" || code == "allocation_failed") return "対戦を始められませんでした。もう一度開始してください";
     if (code == "unknown_map" || code == "unknown_mode") return "Gateway がこのマップかモードを知りません";
