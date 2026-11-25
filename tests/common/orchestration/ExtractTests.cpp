@@ -332,36 +332,197 @@ TEST_CASE("extract: one source with two readers, and a reader of a reader") {
     CHECK_MESSAGE(Joined() == "extract n=1 | extract n=1 | chain n=1", "[or-ex-two-readers-chain] " << Joined());
 }
 
-// The asserts: each case ends right after its GYO_CHECK_ASSERTS, so a mutant that lets the call through
-// (and leaves a reader with a dangling source) does not run on into undefined behaviour.
+// Replacing a source (O-8, O-12; Kernel DI-KS 38; declaration
+// docs/architecture/target/v2/sdl-extract-replace-declaration.zh-Hant.md, sections 3.2 and 6): the readers stay
+// and read the new World from the swap on.
+
 static O::ProductDescription WithChain() {
     O::ProductDescription d = Pair();
     d.worlds.push_back(ChainReader("Chain", "Render"));
     return d;
 }
 
-TEST_CASE("extract: the asserts: replacing the source of a reader (BuildNewFirst)") {
-    auto built = O::Product::Build(WithChain(), Units().Take());
-    ORCH_REQUIRE_BUILT(built);
-    REQUIRE(static_cast<bool>((*built)->RunFrame()));
-    GYO_CHECK_ASSERTS((*built)->ReplaceWorld("Sim", O::ReplaceRequest{}));
+// The extract System of a reader that keeps a value of the source across frames (a table keyed by the source's
+// entities, cut down to one value): it drops it when the source was replaced (O-12, ExtractSourceSwaps).
+K::SystemResult Remembers(K::ExtractRes<Counter> counter, K::Res<O::ExtractSourceSwaps> swaps, K::Local<int> kept) {
+    if (swaps.Changed()) *kept = 0;
+    if (*kept == 0 && counter.Present()) *kept = counter->n;
+    Log().push_back("kept " + std::to_string(*kept) + " swaps " + std::to_string(swaps->count));
+    return {};
 }
 
-TEST_CASE("extract: the asserts: replacing the source of a reader (DropOldFirst) asserts before the old World goes") {
-    auto built = O::Product::Build(WithChain(), Units().Take());
+struct Extra {
+    int n = 0;
+};
+K::SystemResult CopyExtra(K::ExtractRes<Extra> extra) {
+    Log().push_back("extra " + std::to_string(extra.Present() ? extra->n : -1));
+    return {};
+}
+
+// Sim registering Extra while *withExtra (its value: how many Sims had it, so the old and new tell apart), and a
+// second reader "Overlay" extracting it (described after Render, so Render's round is staged first when the new
+// Sim lacks Extra).
+static O::ProductDescription WithOverlay(const bool* withExtra, int* extras) {
+    O::ProductDescription d = Pair();
+    d.worlds[0].build = [base = d.worlds[0].build, withExtra, extras](O::WorldSetup& s) {
+        base(s);
+        if (!*withExtra) return;
+        s.Registrar().Resource<Extra>({.name = "Extra"});
+        s.Prepare([extras](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            world.SetResource(Extra{++*extras});
+            return {};
+        });
+    };
+    O::WorldDescription overlay = World(
+        "Overlay",
+        [](O::WorldSetup& s) {
+            Basics(s.Registrar(), {ExtractOnce("Extract")});
+            s.Registrar().AddSystem<&CopyExtra>(In("CopyExtra", "Extract"));
+        },
+        {"Extract"});
+    overlay.skeleton = O::ScheduleSkeleton::Off;
+    overlay.extractFrom = "Sim";
+    d.worlds.push_back(std::move(overlay));
+    return d;
+}
+
+std::string Why(const GYO::Engine::Base::Result<void, O::OrchestrationError>& result) {
+    return result ? std::string() : std::string(O::ToString(result.error().code)) + ": " + result.error().message + ": " + result.error().detail;
+}
+
+TEST_CASE("extract: replacing the source: the reader stays and reads the new World, in both orders") {
+    for (O::ReplaceOrder order : {O::ReplaceOrder::BuildNewFirst, O::ReplaceOrder::DropOldFirst}) {
+        Log().clear();
+        auto built = O::Product::Build(Pair(), Units().Take());
+        ORCH_REQUIRE_BUILT(built);
+        O::Product& p = **built;
+        REQUIRE(static_cast<bool>(p.RunFrame()));
+        // A value only the reader World has: a new reader World would not have it.
+        p.World("Render").GetWorld().SetResource(Mirror{-5});
+        O::ReplaceRequest request;
+        request.order = order;
+        request.extra = Put(50);
+        const auto replaced = p.ReplaceWorld("Sim", std::move(request));
+        REQUIRE_MESSAGE(static_cast<bool>(replaced), "[or-rx-replace-source] " << Why(replaced));
+        CHECK_MESSAGE(p.World("Render").GetWorld().Resource<Mirror>()->n == -5, "[or-rx-reader-stays]");
+        const O::ExtractSourceSwaps* swaps = p.World("Render").GetWorld().Resource<O::ExtractSourceSwaps>();
+        CHECK_MESSAGE((swaps != nullptr && swaps->count == 1), "[or-rx-notice] the reader was not told");
+        REQUIRE(static_cast<bool>(p.RunFrame()));
+        CHECK_MESSAGE(Joined() == "extract n=1 | extract n=51", "[or-rx-reads-new] " << Joined());
+    }
+}
+
+TEST_CASE("extract: replacing the source: a replacement failing before the swap leaves the reader on the old World") {
+    Log().clear();
+    auto built = O::Product::Build(Pair(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
-    REQUIRE(static_cast<bool>((*built)->RunFrame()));
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    O::ReplaceRequest request;
+    request.extra = [](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::ReplacePrepareFailed, "planned"));
+    };
+    REQUIRE_FALSE(static_cast<bool>(p.ReplaceWorld("Sim", std::move(request))));
+    CHECK(p.World("Render").GetWorld().Resource<O::ExtractSourceSwaps>()->count == 0);
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() == "extract n=1 | extract n=2", "[or-rx-failed-keeps-old] " << Joined());
+}
+
+TEST_CASE("extract: replacing the source: a reader that cannot read the new World drops every staged round") {
+    Log().clear();
+    bool withExtra = true;
+    int extras = 0;
+    auto built = O::Product::Build(WithOverlay(&withExtra, &extras), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    // The new Sim lacks Extra: Render's round stages, Overlay's does not build (R-E4).
+    withExtra = false;
+    const auto refused = p.ReplaceWorld("Sim", O::ReplaceRequest{});
+    REQUIRE_FALSE(static_cast<bool>(refused));
+    CHECK_MESSAGE(refused.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-rx-reader-error] " << Why(refused));
+    CHECK_MESSAGE(refused.error().message.find("Overlay") != std::string::npos, "[or-rx-reader-error] " << Why(refused));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() == "extract n=1 | extra 1 | extract n=2 | extra 1", "[or-rx-all-or-none] " << Joined());
+    // Nothing was left staged: the next replacement goes through for both readers.
+    withExtra = true;
+    O::ReplaceRequest again;
+    again.extra = Put(50);
+    const auto replaced = p.ReplaceWorld("Sim", std::move(again));
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), "[or-rx-nothing-left-staged] " << Why(replaced));
+    Log().clear();
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() == "extract n=51 | extra 2", "[or-rx-two-readers] " << Joined());
+}
+
+TEST_CASE("extract: replacing the source: under DropOldFirst a reader that cannot read the new World ends the Product") {
+    bool withExtra = true;
+    int extras = 0;
+    auto built = O::Product::Build(WithOverlay(&withExtra, &extras), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    withExtra = false;
     O::ReplaceRequest request;
     request.order = O::ReplaceOrder::DropOldFirst;
-    GYO_CHECK_ASSERTS((*built)->ReplaceWorld("Sim", std::move(request)));
-    CHECK_MESSAGE((*built)->HasWorld("Sim"), "[or-ex-replace-source-before-drop] the source was dropped before the assert");
+    REQUIRE_FALSE(static_cast<bool>(p.ReplaceWorld("Sim", std::move(request))));
+    const auto next = p.RunFrame();
+    REQUIRE_FALSE(static_cast<bool>(next));
+    CHECK_MESSAGE(next.error().code == O::OrchestrationErrorCode::WorldMissing, "[or-rx-drop-old-ends] " << Why(next));
 }
 
-TEST_CASE("extract: the asserts: the middle of a chain is a source too") {
+TEST_CASE("extract: replacing the source: a reader that declares no dynamic insert cannot get a new source") {
+    Log().clear();
+    O::ProductDescription d = Pair();
+    d.worlds[1].dynamicInsert = false;
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    const auto refused = p.ReplaceWorld("Sim", O::ReplaceRequest{});
+    REQUIRE_FALSE(static_cast<bool>(refused));
+    CHECK_MESSAGE(refused.error().code == O::OrchestrationErrorCode::ReplaceRegistrationFailed, "[or-rx-refusal] " << Why(refused));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() == "extract n=1 | extract n=2", "[or-rx-refusal] " << Joined());
+}
+
+TEST_CASE("extract: replacing the source: the middle of a chain; its reader reads the new one") {
+    Log().clear();
     auto built = O::Product::Build(WithChain(), Units().Take());
     ORCH_REQUIRE_BUILT(built);
-    REQUIRE(static_cast<bool>((*built)->RunFrame()));
-    GYO_CHECK_ASSERTS((*built)->ReplaceWorld("Render", O::ReplaceRequest{}));
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    p.World("Render").GetWorld().SetResource(Mirror{-5});
+    const auto replaced = p.ReplaceWorld("Render", O::ReplaceRequest{});
+    REQUIRE_MESSAGE(static_cast<bool>(replaced), "[or-rx-chain] " << Why(replaced));
+    // The new Render starts from its prepare (Mirror 0); the chain reads it, not the old one's -5.
+    REQUIRE(static_cast<bool>(p.RunSchedule("Chain", "Extract")));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    CHECK_MESSAGE(Joined() == "extract n=1 | chain n=1 | chain n=0 | extract n=2 | chain n=2", "[or-rx-chain] " << Joined());
+}
+
+TEST_CASE("extract: replacing the source: a reader drops what it kept of the old source when told") {
+    Log().clear();
+    O::ProductDescription d = Pair();
+    d.worlds[1].build = [base = d.worlds[1].build](O::WorldSetup& s) {
+        base(s);
+        s.Registrar().AddSystem<&Remembers>(In("Remembers", "Extract"));
+    };
+    auto built = O::Product::Build(std::move(d), Units().Take());
+    ORCH_REQUIRE_BUILT(built);
+    O::Product& p = **built;
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    O::ReplaceRequest request;
+    request.extra = Put(50);
+    REQUIRE(static_cast<bool>(p.ReplaceWorld("Sim", std::move(request))));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    REQUIRE(static_cast<bool>(p.RunFrame()));
+    std::string kept;
+    for (const std::string& line : Log()) {
+        if (line.rfind("kept", 0) == 0) kept += (kept.empty() ? "" : " | ") + line;
+    }
+    CHECK_MESSAGE(kept == "kept 1 swaps 0 | kept 1 swaps 0 | kept 51 swaps 1 | kept 51 swaps 1", "[or-rx-drops-kept] " << kept);
 }
 
 TEST_CASE("extract: the asserts: an extract schedule on a World without a source; the Product goes on") {
