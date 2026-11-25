@@ -1508,6 +1508,19 @@
    "target": "gyo_net_tests",
    "cases": "connect-target: J4 J5 over UDP*",
    "expect": "\\[nt\\-target\\-socket\\-closed\\]"
+  },
+  {
+   "id": "nt-clock-remote-not-kept",
+   "what": "the clock sync does not keep its remote estimate (a product's interpolation timeline has nothing to follow)",
+   "guards": [
+    "net D-9; PvP port declaration segment 6 (Engine premise)"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        sync.remoteTick = remote;\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "clock: a client at tick 0 jumps*",
+   "expect": "\\[nt\\-clock\\-remote\\]"
   }
  ]
 }
