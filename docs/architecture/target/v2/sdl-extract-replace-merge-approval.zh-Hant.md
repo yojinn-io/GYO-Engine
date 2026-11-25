@@ -12,7 +12,7 @@
 | 2 | Kernel「DI-KS 38: …」5 案、編排層「extract: replacing the source: …」7 案全過；R1a 的三個「替換來源是斷言」案拿掉 | `tests/common/kernel/ExtractTests.cpp`、`tests/common/orchestration/ExtractTests.cpp` |
 | 3 | 相關突變：Kernel 11/11（新 `ks-rx-` 4＋本批改到 find 的 `ks-s2-`／`ks-s3-` 7）、編排層 13/13（新 `or-rx-` 5＋既有 `or-ex-` 3＋本批改到 find 的 5）killed；拿掉 `or-ex-replace-source-allowed` | dev_log「驗證」 |
 | 4 | 宣告的設計審查（Opus／high，同模型）B1 S5 N4 全採用；實作的設計審查（Opus／high，同模型）B1 S2 N4，N-1 以外採用 | 主 checkout `build/evidence/gyo2-sdl-r1b/declaration-r0-review.md`、`impl-r0-review.md` |
-| 5 | L1 三平台：（全綠後補 run） | PR #334 |
+| 5 | L1 三平台全綠（0d007573，merge gyo2 76311f5b 之後；linux-x64、windows-x64、macos-arm64 與 CI gate）；之後的 commit 只改文件 | PR #334，run 45545924167 |
 
 所有「同模型」：Fable 暫停期間一律 Opus。
 
