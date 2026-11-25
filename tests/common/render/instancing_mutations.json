@@ -1,0 +1,216 @@
+{
+ "version": 1,
+ "description": "Declared mutants of automatic batching into instanced 3D draws: Queue3d's batches and keys, and sdl_gpu's instanced draw (big-map declaration section 16, v8-arch-gyo2-big-map-s6; I1 to I5; render IN-1 to IN-3). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The in-g3- mutants need a GPU (label gpu: a machine with one, or Lavapipe). Not added (with the reason): the bins' order by their nearest instance (it follows from binning in the sorted order; the sort itself is guarded by p3-opaque-far-first, render_mutations.json); the upload of the frame's instances (no instance at all fails every 3D pixel case, criterion 1: the instance offset and base mutants below already need the right bytes in the right place).",
+ "mutants": [
+  {
+   "id": "in-batch-off",
+   "what": "I1: opaque items of one key are never instances of one draw",
+   "guards": [
+    "big-map-declaration I1",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            if (made) {\n                batches.push_back({e.index});",
+   "replace": "            if (true) {\n                batches.push_back({e.index});",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-one\\-draw\\]"
+  },
+  {
+   "id": "in-key-mesh",
+   "what": "I2: items of another mesh join the draw",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.mesh = item.mesh.value;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-mesh\\-apart\\]"
+  },
+  {
+   "id": "in-key-texture",
+   "what": "I2: items of another texture join the draw",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.texture = item.texture.value;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-texture\\-apart\\]"
+  },
+  {
+   "id": "in-key-cull",
+   "what": "I2: items of another cull join the draw",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.cull = item.cull;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-cull\\-apart\\]"
+  },
+  {
+   "id": "in-key-depth-write",
+   "what": "I2: items of another depth write join the draw",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.depthWrite = item.depthWrite;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-depth\\-write\\-apart\\]"
+  },
+  {
+   "id": "in-key-blend",
+   "what": "I2: neighbours of another blend join the draw (overlays, where blend does not set the group)",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.blend = item.blend;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: blended and overlay*",
+   "expect": "\\[in\\-blend\\-apart\\]"
+  },
+  {
+   "id": "in-key-depth-test",
+   "what": "I2: a neighbour that is not depth-tested joins a depth-tested draw",
+   "guards": [
+    "big-map-declaration I2",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    key.depthTest = item.depthTest;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: blended and overlay*",
+   "expect": "\\[in\\-depth\\-test\\-apart\\]"
+  },
+  {
+   "id": "in-blend-binned",
+   "what": "I4: blended items are binned as the opaque are, joining over items between them",
+   "guards": [
+    "big-map-declaration I4",
+    "render IN-2"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (e.group == 0) {\n            const auto [bin, made]",
+   "replace": "        if (e.group != 2) {\n            const auto [bin, made]",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: blended and overlay*",
+   "expect": "\\[in\\-blend\\-neighbours\\-only\\]"
+  },
+  {
+   "id": "in-own-joined",
+   "what": "I3: items with geometry of their own (skinned) join a draw",
+   "guards": [
+    "big-map-declaration I3",
+    "render IN-1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (item.mesh == MeshId{}) {\n            batches.push_back({e.index});\n            continue;\n        }\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: culled items*",
+   "expect": "\\[in\\-own\\-apart\\]"
+  },
+  {
+   "id": "in-bin-far-first",
+   "what": "I4: a bin's instances are not near to far",
+   "guards": [
+    "big-map-declaration I4",
+    "render IN-2"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "                batches[bin->second].push_back(e.index);",
+   "replace": "                batches[bin->second].insert(batches[bin->second].begin(), e.index);",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-bin\\-near\\-first\\]"
+  },
+  {
+   "id": "in-instance-world-lost",
+   "what": "I1: an instance does not carry its item's world",
+   "guards": [
+    "big-map-declaration I1",
+    "render IN-3"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "Instance3D{items[i].world, items[i].color}",
+   "replace": "Instance3D{Math::Matrix4{}, items[i].color}",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: opaque items*",
+   "expect": "\\[in\\-instance\\-world\\]"
+  },
+  {
+   "id": "in-instance-colour-lost",
+   "what": "I1: an instance does not carry its item's colour (seen through the World: Mesh3d's colour to the instance)",
+   "guards": [
+    "big-map-declaration I1",
+    "render IN-3"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "Instance3D{items[i].world, items[i].color}",
+   "replace": "Instance3D{items[i].world, Color8{}}",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a scene of one model*",
+   "expect": "\\[in\\-scene\\-instance\\-color\\]"
+  },
+  {
+   "id": "in-g3-one-instance",
+   "what": "I5: a draw draws its first instance only",
+   "guards": [
+    "big-map-declaration I5",
+    "render IN-3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a draw of several*",
+   "expect": "\\[g3\\-instances\\-each\\]"
+  },
+  {
+   "id": "in-g3-instance-offset-ignored",
+   "what": "I5: every draw starts at the pass's first instance",
+   "guards": [
+    "big-map-declaration I5",
+    "render IN-3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "instances, instanceBase + draw.instanceOffset * static_cast<std::uint32_t>(sizeof(R::Instance3D))};",
+   "replace": "instances, instanceBase};",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: a draw of several*",
+   "expect": "\\[g3\\-instances\\-offset\\]"
+  },
+  {
+   "id": "in-g3-instance-base-not-advanced",
+   "what": "I5: a 3D pass's instances do not move the next pass's start",
+   "guards": [
+    "big-map-declaration I5",
+    "render IN-3"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                instanceBase += static_cast<std::uint32_t>(g.instanceBytes);\n",
+   "replace": "",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu pass3d: each pass starts*",
+   "expect": "\\[g3\\-pass\\-depth\\-cleared\\]"
+  }
+ ]
+}

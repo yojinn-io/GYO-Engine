@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <compare>
+#include <map>
 #include <numeric>
 #include <memory>
 #include <utility>
@@ -12,6 +14,35 @@
 #include "engine/world_asset/AssetView.hpp"
 
 namespace GYO::Engine::Render {
+
+namespace {
+
+// What two items must share to be instances of one draw: the retained mesh (Bevy's BatchCompareData, the mesh asset,
+// bevy_pbr/src/render/mesh.rs:2910), the texture (its material bind group, :2892-2899) and the pipeline (blend, depth,
+// cull; Bevy's pipeline id, bevy_render/src/batching/mod.rs:41-52). The world and the colour go with each instance.
+struct BatchKey final {
+    std::uint32_t mesh = 0;
+    std::uint32_t texture = 0;
+    BlendMode blend = BlendMode::Opaque;
+    bool depthTest = true;
+    bool depthWrite = true;
+    CullMode cull = CullMode::None;
+
+    friend auto operator<=>(const BatchKey&, const BatchKey&) = default;
+};
+
+BatchKey KeyOf(const Extracted3dItem& item) {
+    BatchKey key;
+    key.mesh = item.mesh.value;
+    key.texture = item.texture.value;
+    key.blend = item.blend;
+    key.depthTest = item.depthTest;
+    key.depthWrite = item.depthWrite;
+    key.cull = item.cull;
+    return key;
+}
+
+} // namespace
 
 std::vector<Vertex3D> MeshVertices(const Model::Mesh& mesh) {
     std::vector<Vertex3D> out(mesh.positions.size());
@@ -149,11 +180,44 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
         return a.index < b.index;
     });
 
+    // Automatic batching (big-map declaration section 16; Bevy's batch_and_prepare_*_render_phase,
+    // bevy_render/src/batching/): each batch is one draw, its items the draw's instances. The opaque group is binned by
+    // key (Bevy's Opaque3d bins, no_gpu_preprocessing.rs:122-154): a bin is made where its nearest item stands, so the
+    // bins keep the near-to-far order and a pass where nothing shares a key is drawn as before. The blended and the
+    // not depth-tested are sorted phases: only neighbours with the same key join (Bevy's batching/mod.rs:236-243), so the
+    // far-to-near order holds. Items with geometry of their own (skinned on the CPU) never join.
+    std::vector<std::vector<std::size_t>> batches;
+    std::map<BatchKey, std::size_t> bins;
     for (const Entry& e : order) {
         const Extracted3dItem& item = items[e.index];
+        if (item.mesh == MeshId{}) {
+            batches.push_back({e.index});
+            continue;
+        }
+        const BatchKey key = KeyOf(item);
+        if (e.group == 0) {
+            const auto [bin, made] = bins.try_emplace(key, batches.size());
+            if (made) {
+                batches.push_back({e.index});
+            } else {
+                batches[bin->second].push_back(e.index);
+            }
+            continue;
+        }
+        const Extracted3dItem* last = batches.empty() ? nullptr : &items[batches.back().front()];
+        if (last != nullptr && last->mesh != MeshId{} && KeyOf(*last) == key) {
+            batches.back().push_back(e.index);
+        } else {
+            batches.push_back({e.index});
+        }
+    }
+
+    for (const std::vector<std::size_t>& batch : batches) {
+        const Extracted3dItem& item = items[batch.front()];
         Draw3D draw;
-        draw.world = item.world;
-        draw.color = item.color;
+        draw.instanceOffset = static_cast<std::uint32_t>(pass.instances.size());
+        draw.instanceCount = static_cast<std::uint32_t>(batch.size());
+        for (const std::size_t i : batch) pass.instances.push_back(Instance3D{items[i].world, items[i].color});
         draw.texture = item.texture;
         draw.blend = item.blend;
         draw.depthTest = item.depthTest;

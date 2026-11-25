@@ -2,8 +2,8 @@
 // implements GPUDevice (../../GPUDevice.hpp): the device, the window's swapchain, the textures and meshes keyed by
 // render's ids, the passes' pipelines and the frame (uploads in one copy pass, then one render pass per Pass2D or
 // Pass3D, in their order). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
-// (imgui_impl_sdlgpu3.cpp): one transfer buffer cycled each frame, vertex and index buffers grown to the frame's need,
-// the scissor per draw; the 3D pass's depth texture as SDL's examples make one (a depth target cleared by its pass's
+// (imgui_impl_sdlgpu3.cpp): one transfer buffer cycled each frame, vertex, index and instance buffers grown to the
+// frame's need, the scissor per draw; the 3D pass's depth texture as SDL's examples make one (a depth target cleared by its pass's
 // load op, made again when the target's size changes).
 #include "../../GPUDevice.hpp"
 
@@ -98,21 +98,28 @@ struct GPUMesh {
 constexpr SDL_GPUTextureFormat kDepthFormats[] = {SDL_GPU_TEXTUREFORMAT_D32_FLOAT, SDL_GPU_TEXTUREFORMAT_D24_UNORM,
                                                   SDL_GPU_TEXTUREFORMAT_D16_UNORM};
 
-// The bytes of a pass's own vertices and indices (Pass2D or Pass3D).
+// The bytes of a pass's own vertices and indices (Pass2D or Pass3D), and of its instances (Pass3D; none for Pass2D).
 struct PassGeometry {
     const std::uint8_t* vertices = nullptr;
     std::uint64_t vertexBytes = 0;
     const std::uint8_t* indices = nullptr;
     std::uint64_t indexBytes = 0;
+    const std::uint8_t* instances = nullptr;
+    std::uint64_t instanceBytes = 0;
 };
 
 PassGeometry GeometryOf(const R::RenderPass& pass) {
-    return std::visit(
+    PassGeometry g = std::visit(
         [](const auto& p) {
             return PassGeometry{reinterpret_cast<const std::uint8_t*>(p.vertices.data()), p.vertices.size() * sizeof(p.vertices[0]),
                                 reinterpret_cast<const std::uint8_t*>(p.indices.data()), p.indices.size() * sizeof(std::uint32_t)};
         },
         pass);
+    if (const auto* pass3d = std::get_if<R::Pass3D>(&pass)) {
+        g.instances = reinterpret_cast<const std::uint8_t*>(pass3d->instances.data());
+        g.instanceBytes = pass3d->instances.size() * sizeof(R::Instance3D);
+    }
+    return g;
 }
 
 // One chunk of the frame's uploads, at its offset in the transfer buffer.
@@ -152,6 +159,9 @@ struct GPUDevice::State {
     std::uint32_t verticesSize = 0;
     SDL_GPUBuffer* indices = nullptr;
     std::uint32_t indicesSize = 0;
+    // The 3D passes' instances of the frame (Instance3D, read per instance).
+    SDL_GPUBuffer* instances = nullptr;
+    std::uint32_t instancesSize = 0;
 
     ~State() {
         if (device != nullptr) {
@@ -170,6 +180,7 @@ struct GPUDevice::State {
             if (transfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, transfer);
             if (vertices != nullptr) SDL_ReleaseGPUBuffer(device, vertices);
             if (indices != nullptr) SDL_ReleaseGPUBuffer(device, indices);
+            if (instances != nullptr) SDL_ReleaseGPUBuffer(device, instances);
             if (window != nullptr) SDL_ReleaseWindowFromGPUDevice(device, window);
             SDL_DestroyGPUDevice(device);
         }
@@ -249,20 +260,31 @@ struct GPUDevice::State {
             }
         }
         const SDL_GPUColorTargetDescription target = ColorTarget(format, draw.blend);
-        SDL_GPUVertexBufferDescription buffer{};
-        buffer.slot = 0;
-        buffer.pitch = Abi::kMesh3DVertexStride;
-        buffer.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
-        SDL_GPUVertexAttribute attributes[2]{};
-        attributes[0] = {Abi::kMesh3DPositionLocation, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, Abi::kMesh3DPositionOffset};
-        attributes[1] = {Abi::kMesh3DUvLocation, 0, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, Abi::kMesh3DUvOffset};
+        // Slot 0 per vertex, slot 1 per instance (ShaderAbi.hpp).
+        SDL_GPUVertexBufferDescription buffers[2]{};
+        buffers[0].slot = Abi::kMesh3DVertexSlot;
+        buffers[0].pitch = Abi::kMesh3DVertexStride;
+        buffers[0].input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+        buffers[1].slot = Abi::kMesh3DInstanceSlot;
+        buffers[1].pitch = Abi::kMesh3DInstanceStride;
+        buffers[1].input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE;
+        constexpr std::uint32_t kAttributes = 3 + Abi::kMesh3DWorldRows;
+        SDL_GPUVertexAttribute attributes[kAttributes]{};
+        attributes[0] = {Abi::kMesh3DPositionLocation, Abi::kMesh3DVertexSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, Abi::kMesh3DPositionOffset};
+        attributes[1] = {Abi::kMesh3DUvLocation, Abi::kMesh3DVertexSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, Abi::kMesh3DUvOffset};
+        for (std::uint32_t row = 0; row < Abi::kMesh3DWorldRows; ++row) {
+            attributes[2 + row] = {Abi::kMesh3DWorldLocation + row, Abi::kMesh3DInstanceSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                                   Abi::kMesh3DWorldOffset + row * 4 * static_cast<std::uint32_t>(sizeof(float))};
+        }
+        attributes[2 + Abi::kMesh3DWorldRows] = {Abi::kMesh3DColorLocation, Abi::kMesh3DInstanceSlot,
+                                                 SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kMesh3DColorOffset};
         SDL_GPUGraphicsPipelineCreateInfo info{};
         info.vertex_shader = meshVertex;
         info.fragment_shader = meshFragment;
-        info.vertex_input_state.vertex_buffer_descriptions = &buffer;
-        info.vertex_input_state.num_vertex_buffers = 1;
+        info.vertex_input_state.vertex_buffer_descriptions = buffers;
+        info.vertex_input_state.num_vertex_buffers = 2;
         info.vertex_input_state.vertex_attributes = attributes;
-        info.vertex_input_state.num_vertex_attributes = 2;
+        info.vertex_input_state.num_vertex_attributes = kAttributes;
         info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
         info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
         info.rasterizer_state.cull_mode = draw.cull == R::CullMode::Back ? SDL_GPU_CULLMODE_BACK : SDL_GPU_CULLMODE_NONE;
@@ -367,6 +389,8 @@ struct GPUDevice::State {
         std::uint64_t vertexBytes = 0;
         std::uint64_t indexOffset = 0;
         std::uint64_t indexBytes = 0;
+        std::uint64_t instanceOffset = 0;
+        std::uint64_t instanceBytes = 0;
         std::uint64_t total = 0;
     };
 
@@ -449,10 +473,12 @@ struct GPUDevice::State {
         }
     }
 
-    // Places the vertices and indices of the passes on target 0 (2D and 3D, in their order) after the asks' bytes.
+    // Places the vertices, indices and instances of the passes on target 0 (2D and 3D, in their order) after the asks'
+    // bytes.
     void PlaceGeometry(const R::RenderCommands& commands, Frame& frame, std::vector<Upload>& geometry, FrameTally& tally) {
         std::uint64_t vertexBytes = 0;
         std::uint64_t indexBytes = 0;
+        std::uint64_t instanceBytes = 0;
         for (const R::RenderPass& pass : commands.passes) {
             if (R::TargetOf(pass) != 0) {
                 ++tally.unmappedPasses;
@@ -461,6 +487,7 @@ struct GPUDevice::State {
             const PassGeometry g = GeometryOf(pass);
             vertexBytes += g.vertexBytes;
             indexBytes += g.indexBytes;
+            instanceBytes += g.instanceBytes;
         }
         frame.total = AlignUp(frame.total);
         frame.vertexOffset = frame.total;
@@ -470,15 +497,22 @@ struct GPUDevice::State {
         frame.indexOffset = frame.total;
         frame.indexBytes = indexBytes;
         frame.total += indexBytes;
+        frame.total = AlignUp(frame.total);
+        frame.instanceOffset = frame.total;
+        frame.instanceBytes = instanceBytes;
+        frame.total += instanceBytes;
         std::uint64_t v = frame.vertexOffset;
         std::uint64_t i = frame.indexOffset;
+        std::uint64_t n = frame.instanceOffset;
         for (const R::RenderPass& pass : commands.passes) {
             if (R::TargetOf(pass) != 0) continue;
             const PassGeometry g = GeometryOf(pass);
             geometry.push_back(Upload{v, g.vertices, g.vertexBytes});
             geometry.push_back(Upload{i, g.indices, g.indexBytes});
+            geometry.push_back(Upload{n, g.instances, g.instanceBytes});
             v += g.vertexBytes;
             i += g.indexBytes;
+            n += g.instanceBytes;
         }
     }
 
@@ -531,6 +565,9 @@ struct GPUDevice::State {
         if (!EnsureTransfer(frame.total, error)) return fail(error);
         if (frame.vertexBytes > 0 && !EnsureBuffer(vertices, verticesSize, frame.vertexBytes, SDL_GPU_BUFFERUSAGE_VERTEX, error)) return fail(error);
         if (frame.indexBytes > 0 && !EnsureBuffer(indices, indicesSize, frame.indexBytes, SDL_GPU_BUFFERUSAGE_INDEX, error)) return fail(error);
+        if (frame.instanceBytes > 0 && !EnsureBuffer(instances, instancesSize, frame.instanceBytes, SDL_GPU_BUFFERUSAGE_VERTEX, error)) {
+            return fail(error);
+        }
         auto* mapped = static_cast<std::uint8_t*>(SDL_MapGPUTransferBuffer(device, transfer, true));
         if (mapped == nullptr) return fail(SDLError("SDL_MapGPUTransferBuffer"));
         for (const Upload& u : frame.uploads) std::memcpy(mapped + u.offset, u.bytes, u.size);
@@ -569,6 +606,11 @@ struct GPUDevice::State {
             SDL_GPUBufferRegion destination{indices, 0, static_cast<std::uint32_t>(frame.indexBytes)};
             SDL_UploadToGPUBuffer(copy, &source, &destination, true);
         }
+        if (frame.instanceBytes > 0) {
+            SDL_GPUTransferBufferLocation source{transfer, static_cast<std::uint32_t>(frame.instanceOffset)};
+            SDL_GPUBufferRegion destination{instances, 0, static_cast<std::uint32_t>(frame.instanceBytes)};
+            SDL_UploadToGPUBuffer(copy, &source, &destination, true);
+        }
         SDL_EndGPUCopyPass(copy);
         ReleaseLater(frame);
         return true;
@@ -581,6 +623,7 @@ struct GPUDevice::State {
         bool first = true;
         std::uint32_t vertexBase = 0;
         std::uint32_t indexBase = 0;
+        std::uint32_t instanceBase = 0;
         const auto begin = [&](const std::optional<R::Color8>& clear) {
             SDL_GPUColorTargetInfo target{};
             target.texture = texture;
@@ -594,10 +637,11 @@ struct GPUDevice::State {
         for (const R::RenderPass& item : commands.passes) {
             if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
                 if (pass3d->target != 0) continue;
-                RecordPass3D(cmd, texture, format, size, *pass3d, first, vertexBase, indexBase, tally);
+                RecordPass3D(cmd, texture, format, size, *pass3d, first, vertexBase, indexBase, instanceBase, tally);
                 const PassGeometry g = GeometryOf(item);
                 vertexBase += static_cast<std::uint32_t>(g.vertexBytes);
                 indexBase += static_cast<std::uint32_t>(g.indexBytes);
+                instanceBase += static_cast<std::uint32_t>(g.instanceBytes);
                 continue;
             }
             const R::Pass2D& pass = std::get<R::Pass2D>(item);
@@ -668,10 +712,11 @@ struct GPUDevice::State {
 
     // Records one Pass3D: its depth cleared to 1 (each 3D pass has a depth of its own), its colour kept as the target
     // is (cleared to transparent black when it is the target's first pass of the frame, as a Pass2D without a clear).
-    // vertexBase, indexBase: where the pass's own vertices and indices are in the frame's buffers.
+    // vertexBase, indexBase, instanceBase: where the pass's own vertices and indices and its instances are in the
+    // frame's buffers.
     void RecordPass3D(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* texture, const SDL_GPUTextureFormat format, const R::TargetSize size,
                       const R::Pass3D& pass, bool& first, const std::uint32_t vertexBase, const std::uint32_t indexBase,
-                      FrameTally& tally) {
+                      const std::uint32_t instanceBase, FrameTally& tally) {
         SDL_GPUColorTargetInfo colour{};
         colour.texture = texture;
         colour.store_op = SDL_GPU_STOREOP_STORE;
@@ -705,11 +750,18 @@ struct GPUDevice::State {
         }
         // The pass's own geometry, when it has some (draws with mesh {}).
         const bool own = !pass.vertices.empty() && !pass.indices.empty() && vertices != nullptr && indices != nullptr;
+        // Every draw's instances are there (a draw of none draws nothing).
+        const bool instanced = !pass.instances.empty() && instances != nullptr;
+        // One view for the whole pass: each instance's world is applied in the vertex shader.
+        const Abi::Mesh3DViewUniform view = Abi::ToUniform(pass.clipFromWorld);
+        SDL_PushGPUVertexUniformData(cmd, Abi::kMesh3DViewUniformSlot, &view, sizeof(view));
         SDL_GPUGraphicsPipeline* boundPipeline = nullptr;
         SDL_GPUBuffer* boundVertices = nullptr;
         SDL_GPUTextureSamplerBinding boundTexture{};
         for (const R::Draw3D& draw : pass.draws) {
-            if (draw.indexCount == 0 || !drawable) continue;
+            if (draw.indexCount == 0 || draw.instanceCount == 0 || !drawable || !instanced) continue;
+            GYO_ASSERT(draw.instanceOffset <= pass.instances.size() && draw.instanceCount <= pass.instances.size() - draw.instanceOffset &&
+                       "a draw's instances outside its pass");
             SDL_GPUBufferBinding vb{};
             SDL_GPUBufferBinding ib{};
             if (draw.mesh.value == 0) {
@@ -749,21 +801,22 @@ struct GPUDevice::State {
             }
             // The pass's own geometry and each mesh are in buffers of their own: bound when the draw names other ones.
             if (vb.buffer != boundVertices) {
-                SDL_BindGPUVertexBuffers(render, 0, &vb, 1);
+                SDL_BindGPUVertexBuffers(render, Abi::kMesh3DVertexSlot, &vb, 1);
                 SDL_BindGPUIndexBuffer(render, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
                 boundVertices = vb.buffer;
             }
-            const Abi::Mesh3DTransformUniform transform = Abi::ToUniform(Engine::Math::Multiply(pass.clipFromWorld, draw.world));
-            SDL_PushGPUVertexUniformData(cmd, Abi::kMesh3DTransformUniformSlot, &transform, sizeof(transform));
-            const Abi::Mesh3DColorUniform tint = Abi::ToUniform(draw.color);
-            SDL_PushGPUFragmentUniformData(cmd, Abi::kMesh3DColorUniformSlot, &tint, sizeof(tint));
+            // The draw's instances, bound at its first one: the draw starts at instance 0 of the binding, so no API's
+            // first-instance rule is relied on (SDL_gpu.h, SDL_DrawGPUIndexedPrimitives).
+            const SDL_GPUBufferBinding instanceBinding{
+                instances, instanceBase + draw.instanceOffset * static_cast<std::uint32_t>(sizeof(R::Instance3D))};
+            SDL_BindGPUVertexBuffers(render, Abi::kMesh3DInstanceSlot, &instanceBinding, 1);
             const SDL_GPUTextureSamplerBinding binding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
             if (binding.texture != boundTexture.texture || binding.sampler != boundTexture.sampler) {
                 SDL_BindGPUFragmentSamplers(render, Abi::kMesh3DTextureSlot, &binding, 1);
                 boundTexture = binding;
             }
             const auto firstVertex = static_cast<std::int32_t>(draw.vertexOffset);
-            SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);
+            SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);
         }
         SDL_EndGPURenderPass(render);
     }
