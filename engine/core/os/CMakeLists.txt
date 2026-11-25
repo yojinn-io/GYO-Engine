@@ -22,6 +22,7 @@ add_library(gyo_os STATIC
 if(WIN32)
     target_sources(gyo_os PRIVATE
         src/sys/windows/Console.cpp src/sys/windows/DatagramSocket.cpp src/sys/windows/Files.cpp
+        src/sys/windows/StreamSocket.cpp
         src/sys/windows/Platform.cpp
         src/sys/windows/Process.cpp src/sys/windows/Thread.cpp src/sys/windows/WakeSignal.cpp
         src/sys/windows/Wide.cpp)
@@ -29,7 +30,7 @@ if(WIN32)
     # v8-arch-gyo2-os-user-data): a Windows system library, as Design
     # Invariant 3 allows (D49).
     target_link_libraries(gyo_os PRIVATE shell32)
-    # Winsock 2 (DatagramSocket): a Windows system library, as Design Invariant 3
+    # Winsock 2 (DatagramSocket, StreamSocket): a Windows system library, as Design Invariant 3
     # allows (net Module declaration D-1, v8-arch-gyo2-net-module).
     target_link_libraries(gyo_os PRIVATE ws2_32)
     # A Win32 name without its W or A suffix resolves to the wide entry point,
@@ -37,7 +38,8 @@ if(WIN32)
     # R6 sees only names that end in A).
     target_compile_definitions(gyo_os PRIVATE UNICODE _UNICODE)
 else()
-    target_sources(gyo_os PRIVATE src/sys/Console.cpp src/sys/DatagramSocket.cpp src/sys/Files.cpp src/sys/Process.cpp)
+    target_sources(gyo_os PRIVATE src/sys/Console.cpp src/sys/DatagramSocket.cpp src/sys/Files.cpp src/sys/Process.cpp
+        src/sys/StreamSocket.cpp)
     if(APPLE)
         target_sources(gyo_os PRIVATE
             src/sys/macos/Platform.cpp src/sys/macos/Thread.cpp src/sys/macos/WakeSignal.cpp)
