@@ -306,7 +306,9 @@ struct ClientCharacters final {
     std::map<K::EntityId, sim::Locomotion> locomotion;
     // The reload whose sound has played (its end tick), so it plays once.
     std::uint64_t reloadSounded = 0;
-    // The own player's last shot as this frame saw it, and when (the frame's time) a new one came: the recoil.
+    // The own player's last shot as this frame saw it (and whose), and when (the frame's time) a newer one came: the
+    // recoil. A shot the prediction takes back (a later lastShotTick going back) kicks nothing.
+    K::EntityId shotPlayer = 0;
     std::optional<std::uint64_t> shotSeen;
     std::optional<WT::Nanoseconds> recoilAt;
 };
@@ -773,7 +775,8 @@ K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
     const ViewmodelDefinition& viewmodel = scene->presentation->viewmodel;
     if (!viewmodel.model) return {};
     const std::uint64_t step = sim->stepNanoseconds;
-    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat, const PW::HitRecord& hits) {
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
+                        const PW::HitRecord& hits) {
         if (owner.userId != user->userId) return;
         const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, sim->tick, step);
         const auto [clip, seconds] = ViewmodelClip(viewmodel, input);
@@ -785,9 +788,12 @@ K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
         // A dead player's view has no weapon: its parts leave the viewmodel camera's layer.
         const std::uint32_t mask = combat.life == sim::LifeState::Dead ? 0U : 1U << kViewLayer;
         // The recoil: from the frame that first sees a new shot (the prediction's, at once), on the frame's clock.
-        if (characters->shotSeen && *characters->shotSeen != combat.lastShotTick && combat.lastShotTick != 0) {
-            characters->recoilAt = real->elapsed;
+        if (characters->shotPlayer != id) {
+            characters->shotPlayer = id;
+            characters->shotSeen.reset();
+            characters->recoilAt.reset();
         }
+        if (characters->shotSeen && combat.lastShotTick > *characters->shotSeen) characters->recoilAt = real->elapsed;
         characters->shotSeen = combat.lastShotTick;
         const float recoil = characters->recoilAt
                                  ? RecoilRadians(viewmodel, static_cast<double>(real->elapsed - *characters->recoilAt) / 1e9)
@@ -1104,6 +1110,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
     if (const auto* clock = world.Resource<N::ClockSync>(); clock != nullptr && clock->synced) {
         view.synced = true;
         view.remoteTick = clock->remoteTick;
+        view.rttTicks = clock->rttTicks;
         view.jitterTicks = clock->jitterTicks;
     }
     view.ownPlayer = PW::OwnPlayer(world);
@@ -1184,8 +1191,13 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
 }
 
 // Frame World, Main/PreUpdate (after AdvanceTime, before the Systems that show the players): the timeline follows
-// the Match's tick estimated by the Sim World's clock sync minus the delay, and every other player's copy is its
-// history at the timeline's tick. Before the clock sync has an estimate the newest state is shown.
+// the newest state this Client can have minus the delay, and every other player's copy is its history at the
+// timeline's tick. The newest state is the Match's tick estimated by the Sim World's clock sync less half the RTT
+// (the state of the Match's tick now is still on its way). lightyear's objective is the estimate itself less the
+// delay (crates/replication/interpolation/src/timeline.rs:189-215): with a one-way time longer than the delay its
+// timeline runs past every state it has and holds the newest (a step at a time again); the design review of this
+// segment measured that at about 86 ms of RTT, so the half RTT is taken off here. Before the clock sync has an
+// estimate the newest state is shown.
 K::SystemResult InterpolateRemotes(K::Res<ClientView> sim, K::Res<WT::RealTime> real, K::ResMut<RemoteView> remote,
                                    K::Query<K::Write<PW::PlayerBody>> bodies, K::Query<K::Write<PW::PlayerCombat>> combats,
                                    K::Query<K::Write<PW::HitRecord>> hits, K::Query<K::Write<PW::ShotRecord>> shots,
@@ -1200,7 +1212,8 @@ K::SystemResult InterpolateRemotes(K::Res<ClientView> sim, K::Res<WT::RealTime> 
     }
     if (sim->synced && step > 0.0) {
         const double since = static_cast<double>(real->elapsed - view.pictureAt) / step;
-        const double objective = sim->remoteTick + since - present::InterpolationDelay(kTimeline, sim->jitterTicks, step / 1e9);
+        const double objective =
+            sim->remoteTick - sim->rttTicks / 2.0 + since - present::InterpolationDelay(kTimeline, sim->jitterTicks, step / 1e9);
         const double delta = view.lastFrameAt ? static_cast<double>(real->elapsed - *view.lastFrameAt) / step : 0.0;
         present::Advance(view.timeline, delta, objective, kTimeline);
     } else {
@@ -1570,15 +1583,18 @@ ViewmodelDefinition LoadViewmodel(GYO::Engine::IO::FS::NativeFileSystem& fs, con
 
 T::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel, const float recoilRadians) {
     T::Transform t;
+    // (Left-handed, +Z ahead: a positive turn about +X looks down, so up is the negative one.)
     t.rotation = recoilRadians == 0.0F ? viewmodel.rotation
-                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, recoilRadians), viewmodel.rotation);
+                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, -recoilRadians), viewmodel.rotation);
     t.translation = viewmodel.offset - Math::Rotate(t.rotation, viewmodel.anchor);
     return t;
 }
 
 float RecoilRadians(const ViewmodelDefinition& viewmodel, const double seconds) {
     if (seconds < 0.0) return 0.0F;
-    return viewmodel.recoilKickRadians * static_cast<float>(std::exp(-static_cast<double>(viewmodel.recoilRecoveryPerSecond) * seconds));
+    const double left = std::exp(-static_cast<double>(viewmodel.recoilRecoveryPerSecond) * seconds);
+    // Below a thousandth of the kick it is at rest (the weapon stops being written).
+    return left < 1e-3 ? 0.0F : viewmodel.recoilKickRadians * static_cast<float>(left);
 }
 
 std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game, std::string& error) {

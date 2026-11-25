@@ -118,7 +118,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 
 **前提**
 - 內插與後座力：**作者能處理**。兩者都只在 Client 的畫面（Frame World），不碰判定資料；網路宣告 Q7 定「網路不做內插」（`docs/architecture/target/v2/net-module-declaration.zh-Hant.md` 第 615 行「PvP Client 移植時再問」），這一段照它：歷史、取樣、混合都在遊戲。lightyear 把內插放在函式庫裡（`crates/replication/interpolation`）；GYO 先由遊戲做，第二個產品要時再看要不要搬進 Engine（交主會話記）。
-- 「現在 Match 大概到哪個 tick」：**Engine 要解決**。這個估計只有 net 算得出來（`ClockSync` 用封包的到達時刻、RTT、jitter 平滑出的 offset，`engine/modules/net/src/Replication.cpp` 的 `SyncClock`），但算完沒存下來；作者只能照抄 net 的公式（`now / step + offset`）。改法：`ClockSync` 多存兩個值——這一幀的估計 `remoteTick` 與 jitter `jitterTicks`（lightyear 的 `RemoteTimeline::current_estimate()` 是公開的，`crates/core/sync/src/timeline/remote.rs`）。只多存、不改同步的行為。
+- 「現在 Match 大概到哪個 tick」：**Engine 要解決**。這個估計只有 net 算得出來（`ClockSync` 用封包的到達時刻、RTT、jitter 平滑出的 offset，`engine/modules/net/src/Replication.cpp` 的 `SyncClock`），但算完沒存下來；作者只能照抄 net 的公式（`now / step + offset`）。改法：`ClockSync` 多存三個值——這一幀的估計 `remoteTick`、RTT `rttTicks`、jitter `jitterTicks`（lightyear 的 `RemoteTimeline::current_estimate()` 是公開的，`crates/core/sync/src/timeline/remote.rs`）。只多存、不改同步的行為。〔設計審查 B1 後加 `rttTicks`〕
 
 **別家**
 | | 時間軸 | 延遲 | 沒有更新的資料時 | 重生、瞬移 |
@@ -127,13 +127,14 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 | master | 只看封包到達的時刻（到達時間的最小包絡線），游標只前進、誤差大就跳（`SnapshotTimeline.hpp`） | 一個 tick | 停在最後一筆 | 換了一命或瞬移就切段，不跨段混合 |
 
 **設計**（只取概念；數字取 lightyear 的預設，或遊戲自己定，不用 master 的）
-1. **時間軸**（Frame）：`Sim` 的「出」把 `ClockSync::remoteTick`、`jitterTicks` 放進 `ClientView`。Frame 每幀用自己的 `RealTime` 推進一個內插用的 tick（小數），目標＝`remoteTick`（加上快照到了之後過了多久）減延遲；延遲＝`max(1.2 個送出間隔, 5 ms)` ＋ 4 × jitter ＋ 1 tick（Match 每一步送一次）。跟上目標用和 `ClockSync` 相同的規則：第一次或誤差超過 10 tick 就跳；同方向超過 1 tick 連續 3 次就以 1.05 倍加速或減速；否則照常速。還沒同步（沒有 `remoteTick`）時，對手照舊用最新確認的值。
+1. **時間軸**（Frame）：`Sim` 的「出」把 `ClockSync::remoteTick`、`rttTicks`、`jitterTicks` 放進 `ClientView`。Frame 每幀用自己的 `RealTime` 推進一個內插用的 tick（小數），目標＝`remoteTick − rttTicks / 2`（能拿到的最新狀態；加上快照到了之後過了多久）減延遲；〔設計審查 B1：原寫照 lightyear 用 `remoteTick` 本身，單程時間比延遲長（RTT 約 86 ms 以上）時時間軸跑到所有狀態前面、停在最新一筆，又變回一步一跳；lightyear 唯一的測試是 RTT 0。這裡偏離 lightyear，減去半個 RTT〕延遲＝`max(1.2 個送出間隔, 5 ms)` ＋ 4 × jitter ＋ 1 tick（Match 每一步送一次）。跟上目標用和 `ClockSync` 相同的規則：第一次或誤差超過 10 tick 就跳；同方向超過 1 tick 連續 3 次就以 1.05 倍加速或減速；否則照常速。還沒同步（沒有 `remoteTick`）時，對手照舊用最新確認的值。
 2. **歷史**（Frame）：每個遠端玩家一份 `(確認的 tick, PlayerBody, PlayerCombat, HitRecord, ShotRecord)`，快照的 `latestConfirmed` 前進時加一筆（遠端玩家在 Client 不模擬，快照裡就是那個 tick 的值）。修剪照 lightyear：至少 3 筆、而且第二舊那筆已被越過時才丟最舊的。
 3. **取樣**：找「≤ 內插 tick 的最後一筆」與下一筆；位置、pitch 線性，yaw 取最短角度；其他（戰鬥、受擊、開槍紀錄、蹲、著地）取前一筆。沒有下一筆就停在最後一筆，不外插。兩筆之間換了一命（`lifeTick` 不同）就不混合，越過後一筆的 tick 才換過去（master 的切段，只取概念）。
 4. **寫到哪裡**：遠端玩家的複本元件改由內插的 System 每幀寫（Frame 的 PreUpdate，畫面、HUD、聲音之前）；自己的玩家照舊由快照寫（預測值）。對手的動畫時刻用內插 tick（不再用 `latestConfirmed`）；對手的開槍聲、受擊在內插 tick 越過那一刻才觸發，和畫面同一條時間軸（master 也是這樣排聲音）。Sim 沒有的玩家，等內插 tick 越過它消失的那個確認 tick 才刪（lightyear 的延遲刪除）。
 5. **畫面的時間**（net 的 F2「玩家按下時畫面看到的 Match tick＋小數」）：Frame 把內插 tick 隨控制交給 Sim，`WriteStepInput` 寫進 `ViewTime`（小數一個 byte）。Match 還沒用它（PV3 不做，master 也只記錄），但欄位的定義是畫面的時間，這裡讓它照定義。
-6. **後座力**：開槍的那一刻（Frame 第一次看到自己的 `lastShotTick` 變了，用 Frame 的時鐘），viewmodel 繞相機的 X 軸往上踢、指數回復：`踢的角度 × exp(−回復率 × 經過的秒數)`。只轉 viewmodel，不動世界相機、不動瞄準（master 的註解也是這樣）。兩個數字放進 `nailer_v2_viewmodel.json` 的 `recoil`（`kick_degrees`、`recovery_per_second`），值是遊戲自己定的。
+6. **後座力**：開槍的那一刻（Frame 第一次看到自己的 `lastShotTick` 變大，用 Frame 的時鐘；預測收回的一槍不踢），viewmodel 繞相機的 X 軸往上踢（左手系、+Z 朝前：繞 +X 正轉是往下，所以取負角；設計審查 B2）、指數回復：`踢的角度 × exp(−回復率 × 經過的秒數)`。只轉 viewmodel，不動世界相機、不動瞄準（master 的註解也是這樣）。兩個數字放進 `nailer_v2_viewmodel.json` 的 `recoil`（`kick_degrees`、`recovery_per_second`），值是遊戲自己定的。
 7. **後果**：命中仍由 Match 用當 tick 的位置判定（PV3 不做，master 也沒有），對手在畫面上比之前多晚一點（約 2～3 tick），瞄準要多提前一點；和 master 相同。
+8. **不處理**（設計審查 S3、N3、N4）：Sim 的回滾在權威領先或放棄（長時間卡頓）時，遠端玩家的值沒更新而 `latestConfirmed` 前進，歷史會記一筆「舊值標新 tick」，之後跳回正確的值；剛出現的玩家在時間軸追上它的第一筆前先顯示最新值；Match 的 World 被替換、tick 重來時同 id 的玩家會凍住（這個遊戲沒有替換 Match 的 World）。機率低或目前不會發生，寫明不處理。
 
 **測試與突變**
 - `logic`：時間軸的跟上規則（第一次跳、連續 3 次才調速、誤差小照常速）、取樣（混合、yaw 最短角度、停在最後一筆、換命不混合、修剪留兩筆）。

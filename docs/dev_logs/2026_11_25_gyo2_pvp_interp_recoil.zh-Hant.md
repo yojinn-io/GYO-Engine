@@ -38,3 +38,17 @@ Owner：產品（`games/object_fps_pvp`）＋Engine（net 的 `ClockSync` 多存
 - 突變：`nt-clock-remote-not-kept`；`pvp-interp-not-blended`、`pvp-interp-no-delay`、`pvp-interp-life-blended`、`pvp-interp-view-confirmed`、`pvp-recoil-ignored`；相關既有的 `pvp-character-not-shown`、`pvp-hit-direction-not-drawn`、`pvp-frame-mirror-kept`、`pvp-viewmodel-unturned`。共 10/10 killed。
   - `pvp-frame-mirror-kept`、`pvp-viewmodel-unturned` 的 find 因本批改寫而 stale，照新的字面改。`pvp-viewmodel-unturned` 改完後存活：`ViewmodelPlacement` 的位移改用同一個 rotation 算（錨點固定），拿掉轉向後錨點還在原位，「low on the right」那一案看不出來；那一案加判定「靜止時照定義的 rotation、錨點在 offset」後 killed。
 - **沒驗**：實機（對手看起來順不順、後座力的手感）交使用者；Windows 實機。
+
+## 設計審查（Opus／high，唯讀；作者同模型，脈絡分離：只給原始需求、宣告與 diff）
+
+blocker 2、should 3、nit 6。
+
+- **B1**（時間軸照 lightyear 跟「Match 現在的 tick」減延遲；`remoteTick` 已含 RTT/2，延遲只有 2.2 tick，單程時間一長時間軸就跑到所有狀態前面，停在最新一筆、每到一筆跳一次；審查者在 MemoryLink 加固定延遲實測：單程 11 Advance（RTT 約 86 ms）時 80 幀只動 60 幀，13 Advance 時 20 幀＝每步一跳；`ViewTime` 也會超前）→ 作者看了 lightyear 確認（`crates/core/sync/src/timeline/remote.rs:137-139` 加 RTT/2，`crates/replication/interpolation/src/timeline.rs:189-215` 目標＝估計－延遲）。偏離 lightyear：Engine 的 `ClockSync` 再存 `rttTicks`，目標改成 `remoteTick − rttTicks / 2 − 延遲`（審查的方案 (a)；只有 net 量得到 RTT）。測試「walks smoothly」改成無延遲與 13 Advance 兩種都跑（13 Advance 時 80 幀動 71 幀、落後 79 幀、`ViewTime` 不超前）；突變 `pvp-interp-rtt-ignored`、`nt-clock-rtt-not-kept`。
+- **B2**（後座力往下踢：GYO 左手系、+Z 朝前，繞 +X 正轉是往下；測試把「朝後」當成前方，鎖住了錯的方向）→ 取負角；測試的前方改成 +Z；突變 `pvp-recoil-down`。
+- **S1**（預測收回的一槍會再踢一次：`!=`）→ 改成 `lastShotTick` 變大才踢；自己的玩家換人時重設。
+- **S2**（接線沒測：換命的 `lifeTick` 接到混合、延遲刪除、drain、對手動畫時刻與開槍聲在時間軸上）→ 加兩案：「the other player's new life is not blended」（在 Match 上直接把對手移到最遠的 spawn、`lifeTick` 設成現在：80 幀裡 0 幀落在中間）；「對手離開」那一案加判定 Frame 的複本比 Sim 的玩家晚消失（本機晚 3 幀）。突變 `pvp-interp-life-wiring`、`pvp-interp-despawn-at-once`。drain（只影響記憶體）、對手動畫時刻與開槍聲的時間軸沒加測試（逐欄細項）。
+- **S3**、N3、N4 → 寫進宣告第 6 段設計第 8 項「不處理」。
+- N1（`since` 從 Frame 套用快照起算，偏低一點）→ 不改，deadband 吸收。N2（`ClockSync` 註解）→ 改成「synced 時有效，斷線後留著舊值」。N5（跟上規則的數字和 `ClockSyncSettings` 各寫一份）→ 不改：present 不依賴 net，兩邊的數字都標了出處（lightyear 的預設）。N6（後座力衰減到 float 下溢前每幀寫 `Transform`）→ 剩不到千分之一就算靜止。
+- 交主會話／使用者：(1) B1 偏離 lightyear（作者已做，理由同上）；(2) 後座力的「振幅 × exp(−衰減 × 秒)」和 master 同形（常數不同），審查者問算不算照搬；作者判斷是一階衰減的通用形式，不算照搬 master 的算法，報告寫明。
+
+修正後：突變 net 的 `nt-clock-remote-not-kept`、`nt-clock-rtt-not-kept` 2/2；遊戲的新 4 個（`pvp-interp-rtt-ignored`、`pvp-interp-life-wiring`、`pvp-interp-despawn-at-once`、`pvp-recoil-down`）與這一段既有的 7 個（`pvp-interp-not-blended`、`-no-delay`、`-life-blended`、`-view-confirmed`、`pvp-recoil-ignored`、`pvp-frame-mirror-kept`、`pvp-viewmodel-unturned`）11/11 killed（`pvp-viewmodel-unturned` 因 B2 改了同一行而 stale，照新字面改後 killed）。

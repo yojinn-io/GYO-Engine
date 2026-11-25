@@ -115,8 +115,16 @@ struct Setup final {
     // The other Client's input every step (none: it stands).
     std::optional<PW::PlayerInput> otherInput;
 
-    // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it).
-    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0) : framesPerStep(perStep) {
+    // matchArena: the arena the Match plays (the Client starts with arena 0 and follows it). delayAdvances: a fixed
+    // latency of this many Advance calls each way between the Match and this Client (one Advance a frame).
+    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0, const std::uint32_t delayAdvances = 0)
+        : framesPerStep(perStep) {
+        if (delayAdvances != 0) {
+            N::MemoryLinkSettings link;
+            link.aToB.fixedDelaySteps = delayAdvances;
+            link.bToA.fixedDelaySteps = delayAdvances;
+            first = N::MemoryLink::Pair(link);
+        }
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
@@ -559,7 +567,11 @@ TEST_CASE("client: with the Sim World lent, a click among several frames between
 // place every frame (blended between two confirmed states, not a step at a time), behind the newest confirmed state;
 // the inputs this Client sends carry the time the frame showed (a tick and its fraction).
 TEST_CASE("client: the other player walks smoothly, a little behind the Match, and the inputs carry the time shown") {
-    Setup setup(4);
+  // No latency, and 13 Advance calls each way (about 100 ms of RTT at 64 Hz: the design review's case where a timeline
+  // following the Match's tick now, as lightyear's does, runs past every state it has).
+  for (const std::uint32_t delay : {0U, 13U}) {
+    CAPTURE(delay);
+    Setup setup(4, 4, 0, delay);
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -602,6 +614,38 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
     CHECK_MESSAGE(behind >= frames * 3 / 4, "[pvp-interp-behind] shown behind the newest confirmed state in " << behind << " of " << frames << " frames");
     CHECK_MESSAGE(fractions > 0, "[pvp-interp-view] the view time sent carries the timeline's fraction");
     CHECK_MESSAGE(viewsAhead == 0, "[pvp-interp-view] the view time sent is never past the confirmed tick: " << viewsAhead);
+  }
+}
+
+// A respawn (a new life somewhere else) is a jump, not a walk: the Frame World's copy is at the old place or at the
+// new one, never between (port declaration, segment 6, design 3).
+TEST_CASE("client: the other player's new life is not blended from where it was") {
+    Setup setup(4);
+    setup.Frames(480);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId rival = PlayerOf(setup.Client(), 2);
+    REQUIRE(rival != 0);
+    K::World& match = GameWorld(*setup.match);
+    const GYO::Engine::Math::Vec3 from = match.Get<PW::PlayerBody>(rival)->feet;
+    // Another spawn, far from where it stands.
+    GYO::Engine::Math::Vec3 to = from;
+    for (const auto& spawn : ShippedContent()->arenas[0].content.spawns) {
+        if (GYO::Engine::Math::Length(spawn.position - from) > GYO::Engine::Math::Length(to - from)) to = spawn.position;
+    }
+    REQUIRE(GYO::Engine::Math::Length(to - from) > 2.0F);
+    match.GetMut<PW::PlayerBody>(rival)->feet = to;
+    match.GetMut<PW::PlayerCombat>(rival)->lifeTick = static_cast<std::uint32_t>(TickOf(match));
+    int between = 0, atNew = 0;
+    for (int i = 0; i < 4 * 20; ++i) {
+        setup.Frame();
+        const GYO::Engine::Math::Vec3 shown = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+        const bool old = GYO::Engine::Math::Length(shown - from) < 0.05F;
+        const bool fresh = GYO::Engine::Math::Length(shown - to) < 0.05F;
+        if (!old && !fresh) ++between;
+        if (fresh) ++atNew;
+    }
+    CHECK_MESSAGE(between == 0, "[pvp-interp-life] frames between the death place and the spawn: " << between);
+    CHECK(atNew > 0);
 }
 
 // The viewmodel's recoil (port declaration, segment 6): a shot turns the weapon up, the anchor stays, and it comes back.
@@ -618,8 +662,9 @@ TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     const T::Transform kicked = PC::ViewmodelPlacement(viewmodel, viewmodel.recoilKickRadians);
     const auto anchorAt = [&viewmodel](const T::Transform& t) { return GYO::Engine::Math::Rotate(t.rotation, viewmodel.anchor) + t.translation; };
     CHECK(GYO::Engine::Math::Length(anchorAt(kicked) - anchorAt(rest)) < 1e-4F);
+    // The weapon's forward: what points ahead (+Z, left-handed) at rest.
     const GYO::Engine::Math::Vec3 forward =
-        GYO::Engine::Math::Rotate(GYO::Engine::Math::Conjugate(rest.rotation), GYO::Engine::Math::Vec3{0.0F, 0.0F, -1.0F});
+        GYO::Engine::Math::Rotate(GYO::Engine::Math::Conjugate(rest.rotation), GYO::Engine::Math::Vec3{0.0F, 0.0F, 1.0F});
     CHECK(GYO::Engine::Math::Rotate(kicked.rotation, forward).y > 0.0F);
     // The weapon's parts in the Frame World.
     const auto partRotationY = [&setup, forward]() -> std::optional<float> {
@@ -686,7 +731,14 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
     service->Close();
     service->Flush(service->Now(), N::Stamp{});
     setup.other.reset();
-    setup.Frames(20);
+    // The Frame World's copy goes after the Sim World's player: when the timeline passes the tick it left at.
+    int simGone = -1, frameGone = -1;
+    for (int i = 0; i < 20; ++i) {
+        setup.Frame();
+        if (simGone < 0 && !setup.Sim().Alive(rival)) simGone = i;
+        if (frameGone < 0 && !setup.Client().Alive(rival)) frameGone = i;
+    }
+    CHECK_MESSAGE((simGone >= 0 && frameGone > simGone), "[pvp-interp-despawn] the copy goes after the Sim World's player: sim " << simGone << ", frame " << frameGone);
     CHECK_MESSAGE(PlayerOf(GameWorld(*setup.match), 2) == 0, "the Match took the player off without waiting for the timeout");
     CHECK_MESSAGE(PlayerOf(setup.Client(), 2) == 0, "[pvp-frame-mirror] the Frame World's copy went with the Sim World's player");
     CHECK(BodiesAt(setup.Client(), at) == 0);

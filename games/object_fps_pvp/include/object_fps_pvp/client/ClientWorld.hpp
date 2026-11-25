@@ -130,6 +130,7 @@ struct ClientView final {
     std::optional<std::uint64_t> latestConfirmed;   // the newest step the Match confirmed (NetReplicaState)
     bool synced = false;                            // the clock sync has an estimate of the Match's tick (ClockSync)
     double remoteTick = 0.0;                        // the Match's tick now, estimated (ClockSync::remoteTick)
+    double rttTicks = 0.0;                          // ClockSync::rttTicks
     double jitterTicks = 0.0;                       // ClockSync::jitterTicks
     bool connected = false;                         // the own Peer is there
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
