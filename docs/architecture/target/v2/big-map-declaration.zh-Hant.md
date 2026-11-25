@@ -149,6 +149,10 @@
     - 座標換軸（Goxel 的 z 朝上、右手系 → gyo 的 y 朝上、左手系：y、z 互換，形狀不鏡像）。
   - 場景圖層的取出（轉成場景的標記）屬場景線，現在只排除，不轉。
 - **fixture**（`v8-arch-gyo2-big-map-gox-fixture`，使用者「照建議 (ii)」）：只把 `Kiriyu_Town_Graybox.gox`（0.2 MB）放進 repo，當 CI 的 fixture。兩張 250 m 的圖留在 GitHome，只在本機與 Linux 量測時用。
+- **烘好的 arena**（`.gox` 原始檔都不進 repo，只放 `import-gox`＋`build-map` 的輸出）：
+  - 2026-11-26 夜，使用者「只放烘好的 Extraction」：`kiriyu_extraction_250m`。
+  - 同日改成三張都放，使用者「Town_Graybox 和 Incident 也做成 arena」：加 `kiriyu_town_graybox`（100 m）與 `kiriyu_incident_250m`。
+  - Incident 的 16 個 region 裡有 15 個和 Extraction 逐位元組相同，git 共用同一個 blob，repo 實際只多一個 region。
 - **和量測的關係**：250 m 見方、324 萬格是 S0「現狀能撐到多大」與 S5 之間的真實資料點（km2-building 是 4,402 萬格）。
 
 ## 5. 量測

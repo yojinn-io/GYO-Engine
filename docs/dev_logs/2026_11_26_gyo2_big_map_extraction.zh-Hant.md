@@ -50,3 +50,28 @@ Owner：大地圖線的任務卡。分支 `claude/gyo2-big-map-s4-extraction`，
 - S-5：5.2.1 照實寫兩輪的差，4.6 ms 最大單幀的原因標成未確認。
 - N：中位數的中位數改成 0.18 ms，出幀間隔改寫為「由 CPU 與 GPU 中較慢的一方決定」，「沒量」補上載入時間與解析度，dev_log 的「進 CI」改成「進 L1」。arena 的 `cell_size`（沒人讀）與 ArenaTests 寫死份數，照其他 arena 的現況不改。
 - 修正後重跑：`build.ci`、`cmake.ToolRegistry`、`object_fps_pvp.logic` 3/3 通過。突變 `ci-python-silent-empty`、`ci-cmake-empty-never-refused`、`ci-cmake-release-count-ignores-enabled`、`ci-cmake-release-count-all-tools` 4/4 killed，件數一致。
+
+## Town_Graybox 與 Incident 也做成 arena（同日）
+
+- **前提**：使用者「Town_Graybox 和 Incident 也做成 arena」（經主會話轉達）。這改了上面第 1 條的「只放 Extraction」。`.gox` 原始檔照舊不放；Town 的 `.gox` 仍只當 CI fixture。
+- **烘焙**：命令和 Extraction 相同（排除 `Spawns*`、`M? | *`、`REF | *`、`Story *`），`verify-map` 兩張都是 same。
+
+| arena | region | quads | 碰撞盒 | 地圖目錄 | 範圍 |
+|---|---|---|---|---|---|
+| `kiriyu_town_graybox` | 4 | 22,332 | 5,155 | 1.1 MB | 100×100 m |
+| `kiriyu_incident_250m` | 16 | 130,280 | 33,025 | 6.8 MB | 250×250 m |
+
+- **出生點**：照 Extraction 的方法，從標記圖層取出生台的中心，再在烘好的格子（不含標記圖層）裡量地面與頭上空間。檢查腳本放在主 checkout 的 `build/evidence/gyo2-big-map/s4/spawn_check.py`。
+  - Incident：「M1 | P1-P4 blue」的 4 塊平台和 Extraction 同位置，地面 11.5 m，所以出生點與 Extraction 相同。
+  - Town：取「Spawns and exits」圖層的 4 個藍色出生台（另外 3 個綠色的是出口，不當出生點）。地面分別是 9、7、10、7 m。
+  - 兩張的 8 個點，頭上 20 m 內都沒有格子。yaw 都朝地圖中央，取 45° 的倍數，和 Extraction 相同。
+- **範圍**：Town 的格子 x、z 都是 0～100 m，`width`／`depth` 取 100。
+  - Town 有 5,182 格在 y＝0 以下（最低 -3 m）。40,000 個 column 每一個的最高點都不低於 0，所以都埋在地面下，y＝0 的隱藏地板不會露出來。
+- **重複**：Incident 的 16 個 region 裡有 15 個和 Extraction 逐位元組相同（檔名的 hash 也相同）。git 以內容存 blob，repo 實際只多一個 region。
+- **登記**：`arenas.json` 加在 Extraction 之後；catalog 的地圖條目由工具的 `catalog` 命令產生；`ArenaTests` 的份數與地圖清單照改。
+- **換行**：`maps/.gitattributes` 的 `*/map.json`、`*/regions/*.json` 本來就涵蓋新目錄，`git check-attr` 確認兩個新目錄都是 `text: unset`，不必另加。
+- **驗證**（本機 Intel Mac，`test` preset）：
+  - `ctest -R 'object_fps_pvp|voxel_map|content|asset'` 23/23 通過。
+  - Match 用 `--arena kiriyu_town_graybox` 與 `--arena kiriyu_incident_250m` 各起一次（`--ticks 1`），都印出「the match plays …」。
+  - 開機讀 6 張 arena（含兩張 250 m）：牆鐘 1.02～1.09 s、峰值 RSS 152～181 MB（跑 4 次）。當時 load average 3.3。
+  - 先前 4 張是約 1.2 s、167 MB，但那時本機負載高，兩組數字不能直接比較。
