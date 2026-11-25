@@ -117,3 +117,7 @@ blocker 0、should 2、nit 9。確認沒有 Engine 的改動。
 
 - 使用者的現象本身：沒有重現。等使用者用這個分支的 `acceptance_macos.sh` 再試一次、帶回 log。
 - 第一下點擊（上面 5）要不要改：要改就是 `sdl_window` 設 `SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH`（Engine 的 Plugin，所有產品都受影響），交使用者決定。
+
+## 收尾：重複的突變 id（主會話轉來，大地圖卡發現）
+
+`games/object_fps_pvp/docs/mutations.json` 的 `pvp-gw-ended-room-stays` 出現兩次：Gateway 第 1 段（a78be5fb）加了一次，第 3 段的設計審查修正（49b79af4）又加了一次。兩條的 find、replace、cases、expect 完全相同（同一件事），刪掉後一條。執行器（`tests/common/mutation/run_mutations.py`）是照目錄的順序把符合 `--only` 的都跑，重複的 id 兩條都跑、各報一次，不會只跑一條或互相覆蓋：之前的結果沒有漏掉什麼（83/83 裡它算了兩次）。刪掉之後重跑 killed；其他目錄沒有重複的 id。
