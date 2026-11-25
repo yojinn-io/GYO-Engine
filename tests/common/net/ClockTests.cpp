@@ -99,6 +99,8 @@ TEST_CASE("clock: a client at tick 0 jumps to the Match at 5000 on connecting, t
     CHECK(leadMin > 0);
     CHECK_MESSAGE(remoteWorst <= 2.0, "[nt-clock-remote] the remote estimate stays within 2 ticks of the Match's tick: " << remoteWorst);
     CHECK_MESSAGE(game.Sync().jitterTicks > 0.0, "[nt-clock-remote] the jitter is kept (a third of the datagrams come late)");
+    // Three steps each way plus the late third: the RTT is six ticks and a little more.
+    CHECK_MESSAGE((game.Sync().rttTicks >= 5.0 && game.Sync().rttTicks <= 10.0), "[nt-clock-remote] the RTT in ticks: " << game.Sync().rttTicks);
 }
 
 TEST_CASE("clock: when the latency grows the speed goes up, and back to 1 once caught up") {

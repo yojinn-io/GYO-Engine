@@ -316,7 +316,7 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 
 ## 10. 對時（宣告 D-9、第 18 節 (A)；3b）
 
-Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, FixedTime, TimeSyncScale>>`，`Main`／`Last`，在 `SendInputs` 之前）；它登記進時間 Module 的 `TickWriters`（`AddTickWriter`），有權威策略時標 `OneEndOnly`。狀態在 Resource `ClockSync`（量到的誤差、倍率、跳的次數）。〔2026-11-25 PvP 第 6 段〕`ClockSync` 也存這一幀的遠端估計 `remoteTick`（Match 現在的 tick，含小數；lightyear 的 `RemoteTimeline::current_estimate()`）與 `jitterTicks`，給產品的內插時間軸用；同步的行為不變。網路仍不做內插（宣告 Q7）。
+Client 的 World（K1 也有）掛 `SyncClock`（`ExclusiveWorld<Writes<Tick, FixedTime, TimeSyncScale>>`，`Main`／`Last`，在 `SendInputs` 之前）；它登記進時間 Module 的 `TickWriters`（`AddTickWriter`），有權威策略時標 `OneEndOnly`。狀態在 Resource `ClockSync`（量到的誤差、倍率、跳的次數）。〔2026-11-25 PvP 第 6 段〕`ClockSync` 也存這一幀的遠端估計 `remoteTick`（Match 現在的 tick，含小數；lightyear 的 `RemoteTimeline::current_estimate()`）、`rttTicks` 與 `jitterTicks`，給產品的內插時間軸用（能拿到的最新狀態約在 `remoteTick − rttTicks / 2`）；同步的行為不變。網路仍不做內插（宣告 Q7）。
 
 - **量測**（牆鐘只在 IO 層）：
   - Match 的 tick 在每個封包的標頭；RTT 由封包確認的樣本推（1a 的 EWMA 1/12），jitter＝RTT 偏差的一半（偏差的 EWMA 1/6、第一個樣本的一半；lightyear `crates/core/sync/src/ping/estimator.rs`）。

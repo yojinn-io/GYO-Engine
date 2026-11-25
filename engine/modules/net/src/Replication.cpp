@@ -1240,6 +1240,7 @@ SystemResult SyncClock(Kernel::ExclusiveWorld<Kernel::Writes<WorldTime::Tick, Wo
         sync.lastTarget = target;
         sync.lastError = error;
         sync.remoteTick = remote;
+        sync.rttTicks = rtt / step;
         sync.jitterTicks = jitter / step;
         if (!sync.synced || std::abs(error) > sync.settings.snapTicks) {
             const auto k = static_cast<std::int64_t>(std::llround(error));
