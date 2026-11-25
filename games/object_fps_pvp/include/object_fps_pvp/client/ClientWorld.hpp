@@ -79,12 +79,19 @@ struct ViewmodelDefinition final {
 // idle pose's start at the offset, turned by the rotation.
 [[nodiscard]] GYO::Engine::Transform::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel);
 
+// An arena's picture: one model per region of its map (with the region's world box, for culling) and the map's
+// palette picture the models' uv point into.
+struct ArenaPicture final {
+    std::vector<data::RegionPicture> regions;
+    std::shared_ptr<const GYO::Engine::Image::ImageData> palette;
+};
+
 // What the Client reads before it starts, besides the game's content: the sound and hit feedback settings, the
-// arenas' palette pictures (by arena index) and the first-person weapon.
+// arenas' pictures (by arena index) and the first-person weapon.
 struct PresentationContent final {
     present::SoundSettings sound;
     present::HitFeedbackSettings hitFeedback;
-    std::vector<std::shared_ptr<const GYO::Engine::Image::ImageData>> arenaPalettes;
+    std::vector<ArenaPicture> arenaPictures;
     ViewmodelDefinition viewmodel;
 };
 

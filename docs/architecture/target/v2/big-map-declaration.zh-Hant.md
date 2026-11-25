@@ -404,6 +404,14 @@ v8-arch-gyo2-big-map
    - 遷移完畢後刪掉 `data/VoxelMeshFile.*`、`client/VoxelModelLoader.*`。
    - `Town_Graybox`（fixture）當第四張測試地圖。
 
+### 15.2.1 分兩階段（卡片判，2026-11-25）
+
+- **B（本批）**：照 15.2 的 1、3、4、5 做，讀的時點不變，仍在建 World 之前同步讀全部 arena。
+  - 碰撞盒在 `LoadGameContent` 建**一次**；`BoxSet` 的本體是共用、不可變的，所有 World 共用同一份。三次建構的問題（S0）就此消失。
+  - Client 每個 region 一個 `Mesh3d`（持有的模型＋`Aabb`），region 實體由 Frame World 的配發器生成，換圖時移除。
+  - 小地圖（三張遷移的圖）在這個時點讀沒有問題。
+- **C（等 15.3 對齊）**：改成「這個 World 要玩的那一張、在生成世界階段讀」（15.2 的 2）。250 m 以上的圖要靠這一步。
+
 ### 15.3 要和流程框架卡對齊的一點
 
 「Client 跟著 Match 換競技場」（#338）在大地圖下行不通：換一張要重新讀幾百 MB，不能在 `ApplySnapshot` 裡同步做。卡片的方向：

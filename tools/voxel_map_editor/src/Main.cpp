@@ -26,6 +26,7 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect     <grid>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
+    "  gyo_voxel_map_editor catalog     <map-dir> <id> <path>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
     "  gyo_voxel_map_editor import-gox <file.gox> <grid> [--exclude-layer <pattern>]...\n"
     "                       [--block <RRGGBB>=<shape>]... [--cell-size <metres>]\n"
@@ -38,6 +39,11 @@ constexpr std::string_view kHelp =
     "Module first. verify-map bakes again and compares map.json and every region\n"
     "file it lists. inspect summarizes a grid; inspect-map reads a map with the\n"
     "voxel_map Module only and summarizes it.\n"
+    "catalog prints the asset catalog entries of a map, as a JSON array: the index as\n"
+    "<id> (type voxel_map, at <path>/map.json) and each region the index lists as\n"
+    "<id>.r_<x>_<z> (type voxel_region, at <path>/<its file>), in index order. A game\n"
+    "puts them in its catalog, so loading the index loads the map. <id> and <path>\n"
+    "take a-z, 0-9, _, ., - and / (not in <id>).\n"
     "import-boxes makes a grid of cubes from the boxes at a JSON pointer (for\n"
     "example /walls), each {\"min\": [x, y, z], \"max\": [x, y, z]} in whole cells.\n"
     "import-gox makes a grid of a Goxel file: the visible layers with blocks of their\n"
@@ -166,6 +172,32 @@ int InspectMap(const std::string& directory) {
     return 0;
 }
 
+bool CatalogName(const std::string& text, const bool slash) {
+    if (text.empty()) return false;
+    for (const char c : text) {
+        const bool plain = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';
+        if (!plain && !(slash && c == '/')) return false;
+    }
+    return true;
+}
+
+int Catalog(const std::string& directory, const std::string& id, const std::string& path) {
+    if (!CatalogName(id, false) || !CatalogName(path, true)) return Usage("catalog takes an <id> and a <path> of a-z, 0-9, _, ., - (and / in the path)");
+    auto summary = ReadMapSummary(directory);
+    if (!summary) return Fail(summary.error());
+    const auto entry = [](const std::string& entryId, const char* type, const std::string& entryPath) {
+        return "  {\"id\": \"" + entryId + "\", \"type\": \"" + type + "\", \"path\": \"" + entryPath + "\"}";
+    };
+    std::cout << "[\n" << entry(id, "voxel_map", path + "/map.json");
+    for (const auto& region : summary->index.regions) {
+        std::cout << ",\n"
+                  << entry(id + ".r_" + std::to_string(region.at.x) + "_" + std::to_string(region.at.z), "voxel_region",
+                           path + "/" + region.file);
+    }
+    std::cout << "\n]\n";
+    return 0;
+}
+
 int ImportBoxesCommand(const std::string& jsonPath, const std::string& pointer, const std::string& gridPath) {
     auto bytes = ReadFile(jsonPath, kMaxRead);
     if (!bytes) return Fail(bytes.error());
@@ -289,6 +321,10 @@ int Run(const std::span<const std::string> arguments) {
     if (command == "inspect-map") {
         if (arguments.size() != 3) return Usage("inspect-map takes <map-dir>");
         return InspectMap(arguments[2]);
+    }
+    if (command == "catalog") {
+        if (arguments.size() != 5) return Usage("catalog takes <map-dir> <id> <path>");
+        return Catalog(arguments[2], arguments[3], arguments[4]);
     }
     if (command == "import-boxes") {
         if (arguments.size() != 5) return Usage("import-boxes takes <json> <pointer> <grid>");

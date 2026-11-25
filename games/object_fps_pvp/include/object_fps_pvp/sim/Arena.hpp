@@ -16,9 +16,9 @@ struct SpawnPoint final {
     float yaw = 0.0F;
 };
 
-// An arena file (maps/*.json, version 2): the arena's size, the players' body, how fast they move and jump, the
-// spawns, and the baked geometry it names (a gyo.voxel_mesh file next to it; data/VoxelMeshFile.hpp). The floor is
-// the plane y = 0 inside [0, width] x [0, depth]: a game rule, not a collider.
+// An arena file (maps/*.json, version 3): the arena's size, the players' body, how fast they move and jump, the
+// spawns, and the map it plays on (a directory next to it with the tool's chunked map, map.json and its regions;
+// data/ArenaMap.hpp). The floor is the plane y = 0 inside [0, width] x [0, depth]: a game rule, not a collider.
 struct ArenaContent final {
     std::string id;
     float width = 0.0F;
@@ -29,16 +29,17 @@ struct ArenaContent final {
     float eyeHeight = 1.6F;
     float jumpHeight = 0.6F;
     float gravity = 18.0F;
-    std::string geometry;
+    // The map's directory, a plain name next to the arena file.
+    std::string map;
     std::vector<SpawnPoint> spawns;
 };
 
 inline constexpr std::size_t kMinimumSpawns = 2;
 inline constexpr std::size_t kMaximumSpawns = 64;
 
-// Reads an arena file. nullopt with error when a member is missing or of the wrong kind, the version is not 2, a
+// Reads an arena file. nullopt with error when a member is missing or of the wrong kind, the version is not 3, a
 // size or speed is not finite and positive, the eye is above the top of the body, the body is shorter than its
-// two caps (2 x radius), the geometry is not a plain file name, there are not 2 to 64 spawns, or a spawn is below
+// two caps (2 x radius), the map is not a plain name, there are not 2 to 64 spawns, or a spawn is below
 // the floor or outside [radius, width - radius] x [radius, depth - radius]. Whether a spawn is free of the walls
 // and of the other spawns needs the geometry: the World checks it when it builds the arena.
 [[nodiscard]] std::optional<ArenaContent> ParseArena(std::string_view text, std::string& error);

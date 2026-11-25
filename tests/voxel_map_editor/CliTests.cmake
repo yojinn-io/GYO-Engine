@@ -55,6 +55,12 @@ check(0 verify_map_same verify-map "${FIXTURES}/sample.voxel_grid.json" "${WORK}
 check(0 verify_map_golden verify-map "${FIXTURES}/sample.voxel_grid.json" "${FIXTURES}/sample_map")
 check(0 inspect_map inspect-map "${WORK}/map")
 expect_output(inspect_map "gyo.voxel_map: 3 palette entries, 2 regions, 2 chunks, 69 quads, 13 colliders, 4486 bytes")
+# catalog: the index and every region the index lists, in index order (the game's catalog takes them as they are).
+check(0 catalog catalog "${WORK}/map" game.map maps/sample)
+expect_output(catalog "[{]\"id\": \"game[.]map\", \"type\": \"voxel_map\", \"path\": \"maps/sample/map[.]json\"[}]")
+expect_output(catalog "\"id\": \"game[.]map[.]r_-1_0\", \"type\": \"voxel_region\", \"path\": \"maps/sample/regions/r_-1_0_96e1b233dc9068b6[.]json\"[^]]*\"id\": \"game[.]map[.]r_0_0\"")
+check(2 catalog_arguments catalog "${WORK}/map" game.map)
+check(2 catalog_bad_id catalog "${WORK}/map" game/map maps/sample)
 check(0 inspect_grid inspect "${FIXTURES}/sample.voxel_grid.json")
 expect_output(inspect_grid "gyo.voxel_grid: 3 shapes, 3 blocks, 2 chunks, 11 cells")
 # One changed byte in a region file fails verify-map.

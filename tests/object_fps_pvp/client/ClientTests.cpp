@@ -558,9 +558,42 @@ TEST_CASE("client: the Frame World follows the arena the Match plays") {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
         if (mesh == nullptr) continue;
         const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh->image);
-        if (image != nullptr && *image == setup.presentation->arenaPalettes[1]) drawn = true;
+        if (image != nullptr && *image == setup.presentation->arenaPictures[1].palette) drawn = true;
     }
     CHECK_MESSAGE(drawn, "[pvp-frame-arena] the played arena's picture is drawn");
+}
+
+// The arena's map drawn region by region (big-map declaration section 15, L5): one Mesh3d per region of the played
+// arena's map, each the region's model the Client holds, with the region's box, and the 3D camera culled by the
+// visibility Module.
+TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each with its box, culled per camera") {
+    Setup setup(1, 4, 1);
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const std::size_t played = 1;
+    const auto& picture = setup.presentation->arenaPictures[played];
+    REQUIRE(!picture.regions.empty());
+    std::size_t regions = 0;
+    for (const K::EntityId id : setup.Client().Entities()) {
+        const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
+        if (mesh == nullptr) continue;
+        const auto* held = std::get_if<std::shared_ptr<const GYO::Engine::Model::ModelData>>(&mesh->model);
+        if (held == nullptr) continue;
+        for (const auto& region : picture.regions) {
+            if (*held != region.model) continue;
+            ++regions;
+            const auto* box = setup.Client().Get<R::Aabb>(id);
+            CHECK_MESSAGE((box != nullptr && box->local.maximum.x == region.bounds.maximum.x), "[pvp-region-box] the region's box");
+        }
+    }
+    CHECK_MESSAGE(regions == picture.regions.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
+    bool culledList = false;
+    for (const K::EntityId id : setup.Client().Entities()) {
+        if (setup.Client().Get<GYO::Engine::Camera::Camera3d>(id) != nullptr && setup.Client().Get<R::CulledEntities>(id) != nullptr) {
+            culledList = true;
+        }
+    }
+    CHECK_MESSAGE(culledList, "[pvp-region-culled] the visibility Module checks the 3D camera");
 }
 
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
