@@ -1385,6 +1385,7 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     CHECK(setup.Scene().room == 3);
     CHECK(Asked(gateway, "POST", "/v1/rooms"));
     setup.Load();
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("map") == "マップ: " + picked.content.id; }), "[pvp-room-map] " << setup.Binding("map"));
     // Ready (the first button), then start (the second): the game, connected where the started room says.
     REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する"; }));
     setup.Press(I::KeyCode::Enter);
@@ -1868,4 +1869,82 @@ TEST_CASE("client: settings: the start's settings are the first scene's; what is
     setup.Press(I::KeyCode::Enter);  // 設定 again
     setup.Load();
     CHECK_MESSAGE(setup.Binding("resolution") == "解像度: 2560 × 1440", "[pvp-settings-dropped] " << setup.Binding("resolution"));
+}
+
+TEST_CASE("client: settings: the resolution is physical pixels: the window is given the logical size at its scale factor") {
+    CHECK(PC::WindowSizeFor({1920, 1080}, 1.25F) == GYO::Engine::Math::Vec2i{1536, 864});
+    CHECK(PC::WindowSizeFor({2560, 1440}, 2.0F) == GYO::Engine::Math::Vec2i{1280, 720});
+    CHECK(PC::WindowSizeFor({1280, 720}, 0.0F) == GYO::Engine::Math::Vec2i{1280, 720});
+    PC::ClientSettings saved{{1920, 1080}, W::WindowMode::Windowed, true};
+    Setup setup(1, 4, 0, PC::SceneChange{}, {}, std::nullopt, {}, 0, [&saved](PC::ClientStart& start) { start.settings = saved; });
+    REQUIRE(static_cast<bool>(setup.client->InsertSystems("Frame", "test", [](K::Registrar& r) {
+        K::SystemOptions keep;
+        keep.name = "test.KeepResizes";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = std::string(O::DefaultSchedules::last);
+        keep.mounts.push_back(std::move(mount));
+        r.AddSystem<&KeepResizes>(std::move(keep));
+    })));
+    resized.clear();
+    setup.Frames(3);
+    CHECK_MESSAGE(resized.empty(), "a window that has not said its scale is left as it opened");
+    // The window says it is at 125 % (Windows' display scale): it is asked for the logical size of 1920 × 1080 pixels.
+    auto* window = setup.Client().ResourceMut<W::WindowState>();
+    window->known = true;
+    window->scaleFactor = 1.25F;
+    window->physicalSize = {1920, 1080};
+    window->focused = true;
+    // (the Setup's pointer, at the middle of a 1280 x 720 window, would rest on another button of this larger one)
+    setup.Next().moves.push_back(I::CursorMoved{{1.0F, 1.0F}, {}});
+    setup.Frames(2);
+    REQUIRE_MESSAGE(resized.size() == 1, "[pvp-settings-physical] once, when the scale is said");
+    CHECK_MESSAGE((resized.front() == GYO::Engine::Math::Vec2i{1536, 864}), "[pvp-settings-physical] " << resized.front().x);
+    // Applied from the settings page: at the same scale.
+    setup.Load();
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // 設定
+    setup.Load();
+    for (int i = 0; i < 3; ++i) setup.Press(I::KeyCode::Tab);
+    resized.clear();
+    setup.Press(I::KeyCode::Enter);  // apply
+    setup.Frames(1);
+    REQUIRE_MESSAGE(resized.size() == 1, setup.Binding("settings_status"));
+    CHECK_MESSAGE((resized.front() == GYO::Engine::Math::Vec2i{1536, 864}), "[pvp-settings-apply-physical] " << resized.front().x);
+}
+
+TEST_CASE("client: single player: the room is the multiplayer's: the map chosen there is played; the mode is survival") {
+    TempDirectory directory;
+    Setup setup(1, 4, 0, PC::SceneChange{}, directory.Utf8());
+    setup.Load();
+    setup.Press(I::KeyCode::Enter);  // シングルプレイ
+    REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
+    setup.Load();
+    CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "solo_room", "[pvp-solo-room-shared]");
+    CHECK_MESSAGE(setup.Binding("mode") == "モード: 生存（固定）", "[pvp-solo-survival] " << setup.Binding("mode"));
+    const auto& arenas = ShippedContent()->arenas;
+    REQUIRE(arenas.size() >= 2);
+    CHECK(setup.Binding("map") == "マップ: " + arenas[0].content.id);
+    // The map (the second button), then the start (the first: the focus goes round).
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].content.id, "[pvp-solo-map-next] " << setup.Binding("map"));
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start] " << setup.Binding("status"));
+    CHECK_MESSAGE(setup.Scene().map == arenas[1].content.id, "[pvp-solo-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Solo().Resource<PW::GameRules>()->arena.id == arenas[1].content.id, "[pvp-solo-map-played]");
+    // 中止 on the loading screen (its focused button): back to the room, on the same map.
+    for (int i = 0; i < 400; ++i) {
+        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+        if (state != nullptr && state->runtime) break;
+        setup.Frames(1);
+    }
+    REQUIRE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "loading");
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::SoloRoom; }), "[pvp-solo-abort]");
+    setup.Load();
+    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].content.id, "[pvp-solo-map-kept] " << setup.Binding("map"));
 }

@@ -25,8 +25,9 @@ inline constexpr std::array<GYO::Engine::Math::Vec2i, 4> kResolutions = {
     GYO::Engine::Math::Vec2i{2560, 1440}};
 
 // The window's mode is window's own (Windowed, BorderlessFullscreen); the file names them "windowed", "borderless".
-// resolution is the window's size in logical pixels (window's ResizeWindow and WindowSettings::size); in
-// BorderlessFullscreen it is the size the window takes when it is a window again.
+// resolution is the window's size in physical pixels (what the screen shows; window's ResizeWindow and
+// WindowSettings::size take logical ones: WindowSizeFor); in BorderlessFullscreen it is the size the window takes when
+// it is a window again.
 struct ClientSettings final {
     GYO::Engine::Math::Vec2i resolution = kResolutions[0];
     GYO::Engine::Window::WindowMode window = GYO::Engine::Window::WindowMode::Windowed;
@@ -48,6 +49,10 @@ struct LoadedSettings final {
 };
 [[nodiscard]] LoadedSettings LoadSettings(const std::string& path);
 [[nodiscard]] GYO::Engine::Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings);
+
+// The window's size in logical pixels that shows physical pixels at a scale factor (window's WindowState::scaleFactor;
+// one that is not positive counts as 1).
+[[nodiscard]] GYO::Engine::Math::Vec2i WindowSizeFor(GYO::Engine::Math::Vec2i physical, float scale);
 
 // The next size offered after this one (round), and the player's words for a size.
 [[nodiscard]] GYO::Engine::Math::Vec2i NextResolution(GYO::Engine::Math::Vec2i now);

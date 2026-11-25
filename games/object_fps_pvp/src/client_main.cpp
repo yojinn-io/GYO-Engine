@@ -179,7 +179,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
 
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
-    // The size and the mode the player's settings give (their VSync: the Render World's Presentation, ClientWorld).
+    // The size and the mode the player's settings give (the size is physical pixels: the window opens at it as logical
+    // ones and is resized once it says its scale factor, Scenes.cpp FitWindow; their VSync: the Render World's
+    // Presentation, ClientWorld).
     window.size = resolution;
     window.mode = windowMode;
     window.resizable = false;

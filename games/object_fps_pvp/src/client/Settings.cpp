@@ -7,6 +7,7 @@
 #include "engine/json/Writer.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace object_fps_pvp::client {
@@ -84,6 +85,11 @@ LoadedSettings LoadSettings(const std::string& path) {
 
 Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings) {
     return WriteLocalText(path, EncodeSettings(settings));
+}
+
+Math::Vec2i WindowSizeFor(const Math::Vec2i physical, const float scale) {
+    const float by = scale > 0.0F ? scale : 1.0F;
+    return {static_cast<int>(std::lround(static_cast<float>(physical.x) / by)), static_cast<int>(std::lround(static_cast<float>(physical.y) / by))};
 }
 
 Math::Vec2i NextResolution(const Math::Vec2i now) {

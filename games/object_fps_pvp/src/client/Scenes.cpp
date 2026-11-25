@@ -57,6 +57,23 @@ K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootSt
     return {};
 }
 
+// The scale factor the window's logical size was last given at (the program opens it at the settings' size as if the
+// scale were 1). Carried from scene to scene: the window is one.
+struct WindowFit final {
+    float scale = 1.0F;
+};
+void HashValue(K::Hasher&, const WindowFit&) {}
+
+// The settings' resolution is in physical pixels: once the window says its scale factor (and whenever it changes: a
+// screen of another scale), it is asked for the logical size that shows them.
+K::SystemResult FitWindow(K::Res<W::WindowState> window, K::Res<ClientSettings> settings, K::ResMut<WindowFit> fit,
+                          K::MessageWriter<W::ResizeWindow> resize) {
+    if (!window->known || window->scaleFactor == fit.Read().scale) return {};
+    fit->scale = window->scaleFactor;
+    resize.Send(W::ResizeWindow{WindowSizeFor(settings->resolution, window->scaleFactor)});
+    return {};
+}
+
 // ---- The main menu (assets/object_fps_pvp/ui/pvp_menu.json): two pages, MenuPage::Main (canvas "menu") and
 // MenuPage::Settings (canvas "settings"), each with its own root, put when the page is entered and taken away when it
 // is left.
@@ -149,11 +166,11 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<Sc
 }
 
 // The settings page: pvp.resolution / pvp.window_mode / pvp.vsync change what is chosen; pvp.apply puts it in force
-// (the window: window's ResizeWindow and SetWindowMode; VSync: the Render World's Presentation, CopyPresentation) and
+// (the window: window's ResizeWindow, the physical size at its scale, and SetWindowMode; VSync: the Render World's Presentation, CopyPresentation) and
 // saves it; pvp.settings_back goes back to the menu page.
 K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SettingsEdit> edit, K::ResMut<ClientSettings> settings,
                                 K::Query<K::Write<Ui::UiBindings>> roots, K::MessageWriter<W::ResizeWindow> resize,
-                                K::MessageWriter<W::SetWindowMode> mode, K::ResMut<MenuPageRequest> page) {
+                                K::MessageWriter<W::SetWindowMode> mode, K::Res<WindowFit> fit, K::ResMut<MenuPageRequest> page) {
     for (const Ui::UiAction* action : actions.Read()) {
         auto bindings = roots.GetMut<Ui::UiBindings>(action->root);
         if (!bindings) continue;
@@ -170,8 +187,9 @@ K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMu
         } else if (id == "pvp.vsync") {
             edited.vsync = !edited.vsync;
         } else if (id == "pvp.apply") {
-            // Sent each time (the same size again is harmless, and the window may not be at it: the OS clamps it).
-            resize.Send(W::ResizeWindow{edited.resolution});
+            // Sent each time (the same size again is harmless, and the window may not be at it: the OS clamps it); in
+            // logical pixels at the window's scale factor.
+            resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});
             mode.Send(W::SetWindowMode{edited.window});
             *settings = edited;
             std::string status = "適用しました";
@@ -285,7 +303,10 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     setup.CarryOver<ClientSettings>("object_fps_pvp.ClientSettings");
     r.Resource<GatewayClient>({.name = "object_fps_pvp.GatewayClient"});
     setup.CarryOver<GatewayClient>("object_fps_pvp.GatewayClient");
+    r.Resource<WindowFit>({.name = "object_fps_pvp.WindowFit"});
+    setup.CarryOver<WindowFit>("object_fps_pvp.WindowFit");
     r.AddSystem<&CountFrames>(InSceneUpdate("object_fps_pvp.CountFrames"));
+    r.AddSystem<&FitWindow>(InSceneUpdate("object_fps_pvp.FitWindow"));
     K::SystemOptions watch;
     watch.name = "object_fps_pvp.WatchDocument";
     K::Mount last;
@@ -304,6 +325,7 @@ void BuildSceneCommon(O::WorldSetup& setup) {
         w.SetResource(SceneRequest{});
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
         if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
+        if (w.Resource<WindowFit>() == nullptr) w.SetResource(WindowFit{});
         PlaceGatewayClient(w, start.gateway, start.dataDirectory, gatewayNeeded);
         return {};
     });

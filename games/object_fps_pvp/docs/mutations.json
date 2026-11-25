@@ -1579,7 +1579,7 @@
   },
   {
    "id": "pvp-solo-input-ignored",
-   "what": "the Solo World does not write the step's input into its player",
+   "what": "the Solo World does not write the step's input into its player (nor its readiness: the game never starts)",
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
@@ -1588,7 +1588,7 @@
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
-   "expect": "pvp-solo-walks"
+   "expect": "pvp-solo-started"
   },
   {
    "id": "pvp-solo-never-plays",
@@ -1610,7 +1610,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame};\n",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -1948,7 +1948,7 @@
     "game-flow-declaration 4 (segment 5)"
    ],
    "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "            resize.Send(W::ResizeWindow{edited.resolution});\n",
+   "find": "            resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: settings*",
@@ -2096,6 +2096,84 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-map-frame"
+  },
+  {
+   "id": "pvp-solo-map-ignored",
+   "what": "the single player's game is not given the map chosen in its room",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};",
+   "replace": "request->next = SceneChange{.scene = Scene::SoloGame};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map"
+  },
+  {
+   "id": "pvp-solo-map-not-cycled",
+   "what": "the single player's room's map button does nothing",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "            if (!room.maps.empty()) room.map = (room.map + 1) % room.maps.size();\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map-next"
+  },
+  {
+   "id": "pvp-solo-map-not-kept",
+   "what": "back from a game, the single player's room forgets the map it was played on",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": ".status = \"中止しました\", .map = origin->map};",
+   "replace": ".status = \"中止しました\"};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-map-kept"
+  },
+  {
+   "id": "pvp-room-map-not-shown",
+   "what": "the multiplayer's room does not show its map",
+   "guards": [
+    "game-flow-declaration 3.3 (revision 6: the single player's room)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "        bindings.Set(\"map\", \"マップ: \" + state.room->map);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-room-map"
+  },
+  {
+   "id": "pvp-settings-physical-ignored",
+   "what": "the window is not resized when it says its scale factor",
+   "guards": [
+    "game-flow-declaration 3.6 (revision 6: physical pixels)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    resize.Send(W::ResizeWindow{WindowSizeFor(settings->resolution, window->scaleFactor)});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-physical"
+  },
+  {
+   "id": "pvp-settings-apply-logical",
+   "what": "applying sends the physical size as a logical one",
+   "guards": [
+    "game-flow-declaration 3.6 (revision 6: physical pixels)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});",
+   "replace": "resize.Send(W::ResizeWindow{edited.resolution});",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings: the resolution is physical*",
+   "expect": "pvp-settings-apply-physical"
   }
  ]
 }

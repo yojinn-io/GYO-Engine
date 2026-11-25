@@ -49,10 +49,10 @@ bool ReadyOf(const RoomState& state, const std::uint64_t self) {
 }
 
 void ShowRoom(const RoomState& state, const std::uint64_t self, Ui::UiBindings& bindings) {
-    std::string title = "部屋 #" + std::to_string(state.id);
     Ui::UiList members;
     if (state.room) {
-        title += "  " + ModeText(state.room->mode) + "  " + state.room->map;
+        bindings.Set("mode", "モード: " + ModeText(state.room->mode));
+        bindings.Set("map", "マップ: " + state.room->map);
         for (const RoomMember& member : state.room->members) {
             Ui::UiListItem item;
             item.fields["line"] = "Player " + std::to_string(member.userId) + (member.userId == state.room->owner ? "（部屋主）" : "") +
@@ -60,7 +60,7 @@ void ShowRoom(const RoomState& state, const std::uint64_t self, Ui::UiBindings& 
             members.items.push_back(std::move(item));
         }
     }
-    bindings.Set("title", title);
+    bindings.Set("title", "部屋 #" + std::to_string(state.id));
     bindings.Set("members", std::move(members));
     bindings.Set("ready", std::string(ReadyOf(state, self) ? "準備をやめる" : "準備する"));
 }
@@ -158,6 +158,9 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
         state.id = change.room;
         state.gateway = context.gateway.ToString();
         Ui::UiBindings bindings;
+        // (the mode and the map come with the first read of the room)
+        bindings.Set("mode", std::string("モード: —"));
+        bindings.Set("map", std::string("マップ: —"));
         const auto* gateway = w.Resource<GatewayClient>();
         ShowRoom(state, gateway != nullptr ? SelfOf(*gateway) : 0, bindings);
         bindings.Set("status", change.status.empty() ? std::string("全員が準備したら、部屋主が開始します") : change.status);

@@ -1030,6 +1030,7 @@ struct GameOrigin final {
     Scene scene = Scene::MultiGame;
     std::uint64_t room = 0;
     std::string savePath;
+    std::string map;  // the scene's (SceneChange::map): the single player's room comes back to it
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
 
@@ -1236,7 +1237,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
         // pvp.abort (the loading screen's 中止): no game was played. Single player: back to its room, nothing settled;
         // multiplayer: as an evacuation (the room is left).
         if (action->action == "pvp.abort" && origin->scene == Scene::SoloGame) {
-            request->next = SceneChange{.scene = Scene::SoloRoom, .status = "中止しました"};
+            request->next = SceneChange{.scene = Scene::SoloRoom, .status = "中止しました", .map = origin->map};
             continue;
         }
         if (action->action != "pvp.evacuate" && action->action != "pvp.abort") continue;
@@ -1670,7 +1671,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
+    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map};
     const std::uint64_t user = LocalUserOf(change, options);
     const std::size_t played = ArenaOf(change, options);
     setup.Prepare([options, port, origin, user, played](K::World& world) -> Base::Result<void, O::OrchestrationError> {
@@ -2074,7 +2075,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         for (const PW::InstalledArena& arena : options.game->arenas) gateway.maps.push_back(arena.content.id);
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
-        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory); break;
+        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, gateway.maps); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:

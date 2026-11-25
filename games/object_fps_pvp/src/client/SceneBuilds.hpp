@@ -42,8 +42,8 @@ void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
-// dataDirectory: the player's (ClientStart).
-void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory);
+// dataDirectory: the player's (ClientStart); maps: the installed arenas, by id.
+void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps);
 // What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a
 // room can be made with (the installed arenas, by id).
 struct GatewayContext final {
