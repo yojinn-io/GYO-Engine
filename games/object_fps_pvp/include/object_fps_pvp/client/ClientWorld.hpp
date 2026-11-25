@@ -100,6 +100,8 @@ struct ClientStatus final {
     bool playing = false;  // its own player is there
     bool captured = false; // it has the pointer
     std::string mismatch;  // the content mismatch, if any
+    bool ended = false;    // the connection ended (refused, timed out, closed by the Match)
+    std::string endReason; // why, in the player's words
 };
 [[nodiscard]] ClientStatus StatusOf(GYO::Kernel::World& world);
 

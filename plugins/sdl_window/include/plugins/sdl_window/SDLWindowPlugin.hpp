@@ -14,6 +14,10 @@
 //   (v8-arch-gyo2-sdl-input-writer-preupdate), and ApplyWindowRequests in Main/Last.
 // - The runner, each frame: pumps the OS events into sdl_window's queue, runs the Product's frame, and ends when the
 //   game's WindowRequest::close was applied (Success) or the frame failed (Failure). It does not look at the events.
+//   While the OS holds the pump in its modal loop (a live resize, a dragged title bar) it runs the frame from SDL's
+//   live-resize expose (SDLWindowOptions::liveFrame; SDL declaration R3). The Worlds named in ownThreadWorlds it
+//   lends to threads of their own (O-13; R5): each runs its rounds there, waiting for its next fixed step, while the
+//   main thread pumps and runs the others; they are stopped, joined and returned before the runner returns.
 //
 // One World of a Product lists sdl_window (SDL declaration section 9.1): its queue is one, so a second World would
 // take nothing, and the requests of the World that runs later would win. Another World that wants input gets it
@@ -22,8 +26,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "engine/orchestration/Plugin.hpp"
 #include "engine/orchestration/ScheduleSkeleton.hpp"
@@ -60,6 +66,16 @@ struct SDLWindowOptions final {
     // The runner waits for an OS event when a frame took less than this (zero: no wait; drawing to the window waits
     // for the display instead, batch R2a).
     std::chrono::nanoseconds minFrameInterval{0};
+    // The live frame (R3): the runner runs a frame while the OS holds the pump in its modal loop. false: the picture
+    // stops while the window is resized or dragged (the Worlds of ownThreadWorlds go on).
+    bool liveFrame = true;
+    // The Worlds the runner lends to a thread of its own each (O-13; R5; live-frame-sim-thread declaration 4.3): a
+    // World with a fixed step whose rounds must go on while the main thread is held (a networked client's
+    // simulation). Each must be lendable (Product::Lend: not an Extract source or reader). Empty: every World on the
+    // main thread.
+    std::vector<std::string> ownThreadWorlds;
+    // A lent World without a fixed step to wait for (or paused, or at scale 0) waits this long between rounds.
+    std::chrono::nanoseconds ownThreadIdle{std::chrono::milliseconds(4)};
     // Longer clipboard texts are cut (window's ClipboardChanged::truncated).
     std::size_t clipboardLimit = 1U << 20U;
     // SDL_HINT_IME_IMPLEMENTED_UI "composition": the program draws the input method's composition itself (Windows).
@@ -83,6 +99,9 @@ public:
     explicit SDLWindowPump(Service& service) : service_(&service) {}
     // Takes every pending OS event into sdl_window's queue; call it before each RunFrame, on the main thread.
     void Pump();
+    // The live frame for a product's own runner (R3): called from inside Pump while the OS holds it in its modal loop
+    // (SDLWindowOptions::liveFrame does it for the Plugin's runner). Empty: none.
+    void SetLiveFrame(std::function<void()> frame);
     // The game's WindowRequest::close was applied: the window is closed and the loop should end.
     [[nodiscard]] bool Closed() const;
     // OS events dropped because the queue was full, since the window was made.

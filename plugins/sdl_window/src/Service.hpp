@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "engine/input/Input.hpp"
 #include "engine/window/Window.hpp"
@@ -39,6 +40,14 @@ public:
     [[nodiscard]] WindowBackend* Backend() noexcept { return backend_.get(); }
     [[nodiscard]] EventQueue& Queue() noexcept { return queue_; }
     [[nodiscard]] AppliedRequests& Applied() noexcept { return applied_; }
+    // The one-shot requests sent in a live frame (nothing is asked of the window inside the OS's modal loop): kept
+    // for the next frame outside it, in order (the output side's own cache, SDL-7).
+    struct DeferredRequests final {
+        std::vector<Engine::Window::WarpCursor> warps;
+        std::vector<Engine::Window::ResizeWindow> resizes;
+        std::vector<Engine::Window::CopyToClipboard> copies;
+    };
+    [[nodiscard]] DeferredRequests& Deferred() noexcept { return deferred_; }
 
     void Pump() {
         if (backend_) backend_->Pump(queue_);
@@ -70,6 +79,7 @@ private:
     std::unique_ptr<WindowBackend> backend_;
     EventQueue queue_;
     AppliedRequests applied_;
+    DeferredRequests deferred_;
     bool closed_ = false;
     bool shutdownSeen_ = false;
     std::uint64_t refused_ = 0;

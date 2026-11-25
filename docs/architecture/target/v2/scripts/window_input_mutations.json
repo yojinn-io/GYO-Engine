@@ -522,6 +522,123 @@
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: the input method*",
    "expect": "\\[sw\\-ime\\-unit\\-windows\\]"
+  },
+  {
+   "id": "sw-live-any-expose",
+   "what": "every expose runs the live frame (data1 not read)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (event->type != SDL_EVENT_WINDOW_EXPOSED || event->window.data1 != 1) return true;",
+   "replace": "    if (event->type != SDL_EVENT_WINDOW_EXPOSED) return true;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-data1\\]"
+  },
+  {
+   "id": "sw-live-outside-pump",
+   "what": "the live frame runs outside the pump (the watch then writes to a null queue: the crash is the mutant itself, so CRASHED counts)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    if (!SDL_IsMainThread() || state->pumpQueue == nullptr || state->inLiveFrame || !state->liveFrame) return true;",
+   "replace": "    if (!SDL_IsMainThread() || state->inLiveFrame || !state->liveFrame) return true;",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-only\\-in\\-pump\\]|test case CRASHED"
+  },
+  {
+   "id": "sw-live-reentered",
+   "what": "the live frame is entered again from inside itself",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    state->inLiveFrame = true;\n    try {",
+   "replace": "    try {",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame runs*",
+   "expect": "\\[sw\\-live\\-once\\]"
+  },
+  {
+   "id": "sw-live-failure-ignored",
+   "what": "a live frame's failure does not end the runner",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "            if (auto ran = product.RunFrame(); !ran) liveFailure = std::move(ran).error();",
+   "replace": "            static_cast<void>(product.RunFrame());",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the runner's live frame*",
+   "expect": "\\[sw\\-live\\-failure\\]"
+  },
+  {
+   "id": "sw-own-thread-ignored",
+   "what": "ownThreadWorlds is not lent (every World on the main thread)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "        if (auto refused = lent.Lend(options.ownThreadWorlds, options.ownThreadIdle)) return lent.Outcome(*refused);",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a World of ownThreadWorlds*",
+   "expect": "\\[sw\\-own\\-thread\\]"
+  },
+  {
+   "id": "sw-live-size-not-written",
+   "what": "the live frame does not write the window's size now",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
+   "find": "    static_cast<void>(state->pumpQueue->Accept(std::move(now)));\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: the live frame first writes*",
+   "expect": "\\[sw\\-live\\-size\\-now\\]"
+  },
+  {
+   "id": "sw-own-thread-spins",
+   "what": "a lent World does not wait for its next fixed step (it spins)",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "                            static_cast<void>(context.WaitUntil(start + UntilNextRound(lease->World(), idle)));",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a lent World with world_time*",
+   "expect": "\\[sw\\-own\\-thread\\-waits\\]"
+  },
+  {
+   "id": "sw-own-thread-stop-unseen",
+   "what": "the main loop does not see a lent World's thread stop",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "        if (lent.AnyStopped()) return finish(O::RunnerExit{});\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: a lent World's exchange failure*",
+   "expect": "\\[sw\\-own\\-thread\\-stopped\\]"
+  },
+  {
+   "id": "sw-own-thread-exception-lost",
+   "what": "an exception from a lent World's round is not thrown again on the main thread",
+   "guards": [
+    "sdl_window R3/R5 (live-frame-sim-thread declaration 5)"
+   ],
+   "file": "plugins/sdl_window/src/SDLWindowPlugin.cpp",
+   "find": "        if (exception_) std::rethrow_exception(std::exchange(exception_, nullptr));\n",
+   "replace": "",
+   "target": "gyo_sdl_window_tests",
+   "cases": "sdl_window: an exception that leaves*",
+   "expect": "\\[sw\\-own\\-thread\\-exception\\]"
   }
  ]
 }
