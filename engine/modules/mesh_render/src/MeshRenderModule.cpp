@@ -1,8 +1,10 @@
 #include "engine/mesh_render/MeshRenderModule.hpp"
 
+#include <memory>
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "engine/base/Result.hpp"
@@ -52,9 +54,23 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
     std::vector<Render::Extracted3dItem> items;
     meshes.ForEach([&](const Kernel::EntityId id, const Render::Mesh3d& m) {
         const Transform::GlobalTransform* g = globals.Get(id);
-        if (g == nullptr || view == nullptr) return;
-        const Model::ModelData* model = view->Get(m.model);
+        if (g == nullptr) return;
+        // The model: an asset loaded in the source's view, or one the author holds (ModelRef).
+        const Model::ModelData* model = nullptr;
+        Render::ModelMeshKey key;
+        std::shared_ptr<const Model::ModelData> holder;
+        if (const auto* handle = std::get_if<Asset::Handle<Model::ModelData>>(&m.model)) {
+            if (view == nullptr) return;
+            model = view->Get(*handle);
+            key.asset = handle->Id().Text();
+            key.life = Asset::Detail::HandleAccess::Life(*handle);
+        } else {
+            holder = std::get<std::shared_ptr<const Model::ModelData>>(m.model);
+            model = holder.get();
+            key.held = model;
+        }
         if (model == nullptr || m.mesh >= model->meshes.size()) return;
+        key.mesh = m.mesh;
         const Model::Mesh& mesh = model->meshes[m.mesh];
         Math::Vec2 size{};
         Render::ResolvedImage image = Render::ResolveImage(m.image, m.filter, view);
@@ -79,8 +95,8 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             item.indices.resize(item.indices.size() - item.indices.size() % 3);
             if (item.vertices.empty() || item.indices.empty()) return;
         } else {
-            const Render::ModelMeshKey key{m.model.Id().Text(), Asset::Detail::HandleAccess::Life(m.model), m.mesh};
-            const std::optional<Render::MeshId> retained = modelMeshes.Get().Use(key, mesh, renderMeshes.Get(), item.indexCount);
+            const std::optional<Render::MeshId> retained =
+                modelMeshes.Get().Use(key, mesh, std::move(holder), renderMeshes.Get(), item.indexCount);
             if (!retained) return;
             item.mesh = *retained;
         }
@@ -97,6 +113,13 @@ SystemResult Queue3dPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel
         std::optional<Render::Pass3D> pass = Render::Queue3d(cameras->cameras[i], items->items);
         if (pass) slots.byCamera[i].push_back(std::move(*pass));
     }
+    return {};
+}
+
+// After ClearRenderFrame cleared this frame's mesh asks: the meshes of held models no Mesh3d drew this frame go with
+// the next frame's asks (as RenderImages::EndFrame for held images).
+SystemResult EndModelMeshesFrame(Kernel::ResMut<Render::RenderModelMeshes> modelMeshes, Kernel::ResMut<Render::RenderMeshes> renderMeshes) {
+    modelMeshes.Get().EndFrame(renderMeshes.Get());
     return {};
 }
 
@@ -128,6 +151,17 @@ void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     queueMount.stage = options.stage;
     queue.mounts.push_back(std::move(queueMount));
     r.AddSystem<&Queue3dPasses>(std::move(queue));
+
+    Kernel::SystemOptions end;
+    end.name = "EndModelMeshesFrame";
+    Kernel::Mount endMount;
+    // render_world's stage, in render_world's schedule (its options when given).
+    const RenderWorld::RenderWorldOptions* renderWorld = setup.Options<RenderWorld::RenderWorldOptions>();
+    endMount.schedule = renderWorld != nullptr ? renderWorld->schedule : RenderWorld::RenderWorldOptions{}.schedule;
+    endMount.stage = std::string(RenderWorld::kCleanupStage);
+    endMount.after.push_back("ClearRenderFrame");
+    end.mounts.push_back(std::move(endMount));
+    r.AddSystem<&EndModelMeshesFrame>(std::move(end));
 
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted3dItems>(world);

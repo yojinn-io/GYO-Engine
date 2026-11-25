@@ -1096,7 +1096,7 @@
     "render RD-9"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "            if (it->first.asset == key.asset && it->first.life != key.life) {\n                meshes.Release",
+   "find": "            if (it->first.held == nullptr && it->first.asset == key.asset && it->first.life != key.life) {\n                meshes.Release",
    "replace": "            if (false) {\n                meshes.Release",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a model mesh*",
@@ -1707,6 +1707,45 @@
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: GPUSubmit*",
    "expect": "\\[g3\\-frames\\-shown\\]"
+  },
+  {
+   "id": "mh-held-never-let-go",
+   "what": "a held model's GPU mesh is kept after no Mesh3d draws it (EndFrame releases nothing)",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (it->first.held != nullptr && !it->second.used) {",
+   "replace": "        if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a Mesh3d of a model the author holds*",
+   "expect": "\\[mh\\-held\\-let\\-go\\]"
+  },
+  {
+   "id": "mh-end-frame-unmounted",
+   "what": "mesh_render does not mount EndModelMeshesFrame, so held models' meshes are never let go",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "    r.AddSystem<&EndModelMeshesFrame>(std::move(end));",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a Mesh3d of a model the author holds*",
+   "expect": "\\[mh\\-held\\-let\\-go\\]"
+  },
+  {
+   "id": "mh-held-needs-view",
+   "what": "a held model is skipped when the source has no asset view, or treated as an asset",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "            key.held = model;",
+   "replace": "            key.held = nullptr;",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a Mesh3d of a model the author holds*",
+   "expect": "\\[mh\\-held\\-(?:kept|let\\-go|replaced)\\]"
   }
  ]
 }
