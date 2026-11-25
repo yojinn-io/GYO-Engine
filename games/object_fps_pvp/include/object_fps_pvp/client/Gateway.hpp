@@ -20,6 +20,7 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace object_fps_pvp::client {
@@ -111,6 +112,20 @@ struct GatewayResult final {
     [[nodiscard]] bool Ok() const noexcept { return status >= 200 && status < 300; }
 };
 
+// One HTTP exchange of a GatewayClient as it went, for the program's log (--verbose): what was sent, how it ended, how
+// long its call waited behind the calls asked before it (from the first Update after its Ask to its turn; the
+// exchanges of one call -- its session's, a retry -- share it) and how long the exchange took (nanoseconds).
+struct GatewayCallRecord final {
+    std::string tag;
+    bool session = false;  // the session's own call, made for the call named tag
+    std::string method;
+    std::string target;
+    int status = 0;  // 0: no answer (errorCode says why)
+    std::string errorCode;
+    std::int64_t waited = 0;
+    std::int64_t took = 0;
+};
+
 class GatewayClient final {
 public:
     // gateway: its address; deviceId: this player's (empty: none, unavailable says why; every call then ends at once
@@ -129,6 +144,9 @@ public:
     // (then it is returned under the asked call's tag, and that call is dropped).
     [[nodiscard]] std::optional<GatewayResult> Update(std::int64_t now);
     [[nodiscard]] const std::optional<GatewaySession>& Session() const noexcept { return session_; }
+    // The exchanges ended since the last take (the newest kKeptCalls at most).
+    [[nodiscard]] std::vector<GatewayCallRecord> TakeCalls() { return std::exchange(calls_, {}); }
+    static constexpr std::size_t kKeptCalls = 64;
 
     static constexpr std::int64_t kDefaultTimeout = 5'000'000'000;
 
@@ -137,6 +155,8 @@ private:
         std::string tag;
         GatewayRequest request;
         bool retried = false;  // opened the session again once already
+        std::optional<std::int64_t> asked;  // the first Update that saw it waiting
+        std::int64_t waited = 0;            // from asked to its turn
     };
     struct Going {
         Call call;
@@ -144,9 +164,13 @@ private:
         std::optional<GYO::Engine::Http::HttpCall> http;
         std::int64_t started = 0;
         std::string failure;  // why the connection did not start
+        std::string method;   // what was sent (the session's own request, or the call's)
+        std::string target;
     };
 
     void Start(Call call, bool session, std::int64_t now);
+    void Note(const Going& going, int status, std::string errorCode, std::int64_t now);
+    void Keep(GatewayCallRecord record);
 
     GYO::Engine::OS::SocketAddress gateway_;
     std::string host_;
@@ -156,6 +180,7 @@ private:
     std::optional<GatewaySession> session_;
     std::deque<Call> waiting_;
     std::optional<Going> current_;
+    std::vector<GatewayCallRecord> calls_;
 };
 inline void HashValue(GYO::Kernel::Hasher&, const GatewayClient&) {}
 

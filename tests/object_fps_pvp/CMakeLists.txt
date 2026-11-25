@@ -105,12 +105,13 @@ add_test(NAME object_fps_pvp.match_process
 set_tests_properties(object_fps_pvp.match_process PROPERTIES LABELS "network" TIMEOUT 120)
 
 # The whole line (game-flow declaration, segment 3): every service in one Go test process, real Matches, and the
-# Client test program's "network:" case through the Gateway over UDP. Go on the host; label network.
+# Client test program's "network:" case through the Gateway over UDP; and its "network-room:" case (two Clients in one
+# room). Go on the host; label network.
 gyo_get_game_target(object_fps_pvp match object_fps_pvp_match_for_client)
 add_test(NAME object_fps_pvp.gateway_client
     COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "GYO_PVP_MATCH=$<TARGET_FILE:${object_fps_pvp_match_for_client}>"
         "GYO_PVP_CONTENT=${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
         "GYO_PVP_CLIENT_TESTS=$<TARGET_FILE:gyo_object_fps_pvp_client_tests>"
-        "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealClientPlaysThroughTheGateway" ./services/stack/
+        "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealClientPlaysThroughTheGateway|TestTwoClientsInARoom" ./services/stack/
     WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
 set_tests_properties(object_fps_pvp.gateway_client PROPERTIES LABELS "network" TIMEOUT 240)
