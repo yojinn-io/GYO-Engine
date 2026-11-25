@@ -1010,6 +1010,14 @@ struct ClockSync final {
     bool previousBehind = true;
     double lastError = 0.0;
     double lastTarget = 0.0;
+    // The remote estimate at the last SyncClock: the Match's tick now (fractional), and the smoothed RTT and the
+    // jitter in ticks. A product times what it shows of the Match with them: the newest state it can have is about
+    // remoteTick - rttTicks / 2 (an interpolation timeline; lightyear's InterpolationTimeline follows
+    // RemoteTimeline::current_estimate(), crates/replication/interpolation/src/timeline.rs:189-215, and does not take
+    // the RTT off). Valid while synced; the last values stay after a disconnect.
+    double remoteTick = 0.0;
+    double rttTicks = 0.0;
+    double jitterTicks = 0.0;
     double scale = 1.0;
     std::uint64_t jumps = 0;
     std::int64_t lastJump = 0;

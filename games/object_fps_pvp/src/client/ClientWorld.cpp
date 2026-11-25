@@ -2,6 +2,7 @@
 
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
+#include "object_fps_pvp/present/Interpolation.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
 
@@ -47,6 +48,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <map>
 #include <mutex>
 #include <set>
@@ -167,16 +169,22 @@ public:
         seen = snapshot_->version;
         return snapshot_;
     }
-    void AddControls(const present::StepInput& step) {
+    // viewTick: the Match tick the frame showed of the other players (none: not timed yet); the newest is kept.
+    void AddControls(const present::StepInput& step, const std::optional<double> viewTick) {
         const std::lock_guard<std::mutex> lock(controlsLock_);
         Merge(controls_, step);
+        viewTick_ = viewTick;
         haveControls_ = true;
     }
+    struct Sent final {
+        present::StepInput step;
+        std::optional<double> viewTick;
+    };
     // The controls since the last take (nullopt: none came).
-    std::optional<present::StepInput> TakeControls() {
+    std::optional<Sent> TakeControls() {
         const std::lock_guard<std::mutex> lock(controlsLock_);
         if (!haveControls_) return std::nullopt;
-        present::StepInput taken = controls_;
+        Sent taken{controls_, viewTick_};
         controls_.jump = controls_.fire = controls_.reload = false;
         haveControls_ = false;
         return taken;
@@ -198,6 +206,7 @@ private:
     std::uint64_t version_ = 0;
     std::mutex controlsLock_;
     present::StepInput controls_;
+    std::optional<double> viewTick_;
     bool haveControls_ = false;
 };
 
@@ -211,6 +220,7 @@ private:
 // Frame World's pace, and is not counted. The time is the Sim World's RealTime.
 struct SimControls final {
     present::StepInput pending;
+    std::optional<double> viewTick;              // the time the frame showed (ViewTime); none: the confirmed tick
     std::optional<WT::Nanoseconds> lastArrival;  // when controls last came (none yet: stale)
     std::vector<WT::Nanoseconds> recent;         // the recent intervals between two arrivals, oldest first
     bool stale = true;
@@ -236,6 +246,45 @@ struct FrameMirror final {
 };
 void HashValue(K::Hasher&, const FrameMirror&) {}
 
+// The Frame World: the other players as the Match confirmed them, each state at its tick (PV17; port declaration,
+// segment 6). The players' copies are written from here every frame at the timeline's tick (InterpolateRemotes);
+// the own player is the Sim World's prediction, written by the exchange.
+struct RemoteSample final {
+    std::uint64_t tick = 0;
+    std::optional<PW::PlayerBody> body;
+    std::optional<PW::PlayerCombat> combat;
+    std::optional<PW::HitRecord> hits;
+    std::optional<PW::ShotRecord> shot;
+};
+struct RemoteHistory final {
+    std::deque<RemoteSample> samples;          // ascending ticks
+    std::optional<std::uint64_t> goneAt;       // the confirmed tick it left the Sim World at
+};
+struct RemoteView final {
+    present::InterpolationTimeline timeline;
+    std::map<K::EntityId, RemoteHistory> players;
+    bool fresh = false;                        // a picture came since the last frame
+    WT::Nanoseconds pictureAt = 0;             // the frame's time when the last one came
+    std::optional<WT::Nanoseconds> lastFrameAt;
+};
+void HashValue(K::Hasher&, const RemoteView&) {}
+
+const present::TimelineSettings kTimeline{};
+
+// a toward b (present::BlendPose: where it stands and looks, not across a new life); the rest is a's.
+RemoteSample Blend(const RemoteSample& a, const RemoteSample& b, const double fraction) {
+    RemoteSample out = a;
+    if (!a.body || !b.body) return out;
+    const auto pose = [](const RemoteSample& sample) {
+        return present::RemotePose{sample.body->feet, sample.body->yaw, sample.body->pitch, sample.combat ? sample.combat->lifeTick : 0};
+    };
+    const present::RemotePose blended = present::BlendPose(pose(a), pose(b), fraction);
+    out.body->feet = blended.feet;
+    out.body->yaw = blended.yaw;
+    out.body->pitch = blended.pitch;
+    return out;
+}
+
 // One mesh of a player's body (its index in the body model), or the weapon in its hand (mesh: kHeld).
 inline constexpr std::uint32_t kHeld = 0xFFFF'FFFFU;
 struct CharacterPart final {
@@ -255,6 +304,11 @@ struct ClientCharacters final {
     std::map<K::EntityId, sim::Locomotion> locomotion;
     // The reload whose sound has played (its end tick), so it plays once.
     std::uint64_t reloadSounded = 0;
+    // The own player's last shot as this frame saw it (and whose), and when (the frame's time) a newer one came: the
+    // recoil. A shot the prediction takes back (a later lastShotTick going back) kicks nothing.
+    K::EntityId shotPlayer = 0;
+    std::optional<std::uint64_t> shotSeen;
+    std::optional<WT::Nanoseconds> recoilAt;
 };
 void HashValue(K::Hasher&, const ClientCharacters&) {}
 
@@ -506,10 +560,15 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
-    // The time the player saw: the remote players stand at the confirmed point.
-    const std::uint32_t seen = replica->latestConfirmed.value_or(0);
-    inputs.GetMut<N::PeerInput<PW::PlayerInput>>(link->clientPeer)
-        ->Set(static_cast<std::uint32_t>(tick->value), input, N::ViewTime{seen, 0});
+    // The time the player saw (net F2): the other players' timeline of the frame the controls came from (a tick and
+    // its fraction in a byte), or the confirmed point before it is timed.
+    N::ViewTime seen{replica->latestConfirmed.value_or(0), 0};
+    if (const auto view = state.Read().viewTick; view && *view >= 0.0) {
+        const double whole = std::floor(*view);
+        seen.tick = static_cast<std::uint32_t>(whole);
+        seen.overstep = static_cast<std::uint8_t>(std::clamp(std::floor((*view - whole) * 256.0), 0.0, 255.0));
+    }
+    inputs.GetMut<N::PeerInput<PW::PlayerInput>>(link->clientPeer)->Set(static_cast<std::uint32_t>(tick->value), input, seen);
     return {};
 }
 
@@ -603,24 +662,27 @@ R::Color8 MaterialColor(const GYO::Engine::Model::ModelData& model, const std::u
 
 // Every other living player's body parts follow its pose; the parts of a player gone or dead... stay for the death
 // (the death clip plays), and go with the player.
-K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim,
+K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim, K::Res<RemoteView> remote,
                                K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
                                K::Query<K::Read<CharacterPart>> parts, K::Query<K::Write<T::Transform>> transforms,
                                K::Query<K::Write<R::SkinPose>> poses, K::ResMut<ClientCharacters> characters, K::Despawn despawn) {
     if (!rules->character) return {};
     const character::CharacterRig& rig = *rules->character;
     const std::uint64_t step = sim->stepNanoseconds;
-    // The other players stand at the confirmed point (the Match's step their state belongs to), not at this Client's
-    // predicted step: their shots, hits and lives are timed on it (lightyear: an interpolated entity has its own
-    // timeline, crates/replication/interpolation/src/timeline.rs).
-    const std::uint64_t seen = sim->latestConfirmed ? *sim->latestConfirmed : sim->tick;
+    // The other players are timed on the interpolation timeline (their copies are their states at its tick), not on
+    // this Client's predicted step: their shots, hits and lives are timed on it (lightyear: an interpolated entity has
+    // its own timeline, crates/replication/interpolation/src/timeline.rs). Before it is timed: the confirmed point.
+    const double shownTick = remote->timeline.synced ? std::max(remote->timeline.tick, 0.0)
+                                                     : static_cast<double>(sim->latestConfirmed ? *sim->latestConfirmed : sim->tick);
+    const auto seen = static_cast<std::uint64_t>(shownTick);
     // Each shown player's pose this frame.
     std::map<K::EntityId, std::vector<Math::Matrix4>> modelSpace;
     std::map<K::EntityId, const PW::PlayerBody*> bodies;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
                         const PW::HitRecord& hits) {
         if (owner.userId == user->userId) return;
-        const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, seen, step);
+        sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, seen, step);
+        input.seconds = shownTick * static_cast<double>(step) / 1e9;
         sim::Locomotion& locomotion = characters->locomotion[id];
         sim::Advance(locomotion, input, rig.rules);
         std::vector<GYO::Engine::Model::LocalTransform> local;
@@ -704,15 +766,16 @@ std::pair<std::uint32_t, float> ViewmodelClip(const ViewmodelDefinition& viewmod
 
 // The first-person weapon's pose from the own player's state (it hangs under the viewmodel camera with a fixed
 // placement: ViewmodelPlacement), hidden while the player is dead, and the reload's sound at the clip's magazine_in.
-K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim,
+K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim, K::Res<WT::RealTime> real,
                               K::Res<ClientScene> scene, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientSound> sound,
                               K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
-                              K::Query<K::Read<ViewmodelPart>, K::Write<R::SkinPose>, K::Write<R::RenderLayers>> parts,
+                              K::Query<K::Read<ViewmodelPart>, K::Write<R::SkinPose>, K::Write<R::RenderLayers>, K::Write<T::Transform>> parts,
                               K::ResMut<ClientCharacters> characters) {
     const ViewmodelDefinition& viewmodel = scene->presentation->viewmodel;
     if (!viewmodel.model) return {};
     const std::uint64_t step = sim->stepNanoseconds;
-    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat, const PW::HitRecord& hits) {
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
+                        const PW::HitRecord& hits) {
         if (owner.userId != user->userId) return;
         const sim::AnimationInput input = PW::AnimationInputOf(body, combat, hits, *rules, sim->tick, step);
         const auto [clip, seconds] = ViewmodelClip(viewmodel, input);
@@ -723,9 +786,29 @@ K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
         GYO::Engine::Model::ComputeModelSpace(viewmodel.model->nodes, local, nodes);
         // A dead player's view has no weapon: its parts leave the viewmodel camera's layer.
         const std::uint32_t mask = combat.life == sim::LifeState::Dead ? 0U : 1U << kViewLayer;
-        parts.ForEach([&](K::EntityId, const ViewmodelPart&, K::Mut<R::SkinPose> pose, K::Mut<R::RenderLayers> layers) {
+        // The recoil: from the frame that first sees a new shot (the prediction's, at once), on the frame's clock.
+        if (characters->shotPlayer != id) {
+            characters->shotPlayer = id;
+            characters->shotSeen.reset();
+            characters->recoilAt.reset();
+        }
+        if (characters->shotSeen && combat.lastShotTick > *characters->shotSeen) characters->recoilAt = real->elapsed;
+        characters->shotSeen = combat.lastShotTick;
+        const float recoil = characters->recoilAt
+                                 ? RecoilRadians(viewmodel, static_cast<double>(real->elapsed - *characters->recoilAt) / 1e9)
+                                 : 0.0F;
+        const T::Transform placement = ViewmodelPlacement(viewmodel, recoil);
+        parts.ForEach([&](K::EntityId, const ViewmodelPart&, K::Mut<R::SkinPose> pose, K::Mut<R::RenderLayers> layers,
+                          K::Mut<T::Transform> transform) {
             pose->nodes = nodes;
             if (layers.Read().mask != mask) layers->mask = mask;
+            // (Written only when it moves: at rest nothing changes.)
+            const T::Transform& now = transform.Read();
+            const bool same = now.translation.x == placement.translation.x && now.translation.y == placement.translation.y &&
+                              now.translation.z == placement.translation.z && now.rotation.x == placement.rotation.x &&
+                              now.rotation.y == placement.rotation.y && now.rotation.z == placement.rotation.z &&
+                              now.rotation.w == placement.rotation.w;
+            if (!same) transform.Get() = placement;
         });
         // The reload's sound: its sync point at the clip's magazine_in, once per reload.
         if (input.reloadStart && input.reloadEnd && combat.reloadEndTick != characters->reloadSounded && sound->submitter != nullptr) {
@@ -990,7 +1073,8 @@ void TakeControls(ClientExchange& exchange, K::World& world) {
             }
         }
         state.lastArrival = now;
-        ClientExchange::Merge(state.pending, *controls);
+        ClientExchange::Merge(state.pending, controls->step);
+        state.viewTick = controls->viewTick;
     }
     state.stale = !state.lastArrival || now - *state.lastArrival > StaleLimit(state);
 }
@@ -1022,6 +1106,12 @@ WorldSnapshot SnapshotOf(K::World& world) {
         if (replica->latestConfirmed) view.latestConfirmed = *replica->latestConfirmed;
     }
     if (const auto* link = world.Resource<N::NetWorldLink>()) view.connected = link->clientPeer != 0 && world.Alive(link->clientPeer);
+    if (const auto* clock = world.Resource<N::ClockSync>(); clock != nullptr && clock->synced) {
+        view.synced = true;
+        view.remoteTick = clock->remoteTick;
+        view.rttTicks = clock->rttTicks;
+        view.jitterTicks = clock->jitterTicks;
+    }
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
     if (const auto* session = world.Resource<ClientSessionEnd>()) {
@@ -1050,17 +1140,39 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
             world.Remove<T>(id);
         }
     };
+    // The own player: the prediction, as it is. The others: recorded at the confirmed tick (they are not simulated
+    // at the Client, so the picture holds the Match's state of that tick); InterpolateRemotes writes their copies.
+    const std::uint64_t localUser = world.Resource<PW::LocalUser>()->userId;
+    RemoteView& remote = *world.ResourceMut<RemoteView>();
+    remote.fresh = true;
+    const std::optional<std::uint64_t> confirmed = snapshot->view.latestConfirmed;
     std::set<K::EntityId> players;
     for (const PlayerSnapshot& player : snapshot->players) {
         players.insert(player.id);
         put(player.id, player.owner);
-        putOptional(player.id, player.body);
-        putOptional(player.id, player.combat);
-        putOptional(player.id, player.hits);
-        putOptional(player.id, player.shot);
+        if (player.owner.userId == localUser) {
+            putOptional(player.id, player.body);
+            putOptional(player.id, player.combat);
+            putOptional(player.id, player.hits);
+            putOptional(player.id, player.shot);
+            continue;
+        }
+        RemoteHistory& history = remote.players[player.id];
+        history.goneAt.reset();
+        if (confirmed && (history.samples.empty() || history.samples.back().tick < *confirmed)) {
+            history.samples.push_back(RemoteSample{*confirmed, player.body, player.combat, player.hits, player.shot});
+        }
     }
     for (const K::EntityId gone : mirror.players) {
-        if (!players.contains(gone)) world.Despawn(gone);
+        if (players.contains(gone)) continue;
+        // Another player goes when the timeline passes the tick it left at (lightyear's delayed despawn); the own
+        // player at once.
+        const auto found = remote.players.find(gone);
+        if (found != remote.players.end()) {
+            if (!found->second.goneAt) found->second.goneAt = confirmed.value_or(0);
+        } else {
+            world.Despawn(gone);
+        }
     }
     mirror.players = std::move(players);
     // The arena the Sim World follows (FollowMatchArena); one this Client does not have stays as it is (the Sim
@@ -1075,6 +1187,83 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
         }
     }
     world.SetResource(snapshot->view);
+}
+
+// Frame World, Main/PreUpdate (after AdvanceTime, before the Systems that show the players): the timeline follows
+// the newest state this Client can have minus the delay, and every other player's copy is its history at the
+// timeline's tick. The newest state is the Match's tick estimated by the Sim World's clock sync less half the RTT
+// (the state of the Match's tick now is still on its way). lightyear's objective is the estimate itself less the
+// delay (crates/replication/interpolation/src/timeline.rs:189-215): with a one-way time longer than the delay its
+// timeline runs past every state it has and holds the newest (a step at a time again); the design review of this
+// segment measured that at about 86 ms of RTT, so the half RTT is taken off here. Before the clock sync has an
+// estimate the newest state is shown.
+K::SystemResult InterpolateRemotes(K::Res<ClientView> sim, K::Res<WT::RealTime> real, K::ResMut<RemoteView> remote,
+                                   K::Query<K::Write<PW::PlayerBody>> bodies, K::Query<K::Write<PW::PlayerCombat>> combats,
+                                   K::Query<K::Write<PW::HitRecord>> hits, K::Query<K::Write<PW::ShotRecord>> shots,
+                                   K::CommandsFor<K::Inserts<PW::PlayerBody, PW::PlayerCombat, PW::HitRecord, PW::ShotRecord>,
+                                                  K::Removes<PW::PlayerBody, PW::PlayerCombat, PW::HitRecord, PW::ShotRecord>> commands,
+                                   K::Despawn despawn) {
+    RemoteView& view = remote.Get();
+    const auto step = static_cast<double>(sim->stepNanoseconds);
+    if (view.fresh) {
+        view.pictureAt = real->elapsed;
+        view.fresh = false;
+    }
+    if (sim->synced && step > 0.0) {
+        const double since = static_cast<double>(real->elapsed - view.pictureAt) / step;
+        const double objective =
+            sim->remoteTick - sim->rttTicks / 2.0 + since - present::InterpolationDelay(kTimeline, sim->jitterTicks, step / 1e9);
+        const double delta = view.lastFrameAt ? static_cast<double>(real->elapsed - *view.lastFrameAt) / step : 0.0;
+        present::Advance(view.timeline, delta, objective, kTimeline);
+    } else {
+        view.timeline = {};
+    }
+    view.lastFrameAt = real->elapsed;
+    const bool timed = view.timeline.synced;
+    const auto write = [&](const K::EntityId id, auto& query, const auto& value) {
+        using T = typename std::remove_cvref_t<decltype(value)>::value_type;
+        auto now = query.template GetMut<T>(id);
+        if (!value) {
+            if (now) commands.template Remove<T>(id);
+        } else if (!now) {
+            commands.Insert(id, *value);
+        } else if (!(now.Read() == *value)) {
+            now.Get() = *value;
+        }
+    };
+    for (auto it = view.players.begin(); it != view.players.end();) {
+        const K::EntityId id = it->first;
+        RemoteHistory& history = it->second;
+        if (history.goneAt && (!timed || view.timeline.tick >= static_cast<double>(*history.goneAt))) {
+            despawn.Entity(id);
+            it = view.players.erase(it);
+            continue;
+        }
+        if (history.samples.empty()) {
+            ++it;
+            continue;
+        }
+        std::vector<std::uint64_t> ticks;
+        ticks.reserve(history.samples.size());
+        for (const RemoteSample& sample : history.samples) ticks.push_back(sample.tick);
+        RemoteSample shown = history.samples.back();
+        if (timed) {
+            const std::size_t drop = present::Drainable(ticks, view.timeline.tick);
+            history.samples.erase(history.samples.begin(), history.samples.begin() + static_cast<std::ptrdiff_t>(drop));
+            ticks.erase(ticks.begin(), ticks.begin() + static_cast<std::ptrdiff_t>(drop));
+            const present::Bracket bracket = present::BracketAt(ticks, view.timeline.tick);
+            shown = bracket.end ? Blend(history.samples[bracket.start], history.samples[*bracket.end], bracket.fraction)
+                                : history.samples[bracket.start];
+        } else if (history.samples.size() > 2) {
+            history.samples.erase(history.samples.begin(), history.samples.end() - 2);
+        }
+        write(id, bodies, shown.body);
+        write(id, combats, shown.combat);
+        write(id, hits, shown.hits);
+        write(id, shots, shown.shot);
+        ++it;
+    }
+    return {};
 }
 
 void BuildSim(O::WorldSetup& setup) {
@@ -1125,6 +1314,7 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
     r.Resource<PW::ContentRef>({.name = "ContentRef"});
     r.Resource<ClientView>({.name = "object_fps_pvp.ClientView"});
     r.Resource<FrameMirror>({.name = "object_fps_pvp.FrameMirror"});
+    r.Resource<RemoteView>({.name = "object_fps_pvp.RemoteView"});
     r.Resource<ClientAssets>({.name = "object_fps_pvp.ClientAssets"});
     r.Resource<ClientControls>({.name = "object_fps_pvp.ClientControls"});
     r.Resource<ClientScene>({.name = "object_fps_pvp.ClientScene"});
@@ -1142,6 +1332,10 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
     readMount.after = {std::string(I::kInputSet), std::string(W::kWindowSet)};
     read.mounts.push_back(std::move(readMount));
     r.AddSystem<&ReadControls>(std::move(read));
+    K::SystemOptions interpolate;
+    interpolate.name = "object_fps_pvp.InterpolateRemotes";
+    Mount(interpolate, O::DefaultSchedules::frame, O::DefaultSchedules::preUpdate);
+    r.AddSystem<&InterpolateRemotes>(std::move(interpolate));
     r.AddSystem<&ShowArena>(InUpdate("object_fps_pvp.ShowArena"));
     r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera", {"object_fps_pvp.ShowHud"}));
     r.AddSystem<&PoseCharacters>(InUpdate("object_fps_pvp.PoseCharacters"));
@@ -1168,6 +1362,7 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
         world.SetResource(PW::ContentRef{options.game});
         world.SetResource(ClientView{});
         world.SetResource(FrameMirror{});
+        world.SetResource(RemoteView{});
         world.SetResource(ClientAssets{});
         world.SetResource(ClientControls{});
         world.SetResource(ClientScene{options.presentation, {}});
@@ -1246,7 +1441,9 @@ void BuildFrame(O::WorldSetup& setup, const ClientOptions& options) {
         return {};
     });
     setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        exchange->AddControls(world.ResourceMut<ClientControls>()->controls.Take());
+        const RemoteView& remote = *world.Resource<RemoteView>();
+        exchange->AddControls(world.ResourceMut<ClientControls>()->controls.Take(),
+                              remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
         return {};
     });
 }
@@ -1334,6 +1531,9 @@ ViewmodelDefinition LoadViewmodel(GYO::Engine::IO::FS::NativeFileSystem& fs, con
     viewmodel.verticalFov = static_cast<float>(data::Number(data::Member(definition, "vertical_fov_degrees"), "vertical_fov_degrees")) * k;
     viewmodel.nearClip = static_cast<float>(data::Number(data::Member(definition, "near_clip"), "near_clip"));
     viewmodel.farClip = static_cast<float>(data::Number(data::Member(definition, "far_clip"), "far_clip"));
+    const auto recoil = data::AsObject(data::Member(definition, "recoil"), "recoil");
+    viewmodel.recoilKickRadians = static_cast<float>(data::Number(data::Member(recoil, "kick_degrees"), "recoil kick_degrees")) * k;
+    viewmodel.recoilRecoveryPerSecond = static_cast<float>(data::Number(data::Member(recoil, "recovery_per_second"), "recoil recovery_per_second"));
     const auto materials = data::AsObject(data::Member(definition, "materials"), "materials");
     for (const auto& material : shared->materials) {
         viewmodel.materialImages.push_back(data::HasMember(materials, material.name)
@@ -1378,11 +1578,20 @@ ViewmodelDefinition LoadViewmodel(GYO::Engine::IO::FS::NativeFileSystem& fs, con
 
 } // namespace
 
-T::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel) {
+T::Transform ViewmodelPlacement(const ViewmodelDefinition& viewmodel, const float recoilRadians) {
     T::Transform t;
-    t.rotation = viewmodel.rotation;
-    t.translation = viewmodel.offset - Math::Rotate(viewmodel.rotation, viewmodel.anchor);
+    // (Left-handed, +Z ahead: a positive turn about +X looks down, so up is the negative one.)
+    t.rotation = recoilRadians == 0.0F ? viewmodel.rotation
+                                       : Math::Multiply(Math::MakeQuaternionFromAxisAngle({1, 0, 0}, -recoilRadians), viewmodel.rotation);
+    t.translation = viewmodel.offset - Math::Rotate(t.rotation, viewmodel.anchor);
     return t;
+}
+
+float RecoilRadians(const ViewmodelDefinition& viewmodel, const double seconds) {
+    if (seconds < 0.0) return 0.0F;
+    const double left = std::exp(-static_cast<double>(viewmodel.recoilRecoveryPerSecond) * seconds);
+    // Below a thousandth of the kick it is at rest (the weapon stops being written).
+    return left < 1e-3 ? 0.0F : viewmodel.recoilKickRadians * static_cast<float>(left);
 }
 
 std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game, std::string& error) {

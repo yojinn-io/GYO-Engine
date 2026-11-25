@@ -37,6 +37,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/match/SaveSync.cpp
     src/present/Controls.cpp
     src/present/HitFeedback.cpp
+    src/present/Interpolation.cpp
     src/present/SoundCues.cpp
     src/sim/Arena.cpp
     src/sim/CombatRules.cpp
