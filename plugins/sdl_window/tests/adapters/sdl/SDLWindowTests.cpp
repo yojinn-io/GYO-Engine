@@ -9,9 +9,14 @@
 
 #include <doctest/doctest.h>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
+#include <thread>
+#include <functional>
 #include <memory>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <variant>
@@ -27,6 +32,7 @@
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "engine/window_camera/WindowCameraModule.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 #include "plugins/sdl/NativeWindow.hpp"
 #include "plugins/sdl_window/SDLWindowPlugin.hpp"
 
@@ -341,6 +347,8 @@ O::RegisteredUnits Units() {
     units.modules.push_back({"window", std::make_unique<W::WindowModule>()});
     units.rows.push_back(Row("window_camera", O::UnitKind::Module, false, {"window", "camera"}));
     units.modules.push_back({"window_camera", std::make_unique<GYO::Engine::WindowCamera::WindowCameraModule>()});
+    units.rows.push_back(Row("world_time", O::UnitKind::Module, false));
+    units.modules.push_back({"world_time", std::make_unique<GYO::Engine::WorldTime::WorldTimeModule>()});
     units.rows.push_back(Row("sdl", O::UnitKind::Plugin, true));
     units.rows.push_back(Row("sdl_window", O::UnitKind::Plugin, false, {"sdl", "input", "window"}));
     units.plugins.push_back({"sdl_window", std::make_unique<S::SDLWindowPlugin>()});
@@ -578,6 +586,303 @@ TEST_CASE("sdl_window: the runner ends with Success when the game's close was ap
     const O::RunnerExit exit = p->Run();
     CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, "[sw-runner-close] the close request ends the loop: " << exit.reason);
     CHECK_MESSAGE(PumpOf(*p).Closed(), "[sw-runner-closed] the window was closed");
+}
+
+namespace {
+
+// A live-resize expose for the window, pushed on the main thread from inside SDL's pump (SDL_RunOnMainThread's
+// callbacks run in SDL_PumpEvents, the place the OS's modal loop reaches SDL from).
+struct ExposeAsk {
+    SDL_WindowID window = 0;
+    int data1 = 1;
+    std::function<void()> before;  // run first, on the main thread inside the pump
+};
+void SDLCALL PushExpose(void* userdata) {
+    auto* ask = static_cast<ExposeAsk*>(userdata);
+    if (ask->before) ask->before();
+    SDL_Event event = WindowEvent(ask->window, SDL_EVENT_WINDOW_EXPOSED);
+    event.window.data1 = ask->data1;
+    static_cast<void>(SDL_PushEvent(&event));
+}
+// Asks from another thread (so the callback waits for the main thread's next pump).
+void ExposeInNextPump(ExposeAsk& ask) {
+    std::thread asker([&ask] { static_cast<void>(SDL_RunOnMainThread(&PushExpose, &ask, false)); });
+    asker.join();
+}
+
+std::atomic<int> simRounds{0};
+std::atomic<int> roundsWhileStalled{-1};
+int mainFrames = 0;
+
+K::SystemResult CountSimRound() {
+    simRounds.fetch_add(1);
+    return {};
+}
+// The main World: its fifth frame holds the main thread for 250 ms; its tenth asks to close.
+K::SystemResult StallThenClose(K::ResMut<W::WindowRequest> request) {
+    ++mainFrames;
+    if (mainFrames == 5) {
+        const int before = simRounds.load();
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        roundsWhileStalled = simRounds.load() - before;
+    }
+    if (mainFrames == 10) request->close = true;
+    return {};
+}
+std::atomic<bool> failNow{false};
+int framesSeen = 0;
+// Counts the frames; the 50th asks to close (so a runner that went on after the failure ends too).
+K::SystemResult CloseLater(K::ResMut<W::WindowRequest> request) {
+    if (++framesSeen == 50) request->close = true;
+    return {};
+}
+
+K::SystemOptions InFrameUpdate(std::string name) {
+    K::SystemOptions options;
+    options.name = std::move(name);
+    K::Mount mount;
+    mount.schedule = std::string(O::DefaultSchedules::frame);
+    mount.stage = std::string(O::DefaultSchedules::update);
+    options.mounts.push_back(std::move(mount));
+    return options;
+}
+
+} // namespace
+
+TEST_CASE("sdl_window: the live frame runs from SDL's live-resize expose only inside the pump, once, not re-entered") {
+    auto p = Make();
+    PumpOf(*p).Pump();
+    const SDL_WindowID id = SDL_GetWindowID(WindowOf(*p));
+    int frames = 0;
+    PumpOf(*p).SetLiveFrame([&frames, id] {
+        // A second expose from inside the first live frame: not run again (no reentry).
+        if (++frames == 1) {
+            SDL_Event again = WindowEvent(id, SDL_EVENT_WINDOW_EXPOSED);
+            again.window.data1 = 1;
+            static_cast<void>(SDL_PushEvent(&again));
+        }
+    });
+    // Outside the pump: nothing.
+    SDL_Event outside = WindowEvent(id, SDL_EVENT_WINDOW_EXPOSED);
+    outside.window.data1 = 1;
+    Push(outside);
+    CHECK_MESSAGE(frames == 0, "[sw-live-only-in-pump]");
+    PumpOf(*p).Pump();
+    // An ordinary expose (data1 0) inside the pump: nothing.
+    ExposeAsk plain{id, 0, {}};
+    ExposeInNextPump(plain);
+    PumpOf(*p).Pump();
+    CHECK_MESSAGE(frames == 0, "[sw-live-data1] " << frames);
+    // A live-resize expose inside the pump: one frame.
+    ExposeAsk live{id, 1, {}};
+    ExposeInNextPump(live);
+    PumpOf(*p).Pump();
+    CHECK_MESSAGE(frames == 1, "[sw-live-once] " << frames);
+    // Another window's: nothing.
+    ExposeAsk other{id + 1000, 1, {}};
+    ExposeInNextPump(other);
+    PumpOf(*p).Pump();
+    CHECK(frames == 1);
+    PumpOf(*p).SetLiveFrame({});
+}
+
+TEST_CASE("sdl_window: the runner's live frame runs a frame; its failure ends the runner once the pump returned") {
+    static_cast<void>(dummyDriver);
+    failNow = false;
+    framesSeen = 0;
+    O::ProductDescription d;
+    d.name = "game";
+    S::SDLWindowOptions options;
+    d.options.Set(options);
+    d.options.Set(Hidden());
+    O::WorldDescription w;
+    w.name = "Main";
+    w.build = [](O::WorldSetup& setup) {
+        setup.Registrar().AddSystem<&CloseLater>(InFrameUpdate("CloseLater"));
+        // The frame the live frame runs fails once (an exchange function's E2: the World stays healthy, so only the
+        // runner's own record of the live frame's failure ends it).
+        setup.ExchangeIn([](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            if (!failNow.exchange(false)) return {};
+            return GYO::Engine::Base::Err(O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the test's frame fails"));
+        });
+    };
+    d.worlds.push_back(std::move(w));
+    auto built = O::Product::Build(std::move(d), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
+    auto& p = *built;
+    const SDL_WindowID id = SDL_GetWindowID(WindowOf(*p));
+    ExposeAsk live{id, 1, [] { failNow = true; }};
+    ExposeInNextPump(live);
+    const O::RunnerExit exit = p->Run();
+    CHECK_MESSAGE(exit.code == O::RunnerExitCode::Failure, "[sw-live-failure] " << exit.reason);
+    CHECK(exit.reason.find("the test's frame fails") != std::string::npos);
+    CHECK(framesSeen < 50);
+    failNow = false;
+}
+
+TEST_CASE("sdl_window: a World of ownThreadWorlds runs on its own thread while the main thread is held, and is returned") {
+    static_cast<void>(dummyDriver);
+    simRounds = 0;
+    roundsWhileStalled = -1;
+    mainFrames = 0;
+    O::ProductDescription d;
+    d.name = "game";
+    S::SDLWindowOptions options;
+    options.ownThreadWorlds = {"Sim"};
+    options.ownThreadIdle = std::chrono::milliseconds(2);
+    d.options.Set(options);
+    d.options.Set(Hidden());
+    O::WorldDescription main;
+    main.name = "Main";
+    main.units = {"transform", "camera", "input", "window", "window_camera", "sdl_window"};
+    main.build = [](O::WorldSetup& setup) { setup.Registrar().AddSystem<&StallThenClose>(InFrameUpdate("StallThenClose")); };
+    d.worlds.push_back(std::move(main));
+    O::WorldDescription sim;
+    sim.name = "Sim";
+    sim.units = {"transform"};
+    sim.build = [](O::WorldSetup& setup) { setup.Registrar().AddSystem<&CountSimRound>(InFrameUpdate("CountSimRound")); };
+    d.worlds.push_back(std::move(sim));
+    auto built = O::Product::Build(std::move(d), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
+    auto& p = *built;
+    const O::RunnerExit exit = p->Run();
+    CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, exit.reason);
+    CHECK(mainFrames == 10);
+    CHECK_MESSAGE(roundsWhileStalled.load() >= 5, "[sw-own-thread] the lent World ran while the main thread was held: " << roundsWhileStalled.load());
+    // Returned: the Product reaches it again.
+    CHECK(p->HasWorld("Sim"));
+    const int after = simRounds.load();
+    REQUIRE(static_cast<bool>(p->RunFrame()));
+    CHECK_MESSAGE(simRounds.load() == after + 1, "[sw-own-thread-returned] RunFrame runs it again");
+}
+
+namespace {
+
+int resizedSeen = 0;
+K::SystemResult CountResized(K::MessageReader<W::WindowResized> resized) {
+    resizedSeen += static_cast<int>(resized.Read().size());
+    return {};
+}
+
+std::atomic<int> simSteps{0};
+K::SystemResult CountSimStep() {
+    simSteps.fetch_add(1);
+    return {};
+}
+// The main World: each frame holds the main thread 30 ms; the tenth asks to close.
+K::SystemResult SlowThenClose(K::ResMut<W::WindowRequest> request) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    if (++mainFrames == 10) request->close = true;
+    return {};
+}
+std::atomic<int> simRoundsToFail{-1};
+K::SystemResult ThrowLater() {
+    if (simRounds.fetch_add(1) + 1 == 3) throw std::runtime_error("the lent World's System threw");
+    return {};
+}
+
+std::unique_ptr<O::Product> MainAndSim(std::function<void(O::WorldSetup&)> mainBuild, std::vector<std::string> simUnits,
+                                      std::function<void(O::WorldSetup&)> simBuild) {
+    static_cast<void>(dummyDriver);
+    O::ProductDescription d;
+    d.name = "game";
+    S::SDLWindowOptions options;
+    options.ownThreadWorlds = {"Sim"};
+    options.ownThreadIdle = std::chrono::milliseconds(2);
+    d.options.Set(options);
+    d.options.Set(Hidden());
+    O::WorldDescription main;
+    main.name = "Main";
+    main.units = {"transform", "camera", "input", "window", "window_camera", "sdl_window"};
+    main.build = std::move(mainBuild);
+    d.worlds.push_back(std::move(main));
+    O::WorldDescription sim;
+    sim.name = "Sim";
+    sim.units = std::move(simUnits);
+    sim.build = std::move(simBuild);
+    d.worlds.push_back(std::move(sim));
+    auto built = O::Product::Build(std::move(d), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
+    return std::move(*built);
+}
+
+} // namespace
+
+TEST_CASE("sdl_window: the live frame first writes the window's size now as a WindowResized (master's pit 3)") {
+    resizedSeen = 0;
+    static_cast<void>(dummyDriver);
+    O::ProductDescription d;
+    d.name = "game";
+    S::SDLWindowOptions options;
+    options.installRunner = false;
+    d.options.Set(options);
+    d.options.Set(Hidden());
+    O::WorldDescription w;
+    w.name = "Main";
+    w.build = [](O::WorldSetup& setup) { setup.Registrar().AddSystem<&CountResized>(InFrameUpdate("CountResized")); };
+    d.worlds.push_back(std::move(w));
+    auto built = O::Product::Build(std::move(d), Units());
+    REQUIRE_MESSAGE(static_cast<bool>(built), (built ? std::string() : built.error().detail));
+    auto& p = *built;
+    Frame(*p);
+    Frame(*p);  // the first round's present state is behind us
+    const int before = resizedSeen;
+    O::Product* product = p.get();
+    PumpOf(*p).SetLiveFrame([product] { static_cast<void>(product->RunFrame()); });
+    ExposeAsk live{SDL_GetWindowID(WindowOf(*p)), 1, {}};
+    ExposeInNextPump(live);
+    PumpOf(*p).Pump();
+    CHECK_MESSAGE(resizedSeen == before + 1, "[sw-live-size-now] the live frame's World read the size now: " << resizedSeen - before);
+    PumpOf(*p).SetLiveFrame({});
+}
+
+TEST_CASE("sdl_window: a lent World with world_time waits for its next fixed step between rounds (no spin)") {
+    simRounds = 0;
+    simSteps = 0;
+    mainFrames = 0;
+    auto p = MainAndSim([](O::WorldSetup& setup) { setup.Registrar().AddSystem<&SlowThenClose>(InFrameUpdate("SlowThenClose")); },
+                        {"world_time"}, [](O::WorldSetup& setup) {
+                            setup.Registrar().AddSystem<&CountSimRound>(InFrameUpdate("CountSimRound"));
+                            K::SystemOptions step;
+                            step.name = "CountSimStep";
+                            step.mounts.push_back(K::Mount{std::string(O::DefaultSchedules::fixed), std::string(O::DefaultSchedules::update)});
+                            setup.Registrar().AddSystem<&CountSimStep>(std::move(step));
+                        });
+    const O::RunnerExit exit = p->Run();
+    CHECK_MESSAGE(exit.code == O::RunnerExitCode::Success, exit.reason);
+    INFO("rounds " << simRounds.load() << ", steps " << simSteps.load());
+    CHECK(simSteps.load() >= 5);
+    CHECK_MESSAGE(simRounds.load() <= 2 * simSteps.load() + 5, "[sw-own-thread-waits] about one round per step");
+}
+
+TEST_CASE("sdl_window: a lent World's exchange failure (E2) ends the runner with it") {
+    simRounds = 0;
+    mainFrames = 0;
+    auto p = MainAndSim([](O::WorldSetup& setup) { setup.Registrar().AddSystem<&StallThenClose>(InFrameUpdate("StallThenClose")); },
+                        {"transform"}, [](O::WorldSetup& setup) {
+                            setup.Registrar().AddSystem<&CountSimRound>(InFrameUpdate("CountSimRound"));
+                            setup.ExchangeOut([](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                                if (simRounds.load() < 3) return {};
+                                return GYO::Engine::Base::Err(
+                                    O::OrchestrationError(O::OrchestrationErrorCode::PrepareFailed, "the lent World's out failed"));
+                            });
+                        });
+    const O::RunnerExit exit = p->Run();
+    CHECK(exit.code == O::RunnerExitCode::Failure);
+    CHECK_MESSAGE(exit.reason.find("the lent World's out failed") != std::string::npos, exit.reason);
+    CHECK_MESSAGE(mainFrames < 10, "[sw-own-thread-stopped] the runner ended when the thread stopped, frame " << mainFrames);
+    CHECK(p->HasWorld("Sim"));
+}
+
+TEST_CASE("sdl_window: an exception that leaves a lent World's round goes on from the runner, on the main thread") {
+    simRounds = 0;
+    mainFrames = 0;
+    auto p = MainAndSim([](O::WorldSetup& setup) { setup.Registrar().AddSystem<&StallThenClose>(InFrameUpdate("StallThenClose")); },
+                        {"transform"},
+                        [](O::WorldSetup& setup) { setup.Registrar().AddSystem<&ThrowLater>(InFrameUpdate("ThrowLater")); });
+    CHECK_THROWS_WITH_MESSAGE(static_cast<void>(p->Run()), "the lent World's System threw", "[sw-own-thread-exception]");
+    REQUIRE(p->Failure() != nullptr);
+    CHECK(p->Failure()->world == "Sim");
 }
 
 } // namespace GYO::Plugins::SDLWindow

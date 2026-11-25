@@ -2,7 +2,7 @@
 # (Design Invariant SDL-2). They push SDL events, so they are adapter tests (tests/adapters/sdl/, SDL-1) and run on
 # SDL's dummy video driver: no display, every CI row.
 add_executable(gyo_sdl_window_tests TestMain.cpp adapters/sdl/SDLWindowTests.cpp)
-target_link_libraries(gyo_sdl_window_tests PRIVATE GYO::SDLWindow GYO::Input GYO::Window GYO::WindowCamera GYO::Camera
+target_link_libraries(gyo_sdl_window_tests PRIVATE GYO::SDLWindow GYO::Input GYO::Window GYO::WindowCamera GYO::Camera GYO::WorldTime
                       GYO::Transform SDL3::SDL3-static doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_sdl_window_tests PRIVATE /W4 /permissive-)

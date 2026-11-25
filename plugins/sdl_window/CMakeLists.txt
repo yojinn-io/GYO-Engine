@@ -13,7 +13,7 @@ target_include_directories(gyo_sdl_window PUBLIC
 
 # The Modules it writes and GYO::SDL come from config/plugins.csv (O-6).
 target_link_libraries(gyo_sdl_window PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math GYO::Time
-                      PRIVATE GYO::OS SDL3::SDL3-static)
+                      PRIVATE GYO::OS GYO::Threads GYO::WorldTime SDL3::SDL3-static)
 gyo_link_registered_dependencies(sdl_window)
 target_compile_features(gyo_sdl_window PUBLIC cxx_std_20)
 if(MSVC)
