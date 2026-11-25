@@ -37,6 +37,18 @@ Owner：大地圖線的任務卡。分支 `claude/gyo2-big-map-s4c-world-load`�
 - 實際程式：`gyo_object_fps_pvp-match --arena kiriyu_incident_250m --ticks 64` 記「the map is ready (16 regions, 364 ms)」後照常跑完。B 階段啟動時讀 6 張圖約 1.0～1.1 s，現在只讀這一局的那張。
 - 未跑：Windows／Linux（交給 L1）、GPU 的畫面、實機的連線遊玩。
 
+## 設計審查（Opus／high，只給成果物與原始要求）
+
+blocker 1、should 4、nit 5。處置：
+- **B1（採用）**：生成期間「連進來又斷掉」的連線，牆好後讀積壓訊息時會替已不存在的 Peer 生成玩家（沒人控制、永不消失），同一使用者重連時還會多一個。讀時跳過已不存在的 Peer；補兩個測試（來了又走 → 沒有玩家；走了又來 → 只有一個）與突變 `pvp-seat-ended-connection`。Bevy 式「照狀態入座」要重寫 `SeatPlayers` 的換手，不在本批（宣告 15.6 寫明）。`SeatPlayers` 用 early return 而不用執行條件的理由寫進註解（條件會讓 cursor 不存在、紀錄被裁掉）。
+- **S1（採用）**：arena id 不同時一收到 `MatchInfo` 就判，不先讀完錯的圖。
+- **S2（採用）**：`WorkerTask` 丟掉時取消還沒開始的 job；牆與網格改在計算用的執行緒做，和 asset 讀檔的執行緒分開（Bevy 的 IoTaskPool／AsyncComputeTaskPool）。介面借用 `AssetExecutor`，宣告寫明。
+- **S3（採用）**：loading 等 Sim 的牆這一條原本沒有測試守。新測試讓 Frame 先完成、Sim 的牆卡住，確認不 ready、文字停在「地図を組み立てています…」；突變 `pvp-loading-no-sim-walls`。順帶確認：Sim 生成完之前自己的玩家不會出現。
+- **S4（採用）**：測試的 `InlineJobs` 改成 job 內的 Submit 排到後面執行（`AssetExecutor` 的契約）。
+- **N3（採用）**：拿掉沒用到的 `WorkerTask::Started()`。**N4（採用為文件）**：宣告改寫成「Match 的圖不同就重建；Gateway 的房間照理不會遇到，程式不另限制」。**N5（採用）**：測試也確認 region 被放掉。
+- **N1、N2（不改）**：`LoadArena` 與 `ShowArena` 的流程相似，但取哪部分、做什麼、放到哪都不同，共用會多一層參數；複製成本沒量到壓力（km² 的量測在 S5）。
+- 修正後：world 34 案、client 36 案通過（client 4 個行程同時跑也全過）；突變（新加 2 個與相關 9 個）全部 killed。`pvp-loading-no-sim-walls` 第一次為 wrong_failure（當時 expect 的標記不在失敗的斷言上），加上標記後 killed。
+
 ## 沒做
 
 - 串流、km² 量測（S5，要先問使用者）。
