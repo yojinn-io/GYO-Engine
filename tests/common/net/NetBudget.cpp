@@ -189,8 +189,8 @@ int WireMode() {
     server.net.clock = reader;
     server.net.seed = 11;
     client.net.link = std::make_shared<N::MemoryLink>(links.second);
-    client.net.serverEndpoint = N::MemoryLink::EndpointA();
-    client.net.userId = 5;
+    client.target.server = N::MemoryLink::EndpointA();
+    client.target.userId = 5;
     client.net.clock = reader;
     client.net.seed = 7; // G-8 leaves it to std::random_device: fixed here so the digest repeats (the sizes do not depend on it)
     auto s = O::Product::Build(Describe(server), Units(true));
@@ -261,8 +261,8 @@ int main(int argc, char** argv) {
         End client = GameEnd(N::NetRole::Client, rules);
         client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
         client.net.link = std::make_shared<N::MemoryLink>(links[i].second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = static_cast<std::uint64_t>(i + 1);
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = static_cast<std::uint64_t>(i + 1);
         client.net.clock = reader;
         client.net.seed = 1000 + i; // fixed so the digest repeats
         auto built = O::Product::Build(Describe(client), Units(true));

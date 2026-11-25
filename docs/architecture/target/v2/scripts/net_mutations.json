@@ -963,7 +963,7 @@
     "net 8"
    ],
    "file": "engine/modules/net/src/NetService.cpp",
-   "find": "lastSalt_, clientWorlds_ > 0 ? clientWorlds_ - 1 : 0};",
+   "find": "lastSalt_, targetEpoch_};",
    "replace": "lastSalt_, 0};",
    "target": "gyo_net_tests",
    "cases": "replication:*",
@@ -1404,6 +1404,110 @@
    "target": "gyo_net_tests",
    "cases": "k3: the client's own Peer entity*",
    "expect": "\\[nt\\-k3\\-peer\\-kept\\]"
+  },
+  {
+   "id": "nt-target-none-connects",
+   "what": "a World without a target keeps the connection of the one before",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    std::optional<Target> wanted;\n",
+   "replace": "    std::optional<Target> wanted = target_;\n",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-none\\-closes\\]"
+  },
+  {
+   "id": "nt-target-same-not-kept",
+   "what": "the same target does not keep the live connection",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    if (wanted && target_ && *wanted == *target_ && live) return;  // the same connection goes on into the new World\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-same\\-kept\\]"
+  },
+  {
+   "id": "nt-target-end-not-sent",
+   "what": "a connection the new World does not keep is dropped without its Disconnect (the server waits for the timeout). Another target to the same endpoint is ended by the server anyway (a larger salt), so the World without a target kills it",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    EndClient(now);\n    target_ = std::move(wanted);",
+   "replace": "    client_.reset();\n    target_ = std::move(wanted);",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-none\\-closes\\]"
+  },
+  {
+   "id": "nt-target-socket-early",
+   "what": "a client's UDP socket opens at the start (Configure) (a World without a target now closes it at its first frame, so it is seen before that frame)",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (!link && options.role == NetRole::Server) {",
+   "replace": "    if (!link) {",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5*",
+   "expect": "\\[nt\\-target\\-socket\\-late\\]"
+  },
+  {
+   "id": "nt-target-wrong-kind-connects",
+   "what": "an Endpoint over UDP is taken as a target",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "        } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr && options_.link) {",
+   "replace": "        } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr) {",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5*",
+   "expect": "\\[nt\\-target\\-wrong\\-kind\\]"
+  },
+  {
+   "id": "nt-target-closed-dropped",
+   "what": "a session closed just before the replacement is dropped without sending its Disconnect",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    EndClient(now);\n    target_ = std::move(wanted);",
+   "replace": "    if (client_ && client_->State() != ClientState::Disconnected) EndClient(now); else client_.reset();\n    target_ = std::move(wanted);",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J3 closed just before*",
+   "expect": "\\[nt\\-target\\-closed\\-sent\\]"
+  },
+  {
+   "id": "nt-target-open-failure-ignored",
+   "what": "a client socket that cannot open is taken as opened (the target is kept)",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "            Failed(std::move(opened).error());\n            wanted.reset();",
+   "replace": "            Failed(std::move(opened).error());",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5 a client socket*",
+   "expect": "\\[nt\\-target\\-open\\-failed\\]|test case CRASHED"
+  },
+  {
+   "id": "nt-target-socket-kept",
+   "what": "a client World without a target keeps the socket open (a port held in single play)",
+   "guards": [
+    "net D-8 (net-connect-target declaration 4.5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    if (!target_ && !options_.link) link_.reset();\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5 over UDP*",
+   "expect": "\\[nt\\-target\\-socket\\-closed\\]"
   }
  ]
 }

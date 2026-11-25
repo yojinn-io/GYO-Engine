@@ -13,7 +13,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 使用者 2026-11-22（`v8-arch-gyo2-design-review-stage`）：「而是要有一個code review的階段。目的不是找bug，而是看這個設計是否合理。」底層刻意不替誤用、亂用加守衛和突變（守衛過多會把設計鎖回舊形狀，master 就是這樣），少掉的那層由這一步補上。
 
 - **時機**：實作與測試都通過之後、交使用者合併前核准之前。
-- **誰做**：和實作者不同模型的審查者（Fable／high），唯讀。
+- **誰做**：審查者 Opus／high，唯讀（和實作者同模型；換模型的檢查由純淨 Code Review（Fable）負責，`v8-arch-gyo2-navigator-fable-decided`）。這一步第 5 項要讀宣告和 Bevy 的對照，本身不是純淨審查。
 - **看什麼**（設計合不合理，不是找 bug）：
   1. **機制有沒有分散在各個實現裡**：同一件事只該有一個公開出口，各實現注入自己的那一份；呼叫的一方只用公開介面，不用知道背後是哪個實現。例：os 只有一個對外介面，Linux、Windows、macOS 各自實作；外面完全不必管 OS，只呼叫介面就能用 OS 的能力。
   2. 責任與依賴方向；有沒有用契約以外的 API、繞過連結去 include 別的單位（守衛不擋的部分在這裡看）。
@@ -58,7 +58,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 6. 日誌機制 | **2026-11-21 完成**（日誌 PR #256 併入 `gyo2`，d3371355；`v8-arch-gyo2-logging-merged`）。trace 另成 Module、另寫宣告與 PR（`v8-arch-gyo2-logging-trace-two-modules`、`-trace-direction`），使用者「合併完先等等。」後，2026-11-21「通知日誌卡，可以繼續。」，從 bb2497b0 寫 trace 宣告；同日動工前核准（`v8-arch-gyo2-trace-declaration-approved`）；同日合併 PR #258（f25837b0，`v8-arch-gyo2-trace-merged`），**第 6 組完成**。 | master 的 `engine/trace`（參考） | 2、3 |
 | 6. 異常分級 | **2026-11-21 完成**（PR #254 併入 `gyo2`，e0806f1f；`v8-arch-gyo2-error-levels-merged`）。範圍收窄到 D1、D2、P12、P15、退出流程與條文草稿（`v8-arch-gyo2-error-levels-shrink`、`-exit-flow`）。 | `docs/architecture/error-handling.md`（R0–R6 的契約，起點） | 2、3 |
 | 6. Engine 分層 | **2026-11-21 完成**（PR #257 併入 `gyo2`，bb2497b0；`v8-arch-gyo2-engine-layers-merged`）。後續：core、ecs、orchestration 不登記成 Module（PR #261，2acf9cee；`v8-arch-gyo2-core-not-registered`）。`engine/` 分成 `core/`、`ecs/`、`orchestration/`、`modules/`，登記檔加 `dir` 欄並搬到頂層 `config/`；主會話親自做 | — | 已合併的各批 |
-| 6. SDL（第一個 Plugin 批） | **2026-11-23 宣告整份動工前核准**（修訂 21，26e37273，`v8-arch-gyo2-sdl-declaration-approved`；14 個子批 R1a、R1b、KR、X1、X2、I、P、W、A、T、R2a、K、R2b、U，各子批另寫事前宣告；KR 已合併 #295 d02e60f4、X1 已合併 #298 077ae2af、T 已合併 #297 ecbb0bda、R1a 已合併 #299、P 已合併 #300；I 已合併 #301 743d7fd2、X2 已合併 #303 eff6408b、W 已合併 #308 6df0937b、A 已合併 #306 426add81、R2a 已合併 #315 906b1c5e、R2b 已合併 #319 83a5ebb0（2D）＋#320 3dc2d5df（3D）、U 已合併 #322 2a28d9b6＋#326 bec63ca5、R1b 已合併 #334 d9555e62；剩 K（兩個移植之後））；**2026-11-23 開宣告卡**（`v8-arch-gyo2-sdl-declaration-start`，`local_2cc7e494`）。`engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來；碰外部組件的程式一律放各 Module 的 `src/adapters/<組件>/`（SDL 放 `src/adapters/sdl/`）（`engine/core/os` 不搬：core 用 `src/<平台>/`，`src/adapters/<組件>/` 是 Module 的結構，`v8-arch-gyo2-os-in-core-platform-dirs`；SDL 帶的視窗、輸入、聲音裝置不進 core/os）；**render 回來時一起做 11-11 的 K.3-6**：模擬的 World 與渲染的 World 分開，渲染的有自己的 Registry，只經 Extract 唯讀拿資料（Kernel 減法時 Extract 已拿掉，gyo2 上沒有；2026-11-21 補列，`v8-arch-gyo2-plan-gaps-2026-11-21`） | master 的 platform、input、render、text、ui（參考） | 2、3；多個 World、交換點 |
+| 6. SDL（第一個 Plugin 批） | **2026-11-23 宣告整份動工前核准**（修訂 21，26e37273，`v8-arch-gyo2-sdl-declaration-approved`；14 個子批 R1a、R1b、KR、X1、X2、I、P、W、A、T、R2a、K、R2b、U，各子批另寫事前宣告；KR 已合併 #295 d02e60f4、X1 已合併 #298 077ae2af、T 已合併 #297 ecbb0bda、R1a 已合併 #299、P 已合併 #300；I 已合併 #301 743d7fd2、X2 已合併 #303 eff6408b、W 已合併 #308 6df0937b、A 已合併 #306 426add81、R2a 已合併 #315 906b1c5e、R2b 已合併 #319 83a5ebb0（2D）＋#320 3dc2d5df（3D）、U 已合併 #322 2a28d9b6＋#326 bec63ca5、R1b 已合併 #334 d9555e62；K 取消，改為移植 master 的 tools（`v8-arch-gyo2-k-cancelled-port-master-tools`））；**2026-11-23 開宣告卡**（`v8-arch-gyo2-sdl-declaration-start`，`local_2cc7e494`）。`engine/platform` 不回來，功能拆進各 Module，怎麼拆在這批分析（`v8-arch-gyo2-platform-obsolete-split-into-modules`）；plugins 目錄的建置；input、render、text、ui 依序回來；碰外部組件的程式一律放各 Module 的 `src/adapters/<組件>/`（SDL 放 `src/adapters/sdl/`）（`engine/core/os` 不搬：core 用 `src/<平台>/`，`src/adapters/<組件>/` 是 Module 的結構，`v8-arch-gyo2-os-in-core-platform-dirs`；SDL 帶的視窗、輸入、聲音裝置不進 core/os）；**render 回來時一起做 11-11 的 K.3-6**：模擬的 World 與渲染的 World 分開，渲染的有自己的 Registry，只經 Extract 唯讀拿資料（Kernel 減法時 Extract 已拿掉，gyo2 上沒有；2026-11-21 補列，`v8-arch-gyo2-plan-gaps-2026-11-21`） | master 的 platform、input、render、text、ui（參考） | 2、3；多個 World、交換點 |
 | 物理（2D、3D 兩個 Module） | **3D 已合併**（2026-11-24：#309 起步、#311 角色控制器、#312 接縫修正，`v8-arch-gyo2-physics-3d-merged`）；2D 跟 Object_Connect（盤點沒列物理缺口）。2026-11-23 使用者定 2D、3D 分成兩個 Module（`v8-arch-gyo2-2d-and-3d`）；master 的 collision 只有 3D | — | 各自跟點名的產品回來：3D 跟 PvP、2D 跟使用者要移植的 2D 遊戲 |
 | 6. core/os 等待原語＋core/time 改呼叫 os | **2026-11-21 開卡；同日合併前核准（`v8-arch-gyo2-os-wait-merge-approved`，PR #262）**（`v8-arch-gyo2-os-wait-unfreeze`；卡片 `local_16721d66`）。os 是底層兼容層、只對外提供介面；`core/time/src/Waiter.cpp` 不再直接碰 OS API。先查 10-28 W3 不通過的原因並寫事前宣告（Windows 實機計時門檻），核准後做 core/os（`src/<平台>/`）、再讓 time 呼叫 os、刪准許清單 | 10-28 撤回的 os-wait-backend（`4041cf42`、`756073aa`） | — |
 | 6. namespace 根的改名（機械式） | **2026-11-22 完成**（PR #266 併入 `gyo2`，45f13757；`v8-arch-gyo2-namespace-root-merged`）；**開卡**（`v8-arch-gyo2-namespace-root-start`，卡片 `local_36acb56b`；改名＋立守衛）。11-14 命名規範第 6 節已定（`v8-arch-gyo2-naming-1-to-4`）：帶過來的 base、math、os、time、threads、io、audio、entity_store 的根從 `Engine::<X>` 統一成 N17 的 `GYO::Engine::<Module>`（含 `Engine::IO` 的大小寫），只改名字、不改行為，以全部測試通過為準；層名不進 namespace（N17 的例子 `engine/ecs/kernel`↔`GYO::Kernel`）。原定「System 契約確認之後、移植任何產品之前」，之前沒排進批次表（2026-11-21 補列，`v8-arch-gyo2-namespace-rename-placement`）。位置：第 4 批合併之後、threads／io／audio 重審之前，單獨一個 PR（先改名，重審時不必邊改名邊改介面） | — | 4 |
@@ -113,7 +113,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **待使用者定（未決）：骨骼動畫的三層**——1 資料與取樣（骨架、片段、時刻 t 的姿勢純函式）→ model 函式庫；2 播放（每個實體播哪個片段、播到哪裡，照 World 時間前進取樣 Pose）→ 登記單位 `animation`／`AnimationModule`，PvP 進模擬所以要能進回滾、取樣照 tick，碰時間／回滾／權威，是基盤；3 蒙皮顯示 → render，經 Extract 拿 Pose。hitbox、切片段、混合規則是遊戲規則 | 主會話 2026-11-23 提（同上） | 同上 |
 | **已定：留著**（`v8-arch-gyo2-decisions-2026-11-24-morning`）：`tests/common/model/contract/skinned_bar.fbx`（#313 合進 gyo2）帶著本機絕對路徑（含使用者名稱，Blender 寫進貼圖的路徑）；#317 已改成從 `/tmp/gyo_model_contract/` 匯出、重產的檔沒有，但舊內容仍在 gyo2 的 git 歷史（b6196726 之前）。不 rebase、不強推的前提下只能留著 | model #317 | 不處理 |
 | 動畫事件（PvP 盤點 4.6 放在第 1 層，model #313 範圍沒做）：model 的純函式「區間內穿過了哪些時刻（含跨 loop）」＋它的資料；PvP 的事件在 `viewmodel.anim_events.json`（例：`Armature|Reload` 1.887 s 的 `magazine_in`），JSON 的讀法與事件→聲音是遊戲的 | model #313（`model.zh-Hant.md` 第 5 節、dev_log 後續；使用者「沒做的，可以轉給主會話。」） | PvP 移植接 viewmodel 動畫時 |
-| K（KeepTool＋ImGui）：ImGui 預設 16 位元索引，`RenderCommands` 用 32 位元，K 要定 `ImDrawIdx` 怎麼接；R2a 沒排 extract schedule，第一個讀來源 World 的子批（K 或 R2b）排 | R2a #315 | 子批 K（開卡時寫進 brief；R2b 已排 extract schedule，#319） |
+| **K 已取消、改移植 master 的 tools**（`v8-arch-gyo2-k-cancelled-port-master-tools`；以下兩點移到 tools 移植）：ImGui 預設 16 位元索引，`RenderCommands` 用 32 位元，K 要定 `ImDrawIdx` 怎麼接；R2a 沒排 extract schedule，第一個讀來源 World 的子批（K 或 R2b）排 | R2a #315 | 子批 K（開卡時寫進 brief；R2b 已排 extract schedule，#319） |
 | R2b 讀 `ImageData` 照 `image.zh-Hant.md` 第 2 節：RGBA8、straight alpha、第 0 列在最上面、不翻轉、rowPitch＝寬×4、色彩空間是標籤；上下方向在 R2b 的 UV 轉換單一邊界處理（master 坑 17）。另：X1 定的 2D 排序是 z 大在前 | I #301、X1 #298 | 子批 R2b（開卡時寫進 brief） |
 | 角色控制器（#311，照 avian MoveAndSlide）的已知缺陷 S1：`BoxSet` 相鄰同高方塊的接縫，`CapsuleY(0.5,0.5)` 走過最大抬高 8.8 mm、水平速度慢約 10%（相鄰頂邊給 11° 的接觸平面）；PvP 體素地圖接縫多。主會話判（卡片建議）：修在 Engine，照 parry 複合形狀 `FIX_INTERNAL_EDGES`（`src/shape/compound.rs:30-40`），`BoxSet` 加作者可選的旗標。比過：(a) 工具烘焙時合併共面方塊／(b) Engine 旗標←選／(c) 作者在 onHit 忽略近地面平面 | 3D 物理卡 #311（owner 頁第 3 節、dev_log `2026_11_23_gyo2_physics_3d_move_and_slide`） | 3D 物理卡第三個 PR（疊在 #311 上） |
 | `BoxSet` 的 `FixInternalEdges` 預設改 ON（主會話判，2026-11-23）：照 parry／avian 的 Voxels 形狀（無開關、永遠用鄰居分類避開內部邊，parry `src/shape/voxels/voxels.rs:14-28`），`BoxSet` 用途就是體素地圖，Compound 預設 OFF 的理由大多不成立；§1-10「既定値は便利に」；OFF 時 PvP 忘了開 S1 會靜靜回來。比過：OFF（照 Compound）／ON←選。代價：建立時一次 O(n log n)＋每方塊每面一格記憶體。§12 的「照 parry 定」是卡片自己寫的，改預設不是放寬判定 | 3D 物理 #312 | — |
@@ -175,7 +175,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | Engine 公開標頭與共通測試裡的產品名（`v8-arch-gyo2-oc-separation-review` 1、2）：window／input 標頭的 Object_Connect G 編號只留 Bevy 對應；sdl_gpu、audio、image、text 測試的產品名與「Object_Connect-sized」預算改成 Engine 自己的目標（判定不動） | 架構師 2026-11-24 | **已處理**：#319 的獨立 commit 29d27487 |
 | **已定 (a)（暫定，`v8-arch-gyo2-oc-fast-float-a`）**：Object_Connect 直接連 `gyo_fast_float`（`v8-arch-gyo2-oc-separation-review` 3）——產品自己宣告依賴；使用者「後面我想想如何改」 | 架構師 2026-11-24 | **註解已合併**（#328 034ab13f）；之後使用者可能改 |
 | `sdl_gpu.frames` 允許全部幀被跳過（swapchain 拿不到畫面時 0 幀也算通過）；Object_Connect #318 在 Linux Xvfb 的隱藏視窗 63 幀全跳過，是遊戲測試的「至少顯示一幀」抓到、sdl_gpu 自己的測試沒抓到 | Object_Connect 卡 2026-11-24 | **已處理**：#320 c862aed1（2D／3D 幀測試改用顯示的視窗、要求至少一幀送到視窗） |
-| `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批（K）順手改 |
+| `engine/modules/render/include/engine/render/RenderCommands.hpp:5-9` 開頭註解過時：還寫「R2a 只有 2D pass、3D 跟 R2b 來」與「view 拉滿整個目標」；R2b（#319、#320）之後是 `Pass2D::viewport` 與 `Pass3D` | Object_Connect #321 設計審查 2026-11-24 | 下一個動 render 的批順手改（K 已取消） |
 | Object_Connect 拖線時不切 `CursorGrab::Locked`：視窗貼螢幕邊時推不過那個邊；要把 `PointerWrap` 改成相對量追蹤（產品內的改動） | Object_Connect 卡 2026-11-24（#318、#321 的已知限制） | **使用者實機試過**（2026-11-24「這個我已經試過了。沒多大問題。」）；**已合併**：#329 f332b234（Engine 選項）＋#328 034ab13f（鎖游標＋fast_float 註解）；Windows 實機速度未量 |
 | JSON Module 加排版輸出（pretty print）：`gyo.ui` 經 JSON Module 寫出變成一行，Editor 回來前要有排版輸出，否則檔案 diff 沒法看（`v8-arch-gyo2-sdl-u-three-judgments` 2） | U #322 | Editor（工具線）回來前 |
 | `TextComposition.cursor` 改成位元組、由 `sdl_window` 的 adapter 換算（同 winit；`v8-arch-gyo2-sdl-u-three-judgments` 3） | U #322 設計審查 S2 | **已處理**：#326 bec63ca5 |
@@ -186,6 +186,52 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 給使用者知悉、目前不採：由 Kernel 給 World 唯一 id（像 Bevy 的 `WorldId`），讓 Extract 參數自己偵測來源換了（R1b 實作審查提的替代做法；Kernel 要加新概念） | R1b #334 實作審查 | 不排；要用時再議 |
 | **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | **算在 PvP 移植裡**（`v8-arch-gyo2-gateway-in-pvp-port`）；待開卡 |
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
+| **遊戲流程框架（主菜單）卡**（`v8-arch-gyo2-next-game-flow-not-harness`；使用者 2026-11-25「照建議，第 4 段完成再開流程框架卡」）：主菜單 World → 單人（房間 World → 遊戲 World，不帶連線目標）／多人（Gateway 大廳 → 房間 → 遊戲 World 開始時帶 `NetConnectTarget`）／設置（使用者資料目錄）／退出；換場景用 R1b 換前台 World（不關窗）＋#332；多人一支等 Gateway 第 1、2 段合併後接（原「大廳不關窗」與 Gateway 第 3 步一併歸這張卡）；商人、任務、合作／生存只留位置與資料流；**加：loading 進度條**（使用者 2026-11-25「另外還要有loading進度條」；「加載資源、讀檔」那一步要顯示；主會話查：`world_asset` 的 `AssetView::State(handle)` 已給每個 Handle 的 `AssetState`（Queued／Loading／Loaded／Failed），遊戲數自己要載的 Handle 就能算進度，同 Bevy 的 `LoadState`＋生態的 iyes_progress；沒有「連同依賴」的整體狀態與位元組級進度，要不要補由卡判，補 Engine 先寫前提）；**loading 要擋住畫面**（使用者 2026-11-25「我是說加載、預熱階段，沒有loading擋住就什麼都看到了。例如黑底，加載順序，其他玩家的位置什麼的。」）：加載與預熱期間 loading 畫面蓋住遊戲 World，直到「就緒」才露出——就緒至少含資產載完、pipeline／shader 預熱（第一次用到時編譯造成的卡頓）、網路的初始狀態到齊（其他玩家位置確定）、第一幀畫完；主會話補一點：「其他玩家的位置」若只靠畫面擋，Client 仍收到了資料，公平性要靠 Match 在開始前不複製別人的位置（net 的相關性）——**使用者「嗯，這個需要」：要做**，納入流程框架卡 | 使用者 2026-11-25 | **PvP 第 4 段遊戲部分完成後開** |
+| 遊戲優化＝大地圖（bigMap）＋渲染管線（光照、shader、粒子等）（`v8-arch-gyo2-game-optimization-scope`） | 使用者 2026-11-25 | 待開卡（主會話提案：兩條線各先寫宣告） |
+| **渲染管線線：全部要做**（`v8-arch-gyo2-render-pipeline-scope`）：清單原樣見下面〈渲染管線線〉一節 | 使用者 2026-11-25 | 已記；開卡時機待使用者定 |
+
+## 渲染管線線（全部要做，待開卡）
+
+使用者 2026-11-25：「渲染管線 先記下來。這些都是要做的。」並指定「我說的是上面這個」（`v8-arch-gyo2-render-pipeline-scope`）。下面是使用者指定的清單原樣：
+
+```text
+渲染管線
+│
+├─ 光照與陰影
+│  ├─ 光源：方向光（太陽）、點光、聚光；環境光／天空光
+│  ├─ 材質模型：Lambert／Blinn-Phong（簡單）或 PBR（Bevy 的 StandardMaterial）
+│  ├─ 陰影：方向光的 cascaded shadow map、點光的 cube shadow
+│  └─ 環境：skybox、IBL（環境貼圖反射）、AO（SSAO）
+│
+├─ shader 與材質系統
+│  ├─ 遊戲自己的 shader（P22：走共通內容管線）
+│  └─ 材質資料：哪些參數、怎麼對應 shader、熱重載
+│
+├─ 後處理（畫完整張畫面再加工）
+│  ├─ tonemapping＋exposure／gamma（PvP 盤點本來就列了 exposure／gamma）
+│  ├─ bloom、霧、色調調整（color grading）
+│  └─ 抗鋸齒：MSAA 或 FXAA／TAA
+│
+├─ 效果
+│  ├─ 粒子（CPU 或 GPU；Bevy 生態有 bevy_hanabi）
+│  ├─ 貼花（decal：彈孔、血跡）
+│  └─ 軌跡／拖尾（子彈軌跡）
+│
+├─ 效能（大地圖一定會碰到）
+│  ├─ 視錐剔除（frustum culling）：只畫看得到的
+│  ├─ instancing：同一個網格畫很多份只送一次
+│  ├─ LOD：遠的東西用簡化網格
+│  └─ mipmap、貼圖壓縮
+│
+└─ 基礎設施
+   ├─ render target：畫到貼圖上（小地圖、鏡子、編輯器預覽、後處理都靠它）
+   ├─ 多 pass／render graph：pass 之間的順序與相依（Bevy 的 render graph）
+   └─ GPU 計時與除錯（每個 pass 花多少時間）
+```
+
+- 現況（主會話用關鍵字查 render、各 `*_render`、`sdl_gpu`，未逐檔讀）：3D 是 unlit、只有 Plugin 內建 shader，上列幾乎都沒有。
+- **排在大地圖線之後**（使用者 2026-11-25「渲染管線線…排在大地圖的後面」，`v8-arch-gyo2-render-after-big-map`）。視錐剔除、instancing、LOD 隨大地圖線先做。
+- 線內主會話建議的順序（未定）：地基（render target、多 pass）→ 光照、tonemapping／exposure、遊戲 shader → 陰影、粒子、後處理、decal。
 
 ## 不擋路的小事
 

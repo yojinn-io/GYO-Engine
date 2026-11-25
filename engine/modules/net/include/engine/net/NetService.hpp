@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "engine/net/ClientSession.hpp"
@@ -27,15 +28,9 @@ struct NetProductOptions final {
     NetRole role = NetRole::Server;
     // UDP: the local address to bind (a server's listening port; a client usually any address, port 0).
     OS::DatagramAddress bind = OS::DatagramAddress::Any(0);
-    // A client over UDP: the server's address.
-    OS::DatagramAddress server{};
-    // Instead of UDP: a Link the product or a test gives (a MemoryLink end). A client then names the server's
-    // Endpoint on that Link.
+    // Instead of UDP: a Link the product or a test gives (a MemoryLink end).
     std::shared_ptr<Link> link;
-    Endpoint serverEndpoint{};
-    // A client's opaque user id and token (carried, not checked).
-    std::uint64_t userId = 0;
-    std::vector<std::byte> token;
+    // Whom a client connects to is not here: each client World says it (NetConnectTarget, net page D-8).
     // The thresholds and the transport's channels (both ends list the same channels).
     SessionSettings session;
     // A server's product decides before a client is accepted (an Err: Refused).
@@ -47,18 +42,36 @@ struct NetProductOptions final {
     std::optional<std::uint64_t> seed;
 };
 
+// The connection a client World makes (net page D-8, net-connect-target declaration): a Resource of the World, put
+// there by a prepare function (WorldDescription::prepare, a unit's) or a replacement's extra (ReplaceRequest::extra).
+// The net Module reads it at the World's first frame: a client World without one connects to nothing; a
+// new World with the same target as the live connection keeps it (and asks for a resync, R2); another target closes
+// the old connection and opens a new one. Like the World's other facts, it is not decided state.
+struct NetConnectTarget final {
+    // Over UDP: the server's address. Over a Link the product gave: the server's Endpoint on it. The other kind, or
+    // none, connects to nothing (a wrong kind is counted as a link failure: NetFailureCode::LinkFailed).
+    std::variant<std::monostate, OS::DatagramAddress, Endpoint> server;
+    // The client's opaque user id and token (carried, not checked).
+    std::uint64_t userId = 0;
+    std::vector<std::byte> token;
+};
+
 class NetService final {
 public:
-    NetService(NetProductOptions options, std::shared_ptr<Link> link, Endpoint serverEndpoint, std::uint64_t secret,
-               std::uint64_t idSeed);
+    NetService(NetProductOptions options, std::shared_ptr<Link> link, std::uint64_t secret, std::uint64_t idSeed);
 
     [[nodiscard]] NetRole Role() const noexcept { return options_.role; }
     [[nodiscard]] NetTime Now() const;
 
-    // The World's facts (its prepare function with newWorld, the send System every frame without). The first call
-    // makes the server host or the client session. A client whose session ended gets a new one only for a new
-    // World (D-8: a reconnect is a new connection in a new client World, the product's call).
+    // The World's facts (a server World's prepare function with newWorld, the send System every frame without). The
+    // first call makes the server host; a client's makes its session once it has a target (SetTarget) and none.
     void SetFacts(const HandshakeFacts& facts, NetTime now, bool newWorld);
+    // A client World's connection, at its first frame (D-8): none (null, or a server of the other transport's kind)
+    // closes a live session and connects to nothing; the target of the live session keeps it; another closes it
+    // (its last datagrams go out now) and the next SetFacts opens a new one; a session that ended is dropped, so the
+    // next SetFacts opens a new one (a reconnect is a new client World).
+    // epoch: the World's (its NetReplicaState::epoch); the new connection's request carries it (R2).
+    void SetTarget(const NetConnectTarget* target, NetTime now, std::uint32_t epoch);
     // Takes every waiting datagram into the connection layer, then the liveness at now.
     void Pump(NetTime now);
     // Sends what the connection layer has for now.
@@ -71,7 +84,8 @@ public:
     [[nodiscard]] ClientSession* Client() noexcept { return client_ ? &*client_ : nullptr; }
     [[nodiscard]] const ClientSession* Client() const noexcept { return client_ ? &*client_ : nullptr; }
     [[nodiscard]] const NetProductOptions& Options() const noexcept { return options_; }
-    // The local address of the UDP socket the Module opened, or nullopt (a Link the product gave).
+    // The local address of the UDP socket the Module opened, or nullopt (a Link the product gave, or a client whose
+    // socket is not open yet: it opens with the first NetConnectTarget).
     [[nodiscard]] std::optional<OS::DatagramAddress> UdpAddress() const;
 
     // What the Link reported (E2: kept here and counted, the World goes on), and the service's own drops (a
@@ -91,10 +105,20 @@ public:
 
 private:
     void Failed(NetFailure failure);
+    // Closes the client session and sends its last datagrams now (to the endpoint it was made for).
+    void EndClient(NetTime now);
+
+    struct Target {
+        Endpoint endpoint;
+        std::uint64_t userId = 0;
+        std::vector<std::byte> token;
+        friend bool operator==(const Target&, const Target&) = default;
+    };
 
     NetProductOptions options_;
     std::shared_ptr<Link> link_;
-    Endpoint serverEndpoint_;
+    std::optional<Target> target_;
+    std::uint32_t targetEpoch_ = 0;
     std::uint64_t secret_;
     std::uint64_t idSeed_;
     std::optional<ServerHost> server_;

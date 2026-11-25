@@ -45,8 +45,8 @@ struct Game {
         server.net.clock = clock.Reader();
         server.net.seed = 11;
         client.net.link = std::make_shared<N::MemoryLink>(links.second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = 5;
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = 5;
         client.net.clock = clock.Reader();
         auto& pieces = lostPieces;
         links.first.SetInjectionObserver([&pieces](N::MemoryLink::Injection kind, std::span<const std::byte> datagram) {
@@ -388,6 +388,7 @@ K::SystemResult KeepLinkFailures(K::MessageReader<N::NetLinkFailed> failed, K::R
 TEST_CASE("replication: a failing Link is told with NetLinkFailed and the World goes on") {
     End client = GameEnd(N::NetRole::Client, {});
     client.net.link = std::make_shared<BrokenLink>();
+    client.target.server = N::Endpoint{};  // it connects (to an endpoint the broken Link cannot reach)
     client.build = [](O::WorldSetup& s) {
         RegisterGame(s, GameRules{});
         s.Registrar().AddSystem<&KeepLinkFailures>(N::Detail::MountedAt("KeepLinkFailures", "Update"));
