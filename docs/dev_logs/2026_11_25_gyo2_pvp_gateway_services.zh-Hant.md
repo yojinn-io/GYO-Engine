@@ -23,9 +23,22 @@ Owner：Object_FPS_PVP（產品）。GYO2 主會話開的任務卡（PvP Gateway
 - 端到端（`stack`）：兩個使用者經 Gateway 建房→加入→準備→開始→各拿到自己的 `connect`，用 provider 收到的金鑰驗得過；開始後不能加入、不在列表、非成員看不到 ticket；滿房、分配失敗回 open、房主交接、換房、冪等鍵、沒有或偽造的 session、玩家經 Gateway 讀自己的存檔且沒有寫入的路徑。
 - `matches` 的本機 provider：以測試執行檔當假 Match，檢查參數與金鑰、port 用完回 `ErrNoPort`、行程結束後 port 可再用。
 - 冒煙：真的執行檔 `all` ＋ curl：session → 建房 → 準備 → 開始 → `connect`（provider 起了 `/usr/bin/true` 當 Match、結束後回收）。
-- 突變 `pvp-gw-` 21/21 killed（`replays-no-wait` 第一次 wrong_failure：突變讓程式 panic，不是要守的行為；改 `Replays` 每個請求持有自己的 channel，突變改成「不等進行中的同鍵請求」後 killed）。
+- 突變 `pvp-gw-` 第一輪 21/21 killed（`replays-no-wait` 第一次 wrong_failure：突變讓程式 panic，不是要守的行為；改 `Replays` 每個請求持有自己的 channel，突變改成「不等進行中的同鍵請求」後 killed）。
 - **沒驗**：C++ 端（第 2 段起）；Windows、Linux 的 Go 由 CI（Linux 跑 vet、test、race，並交叉編譯四個平台）。
 
-## 設計審查
+## 設計審查（Opus／high，唯讀；作者同模型，Fable 暫停中）
 
-（審查後補）
+blocker 0、should 8、nit 12、要使用者定的 0。報告：主 checkout `build/evidence/v8-product-pvp-gateway/segment1-design-review.zh-Hant.md`。審查中途一次 API 連線錯誤，接續後以遠端分支 `e415a786` 逐檔重對。
+
+- S1（rooms→matches 的冪等鍵每次重產、沒有重試 → 逾時後再按 start 會留孤兒 Match）→ 每次 start 一把鍵，傳輸錯誤時同一把鍵最多送三次。
+- S2（內部協議的 user 0 同時是「系統」與「未登入」）→ 未登入的請求不帶 `X-GYO-User`（`api.Caller`、`api.Nobody`）。
+- S3（admission token 的 `reserved` 會讓舊 Match 默默放寬）→ 拿掉，61 → 57 bytes，新欄位一律升 version。
+- S4（token 與 started 房間都固定 10 分鐘、matches 不存金鑰 → 比賽超過 10 分鐘不能重連）→ matches 保存執行中 Match 的金鑰與玩家、加重簽端點；token 預設 2 分鐘；成員問 started 房間時重簽；Match 結束後回 410 `match_ended` 並刪房；started 房間的上限 TTL 改 6 小時（只給沒人再問的房間）。
+- S5（未知路徑與方法回純文字、路徑版本丟了「說出自己的版本」）→ `unknown_route`、`unsupported_version`（附 `versions`）。
+- S6（內部請求的組裝寫兩份）→ `api.Send` 一個出口。
+- S7（`Replays` 記住 4xx，宣告沒寫）→ 只記 2xx，宣告寫明。
+- S8（宣告與實作四處落差）→ 宣告改：provider 介面（`Start`／`Running`）、matches 存金鑰（現在真的存）、session token 不照搬 master、`/leave` 回 `{"left":true}`。
+- 改的 nit：N1（saves 寫入只回版本）、N2（rooms 保留 matches 的錯誤碼，如 `no_match_available`）、N4（room id 起點隨機）、N6、N12（寫進宣告）、N11（突變 `pvp-gw-gateway-key-dropped`）。記成限制：N5（L10）、N7（L8）、N8（L9）。不改：N3（模式是產品固定的選項、地圖隨 content 變，放法不同是刻意的）、N9（列表是公開的）、N10（`running` 現在給重簽用）。
+
+修正後：`go vet`、`go test -race -count=1 ./...` 全過（新增 gateway 的標頭測試、rooms 的重試測試、stack 的重簽／Match 結束／別的版本測試）；突變 `pvp-gw-` 27/27 killed（`anonymous-carries-user` 第一次存活：測試用 map 索引查標頭，Go 把鍵正規化成 `X-Gyo-User`，查不到，改用 `Values`；`start-no-retry` 第一次 wrong_failure：突變讓變數沒用到而編譯失敗，改寫法後 killed）。
+- L1：第一次 dispatch 的 linux-x64 GPU 測試 `object_fps_pvp.main` 失敗，原因是分支基準早於 hotfix #333（`sdl_window` 對 `world_time` 的依賴），merge origin/gyo2 後重跑。

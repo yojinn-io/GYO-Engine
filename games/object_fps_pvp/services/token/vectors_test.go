@@ -45,7 +45,7 @@ func vectors() string {
 		{"version", key, flip(0), now, a.MatchID, a.UserID},
 		{"another_key", bytes.Repeat([]byte{0xa6}, KeySize), signed, now, a.MatchID, a.UserID},
 		{"changed_user_field", key, flip(16), now, a.MatchID, a.UserID},
-		{"changed_reserved_field", key, flip(26), now, a.MatchID, a.UserID},
+		{"changed_expiry_field", key, flip(20), now, a.MatchID, a.UserID},
 		{"changed_mac", key, flip(AdmissionSize - 1), now, a.MatchID, a.UserID},
 		{"another_match", key, signed, now, a.MatchID ^ 1, a.UserID},
 		{"another_user", key, signed, now, a.MatchID, a.UserID + 1},

@@ -4211,8 +4211,8 @@
       "id": "ks-s2-failed-round-kept",
       "what": "S2: a failed later round replaces the tables anyway (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "            StartupReport report(std::move(round.errors));\n            pending_.reset();",
-      "replace": "            StartupReport report(std::move(round.errors));\n            round.version = data_->version + 1;\n            Detail::Adopt(*data_, std::move(round));\n            pending_.reset();",
+      "find": "    if (!planned) {\n        StartupReport report(std::move(round.errors));\n        pending_.reset();",
+      "replace": "    if (!planned) {\n        StartupReport report(std::move(round.errors));\n        round.version = data_->version + 1;\n        Detail::Adopt(*data_, std::move(round));\n        pending_.reset();",
       "target": "gyo_kernel_tests",
       "expect": "a failed round raised the version",
       "cases": "DI-KS 4: a failed BuildPlans*"
@@ -4221,7 +4221,7 @@
       "id": "ks-s2-discard-ignored",
       "what": "S2: DiscardRegistrations keeps the pending round (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    if (pending_) {\n        pending_.reset();\n        return;\n    }\n    if (data_->frozen || !data_->registered) return;",
+      "find": "    if (pending_) {\n        pending_.reset();\n        staged_ = false;\n        return;\n    }\n    if (data_->frozen || !data_->registered) return;",
       "replace": "    if (pending_) {\n        return;\n    }\n    if (data_->frozen || !data_->registered) return;",
       "target": "gyo_kernel_tests",
       "expect": "a discarded round was built",
@@ -4461,8 +4461,8 @@
       "id": "ks-s2-register-while-running",
       "what": "S2 rule 4: Register is not checked while a World of the Registry runs (review M1) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix) (v8-arch-gyo2-mutation-prune step 3, subsumption: merged in ks-s2-own-world-unchecked [S2 rule 4: no World counts as running, so Register / BuildPlans / DiscardRegistrations are not checked during a Run (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6) (rewritten by v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)])",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)\n    RequireNoWorldRunning();\n",
-      "replace": "    GYO_ASSERT(!data_->failed);  // a failed first round leaves the Registry unusable (rule 9)\n",
+      "find": "    GYO_ASSERT(!staged_ && \"a staged round waits for CommitPlans or DiscardRegistrations\");\n    RequireNoWorldRunning();\n    if (data_->refusingWorlds > 0) {",
+      "replace": "    GYO_ASSERT(!staged_ && \"a staged round waits for CommitPlans or DiscardRegistrations\");\n    if (data_->refusingWorlds > 0) {",
       "target": "gyo_kernel_tests",
       "expect": "(?=[\\s\\S]*(?:expected GYO_ASSERT to fail: registersOwn\\.Run))[\\s\\S]*(?:expected GYO_ASSERT to fail: nestedOuter\\.Run)",
       "cases": "DI-KS 26: while a World made from the Registry runs*"
@@ -4471,8 +4471,8 @@
       "id": "ks-s2-build-while-running",
       "what": "S2 rule 4: BuildPlans is not checked while a World of the Registry runs (review M1) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
-      "replace": "    GYO_ASSERT(!data_->failed);\n    if (pending_) {\n        // A later round",
+      "find": "    GYO_ASSERT(!staged_ && \"BuildPlans: a staged round waits for CommitPlans or DiscardRegistrations\");\n    RequireNoWorldRunning();\n    if (pending_) {",
+      "replace": "    GYO_ASSERT(!staged_ && \"BuildPlans: a staged round waits for CommitPlans or DiscardRegistrations\");\n    if (pending_) {",
       "target": "gyo_kernel_tests",
       "expect": "expected GYO_ASSERT to fail: buildsOwn\\.Run",
       "cases": "DI-KS 26: while a World made from the Registry runs*"
@@ -4552,12 +4552,12 @@
     },
     {
       "id": "ks-s2-build-inside-build-unchecked",
-      "what": "S2 rule 3: BuildPlans inside a build callable is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix)",
+      "what": "S2 rule 3: BuildPlans inside a build callable is accepted (review S5) (v8-arch-gyo2-kernel-subtract-structure, segment 2 line review fix) Since v8-arch-gyo2-sdl-r1b a later round is built by StagePlans, whose own assert still stops it: the first-round case (firstBuildInside) catches this mutant.",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)\n    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
-      "replace": "    GYO_ASSERT(!data_->failed);\n    RequireNoWorldRunning();\n    if (pending_) {\n        // A later round",
+      "find": "    GYO_ASSERT(!data_->building && !(pending_ && pending_->building));  // not inside build (rule 3)\n    GYO_ASSERT(!data_->failed);\n    GYO_ASSERT(!staged_ && \"BuildPlans: a staged",
+      "replace": "    GYO_ASSERT(!data_->failed);\n    GYO_ASSERT(!staged_ && \"BuildPlans: a staged",
       "target": "gyo_kernel_tests",
-      "expect": "expected GYO_ASSERT to fail: buildInside\\.Register",
+      "expect": "expected GYO_ASSERT to fail: (?:buildInside|firstBuildInside)\\.Register",
       "cases": "DI-KS 26: BuildPlans and DiscardRegistrations inside a build callable*"
     },
     {
@@ -4614,8 +4614,8 @@
       "id": "ks-s3-version-not-raised",
       "what": "S3: a later successful BuildPlans keeps the version (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "        round.version = data_->version + 1;\n        round.registered = false;",
-      "replace": "        round.version = data_->version;\n        round.registered = false;",
+      "find": "    round.version = data_->version + 1;\n    round.registered = false;\n    staged_ = true;",
+      "replace": "    round.version = data_->version;\n    round.registered = false;\n    staged_ = true;",
       "target": "gyo_kernel_tests",
       "expect": "DI\\-KS 25 version after a later round",
       "cases": "DI-KS 25: the version is 1*"
@@ -4624,8 +4624,8 @@
       "id": "ks-s3-failed-raises-version",
       "what": "S3: a failed later round raises the version (v8-arch-gyo2-kernel-subtract-structure, segment 2, declaration section 6)",
       "file": "engine/ecs/kernel/src/Registry.cpp",
-      "find": "            StartupReport report(std::move(round.errors));\n            pending_.reset();",
-      "replace": "            StartupReport report(std::move(round.errors));\n            ++data_->version;\n            pending_.reset();",
+      "find": "    if (!planned) {\n        StartupReport report(std::move(round.errors));\n        pending_.reset();",
+      "replace": "    if (!planned) {\n        StartupReport report(std::move(round.errors));\n        ++data_->version;\n        pending_.reset();",
       "target": "gyo_kernel_tests",
       "expect": "DI\\-KS 25 version after a failed round",
       "cases": "DI-KS 25: the version is 1*"
@@ -8636,6 +8636,59 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 35: a run condition with Extract parameters outside an extract schedule is D-E7",
       "expect": "XK\\-7:\\ the\\ same\\ condition\\ on\\ an\\ extract\\ schedule"
+    },
+    {
+      "id": "ks-rx-stage-commits",
+      "what": "StagePlans takes the round in at once (DI-KS 38): several readers can no longer be taken in all or none.",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    round.registered = false;\n    staged_ = true;\n    return {};",
+      "replace": "    round.registered = false;\n    staged_ = true;\n    CommitPlans();\n    return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: StagePlans keeps the round aside*",
+      "expect": "\\[ks\\-rx\\-stage\\-commits\\]"
+    },
+    {
+      "id": "ks-rx-source-not-set",
+      "what": "ReplaceExtractSource opens a round but leaves the round's source as it was (DI-KS 38).",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    pending_->extractSource = source.data_.get();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: after ReplaceExtractSource the reader reads the new source*",
+      "expect": "RunExtract:\\ the\\ source\\ World\\ was\\ not\\ made\\ from\\ this\\ World's\\ extract\\ source\\ Registry"
+    },
+    {
+      "id": "ks-rx-refusal-bypassed",
+      "what": "A new extract source is not refused by a World that declares no dynamic insert (the bypass the R1b declaration's review S-1 turned down; DI-KS 26, 38).",
+      "guards": [
+        "kernel DI-KS 26",
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    if (data_->refusingWorlds > 0) {\n        // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.",
+      "replace": "    if (data_->refusingWorlds > 0 && who.rfind(\"Register\", 0) == 0) {\n        // DI-KS 26: one World that declares no dynamic insert refuses for the whole Registry.",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: a World that declares no dynamic insert*",
+      "expect": "\\[ks\\-rx\\-refusal\\]"
+    },
+    {
+      "id": "ks-rx-discard-keeps-staged",
+      "what": "DiscardRegistrations drops a staged round's tables but leaves it marked staged (DI-KS 38).",
+      "guards": [
+        "kernel DI-KS 38"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "        pending_.reset();\n        staged_ = false;\n        return;",
+      "replace": "        pending_.reset();\n        return;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 38: StagePlans keeps the round aside*",
+      "expect": "a\\ staged\\ round\\ waits\\ for\\ CommitPlans\\ or\\ DiscardRegistrations"
     }
   ]
 }

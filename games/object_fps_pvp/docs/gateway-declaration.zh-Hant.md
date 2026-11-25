@@ -16,7 +16,7 @@
 | G7 | engine/core/os 只有觀測到壓力（有 Feature 要）才長 | 使用者 D78（`os.md` Constraints 9） | D8 |
 | G8 | Gateway、Match、Player 是產品的詞；Engine 名義登記的 gateway 已刪，Go module 的機制留著 | 詞彙表 :173；R0 帶過清單 :274 | D1 |
 
-**master 的 Gateway 搬什麼**：master 的 Gateway 是 Client 與 Match 之間的 UDP 中繼（`apps/object_fps_pvp/gateway/server.go`：session、rate limit、rebinding、轉送 action 與 snapshot、時鐘同步），外加單一房間的 HTTP（`server.go:168-171` `/rooms`、`/rooms/1/join`、`/rooms/1/leave`）。G3 之後中繼那一半沒有位置（盤點 2.4 已判不搬）；搬的是 HTTP 房間那一半的**語意**（列表、建立、加入帶 `request_id` 的冪等、離開要憑證、版本不合回 409 並說自己的版本 `server.go:282-291`、body 上限 4096 與拒絕未知欄位 `server.go:229-240`），以及 session token 的作法（隨機、常數時間比較 `session/session.go:62-64`）。PV19 的 rate limit 與 rebinding 是 UDP 中繼的，不搬；Match 的 UDP 由網路 Module 負責。PV14（內容比對）：放進 token 的欄位之後可加（見 D5），本卡不做。
+**master 的 Gateway 搬什麼**：master 的 Gateway 是 Client 與 Match 之間的 UDP 中繼（`apps/object_fps_pvp/gateway/server.go`：session、rate limit、rebinding、轉送 action 與 snapshot、時鐘同步），外加單一房間的 HTTP（`server.go:168-171` `/rooms`、`/rooms/1/join`、`/rooms/1/leave`）。G3 之後中繼那一半沒有位置（盤點 2.4 已判不搬）；搬的是 HTTP 房間那一半的**語意**（列表、建立、加入帶 `request_id` 的冪等、離開要憑證、版本不合時說出自己的版本 `server.go:282-291`、body 上限 4096 與拒絕未知欄位 `server.go:229-240`）。session token 不照搬：master 是隨機字串存在 Gateway、常數時間比較（`session/session.go:62-64`），要查表；這裡改成自含的 HMAC（D5），Gateway 不存狀態。PV19 的 rate limit 與 rebinding 是 UDP 中繼的，不搬；Match 的 UDP 由網路 Module 負責。PV14（內容比對）：放進 token 的欄位之後可加（見 D5），本卡不做。
 
 ## 1. 分段（每段一個 draft PR，後一個疊在前一個上）
 
@@ -56,7 +56,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-gateway）`；draft、base 前�
 | gateway | **無** | 外部協議的 adapter（現在只有 HTTP/JSON v1）：驗 session token（自含、HMAC，不查表）、把身分與冪等鍵放進內部請求、轉給後面的服務、把回應原樣轉回 | Client |
 | identity（憑證） | 裝置 id → userId 的表（檔案） | 裝置登入：給 userId 與 session token | gateway |
 | rooms（房間） | 記憶體裡的房間（短命，重啟就沒了） | 列表、建房（模式、地圖、容量）、加入、離開、準備、開始（鎖房）；開始時向 matches 要 Match；保存每位成員的連線目標，成員來問時給自己那一份 | gateway |
-| matches（配對與分配） | 執行中的 Match 與它的金鑰、port | 分配：用 provider 起（或取）一個 Match，給每位玩家簽 admission token；Match 結束就回收 | rooms |
+| matches（配對與分配） | 執行中的 Match 與它的位址、金鑰、玩家 | 分配：用 provider 起（或取）一個 Match，給每位玩家簽 admission token；Match 還在時給玩家重簽（token 短命，D5）；Match 結束就忘掉 | rooms |
 | saves（存檔） | 每位使用者一份存檔（檔案）與版本號 | 讀、寫（樂觀鎖＋冪等鍵）；內容是產品的格式，服務不解讀 | Match（讀寫）、gateway（使用者讀自己的） |
 
 - 「配對」本卡只做房間制的分配；自動配對（快速加入）之後放在 matches 或 rooms 前面，協議不用改。
@@ -71,20 +71,25 @@ PR 標題 `type(scope): 說明（v8-product-pvp-gateway）`；draft、base 前�
 | `GET /v1/rooms` | — | `{"rooms":[{"id","mode","map","players","capacity","state"}]}`（只列 `open`） |
 | `POST /v1/rooms` | `{"mode","map"}` | 房間（建的人自動加入、是房主） |
 | `GET /v1/rooms/{id}` | — | 房間：成員與準備、狀態；`started` 後多一個 `connect`：**呼叫者自己的** `{"server","userId","token"}`（token 是 admission token 的 hex） |
-| `POST /v1/rooms/{id}/join`、`/leave`、`/ready`（`{"ready"}`）、`/start` | — | 房間 |
+| `POST /v1/rooms/{id}/join`、`/ready`（`{"ready"}`）、`/start` | — | 房間 |
+| `POST /v1/rooms/{id}/leave` | — | `{"left":true}` |
 | `GET /v1/saves/me` | — | 自己的存檔（唯讀） |
 
 - 身分：`Authorization: Bearer <sessionToken>`（`/v1/session` 以外都要）。改變狀態的請求帶 `Idempotency-Key`（Client 產生）；同一使用者同一個鍵重送，回第一次的結果（master `request_id` 的推廣，`server.go:330-332`）。
 - 錯誤：`{"error":"<code>"}` 加 HTTP 狀態；碼是說「發生了什麼」（`room_full`、`room_started`、`not_owner`、`not_all_ready`、`invalid_session`…），怎麼處理由 Client 決定（AGENTS §1-9）。
-- 版本：路徑的第一段（`/v1`）。〔動工後改〕原本照 master 在 body 帶 `protocol_version`、不合回 409（`server.go:282-291`）；改成路徑版本（Nakama `/v2`、UGS `/v1` 的作法），別的版本的 Client 打到不存在的路徑（404），舊版本的路徑可以並存。
+- 未知的路徑回 404 `{"error":"unknown_route"}`；別的版本的路徑回 404 `{"error":"unsupported_version","versions":[1]}`（Client 看得到伺服器說哪些版本，master 的語意）。〔審查 S5〕
+- started 房間的 Match 結束後再問房間：410 `match_ended`（房間刪掉，之後是 404 `room_not_found`）。
+- 版本：路徑的第一段（`/v1`）。〔動工後改〕原本照 master 在 body 帶 `protocol_version`、不合回 409（`server.go:282-291`）；改成路徑版本（Nakama `/v2`、UGS `/v1` 的作法），別的版本的 Client 打到不存在的路徑（404 `unsupported_version`），舊版本的路徑可以並存。
 - 請求 body 上限 4096、拒絕未知欄位（`server.go:229-240`）。
 - 房間的變化用輪詢 `GET /v1/rooms/{id}`（Unity Lobby 也是輪詢；推送之後可加另一個外部 adapter）。
 - 開始後房間無法進入：`started` 的房間 `join` 回 `room_started`，也不在列表裡。
 
 ### D4 內部協議（服務之間，HTTP/1.1＋JSON，`/internal/v1`）
 
-- 每個請求帶 `X-GYO-User`（gateway 驗過的 userId；Match 呼叫時是 `0`＝系統）與 `Idempotency-Key`（gateway 原樣轉 Client 的；服務自己發起時自己產生）。服務只信任這兩個標頭，不再看 session token。
-- 冪等：rooms、saves 以（使用者, 鍵）存第一次的結果，重送回同一結果；gateway 因此可以重試而不會重複建房或重複寫檔（G2「內部協議保留身分與冪等」）。
+- 每個請求帶 `X-GYO-User`（gateway 驗過的 userId；`0`＝系統，服務或 Match 發起的）與 `Idempotency-Key`（gateway 原樣轉 Client 的；服務自己發起時自己產生）。登入前的請求（`/v1/session`）不帶 `X-GYO-User`。服務只信任這兩個標頭，不再看 session token；Client 自己送的 `X-GYO-User` 不會被轉送。〔審查 S2〕
+- 冪等：rooms、saves、matches 以（使用者, 路由, 鍵）存第一次**成功（2xx）**的結果，重送回同一結果，進行中的同鍵請求等第一個做完；被拒絕的（4xx、5xx）不存，同一把鍵可以再試（master 也只記成功）。〔審查 S7〕
+- 發內部請求只有一個出口（`internal/api` 的 `Send`），gateway 的轉送與服務之間的呼叫都用它。〔審查 S6〕
+- rooms 向 matches 要 Match：進 `starting` 時產生一把鍵，沒有回應（傳輸錯誤）時用同一把鍵最多送三次，所以一次開始最多起一個 Match。〔審查 S1〕
 - 內部埠只綁 loopback（或部署時的私網）；內部協議不做認證——外部只經 gateway 進來。
 - 新的外部 adapter（例如 WebSocket）只換 gateway 的前面，內部協議不變。
 
@@ -93,21 +98,23 @@ PR 標題 `type(scope): 說明（v8-product-pvp-gateway）`；draft、base 前�
 兩種 token，都是「自含、HMAC-SHA256 簽名、不查表就能驗」：
 
 - **session token**（Client ↔ gateway）：identity 簽、gateway 驗，共用 identity 金鑰；內容 userId、到期時間。
-- **admission token**（Client → Match，裝在 `NetConnectTarget::token`，網路的 `ConnectRequest::token` 原樣帶到 Match）：matches 簽，金鑰是**每個 Match 各一把**（matches 起 Match 時隨機產生，寫進 Match 行程的標準輸入；不放命令列與環境，別的使用者讀不到）。〔動工後改〕原本寫環境變數：C++ 讀環境要 `getenv`，MSVC 會警告（C4996），改成 stdin。二進位、固定長度 61 bytes：
+- **admission token**（Client → Match，裝在 `NetConnectTarget::token`，網路的 `ConnectRequest::token` 原樣帶到 Match）：matches 簽，金鑰是**每個 Match 各一把**（matches 起 Match 時隨機產生，寫進 Match 行程的標準輸入；不放命令列與環境，別的使用者讀不到）。〔動工後改〕原本寫環境變數：C++ 讀環境要 `getenv`，MSVC 會警告（C4996），改成 stdin。二進位、固定長度 57 bytes：
 
 ```text
-version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | reserved u32 (=0) | mac [32] = HMAC-SHA256(key, 前 29 bytes)
+version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32] = HMAC-SHA256(key, 前 25 bytes)
 （整數皆 big-endian）
 ```
 
 - Match 的 admission：長度與版本對、MAC 對（常數時間比較）、`userId == request.userId`、`matchId` 是自己的、沒過期（Match 的 wall clock；admission 不是決策資料，D-9 不受影響）、這個 userId 沒有連線中，最後是現有的座位檢查（`SeatAdmission`）。拒絕的 detail 說是哪一條。
 - 沒設金鑰的 Match（`--connect` 直連、現有測試）照舊只看座位；直連是開發用的入口，不加守衛（AGENTS §3）。
 - 對照 netcode.io（lightyear `crates/connection/netcode/src/token.rs:135-142`）：connect token 由後端用和伺服器共用的私鑰加密，含 client id、伺服器位址、到期、user data；伺服器不問後端就能驗。GYO 取同一個思想（後端簽、Match 自己驗、到期）。不加密：netcode 加密是為了帶封包加密的金鑰，GYO 的網路沒有加密（網路 Q7），token 內容不是秘密，簽名就夠。重放：同一個 token 被別人搶先用，Match 只收同一 userId 一條連線；在沒有封包加密的線上這擋不完，登記為限制（第 4 節 L1）。
-- 之後要加的（PV14 內容比對、合作／生存的隊伍）放在 `reserved` 換成的欄位或升 version；Match 對未知 version 拒絕。
+- 之後要加的（PV14 內容比對、合作／生存的隊伍）一律升 version；Match 對未知 version 拒絕。〔審查 S3：原本留 `reserved u32`，不升 version 就填進去的話，舊 Match 驗得過 MAC 卻不看新欄位，等於默默放寬，所以拿掉〕
+- 壽命：token 短命（預設 2 分鐘）。started 房間的成員每次問房間，rooms 就向 matches 要一張新的（matches 保存執行中 Match 的金鑰與玩家），所以比賽多長都能重連（D-8：重連是新連線）；Match 結束後 matches 回 `match_ended`，rooms 回 Client 410 並刪掉房間。netcode 也是短 token 加後端重發。〔審查 S4〕
+- 到期由 matches 與 Match 各自的 wall clock 判斷；跨機時兩邊的時鐘差會吃掉一部分壽命（NTP 同步的機器差在秒以下，2 分鐘夠用）。〔審查 N12〕
 
 ### D6 Gateway 怎麼找到並分配 Match
 
-- matches 有 provider 介面：`Allocate(roomId, capacity) → (address, key, matchId)`、`Release`。本卡的實作是**本機行程**：從設定的 port 範圍挑空的，起 `gyo_object_fps_pvp-match --port P --match-id M --capacity N --arena A --admission-key-stdin --exit-when-empty`（金鑰寫進 stdin），看行程結束就回收。之後換成機群（Agones、PlayFab MPS 那類）只換 provider。
+- matches 有 provider 介面：`Start(spec{matchId, key, capacity, mode, map}) → Running{address, ended, stop}`（Match 結束時 `ended` 關閉；`stop` 提早結束）。〔審查 S8：原本寫 `Allocate`／`Release`，實作的形狀比較好，改宣告〕本卡的實作是**本機行程**：從設定的 port 範圍挑空的，起 `gyo_object_fps_pvp-match --port P --match-id M --capacity N --arena A --admission-key-stdin --exit-when-empty`（金鑰寫進 stdin），看行程結束就回收。之後換成機群（Agones、PlayFab MPS 那類）只換 provider。
 - 地址：provider 回 `advertise IP:port`（本機預設 127.0.0.1；跨機時設定 advertise）。
 - Match 起來前就交出連線目標：Client 的網路握手會重送，Match 晚一點 listen 不影響（網路的握手逾時內）。第 2 段量本機起 Match 的時間，若接近握手逾時再改成等 Match 回報。
 
@@ -161,6 +168,10 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | reserved
 - L4 內部協議沒有認證，只靠綁 loopback／私網。
 - L5 同一 userId 只收一條連線：Client 在握手中途關掉又馬上重連時，Match 上舊的那條要等逾時（現在 10 秒）才移除，這段時間新的會被拒絕（「the user is already in the match」）。PvP 卡 2026-11-25 指出的既有行為（握手中途沒有 Disconnect 可送）。
 - L6 rooms 的地圖：`--content` 給了就只收 content 的 `maps/arenas.json` 列的 arena id；沒給時收任何 `[a-z0-9_]{1,64}`，選到 Match 沒有的地圖時 Match 啟動失敗、Client 連不上（`all` 的本機腳本會給 `--content`）。
+- L7 裝置 id 就是憑證：知道別人的裝置 id 就能登入成那個人。Client 要用高熵亂數產生並存好（第 5 段）；不加守衛（AGENTS §3）。〔審查 N6〕
+- L8 gateway 與 identity 共用 session 金鑰，所以 gateway 也簽得出 session。要分開時換成非對稱簽章（例如 ed25519：identity 拿私鑰、gateway 只拿公鑰）。〔審查 N7〕
+- L9 本機 provider 不先檢查 port 有沒有被別的程式占用：占用時 Match 啟動失敗、行程結束、port 回收，這一場的 Client 連不上。〔審查 N8〕
+- L10 分開部署時每個子命令的 `--listen` 預設是隨機 port、`rooms --matches` 沒給也能啟動，部署腳本要自己給齊；服務的組裝在 `stack` 與 `main.go` 各一份。〔審查 N5〕
 
 ## 5. 測試與突變
 

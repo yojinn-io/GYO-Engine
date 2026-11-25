@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"gyo.local/object_fps_pvp/services/internal/api"
 	"gyo.local/object_fps_pvp/services/matches"
 	"gyo.local/object_fps_pvp/services/token"
 )
@@ -205,7 +207,7 @@ func TestARefusedAllocationOpensTheRoomAgain(t *testing.T) {
 	host := signIn(t, s, "host")
 	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	host.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
-	host.refused(http.MethodPost, roomPath(room, "start"), nil, http.StatusServiceUnavailable, "allocation_failed")
+	host.refused(http.MethodPost, roomPath(room, "start"), nil, http.StatusServiceUnavailable, "no_match_available")
 	if view := host.must(http.MethodGet, roomPath(room, ""), "", nil); view["state"] != "open" {
 		t.Fatalf("after a refused allocation the room is %v, want open", view["state"])
 	}
@@ -294,8 +296,55 @@ func TestAPlayerReadsTheirOwnSaveThroughTheGateway(t *testing.T) {
 		t.Fatalf("the player's save is %v", save)
 	}
 	// The external protocol has no write.
-	status, _ := p.call(http.MethodPut, "/v1/saves/me", "", map[string]any{"version": 1, "body": map[string]int{"kills": 99}})
-	if status != http.StatusMethodNotAllowed {
-		t.Fatalf("a player's write through the gateway answered %d, want 405", status)
+	p.refused(http.MethodPut, "/v1/saves/me", map[string]any{"version": 1, "body": map[string]int{"kills": 99}}, http.StatusNotFound, "unknown_route")
+}
+
+func TestAMemberGetsAFreshTokenUntilTheMatchEnds(t *testing.T) {
+	provider := newFakeProvider()
+	now := time.Unix(1_900_000_000, 0)
+	var mu sync.Mutex
+	clock := func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
+	s, err := Start(Config{Provider: provider, Capacity: 2, Now: clock})
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(s.Close)
+	host := signIn(t, s, "host")
+	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
+	host.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
+	host.must(http.MethodPost, roomPath(room, "start"), "", nil)
+	spec := provider.specs[0]
+	mu.Lock()
+	now = now.Add(time.Hour) // long past the first token's expiry
+	mu.Unlock()
+	view := host.must(http.MethodGet, roomPath(room, ""), "", nil)
+	signed, _ := hex.DecodeString(view["connect"].(map[string]any)["token"].(string))
+	if err := token.VerifyAdmission(spec.Key, signed, clock(), spec.MatchID, host.user); err != nil {
+		t.Fatalf("an hour into the Match the member's token is refused: %v", err)
+	}
+	// Only the Match's players get one.
+	stranger := api.NewClient(s.MatchesURL)
+	err = stranger.Call(context.Background(), http.MethodPost, "/internal/v1/matches/"+strconv.FormatUint(spec.MatchID, 10)+"/tickets",
+		api.As(api.System), "", map[string]uint64{"userId": host.user + 100}, nil)
+	var refused *api.Refused
+	if !errors.As(err, &refused) || refused.Code != "not_player" {
+		t.Fatalf("a token for a user the Match was not started for: %v, want not_player", err)
+	}
+	close(provider.ended)
+	deadline := time.Now().Add(2 * time.Second)
+	for s.Matches.Running() != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	host.refused(http.MethodGet, roomPath(room, ""), nil, http.StatusGone, "match_ended")
+	host.refused(http.MethodGet, roomPath(room, ""), nil, http.StatusNotFound, "room_not_found")
+}
+
+func TestAnotherVersionIsToldTheVersions(t *testing.T) {
+	s := start(t, newFakeProvider())
+	p := signIn(t, s, "old-client")
+	status, out := p.call(http.MethodGet, "/v2/rooms", "", nil)
+	if status != http.StatusNotFound || out["error"] != "unsupported_version" || len(out["versions"].([]any)) != 1 {
+		t.Fatalf("another version's path: %d %v", status, out)
+	}
+	p.refused(http.MethodGet, "/v1/nothing", nil, http.StatusNotFound, "unknown_route")
 }

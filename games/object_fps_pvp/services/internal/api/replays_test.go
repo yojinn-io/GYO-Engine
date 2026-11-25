@@ -42,19 +42,22 @@ func TestConcurrentRequestsWithOneKeyRunOnce(t *testing.T) {
 	}
 }
 
-func TestServerErrorsAreNotKept(t *testing.T) {
+func TestRefusalsAreNotKept(t *testing.T) {
 	var runs atomic.Int32
 	handler := NewReplays(16).Wrap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		runs.Add(1)
-		WriteError(w, http.StatusServiceUnavailable, "busy")
+		if runs.Add(1) == 1 {
+			WriteError(w, http.StatusServiceUnavailable, "busy")
+		} else {
+			WriteError(w, http.StatusConflict, "room_full")
+		}
 	}))
-	for range 2 {
+	for range 3 {
 		request := httptest.NewRequest(http.MethodPost, "/x", nil)
 		request.Header.Set(HeaderIdempotency, "k")
 		handler.ServeHTTP(httptest.NewRecorder(), request)
 	}
-	if runs.Load() != 2 {
-		t.Fatalf("a 503 was replayed instead of retried: %d runs", runs.Load())
+	if runs.Load() != 3 {
+		t.Fatalf("a refusal was replayed instead of retried: %d runs", runs.Load())
 	}
 }
 
