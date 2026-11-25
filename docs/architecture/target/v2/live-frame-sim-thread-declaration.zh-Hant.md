@@ -103,7 +103,7 @@ Linux（X11、Wayland）沒有這種 modal 迴圈，watch 裝了也不會收到 
 3. 模擬執行緒的迴圈＝時間設計 5.5（一）：記下這一輪開始的時刻（它的 `AdvanceTime` 緊接著取樣）→ `RunRound` → 讀交出的 World 的 `world_time` `FixedTime`，`WaitUntil`（那個時刻＋離下一步還差的時間÷倍率，最多一秒；沒有 world_time、暫停或倍率 0 時用閒置間隔）→ 停止請求就出迴圈（審查 S4 更正：原本用等待當下的時刻，每次晚醒一輪的耗時）。`RunRound` 回錯（World 壞了，或交換函式的 E2）或有例外離開一輪時，記下、以 release 設「已停」旗標、出迴圈；例外不逃出執行緒（`RoleThread` 的契約）。
 4. 主執行緒：照舊「泵 → `RunFrame`（跳過交出的）→ 等畫面」；live frame 的「一幀」也是 `RunFrame`。
 5. 結束：視窗關、主執行緒的 `RunFrame` 回錯、live frame 回錯，或主迴圈每圈看到某條模擬執行緒「已停」→ 對每條送停止請求、`join`、`Return`；之後在主執行緒：模擬執行緒的例外照樣丟出（和 `RunFrame` 丟出的一樣），否則它的錯誤或 Product 的 `Failure()` 讓 runner 回 Failure（O-3；審查 B2：原本 E2 與例外沒有回報，正常關窗時才壞的 World 也回了 Success）。
-6. runner 依賴 `world_time`（讀 `FixedTime`）與 `core/threads`：`config/plugins.csv` 的 `sdl_window` 的 `private_depends` 加 `world_time`（審查 S6），`core/threads` 是 core、直接連。
+6. runner 依賴 `world_time`（讀 `FixedTime`）與 `core/threads`：`sdl_window` 的 CMake 直接私下連兩者。〔2026-11-25 更正：原照審查 S6 寫進 `config/plugins.csv` 的 `private_depends`，但那一欄的 Module 是 World 的單位依賴，O-E3 要求每個用 `sdl_window` 的 World 也帶 `world_time`；#331、#330 合併後大廳的 World 因此起不來，已改回〕
 
 **遊戲（作者，`games/object_fps_pvp`）**：
 
