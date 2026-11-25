@@ -134,7 +134,7 @@ TEST_CASE("render_world: without a backend the World runs and the data is still 
 TEST_CASE("render_world: Presentation is the default in a new World and stays as the game set it, frame after frame") {
     auto p = Make();
     K::World& world = p->World("Render").GetWorld();
-    REQUIRE(world.Resource<R::Presentation>() != nullptr);
+    REQUIRE_MESSAGE(world.Resource<R::Presentation>() != nullptr, "[rw-present-registered] render_world puts a Presentation");
     CHECK_MESSAGE(world.Resource<R::Presentation>()->presentMode == R::PresentMode::AutoVsync, "[rw-present-default] VSync on by default");
     world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
     Frame(*p);

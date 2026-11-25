@@ -78,8 +78,10 @@ public:
     [[nodiscard]] const std::string& DriverName() const;
     // The swapchain's present mode now (Vsync until render's Presentation asks for another).
     [[nodiscard]] SwapchainPresentMode ActivePresentMode() const;
-    // Present modes SDL refused to set (the text in LastFailure()); each is not tried again until Presentation
-    // changes (setting the swapchain waits for the GPU).
+    // Times the swapchain's present mode was set (each waits for the GPU): once per change of Presentation, never per
+    // frame. Of these, the ones SDL refused (the text in LastFailure()); a refused one is not tried again until
+    // Presentation changes.
+    [[nodiscard]] std::uint64_t PresentModeSets() const;
     [[nodiscard]] std::uint64_t RefusedPresentModes() const;
     // The textures of render's asks that have a GPU texture now (the white one not counted).
     [[nodiscard]] std::size_t TextureCount() const;

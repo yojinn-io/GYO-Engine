@@ -99,16 +99,17 @@ public:
     // refused request again next frame).
     bool SetTextInput(const Engine::Input::TextInputRequest& request);
     bool SetTitle(const std::string& title);
-    // The Windowed size. While the window is (or was last asked to be) fullscreen it is held, not given to SDL (SDL's
+    // The Windowed size. While the window is fullscreen (SDL's flags), or a fullscreen asked for has not come yet, it is
+    // held, not given to SDL (SDL's
     // SDL_SetWindowSize in fullscreen differs by platform: Windows drops it, macOS resizes the fullscreen window), and
     // FlushWindowedSize gives it once the window is Windowed.
     bool SetSize(Engine::Math::Vec2i logicalSize);
-    // BorderlessFullscreen: SDL's fullscreen at the desktop's mode (no display mode is changed). Leaving it gives the
+    // BorderlessFullscreen: SDL's fullscreen at the desktop's mode (no display mode is ever set). Leaving it gives the
     // window back its Windowed place and size (SDL keeps them). Asynchronous on some platforms (macOS): the result
     // comes as WindowModeChanged.
     bool SetMode(Engine::Window::WindowMode mode);
-    // The held Windowed size (SetSize), once Windowed was asked last and SDL says the window is not fullscreen any
-    // more; called by the request side every frame. false: SDL refused it (it is not held any more).
+    // The held Windowed size (SetSize), once no fullscreen is pending and SDL says the window is not fullscreen (the
+    // game's Windowed, or the player leaving it); called by the request side every frame. false: SDL refused it (it is not held any more).
     bool FlushWindowedSize();
     bool SetCursorGrab(Engine::Window::CursorGrab grab);
     bool SetResizable(bool resizable);

@@ -692,7 +692,7 @@
    "replace": "",
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: a window made borderless*",
-   "expect": "\\[sw\\-made\\-fullscreen\\]"
+   "expect": "\\[sw\\-replaced\\-mode\\]"
   },
   {
    "id": "sw-made-windowed",
@@ -727,7 +727,7 @@
     "window-mode-vsync declaration 4.1/4.2"
    ],
    "file": "plugins/sdl_window/src/adapters/sdl/WindowBackend.cpp",
-   "find": "    if (state_->askedFullscreen || Adapter::IsFullscreen(state_->window)) {\n        state_->heldWindowedSize = logicalSize;\n        return true;\n    }\n",
+   "find": "    if (state_->fullscreenPending || Adapter::IsFullscreen(state_->window)) {\n        state_->heldWindowedSize = logicalSize;\n        return true;\n    }\n",
    "replace": "",
    "target": "gyo_sdl_window_tests",
    "cases": "sdl_window: SetWindowMode makes*",

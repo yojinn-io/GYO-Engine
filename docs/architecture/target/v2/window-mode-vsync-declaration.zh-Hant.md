@@ -28,7 +28,7 @@
 
 | | 視窗模式 | 切換的形 | present mode |
 |---|---|---|---|
-| Bevy | `Window::mode: WindowMode`（`Windowed`、`BorderlessFullscreen(MonitorSelection)`、`Fullscreen(MonitorSelection, VideoModeSelection)`，`bevy_window/src/window.rs:1348`） | 改 `Window` 元件的欄位；`bevy_winit` 的 `changed_windows` 比快取、不同才 `set_fullscreen`（`bevy_winit/src/system.rs:336-365`） | `Window::present_mode`（`window.rs:1229`；`AutoVsync`、`AutoNoVsync`、`Fifo`、`FifoRelaxed`、`Immediate`、`Mailbox`）；`bevy_render` 抽出視窗、變了就重設 surface，退回的順序在 `bevy_render/src/view/window/mod.rs:882-911`（`AutoNoVsync`＝Immediate→Mailbox→Fifo） |
+| Bevy | `Window::mode: WindowMode`（`Windowed`、`BorderlessFullscreen(MonitorSelection)`、`Fullscreen(MonitorSelection, VideoModeSelection)`，`bevy_window/src/window.rs:1348`） | 改 `Window` 元件的欄位；`bevy_winit` 的 `changed_windows` 比快取、不同才 `set_fullscreen`（`bevy_winit/src/system.rs:336-365`） | `Window::present_mode`（欄位 `window.rs:166`，enum `:1229`；`AutoVsync`、`AutoNoVsync`、`Fifo`、`FifoRelaxed`、`Immediate`、`Mailbox`）；`bevy_render` 抽出視窗、變了就重設 surface，退回的順序在 `bevy_render/src/view/window/mod.rs:882-911`（`AutoNoVsync`＝Immediate→Mailbox→Fifo） |
 | SDL 3.4 | `SDL_SetWindowFullscreen`；沒設 `SDL_SetWindowFullscreenMode` 時是桌面無邊框全屏；macOS 是非同步（Spaces），結果用 `SDL_EVENT_WINDOW_ENTER_FULLSCREEN`／`LEAVE_FULLSCREEN` 回報 | — | `SDL_SetGPUSwapchainParameters`（`VSYNC` 一定支援；`IMMEDIATE`、`MAILBOX` 要先問 `SDL_WindowSupportsGPUPresentMode`） |
 | master | — | — | 產品選項 `vsync`，開窗時定一次（`SdlGpuRenderDevice.cpp:308-312`），不能在遊戲中改 |
 
@@ -44,9 +44,9 @@
 
 ### 4.2 `sdl_window`：套用
 
-- 開窗：`mode` 是全屏時建窗帶 `SDL_WINDOW_FULLSCREEN`（不設 fullscreen mode＝桌面無邊框）。Windows 上邏輯大小的修正（`SDL_SetWindowSize` 換算）走 4.1 的「記住、回窗口再套」。
-- `SetWindowMode`：adapter 先 `SDL_SetWindowFullscreenMode(window, nullptr)`（確保是桌面模式）再 `SDL_SetWindowFullscreen`。切回窗口時 SDL 自己還原窗口的位置與大小（`SDL_video.c` 的 `windowed` 矩形）。
-- 記住的大小：adapter 的請求側快取（同 `DeferredRequests`，不是事件側的狀態，SDL-7）。「最後要的模式是全屏」或「SDL 的旗標是全屏」時 `ResizeWindow` 記下來；每幀 `ApplyWindowRequests` 結尾在「要的是窗口且旗標已不是全屏」時套上（macOS 非同步離開時等到 LEAVE 之後）。
+- 開窗：`mode` 是全屏時建窗帶 `SDL_WINDOW_FULLSCREEN`（從不設 fullscreen mode＝桌面無邊框）。Windows 上邏輯大小的修正（`SDL_SetWindowSize` 換算）走 4.1 的「記住、回窗口再套」。
+- `SetWindowMode`：adapter 呼叫 `SDL_SetWindowFullscreen`（審查 N1：不再設 `SDL_SetWindowFullscreenMode(nullptr)`——從沒設過模式，而它在 macOS 的轉場中會 `SDL_SyncWindow`）。切回窗口時 SDL 自己還原窗口的位置與大小（`SDL_video.c` 的 `windowed` 矩形）。
+- 記住的大小：adapter 的請求側快取（同 `DeferredRequests`，不是事件側的狀態，SDL-7）。「SDL 的旗標是全屏」或「要了全屏、旗標還沒變」（只蓋 macOS 非同步進入的空檔；旗標變成全屏或看到 LEAVE 就不再算）時 `ResizeWindow` 記下來；每幀 `ApplyWindowRequests` 結尾在兩者都不成立時套上。**修訂（設計審查 B1）**：原稿用「遊戲最後要的模式」判斷，玩家自己離開全屏後大小會一直被扣住；改成一律問 SDL 的旗標，補測試「after the player left the game's fullscreen…」（先失敗、後修）。
 - 同一幀的順序：模式先、大小後（窗口＋改大小：先離開全屏，同步的平台大小立刻套上，非同步的等 LEAVE）。
 - live frame 中送的 `SetWindowMode` 和其他一次性請求一樣留到下一幀（`DeferredRequests`）。
 - SDL 拒絕：照現有計數（`SDLWindowPump::RefusedRequests`）；一次性請求不重試（同 `ResizeWindow`）。
@@ -58,7 +58,9 @@
 - **為什麼不放 `window`（偏離 Bevy）**：Bevy 的 `present_mode` 在 `Window` 上、`bevy_render` 抽出視窗來讀。GYO 的視窗不是實體、`window` 在列了 `sdl_window` 的那個 World，render World 沒有視窗（window 頁偏離表第 1 列）；`sdl_gpu` 只讀 render World（SDL-5）。放 `window` 的話要嘛 `sdl_gpu` 跨 World 讀、要嘛 `sdl_window` 經 Product 的 buffer 轉給 `sdl_gpu`——兩條都是繞過 render World 的資料流。present mode 是 swapchain 的性質，swapchain 歸渲染這一側。衝突點：兩個 World 的遊戲，設定在遊戲 World，要搬到 render World——作者在 render World 的 `Extract` 用 `ExtractRes<自己的設定>` 寫 `Presentation`（一個 System）；單一 World 直接寫。膠水量：一個 Resource、一個欄位。
 - **只帶兩個 Auto 值**：使用者要的是開關；`Fifo`／`Immediate`／`Mailbox` 指定值沒有消費者，加值不破壞相容，有人點名再加（render 頁範囲の限界）。
 - **退回**：`AutoVsync`＝`VSYNC`（SDL 沒有 FifoRelaxed）；`AutoNoVsync`＝`IMMEDIATE`→`MAILBOX`→`VSYNC`（照 Bevy；master 只有 IMMEDIATE→VSYNC，`MAILBOX` 也不等螢幕、不撕裂，比退回 VSYNC 更接近「關」）。選法是不含 SDL 的純函式（測得到），adapter 只問支援、呼叫 SDL。
-- **實際用的模式**：`SDLGPUStatus::ActivePresentMode()`（`Vsync`／`Immediate`／`Mailbox`）。SDL 拒絕時計數、記 `LastFailure`、不重試（重設 swapchain 會等 GPU 閒下來，不該每幀試）。
+- **實際用的模式**：`SDLGPUStatus::ActivePresentMode()`（`Vsync`／`Immediate`／`Mailbox`）；設定的次數 `PresentModeSets()`（審查 S2：讓「變了才改」從外面看得到）。SDL 拒絕時計數、記 `LastFailure`、不重試（重設 swapchain 會等 GPU 閒下來，不該每幀試）。
+- **新 World**（審查 S1，選 (a)）：替換後的 `Presentation` 是預設、swapchain 跟著回 VSYNC；要保留就照 O-7 帶過去或由遊戲的設定重寫。不選 (b)「`sdl_gpu` 把目前的模式寫進新 World」：後端會變成渲染 World 資料的寫者，真相變成兩份；`window` 的 WN-3 寫的是 OS 那邊的事實（玩家也會改），present mode 只有遊戲會改。
+- **VSync 關的後果**（審查 N4）：送出畫面不等螢幕，runner 也不等（`minFrameInterval` 預設 0），幀率吃滿 CPU／GPU；要上限的產品設 `SDLWindowOptions::minFrameInterval`。
 
 ## 5. 測試（外部可驗證）
 
@@ -71,7 +73,7 @@
 | present mode 的退回順序 | 純函式的表 | CI 三平台（cpu） |
 | `Presentation` 傳到 swapchain、切回來 | `sdl_gpu.frames`：顯示的視窗、`AutoNoVsync` → `ActivePresentMode` 在退回鏈上、幀照常送到；再切回 `Vsync` | Linux（Lavapipe＋Xvfb）、本機 |
 
-**測不到、交使用者實機驗收（這台 Mac＋Windows）**：真的進／出無邊框全屏（macOS 的 Spaces 動畫、Windows 的無邊框）、全屏時 `Letterbox` 的黑邊、回窗口的大小與位置、全屏中改解析度後回窗口、VSync 關時幀率不被鎖（Windows 的 D3D12／Vulkan 是否支援 IMMEDIATE）、macOS 綠色按鈕進全屏後 `WindowState::mode` 跟著變。
+**測不到、交使用者實機驗收（這台 Mac＋Windows）**：真的進／出無邊框全屏（macOS 的 Spaces 動畫、Windows 的無邊框）、macOS 非同步進入的空檔（送全屏的同一幀送大小：全屏不變、回窗口才生效；審查 S2 補充）、全屏時 `Letterbox` 的黑邊、回窗口的大小與位置、全屏中改解析度後回窗口、VSync 關時幀率不被鎖（Windows 的 D3D12／Vulkan 是否支援 IMMEDIATE）、macOS 綠色按鈕進全屏後 `WindowState::mode` 跟著變。
 
 ## 6. 範圍
 
@@ -82,6 +84,6 @@
 ## 7. 判定（完成條件）
 
 1. 本機 `ctest -L "cpu|gpu"` 全過（本機離線造成的除外，寫明）。
-2. 相關突變全 killed：新邏輯（模式的回報、記住的大小、退回順序、只在改變時套 present mode）各至少一個。
+2. 相關突變全 killed：新邏輯（模式的回報、建窗的模式、記住的大小、live frame 的延後、退回順序、`Presentation` 傳到 swapchain）各至少一個。「變了才改 swapchain」由 `PresentModeSets()` 的次數守（`[gp-present-only-on-change]`）。
 3. 設計審查（Opus／high）的 blocker 處理完。
 4. draft PR 的 L1 三平台綠。

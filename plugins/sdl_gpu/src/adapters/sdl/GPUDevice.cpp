@@ -999,6 +999,10 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
 
 namespace {
 
+// The composition SDL_ClaimWindowForGPUDevice gives the window (SDR: render's 2D pass blends bytes as stored); setting
+// the present mode keeps it. HDR changes both.
+constexpr SDL_GPUSwapchainComposition kSwapchainComposition = SDL_GPU_SWAPCHAINCOMPOSITION_SDR;
+
 SDL_GPUPresentMode SDLPresentMode(const SwapchainPresentMode mode) noexcept {
     switch (mode) {
     case SwapchainPresentMode::Vsync: return SDL_GPU_PRESENTMODE_VSYNC;
@@ -1018,8 +1022,7 @@ bool GPUDevice::SetPresentMode(const R::PresentMode mode) {
     const SwapchainPresentMode chosen =
         ChoosePresentMode(mode, SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_IMMEDIATE),
                           SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_MAILBOX));
-    // The composition SDL claimed the window with (SDR, sRGB-unaware UNORM: render's 2D pass blends bytes as stored).
-    if (!SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, SDLPresentMode(chosen))) {
+    if (!SDL_SetGPUSwapchainParameters(device, window, kSwapchainComposition, SDLPresentMode(chosen))) {
         lastError_ = SDLError("SDL_SetGPUSwapchainParameters");
         return false;
     }

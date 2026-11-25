@@ -1760,6 +1760,32 @@
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu frames:*",
    "expect": "\\[gp\\-present\\-off\\]"
+  },
+  {
+   "id": "gp-present-every-frame",
+   "what": "the swapchain is set every frame, not once per change",
+   "guards": [
+    "window-mode-vsync declaration 4.3"
+   ],
+   "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
+   "find": "if (presentation != nullptr && presentation->presentMode != askedPresentMode_) {",
+   "replace": "if (presentation != nullptr) {",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu frames:*",
+   "expect": "\\[gp\\-present\\-only\\-on\\-change\\]"
+  },
+  {
+   "id": "rw-present-not-put",
+   "what": "render_world puts no Presentation in a new World",
+   "guards": [
+    "render RD-10"
+   ],
+   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
+   "find": "        PutIfAbsent<Render::Presentation>(world);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_world: Presentation*",
+   "expect": "\\[rw\\-present\\-registered\\]"
   }
  ]
 }

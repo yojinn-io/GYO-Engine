@@ -43,6 +43,7 @@ public:
         }
         if (presentation != nullptr && presentation->presentMode != askedPresentMode_) {
             askedPresentMode_ = presentation->presentMode;
+            ++presentModeSets_;
             if (!device_->SetPresentMode(askedPresentMode_)) {
                 ++refusedPresentModes_;
                 lastFailure_ = device_->LastError();
@@ -79,6 +80,7 @@ public:
     std::uint64_t refusedMeshAsks_ = 0;
     std::uint64_t skippedDraws_ = 0;
     std::uint64_t unmappedPasses_ = 0;
+    std::uint64_t presentModeSets_ = 0;
     std::uint64_t refusedPresentModes_ = 0;
     std::string lastFailure_;
     std::string driver_;
@@ -129,6 +131,7 @@ std::uint64_t SDLGPUStatus::SkippedDraws() const { return service_->skippedDraws
 std::uint64_t SDLGPUStatus::UnmappedPasses() const { return service_->unmappedPasses_; }
 const std::string& SDLGPUStatus::DriverName() const { return service_->driver_; }
 SwapchainPresentMode SDLGPUStatus::ActivePresentMode() const { return service_->ActivePresentMode(); }
+std::uint64_t SDLGPUStatus::PresentModeSets() const { return service_->presentModeSets_; }
 std::uint64_t SDLGPUStatus::RefusedPresentModes() const { return service_->refusedPresentModes_; }
 std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
 std::size_t SDLGPUStatus::MeshCount() const { return service_->MeshCount(); }

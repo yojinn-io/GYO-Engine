@@ -997,12 +997,38 @@ TEST_CASE("sdl_window: a window made borderless fullscreen; Windowed gives it Wi
     SDL_Window* window = WindowOf(*p);
     CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[sw-made-fullscreen] the first round reports the mode");
     CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == DesktopPixels(window)), "[sw-made-fullscreen-size] at the screen's size");
+    // A replaced World gets no ENTER_FULLSCREEN: its first round writes the mode now (SDL-7 exception (2)).
+    REQUIRE(static_cast<bool>(p->ReplaceWorld("Main", O::ReplaceRequest{})));
+    InsertAsks(*p);
+    CHECK(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed);
+    Frame(*p);
+    CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen,
+                  "[sw-replaced-mode] a replaced World's first round knows the window is fullscreen");
     const float scale = Res<W::WindowState>(*p).scaleFactor;
     modeAsks.push_back(W::SetWindowMode{W::WindowMode::Windowed});
     TwoFrames(*p);
     CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed, "[sw-made-windowed] Windowed");
     CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({640, 480}, scale)), "[sw-made-windowed-size] at WindowSettings::size");
     CHECK_MESSAGE(PumpOf(*p).RefusedRequests() == 0, "[sw-made-none-refused] " << PumpOf(*p).LastRefusal());
+}
+
+TEST_CASE("sdl_window: after the player left the game's fullscreen, a size goes to the window at once") {
+    auto p = Make(false, Shown());
+    InsertAsks(*p);
+    Frame(*p);
+    SDL_Window* window = WindowOf(*p);
+    const float scale = Res<W::WindowState>(*p).scaleFactor;
+    modeAsks.push_back(W::SetWindowMode{W::WindowMode::BorderlessFullscreen});
+    TwoFrames(*p);
+    REQUIRE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen);
+    // The player leaves fullscreen (macOS's green button): SDL does it, the game asked nothing.
+    REQUIRE(SDL_SetWindowFullscreen(window, false));
+    Frame(*p);
+    REQUIRE(Res<W::WindowState>(*p).mode == W::WindowMode::Windowed);
+    sizeAsks.push_back(W::ResizeWindow{{800, 600}});
+    TwoFrames(*p);
+    CHECK_MESSAGE((Res<W::WindowState>(*p).physicalSize == Pixels({800, 600}, scale)),
+                  "[sw-player-left-size] the size is not held for a fullscreen the window has left");
 }
 
 TEST_CASE("sdl_window: a SetWindowMode sent in a live frame waits for the next frame outside it") {

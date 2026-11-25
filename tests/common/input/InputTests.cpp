@@ -290,7 +290,6 @@ TEST_CASE("window: the mode from WindowModeChanged, the last of the frame") {
     pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::BorderlessFullscreen, {}});
     Frame(*p);
     CHECK_MESSAGE(Res<W::WindowState>(*p).mode == W::WindowMode::BorderlessFullscreen, "[wn-mode] the mode the backend reported");
-    pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::Windowed, {}});
     pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::BorderlessFullscreen, {}});
     pending.modeChanged.push_back(W::WindowModeChanged{W::WindowMode::Windowed, {}});
     Frame(*p);

@@ -312,9 +312,11 @@ struct WindowBackend::State {
     // An exception that left the live frame: kept here (it must not cross SDL's C code, its watcher lock and the
     // OS's modal loop: master's pit 4) and thrown again once the pump or the wait returned.
     std::exception_ptr liveException;
-    // The request side's own cache (as sdl_window's AppliedRequests, not event state: SDL-7): the mode asked last,
-    // and a Windowed size (logical pixels) held while the window is or is to be fullscreen (SetSize).
-    bool askedFullscreen = false;
+    // The request side's own cache (as sdl_window's AppliedRequests, not event state: SDL-7): a fullscreen asked for
+    // that SDL's flags do not show yet (macOS enters asynchronously), and a Windowed size (logical pixels) held while
+    // the window is or is about to be fullscreen (SetSize). Whether the window is fullscreen is asked of SDL, never
+    // remembered: the player leaves fullscreen too.
+    bool fullscreenPending = false;
     std::optional<Engine::Math::Vec2i> heldWindowedSize;
 };
 
@@ -375,7 +377,7 @@ Engine::Base::Result<std::unique_ptr<WindowBackend>, BackendFailure> WindowBacke
         return Engine::Base::Err(std::move(failure));
     }
     auto state = std::make_unique<State>();
-    state->askedFullscreen = fullscreen;
+    state->fullscreenPending = fullscreen;
     // SDL makes the window in its window coordinates, which are pixels on Windows: a size asked in logical pixels
     // is set again at the display's scale (made fullscreen: held for when it becomes Windowed).
     if (Adapter::LogicalPerWindowCoordinate(window) != 1.0F) {
@@ -419,6 +421,10 @@ void WindowBackend::Pump(EventQueue& queue) {
     SDL_Event event{};
     state_->pumpQueue = &queue;  // the live frame's condition "while Pump is running"
     while (SDL_PollEvent(&event)) {
+        // A fullscreen asked for and refused or left before the flags showed it: nothing is pending any more.
+        if (event.type == SDL_EVENT_WINDOW_LEAVE_FULLSCREEN && Adapter::OwnWindow(state_->window, event.window.windowID)) {
+            state_->fullscreenPending = false;
+        }
         Translated translated = Adapter::Translate(event, pair, Engine::Time::Now(), state_->window, state_->clipboardLimit,
                                                    state_->editingUnit, state_->motionUnit);
         Adapter::OrderTimes(translated, last);
@@ -514,7 +520,7 @@ bool WindowBackend::SetTitle(const std::string& title) {
 
 bool WindowBackend::SetSize(const Engine::Math::Vec2i logicalSize) {
     RequireMainThread();
-    if (state_->askedFullscreen || Adapter::IsFullscreen(state_->window)) {
+    if (state_->fullscreenPending || Adapter::IsFullscreen(state_->window)) {
         state_->heldWindowedSize = logicalSize;
         return true;
     }
@@ -525,16 +531,17 @@ bool WindowBackend::SetSize(const Engine::Math::Vec2i logicalSize) {
 bool WindowBackend::SetMode(const Win::WindowMode mode) {
     RequireMainThread();
     const bool fullscreen = mode == Win::WindowMode::BorderlessFullscreen;
-    // nullptr: the desktop's mode (borderless), whatever was set before.
-    if (fullscreen && !Done(SDL_SetWindowFullscreenMode(state_->window, nullptr), lastError_)) return false;
+    // No fullscreen display mode is ever set (SDL_SetWindowFullscreenMode): SDL's fullscreen is the desktop's.
     if (!Done(SDL_SetWindowFullscreen(state_->window, fullscreen), lastError_)) return false;
-    state_->askedFullscreen = fullscreen;
+    state_->fullscreenPending = fullscreen && !Adapter::IsFullscreen(state_->window);
     return true;
 }
 
 bool WindowBackend::FlushWindowedSize() {
     RequireMainThread();
-    if (!state_->heldWindowedSize || state_->askedFullscreen || Adapter::IsFullscreen(state_->window)) return true;
+    // A fullscreen asked for has come (the flags show it) or ended (SDL left it: LEAVE_FULLSCREEN, Pump).
+    if (state_->fullscreenPending && Adapter::IsFullscreen(state_->window)) state_->fullscreenPending = false;
+    if (!state_->heldWindowedSize || state_->fullscreenPending || Adapter::IsFullscreen(state_->window)) return true;
     const Engine::Math::Vec2i size = *std::exchange(state_->heldWindowedSize, std::nullopt);
     return Done(Adapter::SetWindowSizeLogical(state_->window, size), lastError_);
 }

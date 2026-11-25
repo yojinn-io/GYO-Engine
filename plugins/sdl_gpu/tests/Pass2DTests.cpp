@@ -432,9 +432,13 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     REQUIRE(static_cast<bool>(product.RunFrame()));
     CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-back] VSync on again is VSYNC");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-present-frames] no frame failed across the changes: " << status->LastFailure());
-    // A driver that has no other mode keeps VSYNC for AutoNoVsync; every desktop driver SDL_GPU uses has IMMEDIATE or
-    // MAILBOX (Metal, D3D12, Vulkan on X11), so here it must have changed.
-    CHECK_MESSAGE(off != G::SwapchainPresentMode::Vsync, "[gp-present-off] VSync off left VSYNC (" << std::string(G::ToString(off)) << ")");
+    pump->Pump();
+    REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->PresentModeSets() == 2, "[gp-present-only-on-change] set once per change, not per frame: " << status->PresentModeSets());
+    // An environment premise, not the contract: a driver with VSYNC only keeps it for AutoNoVsync, but every driver
+    // these tests run on (Metal, Vulkan on Lavapipe under Xvfb) has IMMEDIATE or MAILBOX, so here it must have changed.
+    CHECK_MESSAGE(off != G::SwapchainPresentMode::Vsync,
+                  "[gp-present-off] VSync off left VSYNC (" << std::string(G::ToString(off)) << "; the environment premise above)");
 
     // A replacement that fails before the swap: the old World goes on drawing with its textures.
     O::ReplaceRequest failing;
@@ -444,9 +448,14 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     REQUIRE_FALSE(static_cast<bool>(product.ReplaceWorld("Main", std::move(failing))));
     REQUIRE(static_cast<bool>(product.RunFrame()));
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-world-failed-keeps] a failed replacement forgets no texture");
-    // A replacement that succeeds: the new World's ids start again at 1, so the old World's textures go.
+    // A replacement that succeeds: the new World's ids start again at 1, so the old World's textures go; its
+    // Presentation is the default (nothing carried over), so VSync is on again.
+    world.ResourceMut<R::Presentation>()->presentMode = R::PresentMode::AutoNoVsync;
+    REQUIRE(static_cast<bool>(product.RunFrame()));
     REQUIRE(static_cast<bool>(product.ReplaceWorld("Main", O::ReplaceRequest{})));
     REQUIRE(static_cast<bool>(product.RunFrame()));
+    CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync,
+                  "[gp-present-new-world] a new World's default Presentation is applied (carry it over to keep VSync off)");
     CHECK_MESSAGE(status->TextureCount() == 0, "[gp-world-new-forgets] the new World's first frame lets the old World's textures go");
     CHECK_MESSAGE(status->FramesFailed() == 0, "[gp-world-frames] no frame failed");
 }
