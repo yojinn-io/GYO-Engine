@@ -15,7 +15,8 @@ Owner：Engine（`engine/core/os`、新的 library-only Module `http`、`engine/
 ## 驗證
 
 - 本機（Intel Mac）：`ctest -L "cpu|gpu"` 255/255、`-L "go|network"` 4/4。`gyo_os_tests` 加 3 案（連線雙向收發並看到對方關閉、沒資料不阻塞、沒人 listen 的 port 是 `Unreachable` 而且一直是）；`http.client` 8 案（請求的位元組、逐 byte 餵的 Content-Length、chunked（有一段 ≥ 10，守 16 進位）、讀到關閉、100＋204、拒絕的情形（不是 HTTP、截斷、body／head 超過上限、chunk 大小不是 16 進位）、對 loopback listener 的完整呼叫、連不上）；`gyo_base_tests` 加 SHA-256 的 FIPS 向量（位元組與 hex）。守衛 `os.header_hygiene` 抓到新的公開標頭沒被它的測試 include，已補。
-- 突變（`docs/architecture/target/v2/scripts/http_mutations.json`）8/8 killed（`http-truncation-unseen`、`http-body-limit-ignored` 第一次 wrong_failure：測試先用 `REQUIRE_FALSE` 中止、帶標籤的訊息沒印，改成一個帶標籤的檢查後 killed）。OS 的兩項只在 macOS、Linux 跑（`platforms`）。
+- 審查修正並 merge 第 2 段（含 gyo2 的 #335、#332）後：`ctest -L "cpu|gpu"` 256/256、`-L "go|network"` 4/4；突變 13/13 killed（新增見〈設計審查〉）。
+- 審查前：突變（`docs/architecture/target/v2/scripts/http_mutations.json`）8/8 killed（`http-truncation-unseen`、`http-body-limit-ignored` 第一次 wrong_failure：測試先用 `REQUIRE_FALSE` 中止、帶標籤的訊息沒印，改成一個帶標籤的檢查後 killed）。OS 的兩項只在 macOS、Linux 跑（`platforms`）。
 - **沒驗**：Windows 的 `StreamSocket` 只靠 CI L1；對真的 Go Gateway（net/http 的回應）在第 5 段的端到端走到。
 
 ## 設計審查（Opus／high，唯讀；作者同模型，Fable 暫停中）
