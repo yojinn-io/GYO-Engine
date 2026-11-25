@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"gyo.local/object_fps_pvp/services/gateway"
@@ -70,7 +71,8 @@ func Start(config Config) (*Stack, error) {
 	if s.SavesURL, err = serve("127.0.0.1:0", saves.New(saves.Config{Data: config.Data}).Handler()); err != nil {
 		return fail(err)
 	}
-	if s.Matches, err = matches.New(matches.Config{Provider: config.Provider, Now: config.Now}); err != nil {
+	if s.Matches, err = matches.New(matches.Config{Provider: config.Provider, Saves: strings.TrimPrefix(s.SavesURL, "http://"),
+		Now: config.Now}); err != nil {
 		return fail(err)
 	}
 	if s.MatchesURL, err = serve("127.0.0.1:0", s.Matches.Handler()); err != nil {

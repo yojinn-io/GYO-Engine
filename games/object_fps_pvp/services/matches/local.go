@@ -18,8 +18,8 @@ import (
 // of [FirstPort, LastPort]; the port is free again when the process ends.
 type Local struct {
 	// Command is the Match executable; Arguments come before the ones Local
-	// adds (--port, --match-id, --capacity, --arena, --admission-key-stdin,
-	// --idle-seconds). The key goes to the Match's standard input, in neither
+	// adds (--port, --match-id, --capacity, --arena, --saves,
+	// --admission-key-stdin, --idle-seconds). The key goes to the Match's standard input, in neither
 	// its command line nor its environment.
 	Command   string
 	Arguments []string
@@ -60,6 +60,9 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		"--admission-key-stdin", "--idle-seconds", strconv.Itoa(idle))
 	if spec.Map != "" {
 		arguments = append(arguments, "--arena", spec.Map)
+	}
+	if spec.Saves != "" {
+		arguments = append(arguments, "--saves", spec.Saves)
 	}
 	// Not CommandContext: the Match outlives the allocation request.
 	command := exec.Command(l.Command, arguments...)

@@ -98,6 +98,18 @@ public:
         }
         return text;
     }
+    // Reads one HTTP request: its head and the Content-Length bytes of its body.
+    [[nodiscard]] std::string ReceiveRequest() {
+        std::string text = ReceiveHead();
+        const std::size_t headEnd = text.find("\r\n\r\n") + 4;
+        std::size_t length = 0;
+        for (const char* name : {"Content-Length: ", "content-length: "}) {
+            const std::size_t at = text.find(name);
+            if (at != std::string::npos && at < headEnd) length = std::stoul(text.substr(at + std::string(name).size()));
+        }
+        if (text.size() < headEnd + length) text += Receive(headEnd + length - text.size());
+        return text;
+    }
     void CloseAccepted() {
         CloseNative(accepted_);
         accepted_ = kNoSocket;

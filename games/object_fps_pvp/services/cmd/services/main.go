@@ -146,13 +146,14 @@ func run(name string, arguments []string) error {
 		}
 		return serve(*listen, service.Handler())
 	case "matches":
+		savesAddress := set.String("saves", "", "the save service's address (host:port) given to each Match")
 		match.register(set)
 		_ = set.Parse(arguments)
 		provider, err := match.provider()
 		if err != nil {
 			return err
 		}
-		service, err := matches.New(matches.Config{Provider: provider})
+		service, err := matches.New(matches.Config{Provider: provider, Saves: *savesAddress})
 		if err != nil {
 			return err
 		}

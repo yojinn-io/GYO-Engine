@@ -13,12 +13,15 @@
 //   --match-id ID --admission-key-stdin      admits only a Client whose admission token this Match's key signed for
 //                                            ID; the key is the first line of the standard input (hex), so it is in
 //                                            neither the command line nor the environment
+//   --saves A.B.C.D:P                        reads a player's save from the save service when they join and writes it
+//                                            back, settled, when they leave (with --match-id)
 //   --idle-seconds N                         ends once no player has been in the match for N seconds, from the start
 //                                            or since the last one left (a player who drops may come back within
 //                                            it); the matches service then frees the port
 
 #include "object_fps_pvp/data/Hex.hpp"
 #include "object_fps_pvp/match/AdmissionToken.hpp"
+#include "object_fps_pvp/world/MatchSaves.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "gyo/GameConfig.hpp"
@@ -91,6 +94,16 @@ bool ParseNumber(const std::string_view text, T& value) {
     return parsed.ec == std::errc{} && parsed.ptr == text.data() + text.size();
 }
 
+// "A.B.C.D:P" (port 1 to 65535).
+std::optional<GYO::Engine::OS::DatagramAddress> ParseAddress(const std::string_view text) {
+    const std::size_t colon = text.rfind(':');
+    std::uint16_t port = 0;
+    if (colon == std::string_view::npos || !ParseNumber(text.substr(colon + 1), port) || port == 0) return std::nullopt;
+    auto address = GYO::Engine::OS::DatagramAddress::Parse(text.substr(0, colon), port);
+    if (!address) return std::nullopt;
+    return *address;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -103,6 +116,7 @@ int main(int argc, char** argv) {
     std::optional<std::uint64_t> matchId;
     bool keyOnStdin = false;
     std::optional<std::int64_t> idleSeconds;
+    std::optional<GYO::Engine::OS::DatagramAddress> saves;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         const bool hasValue = index + 1 < argc;
@@ -136,6 +150,12 @@ int main(int argc, char** argv) {
             matchId = id;
         } else if (argument == "--admission-key-stdin") {
             keyOnStdin = true;
+        } else if (argument == "--saves" && hasValue) {
+            saves = ParseAddress(argv[++index]);
+            if (!saves) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--saves takes A.B.C.D:P");
+                return 2;
+            }
         } else if (argument == "--idle-seconds" && hasValue) {
             std::int64_t seconds = 0;
             if (!ParseNumber(argv[++index], seconds) || seconds <= 0) {
@@ -147,12 +167,16 @@ int main(int argc, char** argv) {
             Log(GYO::Engine::Base::LogLevel::Error,
                 "unknown argument '" + std::string(argument) +
                     "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --match-id ID, "
-                    "--admission-key-stdin, --idle-seconds N)");
+                    "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N)");
             return 2;
         }
     }
     if (keyOnStdin != matchId.has_value()) {
         Log(GYO::Engine::Base::LogLevel::Error, "--match-id and --admission-key-stdin go together");
+        return 2;
+    }
+    if (saves && !matchId) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--saves needs --match-id (the save keys name the Match)");
         return 2;
     }
     std::optional<PW::AdmissionCheck> admission;
@@ -203,6 +227,7 @@ int main(int argc, char** argv) {
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({shared, arena, 0, seats});
+    if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
             inner(setup);

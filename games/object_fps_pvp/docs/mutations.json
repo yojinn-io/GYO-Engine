@@ -1087,6 +1087,97 @@
     "--output-on-failure"
    ],
    "expect": "no player for 1 s"
+  },
+  {
+   "id": "pvp-gw-saves-never-read",
+   "what": "the Match does not read a joining player's save",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "        if (!player.loaded && !player.pending && !player.gaveUp) Want(state, player, joined->userId, CallKind::Read);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "never read"
+  },
+  {
+   "id": "pvp-gw-saves-never-written",
+   "what": "the Match does not write a leaving player's save",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "        if (found != state.players.end()) found->second.leaving = true;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "never written"
+  },
+  {
+   "id": "pvp-gw-saves-unsettled",
+   "what": "the Match writes the save as it was read",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "\",\\\"body\\\":\" + match::EncodePlayerSave(match::Settled(player.save, player.sessionDeaths)) + \"}\";",
+   "replace": "\",\\\"body\\\":\" + match::EncodePlayerSave(player.save) + \"}\";",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "settled save is not"
+  },
+  {
+   "id": "pvp-gw-saves-version-dropped",
+   "what": "the Match writes over version 0",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "player.writeBody = \"{\\\"version\\\":\" + std::to_string(player.version) +",
+   "replace": "player.writeBody = \"{\\\"version\\\":\" + std::to_string(0) +",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "settled save is not"
+  },
+  {
+   "id": "pvp-gw-saves-key-repeats",
+   "what": "each leave of a player has the same key",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/MatchSaves.cpp",
+   "find": "\"-leave-\" + std::to_string(player.leaves + 1)}",
+   "replace": "\"-leave-\" + std::to_string(player.leaves)}",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match reads*",
+   "expect": "leave-1"
+  },
+  {
+   "id": "pvp-gw-save-version-unchecked",
+   "what": "a save of another version is read",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/PlayerSave.cpp",
+   "find": "        if (version != kPlayerSaveVersion) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "player save:*",
+   "expect": "saveVersion is 2"
+  },
+  {
+   "id": "pvp-gw-save-not-settled",
+   "what": "a match does not count",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/PlayerSave.cpp",
+   "find": "    ++save.matches;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "player save:*",
+   "expect": "player save: written"
   }
  ]
 }
