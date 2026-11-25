@@ -57,6 +57,7 @@ asset 的 loader 只拿得到位元組，拿不到索引（`LoadContext.hpp`）�
 
 - `VoxelMapLoader`：type `voxel_map`、format `json`，輸出 `VoxelMapAsset`（索引＋每個 region 的 `AssetRef`）。**索引依順序把每個 region 宣告成參照**（`ReferencePath`，相對於索引檔的目錄），所以讀索引就是讀整張地圖。Product 的 catalog 要列出每個 region 檔，一個檔只能有一個條目（否則參照是 AmbiguousReference）。
 - `VoxelRegionLoader`：type `voxel_region`、format `json`，輸出第 1 步的 `VoxelRegionDocument`。第 2 步由同時拿著索引與 region 的讀者呼叫 `CheckVoxelMap`（或逐個 `CheckVoxelRegion`）。
+- **位元組要原樣保存**：索引用 SHA-256 綁住每個 region 的位元組（R3），所以存放地圖的地方不能改動它們。在 git 裡要對 `map.json` 與 `regions/*.json` 設 `-text`，否則 Windows checkout 會把換行轉成 CRLF，sha 就對不上（PvP 的 `assets/object_fps_pvp/maps/.gitattributes`；2026-11-25 的 L1 windows-x64 曾因此失敗）。
 - region 清單在索引與 catalog 各有一份；兩者不合時參照失敗（UnlistedReference）。catalog 的 region 條目由烘焙工具和地圖一起產生，不手寫。
 - 兩者都不收 settings（`{}` 可以），上限是 1 MiB／16 MiB。平行解析由 asset 的 worker 負責，Module 本身單執行緒。
 
