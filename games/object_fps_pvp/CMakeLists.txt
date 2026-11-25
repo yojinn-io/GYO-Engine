@@ -5,7 +5,7 @@
 # logic: the game's rules that need no World, window, input, renderer, audio
 # device or network: the arena files and the baked voxel geometry, the
 # movement, stance and combat rules, the planar movement input, the hit
-# feedback and the client view, the sound cues, the lobby's address filter and the Match's admission token
+# feedback and the client view, the sound cues and the Match's admission token
 # (include/object_fps_pvp/match/AdmissionToken.hpp, the services' token/token.go in C++).
 # character: the player's character for the Match and the Client: the body's skeleton, its clips retargeted from
 # the animation library, the pose of a moment (the game's layering over the model library's sampling), the hit
@@ -20,7 +20,8 @@
 # (its 2D layer), the sounds, and the World that draws (extracts from it).
 # The client library also has the scenes (include/object_fps_pvp/client/Scenes.hpp: one Product, its Worlds replaced
 # when the scene changes, the window open throughout; docs/game-flow-declaration.zh-Hant.md): the menu, the lobby
-# where the player gives the Match's address (ui, world_ui, ui_render), the game.
+# and the room of the Gateway (its HTTP protocol v1: include/object_fps_pvp/client/Gateway.hpp; ui, world_ui,
+# ui_render), the single player's room, the game.
 # main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the menu first; the
 # scenes change between two frames of sdl_window's runner.
 # match: the Match (src/match_main.cpp), headless, listening on UDP.
@@ -65,12 +66,15 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
 
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PUBLIC_LIBRARIES ${object_fps_pvp_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Model GYO::Render
-        GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS
-    PRIVATE_LIBRARIES GYO::IO GYO::Json
+        GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS GYO::Http GYO::IO
+    PRIVATE_LIBRARIES GYO::Json
     SOURCES
     src/client/ClientWorld.cpp
-    src/client/LobbyWorld.cpp
+    src/client/Gateway.cpp
+    src/client/GatewayScene.cpp
+    src/client/LobbyScene.cpp
     src/client/LocalFiles.cpp
+    src/client/RoomScene.cpp
     src/client/Scenes.cpp
     src/client/SoloScene.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")

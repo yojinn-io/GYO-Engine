@@ -7,8 +7,11 @@
 #include "../world/WorldTestSupport.hpp"
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
-#include "object_fps_pvp/client/LobbyWorld.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
+#include "object_fps_pvp/client/LocalFiles.hpp"
 #include "object_fps_pvp/client/SoloSave.hpp"
+
+#include "gyo_test/LoopbackListener.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 
 #include "engine/audio/Mixer.hpp"
@@ -31,6 +34,9 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 
 #include <atomic>
+#include <cstdlib>
+#include <cctype>
+#include <mutex>
 #include <filesystem>
 #include <random>
 #include <chrono>
@@ -137,7 +143,7 @@ struct Setup final {
     // Advance calls each way between the Match and this Client (one Advance a frame).
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
-                   const std::uint32_t delayAdvances = 0)
+                   std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, const std::uint32_t delayAdvances = 0)
         : framesPerStep(perStep) {
         if (delayAdvances != 0) {
             N::MemoryLinkSettings link;
@@ -204,6 +210,8 @@ struct Setup final {
         PC::ClientStart start;
         start.first = firstScene.value_or(GameScene());
         start.dataDirectory = std::move(dataDirectory);
+        // No Gateway given: one nobody answers at (port 1).
+        start.gateway = gateway.value_or(GYO::Engine::OS::SocketAddress::Loopback(1));
         description.options.Set(std::move(start));
         description.worlds.push_back(std::move(solo));
         description.worlds.push_back(std::move(sim));
@@ -628,7 +636,7 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   // following the Match's tick now, as lightyear's does, runs past every state it has).
   for (const std::uint32_t delay : {0U, 13U}) {
     CAPTURE(delay);
-    Setup setup(4, 4, 0, std::nullopt, {}, delay);
+    Setup setup(4, 4, 0, std::nullopt, {}, std::nullopt, delay);
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -974,61 +982,9 @@ TEST_CASE("client: a Match that refuses (no seat) ends the connection: back to t
 namespace {
 
 // The Client starting in the lobby (the Match and the other Client run beside it, unused).
-PC::SceneChange LobbyFirst(std::string status = {}) {
-    return PC::SceneChange{.scene = PC::Scene::Lobby, .status = std::move(status), .address = "127.0.0.1:40000"};
-}
-
-// Starts editing the address field, replaces its text with text and presses Enter.
-void Submit(Setup& setup, const std::string& text) {
-    // The field is the first in the focus order: Enter on it starts editing, select-all and the committed text
-    // replace its text, Enter submits.
-    setup.Press(I::KeyCode::Enter);
-    I::KeyboardInput all = Key(I::KeyCode::A);
-    all.modifiers.Add(I::KeyModifier::Super);
-    all.character = U'a';
-    setup.Next().keys.push_back(all);
-    setup.Frames(1);
-    setup.Next().committed.push_back(I::TextCommitted{text, {}});
-    setup.Frames(1);
-    setup.Press(I::KeyCode::Enter);
-    setup.Frames(1);
-}
+PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{.scene = PC::Scene::Lobby, .status = std::move(status)}; }
 
 } // namespace
-
-TEST_CASE("client: the lobby shows its document; a valid address enters the game connected to it, a wrong one says why") {
-    Setup setup(1, 4, 0, LobbyFirst());
-    setup.Load();
-    const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
-    REQUIRE_MESSAGE((state != nullptr && state->runtime), "[pvp-lobby-loaded] the document and its font load");
-    CHECK_MESSAGE(!state->failure, (state->failure ? state->failure->message : std::string()));
-    CHECK_MESSAGE(!state->drawList.commands.empty(), "the lobby is laid out");
-    setup.Frames(1);
-    CHECK_MESSAGE(setup.Notes().shown, "[pvp-lobby-shown]");
-    CHECK(setup.Notes().failure.empty());
-    CHECK_MESSAGE((lastPicture.passes2d >= 1 && lastPicture.draws2d >= 1), "[pvp-lobby-drawn] the render World draws its UI pass");
-    CHECK(setup.Binding("status").find("アドレス") != std::string::npos);
-    CHECK(state->runtime->InteractionState().focusedElement == "address");
-    CHECK_MESSAGE(!HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-lobby-no-net] the lobby connects to nothing");
-
-    // A wrong form: the status says so, the scene stays.
-    Submit(setup, "192.168.0");
-    CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-lobby-wrong-stays]");
-    CHECK_MESSAGE(setup.Binding("status").find("形が違います") != std::string::npos, setup.Binding("status"));
-
-    // Full-width digits and the ideographic full stop from an input method become ASCII (the game's filter); a valid
-    // address enters the game with the Sim World's target at it.
-    Submit(setup, "１９２。１６８．０．１０：４００００");
-    REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::MultiGame, "[pvp-lobby-submit] " << setup.Binding("status"));
-    REQUIRE(setup.Scene().connect.has_value());
-    const auto* server = std::get_if<GYO::Engine::OS::SocketAddress>(&setup.Scene().connect->server);
-    REQUIRE(server != nullptr);
-    CHECK(server->ToString() == "192.168.0.10:40000");
-    CHECK(setup.Scene().address == "192.168.0.10:40000");
-    REQUIRE_MESSAGE(HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-scene-sim-target] the game scene's Sim World has the target");
-    CHECK(HasResource<PW::GameRules>(setup.Sim()));
-    CHECK_FALSE(setup.Client().Resource<W::WindowRequest>()->close);
-}
 
 TEST_CASE("client: the menu goes to the lobby and back; the Render World stays and is told of each new Frame World") {
     Setup setup(1, 4, 0, PC::SceneChange{});
@@ -1052,11 +1008,15 @@ TEST_CASE("client: the menu goes to the lobby and back; the Render World stays a
     setup.Frames(1);
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-menu-multi]");
+    setup.Load();
+    setup.Frames(1);
+    CHECK_MESSAGE((lastPicture.passes2d >= 1 && lastPicture.draws2d >= 1), "[pvp-lobby-drawn] the render World draws the lobby's UI pass");
     CHECK_MESSAGE(&setup.client->World("Render").GetWorld() == render, "[pvp-scene-render-stays]");
     CHECK_MESSAGE(render->Resource<O::ExtractSourceSwaps>()->count == swaps + 1, "[pvp-scene-swaps] the Render World was told");
     setup.Load();
-    // The lobby's Back (Tab from the address field, Enter): the menu again.
-    setup.Press(I::KeyCode::Tab);
+    // The lobby's Back (the last of its focus order: Shift+Tab from the first, Enter): the menu again.
+    setup.Next().keys.push_back(back);
+    setup.Frames(1);
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-lobby-back]");
     setup.Load();
@@ -1207,4 +1167,531 @@ TEST_CASE("client: leaving the game closes the connection; a new game connects a
     for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
     CHECK_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-scene-reconnects] the new game is played");
     CHECK(setup.Scene().scene == PC::Scene::MultiGame);
+}
+
+namespace {
+
+// A Gateway that speaks the external protocol v1 (gateway-client-handoff section 2) for one user, on a loopback
+// listener (tests/common/os): every request it is sent, in order; a room made by the user, readied and started.
+class FakeGateway final {
+public:
+    struct Seen final {
+        std::string method;
+        std::string target;
+        std::string authorization;
+        std::string key;
+    };
+
+    FakeGateway() {
+        REQUIRE(listener_.Ok());
+        thread_ = std::thread([this] { Serve(); });
+    }
+    ~FakeGateway() {
+        stop_ = true;
+        thread_.join();
+    }
+    [[nodiscard]] GYO::Engine::OS::SocketAddress Address() const { return listener_.Address(); }
+    [[nodiscard]] std::vector<Seen> Requests() {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        return seen_;
+    }
+    // The open room of another user the lobby lists (and the user can join).
+    void OfferRoom(const std::uint64_t id) {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        other_ = id;
+    }
+    // The room's match has ended: reads of the room answer 410 match_ended.
+    void EndMatch() {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        ended_ = true;
+    }
+    // The next read of the rooms answers 401 session_expired (once).
+    void ExpireSession() {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        expire_ = true;
+    }
+
+private:
+    static std::string Header(const std::string& request, const std::string& name) {
+        std::string lower = request;
+        for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const std::string key = "\r\n" + name + ":";
+        const std::size_t at = lower.find(key);
+        if (at == std::string::npos) return {};
+        std::size_t start = at + key.size();
+        while (start < request.size() && request[start] == ' ') ++start;
+        return request.substr(start, request.find("\r\n", start) - start);
+    }
+    static std::string Answer(const int status, const std::string& body) {
+        return "HTTP/1.1 " + std::to_string(status) + " X\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.size()) +
+               "\r\n\r\n" + body;
+    }
+    std::string RoomJson(const bool withConnect) const {
+        std::string json = "{\"id\":3,\"mode\":\"" + mode_ + "\",\"map\":\"" + map_ + "\",\"players\":1,\"capacity\":4,\"state\":\"" +
+                           (started_ ? "started" : "open") + "\",\"owner\":7,\"members\":[{\"userId\":7,\"ready\":" + (ready_ ? "true" : "false") + "}]";
+        if (withConnect && started_) json += ",\"connect\":{\"server\":\"127.0.0.1:47000\",\"userId\":7,\"token\":\"00ff\"}";
+        return json + "}";
+    }
+    std::pair<int, std::string> Route(const std::string& method, const std::string& target, const std::string& body) {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        if (method == "POST" && target == "/v1/session") return {200, "{\"userId\":7,\"sessionToken\":\"t" + std::to_string(++sessions_) + "\",\"expiresAt\":99}"};
+        if (method == "GET" && target == "/v1/rooms") {
+            if (std::exchange(expire_, false)) return {401, "{\"error\":\"session_expired\"}"};
+            std::string rooms;
+            if (other_ != 0) rooms = "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":2,\"capacity\":4,\"state\":\"open\"}";
+            return {200, "{\"rooms\":[" + rooms + "]}"};
+        }
+        if (method == "GET" && target == "/v1/saves/me") {
+            return {200, "{\"userId\":7,\"version\":2,\"body\":{\"saveVersion\":1,\"matches\":3,\"deaths\":2,\"lastMatch\":9,\"lastWrite\":\"k\"}}"};
+        }
+        if (method == "POST" && target == "/v1/rooms") {
+            const auto field = [&body](const std::string& name) {
+                const std::size_t at = body.find("\"" + name + "\":\"");
+                if (at == std::string::npos) return std::string();
+                const std::size_t start = at + name.size() + 4;
+                return body.substr(start, body.find('"', start) - start);
+            };
+            mode_ = field("mode");
+            map_ = field("map");
+            return {200, RoomJson(false)};
+        }
+        if (method == "POST" && target == "/v1/rooms/" + std::to_string(other_) + "/join" && other_ != 0) {
+            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[]}"};
+        }
+        if (target == "/v1/rooms/" + std::to_string(other_) && other_ != 0 && method == "GET") {
+            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[{\"userId\":9,\"ready\":true},{\"userId\":7,\"ready\":false}]}"};
+        }
+        if (method == "GET" && target == "/v1/rooms/3") {
+            if (ended_) return {410, "{\"error\":\"match_ended\"}"};
+            return {200, RoomJson(true)};
+        }
+        if (method == "POST" && target == "/v1/rooms/3/ready") {
+            ready_ = body.find("true") != std::string::npos;
+            return {200, RoomJson(false)};
+        }
+        if (method == "POST" && target == "/v1/rooms/3/start") {
+            if (!ready_) return {409, "{\"error\":\"not_all_ready\"}"};
+            started_ = true;
+            return {200, RoomJson(true)};
+        }
+        if (method == "POST" && target.ends_with("/leave")) return {200, "{\"left\":true}"};
+        return {404, "{\"error\":\"unknown_route\"}"};
+    }
+    void Serve() {
+        while (!stop_) {
+            if (!listener_.Accept(std::chrono::milliseconds(50))) continue;
+            const auto request = listener_.ReceiveRequest();
+            if (!request) {
+                listener_.CloseAccepted();
+                continue;
+            }
+            const std::size_t space = request->find(' ');
+            const std::size_t space2 = request->find(' ', space + 1);
+            const std::string method = request->substr(0, space);
+            const std::string target = request->substr(space + 1, space2 - space - 1);
+            const std::size_t bodyAt = request->find("\r\n\r\n");
+            const std::string body = bodyAt == std::string::npos ? std::string() : request->substr(bodyAt + 4);
+            {
+                const std::lock_guard<std::mutex> lock(mutex_);
+                seen_.push_back({method, target, Header(*request, "authorization"), Header(*request, "idempotency-key")});
+            }
+            const auto [status, answer] = Route(method, target, body);
+            (void)listener_.Send(Answer(status, answer));
+            listener_.CloseAccepted();
+        }
+    }
+
+    GYO::Test::LoopbackListener listener_;
+    std::atomic<bool> stop_{false};
+    std::thread thread_;
+    std::mutex mutex_;
+    std::vector<Seen> seen_;
+    std::uint64_t other_ = 0;
+    bool expire_ = false;
+    bool ended_ = false;
+    int sessions_ = 0;
+    std::string mode_ = "coop";
+    std::string map_;
+    bool ready_ = false;
+    bool started_ = false;
+};
+
+bool Asked(FakeGateway& gateway, const std::string& method, const std::string& target) {
+    for (const FakeGateway::Seen& seen : gateway.Requests()) {
+        if (seen.method == method && seen.target == target) return true;
+    }
+    return false;
+}
+
+// Runs frames until done says so (at most n); the Gateway answers on its own thread.
+template <class Done>
+bool FramesUntil(Setup& setup, Done done, const int n = 600) {
+    for (int i = 0; i < n; ++i) {
+        if (done()) return true;
+        setup.Frame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return done();
+}
+
+std::string ListLine(Setup& setup, const std::size_t row) {
+    const auto* bindings = setup.Client().Get<GYO::Engine::Ui::UiBindings>(setup.Root());
+    if (bindings == nullptr) return {};
+    const auto* value = bindings->Find("rooms");
+    const auto* list = value != nullptr ? std::get_if<GYO::Engine::Ui::UiList>(value) : nullptr;
+    if (list == nullptr || row >= list->items.size()) return {};
+    const auto found = list->items[row].fields.find("line");
+    const auto* text = found != list->items[row].fields.end() ? std::get_if<std::string>(&found->second) : nullptr;
+    return text != nullptr ? *text : std::string();
+}
+
+} // namespace
+
+TEST_CASE("client: gateway: the requests carry the session's token, an idempotency key on each change, and the answers read") {
+    std::optional<PC::GatewaySession> session = PC::GatewaySession{7, "tok", 99};
+    const auto create = PC::ToHttp(PC::CreateRoomRequest("coop", "pvp_training_v1", "k1"), "127.0.0.1:7700", session);
+    CHECK(create.method == "POST");
+    CHECK(create.target == "/v1/rooms");
+    CHECK(create.host == "127.0.0.1:7700");
+    CHECK(create.body == "{\"mode\":\"coop\",\"map\":\"pvp_training_v1\"}");
+    bool bearer = false, key = false;
+    for (const auto& header : create.headers) {
+        bearer = bearer || (header.name == "Authorization" && header.value == "Bearer tok");
+        key = key || (header.name == "Idempotency-Key" && header.value == "k1");
+    }
+    CHECK_MESSAGE(bearer, "[pvp-gw-bearer]");
+    CHECK_MESSAGE(key, "[pvp-gw-key]");
+    const auto list = PC::ToHttp(PC::ListRoomsRequest(), "127.0.0.1:7700", session);
+    for (const auto& header : list.headers) CHECK(header.name != "Idempotency-Key");
+    CHECK(PC::ReadyRequest(3, false, "k").body == "{\"ready\":false}");
+    CHECK(PC::ReadyRequest(3, true, "k").target == "/v1/rooms/3/ready");
+
+    std::string error;
+    const auto room = PC::ParseRoom("{\"id\":3,\"mode\":\"coop\",\"map\":\"m\",\"players\":1,\"capacity\":4,\"state\":\"started\",\"owner\":7,"
+                                    "\"members\":[{\"userId\":7,\"ready\":true}],\"connect\":{\"server\":\"1.2.3.4:5\",\"userId\":7,\"token\":\"ab\"}}",
+                                    error);
+    REQUIRE_MESSAGE(room.has_value(), error);
+    CHECK(room->state == "started");
+    REQUIRE(room->connect.has_value());
+    CHECK(room->connect->server == "1.2.3.4:5");
+    CHECK(room->members.size() == 1);
+    CHECK_FALSE(PC::ParseRoom("{\"id\":\"x\"}", error).has_value());
+    const auto save = PC::ParseSave("{\"userId\":7,\"version\":2,\"body\":null}", error);
+    REQUIRE(save.has_value());
+    CHECK(save->body == "null");
+    CHECK(PC::ErrorCodeOf("{\"error\":\"room_full\"}") == "room_full");
+    CHECK(PC::RandomHex(16).size() == 32);
+}
+
+TEST_CASE("client: gateway: the lobby lists and records; a made room is readied and started; the game connects where the room says") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    Setup setup(1, 4, 0, LobbyFirst(), directory.Utf8(), gateway.Address());
+    setup.Load();
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("record") == "戦績：出撃 3 回・死亡 2 回"; }),
+                    "[pvp-gw-record] " << setup.Binding("record") << " / " << setup.Binding("notice"));
+    const auto requests = gateway.Requests();
+    REQUIRE_FALSE(requests.empty());
+    CHECK_MESSAGE((requests.front().method == "POST" && requests.front().target == "/v1/session"), "[pvp-gw-session-first]");
+    // The device id is kept in the player's directory.
+    const auto device = PC::ReadLocalText(directory.Utf8() + "/device-id");
+    REQUIRE((device && device->has_value()));
+    CHECK((*device)->size() == 64);
+    // Make a room: the creation is the sixth of the focus order (join, prev, next, mode, map, create).
+    for (int i = 0; i < 5; ++i) setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Room; }), "[pvp-gw-create] " << setup.Binding("status"));
+    CHECK(setup.Scene().room == 3);
+    CHECK(Asked(gateway, "POST", "/v1/rooms"));
+    setup.Load();
+    // Ready (the first button), then start (the second): the game, connected where the started room says.
+    REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する"; }));
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備をやめる"; }), "[pvp-gw-ready] " << setup.Binding("status"));
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::MultiGame; }), "[pvp-gw-start] " << setup.Binding("status"));
+    REQUIRE(setup.Scene().connect.has_value());
+    const auto* server = std::get_if<GYO::Engine::OS::SocketAddress>(&setup.Scene().connect->server);
+    REQUIRE(server != nullptr);
+    CHECK_MESSAGE(server->ToString() == "127.0.0.1:47000", "[pvp-gw-connect]");
+    CHECK(setup.Scene().connect->userId == 7);
+    CHECK(setup.Scene().connect->token == std::vector<std::byte>{std::byte{0x00}, std::byte{0xff}});
+    CHECK(setup.Scene().room == 3);
+    CHECK_MESSAGE(HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-scene-sim-target] the game's Sim World has the target");
+    CHECK_MESSAGE(setup.Sim().Resource<PW::LocalUser>()->userId == 7, "[pvp-gw-user] the player is the Gateway's user");
+    CHECK(setup.Client().Resource<PW::LocalUser>()->userId == 7);
+    // Every call after the session's carried its token; every change its own key.
+    for (const FakeGateway::Seen& seen : gateway.Requests()) {
+        if (seen.target == "/v1/session") continue;
+        CHECK_MESSAGE(seen.authorization == "Bearer t1", "[pvp-gw-token] " << seen.method << " " << seen.target);
+        if (seen.method == "POST") CHECK_MESSAGE(!seen.key.empty(), "[pvp-gw-keys] " << seen.target);
+    }
+    // Evacuate (the pause's 撤退する: the pointer is the player's, Enter on the focused button): the room is left and
+    // the lobby comes back.
+    for (int i = 0; i < 400; ++i) {
+        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+        if (state != nullptr && state->runtime) break;
+        setup.Frames(1);
+    }
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return Asked(gateway, "POST", "/v1/rooms/3/leave"); }), "[pvp-gw-leave-sent]");
+    CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-gw-leave]");
+}
+
+TEST_CASE("client: gateway: a listed room is joined; a lost session is opened again; a Gateway nobody answers at is told") {
+    {
+        TempDirectory directory;
+        FakeGateway gateway;
+        gateway.OfferRoom(5);
+        Setup setup(1, 4, 0, LobbyFirst(), directory.Utf8(), gateway.Address());
+        setup.Load();
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return ListLine(setup, 0).find("#5") != std::string::npos; }), "[pvp-gw-list] " << setup.Binding("notice"));
+        gateway.ExpireSession();
+        // Within a few lists the session is opened again (a second POST /v1/session) and the list goes on.
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] {
+                            int sessions = 0;
+                            for (const auto& seen : gateway.Requests()) sessions += seen.target == "/v1/session" ? 1 : 0;
+                            return sessions == 2;
+                        }),
+                        "[pvp-gw-reopen] the session is opened again");
+        CHECK_MESSAGE(FramesUntil(setup, [&] {
+                          const auto all = gateway.Requests();
+                          return !all.empty() && all.back().target == "/v1/rooms" && all.back().authorization == "Bearer t2";
+                      }),
+                      "[pvp-gw-reopen] the list is asked again with the new token");
+        // Join: the first button.
+        setup.Press(I::KeyCode::Enter);
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Room; }), "[pvp-gw-join] " << setup.Binding("status"));
+        CHECK(setup.Scene().room == 5);
+        CHECK(Asked(gateway, "POST", "/v1/rooms/5/join"));
+    }
+    TempDirectory directory;
+    Setup setup(1, 4, 0, LobbyFirst(), directory.Utf8());
+    setup.Load();
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("notice").find("接続できません") != std::string::npos; }, 2000),
+                    "[pvp-gw-unreachable] " << setup.Binding("notice"));
+}
+
+// The whole line, run by the services' Go test TestTheRealClientPlaysThroughTheGateway (CTest
+// object_fps_pvp.gateway_client, label network): the Gateway at GYO_PVP_GATEWAY with real Matches behind it, this
+// Client over UDP. Without the variable the case says so and ends.
+TEST_CASE("network: through the Gateway: a room made, readied and started, played in the Match, evacuated; the save is read") {
+    const char* address = std::getenv("GYO_PVP_GATEWAY");
+    if (address == nullptr) {
+        MESSAGE("GYO_PVP_GATEWAY is not set: nothing to run against");
+        return;
+    }
+    const auto gateway = PC::ParseMatchAddress(address);
+    REQUIRE(gateway.has_value());
+    TempDirectory directory;
+    auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "network assets", .threadCount = 2});
+    REQUIRE(static_cast<bool>(started));
+    auto pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
+    WA::WorkerPoolExecutor executor(*pool);
+    std::string error;
+    auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
+    REQUIRE_MESSAGE(presentation.has_value(), error);
+    PC::ClientOptions options{ShippedContent(), std::make_shared<const PC::PresentationContent>(std::move(*presentation)), 0, 0};
+    O::ProductDescription description;
+    description.name = "pvp-client";
+    N::NetProductOptions net;
+    net.role = N::NetRole::Client;
+    description.options.Set(net);
+    PC::ClientStart start;
+    start.first = LobbyFirst();
+    start.dataDirectory = directory.Utf8();
+    start.gateway = *gateway;
+    description.options.Set(start);
+    O::WorldDescription frame = PC::ClientFrameWorld(options, false);
+    frame.build = [inner = std::move(frame.build)](O::WorldSetup& setup) {
+        inner(setup);
+        setup.Registrar().Resource<Pending>({.name = "test.Pending"});
+        K::SystemOptions write;
+        write.name = "test.WriteEvents";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = std::string(O::DefaultSchedules::preUpdate);
+        mount.before = {std::string(I::kInputSet), std::string(W::kWindowSet)};
+        write.mounts.push_back(std::move(mount));
+        setup.Registrar().AddSystem<&WriteEvents>(std::move(write));
+        setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            Pending first;
+            first.focus.push_back(W::WindowFocused{true, {}});
+            first.sizes.push_back(W::WindowResized{{1280, 720}, 1.0F, {}});
+            w.SetResource(std::move(first));
+            return {};
+        });
+    };
+    description.worlds.push_back(PC::ClientSoloWorld(options));
+    description.worlds.push_back(PC::ClientSimWorld(options));
+    description.worlds.push_back(std::move(frame));
+    description.worlds.push_back(PC::ClientRenderWorld(false));
+    description.configure = [](O::ProductSetup& setup) { PC::ConfigureClient(setup); };
+    WA::AssetOptions assets;
+    assets.contentRoot = PVP_CONTENT_ROOT;
+    assets.executor = &executor;
+    description.options.Set(assets);
+    auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
+    REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+    std::unique_ptr<O::Product> client = std::move(built).value();
+
+    const auto frameWorld = [&]() -> K::World& { return client->World("Frame").GetWorld(); };
+    const auto scene = [&]() -> const PC::SceneChange& { return client->Buffer().Find<PC::SceneDirector>()->Current(); };
+    const auto binding = [&](const std::string_view id) -> std::string {
+        for (const K::EntityId e : frameWorld().Entities()) {
+            const auto* bindings = frameWorld().Get<GYO::Engine::Ui::UiBindings>(e);
+            if (bindings == nullptr) continue;
+            const auto* value = bindings->Find(id);
+            const auto* text = value != nullptr ? std::get_if<std::string>(value) : nullptr;
+            if (text != nullptr) return *text;
+        }
+        return {};
+    };
+    // Real time: a frame every 10 ms, the scene changes between frames.
+    const auto runUntil = [&](const auto& done, const int seconds) {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+        while (std::chrono::steady_clock::now() < until) {
+            if (done()) return true;
+            auto ran = client->RunFrame();
+            REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
+            if (PC::SceneChangeWanted(*client)) REQUIRE(static_cast<bool>(PC::ChangeScene(*client)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return done();
+    };
+    // The scene's document is laid out (keys before that reach nothing).
+    const auto loaded = [&] {
+        for (const K::EntityId e : frameWorld().Entities()) {
+            const auto* state = frameWorld().Get<GYO::Engine::Ui::UiRootState>(e);
+            if (state != nullptr && state->runtime) return true;
+        }
+        return false;
+    };
+    const auto press = [&](const I::KeyCode code) {
+        frameWorld().ResourceMut<Pending>()->keys.push_back(Key(code));
+        for (int i = 0; i < 2; ++i) {
+            REQUIRE(static_cast<bool>(client->RunFrame()));
+            if (PC::SceneChangeWanted(*client)) REQUIRE(static_cast<bool>(PC::ChangeScene(*client)));
+        }
+    };
+    REQUIRE_MESSAGE(runUntil([&] { return binding("record").find("戦績：") == 0 && binding("record") != "戦績：—"; }, 20),
+                    "the lobby read the record: " << binding("record") << " / " << binding("notice"));
+    const std::string before = binding("record");
+    REQUIRE(runUntil(loaded, 20));
+    for (int i = 0; i < 5; ++i) press(I::KeyCode::Tab);
+    press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(runUntil([&] { return scene().scene == PC::Scene::Room; }, 20), binding("status"));
+    REQUIRE(runUntil(loaded, 20));
+    press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(runUntil([&] { return binding("ready") == "準備をやめる"; }, 20), binding("status"));
+    press(I::KeyCode::Tab);
+    press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(runUntil([&] { return scene().scene == PC::Scene::MultiGame; }, 40), "started: " << binding("status"));
+    REQUIRE_MESSAGE(runUntil([&] { return PC::StatusOf(frameWorld()).playing; }, 40),
+                    "[pvp-gw-e2e-playing] the own player came from the Match: " << PC::StatusOf(frameWorld()).endReason << " / scene "
+                        << static_cast<int>(scene().scene) << " (" << scene().status << ") / session " << (client->Buffer().Find<N::NetService>()->Client() != nullptr)
+                        << " / link failures " << client->Buffer().Find<N::NetService>()->LinkFailures() << " / target "
+                        << HasResource<N::NetConnectTarget>(client->World("Sim").GetWorld()) << " / connected "
+                        << PC::StatusOf(frameWorld()).connected);
+    // Evacuate (the pause, shown while the pointer is the player's: Enter on 撤退する): the room is left, the
+    // connection closes, the Match writes the save.
+    REQUIRE(runUntil(loaded, 20));
+    press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(runUntil([&] { return scene().scene == PC::Scene::Lobby; }, 5), "[pvp-gw-e2e-evacuated]");
+    CHECK_MESSAGE(runUntil([&] { return binding("record").find("出撃 1 回") != std::string::npos; }, 40),
+                  "[pvp-gw-e2e-saved] the record after one game: " << binding("record") << " (before: " << before << ")");
+}
+
+TEST_CASE("client: gateway: a game that ends on its own goes back to the lobby without leaving the room, and does not reconnect") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    // The Match refuses (no seat): the connection ends without the player asking.
+    PC::SceneChange game = GameScene();
+    game.room = 3;
+    Setup setup(1, 0, 0, game, directory.Utf8(), gateway.Address());
+    REQUIRE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }));
+    setup.Frames(60);
+    CHECK_MESSAGE(!Asked(gateway, "POST", "/v1/rooms/3/leave"), "[pvp-gw-end-keeps-room] the room is kept: the player may come back");
+    CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "no connection is made again");
+}
+
+TEST_CASE("client: a Match that closes the connection sends the game back to the lobby; it does not connect again") {
+    Setup setup;
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).playing; }));
+    // The Match closes this Client's connection (as when the same user's newer connection takes the player over).
+    K::World& match = GameWorld(*setup.match);
+    std::optional<std::uint32_t> connection;
+    for (const K::EntityId id : match.Entities()) {
+        const auto* peer = match.Get<N::Peer>(id);
+        if (peer != nullptr && peer->userId == 1) connection = peer->connectionId;
+    }
+    REQUIRE(connection.has_value());
+    setup.match->Buffer().Find<N::NetService>()->Server()->Close(*connection);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }), "[pvp-closed-lobby]");
+    CHECK_MESSAGE(setup.Scene().status.find("閉じました") != std::string::npos, setup.Scene().status);
+    setup.Frames(60);
+    CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "[pvp-closed-no-reconnect] no new connection");
+    bool back = false;
+    for (const K::EntityId id : match.Entities()) {
+        const auto* peer = match.Get<N::Peer>(id);
+        back = back || (peer != nullptr && peer->userId == 1);
+    }
+    CHECK_FALSE(back);
+}
+
+TEST_CASE("client: gateway: a room whose match ended sends the room back to the lobby, which says so") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Room, .room = 3}, directory.Utf8(), gateway.Address());
+    REQUIRE(FramesUntil(setup, [&] { return Asked(gateway, "GET", "/v1/rooms/3"); }));
+    gateway.EndMatch();
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }), "[pvp-gw-room-gone]");
+    CHECK(setup.Scene().status == "対戦は終わりました");
+}
+
+TEST_CASE("client: gateway: the error codes in the player's words; a call without an answer times out; the device id is kept") {
+    const auto text = [](std::string code, const int status = 409) {
+        PC::GatewayResult result;
+        result.status = status;
+        result.errorCode = std::move(code);
+        return PC::GatewayErrorText(result, "1.2.3.4:5");
+    };
+    CHECK(text("unreachable", 0) == "Gateway（1.2.3.4:5）に接続できません");
+    CHECK(text("timeout", 0) == "Gateway（1.2.3.4:5）から応答がありません");
+    CHECK(text("room_full") == "部屋が満員です");
+    CHECK(text("room_started") == "その部屋はもう始まっています");
+    CHECK(text("room_starting") == "その部屋はもう始まっています");
+    CHECK(text("room_not_found", 404) == "部屋がありません");
+    CHECK(text("not_member", 403) == "この部屋のメンバーではありません");
+    CHECK(text("match_ended", 410) == "対戦は終わりました");
+    CHECK(text("not_owner", 403) == "開始できるのは部屋を作った人だけです");
+    CHECK(text("not_all_ready") == "全員の準備がまだです");
+    CHECK(text("no_match_available", 503) == "対戦を始められませんでした。もう一度開始してください");
+    CHECK(text("unknown_map", 400) == "Gateway がこのマップかモードを知りません");
+    CHECK(text("", 500).find("HTTP 500") != std::string::npos);
+    CHECK(text("key_failed", 500) == "Gateway: key_failed");
+    CHECK(text("no_device", 0).find("この端末の ID") == 0);
+
+    // A Gateway that takes the call and never answers: the call times out (the clock is the caller's).
+    GYO::Test::LoopbackListener silent;
+    REQUIRE(silent.Ok());
+    PC::GatewayClient client(silent.Address(), "device", {}, 1'000'000'000);
+    client.Ask("list", PC::ListRoomsRequest());
+    std::optional<PC::GatewayResult> result;
+    std::thread accept([&silent] { (void)silent.Accept(std::chrono::seconds(5)); });
+    for (int i = 0; i < 200 && !result; ++i) {
+        result = client.Update(static_cast<std::int64_t>(i) * 20'000'000);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    accept.join();
+    REQUIRE_MESSAGE(result.has_value(), "[pvp-gw-timeout] the call never ended");
+    CHECK_MESSAGE(result->errorCode == "timeout", "[pvp-gw-timeout] " << result->errorCode << " " << result->detail);
+
+    // The device id kept in its file is the one used again.
+    TempDirectory directory;
+    const std::string path = directory.Utf8() + "/device-id";
+    REQUIRE(static_cast<bool>(PC::WriteLocalText(path, "kept-device")));
+    std::string error;
+    CHECK_MESSAGE(PC::LoadDeviceId(path, error) == "kept-device", "[pvp-gw-device-kept] " << error);
 }

@@ -4,6 +4,7 @@
 // scene's.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 #include "object_fps_pvp/client/SoloSave.hpp"
 
@@ -33,15 +34,28 @@ inline constexpr K::EntityId kSceneRoot = 3'000'031;
 void PlaceSceneDocument(K::World& world, std::string_view documentId, std::string_view canvas, GYO::Engine::Ui::UiBindings bindings,
                         GYO::Engine::Ui::UiTextFilter filter);
 
-// Every scene's part: SceneRequest, FrameNotes (carried to the next scene), the frame budget (closes the window when
-// it runs out) and the watch of the scene's document (FrameNotes::shown, failure).
+// Every scene's part: SceneRequest, FrameNotes and the GatewayClient (both carried to the next scene), the frame
+// budget (closes the window when it runs out) and the watch of the scene's document (FrameNotes::shown, failure).
 void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
 // dataDirectory: the player's (ClientStart).
 void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory);
-// user: the user id the lobby connects with.
-void BuildLobby(O::WorldSetup& setup, const SceneChange& change, std::uint64_t user);
+// What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a
+// room can be made with (the installed arenas, by id).
+struct GatewayContext final {
+    std::string dataDirectory;
+    GYO::Engine::OS::SocketAddress gateway;
+    std::vector<std::string> maps;
+};
+void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
+void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
+
+// The device id file in the player's directory.
+[[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
+// The Frame World's GatewayClient, when the World has none yet (the first scene: later ones get it carried): with this
+// player's device id (read, or made the first time), or without one (it then calls nothing and says why).
+void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory);
 
 } // namespace object_fps_pvp::client

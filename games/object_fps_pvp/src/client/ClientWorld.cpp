@@ -1,6 +1,7 @@
 #include "object_fps_pvp/client/ClientWorld.hpp"
 
 #include "client/ClientExchange.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
 #include "client/SceneBuilds.hpp"
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
@@ -987,10 +988,11 @@ K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::Re
     return {};
 }
 
-// Which game the scene is and where it goes back to: the lobby's address text (multiplayer), the single player's save.
+// Which game the scene is and where it goes back to: the Gateway's room the lobby leaves (multiplayer), the single
+// player's save.
 struct GameOrigin final {
     Scene scene = Scene::MultiGame;
-    std::string address;
+    std::uint64_t room = 0;
     std::string savePath;
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
@@ -1019,11 +1021,14 @@ K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientC
 // deaths), back to the menu with what was written (or why not). Multiplayer: back to the lobby (the Sim World of the
 // lobby has no target: the connection closes, and the Match writes the save when it sees the player leave).
 K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
-                         K::ResMut<SceneRequest> request) {
+                         K::ResMut<GatewayClient> gateway, K::ResMut<SceneRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action != "pvp.evacuate" || request.Read().next) continue;
         if (origin->scene == Scene::MultiGame) {
-            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .address = origin->address};
+            // The player leaves the room too (it gives no connect any more: a later game is a new room). The call
+            // goes on in the lobby, which the GatewayClient is carried to.
+            if (origin->room != 0) gateway->Ask("leave", LeaveRequest(origin->room, RandomHex(16)));
+            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました"};
             continue;
         }
         const auto settled = SettleSolo(origin->savePath, sim->deaths);
@@ -1036,7 +1041,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
 
 // Frame World: the connection ended or the Match's content differs (the Sim World's picture says so): back to the
 // lobby with the reason, noted for the program (FrameNotes).
-K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
+K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
     if (request.Read().next) return {};
     std::string reason;
     if (!sim->mismatch.empty()) {
@@ -1048,7 +1053,9 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K:
     } else {
         return {};
     }
-    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};
+    // The room is not left: the player is still its member, and may come back to the Match (the room gives a new
+    // connect while the Match is on; the disconnect rules keep the place).
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason)};
     return {};
 }
 
@@ -1321,6 +1328,12 @@ void BuildSim(O::WorldSetup& setup) {
     });
 }
 
+// The player of a game scene: the connection's user (the Gateway's user id, or --user with --connect), else this
+// Client's own (single player).
+std::uint64_t LocalUserOf(const SceneChange& scene, const ClientOptions& options) {
+    return scene.connect ? scene.connect->userId : options.userId;
+}
+
 // The Solo World's part: the controls in, the picture out (the same exchange as the Sim World's), and the step's input
 // written into the local player.
 void BuildSolo(O::WorldSetup& setup) {
@@ -1407,8 +1420,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    GameOrigin origin{change.scene, change.address, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
-    setup.Prepare([options, port, origin](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
+    const std::uint64_t user = LocalUserOf(change, options);
+    setup.Prepare([options, port, origin, user](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
@@ -1419,7 +1433,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         rules.wallsDigest = arena.wallsDigest;
         rules.character = options.game->character;
         world.SetResource(std::move(rules));
-        world.SetResource(PW::LocalUser{options.userId});
+        world.SetResource(PW::LocalUser{user});
         world.SetResource(PW::ContentRef{options.game});
         world.SetResource(ClientView{});
         world.SetResource(FrameMirror{});
@@ -1739,11 +1753,11 @@ void ConfigureClient(O::ProductSetup& setup) {
 }
 
 O::WorldDescription ClientSimWorld(ClientOptions options) {
-    O::WorldDescription world = PW::ClientWorld({options.game, options.arena, options.userId, nullptr});
+    O::WorldDescription world = PW::ClientWorld({.content = options.game, .arena = options.arena, .localUser = options.userId});
     world.name = "Sim";
     // The game only in the scene that plays it; elsewhere the World is its units alone, without a target (no
-    // connection: net-connect-target).
-    world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
+    // connection: net-connect-target). The player is the connection's user (the Gateway's user id).
+    world.build = [options](O::WorldSetup& setup) {
         const auto* director = setup.ProductBuffer().Find<SceneDirector>();
         GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
         const SceneChange& scene = director->Current();
@@ -1752,7 +1766,8 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
             RB::RollbackEntry(setup).StepSchedule();
             return;
         }
-        inner(setup);
+        PW::BuildWorld(setup, {.content = options.game, .arena = options.arena, .localUser = LocalUserOf(scene, options)},
+                       PW::WorldEnd::Client);
         BuildSim(setup);
         if (scene.connect) {
             setup.Prepare([target = *scene.connect](K::World& w) -> Base::Result<void, O::OrchestrationError> {
@@ -1798,11 +1813,15 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         RegisterFrameTypes(setup);
         BuildSceneCommon(setup);
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
-        const std::string directory = start != nullptr ? start->dataDirectory : std::string();
+        GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
+        const std::string& directory = start->dataDirectory;
+        GatewayContext gateway{directory, start->gateway, {}};
+        for (const PW::InstalledArena& arena : options.game->arenas) gateway.maps.push_back(arena.content.id);
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
         case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory); break;
-        case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
+        case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
+        case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:
         case Scene::MultiGame: BuildGame(setup, options, scene, directory); break;
         }
