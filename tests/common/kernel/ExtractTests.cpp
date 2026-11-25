@@ -516,7 +516,11 @@ TEST_CASE("DI-KS 38: a World that declares no dynamic insert refuses a new sourc
     WorldExecutor oldSource(*oldRegistry, "old");
     WorldExecutor reader(*readerRegistry, "reader", WorldOptions{false});
     const auto refused = readerRegistry->ReplaceExtractSource(*newRegistry);
-    REQUIRE_FALSE(static_cast<bool>(refused));
+    CHECK_MESSAGE(!refused, "[ks-rx-refusal] a World that declares no dynamic insert let a new source in");
+    if (refused) {
+        readerRegistry->DiscardRegistrations();
+        return;
+    }
     CHECK_MESSAGE(refused.error().code == KernelErrorCode::DynamicInsertRefused, "[ks-rx-refusal] " << refused.error().Text());
     CHECK(readerRegistry->Frozen().Version() == 1U);
     CHECK(static_cast<bool>(reader.RunExtract("Extract", oldSource.GetWorld())));

@@ -1356,10 +1356,18 @@ Engine::Base::Result<void, StartupReport> Registry::StagePlans() {
     GYO_ASSERT(!data_->failed);
     GYO_ASSERT(pending_ && !staged_ && "StagePlans: no later round to build");
     RequireNoWorldRunning();
-    // A later round: built on the copy; the tables change only when it is taken in.
+    // A later round: built on the copy; the tables change only when it is taken in. A round that fails, or
+    // that an exception leaves, is dropped (DI-KS 38): it may read a source its caller is about to let go.
     Detail::RegistryData& round = *pending_;
-    Detail::ResolveStage(round, true);
-    if (!Detail::PlanStage(round)) {
+    bool planned = false;
+    try {
+        Detail::ResolveStage(round, true);
+        planned = Detail::PlanStage(round);
+    } catch (...) {
+        pending_.reset();
+        throw;
+    }
+    if (!planned) {
         StartupReport report(std::move(round.errors));
         pending_.reset();
         return Engine::Base::Err(std::move(report));

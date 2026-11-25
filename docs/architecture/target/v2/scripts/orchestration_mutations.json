@@ -845,8 +845,8 @@
    "id": "g8-throw-no-giveback",
    "what": "G-8 candidate: an exception from extra does not give the carried value back (find rewritten for v8-arch-gyo2-broken-world-ends-product) (find and replace rewritten for the replacement's wider try, v8-arch-gyo2-error-levels P12)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    } catch (...) {\n        giveBack(moved);\n        if (!dropOldFirst) {\n",
-   "replace": "    } catch (...) {\n        if (!dropOldFirst) {\n",
+   "find": "    } catch (...) {\n        dropStaged();\n        giveBack(moved);\n        if (!dropOldFirst) {\n",
+   "replace": "    } catch (...) {\n        dropStaged();\n        if (!dropOldFirst) {\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-8: an exception from extra*",
    "expect": "\\[or\\-replace\\-throw\\-keeps\\-old\\]"
@@ -2473,8 +2473,8 @@
     "time-events-declaration 3.6"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            setup.extractFrom_ = world.extractFrom;\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
-   "replace": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            setup.extractFrom_ = world.extractFrom;\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
+   "find": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        // O-12: the notice of a replaced extract source, in every World that reads one (O-8).\n        if (!world.extractFrom.empty()) registrar.Resource<ExtractSourceSwaps>({.name = \"ExtractSourceSwaps\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            setup.extractFrom_ = world.extractFrom;\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n",
+   "replace": "    auto own0 = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, [&world](Kernel::Registrar& registrar) {\n        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        // O-12: the notice of a replaced extract source, in every World that reads one (O-8).\n        if (!world.extractFrom.empty()) registrar.Resource<ExtractSourceSwaps>({.name = \"ExtractSourceSwaps\"});\n    });\n    GYO_ASSERT(static_cast<bool>(own0));\n\n    // Build: every unit of the World in order, then the product's own (always\n    // registered, so a World with no unit still freezes; section 3.3).\n    for (std::size_t index : slot.units) {\n        UnitSlot& unit = units_[index];\n        auto registered = registry->Register(Kernel::RegistrationOwner{unit.row, unit.seq}, [&](Kernel::Registrar& registrar) {\n            WorldSetup setup(world.name, unit.row, registrar, world.options, frame, prepares, carries, *buffer, *buffer_,\n                             exchanges);\n            setup.extractFrom_ = world.extractFrom;\n            unit.unit->Build(setup);\n        });\n        GYO_ASSERT(static_cast<bool>(registered));\n    }\n    if (world.skeleton == ScheduleSkeleton::Default) {\n        auto skeleton = registry->Register(Kernel::RegistrationOwner{kSkeletonOwner, 0}, DeclareDefaultSkeleton);\n        GYO_ASSERT(static_cast<bool>(skeleton));\n    }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-4: a unit inserts a stage into Main*",
    "expect": "\\[or\\-skeleton\\-before\\-build\\]"
@@ -2758,8 +2758,8 @@
    "id": "el-replace-catch-warn-back",
    "what": "an exception leaving ReplaceWorld writes a line to standard error again (error levels D2)",
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "    } catch (...) {\n        giveBack(moved);\n",
-   "replace": "    } catch (...) {\n        std::fputs(\"orchestration: an exception left ReplaceWorld\\n\", stderr);\n        giveBack(moved);\n",
+   "find": "    } catch (...) {\n        dropStaged();\n        giveBack(moved);\n",
+   "replace": "    } catch (...) {\n        dropStaged();\n        std::fputs(\"orchestration: an exception left ReplaceWorld\\n\", stderr);\n        giveBack(moved);\n",
    "target": "gyo_orchestration_tests",
    "command": [
     "{cmake}",
@@ -3617,8 +3617,8 @@
     "orchestration O-14"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n",
-   "replace": "        if (world.skeleton == ScheduleSkeleton::Default) {\n            registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n            DeclareDefaultSkeleton(registrar);\n        }\n",
+   "find": "        registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n        // O-12: the notice of a replaced extract source, in every World that reads one (O-8).\n        if (!world.extractFrom.empty()) registrar.Resource<ExtractSourceSwaps>({.name = \"ExtractSourceSwaps\"});\n        if (world.skeleton == ScheduleSkeleton::Default) DeclareDefaultSkeleton(registrar);\n",
+   "replace": "        // O-12: the notice of a replaced extract source, in every World that reads one (O-8).\n        if (!world.extractFrom.empty()) registrar.Resource<ExtractSourceSwaps>({.name = \"ExtractSourceSwaps\"});\n        if (world.skeleton == ScheduleSkeleton::Default) {\n            registrar.Resource<WorldGeneration>({.name = \"WorldGeneration\"});\n            DeclareDefaultSkeleton(registrar);\n        }\n",
    "target": "gyo_orchestration_tests",
    "cases": "O-14: with the skeleton off*",
    "expect": "GYO_ASSERT failed: entry != nullptr && entry->role == TypeRole::Resource"
@@ -4035,11 +4035,11 @@
     "orchestration O-12"
    ],
    "file": "engine/orchestration/src/Product.cpp",
-   "find": "        readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});\n",
-   "replace": "        static_cast<void>(swaps);\n",
+   "find": "            readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});\n",
+   "replace": "            static_cast<void>(swaps);\n",
    "target": "gyo_orchestration_tests",
    "cases": "extract: replacing the source:*",
-   "expect": "\\[or\\-rx\\-"
+   "expect": "or\\-rx\\-notice|or\\-rx\\-drops\\-kept"
   },
   {
    "id": "or-rx-refusal-ignored",

@@ -5,6 +5,7 @@
 經過：
 - 修訂 0（d4529577）：照卡片寫。
 - 實作（2026-11-25）：照修訂 1 第 3.2 節。Kernel 的三個函式定名 `ReplaceExtractSource`（開之後一輪、改來源；拒絕時回 `KernelError`，同 `Register`）、`StagePlans`（建好留著，同 `BuildPlans` 的錯誤）、`CommitPlans`（只搬移）——第 3.2 節的「stage 一次做開輪與建」拆成開輪與建兩步，是為了沿用 `Register`／`BuildPlans` 的兩種錯誤型別，不新增錯誤碼；`BuildPlans` 的之後一輪改成 `StagePlans`＋`CommitPlans`。
+- 實作的設計審查（2026-11-25，Opus／high，作者與審查者同為 Opus）：blocker 1、should 2、nit 4。採用 B-1（`StagePlans` 丟例外時也丟這一輪、編排層開了輪就計數）、S-1（通知移到換進之前，不配置）、S-2（12 個既有突變的 find 更新後重跑）、N-2～N-4；N-1（`CommitPlans` 標 `noexcept`）不採：測試裡斷言以例外實作。報告：主 checkout `build/evidence/gyo2-sdl-r1b/impl-r0-review.md`。審查也提到另一種通知（Kernel 給 World 唯一 id，像 Bevy 的 `WorldId`，由 Extract 參數自己偵測來源換了）：Kernel 要加概念，目前不採。
 - 修訂 1：修訂 0 送設計審查（**Opus／high，作者與審查者同為 Opus**：Fable 暫停）：blocker 1、should 5、nit 4，全部採用（對照在第 11 節）。審查者沒有建置、沒有跑測試；第 2 節的行號逐一核對過。最大的改動：(B) 的換來源改成「全部暫存、全部成功才一起換進」（B-1，拿掉「失敗改回」）；不繞過 `dynamicInsert = false`（S-1）；列第三個做法 (C) 延後綁定與不選的理由（S-5）。
 
 根據：
@@ -77,7 +78,7 @@ PvP 的 Client 有兩個 World：**Client World**（收網路、跑預測、放�
 1. 拿掉 R1a 的斷言。
 2. `BuildNewFirst`：`beforeSwap` 成功之後，對每個直接讀者 `StageExtractSource(新 Registry)`。任一失敗或丟例外：所有已暫存的讀者 `DiscardRegistrations()`，新 World 丟掉，回 E2 `ReplaceRegistrationFailed`（報告帶讀者的錯誤）或讓例外往外，舊的照跑。全部成功：換上的那一步（不丟例外的區段）裡每個讀者 `CommitStaged()`、銷毀舊的、裝上新的。沒有「改回」。
 3. `DropOldFirst`：舊的先銷毀；讀者的來源指標在換上之前懸空，期間不碰讀者（`~Registry`、`~World` 都不碰來源指標，`Registry.cpp:684`、`World.cpp:152-157`）。新的就緒、`beforeSwap` 成功後同樣先全部暫存、再一起換進；失敗時位置是空的，Product 結束（O-11），讀者不再跑。
-4. **通知**：編排層在每個有 `extractFrom` 的 World 登記一個 Resource（暫名 `ExtractSourceSwaps { std::uint64_t count; }`，owner `orchestration`，照 O-14 的 `WorldGeneration` 的前例），換進之後把讀者的 `count` 加一（World 不在 Run 裡、直接寫，和 `WorldGeneration` 同一條路，不配置）。讀者這一側凡是**以來源實體為鍵、跨幀留著的東西**，在用到它之前整批丟掉：`Changed()` 是每個 System 掛載各自的 `lastRun`，所以用到那張表的每個 System 都自己看，或由擁有者在最早用到它的那張 schedule 清掉（審查 N-4）。這是照 Bevy 同步的形——觀察者記下「發生了什麼」，下一次 extract 開頭處理（`bevy_extract/src/sync_world.rs:93-108` 記到 `PendingSyncEntity`，`:221` 的 `entity_sync_system` 處理）。今天沒有這樣的表（第 2 節），通知的第一個使用者會是 R6。
+4. **通知**：編排層在每個有 `extractFrom` 的 World 登記一個 Resource（暫名 `ExtractSourceSwaps { std::uint64_t count; }`，owner `orchestration`，照 O-14 的 `WorldGeneration` 的前例），全部暫存成功後、換進之前把讀者的 `count` 加一（World 不在 Run 裡、直接寫，和 `WorldGeneration` 同一條路；讀者那時還在原來的版本，不配置，失敗就照例外的路丟掉所有暫存——實作的設計審查 S-1）。讀者這一側凡是**以來源實體為鍵、跨幀留著的東西**，在用到它之前整批丟掉：`Changed()` 是每個 System 掛載各自的 `lastRun`，所以用到那張表的每個 System 都自己看，或由擁有者在最早用到它的那張 schedule 清掉（審查 N-4）。這是照 Bevy 同步的形——觀察者記下「發生了什麼」，下一次 extract 開頭處理（`bevy_extract/src/sync_world.rs:93-108` 記到 `PendingSyncEntity`，`:221` 的 `entity_sync_system` 處理）。今天沒有這樣的表（第 2 節），通知的第一個使用者會是 R6。
 5. 替換讀者自己照舊（新 Registry 接來源目前的 Registry），不加通知（新 World 本來就是空的）。
 
 **通知為什麼在編排層、不在 Kernel**（審查 S-3）：「哪個 World 被換掉」是 O-8 的概念，決定換的是編排層（或直接用 Kernel 的 host）；Kernel 只提供「改讀誰」的原語，和它不保存來源 World（DI-KS 37）一致。直接用 Kernel 的 host 換來源時自己呼叫了 stage／commit，知道自己換了，要通知就自己寫。Bevy 的同步也不在 `bevy_ecs`，在它上面的 `bevy_extract`。代價：Kernel 測試與之後的工具若要同樣的通知，要各寫一行；兩個以上的 host 這樣寫時，重評搬進 Kernel（記成 RC 29 的後半）。

@@ -844,6 +844,7 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
     for (WorldSlot& other : worlds_) {
         if (other.description.extractFrom == slot.description.name) readers.push_back(&other);
     }
+    // The readers whose round is open (staged or not): every way out before the swap drops them.
     std::size_t staged = 0;
     auto dropStaged = [&]() noexcept {
         for (std::size_t i = 0; i < staged; ++i) readers[i]->registry->DiscardRegistrations();
@@ -1019,6 +1020,7 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
                                            " and cannot read the new World",
                                        std::move(opened).error()));
             }
+            ++staged;
             if (auto built = readerRegistry.StagePlans(); !built) {
                 dropStaged();
                 giveBack(moved);
@@ -1027,7 +1029,14 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
                                                    Quoted(name) + " and cannot read the new World",
                                                built.error().detail));
             }
-            ++staged;
+        }
+        // O-12: each reader is told, before the swap: its World is still on the version it has, so nothing is
+        // allocated, and a failure here drops the staged rounds like any other (one already told learns of a
+        // source that did not change, and drops what it kept for nothing).
+        for (WorldSlot* reader : readers) {
+            Kernel::World& readerWorld = reader->executor->GetWorld();
+            const ExtractSourceSwaps* swaps = readerWorld.Resource<ExtractSourceSwaps>();
+            readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});
         }
     } catch (...) {
         dropStaged();
@@ -1070,12 +1079,6 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
     slot.exchangeOut = std::move(registration.exchangeOut);
     slot.lastSchedule.clear();
     slot.nextInsertSeq = 0;
-    // O-12: each reader is told its source was replaced (its World attaches the new version here).
-    for (WorldSlot* reader : readers) {
-        Kernel::World& readerWorld = reader->executor->GetWorld();
-        const ExtractSourceSwaps* swaps = readerWorld.Resource<ExtractSourceSwaps>();
-        readerWorld.SetResource(ExtractSourceSwaps{.count = (swaps != nullptr ? swaps->count : 0) + 1});
-    }
     return {};
 }
 

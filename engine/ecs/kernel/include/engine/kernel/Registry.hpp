@@ -718,7 +718,7 @@ public:
     // and its Worlds stay on the current version until CommitPlans, or
     // DiscardRegistrations drops it. Lets a caller build the rounds of several
     // Registries and take all of them or none (DI-KS 38). Err: as BuildPlans;
-    // the round is dropped. GYO_ASSERT: no later round open, a staged one, or
+    // the round is dropped, as when an exception leaves it. GYO_ASSERT: no later round open, a staged one, or
     // as BuildPlans.
     Engine::Base::Result<void, StartupReport> StagePlans();
     // Takes the staged round in: the version +1, as a successful BuildPlans.
