@@ -182,7 +182,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | **已定：移植做完再開**（`v8-arch-gyo2-big-map-after-ports`）**大地圖線**（`v8-arch-gyo2-pvp-playtest-2026-11-24` 3）：master big-map（1 km²、cell 0.5 m、`gyo.voxel_map`＋`gyo.voxel_region`）做到格式、分塊工具、broadphase，scene v1 與 pa-measure 沒做；gyo2 只有單檔 v1、無剔除、無地圖編輯器；約 200 m 見方內現狀可行（未量）。開線要照 gyo2 重對層的歸屬（工具與遊戲只用資料形式交接） | PvP 卡 2026-11-24 | 兩個移植做完後 |
 | **已合併 (B) 准許換來源**（`v8-arch-gyo2-sdl-r1b-merged`，#334 d9555e62；宣告 `sdl-extract-replace-declaration.zh-Hant.md` 修訂 1，分支 `claude/gyo2-sdl-r1b-extract-replace-8886f8` 6ff83c7b）。更正總宣告 6.1-4：只有 (B) 要改 Kernel 條文（DI-KS 13、26、37、D-E14；新增 DI-KS 38、RC 29），(A) 只改編排層 O-8、O-12 | R1b 卡 2026-11-25 | 已合併 |
 | PvP：連線目標、userId、token 在 `NetProductOptions`（建 Product 時定）、前台 World 一準備好就握手；要「每次換前台時才給目標、大廳不連線」要由遊戲或 net 定（R1b 的用法：前台 World＋渲染 World，runner `ReplaceWorld("front", {extra})`） | R1b 卡 2026-11-25 | **主會話判 (1)**（`v8-arch-gyo2-net-connect-target-per-world`）：PvP 卡另開 net PR；PvP 改成換前台 World 要等 R1b 與它都合 |
-| gyo2 上原本就 stale 的 15 個突變（find 對不上現在的程式），R1b #334 的 dev_log 列了清單 | R1b 卡 2026-11-25 | 整理突變的卡（未開） |
+| gyo2 上原本就 stale 的 15 個突變（find 對不上現在的程式），R1b #334 的 dev_log 列了清單 | R1b 卡 2026-11-25 | **已開小卡**（和 net 重連順序同一張） |
 | 給使用者知悉、目前不採：由 Kernel 給 World 唯一 id（像 Bevy 的 `WorldId`），讓 Extract 參數自己偵測來源換了（R1b 實作審查提的替代做法；Kernel 要加新概念） | R1b #334 實作審查 | 不排；要用時再議 |
 | **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | **算在 PvP 移植裡**（`v8-arch-gyo2-gateway-in-pvp-port`）；待開卡 |
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能。**已定的掉線規則**（`v8-arch-gyo2-disconnect-rules`）：結算時還掉線的算死亡；掉線者的位子保留、不讓出；新玩家不能中途加入 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
@@ -196,7 +196,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `DatagramAddress` 改名（約 25 個檔；TCP 的 `StreamSocket` 也流用它，名字只說了 datagram；會碰 net 的 `NetService`）——Gateway #339 設計審查 S5 交主會話，改名要排前面、同時立規則 | Gateway #339 | **已開卡**（使用者 2026-11-25「DatagramAddress 改名的卡先開」；`local_344c0611`，Opus／medium） |
 | clip-from-world 在三處各自計算（大地圖 #342 S1／S2 設計審查 S-4）：收斂要改 camera 推導值的條文 | 大地圖 #342 | 下一個動 camera／render 的批（渲染管線線可一起看） |
 | `Mesh3d` 只吃 `Handle<ModelData>`，遊戲不能交「一個 region 一個網格」（大地圖審查 S-6）：照 `ImageRef` 的先例讓 `Mesh3d` 也接作者持有的網格，估 +3～5 h | 大地圖 #342 | 大地圖 S4 |
-| net 的觀察（Gateway #340 審查 N9）：`ServerHost::Respond` 先結束同一 endpoint 的舊連線再問 admission，帶過期 token 從同一 endpoint 重連會先斷掉自己還活著的連線 | Gateway #340 | 下一個碰 net 的批（`DatagramAddress` 改名批可一起看） |
+| net 的觀察（Gateway #340 審查 N9）：`ServerHost::Respond` 先結束同一 endpoint 的舊連線再問 admission，帶過期 token 從同一 endpoint 重連會先斷掉自己還活著的連線 | Gateway #340 | **已開小卡**（`v8-arch-gyo2-big-map-s4-parallel`） |
 | `Sha256` 改成從位元組版 `Sha256Digest` 出 hex 後，net 的 `Handshake.cpp:95` 與 authority 的 `Registrations.cpp:79` 仍自己轉 hex（#339 沒動） | Gateway #339 | 下一個碰 net／authority 的批 |
 | **Engine：視窗模式的請求（窗口／全屏）**（`v8-arch-gyo2-settings-resolution-fullscreen`）：`window` 加請求、`sdl_window` 套用；全屏＝無邊框全屏（`v8-arch-gyo2-window-mode-vsync-start`）；VSync 要（`sdl_gpu` 的 present mode，補回 master 的）；不做螢幕／解析度查詢（使用者選固定尺寸） | 使用者 2026-11-25 | **已開卡** |
 
