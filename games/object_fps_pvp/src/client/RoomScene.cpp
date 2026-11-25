@@ -1,10 +1,12 @@
 // A room of the Gateway (Scene::Room; assets/object_fps_pvp/ui/pvp_room.json, canvas "room"; game-flow declaration
 // 3.4): its members and who is ready, polled every 0.75 s. The player gets ready (or not); the owner starts it once
 // everyone is. When the room has started and gives this player's connect, the game follows, connected to the Match
-// (the token is good for two minutes and comes fresh with each read).
+// (the token is good for two minutes and comes fresh with each read). A room this player is no longer in (gone, its
+// match ended, or left elsewhere) sends it back to the lobby.
 //
-//   Main/Update  RoomActions  pvp.ready (toggles), pvp.start, pvp.leave (-> the lobby once the Gateway answers)
-//                RoomGateway  the calls and their answers (-> the game, or back to the lobby when the room is gone)
+//   Main/Update  RoomActions  pvp.ready (toggles what the player asked last), pvp.start, pvp.leave (-> the lobby once the
+//                             Gateway answers)
+//                RoomGateway  the calls and their answers (-> the game, or back to the lobby)
 
 #include "client/SceneBuilds.hpp"
 
@@ -30,38 +32,40 @@ constexpr std::int64_t kPollEvery = 750'000'000;
 struct RoomState final {
     std::uint64_t id = 0;
     std::optional<Room> room;
-    std::uint64_t self = 0;                  // this player's user id (the session's)
+    std::optional<bool> asked;  // the readiness the player asked for, until a read of the room shows it
     std::optional<std::int64_t> polled;
     bool leaving = false;
     std::string gateway;
 };
 void HashValue(K::Hasher&, const RoomState&) {}
 
-bool ReadyOf(const RoomState& state) {
+bool ReadyOf(const RoomState& state, const std::uint64_t self) {
+    if (state.asked) return *state.asked;
     if (!state.room) return false;
     for (const RoomMember& member : state.room->members) {
-        if (member.userId == state.self) return member.ready;
+        if (member.userId == self) return member.ready;
     }
     return false;
 }
 
-void ShowRoom(const RoomState& state, Ui::UiBindings& bindings) {
+void ShowRoom(const RoomState& state, const std::uint64_t self, Ui::UiBindings& bindings) {
     std::string title = "部屋 #" + std::to_string(state.id);
     Ui::UiList members;
     if (state.room) {
-        title += "  " + std::string(state.room->mode == "coop" ? "協力" : state.room->mode == "survival" ? "生存" : state.room->mode) +
-                 "  " + state.room->map;
+        title += "  " + ModeText(state.room->mode) + "  " + state.room->map;
         for (const RoomMember& member : state.room->members) {
             Ui::UiListItem item;
             item.fields["line"] = "Player " + std::to_string(member.userId) + (member.userId == state.room->owner ? "（部屋主）" : "") +
-                                  (member.userId == state.self ? "（自分）" : "") + "  " + (member.ready ? "準備完了" : "準備中");
+                                  (member.userId == self ? "（自分）" : "") + "  " + (member.ready ? "準備完了" : "準備中");
             members.items.push_back(std::move(item));
         }
     }
     bindings.Set("title", title);
     bindings.Set("members", std::move(members));
-    bindings.Set("ready", std::string(ReadyOf(state) ? "準備をやめる" : "準備する"));
+    bindings.Set("ready", std::string(ReadyOf(state, self) ? "準備をやめる" : "準備する"));
 }
+
+std::uint64_t SelfOf(const GatewayClient& gateway) { return gateway.Session() ? gateway.Session()->userId : 0; }
 
 K::SystemResult RoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<RoomState> state, K::ResMut<GatewayClient> gateway,
                             K::Query<K::Write<Ui::UiBindings>> bindings) {
@@ -69,7 +73,9 @@ K::SystemResult RoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<Ro
         RoomState& room = *state;
         if (room.leaving) continue;
         if (action->action == "pvp.ready") {
-            gateway->Ask("ready", ReadyRequest(room.id, !ReadyOf(room), RandomHex(16)));
+            const bool ready = !ReadyOf(room, SelfOf(*gateway));
+            room.asked = ready;
+            gateway->Ask("ready", ReadyRequest(room.id, ready, RandomHex(16)));
         } else if (action->action == "pvp.start") {
             gateway->Ask("start", StartRequest(room.id, RandomHex(16)));
             if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("status", std::string("開始しています…"));
@@ -77,13 +83,13 @@ K::SystemResult RoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<Ro
             gateway->Ask("leave", LeaveRequest(room.id, RandomHex(16)));
             room.leaving = true;
         }
+        if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) ShowRoom(room, SelfOf(*gateway), *root);
     }
     return {};
 }
 
 K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> state, K::ResMut<GatewayClient> gateway,
-                            K::ResMut<GatewayState> carried, K::ResMut<SceneRequest> request,
-                            K::Query<K::Write<Ui::UiBindings>> bindings) {
+                            K::ResMut<SceneRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
     const std::int64_t now = time->elapsed;
     RoomState& room = *state;
     if (!gateway.Read().Busy() && !room.leaving && (!room.polled || now - *room.polled >= kPollEvery)) {
@@ -91,28 +97,28 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
         room.polled = now;
     }
     const auto result = gateway->Update(now);
-    if (const auto& session = gateway.Read().Session()) {
-        room.self = session->userId;
-        if (!carried.Read().session || carried.Read().session->token != session->token) carried->session = session;
-    }
     if (!result || request.Read().next) return {};
-    std::optional<std::string> status;
-    if (result->tag == "leave") {
-        // Gone either way (an error says the room is gone already).
-        request->next = SceneChange{.scene = Scene::Lobby};
+    if (room.leaving) {
+        // Leaving: only the leave's end counts (gone either way: an error says the room is gone already).
+        if (result->tag == "leave") request->next = SceneChange{.scene = Scene::Lobby};
         return {};
     }
+    std::optional<std::string> status;
     if (!result->Ok()) {
-        const bool gone = result->status == 404 || result->status == 410;
-        if (gone) {
+        // This player is no longer in the room (it is gone, its match ended, or it was left elsewhere): the lobby.
+        const bool out = result->status == 404 || result->status == 410 || result->errorCode == "not_member";
+        if (out) {
             request->next = SceneChange{.scene = Scene::Lobby, .status = GatewayErrorText(*result, room.gateway)};
             return {};
         }
         status = GatewayErrorText(*result, room.gateway);
+        if (result->tag == "ready") room.asked.reset();
     } else {
         std::string error;
         if (auto read = ParseRoom(result->body, error)) {
             room.room = std::move(*read);
+            if (result->tag == "room") room.asked.reset();
+            status = std::string();
         } else {
             status = "Gateway の答えを読めません: " + error;
         }
@@ -132,8 +138,9 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
     }
     for (const K::EntityId id : bindings.Entities()) {
         auto root = bindings.GetMut<Ui::UiBindings>(id);
-        ShowRoom(room, *root);
-        if (status) root->Set("status", *status);
+        ShowRoom(room, SelfOf(*gateway), *root);
+        if (status && !status->empty()) root->Set("status", *status);
+        if (status && status->empty()) root->Set("status", std::string("全員が準備したら、部屋主が開始します"));
     }
     return {};
 }
@@ -143,21 +150,16 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
 void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context) {
     K::Registrar& r = setup.Registrar();
     r.Resource<RoomState>({.name = "object_fps_pvp.RoomState"});
-    RegisterGatewayClient(setup);
     r.AddSystem<&RoomActions>(InSceneUpdate("object_fps_pvp.RoomActions"));
     r.AddSystem<&RoomGateway>(InSceneUpdate("object_fps_pvp.RoomGateway", {"object_fps_pvp.RoomActions"}));
     setup.Prepare([change, context](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         RoomState state;
         state.id = change.room;
         state.gateway = context.gateway.ToString();
-        std::string error;
-        const bool placed = PlaceGatewayClient(w, context, error);
-        if (!placed) w.SetResource(GatewayClient(context.gateway, std::string(), std::nullopt));
-        if (const auto* carried = w.Resource<GatewayState>(); carried != nullptr && carried->session) state.self = carried->session->userId;
         Ui::UiBindings bindings;
-        ShowRoom(state, bindings);
-        bindings.Set("status", !placed ? "この端末の ID を用意できません: " + error
-                                       : change.status.empty() ? std::string("全員が準備したら、部屋主が開始します") : change.status);
+        const auto* gateway = w.Resource<GatewayClient>();
+        ShowRoom(state, gateway != nullptr ? SelfOf(*gateway) : 0, bindings);
+        bindings.Set("status", change.status.empty() ? std::string("全員が準備したら、部屋主が開始します") : change.status);
         w.SetResource(std::move(state));
         PlaceSceneDocument(w, "object_fps_pvp.ui.room", "room", std::move(bindings), {});
         return {};

@@ -9,7 +9,8 @@
 //   "Frame"  window, input, cameras, world_ui, sdl_window  each scene its own (the menu, the lobby, the game)
 //   "Render" extracts from "Frame", ui_render, sdl_gpu      never replaced
 //
-// The scene now is the Product's one SceneDirector (O-15, made by ConfigureClient); each World's build reads it. A
+// The scene now is the Product's one SceneDirector (O-15, made by ConfigureClient); each World's build reads it. The
+// Gateway's client (Gateway.hpp) is a Resource of every Frame World, carried from scene to scene with its session. A
 // scene's System asks for the next one by writing the Frame World's SceneRequest; between two frames the runner asks
 // SceneChangeWanted and, when it is true, calls ChangeScene (sdl_window's SDLWindowBetweenFrames).
 
@@ -45,8 +46,7 @@ struct SceneChange final {
     std::string status;
     // MultiGame: whom the Sim World connects to.
     std::optional<GYO::Engine::Net::NetConnectTarget> connect;
-    // The Gateway's room: Room, the room entered; MultiGame, the room the game came from; Lobby, a room to leave first
-    // (0: none).
+    // The Gateway's room: Room, the room entered; MultiGame, the room the game came from (0: none, --connect).
     std::uint64_t room = 0;
 };
 
@@ -89,15 +89,14 @@ struct ClientStart final {
     GYO::Engine::OS::DatagramAddress gateway = GYO::Engine::OS::DatagramAddress::Loopback(7700);
 };
 
-// The Gateway's session, carried from scene to scene (a Resource of the Frame World, CarryOver): opened by the first
-// scene that calls the Gateway.
-struct GatewayState final {
-    std::optional<GatewaySession> session;
-};
-inline void HashValue(GYO::Kernel::Hasher&, const GatewayState&) {}
 
 // An address as --connect and a room's connect give it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
 [[nodiscard]] std::optional<GYO::Engine::OS::DatagramAddress> ParseMatchAddress(std::string_view text);
+
+// The Gateway's scenes' words (GatewayScene.cpp): what the player reads for a call that went wrong (gateway: its
+// address), and for a room's mode.
+[[nodiscard]] std::string GatewayErrorText(const GatewayResult& result, const std::string& gateway);
+[[nodiscard]] std::string ModeText(std::string_view mode);
 
 // Whether the Sim World plays (connects) in this scene; whether the Solo World plays.
 [[nodiscard]] bool SimPlays(Scene scene) noexcept;

@@ -1388,8 +1388,8 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .room = origin->room};",
-   "replace": "    static_cast<void>(origin);",
+   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason)};",
+   "replace": "    static_cast<void>(reason);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
    "expect": "pvp-session-end"
@@ -1642,30 +1642,69 @@
    "expect": "pvp-gw-start"
   },
   {
-   "id": "pvp-gw-leave-not-sent",
-   "what": "the lobby does not leave the room its game came from",
-   "guards": [
-    "game-flow-declaration 4 (segment 3)"
-   ],
-   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
-   "find": "        if (placed && change.room != 0) w.ResourceMut<GatewayClient>()->Ask(\"leave\", LeaveRequest(change.room, RandomHex(16)));\n",
-   "replace": "",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: gateway: the lobby lists*",
-   "expect": "pvp-gw-leave-sent"
-  },
-  {
    "id": "pvp-gw-join-ignored",
    "what": "the lobby's join asks nothing",
    "guards": [
     "game-flow-declaration 4 (segment 3)"
    ],
    "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
-   "find": "                gateway->Ask(\"enter\", JoinRequest(lobby.rooms[lobby.picked].id, RandomHex(16)));",
+   "find": "                gateway->Ask(\"enter\", JoinRequest(lobby.picked, RandomHex(16)));",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: a listed room*",
    "expect": "pvp-gw-join"
+  },
+  {
+   "id": "pvp-gw-evacuate-no-leave",
+   "what": "the evacuation of a room's game does not leave the room",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            if (origin->room != 0) gateway->Ask(\"leave\", LeaveRequest(origin->room, RandomHex(16)));\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-leave-sent"
+  },
+  {
+   "id": "pvp-gw-ended-room-stays",
+   "what": "a room whose match ended keeps the player in the room's scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "const bool out = result->status == 404 || result->status == 410 || result->errorCode == \"not_member\";",
+   "replace": "const bool out = result->status == 404 || result->errorCode == \"not_member\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a room whose match*",
+   "expect": "pvp-gw-room-gone"
+  },
+  {
+   "id": "pvp-gw-no-timeout",
+   "what": "a call without an answer goes on for ever",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "        if (now - going.started > timeout_) {",
+   "replace": "        if (false && now - going.started > timeout_) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the error codes*",
+   "expect": "pvp-gw-timeout"
+  },
+  {
+   "id": "pvp-gw-device-new",
+   "what": "a new device id is made each time (the player is somebody else each time)",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    if (*kept && !(*kept)->empty()) return **kept;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the error codes*",
+   "expect": "pvp-gw-device-kept"
   }
  ]
 }

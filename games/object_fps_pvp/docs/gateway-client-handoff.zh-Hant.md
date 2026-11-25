@@ -49,7 +49,7 @@
 |---|---|---|
 | 送 HTTP、每幀輪詢 | `GYO::Http` 的 `HttpCall::Start(address, request)`、`Poll()`；放在大廳／房間 World 的 Resource，由 System 輪詢；放棄＝丟掉物件 | `engine/modules/http/include/engine/http/Http.hpp`、`docs/architecture/target/v2/http.zh-Hant.md` |
 | JSON | `GYO::Json`（`Parse`、`Writer`） | `engine/modules/json` |
-| `"A.B.C.D:P"` → 位址 | `client::ParseMatchAddress` | `games/object_fps_pvp/include/object_fps_pvp/client/LobbyWorld.hpp` |
+| `"A.B.C.D:P"` → 位址 | `client::ParseMatchAddress` | `games/object_fps_pvp/include/object_fps_pvp/client/Scenes.hpp`（遊戲流程框架第 3 段起；原在 `LobbyWorld.hpp`） |
 | token 的 hex → 位元組 | `data::DecodeHex` | `games/object_fps_pvp/include/object_fps_pvp/data/Hex.hpp` |
 | 連線目標 | `NetConnectTarget{server, userId, token}` 放進遊戲 World 的 prepare | `engine/modules/net/include/engine/net/NetService.hpp`（#332） |
 | 裝置 id 存哪 | 使用者資料夾（`OS::UserDataDirectory`）裡的一個檔；**用高熵亂數產生**（裝置 id 就是憑證，宣告 L7）；同一台 Mac 開兩個 Client 時用不同的檔（例如 `--profile NAME`） | `engine/core/os/include/engine/os/Files.hpp` |

@@ -194,16 +194,18 @@ std::string LoadDeviceId(const std::string& path, std::string& error) {
     return made;
 }
 
-GatewayClient::GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::optional<GatewaySession> session)
-    : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), session_(std::move(session)) {}
+GatewayClient::GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::string unavailable,
+                             const std::int64_t timeout)
+    : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), unavailable_(std::move(unavailable)), timeout_(timeout) {}
 
 void GatewayClient::Ask(std::string tag, GatewayRequest request) { waiting_.push_back(Call{std::move(tag), std::move(request), false}); }
 
 void GatewayClient::Start(Call call, const bool session, const std::int64_t now) {
     const GatewayRequest sent = session ? SessionRequest(deviceId_) : call.request;
     auto started = H::HttpCall::Start(gateway_, ToHttp(sent, host_, session ? std::nullopt : session_));
-    current_ = Going{std::move(call), session, std::nullopt, now};
+    current_ = Going{std::move(call), session, std::nullopt, now, {}};
     if (started) current_->http.emplace(std::move(started).value());
+    else current_->failure = Base::Describe(started.error());
 }
 
 std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
@@ -211,6 +213,7 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
         if (waiting_.empty()) return std::nullopt;
         Call next = std::move(waiting_.front());
         waiting_.pop_front();
+        if (deviceId_.empty()) return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
         Start(std::move(next), !session_.has_value(), now);
     }
     Going& going = *current_;
@@ -220,14 +223,16 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
     };
     GatewayResult result;
     result.tag = going.call.tag;
-    if (!going.http) return finish({result.tag, 0, {}, "unreachable", "the connection did not start"});
+    if (!going.http) return finish({result.tag, 0, {}, "unreachable", going.failure});
     auto polled = going.http->Poll();
     if (!polled) {
         const bool unreachable = polled.error().code == H::HttpFailureCode::Unreachable || polled.error().code == H::HttpFailureCode::ConnectFailed;
         return finish({result.tag, 0, {}, unreachable ? "unreachable" : "http", Base::Describe(polled.error())});
     }
     if (!polled->has_value()) {
-        if (now - going.started > kTimeout) return finish({result.tag, 0, {}, "timeout", "no answer within 5 seconds"});
+        if (now - going.started > timeout_) {
+            return finish({result.tag, 0, {}, "timeout", "no answer within " + std::to_string(timeout_ / 1'000'000'000) + " s"});
+        }
         return std::nullopt;
     }
     const H::HttpResponse& response = **polled;

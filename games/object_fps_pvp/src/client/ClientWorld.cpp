@@ -2,6 +2,7 @@
 
 #include "object_fps_pvp/client/VoxelModelLoader.hpp"
 #include "client/ClientExchange.hpp"
+#include "object_fps_pvp/client/Gateway.hpp"
 #include "client/SceneBuilds.hpp"
 #include "object_fps_pvp/data/VoxelMeshFile.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
@@ -945,11 +946,14 @@ K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientC
 // deaths), back to the menu with what was written (or why not). Multiplayer: back to the lobby (the Sim World of the
 // lobby has no target: the connection closes, and the Match writes the save when it sees the player leave).
 K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
-                         K::ResMut<SceneRequest> request) {
+                         K::ResMut<GatewayClient> gateway, K::ResMut<SceneRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action != "pvp.evacuate" || request.Read().next) continue;
         if (origin->scene == Scene::MultiGame) {
-            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .room = origin->room};
+            // The player leaves the room too (it gives no connect any more: a later game is a new room). The call
+            // goes on in the lobby, which the GatewayClient is carried to.
+            if (origin->room != 0) gateway->Ask("leave", LeaveRequest(origin->room, RandomHex(16)));
+            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました"};
             continue;
         }
         const auto settled = SettleSolo(origin->savePath, sim->deaths);
@@ -962,7 +966,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
 
 // Frame World: the connection ended or the Match's content differs (the Sim World's picture says so): back to the
 // lobby with the reason, noted for the program (FrameNotes).
-K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
+K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
     if (request.Read().next) return {};
     std::string reason;
     if (!sim->mismatch.empty()) {
@@ -974,7 +978,9 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K:
     } else {
         return {};
     }
-    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .room = origin->room};
+    // The room is not left: the player is still its member, and may come back to the Match (the room gives a new
+    // connect while the Match is on; the disconnect rules keep the place).
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason)};
     return {};
 }
 

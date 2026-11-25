@@ -34,8 +34,8 @@ inline constexpr K::EntityId kSceneRoot = 3'000'031;
 void PlaceSceneDocument(K::World& world, std::string_view documentId, std::string_view canvas, GYO::Engine::Ui::UiBindings bindings,
                         GYO::Engine::Ui::UiTextFilter filter);
 
-// Every scene's part: SceneRequest, FrameNotes (carried to the next scene), the frame budget (closes the window when
-// it runs out) and the watch of the scene's document (FrameNotes::shown, failure).
+// Every scene's part: SceneRequest, FrameNotes and the GatewayClient (both carried to the next scene), the frame
+// budget (closes the window when it runs out) and the watch of the scene's document (FrameNotes::shown, failure).
 void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
@@ -52,14 +52,10 @@ struct GatewayContext final {
 void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
 void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
 
-// The Gateway's scenes' common part: the GatewayClient (a Resource) made from the carried session and the device id,
-// and its results handed to the scene's System. Each returns what the player should read for an error (empty: none).
-[[nodiscard]] std::string GatewayErrorText(const GatewayResult& result, const std::string& gateway);
 // The device id file in the player's directory.
 [[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
-// Puts the GatewayClient into the World (a prepare function's part); false with error when there is no device id.
-[[nodiscard]] bool PlaceGatewayClient(K::World& world, const GatewayContext& context, std::string& error);
-// Registers GatewayClient (the scene's).
-void RegisterGatewayClient(O::WorldSetup& setup);
+// The Frame World's GatewayClient, when the World has none yet (the first scene: later ones get it carried): with this
+// player's device id (read, or made the first time), or without one (it then calls nothing and says why).
+void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::DatagramAddress& gateway, const std::string& dataDirectory);
 
 } // namespace object_fps_pvp::client

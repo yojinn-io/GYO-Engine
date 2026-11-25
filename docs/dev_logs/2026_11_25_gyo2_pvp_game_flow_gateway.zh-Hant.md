@@ -18,6 +18,20 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - client 測試（假 Gateway：`gyo_test_loopback_listener` 上的 HTTP）：請求的組成與回應的解析；大廳列房與戰績、建房→準備→開始→`MultiGame` 的 connect（位址、user、token 位元組）、每個呼叫帶 token、每個變更帶鍵、回大廳先 leave；列出的房間可加入；session 過期時重開一次；沒人回答的 Gateway 顯示接不上。
 - 突變：`pvp-gw-no-bearer`、`pvp-gw-no-key`、`pvp-gw-no-reopen`、`pvp-gw-user-own`、`pvp-gw-start-ignored`、`pvp-gw-leave-not-sent`、`pvp-gw-join-ignored`，加改寫的 `pvp-lobby-quit-ignored`、`pvp-lobby-ui-not-drawn`、`pvp-scene-end-stays`、`pvp-scene-sim-kept`：11/11 killed。
 
+## 設計審查（Opus／high，作者同模型，審查者只拿成果物與原始要求）
+
+blocker 1、should 11、nit 12。
+
+- B1（任何斷線回大廳都 leave 房間：封死重連的路，和掉線規則的「位子保留」衝突；被新連線頂掉的舊 Client 還會讓新的失去成員資格）→ 只有撤退（玩家自己）離開房間，`LeaveOnEnd` 不帶房間；新案「連線自己結束時不離開房間、也不重連」。
+- S1（`ClosedByRemote` 沒有專案）→ 新案：Match 關掉連線 → 回大廳、顯示理由、之後沒有新的連線、Match 那邊沒有回來的 Peer。宣告列的突變「自動重連」：程式裡沒有重連的路可以突變成，由這一案與 `pvp-scene-end-stays` 守。
+- S2（選房記 index）→ 記 room id，列表更新後找回。S3（`not_member` 卡在房間）→ 回大廳。S4（退出中還處理別的結果）→ 退出中只看 leave。
+- S5（每個場景重建 client、session 另外同步、大廳代送 leave）→ `GatewayClient` 本身 `CarryOver`；`GatewayState` 與同步程式拿掉；`SceneChange::room` 只剩「進的房間」「遊戲來自的房間」。
+- S6（測試繞過撤退）→ 假 Gateway 案與端到端案都走暫停畫面的「撤退する」（Enter）。
+- S7（錯誤碼、timeout、404／410 沒測）→ 錯誤碼逐一的表、`GatewayClient` 對不回答的連線 timeout（呼叫者的時鐘）、比賽結束的房間回大廳；突變 `pvp-gw-no-timeout`、`pvp-gw-ended-room-stays`。
+- S8（裝置 id 沒驗沿用）→ 案與突變 `pvp-gw-device-new`。S9（共用函式放在大廳檔、交接說明指向刪掉的檔）→ `GatewayScene.cpp`；`GatewayErrorText`、`ModeText` 宣告在 `Scenes.hpp`；交接說明改指 `Scenes.hpp`。S10 → 宣告修訂 3。S11（拿不到裝置 id 時用 sentinel）→ `GatewayClient` 沒有裝置 id 時每個呼叫以 `no_device` 結束。
+- nit：N1（Start 失敗的 detail）、N2（timeout 是建構參數）、N4（`GatewaySession` 不需要 `HashValue`）、N5（`ModeText` 共用）、N6（準備切換照玩家最後按的、成功時清錯誤）、N7（新版存檔提示更新）、N11（假 Gateway 路由、`GYO_PVP_CONTENT`）改了。不改：N3（錯誤碼一欄：都是給 `GatewayErrorText` 的「發生了什麼」，分欄沒有讀的人）、N8（timeout 後再按是新的冪等鍵：Gateway 的建房、開始本身冪等）、N9（建房中按「戻る」留下成員資格：下次建房或加入時 Gateway 自動離開原本的房）、N10（描述的 `options.userId` 只當沒有 connect 時的值）、N11 的 include 順序與埠段、N12（非房主也看得到「開始」：Gateway 回 `not_owner`，顯示理由）。
+- 審查後：client 20/20、端到端 `object_fps_pvp.gateway_client` 通過（撤退走畫面）；突變第 3 段 14/14 killed（find 改了的重跑）。
+
 ## 沒驗
 
 - 兩個 Client（兩個 `--profile`）經 Gateway 進同一場：端到端測試只有一個 Client。交使用者實機驗收。

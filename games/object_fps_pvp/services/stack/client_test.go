@@ -19,8 +19,8 @@ import (
 // object_fps_pvp.gateway_client, label network, sets them).
 func TestTheRealClientPlaysThroughTheGateway(t *testing.T) {
 	match, content, client := os.Getenv("GYO_PVP_MATCH"), os.Getenv("GYO_PVP_CONTENT"), os.Getenv("GYO_PVP_CLIENT_TESTS")
-	if match == "" || client == "" {
-		t.Skip("GYO_PVP_MATCH or GYO_PVP_CLIENT_TESTS is not set")
+	if match == "" || content == "" || client == "" {
+		t.Skip("GYO_PVP_MATCH, GYO_PVP_CONTENT or GYO_PVP_CLIENT_TESTS is not set")
 	}
 	local := &matches.Local{Command: match, Arguments: []string{"--content", content}, Advertise: "127.0.0.1",
 		FirstPort: 47850, LastPort: 47859, IdleSeconds: 5}
