@@ -29,7 +29,9 @@ inline constexpr K::EntityId kSceneRoot = 3'000'031;
 // A System in Main/Update (after the given Systems).
 [[nodiscard]] K::SystemOptions InSceneUpdate(std::string name, std::vector<std::string> after = {});
 
-// A 2D camera on the window for a scene's document, and the document's root entity (its UiRoot, asked for by its asset
+// A 2D camera on the window for a scene's documents (kSceneCamera).
+void PlaceSceneCamera(K::World& world);
+// That camera, and the document's root entity (its UiRoot, asked for by its asset
 // id, with the text fields' filter, and UiBindings).
 void PlaceSceneDocument(K::World& world, std::string_view documentId, std::string_view canvas, GYO::Engine::Ui::UiBindings bindings,
                         GYO::Engine::Ui::UiTextFilter filter);

@@ -3,6 +3,7 @@
 #include "object_fps_pvp/client/VoxelModelLoader.hpp"
 #include "client/ClientExchange.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
+#include "client/Pages.hpp"
 #include "client/SceneBuilds.hpp"
 #include "object_fps_pvp/data/VoxelMeshFile.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
@@ -35,11 +36,14 @@
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
 #include "engine/render/Drawables.hpp"
+#include "engine/render/Presentation.hpp"
+#include "engine/render_world/RenderWorldModule.hpp"
 #include "engine/rollback/Registrations.hpp"
 #include "engine/text/FontLoader.hpp"
 #include "engine/ui/UiAsset.hpp"
 #include "engine/ui/UiDocumentLoader.hpp"
 #include "engine/ui/UiRoot.hpp"
+#include "engine/state_machine/RegisterStateMachine.hpp"
 #include "engine/text/GlyphAtlas.hpp"
 #include "engine/text/TextContext.hpp"
 #include "engine/text/TextLayout.hpp"
@@ -81,6 +85,7 @@ namespace T = GYO::Engine::Transform;
 namespace TM = GYO::Engine::Time;
 namespace TX = GYO::Engine::Text;
 namespace Ui = GYO::Engine::Ui;
+namespace SM = GYO::Engine::StateMachine;
 namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
 namespace WT = GYO::Engine::WorldTime;
@@ -459,8 +464,7 @@ std::string ArenaModelId(const sim::ArenaContent& arena) {
 // of this frame run after it.
 K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::ButtonInput<I::MouseButton>> mouse,
                              K::Res<I::AccumulatedMouseMotion> motion, K::Res<I::CursorPosition> cursor,
-                             K::Res<W::WindowState> window, K::Res<PW::LocalUser> user, K::Res<GameReadiness> readiness,
-                             K::Res<ClientView> sim,
+                             K::Res<W::WindowState> window, K::Res<PW::LocalUser> user, K::Res<GamePageState> page,
                              K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
                              K::ResMut<ClientControls> state, K::ResMut<W::WindowRequest> request) {
     ClientControls& c = state.Get();
@@ -474,7 +478,7 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
         }
     });
     // While the loading screen is up the pointer stays the player's: a click or Tab is for the screen (its 中止).
-    const bool loading = !readiness->ready || !sim->started;
+    const bool loading = page->Current().value_or(GamePage::Loading) == GamePage::Loading;
     present::ControlsFrame frame;
     frame.focused = !window->known || window->focused;
     frame.insideWindow = cursor->position.has_value();
@@ -1141,27 +1145,76 @@ std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, c
     return {};
 }
 
-// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "loading" until the game is ready and the match has
-// started; then "pause" while the pointer is the player's (Tab or Esc gave it back), "play" (nothing) while the game
-// has it.
-K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Res<GameReadiness> readiness, K::Res<ClientView> sim,
-                          K::Res<GameOrigin> origin, K::Query<K::Write<Ui::UiRoot>, K::Write<Ui::UiBindings>> roots) {
-    auto root = roots.GetMut<Ui::UiRoot>(kOverlay);
-    if (!root) return {};
-    const bool loading = !readiness->ready || !sim->started;
-    const bool paused = !loading && !controls->controls.Captured();
-    const std::string canvas = loading ? "loading" : paused ? "pause" : "play";
-    if (root->canvas != canvas) root->canvas = canvas;
-    // The loading screen takes input too (its 中止).
-    if (root->acceptsInput != (paused || loading)) root->acceptsInput = paused || loading;
-    if (loading) {
-        auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
-        const std::string text = LoadingText(*readiness, *sim, origin->scene);
-        const auto* shown = bindings->Find("loading");
-        if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
-        const auto* progress = bindings->Find("progress");
-        if (progress == nullptr || std::get<double>(*progress) != readiness->progress) bindings->Set("progress", readiness->progress);
+// ---- The game scene's pages (client/Pages.hpp, GamePage; assets/object_fps_pvp/ui/pvp_game.json): Loading (canvas
+// "loading") until the game is ready and the match started, then Playing (no overlay), and Paused (canvas "pause")
+// while the pointer is the player's. Entering a page puts its root on kOverlay (the HUD camera's), leaving takes it.
+
+// The overlay's document, held for the scene (each page's root finds it loaded), and the pause's title.
+struct OverlayDocument final {
+    A::Handle<Ui::UiAsset> document;
+    std::string title;
+};
+void HashValue(K::Hasher&, const OverlayDocument&) {}
+
+using OverlayRoots = K::CommandsFor<K::Inserts<Ui::UiRoot, Ui::UiRootState, Ui::UiBindings>, K::Removes<Ui::UiRoot, Ui::UiRootState, Ui::UiBindings>>;
+
+void PutOverlay(OverlayRoots& roots, const OverlayDocument& overlay, std::string canvas, Ui::UiBindings bindings) {
+    Ui::UiRoot root;
+    root.document = overlay.document;
+    root.canvas = std::move(canvas);
+    root.camera = kHudCamera;
+    roots.Insert(kOverlay, std::move(root));
+    roots.Insert(kOverlay, Ui::UiRootState{});
+    roots.Insert(kOverlay, std::move(bindings));
+}
+
+K::SystemResult TakeOverlay(OverlayRoots roots) {
+    roots.Remove<Ui::UiRoot>(kOverlay);
+    roots.Remove<Ui::UiRootState>(kOverlay);
+    roots.Remove<Ui::UiBindings>(kOverlay);
+    return {};
+}
+
+// GamePage.Enter.Loading / Enter.Paused (each Exit is TakeOverlay; Playing has no overlay).
+K::SystemResult EnterLoading(K::Res<OverlayDocument> overlay, OverlayRoots roots) {
+    Ui::UiBindings bindings;
+    bindings.Set("loading", std::string("データを読み込んでいます…"));
+    bindings.Set("progress", 0.0);
+    PutOverlay(roots, *overlay, "loading", std::move(bindings));
+    return {};
+}
+K::SystemResult EnterPaused(K::Res<OverlayDocument> overlay, OverlayRoots roots) {
+    Ui::UiBindings bindings;
+    bindings.Set("title", overlay->title);
+    PutOverlay(roots, *overlay, "pause", std::move(bindings));
+    return {};
+}
+
+// Loading: the loading screen's words and bar; the game, once ready and started.
+K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> sim, K::Res<GameOrigin> origin,
+                            K::Query<K::Write<Ui::UiBindings>> roots, K::ResMut<GamePageRequest> page) {
+    if (readiness->ready && sim->started) {
+        page->Request(GamePage::Playing);
+        return {};
     }
+    auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
+    if (!bindings) return {};
+    const std::string text = LoadingText(*readiness, *sim, origin->scene);
+    const auto* shown = bindings->Find("loading");
+    if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
+    const auto* progress = bindings->Find("progress");
+    if (progress == nullptr || std::get<double>(*progress) != readiness->progress) bindings->Set("progress", readiness->progress);
+    return {};
+}
+
+// Playing -> Paused when the pointer is given back (Tab, Esc); Paused -> Playing when the game takes it again (a click,
+// Tab, 続ける).
+K::SystemResult PauseOnRelease(K::Res<ClientControls> controls, K::ResMut<GamePageRequest> page) {
+    if (!controls->controls.Captured()) page->Request(GamePage::Paused);
+    return {};
+}
+K::SystemResult PlayOnCapture(K::Res<ClientControls> controls, K::ResMut<GamePageRequest> page) {
+    if (controls->controls.Captured()) page->Request(GamePage::Playing);
     return {};
 }
 
@@ -1583,8 +1636,27 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
     r.AddSystem<&TrackReadiness>(InUpdate("object_fps_pvp.TrackReadiness", {"object_fps_pvp.RequestAssets", "object_fps_pvp.ShowArena"}));
     r.AddSystem<&RevealUnderCover>(InUpdate("object_fps_pvp.RevealUnderCover", {"object_fps_pvp.TrackReadiness"}));
-    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause", {"object_fps_pvp.TrackReadiness"}));
-    r.AddSystem<&Resume>(InUpdate("object_fps_pvp.Resume"));
+    r.Resource<OverlayDocument>({.name = "object_fps_pvp.OverlayDocument"});
+    SM::RegisterStateMachine<GamePage>(setup);
+    const auto onPage = [](std::string name, std::string schedule) {
+        K::SystemOptions options;
+        options.name = std::move(name);
+        Mount(options, schedule, SM::kEnterExitStage);
+        return options;
+    };
+    const auto inPage = [](std::string name, K::ConditionRef page, std::vector<std::string> after = {}) {
+        K::SystemOptions options = InUpdate(std::move(name), std::move(after));
+        options.mounts.front().conditions.push_back(std::move(page));
+        return options;
+    };
+    r.AddSystem<&EnterLoading>(onPage("object_fps_pvp.EnterLoading", SM::EnterScheduleName(GamePage::Loading)));
+    r.AddSystem<&TakeOverlay>(onPage("object_fps_pvp.ExitLoading", SM::ExitScheduleName(GamePage::Loading)));
+    r.AddSystem<&EnterPaused>(onPage("object_fps_pvp.EnterPaused", SM::EnterScheduleName(GamePage::Paused)));
+    r.AddSystem<&TakeOverlay>(onPage("object_fps_pvp.ExitPaused", SM::ExitScheduleName(GamePage::Paused)));
+    r.AddSystem<&ShowLoading>(inPage("object_fps_pvp.ShowLoading", SM::InState<GamePage, GamePage::Loading>(), {"object_fps_pvp.TrackReadiness"}));
+    r.AddSystem<&PauseOnRelease>(inPage("object_fps_pvp.PauseOnRelease", SM::InState<GamePage, GamePage::Playing>()));
+    r.AddSystem<&PlayOnCapture>(inPage("object_fps_pvp.PlayOnCapture", SM::InState<GamePage, GamePage::Paused>()));
+    r.AddSystem<&Resume>(inPage("object_fps_pvp.Resume", SM::InState<GamePage, GamePage::Paused>()));
     r.AddSystem<&Evacuate>(InUpdate("object_fps_pvp.Evacuate"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
@@ -1685,19 +1757,10 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         text(kHpText, {-kHudWidth / 2 + 24, -kHudHeight / 2 + 20, 2}, {-0.5F, -0.5F});
         text(kAmmoText, {kHudWidth / 2 - 24, -kHudHeight / 2 + 20, 2}, {0.5F, -0.5F});
         text(kStatusText, {0, kHudHeight / 2 - 80, 2}, {0.0F, 0.5F});
-        // The overlay (pause, evacuate) over the HUD camera; ShowPause picks its canvas.
-        Ui::UiRoot overlay;
-        overlay.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game"));
-        overlay.canvas = "loading";
-        overlay.camera = kHudCamera;
-        overlay.acceptsInput = false;
-        world.Insert(kOverlay, std::move(overlay));
-        world.Insert(kOverlay, Ui::UiRootState{});
-        Ui::UiBindings overlayBindings;
-        overlayBindings.Set("title", std::string(origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"));
-        overlayBindings.Set("loading", std::string("データを読み込んでいます…"));
-        overlayBindings.Set("progress", 0.0);
-        world.Insert(kOverlay, std::move(overlayBindings));
+        // The overlay's document (the pages put their roots on kOverlay, there from the start: GamePage).
+        Place(world, kOverlay, T::Transform{});
+        world.SetResource(OverlayDocument{world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game")),
+                                          origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"});
         return {};
     });
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
@@ -1712,10 +1775,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         step.ready = readiness.ready;
         const RemoteView& remote = *world.Resource<RemoteView>();
         exchange->AddControls(step, remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
-        // Single player's pause: the Solo World stops while the pointer is the player's, once the game is on (a Match
-        // does not wait; the loading neither: the start waits for the player's readiness in the steps).
-        const bool started = world.Resource<ClientView>()->started;
-        exchange->SetPaused(solo && readiness.ready && started && !controls.controls.Captured());
+        // Single player's pause: the Solo World stops on the pause page (a Match does not wait; the loading neither:
+        // the start waits for the player's readiness in the steps).
+        exchange->SetPaused(solo && world.Resource<GamePageState>()->Current() == GamePage::Paused);
         return {};
     });
 }
@@ -2011,12 +2073,26 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
     return world;
 }
 
+// Render World, Extract: the player's VSync (the Frame World's ClientSettings) into render's Presentation, written
+// only when it differs (sdl_gpu sets the swapchain's present mode when Presentation changes).
+K::SystemResult CopyPresentation(K::ExtractRes<ClientSettings> settings, K::ResMut<R::Presentation> presentation) {
+    const R::PresentMode wanted = settings->vsync ? R::PresentMode::AutoVsync : R::PresentMode::AutoNoVsync;
+    if (presentation.Read().presentMode != wanted) presentation->presentMode = wanted;
+    return {};
+}
+
 O::WorldDescription ClientRenderWorld(const bool gpu) {
     O::WorldDescription world;
     world.name = "Render";
     world.extractFrom = "Frame";
     world.units = {"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render", "ui_render"};
     if (gpu) world.units.push_back("sdl_gpu");
+    world.build = [](O::WorldSetup& setup) {
+        K::SystemOptions copy;
+        copy.name = "object_fps_pvp.CopyPresentation";
+        Mount(copy, GYO::Engine::RenderWorld::kExtractSchedule, GYO::Engine::RenderWorld::kExtractSchedule);
+        setup.Registrar().AddSystem<&CopyPresentation>(std::move(copy));
+    };
     return world;
 }
 

@@ -27,7 +27,7 @@ std::string EncodeSettings(const ClientSettings& settings) {
     writer.Int(settings.resolution.y);
     writer.EndArray();
     writer.Key("windowMode");
-    writer.String(settings.window == WindowChoice::Borderless ? "borderless" : "windowed");
+    writer.String(settings.window == GYO::Engine::Window::WindowMode::BorderlessFullscreen ? "borderless" : "windowed");
     writer.Key("vsync");
     writer.Bool(settings.vsync);
     writer.EndObject();
@@ -51,8 +51,8 @@ std::optional<ClientSettings> DecodeSettings(const std::string& text, std::strin
             throw std::runtime_error("resolution is not one of the sizes offered");
         }
         const std::string mode = data::String(data::Member(root, "windowMode"), "windowMode");
-        if (mode == "windowed") settings.window = WindowChoice::Windowed;
-        else if (mode == "borderless") settings.window = WindowChoice::Borderless;
+        if (mode == "windowed") settings.window = GYO::Engine::Window::WindowMode::Windowed;
+        else if (mode == "borderless") settings.window = GYO::Engine::Window::WindowMode::BorderlessFullscreen;
         else throw std::runtime_error("windowMode is neither windowed nor borderless");
         const auto vsync = data::Member(root, "vsync").AsBool();
         if (!vsync) throw std::runtime_error("vsync is not true or false");

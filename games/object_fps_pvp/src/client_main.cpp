@@ -131,6 +131,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                WA::WorkerPoolExecutor& executor, const bool verbose) {
     const std::int64_t frames = start.frames;
     const GYO::Engine::Math::Vec2i resolution = start.settings.resolution;
+    const W::WindowMode windowMode = start.settings.window;
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
@@ -178,9 +179,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
 
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
-    // The size the player's settings give (their window mode and VSync: saved, applied once the window and the
-    // drawing take them).
+    // The size and the mode the player's settings give (their VSync: the Render World's Presentation, ClientWorld).
     window.size = resolution;
+    window.mode = windowMode;
     window.resizable = false;
     description.options.Set(window);
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;

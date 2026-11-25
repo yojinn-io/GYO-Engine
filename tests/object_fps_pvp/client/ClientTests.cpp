@@ -25,6 +25,7 @@
 #include "engine/input/InputModule.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "engine/render/Drawables.hpp"
+#include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
 #include "engine/threads/WorkerPool.hpp"
@@ -34,6 +35,7 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 
 #include <atomic>
+#include <functional>
 #include <cstdlib>
 #include <cctype>
 #include <mutex>
@@ -146,7 +148,7 @@ struct Setup final {
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
                    std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, std::vector<std::uint64_t> expectUsers = {},
-                   const std::uint32_t delayAdvances = 0)
+                   const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {})
         : framesPerStep(perStep) {
         if (delayAdvances != 0) {
             N::MemoryLinkSettings link;
@@ -193,7 +195,8 @@ struct Setup final {
             });
         };
         O::WorldDescription render = PC::ClientRenderWorld(false);
-        render.build = [](O::WorldSetup& setup) {
+        render.build = [inner = std::move(render.build)](O::WorldSetup& setup) {
+            inner(setup);
             K::SystemOptions keep;
             keep.name = "test.KeepPicture";
             K::Mount mount;
@@ -215,6 +218,7 @@ struct Setup final {
         start.dataDirectory = std::move(dataDirectory);
         // No Gateway given: one nobody answers at (port 1).
         start.gateway = gateway.value_or(GYO::Engine::OS::SocketAddress::Loopback(1));
+        if (adjust) adjust(start);
         description.options.Set(std::move(start));
         description.worlds.push_back(std::move(solo));
         description.worlds.push_back(std::move(sim));
@@ -1060,6 +1064,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "loading", "[pvp-loading-shown]");
         REQUIRE_MESSAGE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).started; }), "[pvp-solo-started]");
         CHECK(PC::StatusOf(setup.Client()).ready);
+        setup.Frames(3);  // the loading page leaves (a request, applied next frame)
         const K::EntityId own = PW::OwnPlayer(setup.Solo());
         REQUIRE(own != 0);
         if (game == 1) {
@@ -1091,8 +1096,8 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         // Give the pointer back: the pause canvas, and the Solo World's time stops.
         setup.Press(I::KeyCode::Escape);
         setup.Frames(2);
+        REQUIRE_MESSAGE(setup.Root() != 0, "[pvp-pause-shown] the pause page's root is there");
         const auto* overlay = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
-        REQUIRE(overlay != nullptr);
         CHECK_MESSAGE(overlay->canvas == "pause", "[pvp-pause-shown] " << overlay->canvas);
         const std::uint64_t pausedAt = TickOf(setup.Solo());
         setup.Frames(10);
@@ -1579,8 +1584,9 @@ TEST_CASE("network: through the Gateway: a room made, readied and started, playe
 
 TEST_CASE("client: the loading screen covers the game until it is loaded and drawn; then the Match is told it is ready") {
     Setup setup;
+    setup.Frame();  // the first frame enters the loading page
+    REQUIRE_MESSAGE(setup.Root() != 0, "[pvp-loading-first] the loading page's root is there");
     const auto* overlay = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
-    REQUIRE(overlay != nullptr);
     CHECK_MESSAGE(overlay->canvas == "loading", "[pvp-loading-first] the first frame shows nothing of the game");
     double last = 0.0;
     bool monotonic = true;
@@ -1613,7 +1619,8 @@ TEST_CASE("client: the loading screen covers the game until it is loaded and dra
                     "[pvp-loading-told] the Match's player of this Client says it is ready");
     // A Match played from the first step: the screen is gone.
     setup.Frames(2);
-    CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas != "loading", "[pvp-loading-gone]");
+    const auto* after = setup.Root() != 0 ? setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root()) : nullptr;
+    CHECK_MESSAGE((after == nullptr || after->canvas != "loading"), "[pvp-loading-gone]");
 }
 
 TEST_CASE("client: gateway: a game that ends on its own goes back to the lobby without leaving the room, and does not reconnect") {
@@ -1750,10 +1757,12 @@ TEST_CASE("client: without its own player from the Match the loading screen does
 
 namespace {
 
-// The ResizeWindow Messages the Frame World sent (read where sdl_window would apply them).
+// The ResizeWindow and SetWindowMode Messages the Frame World sent (read where sdl_window would apply them).
 std::vector<GYO::Engine::Math::Vec2i> resized;
-K::SystemResult KeepResizes(K::MessageReader<W::ResizeWindow> sent) {
+std::vector<W::WindowMode> modes;
+K::SystemResult KeepResizes(K::MessageReader<W::ResizeWindow> sent, K::MessageReader<W::SetWindowMode> mode) {
     for (const W::ResizeWindow* resize : sent.Read()) resized.push_back(resize->size);
+    for (const W::SetWindowMode* set : mode.Read()) modes.push_back(set->mode);
     return {};
 }
 
@@ -1761,7 +1770,7 @@ K::SystemResult KeepResizes(K::MessageReader<W::ResizeWindow> sent) {
 
 TEST_CASE("client: settings: the sizes offered in turn, applied to the window and saved; the next start reads them") {
     std::string error;
-    PC::ClientSettings chosen{{1920, 1080}, PC::WindowChoice::Borderless, false};
+    PC::ClientSettings chosen{{1920, 1080}, W::WindowMode::BorderlessFullscreen, false};
     const auto decoded = PC::DecodeSettings(PC::EncodeSettings(chosen), error);
     REQUIRE_MESSAGE(decoded.has_value(), error);
     CHECK_MESSAGE(*decoded == chosen, "[pvp-settings-roundtrip]");
@@ -1780,6 +1789,7 @@ TEST_CASE("client: settings: the sizes offered in turn, applied to the window an
     PC::ClientStart* start = setup.client->Buffer().Find<PC::ClientStart>();
     REQUIRE(start != nullptr);
     resized.clear();
+    modes.clear();
     // (the Setup has no settings file: the test's directory is given here, as the program gives its own)
     setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{};
     start->settingsPath = path;
@@ -1798,6 +1808,7 @@ TEST_CASE("client: settings: the sizes offered in turn, applied to the window an
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);  // 設定
+    setup.Load();                     // the page's request is applied next frame; its root is laid out then
     CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "settings", "[pvp-settings-shown]");
     CHECK(setup.Binding("resolution") == "解像度: 1280 × 720");
     setup.Press(I::KeyCode::Enter);
@@ -1812,6 +1823,11 @@ TEST_CASE("client: settings: the sizes offered in turn, applied to the window an
     setup.Frames(1);
     REQUIRE_MESSAGE(resized.size() == 1, "[pvp-settings-resize] the window is asked for the new size once");
     CHECK(resized.front() == GYO::Engine::Math::Vec2i{1920, 1080});
+    REQUIRE_MESSAGE(modes.size() == 1, "[pvp-settings-mode] the window is asked for the mode");
+    CHECK(modes.front() == W::WindowMode::BorderlessFullscreen);
+    setup.Frames(1);  // the Render World's Extract copies VSync
+    CHECK_MESSAGE(setup.client->World("Render").GetWorld().Resource<R::Presentation>()->presentMode == R::PresentMode::AutoNoVsync,
+                  "[pvp-settings-vsync] VSync off reaches render's Presentation");
     CHECK_MESSAGE(setup.Binding("settings_status").find("保存しました") != std::string::npos, setup.Binding("settings_status"));
     const PC::LoadedSettings saved = PC::LoadSettings(path);
     CHECK_MESSAGE((saved.problem.empty() && saved.settings == chosen), "[pvp-settings-saved] " << saved.problem);
@@ -1819,4 +1835,29 @@ TEST_CASE("client: settings: the sizes offered in turn, applied to the window an
     setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{.scene = PC::Scene::Lobby};
     setup.Frame();
     CHECK_MESSAGE(*setup.Client().Resource<PC::ClientSettings>() == chosen, "[pvp-settings-carried]");
+}
+
+TEST_CASE("client: settings: the start's settings are the first scene's; what is not applied is dropped when the page is left") {
+    PC::ClientSettings saved{{2560, 1440}, W::WindowMode::Windowed, false};
+    Setup setup(1, 4, 0, PC::SceneChange{}, {}, std::nullopt, {}, 0, [&saved](PC::ClientStart& start) { start.settings = saved; });
+    setup.Frames(2);
+    CHECK_MESSAGE(*setup.Client().Resource<PC::ClientSettings>() == saved, "[pvp-settings-start] the settings the program read");
+    CHECK_MESSAGE(setup.client->World("Render").GetWorld().Resource<R::Presentation>()->presentMode == R::PresentMode::AutoNoVsync,
+                  "[pvp-settings-start-vsync] ... their VSync from the first frames");
+    setup.Load();
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // 設定
+    setup.Load();
+    CHECK(setup.Binding("resolution") == "解像度: 2560 × 1440");
+    setup.Press(I::KeyCode::Enter);  // 1280 (round), not applied
+    CHECK(setup.Binding("resolution") == "解像度: 1280 × 720");
+    for (int i = 0; i < 4; ++i) setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // 戻る
+    setup.Load();
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // 設定 again
+    setup.Load();
+    CHECK_MESSAGE(setup.Binding("resolution") == "解像度: 2560 × 1440", "[pvp-settings-dropped] " << setup.Binding("resolution"));
 }

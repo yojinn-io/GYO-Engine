@@ -11,6 +11,9 @@
 #include "engine/window/Window.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/AssetView.hpp"
+#include "engine/state_machine/RegisterStateMachine.hpp"
+
+#include "client/Pages.hpp"
 
 #include <utility>
 #include <variant>
@@ -24,6 +27,7 @@ namespace T = GYO::Engine::Transform;
 namespace Ui = GYO::Engine::Ui;
 namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
+namespace SM = GYO::Engine::StateMachine;
 
 namespace {
 
@@ -53,11 +57,21 @@ K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootSt
     return {};
 }
 
-// ---- The main menu (assets/object_fps_pvp/ui/pvp_menu.json, canvas "menu").
+// ---- The main menu (assets/object_fps_pvp/ui/pvp_menu.json): two pages, MenuPage::Main (canvas "menu") and
+// MenuPage::Settings (canvas "settings"), each with its own root, put when the page is entered and taken away when it
+// is left.
 
 constexpr std::string_view kMenuInvitation = "モードを選んでください";
+constexpr K::EntityId kSettingsRoot = 3'000'032;
 
-// The settings canvas's own state: what the player is choosing (applied with 適用), and the file.
+// The menu's document (held for the scene, so a page's root finds it loaded) and the menu's first status line.
+struct MenuDocument final {
+    A::Handle<Ui::UiAsset> document;
+    std::string status;
+};
+void HashValue(K::Hasher&, const MenuDocument&) {}
+
+// The settings page's own state: what the player is choosing (applied with 適用), and the file.
 struct SettingsEdit final {
     ClientSettings edited;
     std::string path;
@@ -65,35 +79,100 @@ struct SettingsEdit final {
 void HashValue(K::Hasher&, const SettingsEdit&) {}
 
 void ShowSettings(const ClientSettings& settings, Ui::UiBindings& bindings) {
-    bindings.Set("resolution", "解像度: " + ResolutionText(settings.resolution));
-    bindings.Set("window_mode", std::string(settings.window == WindowChoice::Borderless ? "画面: 全画面（枠なし）" : "画面: ウィンドウ"));
+    const bool borderless = settings.window == W::WindowMode::BorderlessFullscreen;
+    // Fullscreen takes the screen's size: the size chosen is the window's when it is a window again.
+    bindings.Set("resolution", "解像度: " + ResolutionText(settings.resolution) + (borderless ? "（ウィンドウ時）" : ""));
+    bindings.Set("window_mode", std::string(borderless ? "画面: 全画面（枠なし）" : "画面: ウィンドウ"));
     bindings.Set("vsync", std::string(settings.vsync ? "VSync: オン" : "VSync: オフ"));
 }
 
-// The settings canvas: pvp.resolution / pvp.window_mode / pvp.vsync change what is chosen; pvp.apply puts it in force
-// (the window's size now: window's ResizeWindow) and saves it; pvp.settings_back goes back to the menu's canvas.
-K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SettingsEdit> edit, K::ResMut<ClientSettings> settings,
-                                K::Query<K::Write<Ui::UiRoot>, K::Write<Ui::UiBindings>> roots, K::MessageWriter<W::ResizeWindow> resize) {
+Ui::UiRoot PageRoot(const MenuDocument& menu, std::string canvas) {
+    Ui::UiRoot root;
+    root.document = menu.document;
+    root.canvas = std::move(canvas);
+    root.camera = kSceneCamera;
+    return root;
+}
+
+using PageRoots = K::CommandsFor<K::Inserts<Ui::UiRoot, Ui::UiRootState, Ui::UiBindings>, K::Removes<Ui::UiRoot, Ui::UiRootState, Ui::UiBindings>>;
+
+void TakeRoot(PageRoots& roots, const K::EntityId id) {
+    roots.Remove<Ui::UiRoot>(id);
+    roots.Remove<Ui::UiRootState>(id);
+    roots.Remove<Ui::UiBindings>(id);
+}
+
+// MenuPage.Enter.Main / Exit.Main.
+K::SystemResult EnterMenuMain(K::Res<MenuDocument> menu, PageRoots roots) {
+    Ui::UiBindings bindings;
+    bindings.Set("status", menu->status.empty() ? std::string(kMenuInvitation) : menu->status);
+    roots.Insert(kSceneRoot, PageRoot(*menu, "menu"));
+    roots.Insert(kSceneRoot, Ui::UiRootState{});
+    roots.Insert(kSceneRoot, std::move(bindings));
+    return {};
+}
+K::SystemResult ExitMenuMain(PageRoots roots) {
+    TakeRoot(roots, kSceneRoot);
+    return {};
+}
+
+// MenuPage.Enter.Settings: the choice starts from the settings in force, the window's mode as the window has it (the
+// player may have changed it: macOS's green button). Exit.Settings drops what was not applied.
+K::SystemResult EnterSettings(K::Res<MenuDocument> menu, K::Res<ClientSettings> settings, K::Res<W::WindowState> window,
+                              K::ResMut<SettingsEdit> edit, PageRoots roots) {
+    edit->edited = *settings;
+    if (window->known) edit->edited.window = window->mode;
+    Ui::UiBindings bindings;
+    ShowSettings(edit.Read().edited, bindings);
+    bindings.Set("settings_status", std::string("変更したら「適用」を押してください"));
+    roots.Insert(kSettingsRoot, PageRoot(*menu, "settings"));
+    roots.Insert(kSettingsRoot, Ui::UiRootState{});
+    roots.Insert(kSettingsRoot, std::move(bindings));
+    return {};
+}
+K::SystemResult ExitSettings(PageRoots roots) {
+    TakeRoot(roots, kSettingsRoot);
+    return {};
+}
+
+// The menu page: pvp.solo, pvp.multi (other scenes), pvp.settings (the settings page), pvp.quit.
+K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SceneRequest> request, K::ResMut<MenuPageRequest> page,
+                            K::ResMut<W::WindowRequest> window) {
     for (const Ui::UiAction* action : actions.Read()) {
-        auto root = roots.GetMut<Ui::UiRoot>(action->root);
+        const std::string& id = action->action;
+        if (id == "pvp.quit") window->close = true;
+        if (id == "pvp.solo") request->next = SceneChange{.scene = Scene::SoloRoom};
+        if (id == "pvp.multi") request->next = SceneChange{.scene = Scene::Lobby};
+        if (id == "pvp.settings") page->Request(MenuPage::Settings);
+    }
+    return {};
+}
+
+// The settings page: pvp.resolution / pvp.window_mode / pvp.vsync change what is chosen; pvp.apply puts it in force
+// (the window: window's ResizeWindow and SetWindowMode; VSync: the Render World's Presentation, CopyPresentation) and
+// saves it; pvp.settings_back goes back to the menu page.
+K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SettingsEdit> edit, K::ResMut<ClientSettings> settings,
+                                K::Query<K::Write<Ui::UiBindings>> roots, K::MessageWriter<W::ResizeWindow> resize,
+                                K::MessageWriter<W::SetWindowMode> mode, K::ResMut<MenuPageRequest> page) {
+    for (const Ui::UiAction* action : actions.Read()) {
         auto bindings = roots.GetMut<Ui::UiBindings>(action->root);
-        if (!root || !bindings) continue;
+        if (!bindings) continue;
         ClientSettings& edited = edit->edited;
         const std::string& id = action->action;
-        if (id == "pvp.settings") {
-            edited = *settings;
-            root->canvas = "settings";
-            bindings->Set("settings_status", std::string("変更したら「適用」を押してください"));
-        } else if (id == "pvp.settings_back") {
-            root->canvas = "menu";
-        } else if (id == "pvp.resolution") {
+        if (id == "pvp.settings_back") {
+            page->Request(MenuPage::Main);
+            continue;
+        }
+        if (id == "pvp.resolution") {
             edited.resolution = NextResolution(edited.resolution);
         } else if (id == "pvp.window_mode") {
-            edited.window = edited.window == WindowChoice::Windowed ? WindowChoice::Borderless : WindowChoice::Windowed;
+            edited.window = edited.window == W::WindowMode::Windowed ? W::WindowMode::BorderlessFullscreen : W::WindowMode::Windowed;
         } else if (id == "pvp.vsync") {
             edited.vsync = !edited.vsync;
         } else if (id == "pvp.apply") {
-            if (edited.resolution != settings.Read().resolution) resize.Send(W::ResizeWindow{edited.resolution});
+            // Sent each time (the same size again is harmless, and the window may not be at it: the OS clamps it).
+            resize.Send(W::ResizeWindow{edited.resolution});
+            mode.Send(W::SetWindowMode{edited.window});
             *settings = edited;
             std::string status = "適用しました";
             if (edit.Read().path.empty()) {
@@ -112,18 +191,15 @@ K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMu
     return {};
 }
 
-K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::Write<Ui::UiBindings>> bindings,
-                            K::ResMut<SceneRequest> request, K::ResMut<W::WindowRequest> window) {
-    for (const Ui::UiAction* action : actions.Read()) {
-        if (action->action == "pvp.quit") {
-            window->close = true;
-        } else if (action->action == "pvp.solo") {
-            request->next = SceneChange{.scene = Scene::SoloRoom};
-        } else if (action->action == "pvp.multi") {
-            request->next = SceneChange{.scene = Scene::Lobby};
-        }
-    }
-    return {};
+// A System in a page's enter or exit schedule.
+K::SystemOptions OnPage(std::string name, std::string schedule) {
+    K::SystemOptions options;
+    options.name = std::move(name);
+    K::Mount mount;
+    mount.schedule = std::move(schedule);
+    mount.stage = std::string(SM::kEnterExitStage);
+    options.mounts.push_back(std::move(mount));
+    return options;
 }
 
 } // namespace
@@ -174,8 +250,7 @@ K::SystemOptions InSceneUpdate(std::string name, std::vector<std::string> after)
     return options;
 }
 
-void PlaceSceneDocument(K::World& world, const std::string_view documentId, const std::string_view canvas, Ui::UiBindings bindings,
-                        Ui::UiTextFilter filter) {
+void PlaceSceneCamera(K::World& world) {
     // The camera the document is laid out in (its target is the window: window_camera writes the size).
     world.Insert(kSceneCamera, C::Camera{});
     world.Insert(kSceneCamera, C::Camera2d{});
@@ -185,6 +260,11 @@ void PlaceSceneDocument(K::World& world, const std::string_view documentId, cons
     const T::Transform at;
     world.Insert(kSceneCamera, at);
     world.Insert(kSceneCamera, T::GlobalTransform{T::ToMatrix(at)});
+}
+
+void PlaceSceneDocument(K::World& world, const std::string_view documentId, const std::string_view canvas, Ui::UiBindings bindings,
+                        Ui::UiTextFilter filter) {
+    PlaceSceneCamera(world);
     // The document, asked for by its asset id; shown once it and its font are loaded.
     Ui::UiRoot root;
     root.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId(std::string(documentId)));
@@ -231,19 +311,28 @@ void BuildSceneCommon(O::WorldSetup& setup) {
 
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change) {
     K::Registrar& r = setup.Registrar();
+    r.Resource<MenuDocument>({.name = "object_fps_pvp.MenuDocument"});
     r.Resource<SettingsEdit>({.name = "object_fps_pvp.SettingsEdit"});
-    r.AddSystem<&MenuActions>(InSceneUpdate("object_fps_pvp.MenuActions"));
-    r.AddSystem<&SettingsActions>(InSceneUpdate("object_fps_pvp.SettingsActions"));
+    SM::RegisterStateMachine<MenuPage>(setup);
+    r.AddSystem<&EnterMenuMain>(OnPage("object_fps_pvp.EnterMenuMain", SM::EnterScheduleName(MenuPage::Main)));
+    r.AddSystem<&ExitMenuMain>(OnPage("object_fps_pvp.ExitMenuMain", SM::ExitScheduleName(MenuPage::Main)));
+    r.AddSystem<&EnterSettings>(OnPage("object_fps_pvp.EnterSettings", SM::EnterScheduleName(MenuPage::Settings)));
+    r.AddSystem<&ExitSettings>(OnPage("object_fps_pvp.ExitSettings", SM::ExitScheduleName(MenuPage::Settings)));
+    K::SystemOptions menu = InSceneUpdate("object_fps_pvp.MenuActions");
+    menu.mounts.front().conditions.push_back(SM::InState<MenuPage, MenuPage::Main>());
+    r.AddSystem<&MenuActions>(std::move(menu));
+    K::SystemOptions settings = InSceneUpdate("object_fps_pvp.SettingsActions");
+    settings.mounts.front().conditions.push_back(SM::InState<MenuPage, MenuPage::Settings>());
+    r.AddSystem<&SettingsActions>(std::move(settings));
     const auto* start = setup.ProductBuffer().Find<ClientStart>();
-    const std::string path = start != nullptr ? start->settingsPath : std::string();
-    setup.Prepare([status = change.status, path](K::World& w) -> Base::Result<void, O::OrchestrationError> {
-        const ClientSettings& settings = *w.Resource<ClientSettings>();
-        w.SetResource(SettingsEdit{settings, path});
-        Ui::UiBindings bindings;
-        ShowSettings(settings, bindings);
-        bindings.Set("settings_status", std::string());
-        bindings.Set("status", status.empty() ? std::string(kMenuInvitation) : status);
-        PlaceSceneDocument(w, "object_fps_pvp.ui.menu", "menu", std::move(bindings), {});
+    GYO_ASSERT(start != nullptr && "the Client's Product needs ConfigureClient (it keeps its ClientStart)");
+    setup.Prepare([status = change.status, path = start->settingsPath](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+        w.SetResource(SettingsEdit{*w.Resource<ClientSettings>(), path});
+        w.SetResource(MenuDocument{w.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.menu")), status});
+        PlaceSceneCamera(w);
+        // The pages' roots: the entities are there from the start (a page's enter puts the root's components on them).
+        w.Insert(kSceneRoot, T::Transform{});
+        w.Insert(kSettingsRoot, T::Transform{});
         return {};
     });
 }

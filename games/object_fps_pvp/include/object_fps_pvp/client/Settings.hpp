@@ -9,6 +9,7 @@
 #include "engine/base/Result.hpp"
 #include "engine/io/IOError.hpp"
 #include "engine/math/linear/VecInt.hpp"
+#include "engine/window/Window.hpp"
 
 #include <array>
 #include <cstdint>
@@ -23,11 +24,12 @@ inline constexpr std::array<GYO::Engine::Math::Vec2i, 4> kResolutions = {
     GYO::Engine::Math::Vec2i{1280, 720}, GYO::Engine::Math::Vec2i{1600, 900}, GYO::Engine::Math::Vec2i{1920, 1080},
     GYO::Engine::Math::Vec2i{2560, 1440}};
 
-enum class WindowChoice : std::uint8_t { Windowed = 0, Borderless };
-
+// The window's mode is window's own (Windowed, BorderlessFullscreen); the file names them "windowed", "borderless".
+// resolution is the window's size in logical pixels (window's ResizeWindow and WindowSettings::size); in
+// BorderlessFullscreen it is the size the window takes when it is a window again.
 struct ClientSettings final {
     GYO::Engine::Math::Vec2i resolution = kResolutions[0];
-    WindowChoice window = WindowChoice::Windowed;
+    GYO::Engine::Window::WindowMode window = GYO::Engine::Window::WindowMode::Windowed;
     bool vsync = true;
     friend bool operator==(const ClientSettings&, const ClientSettings&) = default;
 };
@@ -47,7 +49,7 @@ struct LoadedSettings final {
 [[nodiscard]] LoadedSettings LoadSettings(const std::string& path);
 [[nodiscard]] GYO::Engine::Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings);
 
-// The next size offered after this one (round), and the player's words for a size and a mode.
+// The next size offered after this one (round), and the player's words for a size.
 [[nodiscard]] GYO::Engine::Math::Vec2i NextResolution(GYO::Engine::Math::Vec2i now);
 [[nodiscard]] std::string ResolutionText(GYO::Engine::Math::Vec2i size);
 

@@ -66,8 +66,8 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
 
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PUBLIC_LIBRARIES ${object_fps_pvp_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Model GYO::Render
-        GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS GYO::Http GYO::IO
-    PRIVATE_LIBRARIES GYO::Json
+        GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS GYO::Http GYO::IO GYO::StateMachine
+    PRIVATE_LIBRARIES GYO::Json GYO::RenderWorld
     SOURCES
     src/client/ClientWorld.cpp
     src/client/Gateway.cpp

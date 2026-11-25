@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-25（修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-26（修訂 5：新增 3.7「畫面跳轉的兩層」（主會話轉達使用者的關切）；3.6 照第 5 段實作與審查改寫；修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -136,6 +136,26 @@ struct SDLWindowBetweenFrames final {
 - 套用：解析度送 `window::ResizeWindow`；比例照 Engine 現有的（UI 的 fit、相機的 `Letterbox`），本卡不改。視窗模式與 VSync 照「視窗模式＋VSync」卡的介面；那張卡合併之前，UI 與存檔先做，套用那兩項只記在存檔、不送（PR 寫明）。
 - 存檔：`<使用者資料目錄>/settings.json`（`{"version":1,"resolution":[w,h],"windowMode":"windowed"|"borderless","vsync":true}`，JSON Module）；啟動時讀回、用在 `WindowSettings`；讀不到或不認得 → 預設（1280×720、窗口、VSync 開）並在 log 說一次。設定不分 profile（同一台機器同一份）。
 
+### 3.7 畫面跳轉的兩層
+
+使用者問：「跳轉有解法了麼。之前 master 頁面跳轉都是一堆的 if else」。跳轉分兩層，各自只做一件事；沒有「每一幀先問現在是哪個畫面、再決定做什麼」的總開關。
+
+| 層 | 用什麼 | 負責什麼 | 誰觸發 |
+|---|---|---|---|
+| 場景之間 | 換前台 World（`ReplaceWorld`，R1b；`client/Scenes.hpp` 的 `SceneRequest` → 兩幀之間 `ChangeScene`） | 每個場景是自己的 World，只登記自己的 System 與實體；`Solo`／`Sim` 只在要玩的場景帶遊戲（3.1） | 場景的 System 寫 `SceneRequest` |
+| 同一個場景的頁面 | Engine 的 `state_machine` Module（Bevy 的 States；`client/Pages.hpp`） | 頁面是一個 enum；每個值有 enter／exit schedule：進頁面放它的 UI 根、離開拿掉；頁面的 System 用 `InState<頁面>` 決定跑不跑 | `StateMachineRequest<頁面>::Request(值)` |
+
+| 跳轉 | 層 |
+|---|---|
+| 主菜單 → 單人房間、大廳；單人房間 → 遊戲、主菜單；大廳 ↔ 房間；房間 → 遊戲；遊戲 → 主菜單（單人撤退、中止）、大廳（多人撤退、中止、連線結束）；大廳 → 主菜單 | 場景（換 World） |
+| 主菜單 ↔ 設定（`MenuPage::Main`／`Settings`） | 頁面 |
+| 遊戲的 loading → 遊戲 ↔ 暫停（`GamePage::Loading`／`Playing`／`Paused`） | 頁面 |
+
+- UI 的按鈕（`world_ui` 的 `UiAction`）直接對到「寫一個 `SceneRequest`」或「送一個頁面的 `Request`」：在它所在的頁面的 System 裡（`InState` 擋住別頁），中間不經總開關。不是按鈕的轉換（loading 就緒且開始、指標被拿走或還給玩家）也是那一頁的 System 送一個 `Request`。
+- 一個頁面的請求在下一幀的套用點生效（state_machine 的 apply stage，`Main/PreUpdate` 之後，同 Bevy 的 `StateTransition`）；換場景在兩幀之間。
+- 和 master 比：master 的 `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp`（1453 行）把大廳、連線、遊戲放在同一個物件，一個 `ConnectionPhase` 欄位在每幀的程式裡逐處判斷（`:208`、`:301-303`、`:315`、`:354`、`:880`），按鈕在一個 `switch (entry->action)` 裡再用 `if (inLobby)` 擋（`:316-325`）。這裡每個場景與頁面只登記自己的 System，不在就不跑。
+- 同一個頁面內的按鈕仍依 action 名分派（`UiAction` 帶的是字串 id，U 的設計：ui 頁第 3 節「動作」）；那是「這個按鈕做什麼」，不是跳轉。
+
 ---
 
 ## 4. 分段
@@ -193,3 +213,8 @@ struct SDLWindowBetweenFrames final {
   - 3.5：loading 期間點擊與 Tab 不拿指標（給 loading 畫面的「中止」）；「中止」：多人照撤退（離開房間），單人回單人房間、不結算。
   - 3.5：進度條用 `horizontal_slider`：`gyo.ui` 的 slider 一定有 action、在 focus 順序裡（UI 的驗證），所以它可以被聚焦與拖動，發出的 `pvp.progress` 沒有人讀。只顯示的元素是 Engine（U）的事，有人點名時再加。
   - 就緒用每一步的輸入帶（`PlayerInput::ready`）：net 沒有 client→server 的訊息（只有 `ServerMessage`），Unity 是用 RPC（`NetworkStreamInGame`）。要不要補 client 訊息是 net 的 Engine 題目，記成後續。
+- 修訂 5（第 5 段實作、設計審查之後；3.7 是主會話轉達使用者的關切）：
+  - 3.7 新增。設定頁、遊戲的 loading／暫停改用 `state_machine`（`MenuPage`、`GamePage`）：原本設定是換 canvas、loading 與暫停是每幀照條件挑 canvas（`ShowPause`），改成頁面的 enter／exit 放與拿 UI 根、頁面的 System 用 `InState`。
+  - 3.6：解像度按一下換下一種（繞回），不是左右切換：只有四種，一顆鍵夠；要左右時加一顆「上一種」即可。
+  - 3.6：視窗模式是 window 的 `WindowMode`（設定直接用它，檔案仍寫 `"windowed"`／`"borderless"`）；適用時送 `SetWindowMode` 與 `ResizeWindow`（每次都送，視窗不一定在那個大小）；進設定頁時，畫面一列照視窗實際的 `WindowState::mode`（玩家用 OS 的按鈕切過時）；無邊框時解像度一列標「（ウィンドウ時）」（全屏取螢幕的大小，選的是回到視窗時的大小）。VSync：Render World 的 Extract 把設定抄進 render 的 `Presentation`（`CopyPresentation`）。
+  - 3.6：解像度是視窗的**邏輯像素**（`WindowSettings::size`、`ResizeWindow` 的單位）。Windows 的顯示縮放 125% 時 1920×1080 的邏輯視窗比 1080p 螢幕大。要不要改成實體像素（照 `WindowState::scaleFactor` 換算）是使用者的決定（他定的是「送現有的 `ResizeWindow`」），回報主會話問。
