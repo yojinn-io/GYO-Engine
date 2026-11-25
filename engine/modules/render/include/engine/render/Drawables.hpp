@@ -100,13 +100,19 @@ struct ClearColor final {
     Color8 color{0, 0, 0, 255};
 };
 
-// One mesh of a model asset, drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
+// The model a Mesh3d draws: a model asset (drawn once it is loaded), or a model the author holds (geometry the game
+// makes at run time, such as a map's region; as ImageRef's held image: a new ModelData is a new model, the old one's
+// GPU meshes are let go when no Mesh3d draws it any more). Bevy adds such a mesh to Assets<Mesh> (Assets::add); gyo2's
+// asset has no run-time add, so the held form follows ImageRef instead.
+using ModelRef = std::variant<Asset::Handle<Model::ModelData>, std::shared_ptr<const Model::ModelData>>;
+
+// One mesh of a model (an asset or a held one, ModelRef), drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
 // batch r2b-3d). A mesh without a skin sits at its node (its rest pose, or the entity's SkinPose when it has one); a
 // skinned mesh's vertices are placed by its skin and the entity's SkinPose (model.zh-Hant.md section 2.1), on the CPU
 // (render.zh-Hant.md section 8.4). The entity's GlobalTransform places the model. The material is the author's:
 // color times image (none: white); the model's own material is data the author reads (model.zh-Hant.md: Material).
 struct Mesh3d final {
-    Asset::Handle<Model::ModelData> model;
+    ModelRef model;
     // An index of ModelData::meshes; past the end: nothing is drawn.
     std::uint32_t mesh = 0;
     Color8 color{255, 255, 255, 255};

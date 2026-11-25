@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <memory>
 #include <utility>
+#include <variant>
 
 #include "engine/math/linear/Vec4.hpp"
 #include "engine/render/Compose.hpp"
+#include "engine/world_asset/AssetView.hpp"
 
 namespace GYO::Engine::Render {
 
@@ -20,14 +23,29 @@ std::vector<Vertex3D> MeshVertices(const Model::Mesh& mesh) {
     return out;
 }
 
-std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Model::Mesh& mesh, RenderMeshes& meshes,
+ResolvedModel ResolveModel(const ModelRef& model, const WorldAsset::AssetView* view) {
+    ResolvedModel out;
+    if (const auto* handle = std::get_if<Asset::Handle<Model::ModelData>>(&model)) {
+        out.key.asset = handle->Id().Text();
+        out.key.life = Asset::Detail::HandleAccess::Life(*handle);
+        if (view != nullptr && !out.key.asset.empty()) out.data = view->Get(*handle);
+    } else {
+        out.holder = std::get<std::shared_ptr<const Model::ModelData>>(model);
+        out.data = out.holder.get();
+        out.key.held = out.data;
+    }
+    return out;
+}
+
+std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Model::Mesh& mesh,
+                                             std::shared_ptr<const Model::ModelData> holder, RenderMeshes& meshes,
                                              std::uint32_t& indexCount) {
     auto found = entries_.find(key);
     if (found == entries_.end()) {
         if (mesh.positions.empty() || mesh.indices.empty() || mesh.indices.size() % 3 != 0) return std::nullopt;
         // A new life of the asset: the old life's meshes can never be drawn again (as RenderImages).
-        for (auto it = entries_.begin(); it != entries_.end();) {
-            if (it->first.asset == key.asset && it->first.life != key.life) {
+        for (auto it = entries_.begin(); key.held == nullptr && it != entries_.end();) {
+            if (it->first.held == nullptr && it->first.asset == key.asset && it->first.life != key.life) {
                 meshes.Release(it->second.mesh);
                 it = entries_.erase(it);
             } else {
@@ -35,10 +53,23 @@ std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Mode
             }
         }
         const MeshId id = meshes.Create(MeshVertices(mesh), mesh.indices);
-        found = entries_.emplace(key, Entry{id, static_cast<std::uint32_t>(mesh.indices.size())}).first;
+        found = entries_.emplace(key, Entry{id, static_cast<std::uint32_t>(mesh.indices.size()), std::move(holder), false}).first;
     }
+    found->second.used = true;
     indexCount = found->second.indexCount;
     return found->second.mesh;
+}
+
+void RenderModelMeshes::EndFrame(RenderMeshes& meshes) {
+    for (auto it = entries_.begin(); it != entries_.end();) {
+        if (it->first.held != nullptr && !it->second.used) {
+            meshes.Release(it->second.mesh);
+            it = entries_.erase(it);
+            continue;
+        }
+        it->second.used = false;
+        ++it;
+    }
 }
 
 std::vector<Vertex3D> SkinVertices(const Model::ModelData& model, const Model::Mesh& mesh, const std::span<const Math::Matrix4> nodes) {
