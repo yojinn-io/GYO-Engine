@@ -1,8 +1,10 @@
 #include "engine/mesh_render/MeshRenderModule.hpp"
 
+#include <memory>
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "engine/base/Result.hpp"
@@ -52,9 +54,13 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
     std::vector<Render::Extracted3dItem> items;
     meshes.ForEach([&](const Kernel::EntityId id, const Render::Mesh3d& m) {
         const Transform::GlobalTransform* g = globals.Get(id);
-        if (g == nullptr || view == nullptr) return;
-        const Model::ModelData* model = view->Get(m.model);
+        if (g == nullptr) return;
+        // The model: an asset loaded in the source's view, or one the author holds (ModelRef).
+        Render::ResolvedModel resolved = Render::ResolveModel(m.model, view);
+        const Model::ModelData* model = resolved.data;
         if (model == nullptr || m.mesh >= model->meshes.size()) return;
+        Render::ModelMeshKey key = resolved.key;
+        key.mesh = m.mesh;
         const Model::Mesh& mesh = model->meshes[m.mesh];
         Math::Vec2 size{};
         Render::ResolvedImage image = Render::ResolveImage(m.image, m.filter, view);
@@ -79,14 +85,16 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             item.indices.resize(item.indices.size() - item.indices.size() % 3);
             if (item.vertices.empty() || item.indices.empty()) return;
         } else {
-            const Render::ModelMeshKey key{m.model.Id().Text(), Asset::Detail::HandleAccess::Life(m.model), m.mesh};
-            const std::optional<Render::MeshId> retained = modelMeshes.Get().Use(key, mesh, renderMeshes.Get(), item.indexCount);
+            const std::optional<Render::MeshId> retained =
+                modelMeshes.Get().Use(key, mesh, std::move(resolved.holder), renderMeshes.Get(), item.indexCount);
             if (!retained) return;
             item.mesh = *retained;
         }
         items.push_back(std::move(item));
     });
     out.Get().items = std::move(items);
+    // Every Mesh3d of the frame has been met: held models none of them drew let their meshes go.
+    modelMeshes.Get().EndFrame(renderMeshes.Get());
     return {};
 }
 
@@ -128,6 +136,7 @@ void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     queueMount.stage = options.stage;
     queue.mounts.push_back(std::move(queueMount));
     r.AddSystem<&Queue3dPasses>(std::move(queue));
+
 
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted3dItems>(world);

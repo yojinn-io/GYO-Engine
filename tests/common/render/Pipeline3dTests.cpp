@@ -155,16 +155,16 @@ TEST_CASE("pipeline3d: a model mesh is retained once; a new life lets the old go
     R::RenderMeshes meshes;
     R::RenderModelMeshes cache;
     std::uint32_t count = 0;
-    const std::optional<R::MeshId> first = cache.Use(R::ModelMeshKey{"m.body", 1, 0}, mesh, meshes, count);
+    const std::optional<R::MeshId> first = cache.Use(R::ModelMeshKey{"m.body", 1, 0}, mesh, nullptr, meshes, count);
     REQUIRE(first.has_value());
     CHECK(count == 3);
-    CHECK_MESSAGE((cache.Use(R::ModelMeshKey{"m.body", 1, 0}, mesh, meshes, count) == first && meshes.LiveCount() == 1),
+    CHECK_MESSAGE((cache.Use(R::ModelMeshKey{"m.body", 1, 0}, mesh, nullptr, meshes, count) == first && meshes.LiveCount() == 1),
                   "[p3-mesh-once] one retained mesh for one model mesh");
-    const std::optional<R::MeshId> second = cache.Use(R::ModelMeshKey{"m.body", 2, 0}, mesh, meshes, count);
+    const std::optional<R::MeshId> second = cache.Use(R::ModelMeshKey{"m.body", 2, 0}, mesh, nullptr, meshes, count);
     REQUIRE(second.has_value());
     CHECK_MESSAGE((!meshes.Live(*first) && meshes.LiveCount() == 1), "[p3-mesh-new-life] the old life's mesh goes");
     Md::Mesh empty;
-    CHECK_MESSAGE(!cache.Use(R::ModelMeshKey{"m.empty", 1, 0}, empty, meshes, count).has_value(), "[p3-mesh-empty] nothing to draw");
+    CHECK_MESSAGE(!cache.Use(R::ModelMeshKey{"m.empty", 1, 0}, empty, nullptr, meshes, count).has_value(), "[p3-mesh-empty] nothing to draw");
 }
 
 TEST_CASE("compose: cameras in order, each clear first: the first on a target clears it, a later one its viewport") {
