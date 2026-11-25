@@ -26,7 +26,7 @@ v8-product-pvp-gateway
 ├─ 第 2 段 admission  high｜Match：驗 token（HMAC）、照 matches 給的參數起來、人走光就結束；matches 真的起 Match 行程
 ├─ 第 3 段 http       high｜Engine：core/os 的 TCP（StreamSocket）＋ library-only Module `http`（非阻塞的 HTTP/1.1 client）
 ├─ 第 4 段 saves      high｜Match 進場讀檔、離場（撤離）寫檔，經 saves 服務
-└─ 第 5 段 client     high｜PvP 的大廳換成走 Gateway：房間列表、建房、房間（準備、開始）→ 帶 NetConnectTarget 的遊戲 World（等 #332）
+└─ 第 5 段 client     high｜PvP 的大廳換成走 Gateway：房間列表、建房、房間（準備、開始）→ 帶 NetConnectTarget 的遊戲 World〔主會話 2026-11-25：移交遊戲流程框架卡；本卡交 Client 介面的交接說明 gateway-client-handoff.zh-Hant.md〕
 ```
 
 | 段 | 範圍 | 不做 | 測試 |
@@ -122,7 +122,7 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 
 - 存在 saves 服務的資料夾 `<data>/saves/<userId>.json`（`--data` 指定；本機 stack 的腳本放在建置輸出下，不放 home）；檔內 `{"version": <樂觀鎖的號碼>, "body": <產品的 JSON>}`，寫入先寫暫存檔再改名。
 - **只有 Match 寫**（權威在 Match）；Client 經 gateway 只能讀自己的。
-- PvP 的存檔格式 v1（產品的）：`{"saveVersion":1,"matches":n,"kills":k,"deaths":d}`，用 `save_version` 的 `Policy{1,1}` 檢查。撤離＝玩家離開這場 Match（現在 PvP 沒有撤離點；生存模式「撤離立刻結算」的最小版本）；合作「活著的人全部撤離才結算」是之後的規則，寫入點同一個。
+- PvP 的存檔格式 v1（產品的）：`{"saveVersion":1,"matches":n,"deaths":d}`（`match/PlayerSave.hpp`）；版本由遊戲自己比（不是 1 就拒絕）。〔第 4 段動工後改〕原本寫 `kills` 與 `save_version` 的 `Policy{1,1}`：擊殺要知道兇手，現在的規則層沒記；`save_version` 的 `Check` 回 `OrchestrationError`、給「讀檔換 World」用，Match 裡逐個玩家讀檔不是那個場合。撤離＝玩家離開這場 Match（現在 PvP 沒有撤離點；生存模式「撤離立刻結算」的最小版本）；合作「活著的人全部撤離才結算」是之後的規則，寫入點同一個。
 
 ### D8 C++ 端怎麼講 HTTP → core/os 的 `StreamSocket`＋Engine 的 `http` Module
 

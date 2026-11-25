@@ -78,7 +78,7 @@ TEST_CASE("world: the Match reads a player's save when they join and writes it b
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     };
     const auto report = [&] { return GameWorld(*match).Resource<PW::MatchSaves>()->Report(); };
-    const auto until = [&](auto done, const char* what) {
+    const auto until = [&](auto done, const std::string& what) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (!done() && std::chrono::steady_clock::now() < deadline) frame();
         CHECK_MESSAGE(done(), what << " (failures " << report().failures << ": " << report().lastFailure << ")");
