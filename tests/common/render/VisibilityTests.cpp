@@ -1,7 +1,6 @@
 // The visibility Module (big-map declaration section 13, K1 to K4): CheckVisibility writes each 3D camera's
-// VisibleEntities from the entities' Aabb, NoFrustumCulling and VisibilityRange (after bevy_camera's
-// check_visibility_cpu_culling and check_visibility_ranges), and Queue3d leaves out the items a camera's list does not
-// name. Each CHECK carries a tag in brackets ("[vs-...]"): the mutants expect it (tests/common/render/visibility_mutations.json).
+// CulledEntities from the entities' Aabb, NoFrustumCulling and VisibilityRange (after bevy_camera's
+// check_visibility_cpu_culling and check_visibility_ranges), and Queue3d leaves out the items of the entities in a camera's list. Each CHECK carries a tag in brackets ("[vs-...]"): the mutants expect it (tests/common/render/visibility_mutations.json).
 #include <doctest/doctest.h>
 
 #include <functional>
@@ -55,7 +54,7 @@ std::vector<int>& Changes() {
     return changes;
 }
 
-K::SystemResult CountChanged(K::Query<K::Read<R::VisibleEntities>, K::Changed<R::VisibleEntities>> changed) {
+K::SystemResult CountChanged(K::Query<K::Read<R::CulledEntities>, K::Changed<R::CulledEntities>> changed) {
     Changes().push_back(static_cast<int>(changed.Count()));
     return {};
 }
@@ -130,8 +129,8 @@ void Camera3dAt(K::World& world, const K::EntityId id, const M::Vec3 position, c
 
 const R::Aabb kUnitBox{{{-1.0F, -1.0F, -1.0F}, {1.0F, 1.0F, 1.0F}}};
 
-std::vector<std::uint64_t> SeenBy(K::World& world, const K::EntityId camera) {
-    const R::VisibleEntities* list = world.Get<R::VisibleEntities>(camera);
+std::vector<std::uint64_t> CulledBy(K::World& world, const K::EntityId camera) {
+    const R::CulledEntities* list = world.Get<R::CulledEntities>(camera);
     REQUIRE(list != nullptr);
     return list->entities;
 }
@@ -151,9 +150,9 @@ TEST_CASE("visibility: a camera sees the boxes in its frustum, a box across a pl
     world.Insert(4, R::NoFrustumCulling{});
     Place(world, 5, {10.5F, 0.0F, 10.0F});  // its box crosses the right plane (x = z at 90 degrees)
     world.Insert(5, kUnitBox);
-    Place(world, 6, {0.0F, 0.0F, -10.0F});  // no Aabb, no range: not in the list (always drawn)
+    Place(world, 6, {0.0F, 0.0F, -10.0F});  // no Aabb, no range: never in the list (always drawn)
     Frames(*p);
-    CHECK_MESSAGE((SeenBy(world, 1) == std::vector<std::uint64_t>{2, 4, 5}), "[vs-frustum] in front, unculled and across a plane");
+    CHECK_MESSAGE((CulledBy(world, 1) == std::vector<std::uint64_t>{3}), "[vs-frustum] only the box behind; in front, unculled and across a plane are seen");
 }
 
 TEST_CASE("visibility: the box is placed by the entity's GlobalTransform, scale and rotation included") {
@@ -170,7 +169,7 @@ TEST_CASE("visibility: the box is placed by the entity's GlobalTransform, scale 
     Place(world, 3, {0.0F, 0.0F, 40.0F});
     world.Insert(3, R::Aabb{{{-1.0F, -1.0F, -30.0F}, {1.0F, 1.0F, -28.0F}}});
     Frames(*p);
-    CHECK_MESSAGE((SeenBy(world, 1) == std::vector<std::uint64_t>{2, 3}), "[vs-world-box] the local box goes through the GlobalTransform");
+    CHECK_MESSAGE(CulledBy(world, 1).empty(), "[vs-world-box] the local box goes through the GlobalTransform");
 }
 
 TEST_CASE("visibility: VisibilityRange keeps distances in [start of startMargin, end of endMargin), from the position or the box centre") {
@@ -195,7 +194,7 @@ TEST_CASE("visibility: VisibilityRange keeps distances in [start of startMargin,
     world.Insert(6, centred);
     world.Insert(6, R::Aabb{{{-1.0F, -1.0F, -26.0F}, {1.0F, 1.0F, -24.0F}}});
     Frames(*p);
-    CHECK_MESSAGE((SeenBy(world, 1) == std::vector<std::uint64_t>{3, 4, 6}), "[vs-range] the half-open range, and the box centre");
+    CHECK_MESSAGE((CulledBy(world, 1) == std::vector<std::uint64_t>{2, 5}), "[vs-range] the half-open range, and the box centre");
 }
 
 TEST_CASE("visibility: each 3D camera has its own list; an inactive camera is not checked") {
@@ -209,9 +208,9 @@ TEST_CASE("visibility: each 3D camera has its own list; an inactive camera is no
     Place(world, 5, {0.0F, 0.0F, 30.0F});
     world.Insert(5, kUnitBox);
     Frames(*p);
-    CHECK_MESSAGE((SeenBy(world, 1) == std::vector<std::uint64_t>{4, 5}), "[vs-per-camera] the first camera sees both");
-    CHECK_MESSAGE((SeenBy(world, 2) == std::vector<std::uint64_t>{5}), "[vs-per-camera] the second only the far one");
-    CHECK_MESSAGE(world.Get<R::VisibleEntities>(3) == nullptr, "[vs-inactive] an inactive camera gets no list");
+    CHECK_MESSAGE(CulledBy(world, 1).empty(), "[vs-per-camera] the first camera sees both");
+    CHECK_MESSAGE((CulledBy(world, 2) == std::vector<std::uint64_t>{4}), "[vs-per-camera] the second only the far one");
+    CHECK_MESSAGE(world.Get<R::CulledEntities>(3) == nullptr, "[vs-inactive] an inactive camera gets no list");
 }
 
 TEST_CASE("visibility: the list is written only when it changes") {
@@ -227,7 +226,7 @@ TEST_CASE("visibility: the list is written only when it changes") {
     Place(world, 2, {0.0F, 0.0F, -10.0F});
     Frames(*p);
     CHECK_MESSAGE(Changes().back() == 1, "[vs-write-changes] written again when it changes");
-    CHECK(SeenBy(world, 1).empty());
+    CHECK((CulledBy(world, 1) == std::vector<std::uint64_t>{2}));
 }
 
 TEST_CASE("visibility: without the visibility Module no camera has a list") {
@@ -237,10 +236,10 @@ TEST_CASE("visibility: without the visibility Module no camera has a list") {
     Place(world, 2, {0.0F, 0.0F, -10.0F});
     world.Insert(2, kUnitBox);
     Frames(*p);
-    CHECK_MESSAGE(world.Get<R::VisibleEntities>(1) == nullptr, "[vs-opt-in] nothing writes a list");
+    CHECK_MESSAGE(world.Get<R::CulledEntities>(1) == nullptr, "[vs-opt-in] nothing writes a list");
 }
 
-TEST_CASE("visibility: Queue3d leaves out a checked item the camera's list does not name, and nothing else") {
+TEST_CASE("visibility: Queue3d leaves out the items of the entities in the camera's culled list, and nothing else") {
     R::ExtractedCamera camera;
     camera.is3d = true;
     camera.computed.valid = true;
@@ -254,15 +253,11 @@ TEST_CASE("visibility: Queue3d leaves out a checked item the camera's list does 
         items[i].indexCount = 3;
         items[i].world = M::Matrix4{};
     }
-    items[0].visibilityChecked = true;  // named in the list
-    items[1].visibilityChecked = true;  // not named
-    // items[2]: not checked: drawn whatever the list says
-    camera.visible = std::vector<std::uint64_t>{10};
+    camera.culled = {11};
     auto pass = R::Queue3d(camera, items);
     REQUIRE(pass.has_value());
-    REQUIRE(pass->draws.size() == 2);
-    CHECK_MESSAGE(pass->draws.size() == 2, "[vs-queue] the item not named is left out");
-    camera.visible.reset();
+    CHECK_MESSAGE(pass->draws.size() == 2, "[vs-queue] the culled entity's item is left out");
+    camera.culled.clear();
     pass = R::Queue3d(camera, items);
     REQUIRE(pass.has_value());
     CHECK_MESSAGE(pass->draws.size() == 3, "[vs-queue-no-list] a camera without a list leaves nothing out");

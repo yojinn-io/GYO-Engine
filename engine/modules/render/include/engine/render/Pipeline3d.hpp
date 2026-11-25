@@ -33,8 +33,6 @@ struct Extracted3dItem final {
     // skinned mesh's vertices are in model space already).
     Math::Matrix4 world{};
     std::uint32_t layers = 1;
-    // The entity has an Aabb or a VisibilityRange: a camera with a visible list draws it only when it is in the list.
-    bool visibilityChecked = false;
     TextureId texture{};
     Color8 color{255, 255, 255, 255};
     BlendMode blend = BlendMode::Opaque;

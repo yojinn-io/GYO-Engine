@@ -45,8 +45,6 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
                              Kernel::Extract<Kernel::Read<Transform::GlobalTransform>> globals,
                              Kernel::Extract<Kernel::Read<Render::SkinPose>> poses,
                              Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
-                             Kernel::Extract<Kernel::Read<Render::Aabb>> aabbs,
-                             Kernel::Extract<Kernel::Read<Render::VisibilityRange>> ranges,
                              Kernel::ExtractRes<WorldAsset::AssetView> assets, Kernel::ResMut<Render::Extracted3dItems> out,
                              Kernel::ResMut<Render::RenderModelMeshes> modelMeshes, Kernel::ResMut<Render::RenderMeshes> renderMeshes,
                              Kernel::ResMut<Render::RenderImages> images, Kernel::ResMut<Render::RenderTextures> textures) {
@@ -67,7 +65,6 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
         item.entity = id;
         const Render::RenderLayers* l = layers.Get(id);
         item.layers = l != nullptr ? l->mask : Render::RenderLayers{}.mask;
-        item.visibilityChecked = aabbs.Get(id) != nullptr || ranges.Get(id) != nullptr;
         item.texture = *texture;
         item.color = m.color;
         item.blend = m.blend;

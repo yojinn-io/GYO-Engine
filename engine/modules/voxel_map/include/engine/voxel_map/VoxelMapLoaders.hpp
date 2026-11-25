@@ -73,8 +73,12 @@ enum class VoxelRegionLoaderCode : std::uint8_t {
     return "Unknown";
 }
 
+// Neither loader takes settings.
 struct VoxelMapLoaderSettings final {
     friend bool operator==(const VoxelMapLoaderSettings&, const VoxelMapLoaderSettings&) = default;
+};
+struct VoxelRegionLoaderSettings final {
+    friend bool operator==(const VoxelRegionLoaderSettings&, const VoxelRegionLoaderSettings&) = default;
 };
 
 class VoxelMapLoader final {
@@ -97,7 +101,7 @@ public:
 class VoxelRegionLoader final {
 public:
     using Output = VoxelRegionDocument;
-    using Settings = VoxelMapLoaderSettings;
+    using Settings = VoxelRegionLoaderSettings;
     using Code = VoxelRegionLoaderCode;
 
     static constexpr std::string_view kTypeName = "voxel_region";

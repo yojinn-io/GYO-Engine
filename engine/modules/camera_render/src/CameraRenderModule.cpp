@@ -30,7 +30,7 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
                             Kernel::Extract<Kernel::Read<Render::ClearColorConfig>> clears,
                             Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
                             Kernel::Extract<Kernel::Read<Render::Camera3dDepth>> depths,
-                            Kernel::Extract<Kernel::Read<Render::VisibleEntities>> visibles,
+                            Kernel::Extract<Kernel::Read<Render::CulledEntities>> culled,
                             Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::ResMut<Render::ExtractedCameras> out,
                             Kernel::ResMut<Render::CameraPasses> passes) {
     std::vector<Render::ExtractedCamera> list;
@@ -60,7 +60,7 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
         e.layers = l != nullptr ? l->mask : Render::RenderLayers{}.mask;
         const Render::Camera3dDepth* depth = depths.Get(id);
         e.clearDepth = depth != nullptr ? depth->clear : true;
-        if (const Render::VisibleEntities* visible = visibles.Get(id)) e.visible = visible->entities;
+        if (const Render::CulledEntities* list = culled.Get(id)) e.culled = list->entities;
         list.push_back(std::move(e));
     });
     // Entities come in ascending order; a stable sort by order keeps the entity order among equal orders.

@@ -293,6 +293,19 @@
    "expect": "TEST CASE:\\s+(?:M9|R5):"
   },
   {
+   "id": "vmap-check-map-skips",
+   "what": "CheckVoxelMap: the whole-map exit does not check its regions",
+   "guards": [
+    "voxel-map VM-3"
+   ],
+   "file": "engine/modules/voxel_map/src/VoxelMap.cpp",
+   "find": "        auto checked = CheckVoxelRegion(*regions[i], map, map.regions[i].at);",
+   "replace": "        VoxelMapResult<void> checked{};",
+   "target": "gyo_voxel_map_tests",
+   "cases": "CheckVoxelMap*",
+   "expect": "TEST CASE:\\s+CheckVoxelMap:"
+  },
+  {
    "id": "vreg-schema-name",
    "what": "R2: a region with another schema is accepted",
    "guards": [

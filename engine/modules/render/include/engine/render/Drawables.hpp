@@ -136,10 +136,12 @@ struct SkinPose final {
 };
 
 // Visibility (big-map declaration section 13; after bevy_camera's visibility: Aabb in primitives.rs, NoFrustumCulling
-// and VisibleEntities in visibility/mod.rs:318 and :344, VisibilityRange in visibility/range.rs:80). The visibility
-// Module's CheckVisibility decides, per camera, which entities with an Aabb or a VisibilityRange it sees and writes
-// them into the camera's VisibleEntities; Queue3d leaves out the others. An entity with neither is always drawn, and
-// without the visibility Module no camera has a list, so everything is drawn.
+// in visibility/mod.rs:318, VisibilityRange in visibility/range.rs:80). The visibility Module's CheckVisibility decides,
+// per camera, which entities with an Aabb or a VisibilityRange it does not see and writes them into the camera's
+// CulledEntities; Queue3d leaves those out. Bevy keeps the positive list (VisibleEntities, :344) and lets the queue
+// read it per visibility class; the negative list keeps "which entities are culled at all" in the visibility Module
+// alone, so a renderer only asks "is it in the list". An entity with neither component is never culled, and without
+// the visibility Module no camera has a list, so everything is drawn.
 
 // The entity's bounds in its own space (Bevy's Aabb): the frustum test puts its eight corners through the entity's
 // GlobalTransform and tests the box around them.
@@ -166,18 +168,18 @@ struct VisibilityRange final {
     bool useAabb = false;
 };
 
-// On a camera, written by CheckVisibility: the entities with an Aabb or a VisibilityRange this camera sees, in
+// On a camera, written by CheckVisibility: the entities with an Aabb or a VisibilityRange this camera does not see, in
 // ascending EntityId. A camera without it (no visibility Module, or not checked yet) culls nothing.
-struct VisibleEntities final {
+struct CulledEntities final {
     std::vector<std::uint64_t> entities;
 
-    friend bool operator==(const VisibleEntities&, const VisibleEntities&) = default;
+    friend bool operator==(const CulledEntities&, const CulledEntities&) = default;
 };
 
 inline void HashValue(Kernel::Hasher&, const Aabb&) {}
 inline void HashValue(Kernel::Hasher&, const NoFrustumCulling&) {}
 inline void HashValue(Kernel::Hasher&, const VisibilityRange&) {}
-inline void HashValue(Kernel::Hasher&, const VisibleEntities&) {}
+inline void HashValue(Kernel::Hasher&, const CulledEntities&) {}
 inline void HashValue(Kernel::Hasher&, const RenderLayers&) {}
 inline void HashValue(Kernel::Hasher&, const Mesh3d&) {}
 inline void HashValue(Kernel::Hasher&, const SkinPose&) {}

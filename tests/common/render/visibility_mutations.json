@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the visibility Module and its two ends in camera_render, mesh_render and Queue3d (big-map declaration section 13, v8-arch-gyo2-big-map-s2; K1 to K4). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): the order after TransformPropagate and CameraUpdate (with no order the kernel still runs CheckVisibility after them, as visibility is registered after both, so no test can tell; review guards it, as Bevy's .after()); the inserting of a camera's first list (a camera without a list culls nothing: removing the insert is caught by every list test, criterion 1).",
+ "description": "Declared mutants of the visibility Module and its two ends in camera_render, mesh_render and Queue3d (big-map declaration section 13, v8-arch-gyo2-big-map-s2; K1 to K4). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): the order after TransformPropagate and CameraUpdate (with no order the kernel still runs CheckVisibility after them, as visibility is registered after both, so no test can tell; review guards it, as Bevy's .after()); the inserting of a camera's first list; the flag on extracted items (retired with the negative list, design review S-3: the decision of what is culled at all is the visibility Module's alone) (a camera without a list culls nothing: removing the insert is caught by every list test, criterion 1).",
  "mutants": [
   {
    "id": "vs-frustum-off",
@@ -100,7 +100,7 @@
     "big-map-declaration K3"
    ],
    "file": "engine/modules/visibility/src/VisibilityModule.cpp",
-   "find": "        } else if (lists.Get<Render::VisibleEntities>(camera)->entities != next.entities) {",
+   "find": "        } else if (lists.Get<Render::CulledEntities>(camera)->entities != next.entities) {",
    "replace": "        } else {",
    "target": "gyo_render_tests",
    "cases": "visibility: the list is written*",
@@ -108,38 +108,25 @@
   },
   {
    "id": "vs-queue-filter-off",
-   "what": "K1: Queue3d draws an item the camera's list does not name",
+   "what": "K1: Queue3d draws an item of an entity in the camera's culled list",
    "guards": [
     "big-map-declaration K1"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if (item.visibilityChecked && camera.visible &&",
-   "replace": "        if (false && item.visibilityChecked && camera.visible &&",
+   "find": "        if (std::binary_search(camera.culled.begin(), camera.culled.end(), item.entity)) continue;",
+   "replace": "",
    "target": "gyo_render_tests",
    "cases": "visibility: Queue3d*,render_extract: with the visibility*",
    "expect": "\\[vs-(?:queue|extract)\\]"
   },
   {
-   "id": "vs-extract-flag-off",
-   "what": "K1: mesh_render does not mark an entity with an Aabb as checked",
-   "guards": [
-    "big-map-declaration K1"
-   ],
-   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
-   "find": "        item.visibilityChecked = aabbs.Get(id) != nullptr || ranges.Get(id) != nullptr;",
-   "replace": "        item.visibilityChecked = false;",
-   "target": "gyo_render_tests",
-   "cases": "render_extract: with the visibility*",
-   "expect": "\\[vs-extract\\]"
-  },
-  {
    "id": "vs-camera-list-not-extracted",
-   "what": "K1: camera_render does not take the camera's VisibleEntities",
+   "what": "K1: camera_render does not take the camera's CulledEntities",
    "guards": [
     "big-map-declaration K1"
    ],
    "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-   "find": "        if (const Render::VisibleEntities* visible = visibles.Get(id)) e.visible = visible->entities;",
+   "find": "        if (const Render::CulledEntities* list = culled.Get(id)) e.culled = list->entities;",
    "replace": "",
    "target": "gyo_render_tests",
    "cases": "render_extract: with the visibility*",

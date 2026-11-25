@@ -4,6 +4,7 @@
 #include <compare>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -202,6 +203,12 @@ struct VoxelRegionDocument final {
 [[nodiscard]] VoxelMapResult<void> CheckVoxelRegion(const VoxelRegionDocument& region, const VoxelMapDocument& map,
                                                     VoxelRegionKey expected);
 
+// The whole map, the one answer to "is this map valid": CheckVoxelRegion for every index entry, in index order
+// (regions[i] read for map.regions[i]; both are the caller's to line up, asserted by size). An asset reader calls it
+// once every region is Loaded (a Loaded region has passed the first step only); the paths start with "regions[i]".
+[[nodiscard]] VoxelMapResult<void> CheckVoxelMap(const VoxelMapDocument& map,
+                                                 std::span<const VoxelRegionDocument* const> regions);
+
 // Both steps on one text: ParseVoxelRegion, then CheckVoxelRegion.
 [[nodiscard]] VoxelMapResult<VoxelRegionDocument> ParseVoxelRegion(std::string_view text, const VoxelMapDocument& map,
                                                                    VoxelRegionKey expected);
@@ -222,9 +229,11 @@ struct VoxelGeometry final {
     std::vector<Math::Aabb> colliders;
 };
 
-// Appends one chunk to geometry (indices continue from its vertices). The chunk must be one ParseVoxelRegion returned
-// and CheckVoxelRegion accepted, or ValidateVoxelChunk accepted, with the same map; anything else is a programmer
-// error (asserted). A world coordinate is float(local + 256 x key + 16 x origin) x cellSize / 16.
+// Appends one chunk to geometry (indices continue from its vertices). The chunk must be one the map's rules accepted
+// (CheckVoxelMap or CheckVoxelRegion after ParseVoxelRegion, or ValidateVoxelChunk) with the same map. What the
+// expansion relies on is asserted (the chunk in the bounds, each quad's direction and palette index); the rest of a
+// chunk the rules refuse gives geometry the contract does not describe. A world coordinate is
+// float(local + 256 x key + 16 x origin) x cellSize / 16.
 void AppendVoxelChunk(VoxelGeometry& geometry, const VoxelChunkDocument& chunk, const VoxelMapDocument& map);
 // One chunk on its own.
 [[nodiscard]] VoxelGeometry ExpandVoxelChunk(const VoxelChunkDocument& chunk, const VoxelMapDocument& map);

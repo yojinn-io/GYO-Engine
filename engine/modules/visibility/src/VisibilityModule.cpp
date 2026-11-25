@@ -22,21 +22,34 @@ namespace {
 using SystemResult = Base::Result<void, Kernel::KernelError>;
 
 // Bevy's check_visibility_cpu_culling with check_visibility_ranges folded in: per active, valid 3D camera, the
-// entities with an Aabb or a VisibilityRange it sees, in ascending EntityId; the camera's list is written only when it
-// differs (inserted the first time), so Changed<VisibleEntities> means it changed.
+// entities with an Aabb or a VisibilityRange it does not see, in ascending EntityId (the candidates are gathered once,
+// for every camera); the camera's list is written only when it differs (inserted the first time), so
+// Changed<CulledEntities> means it changed.
 SystemResult CheckVisibility(
     Kernel::Query<Kernel::Read<Camera::Camera>, Kernel::Read<Camera::ComputedCamera>,
                   Kernel::Read<Transform::GlobalTransform>, Kernel::With<Camera::Camera3d>>
         cameras,
-    Kernel::Query<Kernel::Write<Render::VisibleEntities>> lists,
+    Kernel::Query<Kernel::Write<Render::CulledEntities>> lists,
     Kernel::Query<Kernel::Read<Render::Aabb>, Kernel::Read<Transform::GlobalTransform>> boxed,
     Kernel::Query<Kernel::Read<Render::VisibilityRange>, Kernel::Read<Transform::GlobalTransform>> ranged,
     Kernel::Query<Kernel::With<Render::NoFrustumCulling>> unculled,
-    Kernel::CommandsFor<Kernel::Inserts<Render::VisibleEntities>, Kernel::Removes<>> commands) {
-    std::vector<Kernel::EntityId> candidates = boxed.Entities();
-    for (const Kernel::EntityId id : ranged.Entities()) candidates.push_back(id);
-    std::sort(candidates.begin(), candidates.end());
-    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    Kernel::CommandsFor<Kernel::Inserts<Render::CulledEntities>, Kernel::Removes<>> commands) {
+    std::vector<Kernel::EntityId> ids = boxed.Entities();
+    for (const Kernel::EntityId id : ranged.Entities()) ids.push_back(id);
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    std::vector<std::pair<Kernel::EntityId, Candidate>> candidates;
+    candidates.reserve(ids.size());
+    for (const Kernel::EntityId id : ids) {
+        const Transform::GlobalTransform* global = boxed.Get<Transform::GlobalTransform>(id);
+        if (global == nullptr) global = ranged.Get<Transform::GlobalTransform>(id);
+        Candidate candidate;
+        candidate.world = global->matrix;
+        candidate.aabb = boxed.Get<Render::Aabb>(id);
+        candidate.range = ranged.Get<Render::VisibilityRange>(id);
+        candidate.noFrustumCulling = unculled.Contains(id);
+        candidates.emplace_back(id, candidate);
+    }
 
     cameras.ForEach([&](const Kernel::EntityId camera, const Camera::Camera& settings, const Camera::ComputedCamera& computed,
                         const Transform::GlobalTransform& view) {
@@ -45,22 +58,14 @@ SystemResult CheckVisibility(
         if (!viewFromWorld) return;
         const Math::Frustum frustum = Math::MakeFrustum(Math::Multiply(computed.clipFromView, *viewFromWorld));
         const Math::Vec3 position{view.matrix.values[12], view.matrix.values[13], view.matrix.values[14]};
-        Render::VisibleEntities next;
-        for (const Kernel::EntityId id : candidates) {
-            Candidate candidate;
-            const Transform::GlobalTransform* global = boxed.Get<Transform::GlobalTransform>(id);
-            if (global == nullptr) global = ranged.Get<Transform::GlobalTransform>(id);
-            if (global == nullptr) continue;
-            candidate.world = global->matrix;
-            candidate.aabb = boxed.Get<Render::Aabb>(id);
-            candidate.range = ranged.Get<Render::VisibilityRange>(id);
-            candidate.noFrustumCulling = unculled.Contains(id);
-            if (Sees(frustum, position, candidate)) next.entities.push_back(id);
+        Render::CulledEntities next;
+        for (const auto& [id, candidate] : candidates) {
+            if (!Sees(frustum, position, candidate)) next.entities.push_back(id);
         }
         if (!lists.Contains(camera)) {
             commands.Insert(camera, std::move(next));
-        } else if (lists.Get<Render::VisibleEntities>(camera)->entities != next.entities) {
-            *lists.GetMut<Render::VisibleEntities>(camera) = std::move(next);
+        } else if (lists.Get<Render::CulledEntities>(camera)->entities != next.entities) {
+            *lists.GetMut<Render::CulledEntities>(camera) = std::move(next);
         }
     });
     return {};

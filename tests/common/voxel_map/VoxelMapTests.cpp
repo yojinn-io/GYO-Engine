@@ -347,6 +347,28 @@ TEST_CASE("R3: at is the region the index entry names and the text has that entr
     CHECK_THROWS_AS((void)CheckVoxelRegion(*first, map, VoxelRegionKey{0, 0}), Base::AssertionFailure);
 }
 
+TEST_CASE("CheckVoxelMap: every region against its index entry, in index order, paths under regions[i]") {
+    const VoxelMapDocument map = Map();
+    const auto first = ParseVoxelRegion(kRegionText);
+    const auto second = ParseVoxelRegion(kRegionText2);
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    const std::array<const VoxelRegionDocument*, 2> both{&*first, &*second};
+    CHECK(CheckVoxelMap(map, both).has_value());
+    // The second region's text read for the first entry and the other way round: R3 at the first one.
+    const std::array<const VoxelRegionDocument*, 2> swapped{&*second, &*first};
+    RegionRefused(CheckVoxelMap(map, swapped), "R3", "regions[0].at");
+    // A region whose text is not the entry's: R3 with the whole region's path.
+    const auto changed = ParseVoxelRegion(kRegionText2 + " ");
+    REQUIRE(changed.has_value());
+    const std::array<const VoxelRegionDocument*, 2> stale{&*first, &*changed};
+    RegionRefused(CheckVoxelMap(map, stale), "R3", "regions[1]");
+    // A palette index outside a smaller palette in the first region's first chunk: C2 under regions[0].
+    VoxelMapDocument small = map;
+    small.palette.resize(1);
+    RegionRefused(CheckVoxelMap(small, both), "C2", "regions[0].chunks[0].quads[1][6]");
+}
+
 TEST_CASE("R4: one or more chunks of exactly at, quads and colliders, in this region, in strictly increasing key order") {
     RegionRefused(Region(RegionText("[-1, -1]", "")), "R4", "chunks");
     RegionRefused(Region(OneChunk(R"({"at": [0, 0, -1], "quads": [], "colliders": [{"min": [0,0,0], "max": [1,1,1]}]})")), "R4",
@@ -557,7 +579,7 @@ TEST_CASE("Expansion: world coordinates at both ends of +-2^20 units are exact")
     CHECK(SameBits(box.maximum, {49152.0F, 24.0F, 0.0F}));
 }
 
-TEST_CASE("Expansion: AppendVoxelChunk continues the indices; a chunk the rules refuse is a programmer error") {
+TEST_CASE("Expansion: AppendVoxelChunk continues the indices; a quad it cannot expand is a programmer error") {
     const VoxelMapDocument map = Map();
     VoxelGeometry geometry;
     AppendVoxelChunk(geometry, ChunkWith({{0, 0, 0, VoxelFace::PositiveY, 1, 1, 0}}, {}), map);
@@ -568,7 +590,6 @@ TEST_CASE("Expansion: AppendVoxelChunk continues the indices; a chunk the rules 
     CHECK(geometry.indices == std::vector<std::uint32_t>{0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7});
     CHECK(geometry.colliders.size() == 1);
     GYO::Test::ScopedAssertionHandler handler;
-    CHECK_THROWS_AS(AppendVoxelChunk(geometry, ChunkWith({}, {}), map), Base::AssertionFailure);
     CHECK_THROWS_AS(AppendVoxelChunk(geometry, ChunkWith({{0, 0, 0, VoxelFace::PositiveY, 1, 1, 9}}, {}), map),
                     Base::AssertionFailure);
     CHECK_THROWS_AS((void)ChunkWorldOrigin({9, 0, 0}, map), Base::AssertionFailure);

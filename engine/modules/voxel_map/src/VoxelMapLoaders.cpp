@@ -41,17 +41,17 @@ Base::Result<VoxelMapAsset, Asset::LoaderFailure<VoxelMapLoaderCode>> VoxelMapLo
     return asset;
 }
 
-Base::Result<VoxelMapLoaderSettings, Asset::LoaderFailure<VoxelRegionLoaderCode>> VoxelRegionLoader::ParseSettings(
+Base::Result<VoxelRegionLoaderSettings, Asset::LoaderFailure<VoxelRegionLoaderCode>> VoxelRegionLoader::ParseSettings(
     const std::optional<std::string_view> settingsJson) const {
     if (!NoSettings(settingsJson)) {
         return Base::Err(Asset::LoaderFailure<VoxelRegionLoaderCode>::Make(VoxelRegionLoaderCode::BadSettings,
                                                                            "a voxel region takes no settings"));
     }
-    return VoxelMapLoaderSettings{};
+    return VoxelRegionLoaderSettings{};
 }
 
 Base::Result<VoxelRegionDocument, Asset::LoaderFailure<VoxelRegionLoaderCode>> VoxelRegionLoader::Load(
-    const std::span<const std::byte> bytes, const VoxelMapLoaderSettings&, Asset::LoadContext&) const {
+    const std::span<const std::byte> bytes, const VoxelRegionLoaderSettings&, Asset::LoadContext&) const {
     auto region = ParseVoxelRegion(TextOf(bytes));
     if (!region) {
         VoxelMapError error = std::move(region).error();

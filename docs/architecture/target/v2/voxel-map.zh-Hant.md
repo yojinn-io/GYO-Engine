@@ -41,6 +41,7 @@ asset 的 loader 只拿得到位元組，拿不到索引（`LoadContext.hpp`）�
 | 1（不需要索引） | `ParseVoxelRegion(text)` | R1 欄位、JSON｜R2 schema 與 version｜R4 至少一個區塊、欄位、區塊在本 region 內、鍵嚴格遞增｜R5 整數 ±2³⁰、文字 ≤ 16 MiB｜每個區塊：C1 非空、C2 方向 0～5 與尺寸 ≥ 1、C3、C4、C5。記下文字的 SHA-256 |
 | 2（對照索引） | `CheckVoxelRegion(region, map, expected)` | R3 `at`＝`expected`、文字的 SHA-256＝該項的 `sha256`｜每個區塊：C1 在 bounds 內、C2 palette 索引在 palette 內 |
 | 兩步一起 | `ParseVoxelRegion(text, map, expected)` | 上面兩步 |
+| 整張地圖 | `CheckVoxelMap(map, regions)` | 每個索引項各跑第 2 步，依索引順序；錯誤路徑以 `regions[i]` 開頭。經 asset 讀的地圖在全部 region Loaded 之後呼叫一次，回答「這張地圖合不合法」（設計審查 S-2） |
 | 不經文字 | `ValidateVoxelChunk(chunk, map)`（錯誤 `InvalidVoxelChunk`） | 一個區塊的 C1～C5（含 bounds 與 palette）；工具的工作副本用 |
 
 錯誤的 message 以規則名開頭（例 `C2: a width below 1`），detail 是出錯值的路徑：region 給 `chunks[2].quads[3][4]`，`ValidateVoxelChunk` 給 `quads[3][4]`；文字不是 JSON、重複的鍵、整份文字的 SHA-256 不合給空路徑。`expected` 不在索引裡是呼叫端的錯（assert）。
@@ -48,14 +49,15 @@ asset 的 loader 只拿得到位元組，拿不到索引（`LoadContext.hpp`）�
 ### 2.3 展開
 
 - `AppendVoxelChunk(geometry, chunk, map)`／`ExpandVoxelChunk`：每個 quad 四個頂點、六個索引，依 quad 順序；形狀對上 `Model::Mesh`（positions、normals、uvs、indices）。三角形從面朝向的那一側看，在螢幕上是**逆時針**（gyo2 的正面，`RenderCommands.hpp:140`）；空間是左手系（`math.md`），所以 (v1−v0)×(v2−v0) **背向**法線（master 的正面是順時針，四個角的順序與它相反）。法線由方向導出；uv 指到 palette 圖裡那一格的中心。碰撞盒是世界座標的 `Math::Aabb`。
-- 只接受驗證過的區塊（與同一份索引）；其他是程式錯誤（assert）。
+- 只接受驗證過的區塊（與同一份索引）。展開本身依賴的前提（區塊在 bounds 內、每個 quad 的方向與 palette 索引、32 位元索引放得下）是 assert；其餘規則不重跑（設計審查 S-1：重跑整套規則是擋誤用的守衛），沒驗證過的區塊得到的幾何契約不描述。
 - `ExpandVoxelPalette`：palette 圖，一欄一項、一列一個方向，第 0 列在最上面。
 - `RegionOf`、`ChunkWorldOrigin`、`ChunkWorldBounds`、`MapUnitsToWorld`：同一個公式。
 
 ### 2.4 當 asset
 
 - `VoxelMapLoader`：type `voxel_map`、format `json`，輸出 `VoxelMapAsset`（索引＋每個 region 的 `AssetRef`）。**索引依順序把每個 region 宣告成參照**（`ReferencePath`，相對於索引檔的目錄），所以讀索引就是讀整張地圖。Product 的 catalog 要列出每個 region 檔，一個檔只能有一個條目（否則參照是 AmbiguousReference）。
-- `VoxelRegionLoader`：type `voxel_region`、format `json`，輸出第 1 步的 `VoxelRegionDocument`。第 2 步由同時拿著索引與 region 的讀者呼叫 `CheckVoxelRegion`。
+- `VoxelRegionLoader`：type `voxel_region`、format `json`，輸出第 1 步的 `VoxelRegionDocument`。第 2 步由同時拿著索引與 region 的讀者呼叫 `CheckVoxelMap`（或逐個 `CheckVoxelRegion`）。
+- region 清單在索引與 catalog 各有一份；兩者不合時參照失敗（UnlistedReference）。catalog 的 region 條目由烘焙工具和地圖一起產生，不手寫。
 - 兩者都不收 settings（`{}` 可以），上限是 1 MiB／16 MiB。平行解析由 asset 的 worker 負責，Module 本身單執行緒。
 
 ## 3. Design Invariants

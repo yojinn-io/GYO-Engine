@@ -1,5 +1,5 @@
 # The visibility Module (big-map declaration section 13): CheckVisibility in the source World, which writes each 3D
-# camera's VisibleEntities from the entities' Aabb and VisibilityRange (render's Drawables.hpp, registered by
+# camera's CulledEntities from the entities' Aabb and VisibilityRange (render's Drawables.hpp, registered by
 # world_render), after Bevy's check_visibility. Not carried by default (config/modules.csv).
 add_library(gyo_visibility STATIC
     src/Visibility.cpp

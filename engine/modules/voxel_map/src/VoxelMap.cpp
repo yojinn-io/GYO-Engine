@@ -498,6 +498,20 @@ VoxelMapResult<void> CheckVoxelRegion(const VoxelRegionDocument& region, const V
     return {};
 }
 
+VoxelMapResult<void> CheckVoxelMap(const VoxelMapDocument& map, const std::span<const VoxelRegionDocument* const> regions) {
+    GYO_ASSERT(regions.size() == map.regions.size() && "CheckVoxelMap: one region per index entry, in index order");
+    for (std::size_t i = 0; i < regions.size(); ++i) {
+        GYO_ASSERT(regions[i] != nullptr && "CheckVoxelMap: a region that was not read");
+        auto checked = CheckVoxelRegion(*regions[i], map, map.regions[i].at);
+        if (!checked) {
+            VoxelMapError error = std::move(checked).error();
+            return Fail<void>(VoxelMapErrorCode::InvalidVoxelRegion,
+                              {std::move(error.message), Prefixed(Index("regions", i), error.detail)});
+        }
+    }
+    return {};
+}
+
 VoxelMapResult<VoxelRegionDocument> ParseVoxelRegion(const std::string_view text, const VoxelMapDocument& map,
                                                      const VoxelRegionKey expected) {
     auto region = ParseVoxelRegion(text);
@@ -513,7 +527,13 @@ VoxelMapResult<void> ValidateVoxelChunk(const VoxelChunkDocument& chunk, const V
 }
 
 void AppendVoxelChunk(VoxelGeometry& geometry, const VoxelChunkDocument& chunk, const VoxelMapDocument& map) {
-    GYO_ASSERT(!ChunkRules(chunk) && !ChunkMapRules(chunk, map) && "AppendVoxelChunk: a chunk the map's rules refuse");
+    // The preconditions the expansion itself relies on (the switch on the face, the uv's column, exact world
+    // coordinates); the rest of the rules is the readers' to have checked (ValidateVoxelChunk, CheckVoxelMap).
+    GYO_ASSERT(InBounds(chunk.at, map) && "AppendVoxelChunk: a chunk outside the map's bounds");
+    for (const VoxelQuad& quad : chunk.quads) {
+        GYO_ASSERT(static_cast<std::uint8_t>(quad.face) < kFaceCount && quad.palette < map.palette.size() &&
+                   "AppendVoxelChunk: a quad's direction or palette index the map's rules refuse");
+    }
     GYO_ASSERT(geometry.positions.size() + 4 * chunk.quads.size() <= std::numeric_limits<std::uint32_t>::max() &&
                "AppendVoxelChunk: more vertices than 32-bit indices address");
     const std::int64_t baseX = kChunkUnits * chunk.at.x;

@@ -94,8 +94,8 @@ Object_Connect 用兩個 World 時：遊戲 World 帶 `transform`、`camera`、`
 
 | 列 | 角色 | 做什麼 |
 |---|---|---|
-| `world_render` | 來源側（`default=no`，依賴 `render`） | 登記可畫元件 `Sprite`、`Shape2d`、`RenderLayers`、相機的 `ClearColorConfig` 與 Resource `ClearColor`（沒有才放：不透明黑）。不跑 System（總宣告第 3.3 節命名 `world_<x>`） |
-| `camera_render` | 渲染側（依賴 `render`、`render_world`） | `ExtractCameras`（`Extract` schedule）：重建 `ExtractedCameras`——啟用中、`ComputedCamera` 有效、有 `GlobalTransform` 的相機，照 `order`、再照來源實體排；帶目標、視區與投影、視點、2D／3D 標記、清除色（`ClearColorConfig` 對來源的 `ClearColor`）、`RenderLayers` |
+| `world_render` | 來源側（`default=no`，依賴 `render`） | 登記可畫元件 `Sprite`、`Shape2d`、`RenderLayers`、可見性的元件 `Aabb`、`NoFrustumCulling`、`VisibilityRange` 與相機的推導值 `CulledEntities`（`visibility` 寫、`camera_render` 要抽，所以型別要在來源 World 登記；第 8.6 節）、相機的 `ClearColorConfig` 與 Resource `ClearColor`（沒有才放：不透明黑）。不跑 System（總宣告第 3.3 節命名 `world_<x>`） |
+| `camera_render` | 渲染側（依賴 `render`、`render_world`） | `ExtractCameras`（`Extract` schedule）：重建 `ExtractedCameras`——啟用中、`ComputedCamera` 有效、有 `GlobalTransform` 的相機，照 `order`、再照來源實體排；帶目標、視區與投影、視點、2D／3D 標記、清除色（`ClearColorConfig` 對來源的 `ClearColor`）、`RenderLayers`；相機的 `CulledEntities` 抽進 `ExtractedCamera::culled`（沒有就是空的，第 8.6 節） |
 | `sprite_render` | 渲染側（依賴 `render`、`render_world`、`camera_render`） | `ExtractSprites2d`（`Extract`）：重建 `Extracted2dItems`、經 `RenderImages` 建貼圖；`Queue2dPasses`（`SpriteRenderOptions`，預設 `Main`／`Update`）：每個 2D 相機一個 `Queue2d` 的 pass，接在 `RenderCommands` 後面 |
 
 - **讀相機的 extract 另立一列**（總宣告第 10.1 節「定的時候回頭驗 KeepTool」）：放進 `render_world` 的話，每個帶 `render_world` 的渲染 World 都要求來源登記相機的型別（R-E4）；KeepTool 的渲染 World 只抽 ImGui 的 draw list。驗過：來源只有 `entity_ids`、渲染 World 只有 `render_world` 時建得起來（`render.extract` 的 `[re-keeptool]`）。
@@ -192,6 +192,22 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 | master | CPU（`ModelRenderer.cpp:85,131`），PvP 已經這樣跑 | — |
 
 理由：來源側的介面（`SkinPose`＝每個節點的模型空間矩陣）兩種做法都一樣，上層的遊戲、網路、動畫都不依賴它；換成 GPU 只動 `mesh_render` 與 `sdl_gpu` 的內部（RC-RD 6）。所以先選少的那一個，之後換也不會被上層的程式卡住（建機制時要提防的是「保守的選項被上層蓋住、沒人回頭改」，這一題的上層不碰它）。
+
+### 8.6 可見性（視錐剔除與距離；大地圖線 S2，`v8-arch-gyo2-big-map-s2`）
+
+宣告：[大地圖宣告](big-map-declaration.zh-Hant.md)第 13、14 節。照 Bevy 的 `bevy_camera` visibility（`check_visibility_cpu_culling`、`check_visibility_ranges`）。
+
+- **元件**（`Drawables.hpp`，`world_render` 登記，不進雜湊）：`Aabb`（實體本地座標的盒）、`NoFrustumCulling`、`VisibilityRange`（照 Bevy 的兩段 margin＋`useAabb`；看得到＝距離在 `[startMargin.start, endMargin.end)`；漸變要 shader，現在 margin 裡兩個 LOD 都畫）、相機上的 `CulledEntities`。
+- **`visibility` Module**（來源側，`default=no`，依賴 render、transform、camera）：`CheckVisibility` 在 frame／PostUpdate、`TransformPropagate` 與 `CameraUpdate` 之後，公開 set `CheckVisibility`。對每個啟用中、有效的 3D 相機，把受管（有 `Aabb` 或 `VisibilityRange`）而看不到的實體寫進該相機的 `CulledEntities`（EntityId 升冪；只在內容改變時寫；第一份用延遲指令插入）。盒子經 `GlobalTransform` 的八個角換成世界 AABB，用 `Math::Intersects(Frustum, Aabb)`。
+- **抽取與排隊**：`camera_render` 抽成 `ExtractedCamera::culled`；`Queue3d` 跳過清單裡的實體。`RenderLayers` 照舊。2D 不剔除。
+
+**Design Invariants**
+
+- **VS-1 一處決定**：哪些實體受剔除管、看不看得到，只由 `visibility` 的 `CheckVisibility` 決定；renderer 只問「在不在相機的清單裡」。守衛：審查；突變 `vs-queue-filter-off`、`vs-camera-list-not-extracted`。
+- **VS-2 選用**：沒帶 `visibility` 的 World，相機沒有清單，什麼都不剔除；沒有 `Aabb` 也沒有 `VisibilityRange` 的實體永遠畫。守衛：「without the visibility Module…」案、`[vs-frustum]` 的無盒實體。
+- **VS-3 只在變了才寫**：`CulledEntities` 內容不變就不寫，`Changed` 只在變了才亮。守衛：`[vs-write-changes]`、突變 `vs-write-every-frame`。
+
+**Replacement Criteria**：RC-VS1（要剔除很多不知道盒子的網格 → 照 Bevy 的 `calculate_bounds` 自動算）、RC-VS2（玩法要讀「這一幀有沒有被看到」→ `ViewVisibility`）、RC-VS3（量到被剔除的項目在抽取的成本超過預算，例如 CPU 蒙皮 → 把剔除移到抽取前）。另見大地圖宣告第 14 節 S-4（clip-from-world 收成一處）。
 
 ### 8.5 比過的
 
