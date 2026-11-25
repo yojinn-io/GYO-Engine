@@ -27,10 +27,13 @@ std::unique_ptr<O::Product> BuildMatchWithSaves(std::shared_ptr<N::Link> link, s
     net.seed = 7;
     net.admission = PW::SeatAdmission(seats);
     description.options.Set(net);
-    description.worlds.push_back(PW::WithMatchSaves(Stepped(PW::MatchWorld({ShippedContent(), 0, 0, seats})), saves));
+    ReadShippedMaps(description);
+    description.worlds.push_back(PW::WithMatchSaves(Stepped(PW::MatchWorld({.content = ShippedContent(), .arena = 0, .seats = seats})), saves));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-    return std::move(built).value();
+    auto product = std::move(built).value();
+    Generate(*product);
+    return product;
 }
 
 std::string Answer(const std::string& body) {

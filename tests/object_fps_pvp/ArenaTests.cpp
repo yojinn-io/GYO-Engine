@@ -126,7 +126,7 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and map") {
     const auto arena = sim::ParseArena(ReadFile(kMaps + "pvp_arena.json"), error);
     REQUIRE(arena.has_value());
     CHECK(arena->id == "pvp_training_v1");
-    CHECK(arena->map == "pvp_arena");
+    CHECK(arena->map == "object_fps_pvp.map.pvp_arena");
     CHECK(arena->width == 20.0F);
     CHECK(arena->movementSpeed == 3.0F);
     CHECK(arena->jumpHeight == 0.6F);  // not in the file: the default
@@ -147,7 +147,7 @@ TEST_CASE("PvP arena: the rules of an arena file") {
     CHECK_FALSE(sim::ParseArena(arena(R"("eye_height": 2, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("body_height": 0.4, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("movement_speed": -1, )" + twoSpawns), error).has_value());
-    CHECK_FALSE(sim::ParseArena(R"({"version": 3, "id": "a", "width": 10, "depth": 10, "map": "../a", )" + twoSpawns + "}", error)
+    CHECK_FALSE(sim::ParseArena(R"({"version": 3, "id": "a", "width": 10, "depth": 10, "map": "", )" + twoSpawns + "}", error)
                     .has_value());
     // Version 2 named a v1 single file; it is gone, even when the rest would read as version 3.
     CHECK_FALSE(sim::ParseArena(R"({"version": 2, "id": "a", "width": 10, "depth": 10, "map": "a", )" + twoSpawns + "}", error)

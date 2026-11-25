@@ -467,3 +467,48 @@ v8-arch-gyo2-big-map
 ### 15.5 不做
 
 串流、LOD 代理、GPU 量測（量之前先問）、場景標記的轉換（`.gox` 的場景圖層照舊排除）、Seats 的上限。
+
+### 15.6 S4-C：建 World 時才讀地圖（`v8-arch-gyo2-big-map-s4c`）
+
+2026-11-26。使用者：「大地圖卡接著做 S4-C 和 S6」（主會話轉達）。Opus／high（上段：資料契約、Match 判定）。15.3 的選圖接點由流程框架卡做好（#346～#353）；名字與欄位動工前已通知流程框架卡。
+
+**前提**
+
+| 前提 | 誰定的 | 掛在它上面的決定 |
+|---|---|---|
+| 一個 World 只玩一張圖，換圖就換 World | 15.3（卡片判，`-replace-order-author-choice`） | Client 不在 World 裡跟著 Match 換圖 |
+| 載入放在生成世界階段，沒好就 `Hold()` | world-gen（O-14）；object_connect 的 `LoadGameData` 已用同一形狀 | 遊戲的步在生成結束前不跑 |
+| 讀圖走 asset（索引帶 region 參照，VM-6） | 第 6 節、S1 | 同一個 Product 的 World 共用一次讀取 |
+
+**改成（卡片判）**
+
+1. `GameContent` 只留 arena 檔、規則、角色。`InstalledArena`、`ContentRef`、`PresentationContent::arenaPictures` 拿掉。
+2. arena 檔 v3 的 `map` 是 catalog 裡索引的 id（15.2 第 1 點原本就這樣寫；B 階段暫用目錄名）。
+3. 每個玩這張圖的 World（Match、Client 的 Sim／Solo）在生成期間由 `LoadArena` 讀：
+   - 向 asset 要索引，region 全到後 `CheckVoxelMap`。
+   - 只把碰撞盒複製給 worker 建 `BoxSet`，同時放掉 handle（Match 不留 quads）。
+   - 建好後檢查出生點，放進 `kArenaEntity` 的 `Collider`，寫 `GameRules::wallsDigest`；權威端再寫 `MatchInfo{arenaId, wallsDigest}`。
+   - 完成的那一幀不 `Hold()`，生成在那一幀結束；其他幀都 `Hold()`。
+   - 讀不了（缺 region、sha 不合、出生點在牆裡）：維持生成，`MapLoad{done, total, stage, failure}` 寫原因。Match 的 main 記錄後結束；Client 帶原因回上一頁。
+4. Client 的 Frame World 用同一個 asset（store 只讀一次），在生成期間把 faces 交給 worker 做每個 region 的模型，再生成每個 region 一個 `Mesh3d`。loading 畫面等兩邊的 `MapLoad` 都是 Done；region 數計入進度。
+5. 固定步在生成結束前不跑（`WorldTimeOptions::fixedStepConditions = {AfterGenerating()}`），Match 與 Client 條件相同。生成期間來的連線，`SeatPlayers` 先不讀（未讀的紀錄不會被裁掉），牆好了才入座。
+6. Match 玩的圖和自己的不同：記 `ContentMismatch{reason, matchArena}`，不在 World 裡換。Client 有那張圖（`--connect` 直連時才會發生）就以那張重建遊戲；沒有就離開。
+7. worker 由產品給（`WorldOptions::jobs`、`ClientOptions::jobs`，產品的 `WorkerPool`）；沒給時在 System 內同步建。
+
+**照誰**
+
+- 背景建、每幀取結果：Bevy `examples/async_tasks/async_compute.rs:66`（`AsyncComputeTaskPool` 上 spawn）、`:128`（`check_ready` 每幀取）。Godot `WorkerThreadPool::add_task`／`is_task_completed`（`core/object/worker_thread_pool.h:246`、`:249`）同型。不偏離。
+- 生成期間讀＋`Hold()`：gyo2 world-gen，沒有別家對應（Bevy 用 States 自己寫 loading，同樣是作者的系統等資產）。
+
+**判定（合併前）**
+
+- 15.4 的 L2：region 沒到齊、牆沒建好都維持生成；建好的那一幀結束；進度不倒退；生成期間步數為 0。
+- 15.4 的 L3：缺 region、sha 不合、出生點在牆裡 → `MapLoad` 為 Failed 並帶原因，World 維持生成，不 assert。
+- 15.4 的 L4：Match 與 Client 各自讀圖，`wallsDigest` 相同；Match 牆建好後不再持有地圖。
+- 生成期間連進來的 Client：牆好之前沒有玩家，之後入座。
+- Client：Match 玩另一張已安裝的圖時，以那張重建遊戲並畫出那張圖。
+- 新加與改到的突變全部 killed；L1 三平台。
+
+**不做**
+
+串流、km² 量測（S5，要先問）、Gateway 與房間的流程（不變）。

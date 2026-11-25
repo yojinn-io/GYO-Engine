@@ -4,9 +4,11 @@
 #include "engine/model/ModelData.hpp"
 #include "engine/voxel_map/VoxelMap.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +29,13 @@ struct ArenaMap final {
 // message and path) or a region cannot be read (readRegion's error).
 using RegionReader = std::function<std::optional<std::string>(const std::string& file, std::string& error)>;
 [[nodiscard]] std::optional<ArenaMap> ReadArenaMap(std::string_view indexText, const RegionReader& readRegion, std::string& error);
+
+// One part of a map read elsewhere (an asset store's index and regions, in index order), copied for a job that outlives
+// the reading: Walls keeps the collision boxes only, Faces the quads only (a Match never holds faces, a picture never
+// holds boxes). Chunks left with nothing are dropped.
+enum class MapPart : std::uint8_t { Walls, Faces };
+[[nodiscard]] ArenaMap CopyMapPart(const GYO::Engine::VoxelMap::VoxelMapDocument& index,
+                                   std::span<const GYO::Engine::VoxelMap::VoxelRegionDocument* const> regions, MapPart part);
 
 // The collision boxes of the whole map in world coordinates: every chunk's, in index order, then chunk order.
 [[nodiscard]] std::vector<GYO::Engine::Math::Aabb> MapColliders(const ArenaMap& map);

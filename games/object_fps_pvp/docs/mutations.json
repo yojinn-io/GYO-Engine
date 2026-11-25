@@ -1298,17 +1298,17 @@
    "expect": "pvp-exchange-accumulates"
   },
   {
-   "id": "pvp-frame-arena-kept",
-   "what": "the Frame World keeps the arena it started with when the Sim World follows the Match's",
+   "id": "pvp-arena-not-again",
+   "what": "a Match that plays another arena this Client has: the Client leaves instead of building the game again on it",
    "guards": [
-    "live-frame-sim-thread declaration 4.3; design review S2"
+    "big-map declaration 15.3, 15.6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "            rules->arena = arena->content;\n            rules->wallsDigest = arena->wallsDigest;\n",
+   "find": "            request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = sim->mismatchArena};\n            return {};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the Frame World follows*",
-   "expect": "pvp-frame-arena"
+   "cases": "client: a game whose Match plays another arena*",
+   "expect": "pvp-arena-again"
   },
   {
    "id": "pvp-stale-ignored",
@@ -2059,8 +2059,8 @@
     "game-flow-declaration 3.4 (the room's map)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": ".arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options)}",
-   "replace": ".arena = options.arena, .localUser = LocalUserOf(scene, options)}",
+   "find": ".arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options),\n",
+   "replace": ".arena = options.arena, .localUser = LocalUserOf(scene, options),\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-map-sim"
@@ -2222,19 +2222,6 @@
    "expect": "pvp-pause-shown"
   },
   {
-   "id": "pvp-loading-rewarm-skipped",
-   "what": "an arena shown after the warm-up is not warmed up again",
-   "guards": [
-    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
-   ],
-   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    const bool otherArena = next.assets && next.arena != scene->shownArena;\n",
-   "replace": "    const bool otherArena = false;\n",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: an arena changed after the warm-up*",
-   "expect": "pvp-loading-rewarm"
-  },
-  {
    "id": "pvp-pause-focus-ignored",
    "what": "losing the focus before the pointer was taken does not pause",
    "guards": [
@@ -2311,6 +2298,97 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-survival"
+  },
+  {
+   "id": "pvp-map-not-held",
+   "what": "the World ends its generation before every region of its map is read",
+   "guards": [
+    "big-map declaration 15.4 L2, 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (!reading.complete) return hold();\n",
+   "replace": "        if (!reading.complete) return {};\n",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World generates until*",
+   "expect": "pvp-map-held"
+  },
+  {
+   "id": "pvp-walls-not-held",
+   "what": "the World ends its generation while its walls are still being built",
+   "guards": [
+    "big-map declaration 15.4 L2, 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (!built) return hold();\n",
+   "replace": "    if (!built) return {};\n",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World generates until*",
+   "expect": "pvp-walls-held"
+  },
+  {
+   "id": "pvp-steps-before-walls",
+   "what": "the fixed steps run while the World generates (before its walls)",
+   "guards": [
+    "big-map declaration 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    time.fixedStepConditions.push_back(O::AfterGenerating());\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World generates until*",
+   "expect": "pvp-steps-wait"
+  },
+  {
+   "id": "pvp-map-failure-silent",
+   "what": "a map that does not read is not said to have failed",
+   "guards": [
+    "big-map declaration 15.4 L3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        now.stage = MapStage::Failed;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a map with a region missing*",
+   "expect": "pvp-map-failure"
+  },
+  {
+   "id": "pvp-spawn-in-wall-unchecked",
+   "what": "a spawn inside the map's walls is not refused",
+   "guards": [
+    "big-map declaration 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (inside) return \"spawn \"",
+   "replace": "        if (false) return \"spawn \"",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: an arena whose spawn is inside*",
+   "expect": "pvp-spawn-in-wall"
+  },
+  {
+   "id": "pvp-seat-before-walls",
+   "what": "a connection that comes while the Match generates is seated before its walls",
+   "guards": [
+    "big-map declaration 15.6"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (generation->Generating()) return {};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client that connects while the Match generates*",
+   "expect": "pvp-seat-waits"
+  },
+  {
+   "id": "pvp-map-held-after-walls",
+   "what": "the Match keeps its map's handle after its walls are built",
+   "guards": [
+    "big-map declaration 15.2 point 2 (the Match keeps no quads)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        arena.handle = {};\n        arena.walls = ",
+   "replace": "        arena.walls = ",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match keeps none of its map*",
+   "expect": "pvp-map-released"
   }
  ]
 }

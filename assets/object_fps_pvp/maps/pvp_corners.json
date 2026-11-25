@@ -8,7 +8,7 @@
   "body_height": 1.8,
   "radius": 0.25,
   "eye_height": 1.6,
-  "map": "pvp_corners",
+  "map": "object_fps_pvp.map.pvp_corners",
   "spawns": [
     {"position": [3, 0, 3], "yaw": 0.785398163},
     {"position": [17, 0, 17], "yaw": -2.35619449},

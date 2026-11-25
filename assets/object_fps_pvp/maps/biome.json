@@ -8,7 +8,7 @@
   "body_height": 1.8,
   "radius": 0.25,
   "eye_height": 1.6,
-  "map": "biome",
+  "map": "object_fps_pvp.map.biome",
   "spawns": [
     {"position": [10.25, 1, 10.25], "yaw": 0.785398163},
     {"position": [52.75, 0.5, 10.25], "yaw": -0.785398163},

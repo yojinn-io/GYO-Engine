@@ -13,6 +13,7 @@
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
 #include "engine/world_time/Sampling.hpp"
+#include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <chrono>
@@ -31,6 +32,34 @@ namespace PW = object_fps_pvp::world;
 
 // One fixed step of 1/64 s a frame, whatever the clock.
 inline constexpr std::int64_t kStep = 15'625'000;
+
+// The asset store's jobs run at once, on the thread that submits them: a World generates in the same number of frames
+// every run (the store's results still reach a World at its apply point).
+class InlineJobs final : public GYO::Engine::Asset::AssetExecutor {
+public:
+    void Submit(Job job) override { job(); }
+};
+
+inline GYO::Engine::Asset::AssetExecutor& TestJobs() {
+    static InlineJobs jobs;
+    return jobs;
+}
+
+// A Product that reads the shipped content's maps (the asset store on the content root, the game's loaders).
+inline void ReadShippedMaps(O::ProductDescription& description) {
+    GYO::Engine::WorldAsset::AssetOptions assets;
+    assets.contentRoot = PVP_CONTENT_ROOT;
+    assets.executor = &TestJobs();
+    description.options.Set(assets);
+    description.configure = [](O::ProductSetup& setup) { PW::ConfigureGame(setup); };
+}
+
+// Runs the Product's frames until its World has generated (the map read, the walls built): a few frames.
+inline void Generate(O::Product& product, const std::string_view world = "Game") {
+    for (int frame = 0; frame < 64 && product.Generating(world); ++frame) REQUIRE(static_cast<bool>(product.RunFrame()));
+    const PW::MapLoad* load = product.World(world).GetWorld().Resource<PW::MapLoad>();
+    REQUIRE_MESSAGE(!product.Generating(world), (load != nullptr ? load->failure : std::string("no MapLoad")));
+}
 
 inline std::shared_ptr<const PW::GameContent> ShippedContent() {
     static const std::shared_ptr<const PW::GameContent> content = [] {
@@ -102,12 +131,15 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
     net.seed = 7;
     net.admission = PW::SeatAdmission(seats);
     description.options.Set(net);
+    ReadShippedMaps(description);
     description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .seats = seats,
                                                          .expectUsers = std::move(expectUsers),
                                                          .startDeadlineSeconds = startDeadlineSeconds})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-    return std::move(built).value();
+    auto product = std::move(built).value();
+    Generate(*product);
+    return product;
 }
 
 inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
@@ -120,7 +152,8 @@ inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameCon
     net.link = std::move(link);
     net.clock = std::move(clock);
     description.options.Set(net);
-    O::WorldDescription world = Stepped(PW::ClientWorld({std::move(content), arena, userId, nullptr}));
+    ReadShippedMaps(description);
+    O::WorldDescription world = Stepped(PW::ClientWorld({.content = std::move(content), .arena = arena, .localUser = userId}));
     // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
     world.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(target);
@@ -129,7 +162,9 @@ inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameCon
     description.worlds.push_back(std::move(world));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-    return std::move(built).value();
+    auto product = std::move(built).value();
+    Generate(*product);
+    return product;
 }
 
 inline K::World& GameWorld(O::Product& product) { return product.World("Game").GetWorld(); }
