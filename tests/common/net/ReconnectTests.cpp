@@ -30,8 +30,8 @@ TEST_CASE("reconnect: G-9 a new client World after a disconnect gets the server'
     server.net.seed = 17;
     End client = GameEnd(N::NetRole::Client, GameRules{400, true});
     client.net.link = std::make_shared<N::MemoryLink>(links.second);
-    client.net.serverEndpoint = N::MemoryLink::EndpointA();
-    client.net.userId = 44;
+    client.target.server = N::MemoryLink::EndpointA();
+    client.target.userId = 44;
     client.net.clock = reader;
     auto s = O::Product::Build(Describe(server), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(s), Reported(s));

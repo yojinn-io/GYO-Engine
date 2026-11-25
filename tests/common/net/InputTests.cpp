@@ -97,8 +97,8 @@ struct InputGame {
         server.net.seed = 13;
         server.build = [decision](O::WorldSetup& s) { RegisterInputGame(s, decision); };
         client.net.link = std::make_shared<N::MemoryLink>(links.second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = 3;
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = 3;
         client.net.clock = reader;
         client.build = [decision](O::WorldSetup& s) { RegisterInputGame(s, decision); };
         if (decision) {

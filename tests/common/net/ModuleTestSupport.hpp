@@ -113,6 +113,8 @@ inline const Seen& SeenIn(K::World& world) { return *world.Resource<Seen>(); }
 // One end: a Product with one World "Net" in the given role.
 struct End {
     N::NetProductOptions net;
+    // A client World's connection (D-8): put by the World's prepare function when it names a server.
+    N::NetConnectTarget target;
     std::optional<N::NetWorldOptions> role;
     E::EntityIdsOptions range;
     std::shared_ptr<A::AuthorityStrategy> authority;
@@ -133,6 +135,12 @@ inline O::ProductDescription Describe(const End& end) {
     if (end.authority) {
         w.options.Set(A::AuthorityOptions{end.authority});
         w.dynamicInsert = false;
+    }
+    if (!std::holds_alternative<std::monostate>(end.target.server)) {
+        w.prepare.push_back([target = end.target](K::World& world) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            world.SetResource(target);
+            return {};
+        });
     }
     // The reader of the net messages joins a World with a role.
     w.build = [build = end.build, reads = end.role.has_value()](O::WorldSetup& s) {

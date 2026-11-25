@@ -42,11 +42,20 @@ HandshakeFacts Facts(const NetWorldLink& link, const WorldTime::FixedTime& fixed
 // its Peer entity (spawned with PeerConnected; after the server's World was replaced, the open connections get new
 // ones and an empty ledger), and one that ended is despawned with PeerDisconnected. A Link failure since the last
 // frame is told with NetLinkFailed.
-SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel::Bundle<Peer, PeerLedger>> spawn,
-                        Kernel::Despawn despawn, Kernel::MessageWriter<PeerConnected> connected,
-                        Kernel::MessageWriter<PeerDisconnected> disconnected, Kernel::MessageWriter<NetLinkFailed> failed) {
+SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Res<NetConnectTarget> target,
+                        Kernel::Spawn<Kernel::Bundle<Peer, PeerLedger>> spawn, Kernel::Despawn despawn,
+                        Kernel::MessageWriter<PeerConnected> connected, Kernel::MessageWriter<PeerDisconnected> disconnected,
+                        Kernel::MessageWriter<NetLinkFailed> failed) {
     NetWorldLink& world = *link;
     NetService& service = *world.service;
+    if (world.targetPending) {
+        // A client World's first frame (D-8): its connection. The same live one goes on (and asks for a resync when
+        // it was made for an earlier World, R2); another, or none, ends it.
+        world.targetPending = false;
+        service.SetTarget(target.Present() ? &*target : nullptr, service.Now(), world.clientEpoch);
+        const ClientSession* client = service.Client();
+        world.resyncPending = client != nullptr && client->Request().epoch != world.clientEpoch;
+    }
     service.Pump(service.Now());
     if (service.LinkFailures() > world.reportedLinkFailures) {
         world.reportedLinkFailures = service.LinkFailures();
@@ -81,7 +90,16 @@ SystemResult ReceiveNet(Kernel::ResMut<NetWorldLink> link, Kernel::Spawn<Kernel:
         return {};
     }
     const ClientSession* client = service.Client();
-    if (client == nullptr) return {};
+    if (client == nullptr) {
+        // The connection was ended for another World (a replacement's beforeSwap ran this World's frame, then the
+        // replacement failed and this World stayed): its Peer goes, as for any end.
+        if (world.clientPeer != 0) {
+            despawn.Entity(world.clientPeer);
+            disconnected.Send(PeerDisconnected{world.clientPeer, 0, DisconnectReason::Closed, "the connection was ended for another World"});
+            world.clientPeer = 0;
+        }
+        return {};
+    }
     const ClientState state = client->State();
     if ((state == ClientState::Connected || state == ClientState::Interrupted) && world.clientPeer == 0) {
         auto peer = spawn.New(Peer{client->Accepted()->connectionId, client->Request().userId, {}}, PeerLedger{});
@@ -152,19 +170,18 @@ void NetModule::Configure(Orchestration::ProductSetup& setup) {
     // The transport's channels are the net Module's own: replication's reliable messages, then its values.
     options.session.transport.channels = {{ChannelKind::OrderedReliable, 1}, {ChannelKind::Unreliable, 0}};
     std::shared_ptr<Link> link = options.link;
-    Endpoint serverEndpoint = options.serverEndpoint;
-    if (!link) {
+    // A server listens from the start; a client's socket opens with its first NetConnectTarget (net-connect-target
+    // 4.5: a Product whose client Worlds never name a server never opens one).
+    if (!link && options.role == NetRole::Server) {
         auto opened = UdpLink::Open(options.bind);
         if (!opened) {
             setup.Report("NT-E4", "the net Module could not open its UDP socket: " + Base::Describe(opened.error()));
             return;
         }
         link = std::make_shared<UdpLink>(std::move(*opened));
-        serverEndpoint = UdpLink::ToEndpoint(options.server);
     }
     const std::uint64_t seed = options.seed.value_or(RandomSeed());
-    setup.Buffer().Create<NetService>(std::move(options), std::move(link), serverEndpoint, seed,
-                                      seed ^ 0xA0761D6478BD642Full);
+    setup.Buffer().Create<NetService>(std::move(options), std::move(link), seed, seed ^ 0xA0761D6478BD642Full);
 }
 
 void NetModule::Build(Orchestration::WorldSetup& setup) {
@@ -184,6 +201,8 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     r.Message<PeerConnected>({.name = "PeerConnected"});
     r.Message<PeerDisconnected>({.name = "PeerDisconnected"});
     r.Message<NetLinkFailed>({.name = "NetLinkFailed"});
+    // A client World's connection (D-8): put by the product's prepare function or a replacement's extra.
+    r.Resource<NetConnectTarget>({.name = "NetConnectTarget"});
     r.AddSystem<&ReceiveNet>(Detail::MountedAt("ReceiveNet", Orchestration::DefaultSchedules::first));
     Kernel::SystemOptions send = Detail::MountedAt("SendNet", Orchestration::DefaultSchedules::last);
     if (role->idRange) {
@@ -290,11 +309,13 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
             const auto* fixed = world.Resource<WorldTime::FixedTime>();
             const auto* allotter = world.Resource<EntityIds::RangeAllotter>();
             const IdRange range = allotter != nullptr ? IdRange{allotter->first, allotter->last} : IdRange{};
-            if (fixed != nullptr) service->SetFacts(Facts(link, *fixed, range), service->Now(), true);
-            if (worldRole == NetRole::Client) {
-                const ClientSession* client = service->Client();
-                auto* state = world.ResourceMut<NetReplicaState>();
-                state->resyncNeeded = client != nullptr && client->Request().epoch != state->epoch;
+            if (worldRole == NetRole::Server) {
+                if (fixed != nullptr) service->SetFacts(Facts(link, *fixed, range), service->Now(), true);
+            } else {
+                // Whom it connects to is the World's NetConnectTarget, which the product's prepare functions and a
+                // replacement's extra put after this one: read at the World's first frame (ReceiveNet).
+                link.targetPending = true;
+                link.clientEpoch = world.Resource<NetReplicaState>()->epoch;
             }
         }
         world.SetResource(std::move(link));

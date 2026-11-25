@@ -38,7 +38,7 @@ struct ClockGame {
         };
         End c = GameEnd(N::NetRole::Client, GameRules{1, false});
         c.net.link = std::make_shared<N::MemoryLink>(links.second);
-        c.net.serverEndpoint = N::MemoryLink::EndpointA();
+        c.target.server = N::MemoryLink::EndpointA();
         c.net.clock = reader;
         auto built = O::Product::Build(Describe(s), Units(true));
         REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));

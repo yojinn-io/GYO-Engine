@@ -155,8 +155,8 @@ struct Visible {
             client.build = &RegisterVisible;
             client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
             client.net.link = std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second);
-            client.net.serverEndpoint = N::MemoryLink::EndpointA();
-            client.net.userId = static_cast<std::uint64_t>(i + 1);
+            client.target.server = N::MemoryLink::EndpointA();
+            client.target.userId = static_cast<std::uint64_t>(i + 1);
             client.net.clock = reader;
             auto built = O::Product::Build(Describe(client), Units(true));
             REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
