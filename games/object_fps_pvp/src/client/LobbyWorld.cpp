@@ -34,18 +34,14 @@ K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::Res<Lobb
                              K::Query<K::Write<Ui::UiBindings>> bindings) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action == "pvp.quit") {
-            request->next = SceneChange{Scene::Menu, {}, std::nullopt, {}};
+            request->next = SceneChange{.scene = Scene::Menu};
         } else if (action->action == "pvp.submit_address") {
             const auto* text = std::get_if<std::string>(&action->payload);
             const std::string typed = text != nullptr ? *text : std::string();
             auto root = bindings.GetMut<Ui::UiBindings>(action->root);
             if (const auto server = ParseMatchAddress(typed)) {
-                SceneChange next{Scene::MultiGame, {}, N::NetConnectTarget{*server, user->userId, {}}, typed};
-                request->next = std::move(next);
-                if (root) {
-                    root->Set("address", typed);
-                    root->Set("status", std::string("接続しています…"));
-                }
+                // The scene ends with this frame: nothing more is written into it.
+                request->next = SceneChange{.scene = Scene::MultiGame, .connect = N::NetConnectTarget{*server, user->userId, {}}, .address = typed};
             } else if (root) {
                 // The text stays in the field (written back: a binding change drops the text being edited, UI-4).
                 root->Set("address", typed);

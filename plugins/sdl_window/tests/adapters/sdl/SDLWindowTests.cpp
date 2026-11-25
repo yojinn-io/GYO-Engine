@@ -891,18 +891,21 @@ namespace {
 
 // The Sim World's builds and the thread its last round ran on.
 std::atomic<int> simBuilds{0};
-std::atomic<int> simRoundsAfterReplace{0};
 std::atomic<bool> simOffMain{true};
 std::thread::id mainThread;
-int replaceAt = 0;  // the main frame whose end asks for a replacement (0: never)
 K::SystemResult SimRoundWhere() {
     simRounds.fetch_add(1);
     if (std::this_thread::get_id() == mainThread) simOffMain = false;
     return {};
 }
+// The tenth main frame asks to close; it waits first (at most a second) for a round of the Sim World there is now, so
+// a lent World has run before the runner stops it.
 K::SystemResult CloseAtTen(K::ResMut<W::WindowRequest> request) {
     ++mainFrames;
-    if (mainFrames == 10) request->close = true;
+    if (mainFrames == 10) {
+        for (int i = 0; i < 500 && simRounds.load() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        request->close = true;
+    }
     return {};
 }
 
@@ -938,7 +941,6 @@ std::unique_ptr<O::Product> WithBetweenFrames(S::SDLWindowBetweenFrames between)
 void ResetBetweenFrames() {
     simRounds = 0;
     simBuilds = 0;
-    simRoundsAfterReplace = 0;
     simOffMain = true;
     mainFrames = 0;
     mainThread = std::this_thread::get_id();
@@ -970,7 +972,6 @@ TEST_CASE("sdl_window: betweenFrames: a lent World is taken back, replaced, and 
     std::optional<std::string> refused;
     auto p = WithBetweenFrames({[](O::Product&) { return mainFrames == 3; },
                                 [&refused](O::Product& product) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-                                    simRoundsAfterReplace = 0;
                                     auto replaced = product.ReplaceWorld("Sim", {});
                                     if (!replaced) {
                                         refused = std::string(O::ToString(replaced.error().code));

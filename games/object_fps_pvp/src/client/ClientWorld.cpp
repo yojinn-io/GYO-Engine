@@ -875,8 +875,8 @@ std::string EndText(const N::PeerDisconnected& end) {
     }
 }
 
-// The connection's end, as the program and the lobby show it: the window closes (the program goes back to the
-// lobby with the reason).
+// The connection's end, as the program and the lobby show it (the Frame World's LeaveOnEnd goes back to the lobby with
+// the reason).
 K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session) {
     for (const N::PeerDisconnected* end : ends.Read()) {
         session->ended = true;
@@ -905,7 +905,7 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K:
     } else {
         return {};
     }
-    request->next = SceneChange{Scene::Lobby, std::move(reason), std::nullopt, origin->address};
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};
     return {};
 }
 
@@ -1089,7 +1089,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
 }
 
-void BuildFrame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change) {
+void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change) {
     K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
@@ -1460,7 +1460,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
         case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
-        case Scene::MultiGame: BuildFrame(setup, options, scene); break;
+        case Scene::MultiGame: BuildGame(setup, options, scene); break;
         }
     };
     return world;

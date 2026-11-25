@@ -18,6 +18,21 @@ Owner：產品（Object_FPS_PVP）＋`sdl_window` 的 runner。GYO2 主會話開
 - 本機（Intel Mac）`ctest -L "cpu|gpu"`：第一次 255/256（`naming.guard`：標頭裡前向宣告了別的命名空間的 `Product`，N1），改成 include 之後相關 9 項全過。
 - 突變：`sw-between-*` 4/4、`pvp-lobby-*`／`pvp-scene-*`／`pvp-menu-*`／`pvp-session-end-ignored` 10/10 killed。
 
+## 設計審查（Opus／high，作者同模型，審查者只拿成果物與原始要求）
+
+blocker 0、should 7、nit 10。
+
+- S1（`ClientExchange::Reset` 沒有守住）→ 新案「離開遊戲關掉連線；再進遊戲重新連上，看不到上一場的畫面」：Sim 借出（模擬自己的執行緒）時新 Frame World 的第一幀看不到上一場的自己；突變 `pvp-scene-exchange-not-reset`。
+- S2（沒有端到端的「換了才連」「離開就關」）→ 同一案：回大廳後 `NetService::Client()` 是空的、Match 拿掉玩家；再進遊戲重新玩到。
+- S3（內容不符也回大廳）→ 留著：#330 的程式在內容不符時也是關窗後回大廳（`client_main.cpp` 舊的迴圈），不是新行為；PR 寫明。
+- S4（和宣告的偏離）→ 宣告修訂 1 寫進去（`run` 的錯誤型別、連線目標經 `SceneDirector`、第 1 段三個槽）。
+- S5（掛鉤放 `sdl_window`，headless Client 要不要另一份 runner）→ 第 3 段的網路測試照 client 測試的寫法自己在兩幀之間呼叫 `ChangeScene`，不另寫 runner；真的需要另一個 runner 時再提。
+- S6（新 sdl_window 案的時序）→ 第十幀先等新的 Sim 跑過一輪（最多一秒）才關。
+- S7（`client_main` 的接線沒守住）→ 不補：client 函式庫不連 `sdl_window`，接線兩行由實機試玩守；PR 寫明。
+- N1（director 是空的時候安靜）→ 改成斷言；註解寫明失敗時 director 已是新場景。N2 → 呼叫處改成 designated initializer（variant 不改：場景少、欄位各自可選）。N4 → 死變數、看不到的寫入、舊註解、port 宣告的突變說明。N5 → `BuildFrame` 改名 `BuildGame`（`LobbyWorld` 第 3 段整個換掉時一起改）。N8 → 改用 tag `[pvp-lobby-wrong-stays]`。N10 → `[pvp-notes-carried]` 與突變 `pvp-scene-notes-not-carried`。
+- 不改：N3（`FrameNotes` 混三件事：給程式結束後讀的一份，分開沒有讀的人）、N6（固定 id 表：第 3 段場景變多時集中）、N7（`wanted` 拿可寫的 `Product&`：`Product::World` 沒有 const 版）、N9（大廳不記得上次的位址：第 3 段換掉）。
+- 審查後：client 13/13、sdl_window 30/30；突變 `sw-between-*` 2/2、`pvp-*` 7/7 killed（find 改了的三個重跑）。
+
 ## 沒驗
 
 - 真的視窗裡換場景（視窗不關、畫面不閃）：交使用者試玩。

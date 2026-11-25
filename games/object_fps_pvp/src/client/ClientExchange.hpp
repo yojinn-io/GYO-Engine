@@ -1,6 +1,6 @@
 #pragma once
 
-// What the Sim World (or the Solo World) and the Frame World hand each other: one object of the Product
+// What the Sim World and the Frame World hand each other: one object of the Product
 // (ConfigureClient makes it), shared by every scene.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"

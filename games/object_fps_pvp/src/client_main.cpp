@@ -292,6 +292,8 @@ int main(int argc, char** argv) {
 
     PC::ClientStart start;
     start.frames = frames;
-    if (connect) start.first = PC::SceneChange{PC::Scene::MultiGame, {}, N::NetConnectTarget{*connect, userId, {}}, connect->ToString()};
+    if (connect) {
+        start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}, .address = connect->ToString()};
+    }
     return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
 }
