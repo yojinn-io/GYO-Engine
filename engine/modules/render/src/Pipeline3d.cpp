@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <memory>
 #include <utility>
+#include <variant>
 
 #include "engine/math/linear/Vec4.hpp"
 #include "engine/render/Compose.hpp"
+#include "engine/world_asset/AssetView.hpp"
 
 namespace GYO::Engine::Render {
 
@@ -16,6 +19,20 @@ std::vector<Vertex3D> MeshVertices(const Model::Mesh& mesh) {
         out[i].position = mesh.positions[i];
         if (i < mesh.normals.size()) out[i].normal = mesh.normals[i];
         if (i < mesh.uvs.size()) out[i].uv = mesh.uvs[i];
+    }
+    return out;
+}
+
+ResolvedModel ResolveModel(const ModelRef& model, const WorldAsset::AssetView* view) {
+    ResolvedModel out;
+    if (const auto* handle = std::get_if<Asset::Handle<Model::ModelData>>(&model)) {
+        out.key.asset = handle->Id().Text();
+        out.key.life = Asset::Detail::HandleAccess::Life(*handle);
+        if (view != nullptr && !out.key.asset.empty()) out.data = view->Get(*handle);
+    } else {
+        out.holder = std::get<std::shared_ptr<const Model::ModelData>>(model);
+        out.data = out.holder.get();
+        out.key.held = out.data;
     }
     return out;
 }

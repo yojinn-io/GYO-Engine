@@ -61,11 +61,12 @@ struct Seen {
     std::vector<R::Color8> clears;
     std::vector<R::Pass2D> passes;
     std::vector<R::TextureOp> asks;
+    std::vector<R::MeshOp> meshAsks;
 };
 std::vector<Seen> seen;
 std::vector<std::string> trail;
 
-K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures) {
+K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
     Seen s;
     s.all = commands->passes;
     for (const R::RenderPass& pass : commands->passes) {
@@ -78,6 +79,7 @@ K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextu
         }
     }
     s.asks.assign(textures->Pending().begin(), textures->Pending().end());
+    s.meshAsks.assign(meshes->Pending().begin(), meshes->Pending().end());
     seen.push_back(std::move(s));
     return {};
 }
@@ -477,6 +479,13 @@ std::shared_ptr<const GYO::Engine::Model::ModelData> HeldTriangle(const float si
     return std::make_shared<const GYO::Engine::Model::ModelData>(std::move(model));
 }
 
+// How many of this frame's mesh asks (what the backend is told at Submit) are of each kind: 0 MeshCreate, 1 MeshRelease.
+std::size_t MeshAsks(const std::size_t kind) {
+    std::size_t n = 0;
+    for (const R::MeshOp& op : seen.back().meshAsks) n += op.index() == kind ? 1 : 0;
+    return n;
+}
+
 std::size_t Draws3d() {
     std::size_t draws = 0;
     for (const R::RenderPass& pass : seen.back().all) {
@@ -515,9 +524,11 @@ TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without
     Frames(*p);
     CHECK_MESSAGE(Draws3d() == 1, "[mh-held-replaced] the new model is drawn");
     CHECK_MESSAGE((kept() == 1 && live() == 1), "[mh-held-let-go] the old model's GPU mesh is let go after the frame");
+    CHECK_MESSAGE((MeshAsks(0) == 1 && MeshAsks(1) == 1), "[mh-held-released] the backend is told: the new mesh made, the old one released");
 
     // No Mesh3d draws it any more: its mesh goes too.
     game.Remove<R::Mesh3d>(2);
     Frames(*p);
     CHECK_MESSAGE((kept() == 0 && live() == 0), "[mh-held-let-go] a held model no Mesh3d draws is let go");
+    CHECK_MESSAGE(MeshAsks(1) == 1, "[mh-held-released] the backend is told its mesh is released");
 }

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -62,6 +63,17 @@ struct ModelMeshKey final {
     friend auto operator<=>(const ModelMeshKey&, const ModelMeshKey&) = default;
 };
 
+// A model as this frame draws it: its key (the mesh index still 0), its data (null: an asset not loaded yet, or no
+// source asset view), and for a model the author holds, the holder that keeps it alive (as ResolveImage).
+struct ResolvedModel final {
+    ModelMeshKey key;
+    const Model::ModelData* data = nullptr;
+    std::shared_ptr<const Model::ModelData> holder;
+};
+// view: the source World's AssetView (read through ExtractRes), or null when the source has none (an asset then does
+// not resolve; a held model does).
+[[nodiscard]] ResolvedModel ResolveModel(const ModelRef& model, const WorldAsset::AssetView* view);
+
 // render's Resource in the render World (mesh_render): the retained meshes made from model meshes, made the first
 // time one is drawn (Bevy's RenderAssets<RenderMesh>). As RenderImages: a new life of an asset lets the old life's
 // meshes go, and an asset's stay while the render World lives; a held model's go after a frame in which no Mesh3d drew
@@ -73,7 +85,8 @@ public:
     // nullopt (nothing to draw).
     std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const Model::ModelData> holder,
                               RenderMeshes& meshes, std::uint32_t& indexCount);
-    // After every pipeline's extract of the frame: the meshes of held models no Mesh3d drew this frame are released.
+    // At the end of the frame's extract (ExtractMeshes3d, the one user): the meshes of held models no Mesh3d drew this
+    // frame are released (their release goes with this frame's asks).
     void EndFrame(RenderMeshes& meshes);
     [[nodiscard]] std::size_t Count() const noexcept { return entries_.size(); }
 

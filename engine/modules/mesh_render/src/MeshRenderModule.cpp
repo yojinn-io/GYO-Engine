@@ -56,20 +56,10 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
         const Transform::GlobalTransform* g = globals.Get(id);
         if (g == nullptr) return;
         // The model: an asset loaded in the source's view, or one the author holds (ModelRef).
-        const Model::ModelData* model = nullptr;
-        Render::ModelMeshKey key;
-        std::shared_ptr<const Model::ModelData> holder;
-        if (const auto* handle = std::get_if<Asset::Handle<Model::ModelData>>(&m.model)) {
-            if (view == nullptr) return;
-            model = view->Get(*handle);
-            key.asset = handle->Id().Text();
-            key.life = Asset::Detail::HandleAccess::Life(*handle);
-        } else {
-            holder = std::get<std::shared_ptr<const Model::ModelData>>(m.model);
-            model = holder.get();
-            key.held = model;
-        }
+        Render::ResolvedModel resolved = Render::ResolveModel(m.model, view);
+        const Model::ModelData* model = resolved.data;
         if (model == nullptr || m.mesh >= model->meshes.size()) return;
+        Render::ModelMeshKey key = resolved.key;
         key.mesh = m.mesh;
         const Model::Mesh& mesh = model->meshes[m.mesh];
         Math::Vec2 size{};
@@ -96,13 +86,15 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             if (item.vertices.empty() || item.indices.empty()) return;
         } else {
             const std::optional<Render::MeshId> retained =
-                modelMeshes.Get().Use(key, mesh, std::move(holder), renderMeshes.Get(), item.indexCount);
+                modelMeshes.Get().Use(key, mesh, std::move(resolved.holder), renderMeshes.Get(), item.indexCount);
             if (!retained) return;
             item.mesh = *retained;
         }
         items.push_back(std::move(item));
     });
     out.Get().items = std::move(items);
+    // Every Mesh3d of the frame has been met: held models none of them drew let their meshes go.
+    modelMeshes.Get().EndFrame(renderMeshes.Get());
     return {};
 }
 
@@ -113,13 +105,6 @@ SystemResult Queue3dPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel
         std::optional<Render::Pass3D> pass = Render::Queue3d(cameras->cameras[i], items->items);
         if (pass) slots.byCamera[i].push_back(std::move(*pass));
     }
-    return {};
-}
-
-// After ClearRenderFrame cleared this frame's mesh asks: the meshes of held models no Mesh3d drew this frame go with
-// the next frame's asks (as RenderImages::EndFrame for held images).
-SystemResult EndModelMeshesFrame(Kernel::ResMut<Render::RenderModelMeshes> modelMeshes, Kernel::ResMut<Render::RenderMeshes> renderMeshes) {
-    modelMeshes.Get().EndFrame(renderMeshes.Get());
     return {};
 }
 
@@ -152,16 +137,6 @@ void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     queue.mounts.push_back(std::move(queueMount));
     r.AddSystem<&Queue3dPasses>(std::move(queue));
 
-    Kernel::SystemOptions end;
-    end.name = "EndModelMeshesFrame";
-    Kernel::Mount endMount;
-    // render_world's stage, in render_world's schedule (its options when given).
-    const RenderWorld::RenderWorldOptions* renderWorld = setup.Options<RenderWorld::RenderWorldOptions>();
-    endMount.schedule = renderWorld != nullptr ? renderWorld->schedule : RenderWorld::RenderWorldOptions{}.schedule;
-    endMount.stage = std::string(RenderWorld::kCleanupStage);
-    endMount.after.push_back("ClearRenderFrame");
-    end.mounts.push_back(std::move(endMount));
-    r.AddSystem<&EndModelMeshesFrame>(std::move(end));
 
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted3dItems>(world);

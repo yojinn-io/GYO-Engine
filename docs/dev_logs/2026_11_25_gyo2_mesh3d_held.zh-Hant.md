@@ -20,3 +20,13 @@ Engine 要解決：`Mesh3d` 只吃 `Handle<ModelData>`，gyo2 的 asset 沒有�
 - 沒驗：
   - `test` preset 沒在本機建置（PvP 的 `mesh.model = handle` 靠 variant 的隱式轉換，交給 L1）。
   - GPU 上的實際畫面。
+
+## 設計審查與修正（同日）
+
+- 審查者 Opus／high（唯讀），報告在主 checkout 的 `build/evidence/gyo2-mesh3d-held/design-review.md`：B 0、S 3、N 6。審查確認：位址當鍵是安全的，因為 entry 還在時 holder 握著物件，同一個位址不會被別的 `ModelData` 拿走。
+- S-1：`EndFrame` 改在 `ExtractMeshes3d` 的結尾呼叫，`RenderModelMeshes` 只有這一個使用者。刪掉 `EndModelMeshesFrame`，連同它讀 `RenderWorldOptions`、用字串指名 `ClearRenderFrame` 的耦合一起拿掉。
+- S-2：新增 `Render::ResolveModel`，鍵與 holder 由同一處產生，同 `ResolveImage`。
+- S-3：測試記錄每一幀送給後端的 mesh asks，驗證換模型那一幀是「建一個、放一個」，拿掉 `Mesh3d` 那一幀是「放一個」（`[mh-held-released]`）。
+- N-1：和 Bevy 的差別寫進 RD-9。N-2：render 頁第 8.3 節「實體對應」。N-3／N-4：`MeshRenderModule.hpp` 的說明。N-5、N-6：照 `ImageKey` 的先例，不改。
+- 突變：退役 `mh-end-frame-unmounted`（那個 System 已拿掉），新增 `mh-end-frame-skipped`。`mh-held-needs-view` 改指 `ResolveModel`。
+- 重跑（修正後，只跑相關的）：`p3-mesh-old-life-kept`、`p3-mesh-twice`、`re-held-not-ended`、`mh-held-never-let-go`、`mh-held-needs-view`、`mh-end-frame-skipped` 6/6 killed，件數一致。`gyo_render_tests` 42/42。

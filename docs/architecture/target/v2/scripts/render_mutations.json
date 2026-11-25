@@ -1722,30 +1722,30 @@
    "expect": "\\[mh\\-held\\-let\\-go\\]"
   },
   {
-   "id": "mh-end-frame-unmounted",
-   "what": "mesh_render does not mount EndModelMeshesFrame, so held models' meshes are never let go",
-   "guards": [
-    "render RD-9"
-   ],
-   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
-   "find": "    r.AddSystem<&EndModelMeshesFrame>(std::move(end));",
-   "replace": "",
-   "target": "gyo_render_tests",
-   "cases": "render_extract: a Mesh3d of a model the author holds*",
-   "expect": "\\[mh\\-held\\-let\\-go\\]"
-  },
-  {
    "id": "mh-held-needs-view",
-   "what": "a held model is skipped when the source has no asset view, or treated as an asset",
+   "what": "ResolveModel gives a held model an asset key (no held address)",
    "guards": [
     "render RD-9"
    ],
-   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
-   "find": "            key.held = model;",
-   "replace": "            key.held = nullptr;",
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        out.key.held = out.data;",
+   "replace": "        out.key.held = nullptr;",
    "target": "gyo_render_tests",
    "cases": "render_extract: a Mesh3d of a model the author holds*",
    "expect": "\\[mh\\-held\\-(?:kept|let\\-go|replaced)\\]"
+  },
+  {
+   "id": "mh-end-frame-skipped",
+   "what": "ExtractMeshes3d does not end the frame of the held models, so their meshes are never let go",
+   "guards": [
+    "render RD-9"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "    modelMeshes.Get().EndFrame(renderMeshes.Get());",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a Mesh3d of a model the author holds*",
+   "expect": "\\[mh\\-held\\-(?:let\\-go|released)\\]"
   }
  ]
 }
