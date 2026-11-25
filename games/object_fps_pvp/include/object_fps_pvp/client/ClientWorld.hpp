@@ -1,12 +1,27 @@
 #pragma once
 
-// The game's Client: the World of world/PvpWorld.hpp as a client (K3: it predicts its own player), and around it
-// what a player sees, hears and does, all of it only at the Client (none of it writes decision data):
+// The game's Client in three Worlds (live-frame-sim-thread declaration 4.3):
 //
+//   "Sim"    the World of world/PvpWorld.hpp as a client (K3: it predicts its own player) and the net Module; the
+//            program lends it to its own thread (SDLWindowOptions::ownThreadWorlds), so a window held by the OS
+//            (dragged, resized) does not stop the steps nor the packets.
+//   "Frame"  what a player sees, hears and does (none of it writes decision data): the window, the input, the
+//            cameras, the HUD, the characters, the sounds. It shows the Sim World's players as copies by their ids.
+//   "Render" extracts from "Frame".
+//
+// Sim and Frame hand each other two things through one object of the Product (ClientExchange, each half behind its
+// own lock): the Sim World's "out" puts the newest picture (its players, the arena, ClientView); the Frame World's
+// "in" applies it. The Frame World's "out" adds the controls (the held keys and the view: the newest; the presses
+// add up); the Sim World's "in" takes them. Neither waits for the other.
+//
+// Sim:
+//   Main/PreUpdate   PrepareOwnInput the own Peer's PeerInput buffer
+//   FixedUpdate/First WriteStepInput the controls -> the own Peer's PeerInput slot of the step that runs now, before
+//                                   the net Module's ApplyInput (not while resimulating); a press goes to one step
+//   Main/Update      NoteSessionEnd  the connection ended: why (ClientView::ended)
+// Frame:
 //   Main/PreUpdate   ReadControls   keys and mouse -> the controls (pointer taken or given back: window's cursor
 //                                   grab; the view; the held keys; the presses)
-//   FixedUpdate/First WriteStepInput the input of the step that runs now -> the own Peer's PeerInput slot of this
-//                                   step, before the net Module's ApplyInput (not while resimulating)
 //   Main/Update      ShowArena      the arena's model (render's Mesh3d of the baked voxel file as a model asset)
 //                    ShowHud        the 2D layer: crosshair, HP, ammo, what the player should do; a hit's feedback
 //                                   (present/HitFeedback): the red flash, the arc toward the attacker, the HP in red
@@ -15,10 +30,10 @@
 //                    MoveBodies     a stand-in body for every other living player follows it (or goes)
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
+//                    CloseOnEnd     the connection ended: the window closes
 //
-// The pictures are drawn by a second World, "Render", that extracts from this one (render_world, camera_render,
-// sprite_render, mesh_render and sdl_gpu). Entities this World makes outside the step carry the rollback Module's
-// KeepThroughRollback: a rollback must not take the camera or the pictures away.
+// The pictures are drawn by "Render" (render_world, camera_render, sprite_render, mesh_render and sdl_gpu). The
+// Frame World has no rollback: what it makes stays until it takes it away.
 
 #include "object_fps_pvp/present/HitFeedback.hpp"
 #include "object_fps_pvp/present/SoundCues.hpp"
@@ -89,10 +104,29 @@ struct ClientOptions final {
 // sounds), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
 void ConfigureClient(O::ProductSetup& setup);
 
-// The two Worlds: "Game" (the client World with the Client's Systems; units listed: the Modules it needs and
-// sdl_window) and "Render" (extracts from it; with sdl_gpu when gpu is true, false for a test without a device).
-[[nodiscard]] O::WorldDescription ClientGameWorld(ClientOptions options, bool window = true);
+// The Frame World's own entities (the stand-in bodies): outside the Match's and the Sim World's ranges, whose
+// players it copies by their ids.
+inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3'000'000};
+
+// The three Worlds: "Sim" (the client World and the Client's input), "Frame" (units listed: the Modules it needs
+// and sdl_window when window is true) and "Render" (extracts from "Frame"; with sdl_gpu when gpu is true, false for
+// a test without a device). Sim and Frame need ConfigureClient (their ClientExchange).
+[[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
+[[nodiscard]] O::WorldDescription ClientFrameWorld(ClientOptions options, bool window = true);
 [[nodiscard]] O::WorldDescription ClientRenderWorld(bool gpu = true);
+
+// What the Frame World knows of the Sim World, as of the last picture it applied (a Resource of the Frame World).
+struct ClientView final {
+    std::uint64_t tick = 0;                         // the Sim World's step
+    std::uint64_t stepNanoseconds = 0;              // its length
+    std::optional<std::uint64_t> latestConfirmed;   // the newest step the Match confirmed (NetReplicaState)
+    bool connected = false;                         // the own Peer is there
+    GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
+    std::string mismatch;                           // world::ContentMismatch
+    bool ended = false;                             // the connection ended (refused, timed out, closed by the Match)
+    std::string endReason;                          // why, in the player's words
+};
+void HashValue(GYO::Kernel::Hasher&, const ClientView&);
 
 // What the Client shows, for its program and its tests.
 struct ClientStatus final {
@@ -103,6 +137,7 @@ struct ClientStatus final {
     bool ended = false;    // the connection ended (refused, timed out, closed by the Match)
     std::string endReason; // why, in the player's words
 };
+// Of the Frame World.
 [[nodiscard]] ClientStatus StatusOf(GYO::Kernel::World& world);
 
 } // namespace object_fps_pvp::client

@@ -1,7 +1,7 @@
 // The Client: first the lobby (its own Product: a window with the game's gyo.ui document, no net) where the player
-// gives the Match's address; then the Client's Product (the game's client World "Game" with sdl_window, the World
-// that draws it "Render" with sdl_gpu, sdl_audio for the sound) connected to that address, run by sdl_window's runner
-// until its window closes. When the connection ends (refused, timed out, closed by the Match) the lobby comes back
+// gives the Match's address; then the Client's Product (the game's client World "Sim" on its own thread, "Frame" with
+// sdl_window, the World that draws it "Render" with sdl_gpu, sdl_audio for the sound) connected to that address, run
+// by sdl_window's runner until its window closes. When the connection ends (refused, timed out, closed by the Match) the lobby comes back
 // with the reason; closing a window, or the lobby's Quit, ends the program.
 //
 //   gyo_object_fps_pvp                         the lobby first
@@ -73,25 +73,19 @@ K::SystemResult WatchProgram(K::ExclusiveWorld<> world) {
     ProgramState next = **state;
     bool close = false;
     if (next.framesLeft > 0 && --next.framesLeft == 0) close = true;
-    auto mismatch = world.Read<PW::ContentMismatch>([](const PW::ContentMismatch& m) { return m.reason; });
-    if (mismatch && mismatch->has_value() && !(*mismatch)->empty() && next.shown.mismatch.empty()) {
-        Log(GYO::Engine::Base::LogLevel::Error, "the Match's content differs from this Client's: " + **mismatch);
-        next.shown.mismatch = **mismatch;
+    // What the Sim World's last picture said (the Frame World's ClientView).
+    auto view = world.Read<PC::ClientView>([](const PC::ClientView& v) { return v; });
+    const PC::ClientView sim = view && view->has_value() ? **view : PC::ClientView{};
+    if (!sim.mismatch.empty() && next.shown.mismatch.empty()) {
+        Log(GYO::Engine::Base::LogLevel::Error, "the Match's content differs from this Client's: " + sim.mismatch);
+        next.shown.mismatch = sim.mismatch;
         close = true;
     }
-    auto link = world.Read<N::NetWorldLink>([](const N::NetWorldLink& l) { return l.clientPeer; });
-    const bool connected = link && link->has_value() && **link != 0;
+    const bool connected = sim.connected;
     if (connected != next.shown.connected && next.verbose) Log(GYO::Engine::Base::LogLevel::Info, connected ? "connected" : "not connected");
     next.shown.connected = connected;
     // The own player is there once the Match's player with this Client's user id has reached it.
-    auto user = world.Read<PW::LocalUser>([](const PW::LocalUser& u) { return u.userId; });
-    bool playing = false;
-    if (user && user->has_value()) {
-        for (const K::EntityId id : world.Entities()) {
-            auto owner = world.Read<PW::Owner>(id, [](const PW::Owner& o) { return o.userId; });
-            if (owner && owner->has_value() && **owner == **user) playing = true;
-        }
-    }
+    const bool playing = sim.ownPlayer != 0;
     if (playing != next.shown.playing && next.verbose) Log(GYO::Engine::Base::LogLevel::Info, playing ? "playing" : "not playing");
     next.shown.playing = playing;
     auto set = world.SetResource(std::move(next));
@@ -166,7 +160,9 @@ int CheckDrawing(O::Product& product, const std::int64_t frames, const O::Runner
 }
 
 // The common Product settings: the window, sdl_window's frame interval, the asset store.
-void SetCommonOptions(O::ProductDescription& description, const std::string& contentRoot, WA::WorkerPoolExecutor& executor) {
+// ownThread: the Worlds sdl_window's runner lends to threads of their own.
+void SetCommonOptions(O::ProductDescription& description, const std::string& contentRoot, WA::WorkerPoolExecutor& executor,
+                      std::vector<std::string> ownThread = {}) {
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
     window.size = {1280, 720};
@@ -174,6 +170,7 @@ void SetCommonOptions(O::ProductDescription& description, const std::string& con
     description.options.Set(window);
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
     sdl.minFrameInterval = std::chrono::milliseconds(4);
+    sdl.ownThreadWorlds = std::move(ownThread);
     description.options.Set(sdl);
     WA::AssetOptions assets;
     assets.contentRoot = contentRoot;
@@ -247,14 +244,15 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
     net.role = N::NetRole::Client;
     description.options.Set(net);
     PC::ClientOptions options{game, presentation, 0, userId};
-    O::WorldDescription gameWorld = PC::ClientGameWorld(options);
+    O::WorldDescription simWorld = PC::ClientSimWorld(options);
     // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function; the
     // lobby has none, so it connects to nothing).
-    gameWorld.prepare.push_back([target = N::NetConnectTarget{server, userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+    simWorld.prepare.push_back([target = N::NetConnectTarget{server, userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(target);
         return {};
     });
-    gameWorld.build = [inner = std::move(gameWorld.build), frames, verbose](O::WorldSetup& setup) {
+    O::WorldDescription frameWorld = PC::ClientFrameWorld(options);
+    frameWorld.build = [inner = std::move(frameWorld.build), frames, verbose](O::WorldSetup& setup) {
         inner(setup);
         setup.Registrar().Resource<ProgramState>({.name = "ProgramState"});
         K::SystemOptions watch;
@@ -269,10 +267,13 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
             return {};
         });
     };
-    description.worlds.push_back(std::move(gameWorld));
+    description.worlds.push_back(std::move(simWorld));
+    description.worlds.push_back(std::move(frameWorld));
     description.worlds.push_back(PC::ClientRenderWorld());
     description.configure = [](O::ProductSetup& setup) { PC::ConfigureClient(setup); };
-    SetCommonOptions(description, contentRoot, executor);
+    // The Sim World on its own thread (live-frame-sim-thread declaration 4.3): while the OS holds the window (a
+    // drag, a resize) the steps and the packets go on, so the Match does not see this Client go quiet.
+    SetCommonOptions(description, contentRoot, executor, {"Sim"});
 
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     if (!built) {
@@ -290,8 +291,8 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
     if (gpu != nullptr && verbose) Log(GYO::Engine::Base::LogLevel::Info, "drawing on the " + gpu->DriverName() + " GPU driver");
     if (verbose) Log(GYO::Engine::Base::LogLevel::Info, "connecting to " + server.ToString() + " as user " + std::to_string(userId));
     const O::RunnerExit exit = product->Run();
-    K::World& world = product->World("Game").GetWorld();
-    const PC::ClientStatus status = PC::StatusOf(world);
+    const PC::ClientStatus status = PC::StatusOf(product->World("Frame").GetWorld());
+    K::World& world = product->World("Sim").GetWorld();
     // The window closed: tell the Match now (the disconnect packets, sent at once), so it takes the player off
     // without waiting for the timeout (lightyear's netcode client sends its disconnect packets the same way).
     if (auto* service = product->Buffer().Find<N::NetService>()) {
