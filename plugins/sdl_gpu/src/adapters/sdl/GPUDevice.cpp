@@ -268,15 +268,15 @@ struct GPUDevice::State {
         buffers[1].slot = Abi::kMesh3DInstanceSlot;
         buffers[1].pitch = Abi::kMesh3DInstanceStride;
         buffers[1].input_rate = SDL_GPU_VERTEXINPUTRATE_INSTANCE;
-        constexpr std::uint32_t kAttributes = 3 + Abi::kMesh3DWorldRows;
+        constexpr std::uint32_t kAttributes = 3 + Abi::kMesh3DWorldColumns;
         SDL_GPUVertexAttribute attributes[kAttributes]{};
         attributes[0] = {Abi::kMesh3DPositionLocation, Abi::kMesh3DVertexSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, Abi::kMesh3DPositionOffset};
         attributes[1] = {Abi::kMesh3DUvLocation, Abi::kMesh3DVertexSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, Abi::kMesh3DUvOffset};
-        for (std::uint32_t row = 0; row < Abi::kMesh3DWorldRows; ++row) {
-            attributes[2 + row] = {Abi::kMesh3DWorldLocation + row, Abi::kMesh3DInstanceSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
-                                   Abi::kMesh3DWorldOffset + row * 4 * static_cast<std::uint32_t>(sizeof(float))};
+        for (std::uint32_t column = 0; column < Abi::kMesh3DWorldColumns; ++column) {
+            attributes[2 + column] = {Abi::kMesh3DWorldLocation + column, Abi::kMesh3DInstanceSlot, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                                   Abi::kMesh3DWorldOffset + column * 4 * static_cast<std::uint32_t>(sizeof(float))};
         }
-        attributes[2 + Abi::kMesh3DWorldRows] = {Abi::kMesh3DColorLocation, Abi::kMesh3DInstanceSlot,
+        attributes[2 + Abi::kMesh3DWorldColumns] = {Abi::kMesh3DColorLocation, Abi::kMesh3DInstanceSlot,
                                                  SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kMesh3DColorOffset};
         SDL_GPUGraphicsPipelineCreateInfo info{};
         info.vertex_shader = meshVertex;
@@ -755,13 +755,21 @@ struct GPUDevice::State {
         // One view for the whole pass: each instance's world is applied in the vertex shader.
         const Abi::Mesh3DViewUniform view = Abi::ToUniform(pass.clipFromWorld);
         SDL_PushGPUVertexUniformData(cmd, Abi::kMesh3DViewUniformSlot, &view, sizeof(view));
+        // The pass's instances, bound once at the pass's first: a draw names its range by first_instance (as Bevy's
+        // draw_indexed(.., batch_range), bevy_pbr/src/render/mesh.rs:4734-4738); instance-rate inputs start there on
+        // every backend (Vulkan firstInstance, D3D12 StartInstanceLocation, Metal baseInstance). Only an instance id
+        // read in a shader would not (SDL_gpu.h, SDL_DrawGPUIndexedPrimitives); this one reads none.
+        if (instanced) {
+            const SDL_GPUBufferBinding instanceBinding{instances, instanceBase};
+            SDL_BindGPUVertexBuffers(render, Abi::kMesh3DInstanceSlot, &instanceBinding, 1);
+        }
         SDL_GPUGraphicsPipeline* boundPipeline = nullptr;
         SDL_GPUBuffer* boundVertices = nullptr;
         SDL_GPUTextureSamplerBinding boundTexture{};
         for (const R::Draw3D& draw : pass.draws) {
-            if (draw.indexCount == 0 || draw.instanceCount == 0 || !drawable || !instanced) continue;
             GYO_ASSERT(draw.instanceOffset <= pass.instances.size() && draw.instanceCount <= pass.instances.size() - draw.instanceOffset &&
                        "a draw's instances outside its pass");
+            if (draw.indexCount == 0 || draw.instanceCount == 0 || !drawable || !instanced) continue;
             SDL_GPUBufferBinding vb{};
             SDL_GPUBufferBinding ib{};
             if (draw.mesh.value == 0) {
@@ -805,18 +813,13 @@ struct GPUDevice::State {
                 SDL_BindGPUIndexBuffer(render, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
                 boundVertices = vb.buffer;
             }
-            // The draw's instances, bound at its first one: the draw starts at instance 0 of the binding, so no API's
-            // first-instance rule is relied on (SDL_gpu.h, SDL_DrawGPUIndexedPrimitives).
-            const SDL_GPUBufferBinding instanceBinding{
-                instances, instanceBase + draw.instanceOffset * static_cast<std::uint32_t>(sizeof(R::Instance3D))};
-            SDL_BindGPUVertexBuffers(render, Abi::kMesh3DInstanceSlot, &instanceBinding, 1);
             const SDL_GPUTextureSamplerBinding binding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
             if (binding.texture != boundTexture.texture || binding.sampler != boundTexture.sampler) {
                 SDL_BindGPUFragmentSamplers(render, Abi::kMesh3DTextureSlot, &binding, 1);
                 boundTexture = binding;
             }
             const auto firstVertex = static_cast<std::int32_t>(draw.vertexOffset);
-            SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);
+            SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);
         }
         SDL_EndGPURenderPass(render);
     }

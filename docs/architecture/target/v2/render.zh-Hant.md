@@ -176,7 +176,7 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 - **深度**：預設每個 `Pass3D` 的深度從清空開始、顏色不清（相機的清除是它前面的那個 pass）。等於 Bevy 每個相機有自己的深度：viewmodel 相機在世界相機之後畫、自己的深度，就是盤點表 PV7 的「清深度」。作者可以讓一個 3D 相機**接著用**前面的相機留下的深度：相機實體放 `Camera3dDepth{clear = false}`（Bevy 的 `Camera3dDepthLoadOp::Load`，`bevy_camera/src/components.rs:60-72`；`Pass3D::clearDepth`）——這一幀沒有 pass 寫過的深度是未定的，同 Bevy。
 - **半透明不寫深度**（照 Bevy：`AlphaMode::Blend` 不寫深度，`bevy_pbr/src/render/mesh.rs:3531-3547`）：`Mesh3d::depthWrite` 沒給時，不透明寫、半透明不寫，交錯的半透明網格不會互相擋住；作者要時明給 `true`。
 - **shader**：無光照（unlit）——貼圖×`color`，同 master（盤點表 R2a 列「unlit 的 shader」）。顏色照 bytes（同 2D pass；RC-RD 3 不觸發，因為不打光）。HLSL 在 `render/shaders/mesh3d.*.hlsl`，ABI 在 `ShaderAbi.hpp`（RD-4）。
-- **先後**（RD-8）：不透明、測深度的近到遠（被近的擋住的像素少算；**偏離 Bevy**：Bevy 的 `Opaque3d` 是 binned phase，照 pipeline、材質、網格分組，不照距離，`bevy_core_pipeline/src/core_3d/mod.rs:172-188`、`:275`——照距離排的代價是 pipeline 與貼圖可能來回切換，沒有量；PvP 的 draw 數少），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
+- **先後**（RD-8）：不透明、測深度的照**各自最近的實例**排、近到遠（同鍵的併成一個 draw，第 8.7 節的 IN-2）（被近的擋住的像素少算；**偏離 Bevy**：Bevy 的 `Opaque3d` 是 binned phase，照 pipeline、材質、網格分組，不照距離，`bevy_core_pipeline/src/core_3d/mod.rs:172-188`、`:275`——照距離排的代價是 pipeline 與貼圖可能來回切換，沒有量；PvP 的 draw 數少），半透明、測深度的遠到近（Bevy 的 `Transparent3d`），不測深度的（世界疊層：方向指示、命中標記）最後、遠到近；距離＝物件原點在視空間的 z。
 - **`Mesh3d`**（來源側，`world_render` 登記）：模型（`ModelRef`：素材的 `Handle`，或作者持有的 `shared_ptr<const ModelData>`——執行期產生的幾何，例如大地圖的 region；照 `ImageRef` 的先例，Bevy 是 `Assets<Mesh>::add`，gyo2 的 asset 沒有執行期加入，`v8-arch-gyo2-mesh3d-held`）、網格索引、`color`、`image`（`ImageRef`，沒給是白）、混合、深度測試／寫入、`CullMode`（`Back`＝螢幕上順時針的不畫，逆時針是正面，同 Bevy 的 `FrontFace::Ccw`；預設 `None`）。模型自己的材質（`Material::baseColor`、貼圖檔名）是資料，作者讀了填進 `color`／`image`——材質系統（Bevy 的 `StandardMaterial`）不在本批。
 - **實體對應**（總宣告第 6.1 節第 8 點，逐種判的 3D 那一種）：網格每幀暫時（`Extracted3dItems`）；保留的是**模型網格**（以素材 id、life、網格索引為鍵，或作者持有的模型以位址、網格索引為鍵的 `RenderModelMeshes`，RD-9）。Bevy 的 `RenderMeshInstances` 以來源實體為鍵、留每實例的 GPU 資料；GYO 的 world 矩陣與顏色是每幀重寫的實例資料（第 8.7 節），沒有跨幀的每實例 GPU 狀態要留，所以不需要對應實體——四個衝突點在 3D 段也不出現（RC-RD 5 寫了什麼時候要改）。
 - **沒有蒙皮的網格**放在它的節點上（`SkinPose` 合模型的節點數就用它，否則 rest pose；`PlaceMesh`），整個模型再由實體的 `GlobalTransform` 放。
@@ -215,18 +215,18 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 宣告：[大地圖宣告](big-map-declaration.zh-Hant.md)第 16 節。照 Bevy 的自動合批（`bevy_render/src/batching/`）。作者那一側不加元件：同一個模型網格、同一張圖、同樣的混合／深度／cull 的 `Mesh3d` 自動成為一個 draw 的實例。
 
 - **資料**：`Instance3D{world, color}`（68 bytes）；`Pass3D::instances`；每個 `Draw3D` 畫 `[instanceOffset, instanceOffset + instanceCount)` 的實例，畫一個東西＝一個實例。
-- **ABI**：頂點 slot 0 每頂點、slot 1 每實例（location 2～5＝world 的四列、6＝顏色）；vertex uniform 是 pass 的 `clipFromWorld`；沒有 fragment uniform。
+- **ABI**：頂點 slot 0 每頂點、slot 1 每實例（location 2～5＝world，`Matrix4` 照存放順序的四欄；6＝顏色）；vertex uniform 是 pass 的 `clipFromWorld`；沒有 fragment uniform。
 - **`Queue3d`**：鍵＝`MeshId`、`TextureId`、混合、深度測試、深度寫入、cull。
   - 不透明的同鍵進一個 bin，bin 在最近成員的位置，bin 內近到遠。
   - 半透明與不測深度的只併相鄰同鍵的。
   - 自己帶頂點的（CPU 蒙皮）不併。
-- **`sdl_gpu`**：實例每幀上傳到一個 instance buffer；每個 draw 把 slot 1 綁在它的第一個實例，`first_instance` 恆 0（`SDL_gpu.h` 的註：各 API 的實例編號不一致）。
+- **`sdl_gpu`**：實例每幀上傳到一個 instance buffer；slot 1 每個 pass 綁一次，每個 draw 用 `first_instance`＝`instanceOffset` 指出範圍（同 Bevy 的 `draw_indexed(.., batch_range)`；instance-rate 輸入在 Vulkan、D3D12、Metal 都照它開始，只有 shader 讀內建的實例編號時才不一致，這裡不讀）。
 
 **Design Invariants**
 
 - **IN-1 鍵**：只有鍵相同的項目成為同一個 draw 的實例；world 與顏色跟著實例。守衛：`render.pipeline3d`（`[in-*-apart]`、`[in-one-draw]`、`[in-own-apart]`）、`render.extract`（`[in-scene-*]`）；突變 `in-batch-off`、`in-key-*`、`in-own-joined`。
 - **IN-2 順序**：不透明的 bin 在最近成員的位置、bin 內近到遠；排序過的組只併相鄰的；GPU 照實例順序畫。守衛：`[in-bin-near-first]`、`[in-bins-by-nearest]`、`[in-blend-neighbours-*]`、`[g3-instances-order]`；突變 `in-blend-binned`、`in-bin-far-first`。
-- **IN-3 實例的位置**：每個 draw 從它自己的第一個實例開始，下一個 pass 從前一個 pass 的實例之後開始。守衛：`sdl_gpu.pass3d`（`[g3-instances-*]`、`[g3-pass-depth-cleared]`）；突變 `in-g3-*`、`in-instance-world-lost`、`in-instance-colour-lost`。
+- **IN-3 實例的位置**：每個 draw 從它自己的第一個實例開始（`first_instance`），下一個 pass 從前一個 pass 的實例之後開始。守衛：`sdl_gpu.pass3d`（`[g3-instances-*]`、`[g3-pass-depth-cleared]`）；突變 `in-g3-*`、`in-instance-world-lost`、`in-instance-colour-lost`。
 
 **Replacement Criteria**：RC-IN1（自訂 shader 要每實體的 uniform → `NoAutomaticBatching`）、RC-IN2（draw 數或實例上傳成為主要成本 → 保留式實例或 GPU 剔除＋indirect）、RC-IN3（每實例一個實體的成本超過預算 → 一個實體多個實例的元件，Godot `MultiMesh` 的形狀）。
 
@@ -255,7 +255,7 @@ PvP 的 Client：遊戲 World 有世界相機（`Camera3d`、`order 0`）、view
 - **RD-6 抽出的 2D 資料每幀重建，留著的只有以圖為鍵的貼圖**（R2b，第 7.3 節）：`ExtractedCameras`、`Extracted2dItems` 每次 extract 整個換掉；`RenderImages` 以素材（id＋life）或作者持有的圖為鍵，同一張圖只建一次；作者持有的圖沒人用就放掉，素材的留著。守衛：`render.extract`（`[re-gone]`、`[re-dynamic]`、`[re-texture-once]`、`[re-held-released]`、`[re-asset-*]`：真的 PNG 經 world_asset，載好的那一幀就畫）、`render.pipeline2d`（`[p2-image-*]`）。
 - **RD-7 相機的先後、清除與 2D 的先後**（R2b，第 7.4 節）：一個目標第一個相機清整個目標，之後的相機只清自己的視區；相機照 `order`、再照來源實體；一個相機只畫 `RenderLayers` 有交集的物件，照位置的 z 從小到大、同 z 照來源實體；近平面之前、遠平面之後的不畫；相鄰同貼圖同混合才合批。守衛：`render.pipeline2d`（`[p2-z-*]`、`[p2-layers]`、`[p2-near-far]`、`[p2-batch*]`、`[p2-map-*]`、`[p2-viewport]`、`[p2-clear-*]`）、`render.extract`（`[re-camera-order]`、`[re-hud]`、`[re-split-*]`）、`sdl_gpu.pass2d`（`[gp-pipe-*]`，Lavapipe 上的像素）。
 
-- **RD-8 3D 的先後**（R2b 的 3D 段，第 8.3 節）：一個 3D 相機一個 `Pass3D`，深度從清空開始、顏色不清；先畫不透明、測深度的（近到遠），再畫半透明、測深度的（遠到近），最後畫不測深度的（遠到近）；同距離照來源實體；只畫 `RenderLayers` 有交集的。守衛：`render.pipeline3d`（`[p3-*]`）、`sdl_gpu.pass3d`（`[g3-*]`，Lavapipe 上的像素）。
+- **RD-8 3D 的先後**（R2b 的 3D 段，第 8.3 節）：一個 3D 相機一個 `Pass3D`，深度從清空開始、顏色不清；先畫不透明、測深度的（照各自最近的實例近到遠，見 IN-2），再畫半透明、測深度的（遠到近），最後畫不測深度的（遠到近）；同距離照來源實體；只畫 `RenderLayers` 有交集的。守衛：`render.pipeline3d`（`[p3-*]`）、`sdl_gpu.pass3d`（`[g3-*]`，Lavapipe 上的像素）。
 - **RD-9 模型網格以模型網格為鍵保留**（第 8.3 節）：沒有蒙皮的模型網格第一次畫時建成 `RenderMeshes` 的網格、以（素材 id、life、網格索引）為鍵；同一個素材的新 life 放掉舊的；作者持有的模型（`ModelRef` 的 `shared_ptr`）以（位址、網格索引）為鍵，保留期間握著它，在沒有任何 `Mesh3d` 畫它的那一幀放掉（`ExtractMeshes3d` 的結尾呼叫 `EndFrame`，release 跟著那一幀的 asks 送給後端；鍵與 holder 由 `ResolveModel` 一處產生，同 `ResolveImage`）。和 Bevy 的差別：Bevy 在最後一個 Handle 丟掉時才放 GPU 網格，就地修改 `Assets<Mesh>` 會觸發重傳；這裡是一幀沒畫就放，也不察覺就地修改——作者要換幾何就給新的 `ModelData`（持有的要當作不可變）；蒙皮的網格每幀在 CPU 算、放在 pass 自己的頂點。守衛：`render.pipeline3d`（`[p3-mesh-*]`、`[p3-skin-*]`、`[p3-place-*]`）、`render.extract`（`[re-3d-*]`）。
 
 - **RD-10 呈現方式是渲染 World 的資料、`Cleanup` 不清**（第 2 節末）：`render_world` 登記 `Presentation`、新 World 放預設（帶過去的值留著，O-7）；遊戲改的值留到它再改；後端讀它、不寫它，變了才套用。守衛：`render.world`（`[rw-present-registered]`、`[rw-present-default]`、`[rw-present-kept]`）、`sdl_gpu.frames`（`[gp-present-*]`：含 `[gp-present-only-on-change]`、`[gp-present-new-world]`）；突變 `rw-present-not-put`、`gp-present-every-frame`。

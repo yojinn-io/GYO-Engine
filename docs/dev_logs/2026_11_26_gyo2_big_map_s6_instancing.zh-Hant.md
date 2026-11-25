@@ -25,7 +25,7 @@ Owner：大地圖線（GYO2 主會話轉達）。分支 `claude/gyo2-big-map-s6-
    - CPU 蒙皮的不併。
 4. **`sdl_gpu`**（`GPUDevice.cpp`）：
    - 每幀的實例上傳到 instance buffer。
-   - 每個 draw 把 slot 1 綁在它的第一個實例，`first_instance` 恆 0（`SDL_gpu.h:3502-3525`）。
+   - slot 1 每個 pass 綁一次，每個 draw 用 `first_instance`＝`instanceOffset` 指出範圍（設計審查後的形狀；第一版見下面「設計審查與修正」）。
    - pipeline 多一個 instance-rate 的頂點緩衝。
 5. **文件**：宣告第 16 節、render 頁（8.3 的資料、8.5 的偏離說明、8.7、範囲の限界）。
 
@@ -55,6 +55,31 @@ Owner：大地圖線（GYO2 主會話轉達）。分支 `claude/gyo2-big-map-s6-
   - `tests/common/render/instancing_mutations.json`：15/15 killed（GPU 的 3 個在 Metal 上）。
   - `render_mutations.json` 裡 find 失效而改寫的 7 個（`g3-abi-frag-no-texture`、`-no-colour`、`g3-transform-world-ignored`、`g3-transform-order`、`g3-colour-ignored`、`g3-mesh-index-offset-ignored`、`g3-vertex-offset-ignored`）：7/7 killed（Metal）。其他既有的 3D 突變的 find 都還找得到（腳本逐一確認），沒有重跑。
 - 突變數量：15 個＝新 DI（IN-1～IN-3）3 條 × 5，在上限內。每個都是獨立可錯的判斷，沒加的寫在清單的 description。
+
+## 設計審查與修正（同日）
+
+審查者 Opus／high，只拿 diff 與原始要求：沒有 blocker，Should 3、Nit 6、Note 1。全部照指示處理。
+
+- **S1 `first_instance` 的理由錯了**：
+  - `SDL_gpu.h:3502-3509` 只警告「shader 讀 `SV_InstanceID`」時各 API 不一致。instance-rate 的輸入在三個後端都照 `first_instance` 開始：Vulkan `firstInstance`、D3D12 `StartInstanceLocation`、SDL Metal `baseInstance:firstInstance`（`SDL_gpu_metal.m:2862`）。
+  - 每個 draw 重綁 slot 1，在 SDL Vulkan 上會重綁整組頂點緩衝（`SDL_gpu_vulkan.c:8014-8026`）。
+  - 改成 (a)：slot 1 每個 pass 綁一次，`SDL_DrawGPUIndexedPrimitives` 的 `first_instance` 給 `instanceOffset`（同 Bevy 的 `draw_indexed(.., batch_range)`）。
+  - 先讀 SDL 原始碼確認：`*_BindVertexBuffers` 只改指定的 slot、數量取最大值，綁定到 `EndRenderPass` 才清。所以只綁 slot 0 不會掉 slot 1。
+  - 本機 Metal 的 `sdl_gpu.pass3d` 通過；Vulkan（Lavapipe）、D3D12 看 L1。
+  - 突變 `in-g3-instance-offset-ignored` 移到 draw 呼叫（`first_instance` 給 0）。宣告、render 頁、`GPUDevice.cpp`、`ShaderAbi.hpp` 的說明一起改。
+- **S2**：宣告第 3 節的表與第 4 點改成指向第 16.3 節的偏離表。
+- **S3**：render 頁 RD-8 與 8.3 的不透明改成「照各自最近的實例近到遠，見 IN-2」。
+- **Nit 4**：拿掉 `Queue3d` 裡不會成立的 `last->mesh != MeshId{}`（自己帶頂點的項目鍵裡 mesh 是 0，本來就不會相等）。
+- **Nit 5**：合批改成「每個項目記 batch 編號＋計數＋填入」，不再每個 batch 配一個 vector；`pass.instances` 一次 `resize`、`draws` 先 `reserve`。突變 `in-batch-off`、`in-own-joined`、`in-bin-far-first`、`in-instance-*` 的 find 跟著改。
+- **Nit 6**：宣告寫明 bin 也會重排 `depthWrite = false` 的不透明項目（同 Bevy）。
+- **Nit 7**：實例範圍的 assert 移到跳過條件之前（同 Pass2D）。
+- **Nit 8**：world 的四個 float4 是 `Matrix4` 的**欄**（照存放順序），HLSL 的 `float4x4` 把它們當列；常數改名為 `kMesh3DWorldColumns`。
+- **Nit 9**：`[vs-extract]` 改數實例（`model.bar` 有蒙皮，不會併，原本只是剛好成立）。
+- **Note**：沒有 GPU 測試從 `Mesh3d` 端到端畫到像素。GPU 測試是手組 `Pass3D`；`Mesh3d` → `Pass3D` 由 `render.extract` 在 CPU 側驗。
+- **修正後的驗證**（本機）：
+  - `render.*`、`sdl_gpu.{startup,shaders,present,pass2d,pass3d}` 全部通過。
+  - `ctest -L 'cpu|shader'` 253/254（同上，`cmake.PluginSelection` 是借用依賴的環境問題）。
+  - 突變：instancing 15/15、`render_mutations.json` 的 `g3-mesh-index-offset-ignored`、`g3-vertex-offset-ignored`、`p3-own-offset-lost` 3/3、`visibility_mutations.json` 的 `vs-queue-filter-off`、`vs-camera-list-not-extracted` 2/2，全部 killed。
 
 ## 沒做／沒跑
 

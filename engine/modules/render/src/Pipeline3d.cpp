@@ -183,41 +183,54 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     // Automatic batching (big-map declaration section 16; Bevy's batch_and_prepare_*_render_phase,
     // bevy_render/src/batching/): each batch is one draw, its items the draw's instances. The opaque group is binned by
     // key (Bevy's Opaque3d bins, no_gpu_preprocessing.rs:122-154): a bin is made where its nearest item stands, so the
-    // bins keep the near-to-far order and a pass where nothing shares a key is drawn as before. The blended and the
-    // not depth-tested are sorted phases: only neighbours with the same key join (Bevy's batching/mod.rs:236-243), so the
-    // far-to-near order holds. Items with geometry of their own (skinned on the CPU) never join.
-    std::vector<std::vector<std::size_t>> batches;
+    // bins are drawn by their nearest instance and a pass where nothing shares a key is drawn as before. The blended and
+    // the not depth-tested are sorted phases: only neighbours with the same key join (Bevy's batching/mod.rs:236-243),
+    // so the far-to-near order holds. Items with geometry of their own (skinned on the CPU) never join.
+    // batchOf[k]: the batch of order[k]; firstOf[b]: the item that opened batch b (its draw's state).
+    std::vector<std::size_t> batchOf(order.size());
+    std::vector<std::size_t> firstOf;
     std::map<BatchKey, std::size_t> bins;
-    for (const Entry& e : order) {
+    for (std::size_t k = 0; k < order.size(); ++k) {
+        const Entry& e = order[k];
         const Extracted3dItem& item = items[e.index];
         if (item.mesh == MeshId{}) {
-            batches.push_back({e.index});
+            batchOf[k] = firstOf.size();
+            firstOf.push_back(e.index);
             continue;
         }
         const BatchKey key = KeyOf(item);
         if (e.group == 0) {
-            const auto [bin, made] = bins.try_emplace(key, batches.size());
-            if (made) {
-                batches.push_back({e.index});
-            } else {
-                batches[bin->second].push_back(e.index);
-            }
+            const auto [bin, made] = bins.try_emplace(key, firstOf.size());
+            if (made) firstOf.push_back(e.index);
+            batchOf[k] = bin->second;
             continue;
         }
-        const Extracted3dItem* last = batches.empty() ? nullptr : &items[batches.back().front()];
-        if (last != nullptr && last->mesh != MeshId{} && KeyOf(*last) == key) {
-            batches.back().push_back(e.index);
+        // An item with geometry of its own has mesh 0 in its key, so it never matches an item with a mesh.
+        if (!firstOf.empty() && KeyOf(items[firstOf.back()]) == key) {
+            batchOf[k] = firstOf.size() - 1;
         } else {
-            batches.push_back({e.index});
+            batchOf[k] = firstOf.size();
+            firstOf.push_back(e.index);
         }
     }
 
-    for (const std::vector<std::size_t>& batch : batches) {
-        const Extracted3dItem& item = items[batch.front()];
+    // Each batch's instances in one range, in the order of its items (near to far in a bin): a count, then a fill.
+    std::vector<std::uint32_t> offsetOf(firstOf.size() + 1, 0);
+    for (const std::size_t b : batchOf) ++offsetOf[b + 1];
+    for (std::size_t b = 0; b < firstOf.size(); ++b) offsetOf[b + 1] += offsetOf[b];
+    std::vector<std::uint32_t> cursor(offsetOf.begin(), offsetOf.end() - 1);
+    pass.instances.resize(order.size());
+    for (std::size_t k = 0; k < order.size(); ++k) {
+        const Extracted3dItem& item = items[order[k].index];
+        pass.instances[cursor[batchOf[k]]++] = Instance3D{item.world, item.color};
+    }
+
+    pass.draws.reserve(firstOf.size());
+    for (std::size_t b = 0; b < firstOf.size(); ++b) {
+        const Extracted3dItem& item = items[firstOf[b]];
         Draw3D draw;
-        draw.instanceOffset = static_cast<std::uint32_t>(pass.instances.size());
-        draw.instanceCount = static_cast<std::uint32_t>(batch.size());
-        for (const std::size_t i : batch) pass.instances.push_back(Instance3D{items[i].world, items[i].color});
+        draw.instanceOffset = offsetOf[b];
+        draw.instanceCount = offsetOf[b + 1] - offsetOf[b];
         draw.texture = item.texture;
         draw.blend = item.blend;
         draw.depthTest = item.depthTest;

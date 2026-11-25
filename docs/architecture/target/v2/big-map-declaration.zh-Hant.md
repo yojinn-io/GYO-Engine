@@ -100,13 +100,13 @@
 | 碰撞 | 生態不提供（範例用 avian） | 每 chunk | 每 octant 一個 static body | 跟著 actor | 整張一個 `BoxSet`（2.3） |
 | 剔除 | 核心 `check_visibility`（Aabb、Frustum） | 不畫空 section（wiki）；其他未從讀到的頁確認 | 渲染伺服器的實例剔除 | — | 照 Bevy |
 | LOD | 核心 `VisibilityRange`；生態 chunk LOD（降取樣再放大） | — | `visibility_range` | HLOD（離線建、代替未載入格子） | `VisibilityRange`＋工具烘的代理 |
-| instancing | 自動 batching | — | MultiMesh | HLOD 的 Instancing 層 | 照 Bevy，排在後面 |
+| instancing | 自動 batching | — | MultiMesh | HLOD 的 Instancing 層 | 照 Bevy 的自動合批；偏離處見第 16.3 節的表（S6） |
 
 **偏離 Bevy 的地方與膠水**：
 1. **整張載入、不照 bevy_voxel_world 的相機串流**：衝突點是權威——Match 要整張碰撞，Client 的「看不到的先不載」和 Match 的狀態無關，但 region 何時進碰撞要決定性（asset RC-AS1）。不串流就沒有這個膠水。這不是偏離 Bevy 核心（核心沒有串流），是不採用一個生態 crate 的策略。
 2. **格式自己定（master 的）**：Bevy 生態沒有檔案格式可照；接合點是 Bevy 式的 asset loader（我們的 asset Module 已照 Bevy），膠水只有兩個 loader。
 3. **Match 碰撞整張一個 `BoxSet`**：avian 有實體層 broadphase、我們沒有（physics_3d 的取捨，3D 物理卡已定）。一張地圖一個實體正好繞開這個差異，不寫膠水。
-4. 剔除、`VisibilityRange`、instancing 照 Bevy，沒有偏離。
+4. 剔除、`VisibilityRange` 照 Bevy，沒有偏離。instancing 照 Bevy 的自動合批，偏離處（實例資料的放法、bin 的順序、沒有 `NoAutomaticBatching` 等）見第 16.3 節的表。
 
 ## 4. 地圖從哪來（交使用者選）
 
@@ -498,25 +498,28 @@ v8-arch-gyo2-big-map
    - `Pass3D::instances`；`Draw3D::instanceOffset`、`instanceCount`。
    - `Draw3D::world`、`color` **拿掉**：只留一條路，畫一個東西＝畫一個實例（Bevy 每個 phase item 也都有 `batch_range`，單一項目是長度 1）。
 2. **shader ABI**（`ShaderAbi.hpp`、`Mesh3D.hlsli`）：
-   - 頂點 slot 0 照舊（每頂點）；新的 slot 1 每實例：location 2～5 是 world 的四列、6 是顏色。
+   - 頂點 slot 0 照舊（每頂點）；新的 slot 1 每實例：location 2～5 是 world（`Matrix4` 照存放順序的四欄，HLSL 的 `float4x4` 把它們當列）、6 是顏色。
    - vertex uniform 改成 pass 的 `clipFromWorld`（每個 pass 推一次）；fragment uniform 拿掉（顏色跟著實例走）。
    - 位置＝`mul(mul(p, world), clipFromWorld)`，同 Bevy 的 `get_world_from_local(instance_index)`（`mesh_functions.wesl:15`）再乘 view 的 clip_from_world。
 3. **自動合批**（`Queue3d`，〔Engine〕）：
    - **鍵**：保留網格（`MeshId`）、貼圖（`TextureId`，含 filter）、混合、深度測試、深度寫入、cull。照 Bevy：網格是 `BatchCompareData = AssetId<Mesh>`（`mesh.rs:2910`），貼圖是材質 bind group（`:2892-2899`），其餘是 pipeline id（`bevy_render/src/batching/mod.rs:41-52`）。
    - **不透明**（RD-8 的第 0 組）：同鍵的進一個 bin，照 Bevy 的 binned phase（`no_gpu_preprocessing.rs:122-154`，一個 bin 一段 `instance_range`）。
+   - 這也會重排 `depthWrite = false` 的不透明項目（它們的先後影響畫面），和 Bevy 一樣。
    - **半透明、不測深度**：排序後**相鄰**且同鍵的才併，照 Bevy 的 sorted phase（`batching/mod.rs:236-243`）。遠到近不變；GPU 照實例順序畫，混合的先後也不變。
    - **自己帶頂點的項目**（CPU 蒙皮）不併。Godot 也一樣：有 `mesh_instance` 的不 repeat（`render_forward_clustered.cpp:896`）。
    - 被剔除的（`CulledEntities`）、層不符的，照舊在合批前去掉（第 13 節不變）。
 4. **後端**（`sdl_gpu`，〔Engine〕）：
    - 每幀的實例放進一個 instance buffer，和 pass 的頂點一樣每幀重建（Bevy 的 CPU 路徑也每幀清：`no_gpu_preprocessing.rs:64-72`）。
-   - 每個 draw 把 slot 1 綁在**它的第一個實例**的位移上，`first_instance` 恆為 0。理由：SDL 寫明 `first_instance` 和內建的實例編號在各 API 不一致（`SDL_gpu.h:3502-3525`）。
+   - slot 1 每個 pass 只綁一次（在這個 pass 的實例起點）；每個 draw 用 `first_instance`＝`instanceOffset` 指出自己的範圍，同 Bevy 的 `draw_indexed(.., batch_range)`（`mesh.rs:4734-4738`）。
+   - instance-rate 的頂點輸入在三個後端都從 `first_instance` 開始：Vulkan 的 `firstInstance`、D3D12 的 `StartInstanceLocation`、SDL Metal 的 `baseInstance:firstInstance`（`SDL_gpu_metal.m:2862`）。SDL 的註（`SDL_gpu.h:3502-3509`）只說 shader 讀內建的實例編號（`SV_InstanceID`）時不一致，這裡的 shader 不讀它。
+   - 第一版把 slot 1 綁在每個 draw 的第一個實例、`first_instance` 恆 0，理由寫成「`first_instance` 不一致」。這個理由錯了，而且每個 draw 重綁在 SDL Vulkan 上會重綁整組頂點緩衝（`SDL_gpu_vulkan.c:8014-8026`）。設計審查指出後改掉。
    - `SDL_DrawGPUIndexedPrimitives` 帶 `instanceCount`。
 
 **偏離 Bevy 的地方、理由與膠水**：
 
 | Bevy | gyo2 | 理由 | 膠水 |
 |---|---|---|---|
-| 實例資料放 storage buffer，shader 用 `instance_index` 取（`mesh.wesl:43`；`draw_indexed(..., batch_range)`，`mesh.rs:4734-4738`） | 每實例的頂點輸入（instance-rate） | SDL_GPU 的頂點輸入在三個 API 一樣；shader 不讀實例編號，就不碰 `first_instance` 的不一致；shader 工具不必多查 storage buffer | 無（ABI 多一組輸入） |
+| 實例資料放 storage buffer，shader 用 `instance_index` 取（`mesh.wesl:43`；`draw_indexed(..., batch_range)`，`mesh.rs:4734-4738`） | 每實例的頂點輸入（instance-rate），draw 用 `first_instance` 指出範圍 | SDL_GPU 的頂點輸入在三個 API 一樣、照 `first_instance` 開始；shader 不讀內建的實例編號（只有它在各 API 不一致）；shader 工具不必多查 storage buffer | 無（ABI 多一組輸入） |
 | 不透明的 bin 照鍵排（`sort_binned_render_phase`，`batching/mod.rs:199-209`） | bin 照「最近的成員」排，bin 內近到遠 | 留住 RD-8 的近到遠；沒有任何東西可併時，輸出和 S6 前一樣（既有的 `[p3-*]` 不改） | 無 |
 | `NoAutomaticBatching`（`batching/mod.rs:24-26`） | 不做 | Bevy 用它是因為自訂 draw function 需要每實體的資料；gyo2 沒有自訂 shader，合批在畫面上看不出來，沒有使用者的開關測不了 | 無；RC-IN1 |
 | GPU preprocessing、multi-draw indirect（`gpu_preprocessing.rs`） | 不做；只有 CPU 建實例（Bevy 自己的 `no_gpu_preprocessing` 路徑） | 剔除在 CPU（第 13 節）；沒量到 draw 數或實例上傳是瓶頸 | 無；RC-IN2 |

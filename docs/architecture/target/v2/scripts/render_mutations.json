@@ -1531,8 +1531,8 @@
     "render section 8"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);",
-   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, 0, firstVertex, 0);",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, 0, firstVertex, draw.instanceOffset);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-mesh\\-index\\-offset\\]"
@@ -1544,8 +1544,8 @@
     "render section 8"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);",
-   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, 0, 0);",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, 0, draw.instanceOffset);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-vertex\\-offset\\]"

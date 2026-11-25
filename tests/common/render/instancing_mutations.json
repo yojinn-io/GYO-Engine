@@ -10,8 +10,8 @@
     "render IN-1"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "            if (made) {\n                batches.push_back({e.index});",
-   "replace": "            if (true) {\n                batches.push_back({e.index});",
+   "find": "            if (made) firstOf.push_back(e.index);\n            batchOf[k] = bin->second;",
+   "replace": "            firstOf.push_back(e.index);\n            batchOf[k] = firstOf.size() - 1;",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: opaque items*",
    "expect": "\\[in\\-one\\-draw\\]"
@@ -122,7 +122,7 @@
     "render IN-1"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if (item.mesh == MeshId{}) {\n            batches.push_back({e.index});\n            continue;\n        }\n",
+   "find": "        if (item.mesh == MeshId{}) {\n            batchOf[k] = firstOf.size();\n            firstOf.push_back(e.index);\n            continue;\n        }\n",
    "replace": "",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: culled items*",
@@ -130,14 +130,14 @@
   },
   {
    "id": "in-bin-far-first",
-   "what": "I4: a bin's instances are not near to far",
+   "what": "I4: a batch's instances are filled far to near (in a bin) instead of in its items' order",
    "guards": [
     "big-map-declaration I4",
     "render IN-2"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "                batches[bin->second].push_back(e.index);",
-   "replace": "                batches[bin->second].insert(batches[bin->second].begin(), e.index);",
+   "find": "    for (std::size_t k = 0; k < order.size(); ++k) {\n        const Extracted3dItem& item = items[order[k].index];\n        pass.instances[",
+   "replace": "    for (std::size_t k = order.size(); k-- > 0;) {\n        const Extracted3dItem& item = items[order[k].index];\n        pass.instances[",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: opaque items*",
    "expect": "\\[in\\-bin\\-near\\-first\\]"
@@ -150,8 +150,8 @@
     "render IN-3"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "Instance3D{items[i].world, items[i].color}",
-   "replace": "Instance3D{Math::Matrix4{}, items[i].color}",
+   "find": "Instance3D{item.world, item.color}",
+   "replace": "Instance3D{Math::Matrix4{}, item.color}",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: opaque items*",
    "expect": "\\[in\\-instance\\-world\\]"
@@ -164,8 +164,8 @@
     "render IN-3"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "Instance3D{items[i].world, items[i].color}",
-   "replace": "Instance3D{items[i].world, Color8{}}",
+   "find": "Instance3D{item.world, item.color}",
+   "replace": "Instance3D{item.world, Color8{}}",
    "target": "gyo_render_tests",
    "cases": "render_extract: a scene of one model*",
    "expect": "\\[in\\-scene\\-instance\\-color\\]"
@@ -178,22 +178,22 @@
     "render IN-3"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);",
-   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, draw.instanceOffset);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a draw of several*",
    "expect": "\\[g3\\-instances\\-each\\]"
   },
   {
    "id": "in-g3-instance-offset-ignored",
-   "what": "I5: every draw starts at the pass's first instance",
+   "what": "I5: every draw starts at the pass's first instance (first_instance not given)",
    "guards": [
     "big-map-declaration I5",
     "render IN-3"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "instances, instanceBase + draw.instanceOffset * static_cast<std::uint32_t>(sizeof(R::Instance3D))};",
-   "replace": "instances, instanceBase};",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, 0);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a draw of several*",
    "expect": "\\[g3\\-instances\\-offset\\]"

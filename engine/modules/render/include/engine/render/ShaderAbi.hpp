@@ -60,12 +60,14 @@ inline constexpr std::uint32_t kMesh3DUvOffset = offsetof(Vertex3D, uv);
 static_assert(kMesh3DPositionOffset == 0 && kMesh3DUvOffset == 24);
 
 // Vertex input, buffer slot 1, one Instance3D per instance (big-map declaration section 16). A backend binds the pass's
-// instances at the draw's first one, so the shader reads its instance through these inputs alone and never through an
-// instance id (whose base differs between GPU APIs). The world's four rows are four float4s at locations 2 to 5.
+// instances and a draw names its range by its first instance (first_instance), which instance-rate inputs follow on
+// every GPU API; the shader reads its instance through these inputs alone and never through an instance id (whose base
+// differs between GPU APIs). The world is four float4s at locations 2 to 5: Matrix4's four columns in storage order,
+// which HLSL's float4x4 constructor takes as its rows (mul(float4(p, 1), M), as the uniforms).
 inline constexpr std::uint32_t kMesh3DInstanceSlot = 1;
 inline constexpr std::uint32_t kMesh3DInstanceStride = sizeof(Instance3D);
-inline constexpr std::uint32_t kMesh3DWorldLocation = 2;      // float4 x kMesh3DWorldRows, row r at location 2 + r
-inline constexpr std::uint32_t kMesh3DWorldRows = 4;
+inline constexpr std::uint32_t kMesh3DWorldLocation = 2;      // float4 x kMesh3DWorldColumns, column c at location 2 + c
+inline constexpr std::uint32_t kMesh3DWorldColumns = 4;
 inline constexpr std::uint32_t kMesh3DColorLocation = 6;      // 4 bytes, normalized to 0..1
 inline constexpr std::uint32_t kMesh3DWorldOffset = offsetof(Instance3D, world);
 inline constexpr std::uint32_t kMesh3DColorOffset = offsetof(Instance3D, color);

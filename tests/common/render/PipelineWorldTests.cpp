@@ -517,7 +517,7 @@ TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of
         if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) scene = p3;
     }
     REQUIRE(scene != nullptr);
-    CHECK_MESSAGE(scene->draws.size() == 3, "[vs-extract] the mesh behind the camera with a box is left out, the other three drawn");
+    CHECK_MESSAGE(scene->instances.size() == 3, "[vs-extract] the mesh behind the camera with a box is left out, the other three drawn");
 }
 
 namespace {

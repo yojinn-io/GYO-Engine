@@ -15,7 +15,7 @@ Texture2D<float4> meshTexture : register(t0, space2);
 SamplerState meshSampler : register(s0, space2);
 
 // Vertex input locations 0, 1 (render's Vertex3D: position, uv; the normal is not bound), per vertex; locations 2 to 6
-// (render's Instance3D: the world's four rows, the colour), per instance.
+// (render's Instance3D: the world's four columns as Matrix4 stores them, the colour), per instance.
 struct Mesh3DVertex
 {
     float3 position : TEXCOORD0;
