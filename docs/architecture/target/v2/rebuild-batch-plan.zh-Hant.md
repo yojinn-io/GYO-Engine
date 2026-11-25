@@ -190,6 +190,8 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | 遊戲優化＝大地圖（bigMap）＋渲染管線（光照、shader、粒子等）（`v8-arch-gyo2-game-optimization-scope`） | 使用者 2026-11-25 | 待開卡（主會話提案：兩條線各先寫宣告） |
 | **渲染管線線：全部要做**（`v8-arch-gyo2-render-pipeline-scope`）：清單原樣見下面〈渲染管線線〉一節 | 使用者 2026-11-25 | 已記；開卡時機待使用者定 |
 | **移植 master 的 tools**（`v8-arch-gyo2-k-cancelled-port-master-tools`；使用者 2026-11-25「先記著排在後面」）：`tools/audio_editor`、`model_viewer`、`ui_editor`、`voxel_map_editor`；ImGui 照 SDL 宣告 Q3＝(b) 接在 Engine 的 `input`／`window`／`render`（不帶 master 的 `ToolFrameworkImGui`＋`RenderBackendSDL`），`ImDrawIdx` 16／32 位元在這裡定；主會話提案的段落：ImGui 接法 → `voxel_map_editor` → 其他三個。注意：大地圖線要先定「地圖從哪來」，用 GYO2 自己的編輯器就依賴這條 | 使用者 2026-11-25 | **排在後面**（具體位置未定；大地圖卡宣告時把依賴列出來） |
+| `DatagramAddress` 改名（約 25 個檔；TCP 的 `StreamSocket` 也流用它，名字只說了 datagram；會碰 net 的 `NetService`）——Gateway #339 設計審查 S5 交主會話，改名要排前面、同時立規則 | Gateway #339 | 獨立的改名批（未開） |
+| `Sha256` 改成從位元組版 `Sha256Digest` 出 hex 後，net 的 `Handshake.cpp:95` 與 authority 的 `Registrations.cpp:79` 仍自己轉 hex（#339 沒動） | Gateway #339 | 下一個碰 net／authority 的批 |
 
 ## 渲染管線線（全部要做，待開卡）
 
