@@ -310,6 +310,8 @@ int main(int argc, char** argv) {
     } else {
         Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
     }
-    if (connect) start.first = PC::SceneChange{PC::Scene::MultiGame, {}, N::NetConnectTarget{*connect, userId, {}}, connect->ToString()};
+    if (connect) {
+        start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}, .address = connect->ToString()};
+    }
     return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
 }

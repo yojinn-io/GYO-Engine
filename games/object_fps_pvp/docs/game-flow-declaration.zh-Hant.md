@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-25（修訂 0）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-25（修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -85,7 +85,7 @@ struct SDLWindowBetweenFrames final {
     std::function<bool(Engine::Orchestration::Product&)> wanted;
     // Then, with the lent Worlds returned: the product's replacements. An Err ends the runner (Failure).
     // The Worlds of ownThreadWorlds are lent again after it.
-    std::function<Engine::Base::Result<void, std::string>(Engine::Orchestration::Product&)> run;
+    std::function<Engine::Base::Result<void, Engine::Orchestration::OrchestrationError>(Engine::Orchestration::Product&)> run;
 };
 // SDLWindowOptions::betweenFrames (none: no replacement, as today).
 ```
@@ -109,7 +109,7 @@ struct SDLWindowBetweenFrames final {
 - session：第一次用的時候 `POST /v1/session`；token 與到期放 `SceneDirector`（跨場景）；401 的三種碼重拿一次。裝置 id：`<使用者資料目錄>/<profile>/device-id`，第一次用高熵亂數（32 bytes hex）產生（交接說明 L7）；`--profile NAME` 讓同一台 Mac 開兩個 Client。
 - 大廳（`Lobby`）：每秒 `GET /v1/rooms`；列表（`fixed_step_list`，最多 8 列，點一列＝加入）；建房（模式 coop／survival 切換、地圖在 content 的 arena 之間切換）；顯示戰績（`GET /v1/saves/me`：局數、死亡）；回主菜單。
 - 房間（`Room`）：每 0.75 秒 `GET /v1/rooms/{id}`；成員與準備；準備切換；房主的「開始」；離開（`POST leave`，回大廳）。`state == "started"` 且有自己的 `connect` → `SceneRequest{MultiGame, connect}`（同一份 GET 的 connect，2 分鐘內）。409／503 的錯誤碼顯示在狀態列。
-- 遊戲（`MultiGame`）：`Sim` 的 `extra` 放 `NetConnectTarget{server, userId, DecodeHex(token)}`。斷線（Refused、逾時、`ClosedByRemote`）→ 回大廳並顯示理由，**不自動重連**（交接說明第 4 節）。撤離＝`NetService::Close`＋Flush（現在 `RunClient` 關窗時做的）→ 回大廳，大廳過幾秒再讀一次存檔（Match 收到離開才寫）。
+- 遊戲（`MultiGame`）：`SceneChange::connect` 放 `NetConnectTarget{server, userId, DecodeHex(token)}`，`Sim` 的 `build` 讀 `SceneDirector` 的它、在準備函式放入。斷線（Refused、逾時、`ClosedByRemote`）→ 回大廳並顯示理由，**不自動重連**（交接說明第 4 節）。撤離＝`NetService::Close`＋Flush（現在 `RunClient` 關窗時做的）→ 回大廳，大廳過幾秒再讀一次存檔（Match 收到離開才寫）。
 - `--connect A.B.C.D:P` 留著（測試與手動）：直接進 `MultiGame`，沒有 token（沒有金鑰的 Match 收）。直接輸入位址的舊大廳（#330，`LobbyWorld`、`lobby/AddressText`）由 Gateway 大廳取代、刪掉（第 3 段）；第 1 段先把它當成一個場景接上，保持每段都能玩。
 - `--gateway A.B.C.D:P`（預設 `127.0.0.1:7700`）。
 
@@ -144,7 +144,7 @@ struct SDLWindowBetweenFrames final {
 
 | 段 | 範圍 | 測試 | 突變（只跑相關的） |
 |---|---|---|---|
-| 1 主菜單與場景切換 | `sdl_window` 的 `betweenFrames`（3.2）；Client 改成一個 Product 四個槽、`SceneDirector`、`SceneRequest`；主菜單（單人、多人、設置、退出；單人與設置先顯示「準備中」）；多人＝舊的位址大廳當場景 → 遊戲 → 斷線回大廳；`--connect` 照舊 | sdl_window 的三案；client 測試：菜單→大廳→遊戲→斷線回大廳，Render 沒重建（`ExtractSourceSwaps` 加一、同一個 Render World）、Sim 換了才連；`main`／`main_connect`（gpu） | `betweenFrames` 三個；換場景不換 Sim；菜單場景 Sim 帶目標 |
+| 1 主菜單與場景切換 | `sdl_window` 的 `betweenFrames`（3.2）；Client 改成一個 Product（第 1 段三個槽，`Solo` 在第 2 段加）、`SceneDirector`、`SceneRequest`；主菜單（單人、多人、設置、退出；單人與設置先顯示「準備中」）；多人＝舊的位址大廳當場景 → 遊戲 → 斷線回大廳；`--connect` 照舊 | sdl_window 的三案；client 測試：菜單→大廳→遊戲→斷線回大廳，Render 沒重建（`ExtractSourceSwaps` 加一、同一個 Render World）、Sim 換了才連；`main`／`main_connect`（gpu） | `betweenFrames` 三個；換場景不換 Sim；菜單場景 Sim 帶目標 |
 | 2 單人 | Local 端（3.3）、`Solo` 槽、單人房間、隨機出生點、暫停與撤離、本機存檔 | world 測試：Local 生玩家、能動、能死與重生；client 測試：主菜單→單人→遊戲→撤離→存檔寫了、再進讀得到、全程沒有 socket（`NetService::UdpAddress` 空） | Local 帶 net；不寫存檔；出生點固定 |
 | 3 多人接 Gateway | `GatewayClient`、session 與裝置 id、大廳、房間、開始 → `MultiGame`、撤離與回大廳、戰績；刪舊位址大廳 | 邏輯測試：請求的組成與回應的解析（每個錯誤碼）；client 測試：假 Gateway（`gyo_test_loopback_listener`）走建房→準備→開始→帶上 connect；network：真的 services＋Match，一個 headless Client 走完（`-L network`） | 不帶 Bearer；不帶冪等鍵；`ClosedByRemote` 自動重連 |
 | 4 loading 與就緒 | 就緒四項、進度條、等待其他玩家；`MatchInfo.phase`、`PlayerInput.ready`、Match 的開始與 `PeerVisibility`；Go 的 `--expect-users` | world 測試：Waiting 時另一個 Client 收不到別人的玩家、不能動；全員 ready → Playing、看得到；期限；client 測試：資產沒齊時 loading 在、進度遞增 | 不設 visibility；ready 不看；Waiting 時能動 |
@@ -169,3 +169,10 @@ struct SDLWindowBetweenFrames final {
 - Match 等「全員載完」用輸入的就緒位元（不是延後連線、不是新的 client 訊息）：P6；net 沒有 client 訊息，加它是 Engine 的新機制，沒有必要。
 - 開始前凍結移動：沒有它「開始」沒有意義（先載完的人可以先跑位）。這是 PvP 這款遊戲的規則，放在遊戲裡、不在 Engine。
 - 進度不做位元組級；設定不分 profile；單人地圖用第一個。
+
+## 修訂紀錄
+
+- 修訂 1（第 1 段實作、設計審查 S4 之後）：
+  - 3.2：`run` 回 `Result<void, OrchestrationError>`，不是 `std::string`。`Base::Result` 的錯誤要是帶碼的錯誤（`CodedError`），而產品在 `run` 裡做的就是 `ReplaceWorld`，它的錯誤（含壞掉時的 `WorldFailure`）原樣帶出最直接；產品自己的錯誤用 `PrepareFailed` 加 `reporterCode`。
+  - 3.4：連線目標不經 `ReplaceRequest::extra`，改由 `Sim` 的 `build` 讀 `SceneDirector` 現在場景的 `connect`、放進準備函式。換場景時的參數都在 `SceneDirector` 一處，`ChangeScene` 不必知道每個場景要什麼。
+  - 第 4 節第 1 段：先做三個槽；`Solo` 隨第 2 段加。

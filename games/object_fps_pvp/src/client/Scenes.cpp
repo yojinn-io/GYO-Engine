@@ -4,6 +4,7 @@
 #include "client/SceneBuilds.hpp"
 
 #include "engine/asset/AssetStore.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/camera/Camera.hpp"
 #include "engine/transform/Transform.hpp"
 #include "engine/ui/UiAsset.hpp"
@@ -63,9 +64,9 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::
         if (action->action == "pvp.quit") {
             window->close = true;
         } else if (action->action == "pvp.solo") {
-            request->next = SceneChange{Scene::SoloRoom, {}, std::nullopt, {}};
+            request->next = SceneChange{.scene = Scene::SoloRoom};
         } else if (action->action == "pvp.multi") {
-            request->next = SceneChange{Scene::Lobby, {}, std::nullopt, {}};
+            request->next = SceneChange{.scene = Scene::Lobby};
         } else if (action->action == "pvp.settings") {
             if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("status", std::string(kNotYet));
         }
@@ -90,8 +91,9 @@ bool SceneChangeWanted(O::Product& product) {
 
 Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product) {
     auto* director = product.Buffer().Find<SceneDirector>();
+    GYO_ASSERT(director != nullptr && "the Client's Product needs ConfigureClient (it makes its SceneDirector)");
     auto* request = product.World("Frame").GetWorld().ResourceMut<SceneRequest>();
-    if (director == nullptr || request == nullptr || !request->next) return {};
+    if (request == nullptr || !request->next) return {};
     const bool simBefore = SimPlays(director->Current().scene);
     const bool soloBefore = SoloPlays(director->Current().scene);
     SceneChange next = std::move(*request->next);

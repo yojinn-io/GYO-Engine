@@ -94,7 +94,8 @@ struct ClientStart final {
 // The runner's part: whether the Frame World asks for another scene.
 [[nodiscard]] bool SceneChangeWanted(O::Product& product);
 // Enters the requested scene: the Solo and Sim Worlds are replaced when their part changes (into or out of SoloGame,
-// MultiGame), then the Frame World (the Render World reads the new one). A refused replacement is returned as it came.
+// MultiGame), then the Frame World (the Render World reads the new one). A refused replacement is returned as it came;
+// the SceneDirector already names the new scene then (the runner ends the Product on the error: nothing reads it again).
 [[nodiscard]] GYO::Engine::Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product);
 
 } // namespace object_fps_pvp::client

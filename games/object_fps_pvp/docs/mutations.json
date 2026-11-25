@@ -338,7 +338,7 @@
    "replace": "if (const auto server = ParseMatchAddress(\"127.0.0.1:1\")) {",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the lobby shows*",
-   "expect": "Scene::Lobby"
+   "expect": "pvp-lobby-wrong-stays"
   },
   {
    "id": "pvp-lobby-quit-ignored",
@@ -347,7 +347,7 @@
     "port-declaration 4 (segment 5)"
    ],
    "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "        if (action->action == \"pvp.quit\") {\n            request->next = SceneChange{Scene::Menu, {}, std::nullopt, {}};\n",
+   "find": "        if (action->action == \"pvp.quit\") {\n            request->next = SceneChange{.scene = Scene::Menu};\n",
    "replace": "        if (action->action == \"pvp.quit\") {\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
@@ -1414,7 +1414,7 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    request->next = SceneChange{Scene::Lobby, std::move(reason), std::nullopt, origin->address};",
+   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};",
    "replace": "    static_cast<void>(origin);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
@@ -1427,7 +1427,7 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "            request->next = SceneChange{Scene::Lobby, {}, std::nullopt, {}};",
+   "find": "            request->next = SceneChange{.scene = Scene::Lobby};",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
@@ -1445,6 +1445,32 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu's Quit*",
    "expect": "pvp-menu-quit"
+  },
+  {
+   "id": "pvp-scene-exchange-not-reset",
+   "what": "a new scene's Frame World gets the last game's picture",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    if (auto* exchange = product.Buffer().Find<ClientExchange>()) exchange->Reset();\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: leaving the game*",
+   "expect": "pvp-scene-exchange-reset"
+  },
+  {
+   "id": "pvp-scene-notes-not-carried",
+   "what": "FrameNotes start again with each scene (the program loses what the last one noted)",
+   "guards": [
+    "game-flow-declaration 4 (segment 1)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    setup.CarryOver<FrameNotes>(\"object_fps_pvp.FrameNotes\");\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a Match that refuses*",
+   "expect": "pvp-notes-carried"
   }
  ]
 }

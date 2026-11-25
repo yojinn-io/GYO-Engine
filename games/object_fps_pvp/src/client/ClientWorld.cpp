@@ -897,8 +897,8 @@ std::string EndText(const N::PeerDisconnected& end) {
     }
 }
 
-// The connection's end, as the program and the lobby show it: the window closes (the program goes back to the
-// lobby with the reason).
+// The connection's end, as the program and the lobby show it (the Frame World's LeaveOnEnd goes back to the lobby with
+// the reason).
 K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session) {
     for (const N::PeerDisconnected* end : ends.Read()) {
         session->ended = true;
@@ -943,7 +943,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action != "pvp.evacuate" || request.Read().next) continue;
         if (origin->scene == Scene::MultiGame) {
-            request->next = SceneChange{Scene::Lobby, "撤退しました", std::nullopt, origin->address};
+            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .address = origin->address};
             continue;
         }
         const PW::PlayerCombat* combat = sim->ownPlayer != 0 ? players.Get<PW::PlayerCombat>(sim->ownPlayer) : nullptr;
@@ -952,7 +952,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
         const std::string failure = SettleSolo(origin->savePath, deaths, written);
         const std::string status = failure.empty() ? "撤退しました（死亡 " + std::to_string(deaths) + " 回）。記録しました"
                                                    : "撤退しました。記録できません: " + failure;
-        request->next = SceneChange{Scene::Menu, status, std::nullopt, {}};
+        request->next = SceneChange{.scene = Scene::Menu, .status = status};
     }
     return {};
 }
@@ -971,7 +971,7 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<GameOrigin> origin, K:
     } else {
         return {};
     }
-    request->next = SceneChange{Scene::Lobby, std::move(reason), std::nullopt, origin->address};
+    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};
     return {};
 }
 
@@ -1188,7 +1188,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
 }
 
-void BuildFrame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
+void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
     K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
@@ -1590,7 +1590,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory); break;
         case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
         case Scene::SoloGame:
-        case Scene::MultiGame: BuildFrame(setup, options, scene, directory); break;
+        case Scene::MultiGame: BuildGame(setup, options, scene, directory); break;
         }
     };
     return world;

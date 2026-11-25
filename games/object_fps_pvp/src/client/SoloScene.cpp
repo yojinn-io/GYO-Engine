@@ -24,9 +24,9 @@ constexpr std::string_view kRoomInvitation = "準備ができたら出撃して�
 K::SystemResult SoloRoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SceneRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action == "pvp.start") {
-            request->next = SceneChange{Scene::SoloGame, {}, std::nullopt, {}};
+            request->next = SceneChange{.scene = Scene::SoloGame};
         } else if (action->action == "pvp.back") {
-            request->next = SceneChange{Scene::Menu, {}, std::nullopt, {}};
+            request->next = SceneChange{.scene = Scene::Menu};
         }
     }
     return {};

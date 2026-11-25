@@ -105,6 +105,11 @@ std::shared_ptr<PW::Seats> SeatsOf(const std::uint32_t capacity) {
 
 I::KeyboardInput Key(I::KeyCode code, I::ButtonState state = I::ButtonState::Pressed);
 
+// The game connected to the Match over the memory link.
+PC::SceneChange GameScene() {
+    return PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}};
+}
+
 // Whether the World has a value of Resource T (an empty scene's World may not even register T).
 template <class T>
 bool HasResource(const K::World& world) {
@@ -188,7 +193,7 @@ struct Setup final {
         description.options.Set(net);
         // Whom it connects to (net-connect-target: the game scene's NetConnectTarget, put by the Sim World's build).
         PC::ClientStart start;
-        start.first = firstScene.value_or(PC::SceneChange{PC::Scene::MultiGame, {}, N::NetConnectTarget{N::MemoryLink::EndpointA(), 1, {}}, {}});
+        start.first = firstScene.value_or(GameScene());
         start.dataDirectory = std::move(dataDirectory);
         description.options.Set(std::move(start));
         description.worlds.push_back(std::move(solo));
@@ -755,7 +760,8 @@ TEST_CASE("client: a Match that refuses (no seat) ends the connection: back to t
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-session-end] the game scene went back to the lobby");
     CHECK_MESSAGE(setup.Scene().status.find("断られました") != std::string::npos, setup.Scene().status);
     CHECK_MESSAGE(setup.Scene().status.find("the match is full") != std::string::npos, setup.Scene().status);
-    CHECK_MESSAGE(setup.Notes().endReason.find("the match is full") != std::string::npos, "the reason is noted for the program");
+    CHECK_MESSAGE(setup.Notes().endReason.find("the match is full") != std::string::npos,
+                  "[pvp-notes-carried] the reason is noted for the program, carried into the lobby's Frame World");
     CHECK_FALSE_MESSAGE(setup.Client().Resource<W::WindowRequest>()->close, "[pvp-scene-window-stays] the window stays open");
     CHECK_MESSAGE(&setup.client->World("Render").GetWorld() == render, "[pvp-scene-render-stays] the Render World was not replaced");
     // The lobby's Sim World plays nothing and connects to nothing.
@@ -768,7 +774,9 @@ TEST_CASE("client: a Match that refuses (no seat) ends the connection: back to t
 namespace {
 
 // The Client starting in the lobby (the Match and the other Client run beside it, unused).
-PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{PC::Scene::Lobby, std::move(status), std::nullopt, "127.0.0.1:40000"}; }
+PC::SceneChange LobbyFirst(std::string status = {}) {
+    return PC::SceneChange{.scene = PC::Scene::Lobby, .status = std::move(status), .address = "127.0.0.1:40000"};
+}
 
 // Starts editing the address field, replaces its text with text and presses Enter.
 void Submit(Setup& setup, const std::string& text) {
@@ -805,7 +813,7 @@ TEST_CASE("client: the lobby shows its document; a valid address enters the game
 
     // A wrong form: the status says so, the scene stays.
     Submit(setup, "192.168.0");
-    CHECK(setup.Scene().scene == PC::Scene::Lobby);
+    CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-lobby-wrong-stays]");
     CHECK_MESSAGE(setup.Binding("status").find("形が違います") != std::string::npos, setup.Binding("status"));
 
     // Full-width digits and the ideographic full stop from an input method become ASCII (the game's filter); a valid
@@ -951,4 +959,33 @@ TEST_CASE("client: single player: the room, a game without a server, the evacuat
     REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
     setup.Load();
     CHECK_MESSAGE(setup.Binding("record") == "出撃 1 回・死亡 0 回", "[pvp-solo-record] " << setup.Binding("record"));
+}
+
+TEST_CASE("client: leaving the game closes the connection; a new game connects again and sees nothing of the last") {
+    Setup setup;
+    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    REQUIRE(PlayerOf(GameWorld(*setup.match), 1) != 0);
+    // To the lobby (as its scene's System would ask): the lobby's Sim World has no target, so the session closes.
+    setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{.scene = PC::Scene::Lobby};
+    setup.Frame();
+    REQUIRE(setup.Scene().scene == PC::Scene::Lobby);
+    setup.Frames(20);
+    CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "[pvp-scene-leave-closes] no session");
+    CHECK_MESSAGE(PlayerOf(GameWorld(*setup.match), 1) == 0, "[pvp-scene-leave-match] the Match took the player off");
+    // The game again. While the Sim World is held elsewhere (lent, as on its own thread), the new Frame World's first
+    // frame sees no picture of the last game.
+    setup.Client().ResourceMut<PC::SceneRequest>()->next = GameScene();
+    setup.Frame();
+    REQUIRE(setup.Scene().scene == PC::Scene::MultiGame);
+    {
+        auto lent = setup.client->Lend("Sim");
+        REQUIRE(static_cast<bool>(lent));
+        REQUIRE(static_cast<bool>(setup.client->RunFrame()));
+        setup.client->Return(std::move(*lent));
+    }
+    CHECK_MESSAGE(!PC::StatusOf(setup.Client()).playing, "[pvp-scene-exchange-reset] the last game's own player is not shown");
+    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
+    CHECK_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-scene-reconnects] the new game is played");
+    CHECK(setup.Scene().scene == PC::Scene::MultiGame);
 }
