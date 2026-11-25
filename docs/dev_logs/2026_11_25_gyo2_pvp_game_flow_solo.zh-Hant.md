@@ -18,7 +18,18 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - client：主菜單 → 單人房間（「記録はまだありません」）→ 出擊 → 自己的玩家到 Frame World、沒有 session → 點擊拿指標、W 前進 → Esc 出現暫停 → Enter 撤退 → 主菜單、存檔 `matches 1`、`deaths 0` → 再進房間「出撃 1 回・死亡 0 回」；每個場景的文件都顯示過（這一條先抓到 `pvp_game.json` 的 `play` canvas 少了 `focus_order`）。
 - 突變：`pvp-local-spawn-fixed`、`pvp-local-input-ignored`、`pvp-solo-never-plays`、`pvp-solo-start-ignored`、`pvp-solo-not-saved`、`pvp-pause-not-shown`，加第 1 段的 `pvp-menu-multi-ignored`、`pvp-scene-sim-kept`：8/8 killed。
 
+## 設計審查（Opus／high，作者同模型，審查者只拿成果物與原始要求）
+
+blocker 1、should 4、nit 12。
+
+- B1（宣告的「Local 能死與重生」「全程沒有 socket」沒做）→ world 新案：Local World 的玩家死了會重生、`lives` 2、死亡只數一次；client 單人案每幀查 `UdpAddress()` 是空的；突變「Local 帶 net」換成 `pvp-local-authority-conditioned`（宣告修訂 2 寫理由）。
+- S1（結算在 Frame 用鏡像另算一套死亡數）→ `CountDeath`（Match 的存檔與 Local 共用）、Solo World 的 `CountLocalDeaths`／`LocalDeaths`，`ClientView::deaths` 帶給 Frame；`DeathsOf` 拿掉。
+- S2（「一時停止」但單人照走）→ 單人暫停時 Solo World 的 `TimeControl::paused`；多人的標題改成「メニュー（対戦は続いています）」；加「続ける」（`pvp.resume`，下一幀當成點擊拿指標；拿著指標時不再當點擊，否則會開槍）。
+- S3（死亡數與多局累加沒守住）→ 單人案走兩局：第一局死一次，第二局後 `matches 2`、`deaths 1`；突變 `pvp-solo-game-number-fixed`、`pvp-local-deaths-not-counted`、`pvp-pause-not-stopping`。
+- S4（新的對外 API 用 out-param）→ `LocalFiles` 回 `Result<…, IOError>`；單人存檔是 `SoloSave.hpp` 的 `Result<…, SoloSaveFailure>`。`PvpWorld.cpp` 的 `ReadText`（讀內容檔，world 函式庫）不併：兩個函式庫、用途不同。
+- nit：N1 拿掉不可能的守衛；N3 註解與宣告對齊；N4 `Fixed` 的參數改名 `onServer`、rollback 的 `StepSchedule` 併進 `if (networked)`；N5 designated initializer；N6 `GameScene` 拿掉；N7 `ShowPause` 只寫 overlay、多人不算存檔路徑；N9 `PlayerSave.hpp` 註解；N10 測試用 `SoloSavePath`；N12 突變改名 `pvp-solo-input-ignored`。不改：N2（宣告修訂 2 寫了為什麼是 System）、N5 的出生點注入（測試以 `LocalSpawn` 給定出生點的 world 案守）、N8（註解寬度）、N11（點「撤退する」那一下也拿了指標：換場景時游標放開，實機看）。
+- 審查後：`ctest -L "cpu|gpu"` 256/256；突變第 2 段 10/10 killed。
+
 ## 沒驗
 
-- 死亡數不為 0 的結算（單人沒有敵人，測試走不到死亡；`DeathsOf` 只由程式審查看）。
 - 真的視窗裡的單人一輪、暫停畫面：交使用者試玩。

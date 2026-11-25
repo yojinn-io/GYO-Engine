@@ -1,6 +1,5 @@
 #include "object_fps_pvp/client/LocalFiles.hpp"
 
-#include "engine/base/Result.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
 #include "engine/io/helpers/WriteFileAtomically.hpp"
@@ -12,33 +11,28 @@ namespace object_fps_pvp::client {
 namespace Base = GYO::Engine::Base;
 namespace FS = GYO::Engine::IO::FS;
 namespace H = GYO::Engine::IO::Helpers;
+namespace IO = GYO::Engine::IO;
 
-std::optional<std::string> ReadLocalText(const std::string& path, std::string& error) {
-    error.clear();
+Base::Result<std::optional<std::string>, IO::IOError> ReadLocalText(const std::string& path) {
     auto uri = FS::NativeFileUri(path);
-    if (!uri) {
-        error = path + ": " + Base::Describe(uri.error());
-        return std::nullopt;
-    }
+    if (!uri) return Base::Err(std::move(uri).error());
     FS::NativeFileSystem fs;
     auto text = H::ReadAllTextUtf8(fs, *uri);
     if (!text) {
-        if (text.error().code != GYO::Engine::IO::IOErrorCode::NotFound) error = path + ": " + Base::Describe(text.error());
-        return std::nullopt;
+        if (text.error().code == IO::IOErrorCode::NotFound) return std::optional<std::string>{};
+        return Base::Err(std::move(text).error());
     }
-    return std::move(*text);
+    return std::optional<std::string>(std::move(*text));
 }
 
-std::string WriteLocalText(const std::string& path, const std::string& text) {
+Base::Result<void, IO::IOError> WriteLocalText(const std::string& path, const std::string& text) {
     auto uri = FS::NativeFileUri(path);
-    if (!uri) return path + ": " + Base::Describe(uri.error());
+    if (!uri) return Base::Err(std::move(uri).error());
     FS::NativeFileSystem fs;
     const auto* bytes = reinterpret_cast<const std::byte*>(text.data());
     H::WriteAtomicallyOptions options;
     options.createParentDirectories = true;
-    auto written = H::WriteFileAtomically(fs, *uri, GYO::Engine::Base::ConstSpan<std::byte>(bytes, text.size()), options);
-    if (!written) return path + ": " + Base::Describe(written.error());
-    return {};
+    return H::WriteFileAtomically(fs, *uri, Base::ConstSpan<std::byte>(bytes, text.size()), options);
 }
 
 } // namespace object_fps_pvp::client

@@ -93,6 +93,11 @@
       "id": "status",
       "type": "string",
       "preview": "部屋を選ぶか、作ってください"
+    },
+    {
+      "id": "notice",
+      "type": "string",
+      "preview": "Gateway（127.0.0.1:7700）に接続できません"
     }
   ],
   "canvases": [
@@ -697,11 +702,11 @@
             ],
             "position": [
               120,
-              588
+              576
             ],
             "size_delta": [
               760,
-              40
+              36
             ]
           },
           "text": {
@@ -710,6 +715,39 @@
           "point_size": 18,
           "text_color": {
             "color": "accent"
+          }
+        },
+        {
+          "type": "text",
+          "id": "notice",
+          "rect": {
+            "anchor_min": [
+              0,
+              0
+            ],
+            "anchor_max": [
+              0,
+              0
+            ],
+            "pivot": [
+              0,
+              0
+            ],
+            "position": [
+              120,
+              616
+            ],
+            "size_delta": [
+              760,
+              32
+            ]
+          },
+          "text": {
+            "binding": "notice"
+          },
+          "point_size": 15,
+          "text_color": {
+            "color": "muted"
           }
         },
         {

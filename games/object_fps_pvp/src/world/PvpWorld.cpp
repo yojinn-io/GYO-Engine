@@ -94,6 +94,16 @@ void HashValue(K::Hasher&, const GameRules&) {}
 void HashValue(K::Hasher&, const MatchInfo&) {}
 void HashValue(K::Hasher&, const LocalUser&) {}
 void HashValue(K::Hasher& h, const LocalSpawn& v) { HashValue(h, static_cast<std::uint64_t>(v.index)); }
+void HashValue(K::Hasher& h, const LocalDeaths& v) {
+    HashValue(h, v.count);
+    HashValue(h, v.respawnSeen);
+}
+
+bool CountDeath(const PlayerCombat& combat, std::uint64_t& respawnSeen) noexcept {
+    if (combat.life != sim::LifeState::Dead || combat.respawnTick <= respawnSeen) return false;
+    respawnSeen = combat.respawnTick;
+    return true;
+}
 void HashValue(K::Hasher&, const MatchSeats&) {}
 void HashValue(K::Hasher&, const SeatedPlayers&) {}
 void HashValue(K::Hasher&, const ContentRef&) {}
@@ -644,12 +654,26 @@ K::SystemResult SpawnLocalPlayer(K::Query<K::Read<Owner>> players, K::Res<LocalU
                                  K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn) {
     bool there = false;
     players.ForEach([&](K::EntityId, const Owner& owner) { there = there || owner.userId == user->userId; });
-    if (there || rules->arena.spawns.empty()) return {};
+    if (there) return {};
     const sim::SpawnPoint& point = rules->arena.spawns[chosen->index % rules->arena.spawns.size()];
     PlayerCombat combat = FreshCombat(rules->combat, 1);
     combat.lifeTick = tick->value;
     auto id = spawn.New(BodyAt(point), combat, ShotRecord{}, HitRecord{}, Owner{user->userId}, PlayerInput{}, PlayerMotion{});
     if (!id) return Base::Err(std::move(id).error());
+    return {};
+}
+
+// Local: the deaths of its player (CountDeath; Frame/Last, after the steps of the frame).
+K::SystemResult CountLocalDeaths(K::Query<K::Read<Owner>, K::Read<PlayerCombat>> players, K::Res<LocalUser> user,
+                                 K::ResMut<LocalDeaths> deaths) {
+    players.ForEach([&](K::EntityId, const Owner& owner, const PlayerCombat& combat) {
+        if (owner.userId != user->userId) return;
+        std::uint64_t seen = deaths.Read().respawnSeen;
+        if (CountDeath(combat, seen)) {
+            deaths->respawnSeen = seen;
+            ++deaths->count;
+        }
+    });
     return {};
 }
 
@@ -700,16 +724,16 @@ K::SystemResult FollowMatchArena(K::ExclusiveWorld<> world) {
     return {};
 }
 
-// serverOnly: a System of the authority alone; the condition is the net Module's, so only a networked end has it (the
-// Local end is the authority itself).
-K::SystemOptions Fixed(std::string name, std::string stage, std::vector<std::string> after, const bool serverOnly) {
+// onServer: mounted with the net Module's net.OnServer (a System of the authority alone, on a networked end; a Local
+// World is the authority itself and mounts it without).
+K::SystemOptions Fixed(std::string name, std::string stage, std::vector<std::string> after, const bool onServer) {
     K::SystemOptions options;
     options.name = std::move(name);
     K::Mount mount;
     mount.schedule = std::string(O::DefaultSchedules::fixed);
     mount.stage = std::move(stage);
     mount.after = std::move(after);
-    if (serverOnly) mount.conditions.push_back(N::OnServer());
+    if (onServer) mount.conditions.push_back(N::OnServer());
     options.mounts.push_back(std::move(mount));
     return options;
 }
@@ -892,6 +916,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
     r.Resource<ContentRef>({.name = "ContentRef"});
     r.Resource<ContentMismatch>({.name = "ContentMismatch"});
     r.Resource<LocalSpawn>({.name = "LocalSpawn"});
+    r.Resource<LocalDeaths>({.name = "LocalDeaths"});
     const bool networked = end != WorldEnd::Local;
 
     if (networked) {
@@ -905,8 +930,8 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         info.codec = MatchInfoCodec();
         net.ReplicateResource<MatchInfo>("MatchInfo", std::move(info));
         net.Input<PlayerInput>("PlayerInput", InputOptions());
+        R::RollbackEntry(setup).StepSchedule();
     }
-    if (networked) R::RollbackEntry(setup).StepSchedule();
 
     const std::string update = std::string(O::DefaultSchedules::update);
     const std::string postUpdate = std::string(O::DefaultSchedules::postUpdate);
@@ -927,6 +952,13 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         mount.stage = update;
         local.mounts.push_back(std::move(mount));
         r.AddSystem<&SpawnLocalPlayer>(std::move(local));
+        K::SystemOptions deaths;
+        deaths.name = "CountLocalDeaths";
+        K::Mount last;
+        last.schedule = std::string(O::DefaultSchedules::frame);
+        last.stage = std::string(O::DefaultSchedules::last);
+        deaths.mounts.push_back(std::move(last));
+        r.AddSystem<&CountLocalDeaths>(std::move(deaths));
     }
 
     setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
@@ -944,6 +976,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(ContentRef{options.content});
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
+        world.SetResource(LocalDeaths{});
         // The Match (and a Local World) says which arena it plays; a Client's MatchInfo comes from the Match.
         world.SetResource(end != WorldEnd::Client ? MatchInfo{arena.content.id, arena.wallsDigest} : MatchInfo{});
         auto boxes = P::BoxSet::Build(arena.walls);

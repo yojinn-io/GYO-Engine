@@ -79,7 +79,6 @@ build/target/_services/object_fps_pvp/bin/gyo_object_fps_pvp-services all --gate
 
 ## 6. 還沒做的（框架卡的範圍或之後）
 
-- 大廳與房間的 UI（U：`ui`、`world_ui`、`ui_render`，`docs/architecture/target/v2/ui.zh-Hant.md` 第 9 節）、錯誤的顯示。
-- Client 帶 token 經 Gateway 連上真的 Match 的端到端測試（第 2、4 段只驗到 Match 端：token 向量、admission、對假 saves 的讀寫、真的 Match 行程起得來與 idle 結束）。
+- 〔遊戲流程框架第 3 段做了〕大廳與房間的 UI、錯誤的顯示（`client/Gateway.hpp`、`src/client/LobbyScene.cpp`、`RoomScene.cpp`）；Client 帶 token 經 Gateway 連上真的 Match 的端到端測試（CTest `object_fps_pvp.gateway_client`，label network：服務、真的 Match、Client 建房→準備→開始→對戰→撤退→讀到存檔）。
 - 完成條件的實機部分：這台 Mac 兩個 Client 經 Gateway 建房、加入、準備、開始、連上同一個 Match 對戰；撤離後存檔寫回、下次讀得到。
 - 快速配對、推送（取代輪詢）、商人、任務、合作／生存的規則與結算。

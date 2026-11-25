@@ -134,19 +134,26 @@ K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> st
         carried->session = gateway.Read().Session();
     }
     if (!result) return {};
+    // status: what the player asked (or why the lobby came back); notice: the Gateway's state, from the polls.
     std::optional<std::string> status;
+    std::optional<std::string> notice;
     std::optional<std::string> record;
     if (!result->Ok()) {
-        if (result->tag == "enter") lobby.asking = false;
-        // The leave of a room the lobby came back from: nothing to tell (the room may be gone already).
-        if (result->tag != "leave") status = GatewayErrorText(*result, lobby.gateway);
+        if (result->tag == "enter") {
+            lobby.asking = false;
+            status = GatewayErrorText(*result, lobby.gateway);
+        } else if (result->tag != "leave") {
+            // The leave of a room the lobby came back from: nothing to tell (the room may be gone already).
+            notice = GatewayErrorText(*result, lobby.gateway);
+        }
     } else if (result->tag == "list") {
+        notice = std::string();
         std::string error;
         if (auto rooms = ParseRooms(result->body, error)) {
             lobby.rooms = std::move(*rooms);
             if (lobby.picked >= std::min(lobby.rooms.size(), kRows)) lobby.picked = 0;
         } else {
-            status = "Gateway の答えを読めません: " + error;
+            notice = "Gateway の答えを読めません: " + error;
         }
     } else if (result->tag == "record") {
         std::string error;
@@ -165,6 +172,7 @@ K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> st
         auto root = bindings.GetMut<Ui::UiBindings>(id);
         ShowState(lobby, *root);
         if (status) root->Set("status", *status);
+        if (notice) root->Set("notice", *notice);
         if (record) root->Set("record", *record);
     }
     return {};
@@ -232,7 +240,8 @@ void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayCo
         Ui::UiBindings bindings;
         ShowState(state, bindings);
         bindings.Set("record", std::string("戦績：—"));
-        bindings.Set("status", !placed ? "この端末の ID を用意できません: " + error : change.status.empty() ? std::string("部屋を選ぶか、作ってください") : change.status);
+        bindings.Set("status", change.status.empty() ? std::string("部屋を選ぶか、作ってください") : change.status);
+        bindings.Set("notice", !placed ? "この端末の ID を用意できません: " + error : std::string("Gateway: ") + state.gateway);
         // Without a device id the lobby shows why and calls nothing (its System waits for a client that is not there).
         if (!placed) w.SetResource(GatewayClient(context.gateway, std::string(), std::nullopt));
         if (!placed) state.listed = state.recorded = std::numeric_limits<std::int64_t>::max();

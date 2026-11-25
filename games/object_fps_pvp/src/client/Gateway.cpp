@@ -180,13 +180,18 @@ std::string LoadDeviceId(const std::string& path, std::string& error) {
         error = "no directory for the device id";
         return {};
     }
-    if (auto kept = ReadLocalText(path, error)) {
-        if (!kept->empty()) return *kept;
+    auto kept = ReadLocalText(path);
+    if (!kept) {
+        error = Base::Describe(kept.error());
+        return {};
     }
-    if (!error.empty()) return {};
+    if (*kept && !(*kept)->empty()) return **kept;
     std::string made = RandomHex(32);
-    error = WriteLocalText(path, made);
-    return error.empty() ? made : std::string();
+    if (auto written = WriteLocalText(path, made); !written) {
+        error = Base::Describe(written.error());
+        return {};
+    }
+    return made;
 }
 
 GatewayClient::GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::optional<GatewaySession> session)

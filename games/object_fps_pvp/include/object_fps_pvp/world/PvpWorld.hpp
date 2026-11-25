@@ -13,9 +13,10 @@
 //   Main/PreUpdate      FollowMatchArena         Client only: the Match's arena (MatchInfo)
 //   Main/Update         SpawnLocalPlayer         Local only: the local user's player at LocalSpawn
 //
-// Three ends: the Match (the server), a Client (predicts its own player) and Local (single player: no net, no
-// rollback; the World is the authority, "Match only" runs there too, and the World's own product writes the player's
-// PlayerInput).
+// Three ends: the Match (the server), a Client (predicts its own player) and Local (single player: no net; the rollback
+// Module is there without a strategy, as authority needs it; the World is the authority, "Match only" runs there too,
+// and the World's own product writes the player's PlayerInput). A Local World also counts its player's deaths
+// (LocalDeaths, Frame/Last CountLocalDeaths), by the same rule as the Match's saves (CountDeath).
 //
 // The Client predicts its own player (K3: the rollback strategy) and takes everything else from the Match. A player
 // without input in a step (a player the Client does not control) neither moves nor turns.
@@ -155,6 +156,17 @@ struct LocalSpawn final {
     std::size_t index = 0;
 };
 void HashValue(K::Hasher&, const LocalSpawn&);
+
+// A death of a player as a save counts it: a dead player whose respawn tick (set when it dies) was not seen before.
+// respawnSeen: the last one seen for that player.
+[[nodiscard]] bool CountDeath(const PlayerCombat& combat, std::uint64_t& respawnSeen) noexcept;
+
+// Local: the deaths of its player so far (CountDeath).
+struct LocalDeaths final {
+    std::uint64_t count = 0;
+    std::uint64_t respawnSeen = 0;
+};
+void HashValue(K::Hasher&, const LocalDeaths&);
 
 // Registers the game in the World (the table above). The World's description carries AuthorityOptions
 // {ServerAuthorityStrategy}, dynamicInsert = false, the id range and, at the networked ends, NetWorldOptions and, at a

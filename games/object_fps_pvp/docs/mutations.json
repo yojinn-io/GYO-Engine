@@ -315,40 +315,14 @@
    "cases": "client: a hit shows*"
   },
   {
-   "id": "pvp-lobby-filter-off",
-   "what": "the address field takes every character (the game's filter is not given)",
-   "guards": [
-    "port-declaration 4 (segment 5)"
-   ],
-   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "return element == \"address\" ? lobby::FilterAddressText(text) : std::string(text);",
-   "replace": "return std::string(text);",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the lobby shows*",
-   "expect": "pvp-lobby-submit"
-  },
-  {
-   "id": "pvp-lobby-any-address",
-   "what": "the lobby takes any text as an address",
-   "guards": [
-    "port-declaration 4 (segment 5)"
-   ],
-   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "if (const auto server = ParseMatchAddress(typed)) {",
-   "replace": "if (const auto server = ParseMatchAddress(\"127.0.0.1:1\")) {",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the lobby shows*",
-   "expect": "pvp-lobby-wrong-stays"
-  },
-  {
    "id": "pvp-lobby-quit-ignored",
    "what": "the lobby's Back does not go back to the menu",
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/LobbyWorld.cpp",
-   "find": "        if (action->action == \"pvp.quit\") {\n            request->next = SceneChange{.scene = Scene::Menu};\n",
-   "replace": "        if (action->action == \"pvp.quit\") {\n",
+   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
+   "find": "        if (id == \"pvp.back\") {\n            request->next = SceneChange{.scene = Scene::Menu};\n",
+   "replace": "        if (id == \"pvp.back\") {\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
    "expect": "pvp-lobby-back"
@@ -376,7 +350,7 @@
    "find": "\"mesh_render\", \"ui_render\"};",
    "replace": "\"mesh_render\"};",
    "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the lobby shows*",
+   "cases": "client: the menu goes*",
    "expect": "pvp-lobby-drawn"
   },
   {
@@ -1391,7 +1365,7 @@
    "find": "    if (simBefore || simAfter) {",
    "replace": "    if (false) {",
    "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: the lobby shows*",
+   "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-scene-sim-target"
   },
   {
@@ -1414,7 +1388,7 @@
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .address = origin->address};",
+   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason), .room = origin->room};",
    "replace": "    static_cast<void>(origin);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
@@ -1486,7 +1460,7 @@
    "expect": "pvp-local-spawn"
   },
   {
-   "id": "pvp-local-input-ignored",
+   "id": "pvp-solo-input-ignored",
    "what": "the Solo World does not write the step's input into its player",
    "guards": [
     "game-flow-declaration 4 (segment 2)"
@@ -1531,8 +1505,8 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "    return WriteLocalText(path, match::EncodePlayerSave(after));",
-   "replace": "    return {};",
+   "find": "    auto written = WriteLocalText(path, match::EncodePlayerSave(after));\n    if (!written) return Base::Err(SoloSaveFailure::Make(SoloSaveFailureCode::WriteFailed, path, Base::Describe(written.error())));\n",
+   "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-solo-saved"
@@ -1544,11 +1518,154 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        const std::string canvas = paused ? \"pause\" : \"play\";",
-   "replace": "        const std::string canvas = \"play\";",
+   "find": "    const std::string canvas = paused ? \"pause\" : \"play\";",
+   "replace": "    const std::string canvas = \"play\";",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-pause-shown"
+  },
+  {
+   "id": "pvp-local-authority-conditioned",
+   "what": "a Local World mounts the authority's Systems on net.OnServer (it has no net: they never run, or the World does not start)",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (onServer) mount.conditions.push_back(N::OnServer());",
+   "replace": "    if (onServer || true) mount.conditions.push_back(N::OnServer());",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World is its own authority*",
+   "expect": "R-E4"
+  },
+  {
+   "id": "pvp-local-deaths-not-counted",
+   "what": "a Local World does not count its player's deaths",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            ++deaths->count;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World is its own authority*",
+   "expect": "pvp-local-deaths"
+  },
+  {
+   "id": "pvp-pause-not-stopping",
+   "what": "the single player's pause does not stop the Solo World",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        exchange->SetPaused(solo && !controls.controls.Captured());",
+   "replace": "        exchange->SetPaused(false && solo);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-pause-stops"
+  },
+  {
+   "id": "pvp-solo-game-number-fixed",
+   "what": "every single player's game settles as the same game (the count stops at one)",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "    const std::uint64_t game = before.lastMatch + 1;",
+   "replace": "    const std::uint64_t game = 1;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-games"
+  },
+  {
+   "id": "pvp-gw-no-bearer",
+   "what": "calls go without the session's token",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    if (session) http.headers.push_back({\"Authorization\", \"Bearer \" + session->token});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the requests*",
+   "expect": "pvp-gw-bearer"
+  },
+  {
+   "id": "pvp-gw-no-key",
+   "what": "changes go without an idempotency key",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    if (!request.key.empty()) http.headers.push_back({\"Idempotency-Key\", request.key});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the requests*",
+   "expect": "pvp-gw-key"
+  },
+  {
+   "id": "pvp-gw-no-reopen",
+   "what": "a lost session is not opened again",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    if (result.status == 401 && !going.call.retried) {",
+   "replace": "    if (false && result.status == 401 && !going.call.retried) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a listed room*",
+   "expect": "pvp-gw-reopen"
+  },
+  {
+   "id": "pvp-gw-user-own",
+   "what": "the game plays as this Client's own user id, not the Gateway's",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    return scene.connect ? scene.connect->userId : options.userId;",
+   "replace": "    static_cast<void>(scene);\n    return options.userId;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-user"
+  },
+  {
+   "id": "pvp-gw-start-ignored",
+   "what": "a started room with a connect does not lead to the game",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "    if (room.room && room.room->state == \"started\" && room.room->connect) {",
+   "replace": "    if (false && room.room) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-start"
+  },
+  {
+   "id": "pvp-gw-leave-not-sent",
+   "what": "the lobby does not leave the room its game came from",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
+   "find": "        if (placed && change.room != 0) w.ResourceMut<GatewayClient>()->Ask(\"leave\", LeaveRequest(change.room, RandomHex(16)));\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-leave-sent"
+  },
+  {
+   "id": "pvp-gw-join-ignored",
+   "what": "the lobby's join asks nothing",
+   "guards": [
+    "game-flow-declaration 4 (segment 3)"
+   ],
+   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
+   "find": "                gateway->Ask(\"enter\", JoinRequest(lobby.rooms[lobby.picked].id, RandomHex(16)));",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a listed room*",
+   "expect": "pvp-gw-join"
   }
  ]
 }

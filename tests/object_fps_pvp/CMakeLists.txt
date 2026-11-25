@@ -59,7 +59,9 @@ set_tests_properties(object_fps_pvp.world PROPERTIES LABELS "cpu" TIMEOUT 120
 gyo_get_game_target(object_fps_pvp client object_fps_pvp_client)
 add_executable(gyo_object_fps_pvp_client_tests world/TestMain.cpp client/ClientTests.cpp)
 target_include_directories(gyo_object_fps_pvp_client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
-target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld doctest::doctest)
+# The Gateway's tests answer as the Gateway through gyo_test_loopback_listener (tests/common/os).
+target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld gyo_test_loopback_listener
+    doctest::doctest)
 gyo_product_units(gyo_object_fps_pvp_client_tests MODULES physics_3d render_world world_render camera_render sprite_render mesh_render
     world_ui ui_render)
 target_compile_definitions(gyo_object_fps_pvp_client_tests PRIVATE
@@ -98,3 +100,14 @@ add_test(NAME object_fps_pvp.match_process
         "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealMatch" ./services/matches/
     WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
 set_tests_properties(object_fps_pvp.match_process PROPERTIES LABELS "network" TIMEOUT 120)
+
+# The whole line (game-flow declaration, segment 3): every service in one Go test process, real Matches, and the
+# Client test program's "network:" case through the Gateway over UDP. Go on the host; label network.
+gyo_get_game_target(object_fps_pvp match object_fps_pvp_match_for_client)
+add_test(NAME object_fps_pvp.gateway_client
+    COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "GYO_PVP_MATCH=$<TARGET_FILE:${object_fps_pvp_match_for_client}>"
+        "GYO_PVP_CONTENT=${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
+        "GYO_PVP_CLIENT_TESTS=$<TARGET_FILE:gyo_object_fps_pvp_client_tests>"
+        "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealClientPlaysThroughTheGateway" ./services/stack/
+    WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
+set_tests_properties(object_fps_pvp.gateway_client PROPERTIES LABELS "network" TIMEOUT 240)

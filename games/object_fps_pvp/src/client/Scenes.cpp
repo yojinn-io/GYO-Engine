@@ -78,7 +78,6 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::
 
 bool SimPlays(const Scene scene) noexcept { return scene == Scene::MultiGame; }
 bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }
-bool GameScene(const Scene scene) noexcept { return scene == Scene::SoloGame || scene == Scene::MultiGame; }
 
 std::string SoloSavePath(const std::string& dataDirectory) {
     return dataDirectory.empty() ? std::string() : dataDirectory + "/solo-save.json";
