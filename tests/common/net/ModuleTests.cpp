@@ -53,8 +53,8 @@ struct Pair {
         server.range = {1, 1000};
         client.net.role = N::NetRole::Client;
         client.net.link = std::make_shared<N::MemoryLink>(links.second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = 42;
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = 42;
         client.net.clock = clock.Reader();
         client.role = N::NetWorldOptions{N::NetRole::Client, std::nullopt};
         client.range = {1001, 2000};
@@ -260,12 +260,12 @@ TEST_CASE("module: a lasting Link failure stops the frame's receiving; a datagra
     N::NetProductOptions options;
     options.role = N::NetRole::Server;
     auto failing = std::make_shared<FailingReceive>(N::NetFailureCode::LinkFailed);
-    N::NetService lasting(options, failing, {}, 1, 2);
+    N::NetService lasting(options, failing, 1, 2);
     lasting.Pump(N::NetTime{0});
     CHECK_MESSAGE(failing->calls == 1, "small thing 3: a lasting failure stops this frame's receiving");
     CHECK(lasting.LinkFailures() == 1);
     auto large = std::make_shared<FailingReceive>(N::NetFailureCode::DatagramTooLarge);
-    N::NetService once(options, large, {}, 1, 2);
+    N::NetService once(options, large, 1, 2);
     once.Pump(N::NetTime{0});
     CHECK_MESSAGE(large->calls == 2, "small thing 3: after a datagram too large the frame keeps receiving");
     CHECK(once.LinkFailures() == 1);
@@ -275,16 +275,21 @@ TEST_CASE("module: each new handshake of a client carries a larger salt (S2's pr
     N::NetProductOptions options;
     options.role = N::NetRole::Client;
     auto links = N::MemoryLink::Pair({});
-    N::NetService service(options, std::make_shared<N::MemoryLink>(links.second), N::MemoryLink::EndpointA(), 1, 2);
+    options.link = std::make_shared<N::MemoryLink>(links.second);
+    N::NetService service(options, options.link, 1, 2);
+    const N::NetConnectTarget target{N::MemoryLink::EndpointA(), 1, {}};
     N::HandshakeFacts facts;
     std::uint64_t previous = 0;
     for (int i = 0; i < 4; ++i) {
-        // The clock moves on for some handshakes and stands still for others.
+        // The clock moves on for some handshakes and stands still for others. Each round is a new client World: its
+        // target (the closed session is dropped), then its first facts open a new session.
         const N::NetTime now = Ms(i < 2 ? 5 : 5 + i);
-        service.SetFacts(facts, now, true);
+        service.SetTarget(&target, now, static_cast<std::uint32_t>(i));
+        service.SetFacts(facts, now, false);
         REQUIRE(service.Client() != nullptr);
         const std::uint64_t salt = service.Client()->Request().salt;
         CHECK_MESSAGE(salt > previous, "recheck small thing b: a new handshake's salt is larger than the one before");
+        CHECK(service.Client()->Request().epoch == static_cast<std::uint32_t>(i));
         previous = salt;
         service.Close();
         REQUIRE(service.Client()->State() == N::ClientState::Disconnected);
