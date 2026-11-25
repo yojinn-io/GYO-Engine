@@ -389,7 +389,8 @@ v8-arch-gyo2-big-map
 
 ### 15.2 改成（卡片判）
 
-1. **arena 檔 v3**：`geometry`（v1 單檔）換成 `map`，也就是地圖索引在 catalog 裡的 id。`width`／`depth` 刪掉，範圍由地圖的 bounds 導出（事實只在一處，2.5）。出生點、角色參數留在 arena 檔（場景）。`arenas.json` 照舊，只列 arena 檔。
+1. **arena 檔 v3**：`geometry`（v1 單檔）換成 `map`，也就是地圖索引在 catalog 裡的 id。出生點、角色參數留在 arena 檔（場景）。`arenas.json` 照舊，只列 arena 檔。
+   - **`width`／`depth` 留著**（修訂：第一版寫成刪掉，是錯的）。它們不只是範圍，也定義「y＝0、[0, width]×[0, depth] 的地板」這條遊戲規則（`Arena.hpp`）；地圖的 bounds 以 16 格的區塊為單位，對不上 20×20 這種尺寸。要不要拿掉隱藏地板是 PvP 的移動規則（master `-gravity` 那一類），不在這批。
 2. **地圖不在建 World 之前讀**：`GameContent` 只留 arena 檔、規則、角色。地圖由**這個 World 要玩的那一張**在**生成世界階段**讀：
    - 送出索引的請求；索引宣告的 region 參照由 asset 一起讀（VM-6）。
    - region 沒全到之前 `Hold()`。
@@ -414,7 +415,7 @@ v8-arch-gyo2-big-map
 
 ### 15.4 判定（合併前）
 
-- L1：每張地圖（三張遷移的加上 `Town_Graybox`）的碰撞盒集合，遷移前後相同。用遷移前後的移動、射擊 golden 確認（現有的 PvP 測試不改）。
+- L1：三張遷移的地圖，**被碰撞盒佔住的格子**遷移前後相同。盒子的切法會變，因為工具會在區塊內合併。現有的 PvP 測試不改、照舊要通過；如果有 golden 因為盒子的切法而變，停下來回報，不改 golden。`Town_Graybox` 是新加的地圖，沒有「遷移前」。
 - L2：生成期間 region 沒到齊不結束生成；到齊後一幀內結束；進度單調不減。
 - L3：缺 region、sha 不合 → 載入失敗並帶原因，不 assert。
 - L4：`BoxSet` 每個 World 只建一次。Match 與 Client 的 `wallsDigest` 相同。
