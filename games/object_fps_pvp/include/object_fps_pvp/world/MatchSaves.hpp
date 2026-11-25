@@ -15,7 +15,7 @@
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -26,7 +26,7 @@ namespace O = GYO::Engine::Orchestration;
 
 struct MatchSavesOptions final {
     // The save service (its internal protocol), an IPv4 address and port.
-    GYO::Engine::OS::DatagramAddress service;
+    GYO::Engine::OS::SocketAddress service;
     // The Match's id: the idempotency keys and the saves' lastMatch name it.
     std::uint64_t matchId = 0;
 };

@@ -813,7 +813,7 @@ TEST_CASE("client: the lobby shows its document; a valid address enters the game
     Submit(setup, "１９２。１６８．０．１０：４００００");
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::MultiGame, "[pvp-lobby-submit] " << setup.Binding("status"));
     REQUIRE(setup.Scene().connect.has_value());
-    const auto* server = std::get_if<GYO::Engine::OS::DatagramAddress>(&setup.Scene().connect->server);
+    const auto* server = std::get_if<GYO::Engine::OS::SocketAddress>(&setup.Scene().connect->server);
     REQUIRE(server != nullptr);
     CHECK(server->ToString() == "192.168.0.10:40000");
     CHECK(setup.Scene().address == "192.168.0.10:40000");

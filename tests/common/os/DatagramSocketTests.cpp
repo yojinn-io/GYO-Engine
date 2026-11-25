@@ -23,12 +23,12 @@ std::vector<std::byte> Bytes(std::size_t count, std::uint8_t first) {
 }
 
 DatagramSocket OpenLoopback() {
-    auto socket = DatagramSocket::Open(DatagramAddress::Loopback(0));
+    auto socket = DatagramSocket::Open(SocketAddress::Loopback(0));
     REQUIRE(socket.has_value());
     return std::move(socket).value();
 }
 
-DatagramAddress Local(const DatagramSocket& socket) {
+SocketAddress Local(const DatagramSocket& socket) {
     auto address = socket.LocalAddress();
     REQUIRE(address.has_value());
     return *address;
@@ -48,17 +48,17 @@ std::optional<ReceivedDatagram> ReceiveWithin(DatagramSocket& socket, std::span<
 
 } // namespace
 
-TEST_CASE("datagram address: dotted IPv4 text parses, anything else is InvalidAddress") {
-    const auto parsed = DatagramAddress::Parse("192.168.0.10", 7000);
+TEST_CASE("socket address: dotted IPv4 text parses, anything else is InvalidAddress") {
+    const auto parsed = SocketAddress::Parse("192.168.0.10", 7000);
     REQUIRE(parsed.has_value());
-    CHECK(*parsed == DatagramAddress{{192, 168, 0, 10}, 7000});
+    CHECK(*parsed == SocketAddress{{192, 168, 0, 10}, 7000});
     CHECK(parsed->ToString() == "192.168.0.10:7000");
-    CHECK(DatagramAddress::Parse("0.0.0.0", 1)->octets == std::array<std::uint8_t, 4>{0, 0, 0, 0});
-    CHECK(DatagramAddress::Parse("255.255.255.255", 1)->octets == std::array<std::uint8_t, 4>{255, 255, 255, 255});
+    CHECK(SocketAddress::Parse("0.0.0.0", 1)->octets == std::array<std::uint8_t, 4>{0, 0, 0, 0});
+    CHECK(SocketAddress::Parse("255.255.255.255", 1)->octets == std::array<std::uint8_t, 4>{255, 255, 255, 255});
     for (const std::string bad : {"", "1.2.3", "1.2.3.4.5", "256.0.0.1", "01.2.3.4", "1..3.4", "1.2.3.4 ", "a.b.c.d",
              "1.2.3.1000"}) {
         CAPTURE(bad);
-        const auto result = DatagramAddress::Parse(bad, 1);
+        const auto result = SocketAddress::Parse(bad, 1);
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == OSErrorCode::InvalidAddress);
     }
@@ -67,7 +67,7 @@ TEST_CASE("datagram address: dotted IPv4 text parses, anything else is InvalidAd
 TEST_CASE("datagram socket: a datagram sent on loopback arrives whole, with the sender's address") {
     DatagramSocket sender = OpenLoopback();
     DatagramSocket receiver = OpenLoopback();
-    const DatagramAddress to = Local(receiver);
+    const SocketAddress to = Local(receiver);
     CHECK(to.port != 0);
     CHECK(to.octets == std::array<std::uint8_t, 4>{127, 0, 0, 1});
 
@@ -92,7 +92,7 @@ TEST_CASE("datagram socket: receive with nothing waiting returns no datagram and
 TEST_CASE("datagram socket: a datagram longer than the buffer is TooLarge and the next one still arrives") {
     DatagramSocket sender = OpenLoopback();
     DatagramSocket receiver = OpenLoopback();
-    const DatagramAddress to = Local(receiver);
+    const SocketAddress to = Local(receiver);
     REQUIRE(sender.Send(to, Bytes(100, 1)).has_value());
     REQUIRE(sender.Send(to, Bytes(8, 50)).has_value());
 
@@ -123,14 +123,14 @@ TEST_CASE("datagram socket: a port another socket holds is AddressInUse") {
 
 TEST_CASE("datagram socket: binding an address this machine does not have is InvalidAddress") {
     // 203.0.113.1 is TEST-NET-3 (RFC 5737): never assigned to a local interface.
-    const auto socket = DatagramSocket::Open(DatagramAddress{{203, 0, 113, 1}, 0});
+    const auto socket = DatagramSocket::Open(SocketAddress{{203, 0, 113, 1}, 0});
     REQUIRE_FALSE(socket.has_value());
     CHECK(socket.error().code == OSErrorCode::InvalidAddress);
 }
 
 TEST_CASE("datagram socket: sending to a port nobody listens on does not break the next receive") {
     DatagramSocket socket = OpenLoopback();
-    DatagramAddress closed;
+    SocketAddress closed;
     {
         DatagramSocket gone = OpenLoopback();
         closed = Local(gone);

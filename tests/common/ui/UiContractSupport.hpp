@@ -9,8 +9,10 @@
 // - golden_v1.json, golden_v1_master_canonical.json: master's kGoldenSourceDocument and kGoldenCanonicalDocument
 //   (tests/common/ui/UiGoldenDocument.hpp), ASCII only.
 // - golden_v2.json: master's kTextFieldDocument (tests/common/ui/UiTextFieldTests.cpp), version 2 with a text_field.
-// - *_canonical.json without "master": what Serialize writes now, one line (the JSON Module's one format, J-5). The
-//   tests check that they hold the same JSON values as master's frozen output (JsonValuesEqual).
+// - golden_v1_canonical.json, golden_v2_canonical.json: what Serialize writes for golden_v1.json and golden_v2.json.
+//   Serialize writes master's two-space layout, so document_v1_master_canonical.json is itself the canonical form of
+//   document_v1.json; golden_v1's differs from master's only in exponent text (1e300 for nlohmann's 1e+300), and
+//   master froze none for golden_v2.
 // - pvp_lobby.json: master's assets/object_fps_pvp/ui/pvp_lobby.json.
 // contract/.gitattributes keeps them byte for byte (no line ending conversion).
 

@@ -13,7 +13,7 @@ NetFailure FromOS(const OS::OSError& error, const NetFailureCode code, const cha
 
 UdpLink::UdpLink(OS::DatagramSocket socket) noexcept : socket_(std::move(socket)) {}
 
-NetResult<UdpLink> UdpLink::Open(const OS::DatagramAddress& local) {
+NetResult<UdpLink> UdpLink::Open(const OS::SocketAddress& local) {
     auto socket = OS::DatagramSocket::Open(local);
     if (!socket) {
         return Base::Err(FromOS(socket.error(), NetFailureCode::LinkFailed, "the UDP socket could not be opened"));
@@ -21,7 +21,7 @@ NetResult<UdpLink> UdpLink::Open(const OS::DatagramAddress& local) {
     return UdpLink(std::move(*socket));
 }
 
-NetResult<OS::DatagramAddress> UdpLink::LocalAddress() const {
+NetResult<OS::SocketAddress> UdpLink::LocalAddress() const {
     auto address = socket_.LocalAddress();
     if (!address) {
         return Base::Err(FromOS(address.error(), NetFailureCode::LinkFailed, "the UDP socket has no local address"));
