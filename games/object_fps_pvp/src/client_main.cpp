@@ -245,11 +245,15 @@ ClientRun RunClient(const GYO::Engine::OS::DatagramAddress& server, const std::u
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
     net.role = N::NetRole::Client;
-    net.server = server;
-    net.userId = userId;
     description.options.Set(net);
     PC::ClientOptions options{game, presentation, 0, userId};
     O::WorldDescription gameWorld = PC::ClientGameWorld(options);
+    // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function; the
+    // lobby has none, so it connects to nothing).
+    gameWorld.prepare.push_back([target = N::NetConnectTarget{server, userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        w.SetResource(target);
+        return {};
+    });
     gameWorld.build = [inner = std::move(gameWorld.build), frames, verbose](O::WorldSetup& setup) {
         inner(setup);
         setup.Registrar().Resource<ProgramState>({.name = "ProgramState"});

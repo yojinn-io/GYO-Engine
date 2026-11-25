@@ -1,12 +1,12 @@
 // The Match's saves (gateway declaration D7, segment 4): a Client connects, the Match reads its save from the save
 // service, the Client leaves, the Match writes the settled save back. The save service is a loopback listener that
-// answers as the Go service does (tests/common/os/LoopbackListener.hpp keeps the native socket code in tests/common/os).
+// answers as the Go service does (the test library gyo_test_loopback_listener).
 
 #include "WorldTestSupport.hpp"
 
 #include "object_fps_pvp/world/MatchSaves.hpp"
 
-#include "LoopbackListener.hpp"
+#include "gyo_test/LoopbackListener.hpp"
 
 #include <chrono>
 #include <string>
@@ -42,18 +42,24 @@ std::string Answer(const std::string& body) {
 
 TEST_CASE("world: the Match reads a player's save when they join and writes it back, settled, when they leave") {
     GYO::Test::LoopbackListener service;
+    REQUIRE(service.Ok());
     std::string read;
     std::string write;
+    // No REQUIRE on this thread: a Match that never calls leaves it waiting out its timeout, then it ends.
     std::thread answering([&] {
-        service.Accept();
-        read = service.ReceiveRequest();
-        service.Send(Answer("{\"userId\":1,\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":2,\"deaths\":1}}"));
+        if (!service.Accept()) return;
+        read = service.ReceiveRequest().value_or("");
+        if (!service.Send(Answer("{\"userId\":1,\"version\":3,\"body\":{\"saveVersion\":1,\"matches\":2,\"deaths\":1}}"))) return;
         service.CloseAccepted();
-        service.Accept();
-        write = service.ReceiveRequest();
-        service.Send(Answer("{\"version\":4}"));
+        if (!service.Accept()) return;
+        write = service.ReceiveRequest().value_or("");
+        (void)service.Send(Answer("{\"version\":4}"));
         service.CloseAccepted();
     });
+    struct Joined final {
+        std::thread& thread;
+        ~Joined() { if (thread.joinable()) thread.join(); }
+    } joined{answering};
 
     auto clock = std::make_shared<N::NetTime>(0);
     auto reader = [clock] { return *clock; };

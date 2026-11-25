@@ -10,11 +10,11 @@
 #include <optional>
 #include <span>
 
-// A non-blocking IPv4 TCP client connection (docs/architecture/os.md, Stream; the PvP Gateway port's declaration D8,
-// games/object_fps_pvp/docs/gateway-declaration.zh-Hant.md: a Client talks to the Gateway, a Match to its services).
-// engine/core/os opens it, reports how the connect went, and moves bytes; what the bytes mean (HTTP or anything else),
-// when to give up and what to retry stay with the caller (Design Invariant 7). Nothing here blocks: the caller asks
-// again on its next frame. The address is the same IPv4 address and port the datagram socket takes.
+// A non-blocking IPv4 TCP client connection (docs/architecture/os.md, Stream). engine/core/os opens it, reports how the
+// connect went, and moves bytes; what the bytes mean (HTTP or anything else), when to give up and what to retry stay
+// with the caller (Design Invariant 7). Nothing here blocks: the caller asks again on its next frame. The address is
+// the IPv4 address and port the datagram socket takes. The OS's own connect timeout (tens of seconds) is the only one
+// here; a caller that wants a shorter one drops the socket.
 
 namespace GYO::Engine::OS {
 
@@ -42,12 +42,14 @@ public:
     // stays failed.
     [[nodiscard]] Base::Result<StreamState, OSError> State();
 
-    // Sends what the OS takes now: the number of bytes taken, 0 when it has no room. Before Connected, and after the
-    // peer reset the connection, it fails (IOFailed with the native error).
+    // Sends what the OS takes now: the number of bytes taken, 0 when it has no room or the connect has not finished.
+    // A connect that failed is State's error; a connection the peer reset is IOFailed with the native error. It never
+    // raises a signal.
     [[nodiscard]] Base::Result<std::size_t, OSError> Send(std::span<const std::byte> data);
 
-    // Takes the bytes waiting into buffer: their number; 0 when the peer closed its side (nothing more will come);
-    // nullopt when nothing is waiting now.
+    // Takes the bytes waiting into buffer: their number; 0 when the peer closed its side (nothing more will come; an
+    // empty buffer also reads 0, so give it room); nullopt when nothing is waiting now or the connect has not finished.
+    // A connect that failed is State's error.
     [[nodiscard]] Base::Result<std::optional<std::size_t>, OSError> Receive(std::span<std::byte> buffer);
 
 private:

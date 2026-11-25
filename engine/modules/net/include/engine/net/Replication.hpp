@@ -265,7 +265,6 @@ struct NetReplicaState final {
     // This client World's epoch: the NetService's count of client Worlds minus one (B1: it grows with every client
     // World of the Product and is never taken from a message).
     std::uint32_t epoch = 0;
-    bool resyncNeeded = false;
     // The tick of the last structure update applied (they arrive in order); nullopt before the first.
     std::optional<std::uint32_t> appliedStructureTick;
     struct Part {
@@ -377,6 +376,11 @@ struct NetWorldLink final {
     std::map<std::uint32_t, Kernel::EntityId> peers;
     Kernel::EntityId clientPeer = 0;
     bool clientEndReported = false;
+    // A client World: its NetConnectTarget is read at its first frame (targetPending); a connection made for an
+    // earlier World asks for everything again under this World's epoch (resyncPending, R2).
+    bool targetPending = false;
+    std::uint32_t clientEpoch = 0;
+    bool resyncPending = false;
     std::uint64_t reportedLinkFailures = 0;
     // K3 (D-5): a client World with a rollback strategy. The replicated types the rollback Module rolls back (by wire
     // id) go into its inbox; the others are written directly, as at K1. depth: the strategy's DefaultInputLength (the

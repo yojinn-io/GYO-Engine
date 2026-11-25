@@ -1,10 +1,10 @@
-// The http Module (the PvP Gateway port's declaration D8): the request's bytes, the answer read as its bytes come in
-// any pieces, and one call against a loopback listener (tests/common/os/LoopbackListener.hpp).
+// The http Module (docs/architecture/target/v2/http.zh-Hant.md): the request's bytes, the answer read as its bytes
+// come in any pieces, and one call against the test library gyo_test_loopback_listener.
 #include <doctest/doctest.h>
 
 #include "engine/http/Http.hpp"
 
-#include "LoopbackListener.hpp"
+#include "gyo_test/LoopbackListener.hpp"
 
 #include <chrono>
 #include <string>
@@ -114,40 +114,50 @@ TEST_CASE("http: what the parser refuses") {
 
 TEST_CASE("http: a call sends its request and reads the answer over loopback") {
     GYO::Test::LoopbackListener listener;
-    std::string head;
+    REQUIRE(listener.Ok());
+    std::optional<std::string> request;
+    bool answered = false;
     std::thread server([&] {
-        listener.Accept();
-        head = listener.ReceiveHead();
-        listener.Send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        // No REQUIRE on this thread: it reports what happened and ends.
+        if (!listener.Accept()) return;
+        request = listener.ReceiveRequest();
+        answered = listener.Send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
         listener.CloseAccepted();
     });
-    H::HttpRequest request;
-    request.target = "/v1/rooms";
-    request.host = "127.0.0.1";
-    auto call = H::HttpCall::Start(listener.Address(), request);
-    REQUIRE(call.has_value());
+    H::HttpRequest sent;
+    sent.target = "/v1/rooms";
+    sent.host = "127.0.0.1";
     std::optional<H::HttpResponse> answer;
-    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (!answer && std::chrono::steady_clock::now() < until) {
-        auto polled = call->Poll();
-        REQUIRE_MESSAGE(polled.has_value(), "the call failed: " << polled.error().message);
-        answer = *polled;
-        if (!answer) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::string failure;
+    if (auto call = H::HttpCall::Start(listener.Address(), sent)) {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!answer && failure.empty() && std::chrono::steady_clock::now() < until) {
+            auto polled = call->Poll();
+            if (!polled) failure = polled.error().message;
+            else if (*polled) answer = *polled;
+            else std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (answer) {
+            auto again = call->Poll();
+            CHECK_MESSAGE((again && again->has_value()), "a finished call does not give its answer again");
+        }
+    } else {
+        failure = call.error().message;
     }
     server.join();
+    REQUIRE_MESSAGE(failure.empty(), "the call failed: " << failure);
     REQUIRE_MESSAGE(answer.has_value(), "no answer within five seconds");
+    CHECK(answered);
     CHECK(answer->status == 200);
     CHECK(answer->body == "ok");
-    CHECK(head.rfind("GET /v1/rooms HTTP/1.1\r\n", 0) == 0);
-    auto again = call->Poll();
-    REQUIRE(again.has_value());
-    CHECK_MESSAGE(again->has_value(), "a finished call gives its answer again");
+    CHECK(request.value_or("").rfind("GET /v1/rooms HTTP/1.1\r\n", 0) == 0);
 }
 
-TEST_CASE("http: a call to a port nobody listens on fails to connect") {
+TEST_CASE("http: a call to a port nobody listens on is Unreachable, with the OS's error in the detail") {
     GYO::Engine::OS::DatagramAddress closed{};
     {
         GYO::Test::LoopbackListener listener;
+        REQUIRE(listener.Ok());
         closed = listener.Address();
         listener.CloseListening();
     }
@@ -157,10 +167,19 @@ TEST_CASE("http: a call to a port nobody listens on fails to connect") {
     for (;;) {
         auto polled = call->Poll();
         if (!polled) {
-            CHECK(polled.error().code == H::HttpFailureCode::ConnectFailed);
+            CHECK(polled.error().code == H::HttpFailureCode::Unreachable);
+            CHECK_MESSAGE(polled.error().detail.rfind("Unreachable", 0) == 0, "the detail lost the OS's code: " << polled.error().detail);
             break;
         }
         REQUIRE_MESSAGE(std::chrono::steady_clock::now() < until, "the failed connect was never reported");
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+}
+
+TEST_CASE("http: after a failure the parser keeps it") {
+    H::ResponseParser parser;
+    REQUIRE_FALSE(parser.Feed(AsBytes(std::string("SMTP ready\r\n\r\n"))).has_value());
+    auto again = parser.Feed(AsBytes(std::string("HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")));
+    CHECK_MESSAGE((!again && again.error().code == H::HttpFailureCode::MalformedResponse), "a failed parser took more bytes");
+    CHECK_FALSE(parser.Response().has_value());
 }

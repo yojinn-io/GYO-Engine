@@ -78,8 +78,8 @@ std::unique_ptr<O::Product> UdpClient(const OS::DatagramAddress& server, const G
     GYO::Test::Net::End client;
     client.net.role = N::NetRole::Client;
     client.net.bind = OS::DatagramAddress::Loopback(0);
-    client.net.server = server;
-    client.net.userId = 7;
+    client.target.server = server;
+    client.target.userId = 7;
     client.role = N::NetWorldOptions{N::NetRole::Client, std::nullopt};
     client.range = {1001, 2000};
     client.time.step = step;
@@ -120,8 +120,8 @@ TEST_CASE("link: a small G-5 over UDP loopback: the client ends equal to the ser
     REQUIRE(address.has_value());
     End client = GameEnd(N::NetRole::Client, rules);
     client.net.bind = OS::DatagramAddress::Loopback(0);
-    client.net.server = OS::DatagramAddress::Loopback(address->port);
-    client.net.userId = 9;
+    client.target.server = OS::DatagramAddress::Loopback(address->port);
+    client.target.userId = 9;
     auto builtClient = O::Product::Build(Describe(client), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(builtClient), Reported(builtClient));
     auto& serverWorld = (*builtServer)->World("Net").GetWorld();

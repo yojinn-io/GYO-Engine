@@ -23,7 +23,7 @@ enum class OSErrorCode : std::uint16_t {
     TooLarge,
     IOFailed,
     Unsupported,
-    // Sockets (Datagram): an address that is not valid or not local, a local
+    // Sockets (Datagram, Stream): an address that is not valid or not local, a local
     // address another socket holds, a peer or network the OS reports it cannot
     // reach, and an operation the OS cannot take now without blocking.
     InvalidAddress,

@@ -1,6 +1,7 @@
 // The TCP client connection shared by macOS and Linux: BSD sockets, non-blocking through fcntl, the connect's outcome
-// through poll and SO_ERROR. A write to a connection the peer reset must not raise SIGPIPE: Linux takes MSG_NOSIGNAL
-// on each send, macOS SO_NOSIGPIPE on the socket (the feature macros pick which one; no OS macro).
+// through poll and SO_ERROR. A write to a connection the peer reset must not raise SIGPIPE: MSG_NOSIGNAL on each send
+// where the C library has it (Linux; macOS SDKs since 2023), else SO_NOSIGPIPE on the socket (older macOS SDKs). One of
+// the two, chosen by the feature macros (no OS macro).
 #include "engine/os/StreamSocket.hpp"
 
 #include "engine/base/Assert.hpp"
@@ -74,7 +75,7 @@ Base::Result<StreamSocket, OSError> StreamSocket::Connect(const DatagramAddress&
     if (closeOnExec < 0 || fcntl(impl->fd, F_SETFD, closeOnExec | FD_CLOEXEC) < 0)
         return Base::Err(OpenError("fcntl(FD_CLOEXEC)", errno));
     const int on = 1;
-#ifdef SO_NOSIGPIPE
+#if !defined(MSG_NOSIGNAL) && defined(SO_NOSIGPIPE)
     if (setsockopt(impl->fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on) < 0)
         return Base::Err(OpenError("setsockopt(SO_NOSIGPIPE)", errno));
 #endif
@@ -88,8 +89,8 @@ Base::Result<StreamSocket, OSError> StreamSocket::Connect(const DatagramAddress&
             break;
         }
         const int error = errno;
-        if (error == EINTR) continue;
-        if (error == EINPROGRESS) break;
+        // Interrupted: the connect goes on in the background (calling again would be EALREADY); State reports it.
+        if (error == EINPROGRESS || error == EINTR) break;
         if (error == EADDRNOTAVAIL || error == EAFNOSUPPORT || error == EACCES || error == EPERM)
             return Base::Err(OpenError("connect()", error));
         // Refused at once (loopback): the outcome State reports.
@@ -128,6 +129,12 @@ Base::Result<StreamState, OSError> StreamSocket::State() {
 
 Base::Result<std::size_t, OSError> StreamSocket::Send(const std::span<const std::byte> data) {
     GYO_ASSERT(impl_ != nullptr);
+    // The connection's own state first, so every platform answers the same before Connected and after a failure.
+    if (!impl_->connected) {
+        auto state = State();
+        if (!state) return Base::Err(state.error());
+        if (*state != StreamState::Connected) return std::size_t{0};
+    }
     for (;;) {
         const ssize_t sent = send(impl_->fd, data.data(), data.size(), kSendFlags);
         if (sent >= 0) return static_cast<std::size_t>(sent);
@@ -140,6 +147,11 @@ Base::Result<std::size_t, OSError> StreamSocket::Send(const std::span<const std:
 
 Base::Result<std::optional<std::size_t>, OSError> StreamSocket::Receive(const std::span<std::byte> buffer) {
     GYO_ASSERT(impl_ != nullptr);
+    if (!impl_->connected) {
+        auto state = State();
+        if (!state) return Base::Err(state.error());
+        if (*state != StreamState::Connected) return std::optional<std::size_t>();
+    }
     for (;;) {
         const ssize_t received = recv(impl_->fd, buffer.data(), buffer.size(), 0);
         if (received >= 0) return std::optional<std::size_t>(static_cast<std::size_t>(received));
