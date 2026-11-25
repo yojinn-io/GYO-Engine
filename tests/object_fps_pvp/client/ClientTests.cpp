@@ -140,7 +140,7 @@ struct Setup final {
     // scene (none: the game, connected to the Match over the memory link).
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
-                   std::optional<GYO::Engine::OS::DatagramAddress> gateway = std::nullopt)
+                   std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt)
         : framesPerStep(perStep) {
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
@@ -202,7 +202,7 @@ struct Setup final {
         start.first = firstScene.value_or(GameScene());
         start.dataDirectory = std::move(dataDirectory);
         // No Gateway given: one nobody answers at (port 1).
-        start.gateway = gateway.value_or(GYO::Engine::OS::DatagramAddress::Loopback(1));
+        start.gateway = gateway.value_or(GYO::Engine::OS::SocketAddress::Loopback(1));
         description.options.Set(std::move(start));
         description.worlds.push_back(std::move(solo));
         description.worlds.push_back(std::move(sim));
@@ -990,7 +990,7 @@ public:
         stop_ = true;
         thread_.join();
     }
-    [[nodiscard]] GYO::Engine::OS::DatagramAddress Address() const { return listener_.Address(); }
+    [[nodiscard]] GYO::Engine::OS::SocketAddress Address() const { return listener_.Address(); }
     [[nodiscard]] std::vector<Seen> Requests() {
         const std::lock_guard<std::mutex> lock(mutex_);
         return seen_;
@@ -1212,7 +1212,7 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::MultiGame; }), "[pvp-gw-start] " << setup.Binding("status"));
     REQUIRE(setup.Scene().connect.has_value());
-    const auto* server = std::get_if<GYO::Engine::OS::DatagramAddress>(&setup.Scene().connect->server);
+    const auto* server = std::get_if<GYO::Engine::OS::SocketAddress>(&setup.Scene().connect->server);
     REQUIRE(server != nullptr);
     CHECK_MESSAGE(server->ToString() == "127.0.0.1:47000", "[pvp-gw-connect]");
     CHECK(setup.Scene().connect->userId == 7);

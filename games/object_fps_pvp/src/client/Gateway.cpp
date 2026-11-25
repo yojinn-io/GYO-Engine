@@ -194,7 +194,7 @@ std::string LoadDeviceId(const std::string& path, std::string& error) {
     return made;
 }
 
-GatewayClient::GatewayClient(GYO::Engine::OS::DatagramAddress gateway, std::string deviceId, std::string unavailable,
+GatewayClient::GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string unavailable,
                              const std::int64_t timeout)
     : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), unavailable_(std::move(unavailable)), timeout_(timeout) {}
 

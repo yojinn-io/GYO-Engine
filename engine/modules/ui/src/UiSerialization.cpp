@@ -1,7 +1,8 @@
 // Writing gyo.ui (ported from master's engine/ui/src/UiSerialization.cpp): master's field order, the same omitted
-// fields and uppercase #RRGGBBAA colours, through the JSON Module's Writer. The Writer has one format, compact on one
-// line (Design Invariant J-5); master wrote two-space indentation. The values are the same: floats are widened to
-// double as master did, and integers (version, decimals, max_items, max_length, integer previews) stay integers.
+// fields and uppercase #RRGGBBAA colours, through the JSON Module's Writer with two-space indentation: master's
+// layout, so a document master wrote is written back byte for byte and a change shows as a change of its lines.
+// Floats are widened to double as master did, and integers (version, decimals, max_items, max_length, integer
+// previews) stay integers.
 
 #include <cstdint>
 #include <map>
@@ -466,7 +467,7 @@ UiResult<std::string> UiDocumentCodec::Serialize(const UiDocument& document) {
     if (!validation) return Base::Err(std::move(validation).error());
 
     std::string serialized;
-    Json::Writer writer(serialized);
+    Json::Writer writer(serialized, Json::Layout{.indent = 2});
     WriteDocument(writer, document);
     // A string that is not UTF-8 or a preview number that is not finite: JSON cannot hold it (master: nlohmann's
     // strict dump threw for the first and wrote null for the second).

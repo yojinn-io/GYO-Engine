@@ -46,7 +46,7 @@ void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::s
 // room can be made with (the installed arenas, by id).
 struct GatewayContext final {
     std::string dataDirectory;
-    GYO::Engine::OS::DatagramAddress gateway;
+    GYO::Engine::OS::SocketAddress gateway;
     std::vector<std::string> maps;
 };
 void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
@@ -56,6 +56,6 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
 [[nodiscard]] std::string DeviceIdPath(const std::string& dataDirectory);
 // The Frame World's GatewayClient, when the World has none yet (the first scene: later ones get it carried): with this
 // player's device id (read, or made the first time), or without one (it then calls nothing and says why).
-void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::DatagramAddress& gateway, const std::string& dataDirectory);
+void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory);
 
 } // namespace object_fps_pvp::client

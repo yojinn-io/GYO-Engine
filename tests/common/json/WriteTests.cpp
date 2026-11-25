@@ -7,6 +7,7 @@
 #include <ostream>
 
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <limits>
@@ -22,7 +23,9 @@
 
 using namespace std::string_view_literals;
 using GYO::Engine::Json::Document;
+using GYO::Engine::Json::IndentCharacter;
 using GYO::Engine::Json::JsonErrorCode;
+using GYO::Engine::Json::Layout;
 using GYO::Engine::Json::Parse;
 using GYO::Engine::Json::Value;
 using GYO::Engine::Json::WriteValue;
@@ -30,9 +33,9 @@ using GYO::Engine::Json::Writer;
 
 namespace {
 
-std::string Write(void (*body)(Writer&)) {
+std::string Write(void (*body)(Writer&), const Layout layout = {}) {
     std::string out;
-    Writer writer(out);
+    Writer writer(out, layout);
     body(writer);
     auto done = writer.Finish();
     REQUIRE(done.has_value());
@@ -465,4 +468,166 @@ TEST_CASE("Writer: a key written twice is not detected; Parse rejects the result
     auto document = Parse(out);
     REQUIRE_FALSE(document.has_value());
     CHECK(document.error().code == JsonErrorCode::RepeatedKey);
+}
+
+// The indented layout (Layout): the same values on more lines, decided by the
+// calls and the Layout alone.
+
+namespace {
+
+void WriteSample(Writer& w) {
+    w.BeginObject();
+    w.Key("tick");
+    w.Uint(1207);
+    w.Key("player");
+    w.Int(-3);
+    w.Key("moves");
+    w.BeginArray();
+    w.Bool(true);
+    w.Null();
+    w.BeginObject();
+    w.EndObject();
+    w.BeginArray();
+    w.EndArray();
+    w.BeginObject();
+    w.Key("x");
+    w.Double(0.5);
+    w.EndObject();
+    w.EndArray();
+    w.Key("name");
+    w.String("p\n3");
+    w.EndObject();
+}
+
+constexpr std::string_view kSampleCompact =
+    R"({"tick":1207,"player":-3,"moves":[true,null,{},[],{"x":0.5}],"name":"p\n3"})";
+
+// What nlohmann::json's dump(2) writes for the same value.
+constexpr std::string_view kSampleTwoSpaces = "{\n"
+                                              "  \"tick\": 1207,\n"
+                                              "  \"player\": -3,\n"
+                                              "  \"moves\": [\n"
+                                              "    true,\n"
+                                              "    null,\n"
+                                              "    {},\n"
+                                              "    [],\n"
+                                              "    {\n"
+                                              "      \"x\": 0.5\n"
+                                              "    }\n"
+                                              "  ],\n"
+                                              "  \"name\": \"p\\n3\"\n"
+                                              "}";
+
+std::string Rewrite(const std::string_view text, const Layout layout) {
+    auto document = Parse(text);
+    REQUIRE(document.has_value());
+    std::string out;
+    Writer writer(out, layout);
+    WriteValue(writer, document->Root());
+    REQUIRE(writer.Finish().has_value());
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("Writer: the default layout is compact, and so is indent 0") {
+    CHECK(Write(WriteSample) == kSampleCompact);
+    CHECK(Write(WriteSample, Layout{}) == kSampleCompact);
+    CHECK(Write(WriteSample, Layout{.indent = 0, .character = IndentCharacter::Tab}) == kSampleCompact);
+}
+
+TEST_CASE("Writer: an indented layout puts every member and element on its own line") {
+    CHECK(Write(WriteSample, Layout{.indent = 2}) == kSampleTwoSpaces);
+    CHECK(Write(WriteSample, Layout{.indent = 1, .character = IndentCharacter::Tab}) ==
+          "{\n\t\"tick\": 1207,\n\t\"player\": -3,\n\t\"moves\": [\n\t\ttrue,\n\t\tnull,\n\t\t{},\n\t\t[],\n"
+          "\t\t{\n\t\t\t\"x\": 0.5\n\t\t}\n\t],\n\t\"name\": \"p\\n3\"\n}");
+    CHECK(Write([](Writer& w) {
+              w.BeginArray();
+              w.BeginArray();
+              w.Int(1);
+              w.EndArray();
+              w.EndArray();
+          },
+                Layout{.indent = 4}) == "[\n    [\n        1\n    ]\n]");
+}
+
+TEST_CASE("Writer: an indented layout leaves a lone value and empty containers on one line") {
+    const Layout indented{.indent = 2};
+    CHECK(Write([](Writer& w) { w.Int(7); }, indented) == "7");
+    CHECK(Write([](Writer& w) { w.String("a b"); }, indented) == "\"a b\"");
+    CHECK(Write([](Writer& w) {
+              w.BeginObject();
+              w.EndObject();
+          },
+                indented) == "{}");
+    CHECK(Write([](Writer& w) {
+              w.BeginArray();
+              w.EndArray();
+          },
+                indented) == "[]");
+}
+
+TEST_CASE("Writer: the layout changes only whitespace between tokens") {
+    // Both directions through Parse and WriteValue: the indented text reads back
+    // to the compact one, the compact text writes out as the indented one.
+    const std::string indented = Write(WriteSample, Layout{.indent = 2});
+    CHECK(Rewrite(indented, Layout{}) == kSampleCompact);
+    CHECK(Rewrite(kSampleCompact, Layout{.indent = 2}) == indented);
+    CHECK(Rewrite(indented, Layout{.indent = 2}) == indented);
+}
+
+TEST_CASE("Writer: indented output is deterministic for a large generated document") {
+    // Nested objects and arrays of every kind, numbers from random bits: the
+    // same calls twice give the same bytes, the text reads back to the compact
+    // form of the same calls, and the bytes are pinned for every platform.
+    std::string compact;
+    std::string first;
+    std::string second;
+    for (std::string* out : {&compact, &first, &second}) {
+        std::uint64_t state = 0x5EED;
+        Writer writer(*out, out == &compact ? Layout{} : Layout{.indent = 3});
+        writer.BeginArray();
+        for (int record = 0; record < 2000; ++record) {
+            writer.BeginObject();
+            writer.Key("id");
+            writer.Int(record);
+            writer.Key("values");
+            writer.BeginArray();
+            const std::uint64_t count = SplitMix64(state) % 5;
+            for (std::uint64_t i = 0; i < count; ++i) {
+                const double value = std::bit_cast<double>(SplitMix64(state));
+                if (std::isfinite(value)) {
+                    writer.Double(value);
+                } else {
+                    writer.Null();
+                }
+            }
+            writer.EndArray();
+            writer.Key("tag");
+            writer.String(record % 3 == 0 ? "" : "t\t\"");
+            writer.Key("empty");
+            writer.BeginObject();
+            writer.EndObject();
+            writer.EndObject();
+        }
+        writer.EndArray();
+        REQUIRE(writer.Finish().has_value());
+    }
+    CHECK(first == second);
+    CHECK(Rewrite(first, Layout{}) == compact);
+    INFO(first.substr(0, 400));
+    CHECK(GYO::Engine::Base::Fnv1a64(first) == 0x15F3676CEF80855CULL);
+}
+
+TEST_CASE("Writer: a failure under an indented layout still cuts the string back") {
+    std::string out = "kept";
+    Writer writer(out, Layout{.indent = 2});
+    writer.BeginArray();
+    writer.Int(1);
+    writer.Double(std::numeric_limits<double>::infinity());
+    writer.EndArray();
+    auto done = writer.Finish();
+    REQUIRE_FALSE(done.has_value());
+    CHECK(done.error().code == JsonErrorCode::NotRepresentable);
+    CHECK(out == "kept");
 }

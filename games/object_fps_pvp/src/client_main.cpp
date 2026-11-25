@@ -33,8 +33,8 @@
 #include "engine/net/Replication.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/orchestration/Orchestration.hpp"
-#include "engine/os/DatagramSocket.hpp"
 #include "engine/os/Files.hpp"
+#include "engine/os/SocketAddress.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/threads/WorkerPool.hpp"
 #include "engine/window/Window.hpp"
@@ -233,12 +233,12 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
 }
 
 int main(int argc, char** argv) {
-    std::optional<GYO::Engine::OS::DatagramAddress> connect;
+    std::optional<GYO::Engine::OS::SocketAddress> connect;
     std::uint64_t userId = 0;
     std::int64_t frames = -1;
     std::optional<std::string> contentRoot;
     std::string profile = "default";
-    GYO::Engine::OS::DatagramAddress gateway = GYO::Engine::OS::DatagramAddress::Loopback(7700);
+    GYO::Engine::OS::SocketAddress gateway = GYO::Engine::OS::SocketAddress::Loopback(7700);
     bool verbose = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
