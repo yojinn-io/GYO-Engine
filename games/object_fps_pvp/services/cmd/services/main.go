@@ -195,6 +195,9 @@ func installedMaps(content string) ([]string, error) {
 		if err := json.Unmarshal(body, &arena); err != nil {
 			return nil, err
 		}
+		if arena.ID == "" {
+			return nil, fmt.Errorf("the arena %s has no id", file)
+		}
 		ids = append(ids, arena.ID)
 	}
 	return ids, nil

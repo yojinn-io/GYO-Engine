@@ -576,7 +576,8 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         players.ForEach([&](const K::EntityId id, const Owner& owner, const PlayerBody&, const PlayerCombat&) {
             if (owner.userId == gone->userId) despawn.Entity(id);
         });
-        if (seats->seats && gone->peer != 0) seats->seats->Release(gone->userId);
+        // Also a connection that ended before its Peer was made (peer 0): its admission took a seat too.
+        if (seats->seats) seats->seats->Release(gone->userId);
     }
     std::vector<PlayerBody> living;
     players.ForEach([&](K::EntityId, const Owner&, const PlayerBody& body, const PlayerCombat& combat) {
@@ -772,36 +773,45 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     return content;
 }
 
-std::optional<std::string> Seats::Take(const std::uint64_t userId) {
+std::optional<std::string> Seats::Take(const std::uint64_t userId, const N::Endpoint from) {
     const std::lock_guard lock(mutex_);
-    if (users_.contains(userId)) return "the user is already in the match";
-    if (users_.size() >= capacity) return "the match is full";
-    users_.insert(userId);
-    taken.store(static_cast<std::uint32_t>(users_.size()));
+    if (const auto seated = seats_.find(userId); seated != seats_.end()) {
+        if (seated->second.endpoint != from) return "the user is already in the match";
+        ++seated->second.connections;
+        return std::nullopt;
+    }
+    if (seats_.size() >= capacity_) return "the match is full";
+    seats_.emplace(userId, Seat{from, 1});
     return std::nullopt;
 }
 
 void Seats::Release(const std::uint64_t userId) {
     const std::lock_guard lock(mutex_);
-    users_.erase(userId);
-    taken.store(static_cast<std::uint32_t>(users_.size()));
+    const auto seated = seats_.find(userId);
+    if (seated == seats_.end()) return;
+    if (--seated->second.connections == 0) seats_.erase(seated);
+}
+
+std::uint32_t Seats::Taken() const {
+    const std::lock_guard lock(mutex_);
+    return static_cast<std::uint32_t>(seats_.size());
 }
 
 N::ServerHost::Admission SeatAdmission(std::shared_ptr<Seats> seats) {
-    return [seats = std::move(seats)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
-        if (auto refused = seats->Take(request.userId)) {
+    return [seats = std::move(seats)](const N::ConnectRequest& request, const N::Endpoint from) -> N::NetResult<void> {
+        if (auto refused = seats->Take(request.userId, from)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
         }
         return {};
     };
 }
 
-N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionKey key) {
-    return [seats = std::move(seats), key = std::move(key)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
-        if (const auto refused = match::VerifyAdmission(key.key, request.token, key.nowUnixSeconds(), key.matchId, request.userId)) {
+N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionCheck check) {
+    return [seats = std::move(seats), check = std::move(check)](const N::ConnectRequest& request, const N::Endpoint from) -> N::NetResult<void> {
+        if (const auto refused = match::VerifyAdmission(check.key, request.token, check.nowUnixSeconds(), check.matchId, request.userId)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::string(match::AdmissionRefusalName(*refused))));
         }
-        if (auto refused = seats->Take(request.userId)) {
+        if (auto refused = seats->Take(request.userId, from)) {
             return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
         }
         return {};

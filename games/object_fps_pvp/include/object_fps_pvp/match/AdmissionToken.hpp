@@ -41,7 +41,4 @@ enum class AdmissionRefusal : std::uint8_t { Length = 1, Version, Signature, Mat
                                                               std::int64_t nowUnixSeconds, std::uint64_t matchId,
                                                               std::uint64_t userId);
 
-// Hexadecimal text (either case) as bytes; nullopt for an odd length or another character.
-[[nodiscard]] std::optional<std::vector<std::byte>> DecodeHex(std::string_view text);
-
 } // namespace object_fps_pvp::match

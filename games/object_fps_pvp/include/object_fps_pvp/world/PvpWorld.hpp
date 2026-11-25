@@ -24,14 +24,13 @@
 #include "engine/net/NetService.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <set>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -77,21 +76,30 @@ void HashValue(K::Hasher&, const ContentMismatch&);
 // spawn is not free of its walls.
 [[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error);
 
-// The seats of a Match: the admission takes one per user (Take), refusing a full Match and a user already seated;
-// SeatPlayers gives it back when the user's Peer goes (Release). Shared by the Product's admission and the World
-// (MatchSeats); the admission and the World may run on different threads.
-struct Seats final {
-    std::uint32_t capacity = 4;
-    // The seats taken (readable without the lock).
-    std::atomic<std::uint32_t> taken{0};
+// The seats of a Match: the admission takes one per user (Take), refusing a full Match and a user already seated from
+// another endpoint; SeatPlayers gives it back when the user's connection ends (Release). A reconnect from the same
+// endpoint (a newer handshake: the server ends the old connection and asks the admission at once, before the World
+// has seen the old one go) is let in, and the seat is counted per connection, so the old one's release later does
+// not free the new one's seat. The admission runs in the World's net System, and the Match's main loop reads Taken
+// (the World may run on its own thread, so the state is behind a lock).
+class Seats final {
+public:
+    explicit Seats(std::uint32_t capacity = 4) : capacity_(capacity) {}
 
     // nullopt: seated; else why not ("the match is full", "the user is already in the match").
-    [[nodiscard]] std::optional<std::string> Take(std::uint64_t userId);
+    [[nodiscard]] std::optional<std::string> Take(std::uint64_t userId, N::Endpoint from);
     void Release(std::uint64_t userId);
+    // The users seated.
+    [[nodiscard]] std::uint32_t Taken() const;
 
 private:
-    std::mutex mutex_;
-    std::set<std::uint64_t> users_;
+    struct Seat final {
+        N::Endpoint endpoint;
+        std::uint32_t connections = 0;
+    };
+    std::uint32_t capacity_;
+    mutable std::mutex mutex_;
+    std::map<std::uint64_t, Seat> seats_;
 };
 struct MatchSeats final {
     std::shared_ptr<Seats> seats;
@@ -103,14 +111,14 @@ void HashValue(K::Hasher&, const MatchSeats&);
 
 // What a Match the matches service started checks first (gateway declaration D5): its own key and id, and the wall
 // clock in Unix seconds (an admission is not decision data, net D-9).
-struct AdmissionKey final {
+struct AdmissionCheck final {
     std::vector<std::byte> key;
     std::uint64_t matchId = 0;
     std::function<std::int64_t()> nowUnixSeconds;
 };
 
 // The token (match/AdmissionToken.hpp: Refused with the failed field as the detail), then the seats.
-[[nodiscard]] N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionKey key);
+[[nodiscard]] N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionCheck check);
 
 // The allotter ranges: the Match's entities and every Client's own (render, sound) ones; kArenaEntity is outside both.
 inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kMatchIds{1, 1'000'000};

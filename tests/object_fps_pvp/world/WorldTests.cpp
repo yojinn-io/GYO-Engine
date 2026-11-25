@@ -281,7 +281,7 @@ struct Session {
 
     Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
             std::shared_ptr<const PW::GameContent> clientContent = ShippedContent()) {
-        seats->capacity = capacity;
+        seats = std::make_shared<PW::Seats>(capacity);
         std::vector<N::MemoryLink> serverEnds;
         for (int i = 0; i < clientCount; ++i) {
             N::MemoryLinkSettings settings;
@@ -414,21 +414,21 @@ TEST_CASE("world: a Client past the seats is refused and gets no player") {
     CHECK(PeerCount(session.Match()) == 2);
     CHECK(PlayerOf(session.Match(), 3) == 0);
     CHECK(PeerCount(session.Client(2)) == 0);
-    CHECK(session.seats->taken.load() == 2);
+    CHECK(session.seats->Taken() == 2);
 }
 
 TEST_CASE("world: a Client that leaves takes its player with it and gives its seat back") {
     Session session(2, 2);
     session.Frames(90);
     REQUIRE(PlayerOf(session.Match(), 2) != 0);
-    REQUIRE(session.seats->taken.load() == 2);
+    REQUIRE(session.seats->Taken() == 2);
     auto* net = session.clients[1]->Buffer().Find<N::NetService>();
     REQUIRE(net != nullptr);
     net->Close();
     session.Frames(30);
     CHECK(PlayerOf(session.Match(), 2) == 0);
     CHECK(PlayerOf(session.Match(), 1) != 0);
-    CHECK(session.seats->taken.load() == 1);
+    CHECK(session.seats->Taken() == 1);
     CHECK(PlayerOf(session.Client(0), 2) == 0);
 }
 

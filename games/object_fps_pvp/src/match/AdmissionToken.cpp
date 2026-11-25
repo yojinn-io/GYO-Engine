@@ -1,5 +1,7 @@
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 
+#include "object_fps_pvp/data/Hex.hpp"
+
 #include "engine/base/Sha256.hpp"
 
 namespace object_fps_pvp::match {
@@ -14,7 +16,7 @@ std::uint64_t ReadU64(const std::span<const std::byte> bytes, const std::size_t 
 
 std::array<std::byte, 32> Sha256Digest(const std::span<const std::byte> bytes) {
     const std::string text = GYO::Engine::Base::Sha256(bytes);
-    const auto decoded = DecodeHex(text);
+    const auto decoded = data::DecodeHex(text);
     std::array<std::byte, 32> digest{};
     for (std::size_t i = 0; i < digest.size(); ++i) digest[i] = (*decoded)[i];
     return digest;
@@ -70,24 +72,6 @@ std::optional<AdmissionRefusal> VerifyAdmission(const std::span<const std::byte>
     const std::uint64_t expiresAt = ReadU64(token, 17);
     if (nowUnixSeconds < 0 || static_cast<std::uint64_t>(nowUnixSeconds) >= expiresAt) return AdmissionRefusal::Expired;
     return std::nullopt;
-}
-
-std::optional<std::vector<std::byte>> DecodeHex(const std::string_view text) {
-    if (text.size() % 2 != 0) return std::nullopt;
-    const auto nibble = [](const char c) -> int {
-        if (c >= '0' && c <= '9') return c - '0';
-        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-        return -1;
-    };
-    std::vector<std::byte> bytes(text.size() / 2);
-    for (std::size_t i = 0; i < bytes.size(); ++i) {
-        const int high = nibble(text[2 * i]);
-        const int low = nibble(text[2 * i + 1]);
-        if (high < 0 || low < 0) return std::nullopt;
-        bytes[i] = static_cast<std::byte>((high << 4) | low);
-    }
-    return bytes;
 }
 
 } // namespace object_fps_pvp::match

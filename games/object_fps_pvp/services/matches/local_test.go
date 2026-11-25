@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 
 func fakeMatch() int {
 	arguments := strings.Join(os.Args[1:], " ")
-	want := "--port 7811 --match-id 77 --capacity 3 --admission-key-stdin --exit-when-empty --arena pvp_corners_v1"
+	want := "--port 7811 --match-id 77 --capacity 3 --admission-key-stdin --idle-seconds 60 --arena pvp_corners_v1"
 	if !strings.Contains(arguments, want) {
 		os.Stderr.WriteString("fake match: arguments " + arguments + "\n")
 		return 3

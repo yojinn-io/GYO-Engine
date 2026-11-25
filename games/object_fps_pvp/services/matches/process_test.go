@@ -1,9 +1,9 @@
 package matches
 
 import (
+	"bufio"
 	"context"
-	"errors"
-	"net"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -11,62 +11,90 @@ import (
 	"time"
 )
 
-// TestTheRealMatchStartsWithItsKey starts the Match executable the way the
-// service does (CTest object_fps_pvp.match_process, label network, sets
-// GYO_PVP_MATCH and GYO_PVP_CONTENT; skipped otherwise).
-func TestTheRealMatchStartsWithItsKey(t *testing.T) {
+// The real Match executable as the service starts it (CTest
+// object_fps_pvp.match_process, label network, sets GYO_PVP_MATCH and
+// GYO_PVP_CONTENT; skipped otherwise).
+func realMatch(t *testing.T) (string, string) {
+	t.Helper()
 	executable, content := os.Getenv("GYO_PVP_MATCH"), os.Getenv("GYO_PVP_CONTENT")
 	if executable == "" {
 		t.Skip("GYO_PVP_MATCH is not set")
 	}
+	return executable, content
+}
+
+// startWatched starts a Match whose output the test reads line by line.
+func startWatched(t *testing.T, idleSeconds, port int) (Running, <-chan string) {
+	t.Helper()
+	executable, content := realMatch(t)
+	reader, writer := io.Pipe()
 	local := &Local{Command: executable, Arguments: []string{"--content", content}, Advertise: "127.0.0.1",
-		FirstPort: 47811, LastPort: 47811}
+		FirstPort: port, LastPort: port, IdleSeconds: idleSeconds, Output: writer}
 	running, err := local.Start(context.Background(), Spec{MatchID: 5, Key: make([]byte, 32), Capacity: 2, Map: "pvp_training_v1"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	lines := make(chan string, 64)
+	go func() {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			lines <- scanner.Text()
+		}
+		close(lines)
+	}()
+	go func() {
+		<-running.Ended
+		writer.Close()
+	}()
+	return running, lines
+}
+
+// waitFor reads lines until one contains text, or fails at the deadline.
+func waitFor(t *testing.T, lines <-chan string, text string, within time.Duration) {
+	t.Helper()
+	deadline := time.After(within)
+	for {
+		select {
+		case line, open := <-lines:
+			if !open {
+				t.Fatalf("the Match ended before saying %q", text)
+			}
+			if strings.Contains(line, text) {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("the Match did not say %q within %v", text, within)
+		}
+	}
+}
+
+// The Match says it plays once its UDP socket is open (the Product is built,
+// the net Module's Configure opened it). The time it takes is logged: the
+// connect target is handed out before it (declaration D6).
+func TestTheRealMatchListensWithItsKey(t *testing.T) {
+	started := time.Now()
+	running, lines := startWatched(t, 60, 47811)
 	defer func() {
 		running.Stop()
 		<-running.Ended
 	}()
-	deadline := time.Now().Add(20 * time.Second)
-	for !listening(t, "127.0.0.1:47811") {
-		select {
-		case <-running.Ended:
-			t.Fatal("the Match ended instead of listening")
-		default:
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the Match did not listen on its port")
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	waitFor(t, lines, "on UDP port 47811", 20*time.Second)
+	t.Logf("the Match was listening %v after it was started", time.Since(started))
 }
 
-// listening sends a datagram the Match drops (not a handshake): a closed port
-// answers with ICMP port unreachable, which a connected UDP socket reads as a
-// refusal; an open one stays silent until the deadline.
-func listening(t *testing.T, address string) bool {
-	t.Helper()
-	connection, err := net.Dial("udp", address)
-	if err != nil {
-		t.Fatal(err)
+func TestTheRealMatchEndsWhenNobodyCame(t *testing.T) {
+	running, lines := startWatched(t, 1, 47813)
+	waitFor(t, lines, "no player for 1 s: the match ends", 20*time.Second)
+	select {
+	case <-running.Ended:
+	case <-time.After(10 * time.Second):
+		running.Stop()
+		t.Fatal("the Match said it ends but its process went on")
 	}
-	defer connection.Close()
-	if _, err := connection.Write([]byte("probe")); err != nil {
-		return false
-	}
-	_ = connection.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	_, err = connection.Read(make([]byte, 64))
-	var timeout net.Error
-	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 func TestTheRealMatchRefusesABadKey(t *testing.T) {
-	executable, content := os.Getenv("GYO_PVP_MATCH"), os.Getenv("GYO_PVP_CONTENT")
-	if executable == "" {
-		t.Skip("GYO_PVP_MATCH is not set")
-	}
+	executable, content := realMatch(t)
 	command := exec.Command(executable, "--content", content, "--port", "47812", "--match-id", "5", "--admission-key-stdin")
 	command.Stdin = strings.NewReader("not hex\n")
 	output, err := command.CombinedOutput()

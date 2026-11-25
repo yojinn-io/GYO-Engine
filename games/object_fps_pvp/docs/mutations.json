@@ -977,11 +977,11 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "    if (users_.contains(userId)) return \"the user is already in the match\";\n",
+   "find": "        if (seated->second.endpoint != from) return \"the user is already in the match\";\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a keyed*,world: a Match without*",
-   "expect": "a second seat for one user|the token used twice"
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "from another endpoint"
   },
   {
    "id": "pvp-gw-seat-kept",
@@ -990,10 +990,10 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "    users_.erase(userId);\n",
-   "replace": "",
+   "find": "    if (--seated->second.connections == 0) seats_.erase(seated);",
+   "replace": "    --seated->second.connections;",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a keyed*,world: a Match without*",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
    "expect": "a user who left"
   },
   {
@@ -1003,10 +1003,10 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (const auto refused = match::VerifyAdmission(key.key, request.token, key.nowUnixSeconds(), key.matchId, request.userId)) {",
+   "find": "        if (const auto refused = match::VerifyAdmission(check.key, request.token, check.nowUnixSeconds(), check.matchId, request.userId)) {",
    "replace": "        if (const auto refused = std::optional<match::AdmissionRefusal>{}) {",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a*seat*,world: a keyed*,world: a Match without*",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
    "expect": "another user's token"
   },
   {
@@ -1028,6 +1028,65 @@
     "--output-on-failure"
    ],
    "expect": "a bad key"
+  },
+  {
+   "id": "pvp-gw-cpp-length",
+   "what": "the Match reads a token of another length",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "    if (token.size() != kAdmissionSize) return AdmissionRefusal::Length;",
+   "replace": "    if (token.size() < kAdmissionSigned) return AdmissionRefusal::Length;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say length"
+  },
+  {
+   "id": "pvp-gw-cpp-version",
+   "what": "the Match takes a token of another version",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "    if (std::to_integer<std::uint8_t>(token[0]) != kAdmissionVersion) return AdmissionRefusal::Version;",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say version"
+  },
+  {
+   "id": "pvp-gw-seat-reconnect-refused",
+   "what": "a reconnect from the same endpoint is refused",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        ++seated->second.connections;\n        return std::nullopt;",
+   "replace": "        return \"the user is already in the match\";",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "same endpoint is refused"
+  },
+  {
+   "id": "pvp-gw-match-never-idle",
+   "what": "the Match never ends when nobody is in it",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match_main.cpp",
+   "find": "            } else if (now - emptySince >= std::chrono::seconds(*idleSeconds)) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_object_fps_pvp-match",
+   "command": [
+    "ctest",
+    "--test-dir",
+    "{build}",
+    "-R",
+    "^object_fps_pvp\\.match_process$",
+    "--output-on-failure"
+   ],
+   "expect": "no player for 1 s"
   }
  ]
 }
