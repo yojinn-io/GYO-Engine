@@ -32,6 +32,9 @@ struct PointerWrapSample final {
     // tell a push against an edge the cursor cannot pass (the original's
     // DirectInput relative motion).
     Vec2 relativeMotion{};
+    // The caller moves the pointer to a warp's target itself, at once (a locked cursor): no jump back to an
+    // unapplied warp can happen, so a large motion right after a crossing is the player's.
+    bool warpsApplyAtOnce = false;
 };
 
 struct PointerWrapResult final {

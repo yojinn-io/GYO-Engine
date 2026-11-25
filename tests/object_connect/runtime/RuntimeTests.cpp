@@ -60,6 +60,7 @@ struct Pending {
     std::vector<I::KeyboardInput> keys;
     std::vector<I::MouseButtonInput> buttons;
     std::vector<I::CursorMoved> moves;
+    std::vector<I::MouseMotion> motions;
     std::vector<I::MouseWheel> wheels;
     std::vector<I::CursorLeft> lefts;
     std::vector<W::WindowFocused> focus;
@@ -87,12 +88,14 @@ K::SystemResult KeepPicture(K::Res<GYO::Engine::Render::RenderCommands> commands
 
 K::SystemResult WriteEvents(K::ResMut<Pending> pending, K::MessageWriter<I::KeyboardInput> keys,
                             K::MessageWriter<I::MouseButtonInput> buttons, K::MessageWriter<I::CursorMoved> moves,
-                            K::MessageWriter<I::MouseWheel> wheels, K::MessageWriter<I::CursorLeft> lefts,
+                            K::MessageWriter<I::MouseMotion> motions, K::MessageWriter<I::MouseWheel> wheels,
+                            K::MessageWriter<I::CursorLeft> lefts,
                             K::MessageWriter<W::WindowFocused> focus, K::MessageWriter<W::WindowResized> sizes) {
     Pending& p = pending.Get();
     for (auto& m : p.keys) keys.Send(m);
     for (auto& m : p.buttons) buttons.Send(m);
     for (auto& m : p.moves) moves.Send(m);
+    for (auto& m : p.motions) motions.Send(m);
     for (auto& m : p.wheels) wheels.Send(m);
     for (auto& m : p.lefts) lefts.Send(m);
     for (auto& m : p.focus) focus.Send(m);
@@ -225,13 +228,31 @@ public:
         Next().keys.push_back({key, I::ButtonState::Released, false, 0, {}, {}});
         Frame();
     }
+    // The cursor moved to (x, y): SDL writes the new place and the motion that got it there.
     void MoveTo(const float x, const float y) {
         Next().moves.push_back({{x, y}, {}});
+        Next().motions.push_back({{x - last_.x, y - last_.y}, {}});
+        last_ = {x, y};
+        Frame();
+    }
+    // The device moved by (dx, dy) while the place the OS reports is (x, y): a cursor stopped at a screen edge, or
+    // held in relative mode.
+    void Push(const float dx, const float dy, const float x, const float y) {
+        Next().moves.push_back({{x, y}, {}});
+        Next().motions.push_back({{dx, dy}, {}});
+        last_ = {x, y};
         Frame();
     }
     void Button(const float x, const float y, const I::ButtonState state) {
         Next().moves.push_back({{x, y}, {}});
+        Next().motions.push_back({{x - last_.x, y - last_.y}, {}});
+        last_ = {x, y};
         Next().buttons.push_back({I::MouseButton::Left, state, {x, y}, {}});
+        Frame();
+    }
+    // The left button goes up where the cursor is, with no motion.
+    void Release() {
+        Next().buttons.push_back({I::MouseButton::Left, I::ButtonState::Released, {last_.x, last_.y}, {}});
         Frame();
     }
     void Click(const float x, const float y) {
@@ -254,7 +275,33 @@ private:
     std::unique_ptr<GYO::Engine::Threads::WorkerPool> pool_;
     std::unique_ptr<WA::WorkerPoolExecutor> executor_;
     std::unique_ptr<O::Product> product_;
+    OC::Vec2 last_{};
 };
+
+// The centre of the first root of the level being played, in playfield coordinates.
+[[nodiscard]] OC::Vec2 FirstRoot(Game& game) {
+    for (const auto& node : game.Session().board->GetDefinition().nodes) {
+        if (node.type == OC::NodeType::Root && node.tilePosition) {
+            return {(static_cast<float>(node.tilePosition->x) + node.widthTiles * 0.5f) * 16.0f,
+                    (static_cast<float>(node.tilePosition->y) + node.heightTiles * 0.5f) * 16.0f};
+        }
+    }
+    FAIL("the level has no placed root");
+    return {};
+}
+
+// From the main menu into the first wrapEdges level, with the keys.
+void EnterWrapLevel(Game& game) {
+    const OW::Catalog* catalog = game.World().Resource<OW::Catalog>();
+    std::size_t wrapLevel = 0;
+    while (!catalog->puzzles.GetPuzzles()[wrapLevel].wrapEdges) ++wrapLevel;
+    game.Press(I::KeyCode::Enter);
+    while (game.World().Resource<OW::MenuSelection>()->item < wrapLevel) game.Press(I::KeyCode::ArrowDown);
+    game.Press(I::KeyCode::Enter);
+    game.Frame();
+    REQUIRE(game.Screen() == GameScreen::Playing);
+    REQUIRE(game.Session().board->GetDefinition().wrapEdges);
+}
 
 } // namespace
 
@@ -373,92 +420,83 @@ TEST_CASE("runtime: Escape pauses, a lost focus cancels the drag, and quitting c
     CHECK(game.World().Resource<W::WindowRequest>()->close);
 }
 
-TEST_CASE("runtime: on a wrapEdges level the cursor is warped to the opposite edge") {
+TEST_CASE("runtime: on a wrapEdges level a drag locks the cursor and crosses the window's edges") {
     Game game;
     game.LoadContent();
     game.OpenWindow();
-    const OW::Catalog* catalog = game.World().Resource<OW::Catalog>();
-    std::optional<std::size_t> wrapLevel;
-    for (std::size_t index = 0; index < catalog->puzzles.GetPuzzles().size(); ++index) {
-        if (catalog->puzzles.GetPuzzles()[index].wrapEdges) {
-            wrapLevel = index;
-            break;
-        }
-    }
-    REQUIRE(wrapLevel.has_value());
-    game.Press(I::KeyCode::Enter);
-    for (std::size_t step = 0; step < *wrapLevel; ++step) game.Press(I::KeyCode::ArrowDown);
-    game.Press(I::KeyCode::Enter);
-    game.Frame();
-    REQUIRE(game.Screen() == GameScreen::Playing);
-    REQUIRE(game.Session().board->GetDefinition().wrapEdges);
-
-    // Take hold of the first root and drag left past the window's edge.
-    const auto& nodes = game.Session().board->GetDefinition().nodes;
-    std::optional<OC::Vec2> root;
-    for (const auto& node : nodes) {
-        if (node.type == OC::NodeType::Root && node.tilePosition) {
-            root = OC::Vec2{(static_cast<float>(node.tilePosition->x) + node.widthTiles * 0.5f) * 16.0f,
-                            (static_cast<float>(node.tilePosition->y) + node.heightTiles * 0.5f) * 16.0f};
-            break;
-        }
-    }
-    REQUIRE(root.has_value());
-    game.Button(root->x, root->y, I::ButtonState::Pressed);
+    EnterWrapLevel(game);
+    const OC::Vec2 root = FirstRoot(game);
+    game.Button(root.x, root.y, I::ButtonState::Pressed);
     REQUIRE(game.Session().board->IsDragging());
-    for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(x, root->y);
-    game.MoveTo(-2.0f, root->y); // the OS keeps the capture while the button is held
-    const Asked* asked = game.World().Resource<Asked>();
-    REQUIRE(asked->warps.size() == 1);
+    game.MoveTo(root.x - 8.0f, root.y);
+    // While the vessel is held the cursor is locked (hidden and held by the OS; the game draws its own).
+    CHECK(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::Locked);
+    for (float x = root.x - 16.0f; x > 0.0f; x -= 8.0f) game.MoveTo(x, root.y);
+    game.MoveTo(-2.0f, root.y);
     // Two pixels past the left edge come back two pixels inside the right one: the overshoot is kept (the original
-    // InputSystem crosses at the last pixel only while the cursor is still on the edge).
-    const W::WarpCursor warp = asked->warps.back();
-    CHECK(warp.position.x == doctest::Approx(1278.0f));
-    CHECK(warp.position.y == doctest::Approx(std::round(root->y)));
+    // InputSystem crosses at the last pixel only while the cursor is still on the edge). The game moves its own
+    // pointer: no warp is asked of the OS while the cursor is locked.
+    CHECK(game.Input().pointer.position.x == doctest::Approx(1278.0f));
     REQUIRE(game.Input().pointer.unwrappedPosition.has_value());
     CHECK(game.Input().pointer.unwrappedPosition->x == doctest::Approx(-2.0f));
+    const Asked* asked = game.World().Resource<Asked>();
+    CHECK(asked->warps.empty());
 
-    // The backend applies the warp before the next frame and reports the cursor there (sdl_window, Main/Last).
-    game.MoveTo(warp.position.x, warp.position.y);
-    game.MoveTo(warp.position.x - 20.0f, warp.position.y);
-    CHECK(asked->warps.size() == 1);
+    game.Push(-20.0f, 0.0f, 0.0f, root.y); // on through the edge
     CHECK(game.Session().board->IsDragging());
     CHECK(game.Input().pointer.position.x == doctest::Approx(1258.0f));
     REQUIRE(game.Input().pointer.unwrappedPosition.has_value());
     CHECK(game.Input().pointer.unwrappedPosition->x == doctest::Approx(-22.0f));
+
+    // Let go: unlocked, and the system's cursor comes back where the game's was.
+    game.Release();
+    game.Frame();
+    CHECK(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::None);
+    REQUIRE(asked->warps.size() == 1);
+    CHECK(asked->warps.back().position.x == doctest::Approx(1258.0f));
+    CHECK(asked->warps.back().position.y == doctest::Approx(root.y));
 }
 
-TEST_CASE("runtime: a warp the window did not apply is not taken as motion") {
+TEST_CASE("runtime: a lost focus unlocks the cursor at once and gives the system's cursor back") {
     Game game;
     game.LoadContent();
     game.OpenWindow();
-    const OW::Catalog* catalog = game.World().Resource<OW::Catalog>();
-    std::size_t wrapLevel = 0;
-    while (!catalog->puzzles.GetPuzzles()[wrapLevel].wrapEdges) ++wrapLevel;
-    game.Press(I::KeyCode::Enter);
-    for (std::size_t step = 0; step < wrapLevel; ++step) game.Press(I::KeyCode::ArrowDown);
-    game.Press(I::KeyCode::Enter);
-    game.Frame();
-    std::optional<OC::Vec2> root;
-    for (const auto& node : game.Session().board->GetDefinition().nodes) {
-        if (node.type == OC::NodeType::Root && node.tilePosition) {
-            root = OC::Vec2{(static_cast<float>(node.tilePosition->x) + node.widthTiles * 0.5f) * 16.0f,
-                            (static_cast<float>(node.tilePosition->y) + node.heightTiles * 0.5f) * 16.0f};
-            break;
-        }
-    }
-    REQUIRE(root.has_value());
-    game.Button(root->x, root->y, I::ButtonState::Pressed);
-    for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(x, root->y);
-    game.MoveTo(-2.0f, root->y);
+    EnterWrapLevel(game);
+    const OC::Vec2 root = FirstRoot(game);
+    game.Button(root.x, root.y, I::ButtonState::Pressed);
+    game.MoveTo(root.x - 8.0f, root.y);
+    REQUIRE(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::Locked);
+    game.Next().focus.push_back({false, {}});
+    game.Frame(); // the focus is gone this frame: unlocked in the same frame, before the drag is cancelled
+    CHECK(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::None);
     const Asked* asked = game.World().Resource<Asked>();
     REQUIRE(asked->warps.size() == 1);
-    // No CursorMoved to the warp's place: the cursor stays where it was.
-    game.Frame();
-    game.Frame();
-    CHECK(asked->warps.size() == 1);
+    CHECK(asked->warps.back().position.x == doctest::Approx(root.x - 8.0f));
+}
+
+TEST_CASE("runtime: a screen edge that stops the cursor does not stop a locked drag") {
+    // The window touches the screen's left edge: the OS keeps reporting x = 0, only the device's motion goes on
+    // (the original pushed through with DirectInput's relative motion; G4 in the porting inventory).
+    Game game;
+    game.LoadContent();
+    game.OpenWindow();
+    EnterWrapLevel(game);
+    const OC::Vec2 root = FirstRoot(game);
+    game.Button(root.x, root.y, I::ButtonState::Pressed);
+    game.MoveTo(root.x - 8.0f, root.y);
+    REQUIRE(game.World().Resource<W::WindowRequest>()->cursorGrab == W::CursorGrab::Locked);
+    // Push left by the root's distance to the edge and 100 more: the reported place stops at 0 on the way.
+    float reported = root.x - 8.0f;
+    const int steps = static_cast<int>((root.x + 100.0f) / 4.0f);
+    for (int step = 0; step < steps; ++step) {
+        reported = (std::max)(0.0f, reported - 4.0f);
+        game.Push(-4.0f, 0.0f, reported, root.y);
+    }
+    CHECK(game.Session().board->IsDragging());
     REQUIRE(game.Input().pointer.unwrappedPosition.has_value());
-    CHECK(game.Input().pointer.unwrappedPosition->x == doctest::Approx(-2.0f));
+    const float expected = root.x - 8.0f - 4.0f * static_cast<float>(steps); // about -100
+    CHECK(game.Input().pointer.unwrappedPosition->x == doctest::Approx(expected).epsilon(0.02));
+    CHECK(game.Input().pointer.position.x == doctest::Approx(1280.0f + expected).epsilon(0.02)); // in from the right
 }
 
 TEST_CASE("runtime: the level select's arrows and wheel turn pages, and the cursor follows the menus") {
@@ -820,9 +858,13 @@ TEST_CASE("runtime: in a letterboxed window the wrap crosses the playfield's edg
     REQUIRE(game.Session().board->IsDragging());
     for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(kBar + x, root->y);
     game.MoveTo(kBar - 2.0f, root->y); // two pixels into the left bar: past the playfield's left edge
+    CHECK(game.Input().pointer.position.x == doctest::Approx(1278.0f));
+    game.Release();
+    game.Frame();
+    // Let go: the system's cursor comes back where the game's was, inside the playfield's right edge.
     const Asked* asked = game.World().Resource<Asked>();
     REQUIRE(asked->warps.size() == 1);
-    CHECK(asked->warps.back().position.x == doctest::Approx(kBar + 1278.0f)); // inside the playfield's right edge
+    CHECK(asked->warps.back().position.x == doctest::Approx(kBar + 1278.0f));
 }
 
 TEST_CASE("runtime: at a scale factor of 2 the pointer and the warp go through the playfield in logical pixels") {
@@ -873,6 +915,9 @@ TEST_CASE("runtime: at a scale factor of 2 the pointer and the warp go through t
     REQUIRE(game.Session().board->IsDragging());
     for (float x = root->x - 8.0f; x > 0.0f; x -= 8.0f) game.MoveTo(kBar + x, root->y);
     game.MoveTo(kBar - 2.0f, root->y);
+    CHECK(game.Input().pointer.position.x == doctest::Approx(1278.0f));
+    game.Release();
+    game.Frame();
     const Asked* asked = game.World().Resource<Asked>();
     REQUIRE(asked->warps.size() == 1);
     CHECK(asked->warps.back().position.x == doctest::Approx(kBar + 1278.0f));

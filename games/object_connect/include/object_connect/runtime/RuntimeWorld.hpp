@@ -87,6 +87,11 @@ struct PointerState final {
     Vec2 lastClient{};
     bool focused = false;
     bool insideClient = false;
+    // While a vessel is dragged on a wrapEdges level the cursor is locked (window's CursorGrab::Locked: hidden and
+    // held by the OS) and the pointer is this place in the window, moved by the device's motion, so no screen edge
+    // stops it; the original pushed through a stopped edge with DirectInput's relative motion.
+    bool locked = false;
+    Vec2 virtualClient{};
     // Where the playfield is in the window this frame (nullopt: the size is not known yet) and the pointer in the
     // playfield, for the picture.
     std::optional<PlayfieldFit> fit;

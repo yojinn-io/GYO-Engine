@@ -223,6 +223,7 @@ void SDLWindowPlugin::Configure(O::ProductSetup& setup) {
     BackendSettings settings;
     settings.window = settingsGiven != nullptr ? *settingsGiven : Win::WindowSettings{};
     settings.drawComposition = options.drawComposition;
+    settings.logicalMotion = options.mouseMotion == MouseMotionUnit::LogicalPixels;
     settings.clipboardLimit = options.clipboardLimit;
     auto backend = WindowBackend::Create(settings);
     if (!backend) {
