@@ -1,5 +1,6 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
+#include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/sim/PlanarMovement.hpp"
 #include "object_fps_pvp/sim/ViewLimits.hpp"
 
@@ -575,11 +576,7 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         players.ForEach([&](const K::EntityId id, const Owner& owner, const PlayerBody&, const PlayerCombat&) {
             if (owner.userId == gone->userId) despawn.Entity(id);
         });
-        if (seats->seats && gone->peer != 0) {
-            std::uint32_t taken = seats->seats->taken.load();
-            while (taken > 0 && !seats->seats->taken.compare_exchange_weak(taken, taken - 1)) {
-            }
-        }
+        if (seats->seats && gone->peer != 0) seats->seats->Release(gone->userId);
     }
     std::vector<PlayerBody> living;
     players.ForEach([&](K::EntityId, const Owner&, const PlayerBody& body, const PlayerCombat& combat) {
@@ -775,14 +772,38 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     return content;
 }
 
+std::optional<std::string> Seats::Take(const std::uint64_t userId) {
+    const std::lock_guard lock(mutex_);
+    if (users_.contains(userId)) return "the user is already in the match";
+    if (users_.size() >= capacity) return "the match is full";
+    users_.insert(userId);
+    taken.store(static_cast<std::uint32_t>(users_.size()));
+    return std::nullopt;
+}
+
+void Seats::Release(const std::uint64_t userId) {
+    const std::lock_guard lock(mutex_);
+    users_.erase(userId);
+    taken.store(static_cast<std::uint32_t>(users_.size()));
+}
+
 N::ServerHost::Admission SeatAdmission(std::shared_ptr<Seats> seats) {
-    return [seats = std::move(seats)](const N::ConnectRequest&, N::Endpoint) -> N::NetResult<void> {
-        std::uint32_t taken = seats->taken.load();
-        do {
-            if (taken >= seats->capacity) {
-                return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, "the match is full"));
-            }
-        } while (!seats->taken.compare_exchange_weak(taken, taken + 1));
+    return [seats = std::move(seats)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
+        if (auto refused = seats->Take(request.userId)) {
+            return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
+        }
+        return {};
+    };
+}
+
+N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionKey key) {
+    return [seats = std::move(seats), key = std::move(key)](const N::ConnectRequest& request, N::Endpoint) -> N::NetResult<void> {
+        if (const auto refused = match::VerifyAdmission(key.key, request.token, key.nowUnixSeconds(), key.matchId, request.userId)) {
+            return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::string(match::AdmissionRefusalName(*refused))));
+        }
+        if (auto refused = seats->Take(request.userId)) {
+            return Base::Err(N::NetFailure::Make(N::NetFailureCode::MessageRejected, std::move(*refused)));
+        }
         return {};
     };
 }

@@ -39,7 +39,7 @@ func (p *fakeProvider) Start(_ context.Context, spec matches.Spec) (matches.Runn
 	}
 	p.keys[spec.MatchID] = spec.Key
 	p.specs = append(p.specs, spec)
-	return matches.Running{Address: "127.0.0.1:7801", Ended: p.ended}, nil
+	return matches.Running{Address: "127.0.0.1:7801", Ended: p.ended, Stop: func() {}}, nil
 }
 
 // player is one Client of the gateway's external protocol.
@@ -126,7 +126,7 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 		t.Fatalf("two devices got the same user %d", host.user)
 	}
 
-	room := host.must(http.MethodPost, "/v1/rooms", "create-1", map[string]string{"mode": "survival", "map": "pvp_arena"})
+	room := host.must(http.MethodPost, "/v1/rooms", "create-1", map[string]string{"mode": "survival", "map": "pvp_training_v1"})
 	listed := guest.must(http.MethodGet, "/v1/rooms", "", nil)["rooms"].([]any)
 	if len(listed) != 1 || listed[0].(map[string]any)["mode"] != "survival" {
 		t.Fatalf("the room list is %v, want the one survival room", listed)
@@ -141,8 +141,8 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 		t.Fatalf("the started room is %v", started)
 	}
 
-	if len(provider.specs) != 1 || provider.specs[0].Mode != "survival" || provider.specs[0].Map != "pvp_arena" || provider.specs[0].Capacity != 2 {
-		t.Fatalf("the provider was asked %+v, want one survival pvp_arena Match of 2", provider.specs)
+	if len(provider.specs) != 1 || provider.specs[0].Mode != "survival" || provider.specs[0].Map != "pvp_training_v1" || provider.specs[0].Capacity != 2 {
+		t.Fatalf("the provider was asked %+v, want one survival pvp_training_v1 Match of 2", provider.specs)
 	}
 	spec := provider.specs[0]
 	for _, p := range []*player{host, guest} {
@@ -178,7 +178,7 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 func TestAStartedRoomCannotBeEntered(t *testing.T) {
 	s := start(t, newFakeProvider())
 	host, late := signIn(t, s, "host"), signIn(t, s, "late")
-	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_arena"})
+	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	host.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
 	host.must(http.MethodPost, roomPath(room, "start"), "", nil)
 	late.refused(http.MethodPost, roomPath(room, "join"), nil, http.StatusConflict, "room_started")
@@ -193,7 +193,7 @@ func TestAStartedRoomCannotBeEntered(t *testing.T) {
 func TestAFullRoomRefusesAJoin(t *testing.T) {
 	s := start(t, newFakeProvider())
 	a, b, c := signIn(t, s, "a"), signIn(t, s, "b"), signIn(t, s, "c")
-	room := a.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_arena"})
+	room := a.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	b.must(http.MethodPost, roomPath(room, "join"), "", nil)
 	c.refused(http.MethodPost, roomPath(room, "join"), nil, http.StatusConflict, "room_full")
 }
@@ -203,7 +203,7 @@ func TestARefusedAllocationOpensTheRoomAgain(t *testing.T) {
 	provider.refuse = true
 	s := start(t, provider)
 	host := signIn(t, s, "host")
-	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_arena"})
+	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	host.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
 	host.refused(http.MethodPost, roomPath(room, "start"), nil, http.StatusServiceUnavailable, "allocation_failed")
 	if view := host.must(http.MethodGet, roomPath(room, ""), "", nil); view["state"] != "open" {
@@ -214,7 +214,7 @@ func TestARefusedAllocationOpensTheRoomAgain(t *testing.T) {
 func TestTheOwnerLeavingHandsTheRoomOn(t *testing.T) {
 	s := start(t, newFakeProvider())
 	host, guest := signIn(t, s, "host"), signIn(t, s, "guest")
-	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_arena"})
+	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	guest.must(http.MethodPost, roomPath(room, "join"), "", nil)
 	host.must(http.MethodPost, roomPath(room, "leave"), "", nil)
 	if view := guest.must(http.MethodGet, roomPath(room, ""), "", nil); uint64(view["owner"].(float64)) != guest.user {
@@ -227,9 +227,9 @@ func TestTheOwnerLeavingHandsTheRoomOn(t *testing.T) {
 func TestJoiningAnotherRoomMovesTheUser(t *testing.T) {
 	s := start(t, newFakeProvider())
 	a, b := signIn(t, s, "a"), signIn(t, s, "b")
-	first := a.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_arena"})
+	first := a.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "coop", "map": "pvp_training_v1"})
 	b.must(http.MethodPost, roomPath(first, "join"), "", nil)
-	second := b.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "survival", "map": "pvp_arena"})
+	second := b.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "survival", "map": "pvp_training_v1"})
 	if view := a.must(http.MethodGet, roomPath(first, ""), "", nil); len(view["members"].([]any)) != 1 {
 		t.Fatalf("the first room keeps the user who made another: %v", view["members"])
 	}
@@ -241,7 +241,7 @@ func TestJoiningAnotherRoomMovesTheUser(t *testing.T) {
 func TestAnIdempotencyKeyRepeatsTheFirstAnswer(t *testing.T) {
 	s := start(t, newFakeProvider())
 	host := signIn(t, s, "host")
-	create := map[string]string{"mode": "coop", "map": "pvp_arena"}
+	create := map[string]string{"mode": "coop", "map": "pvp_training_v1"}
 	first := host.must(http.MethodPost, "/v1/rooms", "same", create)
 	again := host.must(http.MethodPost, "/v1/rooms", "same", create)
 	if first["id"] != again["id"] {
@@ -266,8 +266,8 @@ func TestTheGatewayRefusesWithoutAValidSession(t *testing.T) {
 	anonymous.refused(http.MethodGet, "/v1/rooms", nil, http.StatusUnauthorized, "invalid_session")
 	signedIn := signIn(t, s, "someone")
 	signedIn.refused(http.MethodGet, "/v1/rooms/1%2F..%2F..", nil, http.StatusBadRequest, "invalid_room")
-	signedIn.refused(http.MethodPost, "/v1/rooms", map[string]string{"mode": "deathmatch", "map": "pvp_arena"}, http.StatusBadRequest, "unknown_mode")
-	signedIn.refused(http.MethodPost, "/v1/rooms", map[string]any{"mode": "coop", "map": "pvp_arena", "extra": 1}, http.StatusBadRequest, "invalid_room")
+	signedIn.refused(http.MethodPost, "/v1/rooms", map[string]string{"mode": "deathmatch", "map": "pvp_training_v1"}, http.StatusBadRequest, "unknown_mode")
+	signedIn.refused(http.MethodPost, "/v1/rooms", map[string]any{"mode": "coop", "map": "pvp_training_v1", "extra": 1}, http.StatusBadRequest, "invalid_room")
 }
 
 func TestTheSameDeviceIsTheSameUser(t *testing.T) {

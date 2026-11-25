@@ -9,18 +9,17 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 )
-
-// AdmissionKeyVariable carries a Match's key to its process (not its command
-// line, which other users of the machine can read).
-const AdmissionKeyVariable = "GYO_PVP_ADMISSION_KEY"
 
 // Local starts each Match as a process on this machine (D6), on a free port
 // of [FirstPort, LastPort]; the port is free again when the process ends.
 type Local struct {
 	// Command is the Match executable; Arguments come before the ones Local
-	// adds (--port, --match-id, --capacity, --arena, --exit-when-empty).
+	// adds (--port, --match-id, --capacity, --arena, --admission-key-stdin,
+	// --exit-when-empty). The key goes to the Match's standard input, in
+	// neither its command line nor its environment.
 	Command   string
 	Arguments []string
 	// Advertise is the address players are told to connect to (an IPv4
@@ -46,13 +45,14 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		"--port", strconv.Itoa(port),
 		"--match-id", strconv.FormatUint(spec.MatchID, 10),
 		"--capacity", strconv.Itoa(spec.Capacity),
-		"--exit-when-empty")
+		"--admission-key-stdin", "--exit-when-empty")
 	if spec.Map != "" {
 		arguments = append(arguments, "--arena", spec.Map)
 	}
 	// Not CommandContext: the Match outlives the allocation request.
 	command := exec.Command(l.Command, arguments...)
-	command.Env = append(append(os.Environ(), l.Environment...), AdmissionKeyVariable+"="+hex.EncodeToString(spec.Key))
+	command.Env = append(os.Environ(), l.Environment...)
+	command.Stdin = strings.NewReader(hex.EncodeToString(spec.Key) + "\n")
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr
 	if err := command.Start(); err != nil {
 		l.givePort(port)
@@ -66,7 +66,8 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		close(ended)
 	}()
 	log.Printf("match started match=%d port=%d pid=%d", spec.MatchID, port, command.Process.Pid)
-	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended}, nil
+	process := command.Process
+	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended, Stop: func() { _ = process.Kill() }}, nil
 }
 
 func (l *Local) takePort() (int, error) {

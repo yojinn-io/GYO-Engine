@@ -7,7 +7,16 @@
 //   gyo_object_fps_pvp --ticks N             stops after N fixed steps (the tests)
 //   gyo_object_fps_pvp --content DIR         reads the content from DIR (default: next to the executable)
 //   gyo_object_fps_pvp --verbose             logs who joins and leaves and every kill
+//   gyo_object_fps_pvp --capacity N          seats N players (default 4)
+//
+// Started by the matches service (gateway declaration D5, D6):
+//   --match-id ID --admission-key-stdin      admits only a Client whose admission token this Match's key signed for
+//                                            ID; the key is the first line of the standard input (hex), so it is in
+//                                            neither the command line nor the environment
+//   --exit-when-empty                        ends when the last player has left, or when nobody came in the first
+//                                            minute (the matches service then frees the port)
 
+#include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "gyo/GameConfig.hpp"
@@ -23,6 +32,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -87,6 +97,10 @@ int main(int argc, char** argv) {
     std::string arenaId;
     std::optional<std::string> contentRoot;
     bool verbose = false;
+    std::uint32_t capacity = 4;
+    std::optional<std::uint64_t> matchId;
+    bool keyOnStdin = false;
+    bool exitWhenEmpty = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         const bool hasValue = index + 1 < argc;
@@ -106,11 +120,50 @@ int main(int argc, char** argv) {
             contentRoot = argv[++index];
         } else if (argument == "--verbose") {
             verbose = true;
+        } else if (argument == "--capacity" && hasValue) {
+            if (!ParseNumber(argv[++index], capacity) || capacity == 0) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--capacity takes a positive whole number");
+                return 2;
+            }
+        } else if (argument == "--match-id" && hasValue) {
+            std::uint64_t id = 0;
+            if (!ParseNumber(argv[++index], id)) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--match-id takes a whole number");
+                return 2;
+            }
+            matchId = id;
+        } else if (argument == "--admission-key-stdin") {
+            keyOnStdin = true;
+        } else if (argument == "--exit-when-empty") {
+            exitWhenEmpty = true;
         } else {
             Log(GYO::Engine::Base::LogLevel::Error,
-                "unknown argument '" + std::string(argument) + "' (--port P, --arena ID, --ticks N, --content DIR, --verbose)");
+                "unknown argument '" + std::string(argument) +
+                    "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --match-id ID, "
+                    "--admission-key-stdin, --exit-when-empty)");
             return 2;
         }
+    }
+    if (keyOnStdin != matchId.has_value()) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--match-id and --admission-key-stdin go together");
+        return 2;
+    }
+    std::optional<PW::AdmissionKey> admissionKey;
+    if (keyOnStdin) {
+        std::string line;
+        std::getline(std::cin, line);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        auto key = object_fps_pvp::match::DecodeHex(line);
+        if (!key || key->empty()) {
+            Log(GYO::Engine::Base::LogLevel::Error, "the standard input's first line is not a hexadecimal key");
+            return 2;
+        }
+        // The wall clock: tokens expire in Unix seconds (an admission is not decision data, net D-9).
+        admissionKey = PW::AdmissionKey{std::move(*key), *matchId, [] {
+                                            return std::chrono::duration_cast<std::chrono::seconds>(
+                                                       std::chrono::system_clock::now().time_since_epoch())
+                                                .count();
+                                        }};
     }
     if (!contentRoot) contentRoot = ContentRoot();
     if (!contentRoot) {
@@ -135,12 +188,13 @@ int main(int argc, char** argv) {
     }
 
     auto seats = std::make_shared<PW::Seats>();
+    seats->capacity = capacity;
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
     net.role = N::NetRole::Server;
     net.bind = GYO::Engine::OS::DatagramAddress::Any(port);
-    net.admission = PW::SeatAdmission(seats);
+    net.admission = admissionKey ? PW::MatchAdmission(seats, std::move(*admissionKey)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({shared, arena, 0, seats});
     if (verbose) {
@@ -180,6 +234,8 @@ int main(int argc, char** argv) {
     // A frame every 4 ms: the time Module runs the fixed steps the real time has made due.
     constexpr auto kFrame = std::chrono::milliseconds(4);
     auto next = GYO::Engine::Time::MonotonicClock::now();
+    const auto started = next;
+    bool someoneCame = false;
     while (true) {
         auto ran = product->RunFrame();
         if (!ran) {
@@ -189,6 +245,18 @@ int main(int argc, char** argv) {
         if (ticks > 0) {
             const WT::Tick* tick = product->World("Game").GetWorld().Resource<WT::Tick>();
             if (tick != nullptr && tick->value >= static_cast<std::uint64_t>(ticks)) break;
+        }
+        if (exitWhenEmpty) {
+            const std::uint32_t seated = seats->taken.load();
+            if (seated > 0) someoneCame = true;
+            if (someoneCame && seated == 0) {
+                Log(GYO::Engine::Base::LogLevel::Info, "the last player left: the match ends");
+                break;
+            }
+            if (!someoneCame && GYO::Engine::Time::MonotonicClock::now() - started > std::chrono::minutes(1)) {
+                Log(GYO::Engine::Base::LogLevel::Info, "nobody came in the first minute: the match ends");
+                break;
+            }
         }
         next += kFrame;
         const auto now = GYO::Engine::Time::MonotonicClock::now();

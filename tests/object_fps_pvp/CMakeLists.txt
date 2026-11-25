@@ -6,6 +6,7 @@ gyo_get_game_target(object_fps_pvp logic object_fps_pvp_logic)
 add_executable(gyo_object_fps_pvp_logic_tests
     TestMain.cpp
     AddressTextTests.cpp
+    AdmissionTokenTests.cpp
     AnimationTests.cpp
     ArenaTests.cpp
     ControlsTests.cpp
@@ -18,7 +19,8 @@ target_link_libraries(gyo_object_fps_pvp_logic_tests PRIVATE ${object_fps_pvp_lo
 target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
-    PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json")
+    PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
+    PVP_ADMISSION_VECTORS="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/token/testdata/admission_vectors.txt")
 if(MSVC)
     target_compile_options(gyo_object_fps_pvp_logic_tests PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE NOMINMAX)
@@ -31,7 +33,7 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 # The game in a World: a lone Match the test steers, and a Match with Clients over
 # the net Module's memory links (no socket), one fixed step a frame.
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
-add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp)
+add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE ${object_fps_pvp_world} doctest::doctest)
 gyo_product_units(gyo_object_fps_pvp_world_tests MODULES physics_3d)
@@ -82,3 +84,13 @@ set_tests_properties(object_fps_pvp.main_connect PROPERTIES LABELS "gpu" TIMEOUT
 gyo_get_game_target(object_fps_pvp match object_fps_pvp_match)
 add_test(NAME object_fps_pvp.match COMMAND ${object_fps_pvp_match} --port 0 --ticks 64)
 set_tests_properties(object_fps_pvp.match PROPERTIES LABELS "network" TIMEOUT 60)
+
+# The Match executable as the matches service starts it (gateway declaration, segment 2): its key on the standard
+# input, listening on its port; a bad key refuses to start. Go on the host; label network (a real UDP port).
+gyo_get_game_target(object_fps_pvp match object_fps_pvp_match_target)
+add_test(NAME object_fps_pvp.match_process
+    COMMAND "${CMAKE_COMMAND}" -E env GOWORK=off "GYO_PVP_MATCH=$<TARGET_FILE:${object_fps_pvp_match_target}>"
+        "GYO_PVP_CONTENT=${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
+        "${GYO_GO_EXECUTABLE}" test -count=1 -run "TestTheRealMatch" ./services/matches/
+    WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
+set_tests_properties(object_fps_pvp.match_process PROPERTIES LABELS "network" TIMEOUT 120)

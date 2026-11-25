@@ -1,6 +1,7 @@
 package matches
 
 import (
+	"bufio"
 	"context"
 	"encoding/hex"
 	"os"
@@ -20,13 +21,14 @@ func TestMain(m *testing.M) {
 
 func fakeMatch() int {
 	arguments := strings.Join(os.Args[1:], " ")
-	want := "--port 7811 --match-id 77 --capacity 3 --exit-when-empty --arena pvp_corners"
+	want := "--port 7811 --match-id 77 --capacity 3 --admission-key-stdin --exit-when-empty --arena pvp_corners_v1"
 	if !strings.Contains(arguments, want) {
 		os.Stderr.WriteString("fake match: arguments " + arguments + "\n")
 		return 3
 	}
-	if os.Getenv(AdmissionKeyVariable) != hex.EncodeToString([]byte{1, 2, 3}) {
-		os.Stderr.WriteString("fake match: no key\n")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	if line != hex.EncodeToString([]byte{1, 2, 3})+"\n" {
+		os.Stderr.WriteString("fake match: no key on the standard input\n")
 		return 4
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -36,7 +38,7 @@ func fakeMatch() int {
 func TestLocalStartsAMatchProcessAndFreesItsPort(t *testing.T) {
 	local := &Local{Command: os.Args[0], Arguments: []string{"-test.run=^$"}, Advertise: "127.0.0.1",
 		FirstPort: 7811, LastPort: 7811, Environment: []string{"GYO_FAKE_MATCH=1"}}
-	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Map: "pvp_corners"}
+	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Map: "pvp_corners_v1"}
 	running, err := local.Start(context.Background(), spec)
 	if err != nil {
 		t.Fatal(err)
