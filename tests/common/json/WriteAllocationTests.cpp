@@ -95,6 +95,21 @@ TEST_CASE("Writer: no allocation when the string has the capacity and the depth 
     CHECK(allocations == 0);
 }
 
+TEST_CASE("Writer: an indented layout allocates nothing either") {
+    std::string text;
+    text.reserve(8192);
+    const char* data = text.data();
+    allocations = 0;
+    {
+        Writer writer(text, GYO::Engine::Json::Layout{.indent = 4});
+        WriteRecord(writer);
+        CHECK(writer.Finish().has_value());
+    }
+    CHECK(allocations == 0);
+    CHECK(text.data() == data);
+    CHECK(text.find('\n') != std::string::npos);
+}
+
 TEST_CASE("Writer: an allocation failure is OutOfMemory and the string is cut back") {
     std::string line = "kept";
     line.shrink_to_fit();

@@ -90,7 +90,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-port）`；draft、base `gyo2`�
 - 動工條件：#322、#326 合進 gyo2（等使用者說「合併」）。
 - 連線的時機：現在 Client 在 Product 建好時就連（`NetProductOptions` 帶 server endpoint，`NetService` 建構時固定）。大廳要「送出才連」：大廳先跑不帶 net 的 Product，送出後再建帶位址的 Client（net 頁 D-8：重連＝新 client World 的新連線，產品的事），歸作者處理（主會話 2026-11-24 確認）。開工確認時若 Engine 缺入口，先問主會話。
 - 〔第 5 段實作〕程式的流程：大廳（自己的 Product：`Game`＋`Render`，`world_ui`、`window_camera`、`ui_render`，沒有 net）→ 送出有效的位址就關窗、回到程式 → 用那個位址建 Client 的 Product → 連線結束（被拒、逾時、Match 關掉；net 的 `PeerDisconnected`）時 Client 自己關窗，程式帶著理由回到大廳；玩家關窗或按「終了」就結束程式。`--connect` 照舊（第一次不進大廳），`--frames N` 只跑一個 Product（測試用）。代價：大廳和 Client 是兩個 Product，各開一個視窗，換的時候視窗會關掉再開（D-8：連線的位址在 Product 建好時就定）。
-- 〔第 5 段實作〕大廳的文件是產品自己的 `assets/object_fps_pvp/ui/pvp_lobby.json`（gyo.ui v2；位址欄、提示、狀態、「終了」），不帶 master 的房間按鈕（PV18 不做）；送出只有 Enter（文字框的動作）。位址只收 IPv4（`A.B.C.D:P`，`OS::DatagramAddress::Parse`），和 `--connect` 同一個函式 `ParseMatchAddress`。
+- 〔第 5 段實作〕大廳的文件是產品自己的 `assets/object_fps_pvp/ui/pvp_lobby.json`（gyo.ui v2；位址欄、提示、狀態、「終了」），不帶 master 的房間按鈕（PV18 不做）；送出只有 Enter（文字框的動作）。位址只收 IPv4（`A.B.C.D:P`，`OS::SocketAddress::Parse`），和 `--connect` 同一個函式 `ParseMatchAddress`。
 
 ### PV14 內容比對 → **遊戲用複製的 Resource**
 

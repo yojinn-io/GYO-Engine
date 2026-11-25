@@ -27,7 +27,7 @@ constexpr int kSendFlags = MSG_NOSIGNAL;
 constexpr int kSendFlags = 0;
 #endif
 
-sockaddr_in ToNative(const DatagramAddress& address) noexcept {
+sockaddr_in ToNative(const SocketAddress& address) noexcept {
     sockaddr_in native{};
     native.sin_family = AF_INET;
     native.sin_port = htons(address.port);
@@ -64,7 +64,7 @@ struct StreamSocket::Impl final {
     }
 };
 
-Base::Result<StreamSocket, OSError> StreamSocket::Connect(const DatagramAddress& to) {
+Base::Result<StreamSocket, OSError> StreamSocket::Connect(const SocketAddress& to) {
     auto impl = std::make_unique<Impl>();
     impl->fd = socket(AF_INET, SOCK_STREAM, 0);
     if (impl->fd < 0) return Base::Err(OpenError("socket()", errno));

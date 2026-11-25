@@ -126,7 +126,7 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
     // A server listens from the start.
     N::NetProductOptions serverOptions;
     serverOptions.role = N::NetRole::Server;
-    serverOptions.bind = OS::DatagramAddress::Loopback(0);
+    serverOptions.bind = OS::SocketAddress::Loopback(0);
     End server = GameEnd(N::NetRole::Server, GameRules{});
     server.net = serverOptions;
     auto s = O::Product::Build(Describe(server), Units(true));
@@ -135,7 +135,7 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
 
     // A client without a target opens no socket.
     End lone = GameEnd(N::NetRole::Client, GameRules{});
-    lone.net.bind = OS::DatagramAddress::Loopback(0);
+    lone.net.bind = OS::SocketAddress::Loopback(0);
     auto alone = O::Product::Build(Describe(lone), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(alone), Reported(alone));
     for (int i = 0; i < 5; ++i) REQUIRE(static_cast<bool>((*alone)->RunFrame()));
@@ -143,7 +143,7 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
 
     // A client given an Endpoint over UDP: the other kind, a link failure, no connection, no socket.
     End wrong = GameEnd(N::NetRole::Client, GameRules{});
-    wrong.net.bind = OS::DatagramAddress::Loopback(0);
+    wrong.net.bind = OS::SocketAddress::Loopback(0);
     wrong.target.server = N::MemoryLink::EndpointA();
     auto mismatched = O::Product::Build(Describe(wrong), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(mismatched), Reported(mismatched));
@@ -154,8 +154,8 @@ TEST_CASE("connect-target: J4 J5 over UDP the socket opens with the first target
 
     // A client given the server's address: its socket opens at its first frame and it connects.
     End player = GameEnd(N::NetRole::Client, GameRules{});
-    player.net.bind = OS::DatagramAddress::Loopback(0);
-    player.target.server = OS::DatagramAddress::Loopback((*s)->Buffer().Find<N::NetService>()->UdpAddress()->port);
+    player.net.bind = OS::SocketAddress::Loopback(0);
+    player.target.server = OS::SocketAddress::Loopback((*s)->Buffer().Find<N::NetService>()->UdpAddress()->port);
     player.target.userId = 11;
     auto c = O::Product::Build(Describe(player), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(c), Reported(c));
@@ -203,12 +203,12 @@ TEST_CASE("connect-target: J3 closed just before the replacement, its Disconnect
 
 TEST_CASE("connect-target: J4 J5 a client socket that cannot open, and an address over a given Link, connect to nothing") {
     // The port is taken: the client's socket cannot open; told as a link failure, no connection.
-    auto taken = N::UdpLink::Open(OS::DatagramAddress::Loopback(0));
+    auto taken = N::UdpLink::Open(OS::SocketAddress::Loopback(0));
     REQUIRE(static_cast<bool>(taken));
     const auto port = taken->LocalAddress()->port;
     End blocked = GameEnd(N::NetRole::Client, GameRules{});
-    blocked.net.bind = OS::DatagramAddress::Loopback(port);
-    blocked.target.server = OS::DatagramAddress::Loopback(1);
+    blocked.net.bind = OS::SocketAddress::Loopback(port);
+    blocked.target.server = OS::SocketAddress::Loopback(1);
     auto b = O::Product::Build(Describe(blocked), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(b), Reported(b));
     for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>((*b)->RunFrame()));
@@ -220,7 +220,7 @@ TEST_CASE("connect-target: J4 J5 a client socket that cannot open, and an addres
     auto links = N::MemoryLink::Pair({});
     End wrong = GameEnd(N::NetRole::Client, GameRules{});
     wrong.net.link = std::make_shared<N::MemoryLink>(links.second);
-    wrong.target.server = OS::DatagramAddress::Loopback(40000);
+    wrong.target.server = OS::SocketAddress::Loopback(40000);
     auto w = O::Product::Build(Describe(wrong), Units(true));
     REQUIRE_MESSAGE(static_cast<bool>(w), Reported(w));
     for (int i = 0; i < 3; ++i) REQUIRE(static_cast<bool>((*w)->RunFrame()));

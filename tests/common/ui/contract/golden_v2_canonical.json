@@ -1,1 +1,140 @@
-{"schema":"gyo.ui","version":2,"design_canvas":{"size":[100.0,100.0],"scale_mode":"fit"},"fonts":{"ui":"test.font"},"default_font":"ui","colors":{"background":"#000000FF","editing":"#C06000FF","focused":"#804000FF","gray":"#808080FF","normal":"#202020FF","white":"#FFFFFFFF"},"actions":[{"id":"submit_address","payload":"string"},{"id":"go","payload":"none"},{"id":"back","payload":"none"}],"bindings":[{"id":"address","type":"string","preview":""}],"canvases":[{"id":"main","backdrop_color":"background","cancel_action":"back","focus_order":["address_field","go_button"],"children":[{"type":"text_field","id":"address_field","rect":{"anchor_min":[0.0,0.0],"anchor_max":[0.0,0.0],"pivot":[0.0,0.0],"position":[0.0,0.0],"size_delta":[80.0,20.0]},"point_size":10.0,"text_color":{"color":"white"},"horizontal_align":"left","vertical_align":"center","action":"submit_address","background":{"normal":"normal","focused":"focused","pressed":"editing"},"binding":"address","max_length":8,"placeholder":"host:port","placeholder_color":"gray"},{"type":"button","id":"go_button","rect":{"anchor_min":[0.0,0.0],"anchor_max":[0.0,0.0],"pivot":[0.0,0.0],"position":[0.0,50.0],"size_delta":[80.0,20.0]},"text":{"literal":"Go"},"point_size":16.0,"text_color":{"color":"white"},"horizontal_align":"center","vertical_align":"center","action":"go","background":{"normal":"normal","focused":"normal","pressed":"normal"}}]}]}
+{
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": {
+    "size": [
+      100.0,
+      100.0
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "test.font"
+  },
+  "default_font": "ui",
+  "colors": {
+    "background": "#000000FF",
+    "editing": "#C06000FF",
+    "focused": "#804000FF",
+    "gray": "#808080FF",
+    "normal": "#202020FF",
+    "white": "#FFFFFFFF"
+  },
+  "actions": [
+    {
+      "id": "submit_address",
+      "payload": "string"
+    },
+    {
+      "id": "go",
+      "payload": "none"
+    },
+    {
+      "id": "back",
+      "payload": "none"
+    }
+  ],
+  "bindings": [
+    {
+      "id": "address",
+      "type": "string",
+      "preview": ""
+    }
+  ],
+  "canvases": [
+    {
+      "id": "main",
+      "backdrop_color": "background",
+      "cancel_action": "back",
+      "focus_order": [
+        "address_field",
+        "go_button"
+      ],
+      "children": [
+        {
+          "type": "text_field",
+          "id": "address_field",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              0.0,
+              0.0
+            ],
+            "size_delta": [
+              80.0,
+              20.0
+            ]
+          },
+          "point_size": 10.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "left",
+          "vertical_align": "center",
+          "action": "submit_address",
+          "background": {
+            "normal": "normal",
+            "focused": "focused",
+            "pressed": "editing"
+          },
+          "binding": "address",
+          "max_length": 8,
+          "placeholder": "host:port",
+          "placeholder_color": "gray"
+        },
+        {
+          "type": "button",
+          "id": "go_button",
+          "rect": {
+            "anchor_min": [
+              0.0,
+              0.0
+            ],
+            "anchor_max": [
+              0.0,
+              0.0
+            ],
+            "pivot": [
+              0.0,
+              0.0
+            ],
+            "position": [
+              0.0,
+              50.0
+            ],
+            "size_delta": [
+              80.0,
+              20.0
+            ]
+          },
+          "text": {
+            "literal": "Go"
+          },
+          "point_size": 16.0,
+          "text_color": {
+            "color": "white"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center",
+          "action": "go",
+          "background": {
+            "normal": "normal",
+            "focused": "normal",
+            "pressed": "normal"
+          }
+        }
+      ]
+    }
+  ]
+}
