@@ -42,6 +42,16 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - 修訂 6：新案兩個——「解析度是實體像素」（`WindowSizeFor` 的換算；視窗說 125% 時送一次 1536×864；適用也照 scale；測試的游標原本停在 1280×720 視窗的中央，換了大小會停到別的按鈕上，所以移到角落）；「單人房間是多人的房間」（`solo_room` canvas、模式固定、選第二張圖 → Solo World 玩那張、中止回房間仍是那張）。Gateway 的案多檢查房間顯示建房時的地圖。新突變 `pvp-solo-map-ignored`、`pvp-solo-map-not-cycled`、`pvp-solo-map-not-kept`、`pvp-room-map-not-shown`、`pvp-settings-physical-ignored`、`pvp-settings-apply-logical`；find 變了的 `pvp-solo-start-ignored`、`pvp-settings-no-resize` 改 find 重跑。
 - 跟上 gyo2 與試玩兩件之後：本機 `ctest -L "cpu|gpu"` 260/260、`-L "go|network"` 5/5（Gateway 的 e2e 原本在遊戲開始後直接按 Enter 撤退——舊的「沒拿指標就是暫停」——改成先按 Esc）；相關突變 40/40 killed（`pvp-loading-no-wait-start` 第一次是 wrong_failure：頁面離開後 loading 的根不在，測試讀空指標；加 tag 的 `REQUIRE` 後 killed）。
 
+### 修訂 6 的設計審查（Opus／high，作者同模型，審查者只拿三份成果物與使用者原話）
+
+blocker 0、should 3、nit 7。
+
+- S1（merge 後 arena 中途換了不重新 warm-up：模型由 Client 持有只代表不用載入，GPU 端仍要做 mesh／pipeline）→ 先寫失敗的案「warm-up 之後換的 arena 再 warm 一次」（Match 晚到、新 arena 的繪製一直被跳過時不 ready，修前失敗），再讓 `GameReadiness` 記住 warm-up 時的 `shownArena`，不同就重來（warm-up 的上限也重算）。突變 `pvp-loading-rewarm-skipped`。
+- S2（還沒拿指標時失去焦點不暫停，單人的 Solo World 繼續跑）→ 選 (a)：焦點「有 → 沒有」也算要暫停（保留「點一下才拿指標」：#330 起的設計，Bevy `examples/input/mouse_grab.rs` 同）。(b)「開始時自動拿指標」會改掉第一下點擊不射擊的行為，不採用。
+- S3（Tab、失焦的暫停與 scale 第二次變化沒守）→ 新案「失去焦點、或 Tab 交還指標就暫停」；實體像素案最後換到 200 %，再送一次 960×540。突變 `pvp-pause-focus-ignored`、`pvp-pause-tab-ignored`、`pvp-settings-fit-once`、`pvp-settings-fit-every-frame`。
+- N2 → 地圖清單先取成區域變數，再分給大廳／房間與單人房間。N4 → 突變 `pvp-solo-mode-not-survival`（模式不影響規則，SceneChange 不帶 mode：之後模式影響規則時再補）。N6 → 突變 `pvp-solo-moves-ignored`（只帶準備、不帶移動）守 `[pvp-solo-walks]`。
+- 不改：N1（視窗先以設定的數字當邏輯像素開，知道 scale 後再縮：Bevy 也是先用 logical 建、再 request physical；實機看不看得出閃一下未確認）、N3（單人房間的小整理）、N5（`ShowArena` 是大地圖卡的程式，找不到 arena 時也記成已顯示：現在每個 arena 都有畫面，觸發不到；轉告大地圖卡）、N7（兩個倍率的螢幕交界來回振盪：本機沒有 SDL 原始碼可確認，未確認）。
+
 ## 沒驗
 
 - 真的視窗換尺寸、比例（UI 的 fit 與相機）、視窗模式與 VSync 的實際套用：交使用者試玩。

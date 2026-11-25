@@ -1797,6 +1797,73 @@ TEST_CASE("client: the loading screen waits for the Match's start; it is judged 
     CHECK_MESSAGE((shown && !other), "[pvp-loading-arena] when ready, the Match's arena is shown (and the first one no more)");
 }
 
+TEST_CASE("client: the pause comes when the window loses its focus, or the pointer is given back with Tab") {
+    Setup setup;
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).started && PC::StatusOf(setup.Client()).ready; }));
+    setup.Frames(3);  // the loading page leaves (a request, applied next frame)
+    const auto canvas = [&setup] {
+        const auto* root = setup.Root() != 0 ? setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root()) : nullptr;
+        return root != nullptr ? root->canvas : std::string();
+    };
+    REQUIRE(canvas().empty());
+    // The window loses its focus before the game took the pointer: the pause.
+    auto* window = setup.Client().ResourceMut<W::WindowState>();
+    window->known = true;
+    window->physicalSize = {1280, 720};
+    window->focused = false;
+    setup.Frames(2);
+    CHECK_MESSAGE(canvas() == "pause", "[pvp-pause-focus] " << canvas());
+    // Back in focus, a click takes the pointer: the game again; Tab gives it back: the pause.
+    setup.Client().ResourceMut<W::WindowState>()->focused = true;
+    setup.Frame();
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.state = I::ButtonState::Pressed;
+    click.position = {640.0F, 360.0F};
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    setup.Frames(2);
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    REQUIRE(canvas() != "pause");
+    setup.Press(I::KeyCode::Tab);
+    setup.Frames(2);
+    CHECK_MESSAGE(canvas() == "pause", "[pvp-pause-tab] " << canvas());
+}
+
+TEST_CASE("client: an arena changed after the warm-up is warmed again before the loading screen goes") {
+    // The Match plays arena 1 and is slow: the Client warms arena 0 up (a frame shown each frame, nothing skipped);
+    // when the Match comes the Client shows arena 1, whose draws are skipped for a while (its meshes being made).
+    Setup setup(1, 4, 1);
+    setup.holdMatch = true;
+    std::uint64_t shown = 0;
+    std::uint64_t skipped = 0;
+    REQUIRE(FramesUntil(setup, [&] {
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
+        return PC::StatusOf(setup.Client()).progress >= 0.85;
+    }));
+    for (int i = 0; i < 5; ++i) {  // two frames shown with nothing skipped: arena 0 is warmed up
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
+        setup.Frame();
+    }
+    setup.holdMatch = false;
+    bool readyWhileSkipping = false;
+    for (int i = 0; i < 60; ++i) {
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, ++skipped});
+        setup.Frame();
+        readyWhileSkipping = readyWhileSkipping || PC::StatusOf(setup.Client()).ready;
+    }
+    CHECK_MESSAGE(!readyWhileSkipping, "[pvp-loading-rewarm] not ready while the new arena's draws are skipped");
+    REQUIRE(setup.Client().Resource<PW::GameRules>()->arena.id == ShippedContent()->arenas[1].content.id);
+    // The draws stop being skipped: ready.
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] {
+                        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
+                        return PC::StatusOf(setup.Client()).ready;
+                    }),
+                    "[pvp-loading-rewarm] ready once the new arena is drawn");
+}
+
 TEST_CASE("client: without its own player from the Match the loading screen does not end") {
     Setup setup;
     setup.holdMatch = true;  // nothing comes from the Match
@@ -1929,7 +1996,7 @@ TEST_CASE("client: settings: the resolution is physical pixels: the window is gi
     })));
     resized.clear();
     setup.Frames(3);
-    CHECK_MESSAGE(resized.empty(), "a window that has not said its scale is left as it opened");
+    CHECK_MESSAGE(resized.empty(), "a window at scale 1 is left as it opened");
     // The window says it is at 125 % (Windows' display scale): it is asked for the logical size of 1920 × 1080 pixels.
     auto* window = setup.Client().ResourceMut<W::WindowState>();
     window->known = true;
@@ -1953,6 +2020,12 @@ TEST_CASE("client: settings: the resolution is physical pixels: the window is gi
     setup.Frames(1);
     REQUIRE_MESSAGE(resized.size() == 1, setup.Binding("settings_status"));
     CHECK_MESSAGE((resized.front() == GYO::Engine::Math::Vec2i{1536, 864}), "[pvp-settings-apply-physical] " << resized.front().x);
+    // The window goes to a screen at 200 %: asked again, for that scale.
+    resized.clear();
+    setup.Client().ResourceMut<W::WindowState>()->scaleFactor = 2.0F;
+    setup.Frames(2);
+    REQUIRE_MESSAGE(resized.size() == 1, "[pvp-settings-rescaled] once more, at the new scale");
+    CHECK_MESSAGE((resized.front() == GYO::Engine::Math::Vec2i{960, 540}), "[pvp-settings-rescaled] " << resized.front().x);
 }
 
 TEST_CASE("client: single player: the room is the multiplayer's: the map chosen there is played; the mode is survival") {

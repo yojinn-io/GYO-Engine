@@ -144,8 +144,10 @@ struct ClientControls final {
     present::Controls controls;
     // The next frame takes the pointer, as a click does (the pause's pvp.resume).
     bool resume = false;
-    // This frame asks for the pause: it gave the pointer back (Tab, Esc, the window's focus lost), or Esc without it.
+    // This frame asks for the pause: it gave the pointer back (Tab, Esc, the window's focus lost), or without the
+    // pointer Esc was pressed or the window lost its focus.
     bool pauseAsked = false;
+    bool focused = true;  // the window had the focus last frame
     // The life the view was turned to (a new life faces its spawn's yaw).
     std::uint32_t facedLife = 0;
     K::EntityId facedPlayer = 0;
@@ -166,7 +168,8 @@ const R::ClearColorConfig kSky{R::ClearColorConfig::Mode::Custom, R::Color8{120,
 struct GameReadiness final {
     double progress = 0.0;
     bool covered = false;                   // the overlay is shown: the game may be drawn under it
-    bool assets = false;                    // the game's assets finished, the arena shown the one the World plays
+    bool assets = false;                    // the game's assets finished
+    std::string arena;                      // the arena shown when they were (ShowArena): another one is warmed again
     std::optional<std::uint64_t> warmFrom;  // DrawnFrames::shown when the assets were done (or a draw was last skipped)
     std::optional<std::uint64_t> warmStart; // ... when they were first done: the warm-up's limit counts from here
     std::uint64_t skippedAt = 0;            // DrawnFrames::skipped at warmFrom
@@ -490,7 +493,9 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     frame.motion = motion->delta;
     const bool before = c.controls.Captured();
     c.controls.Apply(frame);
-    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape;
+    const bool focusLost = c.focused && !frame.focused;
+    c.focused = frame.focused;
+    c.pauseAsked = (before && !c.controls.Captured()) || frame.escape || focusLost;
     // The pointer: hidden and held while the game has it (window's Locked: relative motion).
     const bool captured = c.controls.Captured();
     if (request.Read().cursorVisible == captured || (request.Read().cursorGrab == W::CursorGrab::Locked) != captured) {
@@ -1046,12 +1051,13 @@ constexpr std::uint64_t kWarmFramesAtMost = 120;
 
 // The steps of the loading, in order; each waits for the ones before it.
 K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<DrawnFrames> drawn,
-                               K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::ResMut<GameReadiness> readiness) {
+                               K::Res<ClientScene> scene, K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::ResMut<GameReadiness> readiness) {
     if (readiness.Read().ready) return {};
     GameReadiness next = readiness.Read();
     next.covered = next.covered || (roots.Get<Ui::UiRootState>(kOverlay) != nullptr && roots.Get<Ui::UiRootState>(kOverlay)->runtime.has_value());
     // The assets: the game's and the overlay's document. The arena's regions are models the Client holds (read with the
-    // content): ShowArena, before this, shows the arena the World plays at once, with nothing to wait for.
+    // content): ShowArena, before this, shows the arena the World plays at once, with nothing to load -- but another
+    // arena than the one warmed up (the Match's, come later) is drawn anew: the steps after the assets again.
     bool assetsDone = false;
     if (assets->requested) {
         std::vector<WA::UntypedHandle> handles;
@@ -1075,15 +1081,20 @@ K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView
         next.progress = std::max(next.progress, kAssetsShare * done);
         assetsDone = ready.allFinished && ready.dependenciesFinished;
     }
-    if (!assetsDone) {
-        // Not (or no more): everything after it again.
-        next.assets = next.warmed = next.network = false;
+    const bool otherArena = next.assets && next.arena != scene->shownArena;
+    if (!assetsDone || otherArena) {
+        // Not (or no more), or another arena: everything after it again (another arena's warm-up has its own limit).
+        next.assets = assetsDone;
+        next.warmed = next.network = false;
         next.warmFrom.reset();
+        if (otherArena) next.warmStart.reset();
         next.lastFrom.reset();
+        next.arena = scene->shownArena;
         readiness.Get() = std::move(next);
         return {};
     }
     next.assets = true;
+    next.arena = scene->shownArena;
     // The warm-up: the game drawn under the overlay until two frames are shown with no draw skipped (the textures,
     // meshes and pipelines made), at most kWarmFramesAtMost frames after the assets were done.
     if (next.covered && !next.warmed) {
@@ -2070,11 +2081,13 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
         GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
         const std::string& directory = start->dataDirectory;
-        GatewayContext gateway{directory, start->gateway, {}};
-        for (const PW::InstalledArena& arena : options.game->arenas) gateway.maps.push_back(arena.content.id);
+        // The maps a room offers: the installed arenas, by id.
+        std::vector<std::string> maps;
+        for (const PW::InstalledArena& arena : options.game->arenas) maps.push_back(arena.content.id);
+        GatewayContext gateway{directory, start->gateway, maps};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
-        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, gateway.maps); break;
+        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, maps); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:
