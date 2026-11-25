@@ -46,6 +46,11 @@ type Write struct {
 	Body    json.RawMessage `json:"body"`
 }
 
+// Written is a write's answer: the save's version now.
+type Written struct {
+	Version uint64 `json:"version"`
+}
+
 // Conflict is a refused write's answer: the save was written meanwhile.
 type Conflict struct {
 	Error   string `json:"error"`
@@ -111,7 +116,8 @@ func (s *Service) write(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusInternalServerError, "save_store_failed")
 		return
 	}
-	api.WriteJSON(w, http.StatusOK, next)
+	// Only the version: the writer has the body, and a kept answer stays small.
+	api.WriteJSON(w, http.StatusOK, Written{Version: next.Version})
 }
 
 func (s *Service) file(user uint64) string {

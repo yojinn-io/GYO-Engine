@@ -6,7 +6,6 @@
 package gateway
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"log"
@@ -51,30 +50,54 @@ func New(config Config) (*Gateway, error) {
 func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/session", func(w http.ResponseWriter, r *http.Request) {
-		g.forward(w, r, g.config.Identity, "/internal/v1/sessions", 0)
+		g.forward(w, r, g.config.Identity, "/internal/v1/sessions", api.Nobody)
 	})
 	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", api.As(user))
 	}))
 	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", api.As(user))
 	}))
 	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
 		if id, ok := roomID(w, r); ok {
-			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, user)
+			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, api.As(user))
 		}
 	}))
 	for _, action := range []string{"join", "leave", "ready", "start"} {
 		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
 			if id, ok := roomID(w, r); ok {
-				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, user)
+				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, api.As(user))
 			}
 		}))
 	}
 	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user, 10), user)
+		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user, 10), api.As(user))
 	}))
-	return mux
+	return unknownAsJSON(mux)
+}
+
+// Versions is what a Client of another protocol version is told.
+type Versions struct {
+	Error    string `json:"error"`
+	Versions []int  `json:"versions"`
+}
+
+// unknownAsJSON answers what no route takes in the external protocol's form:
+// a path of another version says which versions this gateway speaks
+// (unsupported_version, as master's gateway stated its own version), any other
+// unknown_route.
+func unknownAsJSON(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, pattern := mux.Handler(r); pattern != "" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, "/v"+strconv.Itoa(ProtocolVersion)+"/") {
+			api.WriteJSON(w, http.StatusNotFound, Versions{Error: "unsupported_version", Versions: []int{ProtocolVersion}})
+			return
+		}
+		api.WriteError(w, http.StatusNotFound, "unknown_route")
+	})
 }
 
 // signedIn checks the bearer session token before the route.
@@ -109,37 +132,22 @@ func roomID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return id, true
 }
 
-// forward sends the request to a service as user, with the client's body and
-// idempotency key, and copies the answer back.
-func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, base, path string, user uint64) {
+// forward sends the request to a service for the caller, with the client's
+// body and idempotency key, and copies the answer back.
+func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, base, path string, caller api.Caller) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, api.MaxBody))
 	if err != nil {
 		api.WriteError(w, http.StatusRequestEntityTooLarge, "body_too_large")
 		return
 	}
-	request, err := http.NewRequestWithContext(r.Context(), r.Method, base+path, bytes.NewReader(body))
-	if err != nil {
-		api.WriteError(w, http.StatusInternalServerError, "forward_failed")
-		return
+	if len(body) == 0 {
+		body = nil
 	}
-	request.Header.Set(api.HeaderUser, strconv.FormatUint(user, 10))
-	if key := r.Header.Get(api.HeaderIdempotency); key != "" {
-		request.Header.Set(api.HeaderIdempotency, key)
-	}
-	if len(body) > 0 {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	response, err := g.config.HTTP.Do(request)
+	status, answer, err := api.Send(r.Context(), g.config.HTTP, r.Method, base+path, caller, r.Header.Get(api.HeaderIdempotency), body)
 	if err != nil {
 		log.Printf("gateway forward failed path=%s error=%v", path, err)
 		api.WriteError(w, http.StatusBadGateway, "service_unavailable")
 		return
 	}
-	defer response.Body.Close()
-	answer, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if err != nil {
-		api.WriteError(w, http.StatusBadGateway, "service_unavailable")
-		return
-	}
-	api.WriteRaw(w, response.StatusCode, answer)
+	api.WriteRaw(w, status, answer)
 }

@@ -39,10 +39,11 @@ var (
 
 // The admission token's layout (declaration D5), integers big-endian:
 // version u8 | matchId u64 | userId u64 | expiresAt u64 (Unix seconds) |
-// reserved u32 | mac [32] = HMAC-SHA256(key, the 29 bytes before it).
+// mac [32] = HMAC-SHA256(key, the 25 bytes before it). A new field is a new
+// version, which a Match that does not know it refuses.
 const (
 	AdmissionVersion = 1
-	admissionSigned  = 1 + 8 + 8 + 8 + 4
+	admissionSigned  = 1 + 8 + 8 + 8
 	AdmissionSize    = admissionSigned + sha256.Size
 )
 
@@ -61,7 +62,6 @@ func SignAdmission(key []byte, a Admission) []byte {
 	binary.BigEndian.PutUint64(out[1:], a.MatchID)
 	binary.BigEndian.PutUint64(out[9:], a.UserID)
 	binary.BigEndian.PutUint64(out[17:], uint64(a.ExpiresAt.Unix()))
-	// out[25:29], reserved, stays zero.
 	return append(out, mac(key, out)...)
 }
 

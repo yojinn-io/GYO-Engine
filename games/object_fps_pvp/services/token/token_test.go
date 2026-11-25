@@ -22,7 +22,7 @@ func TestAdmissionLayout(t *testing.T) {
 	if len(signed) != AdmissionSize {
 		t.Fatalf("admission token size %d, want %d", len(signed), AdmissionSize)
 	}
-	want := "01" + "0102030405060708" + "000000000000002a" + hex.EncodeToString([]byte{0, 0, 0, 0, 0x6b, 0x49, 0xd2, 0x3c}) + "00000000"
+	want := "01" + "0102030405060708" + "000000000000002a" + hex.EncodeToString([]byte{0, 0, 0, 0, 0x6b, 0x49, 0xd2, 0x3c})
 	if got := hex.EncodeToString(signed[:admissionSigned]); got != want {
 		t.Fatalf("admission token fields %s, want %s", got, want)
 	}
@@ -60,7 +60,6 @@ func TestAdmissionRefusals(t *testing.T) {
 		{"changed match field", testKey, flipped(8), now, a.MatchID, a.UserID, ErrMAC},
 		{"changed user field", testKey, flipped(16), now, a.MatchID, a.UserID, ErrMAC},
 		{"changed expiry field", testKey, flipped(24), now, a.MatchID, a.UserID, ErrMAC},
-		{"changed reserved field", testKey, flipped(28), now, a.MatchID, a.UserID, ErrMAC},
 		{"changed signature", testKey, flipped(AdmissionSize - 1), now, a.MatchID, a.UserID, ErrMAC},
 		{"another match", testKey, signed, now, a.MatchID + 1, a.UserID, ErrMatch},
 		{"another user", testKey, signed, now, a.MatchID, a.UserID + 1, ErrUser},

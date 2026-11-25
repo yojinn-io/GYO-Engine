@@ -7,6 +7,7 @@ package rooms
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -42,8 +43,9 @@ type Config struct {
 	Capacity int
 	// Maps the rooms may choose; empty: any id of [a-z0-9_]{1,64}.
 	Maps []string
-	// StartedTTL: how long a started room stays for its members to fetch their
-	// tickets.
+	// StartedTTL: how long a started room stays at most. It goes as soon as a
+	// member asks for it after its Match has ended (the matches service says
+	// match_ended); this bounds the rooms nobody asks for again.
 	StartedTTL time.Duration
 	Now        func() time.Time
 }
@@ -63,12 +65,14 @@ type member struct {
 }
 
 type room struct {
-	id        uint64
-	mode      string
-	mapID     string
-	owner     uint64
-	members   []*member
-	state     string
+	id      uint64
+	mode    string
+	mapID   string
+	owner   uint64
+	members []*member
+	state   string
+	// started: its Match.
+	matchID   uint64
 	startedAt time.Time
 }
 
@@ -80,12 +84,19 @@ func New(config Config) (*Service, error) {
 		config.Capacity = 4
 	}
 	if config.StartedTTL <= 0 {
-		config.StartedTTL = 10 * time.Minute
+		config.StartedTTL = 6 * time.Hour
 	}
 	if config.Now == nil {
 		config.Now = time.Now
 	}
-	return &Service{config: config, rooms: map[uint64]*room{}, replays: api.NewReplays(4096)}, nil
+	// Room ids start at a random point: a Client polling a room of an earlier
+	// run of this service does not meet another room under the same id.
+	var random [4]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return nil, err
+	}
+	return &Service{config: config, rooms: map[uint64]*room{}, next: uint64(binary.BigEndian.Uint32(random[:])) << 16,
+		replays: api.NewReplays(4096)}, nil
 }
 
 // Summary is a room in the list.
@@ -170,12 +181,42 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sweep()
 	found, ok := s.found(w, r)
 	if !ok {
+		s.mu.Unlock()
 		return
 	}
+	if found.state != Started || found.memberOf(caller) == nil {
+		api.WriteJSON(w, http.StatusOK, s.view(found, caller))
+		s.mu.Unlock()
+		return
+	}
+	id, matchID := found.id, found.matchID
+	s.mu.Unlock()
+
+	// A member of a started room gets a fresh token while the Match runs.
+	var ticket matches.Ticket
+	err := s.config.Matches.Call(r.Context(), http.MethodPost, "/internal/v1/matches/"+strconv.FormatUint(matchID, 10)+"/tickets",
+		api.As(api.System), "", map[string]uint64{"userId": caller}, &ticket)
+	var refused *api.Refused
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found, ok = s.rooms[id]
+	if !ok {
+		api.WriteError(w, http.StatusNotFound, "room_not_found")
+		return
+	}
+	if errors.As(err, &refused) && refused.Code == "match_ended" {
+		delete(s.rooms, id)
+		api.WriteError(w, http.StatusGone, "match_ended")
+		return
+	}
+	if m := found.memberOf(caller); err == nil && m != nil {
+		m.ticket = &ticket
+	}
+	// Unreachable matches service: the ticket the member had (it may still be
+	// good).
 	api.WriteJSON(w, http.StatusOK, s.view(found, caller))
 }
 
@@ -333,25 +374,30 @@ func (s *Service) start(w http.ResponseWriter, r *http.Request) {
 		}
 		request.Players = append(request.Players, m.user)
 	}
+	key, err := attemptKey()
+	if err != nil {
+		api.WriteError(w, http.StatusInternalServerError, "key_failed")
+		s.mu.Unlock()
+		return
+	}
 	found.state = Starting
 	s.mu.Unlock()
 
-	// A key of its own per start: room ids begin again when this service
-	// restarts, the matches service's record of an earlier start does not.
-	var allocation matches.Allocation
-	key, err := attemptKey()
-	if err == nil {
-		err = s.config.Matches.Call(context.WithoutCancel(r.Context()), http.MethodPost, "/internal/v1/matches", 0,
-			key, request, &allocation)
-	}
+	allocation, err := s.allocate(context.WithoutCancel(r.Context()), key, request)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err != nil || len(allocation.Tickets) != len(found.members) {
 		found.state = Open
-		api.WriteError(w, http.StatusServiceUnavailable, "allocation_failed")
+		code := "allocation_failed"
+		var refused *api.Refused
+		if errors.As(err, &refused) && refused.Code != "" {
+			code = refused.Code
+		}
+		api.WriteError(w, http.StatusServiceUnavailable, code)
 		return
 	}
+	found.matchID = allocation.MatchID
 	for i := range allocation.Tickets {
 		ticket := allocation.Tickets[i]
 		if m := found.memberOf(ticket.UserID); m != nil {
@@ -361,6 +407,25 @@ func (s *Service) start(w http.ResponseWriter, r *http.Request) {
 	found.state = Started
 	found.startedAt = s.config.Now()
 	api.WriteJSON(w, http.StatusOK, s.view(found, caller))
+}
+
+// startAttempts: how many times a start sends its allocation when the matches
+// service cannot be reached (the same key each time, so at most one Match).
+const startAttempts = 3
+
+// allocate asks the matches service for a Match; a transport failure (no
+// answer) is sent again with the same key, a refusal is the answer.
+func (s *Service) allocate(ctx context.Context, key string, request matches.Request) (matches.Allocation, error) {
+	var allocation matches.Allocation
+	var err error
+	for attempt := 0; attempt < startAttempts; attempt++ {
+		err = s.config.Matches.Call(ctx, http.MethodPost, "/internal/v1/matches", api.As(api.System), key, request, &allocation)
+		var refused *api.Refused
+		if err == nil || errors.As(err, &refused) {
+			return allocation, err
+		}
+	}
+	return allocation, err
 }
 
 // changeable answers why a room cannot change now (starting, started).

@@ -11,9 +11,10 @@ import (
 const MaxKey = 128
 
 // Replays makes a service's state-changing routes idempotent (declaration D4):
-// the first answer to a (user, route, key) is kept and every later request with
-// the same key gets it again, also while the first is still running. Answers of
-// 5xx are not kept, so the caller can retry them. A request without a key is
+// the first successful (2xx) answer to a (user, route, key) is kept and every
+// later request with the same key gets it again, also while the first is still
+// running. A refusal (4xx, 5xx) is not kept: nothing changed, and the same key
+// may try again (master kept only successes too). A request without a key is
 // handled every time. At most limit answers are kept, the oldest dropped first.
 type Replays struct {
 	mu      sync.Mutex
@@ -71,7 +72,7 @@ func (s *Replays) Wrap(next http.Handler) http.Handler {
 		defer func() {
 			s.mu.Lock()
 			defer s.mu.Unlock()
-			if recorder.status < 500 {
+			if recorder.status/100 == 2 {
 				s.keep(entry, recorded{status: recorder.status, header: w.Header().Clone(), body: recorder.body.Bytes()})
 			}
 			if s.pending[entry] == own {
