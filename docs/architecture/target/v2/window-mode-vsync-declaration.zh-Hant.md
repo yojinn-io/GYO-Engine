@@ -73,6 +73,8 @@
 | present mode 的退回順序 | 純函式的表 | CI 三平台（cpu） |
 | `Presentation` 傳到 swapchain、切回來 | `sdl_gpu.frames`：顯示的視窗、`AutoNoVsync` → `ActivePresentMode` 在退回鏈上、幀照常送到；再切回 `Vsync` | Linux（Lavapipe＋Xvfb）、本機 |
 
+**實機用的程式**：`examples/window_mode`（F／W／1-4／V 切換、標題與每次變化印一行；`--frames N` 自動走一遍，ctest `window_mode.example`，label `gpu`）、`examples/window_mode/acceptance_macos.sh`（建置＋自動＋互動，日誌放主 checkout 的 `build/evidence/gyo2-window-mode-vsync/`）。2026-11-25 這台 Mac（Intel、5K、縮放 2）自動走過：第 24 幀進全屏 5120×2880、全屏中的 1600×900 回窗口後成為 3200×1800、VSync 關＝Immediate。
+
 **測不到、交使用者實機驗收（這台 Mac＋Windows）**：真的進／出無邊框全屏（macOS 的 Spaces 動畫、Windows 的無邊框）、macOS 非同步進入的空檔（送全屏的同一幀送大小：全屏不變、回窗口才生效；審查 S2 補充）、全屏時 `Letterbox` 的黑邊、回窗口的大小與位置、全屏中改解析度後回窗口、VSync 關時幀率不被鎖（Windows 的 D3D12／Vulkan 是否支援 IMMEDIATE）、macOS 綠色按鈕進全屏後 `WindowState::mode` 跟著變。
 
 ## 6. 範圍
