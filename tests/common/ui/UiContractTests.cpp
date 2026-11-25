@@ -43,13 +43,15 @@ volatile unsigned gByteOffset = 0U;
     return parsed ? std::optional<UiFailureCode>{} : std::optional<UiFailureCode>{parsed.error().code};
 }
 
-// The canonical golden: one line, one trailing newline, a fixed point of Parse -> Serialize, the output for the
-// source document, and the same JSON values as master's frozen two-space output.
-void CheckGolden(const std::string_view source, const std::string_view canonical, const std::string_view master) {
+// The canonical golden: two-space indentation, one trailing newline, a fixed point of Parse -> Serialize and the
+// output for the source document. When master froze its output and it is not the canonical file itself, the two hold
+// the same JSON values and master's reads back to the golden: they differ only in exponent text (master's nlohmann
+// wrote 1e+300 and 2.5e-07, the JSON Module writes the shortest round-trip text, 1e300 and 2.5e-7; J-5).
+void CheckGolden(const std::string_view source, const std::string_view canonical, const std::string_view master = {}) {
     const std::string golden = ReadContractFile(canonical);
     REQUIRE(golden.size() > 1U);
     CHECK(golden.back() == '\n');
-    CHECK_MESSAGE(golden.find('\n') == golden.size() - 1U, "the canonical form is one line");
+    CHECK_FALSE(golden.ends_with("\n\n"));
 
     CHECK(SerializeParsed(ReadContractFile(source)) == golden);
     CHECK(SerializeParsed(golden) == golden);
@@ -72,18 +74,30 @@ TEST_CASE("ui_contract: Parse reads UTF-8 and converts sRGB colours to linear") 
     CHECK(document.canvases[0].children[0].children[0].text.literal == "ゲームスタート");
 }
 
-TEST_CASE("ui_contract: Serialize is deterministic, one line, UTF-8 and in master's field order") {
+TEST_CASE("ui_contract: Serialize is deterministic, indented, UTF-8 and in master's field order") {
     const UiDocument document = ParseOrFail(Document());
     const std::string first = SerializeOrFail(document);
     const std::string second = SerializeOrFail(document);
     CHECK(first == second);
     CHECK(first.ends_with("\n"));
     CHECK_FALSE(first.ends_with("\n\n"));
-    CHECK(first.find('\n') == first.size() - 1U);
     CHECK(first.find("ゲームスタート") != std::string::npos);
     CHECK(first.find("#808080FF") != std::string::npos);
-    CHECK(first.starts_with(R"({"schema":"gyo.ui","version":1,"design_canvas":{"size":[100.0,100.0],)"
-                            R"("scale_mode":"fit"},"fonts":{"ui":"test.font"},"default_font":"ui","colors":{)"));
+    CHECK(first.starts_with("{\n"
+                            "  \"schema\": \"gyo.ui\",\n"
+                            "  \"version\": 1,\n"
+                            "  \"design_canvas\": {\n"
+                            "    \"size\": [\n"
+                            "      100.0,\n"
+                            "      100.0\n"
+                            "    ],\n"
+                            "    \"scale_mode\": \"fit\"\n"
+                            "  },\n"
+                            "  \"fonts\": {\n"
+                            "    \"ui\": \"test.font\"\n"
+                            "  },\n"
+                            "  \"default_font\": \"ui\",\n"
+                            "  \"colors\": {\n"));
 
     const UiDocument roundTrip = ParseOrFail(first);
     CHECK(roundTrip.canvases[0].focusOrder.size() == 3U);
@@ -304,8 +318,8 @@ TEST_CASE("ui_contract: compose rejects unknown, unused and malformed formats") 
     }
 }
 
-TEST_CASE("ui_contract: the golden of master's test document (v1, UTF-8)") {
-    CheckGolden("document_v1.json", "document_v1_canonical.json", "document_v1_master_canonical.json");
+TEST_CASE("ui_contract: the golden of master's test document (v1, UTF-8) is master's output byte for byte") {
+    CheckGolden("document_v1.json", "document_v1_master_canonical.json");
 }
 
 TEST_CASE("ui_contract: the golden of master's synthetic document (v1)") {
@@ -313,16 +327,16 @@ TEST_CASE("ui_contract: the golden of master's synthetic document (v1)") {
 
     // Spot checks of what the golden pins (the full comparisons above are authoritative).
     const std::string serialized = SerializeParsed(ReadContractFile("golden_v1.json"));
-    CHECK(serialized.find(R"("schema":"gyo.ui")") != std::string::npos);
-    CHECK(serialized.find(R"("version":1,)") != std::string::npos);
+    CHECK(serialized.find(R"("schema": "gyo.ui")") != std::string::npos);
+    CHECK(serialized.find(R"("version": 1,)") != std::string::npos);
     CHECK_MESSAGE(serialized.find("0.10000000149011612") != std::string::npos, "0.1 after the float round trip");
     CHECK(serialized.find(R"("#A1B2C3D4")") != std::string::npos);
     CHECK_MESSAGE(serialized.find(R"("#102030FF")") != std::string::npos, "#RRGGBB gains FF");
-    CHECK_MESSAGE(serialized.find(R"("preview":-3)") != std::string::npos, "an integer preview stays an integer");
+    CHECK_MESSAGE(serialized.find(R"("preview": -3)") != std::string::npos, "an integer preview stays an integer");
 }
 
 TEST_CASE("ui_contract: the golden of master's text field document (v2)") {
-    CheckGolden("golden_v2.json", "golden_v2_canonical.json", "");
+    CheckGolden("golden_v2.json", "golden_v2_canonical.json");
 }
 
 TEST_CASE("ui_contract: sRGB hex colours round-trip every byte") {
@@ -599,7 +613,8 @@ TEST_CASE("ui_contract: a document built in code stays version 1 unless it needs
     CHECK(built.designCanvas.size.x == 1280.0F);
     CHECK(built.designCanvas.size.y == 720.0F);
     const std::string serialized = SerializeOrFail(built);
-    CHECK(serialized.starts_with(R"({"schema":"gyo.ui","version":1,"design_canvas":{"size":[1280.0,720.0],)"));
+    CHECK(serialized.starts_with("{\n  \"schema\": \"gyo.ui\",\n  \"version\": 1,\n  \"design_canvas\": {\n"
+                                 "    \"size\": [\n      1280.0,\n      720.0\n    ],\n"));
     CHECK(SerializeParsed(serialized) == serialized);
 }
 
