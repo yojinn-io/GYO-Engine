@@ -56,7 +56,61 @@ K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootSt
 // ---- The main menu (assets/object_fps_pvp/ui/pvp_menu.json, canvas "menu").
 
 constexpr std::string_view kMenuInvitation = "モードを選んでください";
-constexpr std::string_view kNotYet = "準備中です";
+
+// The settings canvas's own state: what the player is choosing (applied with 適用), and the file.
+struct SettingsEdit final {
+    ClientSettings edited;
+    std::string path;
+};
+void HashValue(K::Hasher&, const SettingsEdit&) {}
+
+void ShowSettings(const ClientSettings& settings, Ui::UiBindings& bindings) {
+    bindings.Set("resolution", "解像度: " + ResolutionText(settings.resolution));
+    bindings.Set("window_mode", std::string(settings.window == WindowChoice::Borderless ? "画面: 全画面（枠なし）" : "画面: ウィンドウ"));
+    bindings.Set("vsync", std::string(settings.vsync ? "VSync: オン" : "VSync: オフ"));
+}
+
+// The settings canvas: pvp.resolution / pvp.window_mode / pvp.vsync change what is chosen; pvp.apply puts it in force
+// (the window's size now: window's ResizeWindow) and saves it; pvp.settings_back goes back to the menu's canvas.
+K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SettingsEdit> edit, K::ResMut<ClientSettings> settings,
+                                K::Query<K::Write<Ui::UiRoot>, K::Write<Ui::UiBindings>> roots, K::MessageWriter<W::ResizeWindow> resize) {
+    for (const Ui::UiAction* action : actions.Read()) {
+        auto root = roots.GetMut<Ui::UiRoot>(action->root);
+        auto bindings = roots.GetMut<Ui::UiBindings>(action->root);
+        if (!root || !bindings) continue;
+        ClientSettings& edited = edit->edited;
+        const std::string& id = action->action;
+        if (id == "pvp.settings") {
+            edited = *settings;
+            root->canvas = "settings";
+            bindings->Set("settings_status", std::string("変更したら「適用」を押してください"));
+        } else if (id == "pvp.settings_back") {
+            root->canvas = "menu";
+        } else if (id == "pvp.resolution") {
+            edited.resolution = NextResolution(edited.resolution);
+        } else if (id == "pvp.window_mode") {
+            edited.window = edited.window == WindowChoice::Windowed ? WindowChoice::Borderless : WindowChoice::Windowed;
+        } else if (id == "pvp.vsync") {
+            edited.vsync = !edited.vsync;
+        } else if (id == "pvp.apply") {
+            if (edited.resolution != settings.Read().resolution) resize.Send(W::ResizeWindow{edited.resolution});
+            *settings = edited;
+            std::string status = "適用しました";
+            if (edit.Read().path.empty()) {
+                status += "（保存先がないため、保存していません）";
+            } else if (auto saved = SaveSettings(edit.Read().path, edited); !saved) {
+                status += "。保存できません: " + Base::Describe(saved.error());
+            } else {
+                status += "。保存しました";
+            }
+            bindings->Set("settings_status", status);
+        } else {
+            continue;
+        }
+        ShowSettings(edited, *bindings);
+    }
+    return {};
+}
 
 K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::Write<Ui::UiBindings>> bindings,
                             K::ResMut<SceneRequest> request, K::ResMut<W::WindowRequest> window) {
@@ -67,8 +121,6 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::
             request->next = SceneChange{.scene = Scene::SoloRoom};
         } else if (action->action == "pvp.multi") {
             request->next = SceneChange{.scene = Scene::Lobby};
-        } else if (action->action == "pvp.settings") {
-            if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("status", std::string(kNotYet));
         }
     }
     return {};
@@ -149,6 +201,8 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     r.Resource<SceneRequest>({.name = "object_fps_pvp.SceneRequest"});
     r.Resource<FrameNotes>({.name = "object_fps_pvp.FrameNotes"});
     setup.CarryOver<FrameNotes>("object_fps_pvp.FrameNotes");
+    r.Resource<ClientSettings>({.name = "object_fps_pvp.ClientSettings"});
+    setup.CarryOver<ClientSettings>("object_fps_pvp.ClientSettings");
     r.Resource<GatewayClient>({.name = "object_fps_pvp.GatewayClient"});
     setup.CarryOver<GatewayClient>("object_fps_pvp.GatewayClient");
     r.AddSystem<&CountFrames>(InSceneUpdate("object_fps_pvp.CountFrames"));
@@ -166,15 +220,25 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     setup.Prepare([start = *start](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SceneRequest{});
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
+        if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
         PlaceGatewayClient(w, start.gateway, start.dataDirectory);
         return {};
     });
 }
 
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change) {
-    setup.Registrar().AddSystem<&MenuActions>(InSceneUpdate("object_fps_pvp.MenuActions"));
-    setup.Prepare([status = change.status](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+    K::Registrar& r = setup.Registrar();
+    r.Resource<SettingsEdit>({.name = "object_fps_pvp.SettingsEdit"});
+    r.AddSystem<&MenuActions>(InSceneUpdate("object_fps_pvp.MenuActions"));
+    r.AddSystem<&SettingsActions>(InSceneUpdate("object_fps_pvp.SettingsActions"));
+    const auto* start = setup.ProductBuffer().Find<ClientStart>();
+    const std::string path = start != nullptr ? start->settingsPath : std::string();
+    setup.Prepare([status = change.status, path](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+        const ClientSettings& settings = *w.Resource<ClientSettings>();
+        w.SetResource(SettingsEdit{settings, path});
         Ui::UiBindings bindings;
+        ShowSettings(settings, bindings);
+        bindings.Set("settings_status", std::string());
         bindings.Set("status", status.empty() ? std::string(kMenuInvitation) : status);
         PlaceSceneDocument(w, "object_fps_pvp.ui.menu", "menu", std::move(bindings), {});
         return {};

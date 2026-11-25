@@ -1822,6 +1822,58 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: without its own player*",
    "expect": "pvp-loading-needs-player"
+  },
+  {
+   "id": "pvp-settings-no-resize",
+   "what": "applying a new size does not ask the window for it",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            if (edited.resolution != settings.Read().resolution) resize.Send(W::ResizeWindow{edited.resolution});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-resize"
+  },
+  {
+   "id": "pvp-settings-not-saved",
+   "what": "applied settings are not saved",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "            } else if (auto saved = SaveSettings(edit.Read().path, edited); !saved) {",
+   "replace": "            } else if (auto saved = Base::Result<void, GYO::Engine::IO::IOError>{}; !saved) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-saved"
+  },
+  {
+   "id": "pvp-settings-not-carried",
+   "what": "the settings start again with each scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    setup.CarryOver<ClientSettings>(\"object_fps_pvp.ClientSettings\");\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-carried"
+  },
+  {
+   "id": "pvp-settings-any-size",
+   "what": "a saved size not offered is read as it is",
+   "guards": [
+    "game-flow-declaration 4 (segment 5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "        if (std::find(kResolutions.begin(), kResolutions.end(), settings.resolution) == kResolutions.end()) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: settings*",
+   "expect": "pvp-settings-fixed-sizes"
   }
  ]
 }

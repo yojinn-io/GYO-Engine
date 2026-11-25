@@ -130,6 +130,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                const std::shared_ptr<const PC::PresentationContent>& presentation, const std::string& contentRoot,
                WA::WorkerPoolExecutor& executor, const bool verbose) {
     const std::int64_t frames = start.frames;
+    const GYO::Engine::Math::Vec2i resolution = start.settings.resolution;
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
     N::NetProductOptions net;
@@ -177,7 +178,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
 
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
-    window.size = {1280, 720};
+    // The size the player's settings give (their window mode and VSync: saved, applied once the window and the
+    // drawing take them).
+    window.size = resolution;
     window.resizable = false;
     description.options.Set(window);
     GYO::Plugins::SDLWindow::SDLWindowOptions sdl;
@@ -330,6 +333,11 @@ int main(int argc, char** argv) {
     // This player's files: <the user's data directory>/<profile>. None found: nothing is saved (the scenes say so).
     if (auto data = GYO::Engine::OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)) {
         start.dataDirectory = *data + "/" + profile;
+        // The settings are the machine's, not the profile's.
+        start.settingsPath = *data + "/settings.json";
+        PC::LoadedSettings loaded = PC::LoadSettings(start.settingsPath);
+        if (!loaded.problem.empty()) Log(GYO::Engine::Base::LogLevel::Warning, "the settings were not read, the defaults are used: " + loaded.problem);
+        start.settings = loaded.settings;
     } else {
         Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
     }

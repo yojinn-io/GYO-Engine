@@ -16,6 +16,7 @@
 
 #include "engine/kernel/Kernel.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
+#include "object_fps_pvp/client/Settings.hpp"
 
 #include "engine/net/NetService.hpp"
 #include "engine/os/SocketAddress.hpp"
@@ -87,11 +88,17 @@ struct ClientStart final {
     std::string dataDirectory;
     // The Gateway (its HTTP address).
     GYO::Engine::OS::SocketAddress gateway = GYO::Engine::OS::SocketAddress::Loopback(7700);
+    // The settings the program started with, and their file (empty: not saved).
+    ClientSettings settings;
+    std::string settingsPath;
 };
 
 
 // An address as --connect and a room's connect give it: an IPv4 address and a port (A.B.C.D:P, port 1 to 65535).
 [[nodiscard]] std::optional<GYO::Engine::OS::SocketAddress> ParseMatchAddress(std::string_view text);
+
+// The settings in force (a Resource of every Frame World, carried from scene to scene; ClientStart's first).
+inline void HashValue(GYO::Kernel::Hasher&, const ClientSettings&) {}
 
 // The Gateway's scenes' words (GatewayScene.cpp): what the player reads for a call that went wrong (gateway: its
 // address), and for a room's mode.

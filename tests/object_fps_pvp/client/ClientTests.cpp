@@ -797,18 +797,11 @@ TEST_CASE("client: the menu goes to the lobby and back; the Render World stays a
     CHECK_MESSAGE(setup.client->Buffer().Find<N::NetService>()->Client() == nullptr, "[pvp-menu-no-connection]");
     const K::World* render = &setup.client->World("Render").GetWorld();
     const std::uint64_t swaps = render->Resource<O::ExtractSourceSwaps>()->count;
-    // Settings is not there yet: the status says so.
-    setup.Press(I::KeyCode::Tab);
+    // Multiplayer (the second button), Enter: the lobby.
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
-    CHECK(setup.Scene().scene == PC::Scene::Menu);
-    CHECK(setup.Binding("status") == "準備中です");
-    // Back to multiplayer (Shift+Tab), Enter: the lobby.
     I::KeyboardInput back = Key(I::KeyCode::Tab);
     back.modifiers.Add(I::KeyModifier::Shift);
-    setup.Next().keys.push_back(back);
-    setup.Frames(1);
-    setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Lobby, "[pvp-menu-multi]");
     setup.Load();
     setup.Frames(1);
@@ -1584,4 +1577,77 @@ TEST_CASE("client: without its own player from the Match the loading screen does
     REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).progress >= 0.85; }));
     setup.Frames(20);
     CHECK_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-needs-player] the assets are done, the own player is not there");
+}
+
+namespace {
+
+// The ResizeWindow Messages the Frame World sent (read where sdl_window would apply them).
+std::vector<GYO::Engine::Math::Vec2i> resized;
+K::SystemResult KeepResizes(K::MessageReader<W::ResizeWindow> sent) {
+    for (const W::ResizeWindow* resize : sent.Read()) resized.push_back(resize->size);
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("client: settings: the sizes offered in turn, applied to the window and saved; the next start reads them") {
+    std::string error;
+    PC::ClientSettings chosen{{1920, 1080}, PC::WindowChoice::Borderless, false};
+    const auto decoded = PC::DecodeSettings(PC::EncodeSettings(chosen), error);
+    REQUIRE_MESSAGE(decoded.has_value(), error);
+    CHECK_MESSAGE(*decoded == chosen, "[pvp-settings-roundtrip]");
+    CHECK_FALSE_MESSAGE(PC::DecodeSettings("{\"version\":1,\"resolution\":[1000,700],\"windowMode\":\"windowed\",\"vsync\":true}", error).has_value(),
+                        "[pvp-settings-fixed-sizes] a size not offered is not read");
+    CHECK_FALSE(PC::DecodeSettings("{\"version\":2,\"resolution\":[1280,720],\"windowMode\":\"windowed\",\"vsync\":true}", error).has_value());
+    CHECK(PC::NextResolution({2560, 1440}) == GYO::Engine::Math::Vec2i{1280, 720});
+    TempDirectory directory;
+    const std::string path = directory.Utf8() + "/settings.json";
+    REQUIRE(static_cast<bool>(PC::WriteLocalText(path, "not json")));
+    const PC::LoadedSettings bad = PC::LoadSettings(path);
+    CHECK_MESSAGE((bad.settings == PC::ClientSettings{} && !bad.problem.empty()), "[pvp-settings-bad-file] the defaults, and why");
+
+    // The menu's settings: next size twice, borderless, VSync off, apply.
+    Setup setup(1, 4, 0, PC::SceneChange{}, directory.Utf8());
+    PC::ClientStart* start = setup.client->Buffer().Find<PC::ClientStart>();
+    REQUIRE(start != nullptr);
+    resized.clear();
+    // (the Setup has no settings file: the test's directory is given here, as the program gives its own)
+    setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{};
+    start->settingsPath = path;
+    setup.Frame();
+    // Inserted into the menu's Frame World (a replacement resets what was inserted).
+    REQUIRE(static_cast<bool>(setup.client->InsertSystems("Frame", "test", [](K::Registrar& r) {
+        K::SystemOptions keep;
+        keep.name = "test.KeepResizes";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = std::string(O::DefaultSchedules::last);
+        keep.mounts.push_back(std::move(mount));
+        r.AddSystem<&KeepResizes>(std::move(keep));
+    })));
+    setup.Load();
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // 設定
+    CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "settings", "[pvp-settings-shown]");
+    CHECK(setup.Binding("resolution") == "解像度: 1280 × 720");
+    setup.Press(I::KeyCode::Enter);
+    setup.Press(I::KeyCode::Enter);  // 1600, then 1920
+    CHECK(setup.Binding("resolution") == "解像度: 1920 × 1080");
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // borderless
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // VSync off
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);  // apply
+    setup.Frames(1);
+    REQUIRE_MESSAGE(resized.size() == 1, "[pvp-settings-resize] the window is asked for the new size once");
+    CHECK(resized.front() == GYO::Engine::Math::Vec2i{1920, 1080});
+    CHECK_MESSAGE(setup.Binding("settings_status").find("保存しました") != std::string::npos, setup.Binding("settings_status"));
+    const PC::LoadedSettings saved = PC::LoadSettings(path);
+    CHECK_MESSAGE((saved.problem.empty() && saved.settings == chosen), "[pvp-settings-saved] " << saved.problem);
+    // Carried to the next scene: the lobby and back keep them.
+    setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{.scene = PC::Scene::Lobby};
+    setup.Frame();
+    CHECK_MESSAGE(*setup.Client().Resource<PC::ClientSettings>() == chosen, "[pvp-settings-carried]");
 }
