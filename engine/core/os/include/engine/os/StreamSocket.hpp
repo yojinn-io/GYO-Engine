@@ -1,8 +1,8 @@
 #pragma once
 
 #include "engine/base/Result.hpp"
-#include "engine/os/DatagramSocket.hpp"
 #include "engine/os/OSError.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -13,8 +13,8 @@
 // A non-blocking IPv4 TCP client connection (docs/architecture/os.md, Stream). engine/core/os opens it, reports how the
 // connect went, and moves bytes; what the bytes mean (HTTP or anything else), when to give up and what to retry stay
 // with the caller (Design Invariant 7). Nothing here blocks: the caller asks again on its next frame. The address is
-// the IPv4 address and port the datagram socket takes. The OS's own connect timeout (tens of seconds) is the only one
-// here; a caller that wants a shorter one drops the socket.
+// a SocketAddress. The OS's own connect timeout (tens of seconds) is the only one here; a caller that wants a shorter
+// one drops the socket.
 
 namespace GYO::Engine::OS {
 
@@ -29,7 +29,7 @@ class StreamSocket final {
 public:
     // Starts connecting to `to`. The connect's outcome comes from State. InvalidAddress, AccessDenied or IOFailed when
     // the OS refuses to start it.
-    [[nodiscard]] static Base::Result<StreamSocket, OSError> Connect(const DatagramAddress& to);
+    [[nodiscard]] static Base::Result<StreamSocket, OSError> Connect(const SocketAddress& to);
 
     StreamSocket(StreamSocket&& other) noexcept;
     StreamSocket& operator=(StreamSocket&& other) noexcept;

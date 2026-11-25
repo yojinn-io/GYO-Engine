@@ -6,7 +6,7 @@
 // test library gyo_test_loopback_listener (tests/common/os, where OS headers are allowed). Nothing here blocks past
 // the time it is given, and nothing aborts a test: a server thread can report a failure and end.
 
-#include "engine/os/DatagramSocket.hpp"
+#include "engine/os/SocketAddress.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -26,7 +26,7 @@ public:
     LoopbackListener& operator=(const LoopbackListener&) = delete;
 
     [[nodiscard]] bool Ok() const noexcept;
-    [[nodiscard]] Engine::OS::DatagramAddress Address() const;
+    [[nodiscard]] Engine::OS::SocketAddress Address() const;
 
     // Accepts the next connection (closing the one before); false when none came within the time.
     [[nodiscard]] bool Accept(std::chrono::milliseconds within = std::chrono::seconds(10));
