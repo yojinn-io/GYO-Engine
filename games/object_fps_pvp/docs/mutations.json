@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the Object_FPS_PVP port (games/object_fps_pvp/docs/port-declaration.zh-Hant.md, section 4; ids pvp-). A mutant is killed only when the named test case fails with the expected message. Run: python3 tests/common/mutation/run_mutations.py --build-dir build/target/_build/test --catalog games/object_fps_pvp/docs/mutations.json",
+ "description": "Declared mutants of the Object_FPS_PVP port (games/object_fps_pvp/docs/port-declaration.zh-Hant.md, section 4; ids pvp-). A mutant is killed only when the named test case fails with the expected message. Run: python3 tests/common/mutation/run_mutations.py --build-dir build/target/_build/test --catalog games/object_fps_pvp/docs/mutations.json. The pvp-gw- mutants (gateway-declaration.zh-Hant.md, section 5) run go test: go on PATH.",
  "mutants": [
   {
    "id": "pvp-jump-no-gravity",
@@ -378,6 +378,519 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the lobby shows*",
    "expect": "pvp-lobby-drawn"
+  },
+  {
+   "id": "pvp-gw-token-admission-mac",
+   "what": "the admission token's signature is not checked",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if !hmac.Equal(token[admissionSigned:], mac(key, token[:admissionSigned])) {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "changed match field"
+  },
+  {
+   "id": "pvp-gw-token-admission-match",
+   "what": "the admission token's Match is not checked",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if binary.BigEndian.Uint64(token[1:]) != matchID {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "another match"
+  },
+  {
+   "id": "pvp-gw-token-admission-user",
+   "what": "the admission token's user is not checked",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if binary.BigEndian.Uint64(token[9:]) != userID {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "another user"
+  },
+  {
+   "id": "pvp-gw-token-admission-expiry",
+   "what": "an admission token is still good at its expiry",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if now.Unix() >= int64(binary.BigEndian.Uint64(token[17:])) {",
+   "replace": "if now.Unix() > int64(binary.BigEndian.Uint64(token[17:])) {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "at expiry"
+  },
+  {
+   "id": "pvp-gw-token-session-mac",
+   "what": "the session token's signature is not checked",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if !hmac.Equal(signature, mac(key, payload)) {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "another user's payload"
+  },
+  {
+   "id": "pvp-gw-token-session-expiry",
+   "what": "a session token never expires",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if now.Unix() >= int64(binary.BigEndian.Uint64(payload[9:])) {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "session expired"
+  },
+  {
+   "id": "pvp-gw-rooms-started-joinable",
+   "what": "a started room still takes a join",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "api.WriteError(w, http.StatusConflict, \"room_started\")\n\t\treturn false",
+   "replace": "return true",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "room_started"
+  },
+  {
+   "id": "pvp-gw-rooms-start-unready",
+   "what": "the start does not wait for every member to be ready",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "\t\tif !m.ready {",
+   "replace": "\t\tif false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "not_all_ready"
+  },
+  {
+   "id": "pvp-gw-rooms-start-anyone",
+   "what": "any member may start the room",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "if found.owner != caller {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "not_owner"
+  },
+  {
+   "id": "pvp-gw-rooms-overfull",
+   "what": "a full room takes one more",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "if len(found.members) >= s.config.Capacity {",
+   "replace": "if len(found.members) > s.config.Capacity {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "room_full"
+  },
+  {
+   "id": "pvp-gw-rooms-refused-stays-starting",
+   "what": "a refused allocation leaves the room starting",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "\t\tfound.state = Open\n\t\tcode := \"allocation_failed\"",
+   "replace": "\t\tcode := \"allocation_failed\"",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "want open"
+  },
+  {
+   "id": "pvp-gw-rooms-ticket-for-all",
+   "what": "a room shows a ticket that is not the caller's",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "if m.user == caller && m.ticket != nil {",
+   "replace": "if m.ticket != nil {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "sees a ticket|target is"
+  },
+  {
+   "id": "pvp-gw-replays-no-wait",
+   "what": "a request with a key that is still running runs again",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/internal/api/replays.go",
+   "find": "wait, running := s.pending[entry]",
+   "replace": "wait, running := s.pending[entry], false",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/internal/api/"
+   ],
+   "expect": "ran the handler"
+  },
+  {
+   "id": "pvp-gw-replays-keeps-refusals",
+   "what": "a refused answer is replayed",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/internal/api/replays.go",
+   "find": "if recorder.status/100 == 2 {",
+   "replace": "if recorder.status < 500 {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/internal/api/"
+   ],
+   "expect": "was replayed"
+  },
+  {
+   "id": "pvp-gw-replays-shared-across-users",
+   "what": "one user's key answers another user",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/internal/api/replays.go",
+   "find": "entry := r.Header.Get(HeaderUser) + \"\\x00\" + r.Method",
+   "replace": "entry := r.Method",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "another user's key"
+  },
+  {
+   "id": "pvp-gw-saves-no-version-check",
+   "what": "a write over a newer save is taken",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/saves/saves.go",
+   "find": "if current.Version != request.Version {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/saves/"
+   ],
+   "expect": "a write over version 1"
+  },
+  {
+   "id": "pvp-gw-gateway-session-unchecked",
+   "what": "the gateway takes a session token it could not verify",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/gateway/gateway.go",
+   "find": "user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil {",
+   "replace": "user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil && user != 0 {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "invalid_session"
+  },
+  {
+   "id": "pvp-gw-gateway-room-id-unchecked",
+   "what": "the gateway puts any path segment in the internal path",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/gateway/gateway.go",
+   "find": "if _, err := strconv.ParseUint(id, 10, 64); err != nil {",
+   "replace": "if false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "invalid_room"
+  },
+  {
+   "id": "pvp-gw-identity-new-user-each-login",
+   "what": "a device gets a new user each time",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/identity/identity.go",
+   "find": "if user, ok := s.devices[device]; ok {",
+   "replace": "if user, ok := s.devices[device]; ok && false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "a-after-restart"
+  },
+  {
+   "id": "pvp-gw-local-port-kept",
+   "what": "an ended Match keeps its port",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/matches/local.go",
+   "find": "\t\tl.givePort(port)\n\t\tclose(ended)",
+   "replace": "\t\tclose(ended)",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/matches/"
+   ],
+   "expect": "not free"
+  },
+  {
+   "id": "pvp-gw-matches-ended-counted",
+   "what": "an ended Match is still counted",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/matches/matches.go",
+   "find": "\t\tdelete(s.running, matchID)",
+   "replace": "\t\t_ = matchID",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "still counted"
+  },
+  {
+   "id": "pvp-gw-gateway-key-dropped",
+   "what": "the gateway does not carry the Client's idempotency key",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/gateway/gateway.go",
+   "find": "caller, r.Header.Get(api.HeaderIdempotency), body)",
+   "replace": "caller, \"\", body)",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/gateway/"
+   ],
+   "expect": "carried key"
+  },
+  {
+   "id": "pvp-gw-anonymous-carries-user",
+   "what": "a request before sign-in carries a user",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/internal/api/client.go",
+   "find": "\tif !caller.Anonymous {\n",
+   "replace": "\tif true {\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/gateway/"
+   ],
+   "expect": "an anonymous request has none"
+  },
+  {
+   "id": "pvp-gw-ticket-not-reissued",
+   "what": "a member keeps the first token after it expired",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "\tif m := found.memberOf(caller); err == nil && m != nil {\n\t\tm.ticket = &ticket\n\t}",
+   "replace": "\t_ = ticket",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "the member's token is refused"
+  },
+  {
+   "id": "pvp-gw-ended-room-stays",
+   "what": "a room stays after its Match ended",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "\t\tdelete(s.rooms, id)\n\t\tapi.WriteError(w, http.StatusGone, \"match_ended\")",
+   "replace": "\t\tapi.WriteError(w, http.StatusGone, \"match_ended\")",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "room_not_found"
+  },
+  {
+   "id": "pvp-gw-start-no-retry",
+   "what": "a start gives up on the first unanswered allocation",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "if err == nil || errors.As(err, &refused) {",
+   "replace": "if err == nil || errors.As(err, &refused) || true {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/rooms/"
+   ],
+   "expect": "dropped allocation"
+  },
+  {
+   "id": "pvp-gw-reissue-any-user",
+   "what": "the matches service signs a token for a user the Match was not started for",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/services/matches/matches.go",
+   "find": "\tif !found.players[request.UserID] {",
+   "replace": "\tif false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "not_player"
   }
  ]
 }

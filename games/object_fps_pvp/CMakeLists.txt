@@ -21,6 +21,8 @@
 # main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the lobby, then the
 # Client with the address it gave, back to the lobby when that connection ends.
 # match: the Match (src/match_main.cpp), headless, listening on UDP.
+# services: the Gateway and the services behind it (docs/gateway-declaration.zh-Hant.md), a Go module of its own
+# (go.mod here, the packages in services/): one executable, a subcommand per service. Native builds never need Go.
 gyo_game_project()
 
 gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
@@ -80,3 +82,6 @@ gyo_product_units(${object_fps_pvp_match} MODULES physics_3d)
 # the content both read.
 gyo_install_product_target(TARGET ${object_fps_pvp_match} PRODUCT object_fps_pvp KIND game OWNER object_fps_pvp ROLE match)
 add_dependencies(${object_fps_pvp_match} gyo_object_fps_pvp--content)
+
+gyo_game_add_go_service(services PACKAGE ./services/cmd/services
+    PLATFORMS windows-x64 linux-x64 macos-arm64 macos-x64)
