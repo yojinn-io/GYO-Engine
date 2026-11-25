@@ -138,9 +138,10 @@ TEST_CASE("world: a crouched player under a low roof cannot stand up until it le
     // An arena of the shipped one's rules with a roof from y 1.5 to 3 over x in [8, 12] (no pillar).
     auto content = std::make_shared<PW::GameContent>(*ShippedContent());
     PW::InstalledArena& arena = content->arenas.front();
-    arena.walls = {{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}};
-    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(arena.walls);
+    const std::vector<GYO::Engine::Math::Aabb> roof{{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}};
+    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(roof);
     REQUIRE(static_cast<bool>(boxes));
+    arena.walls = *boxes;
     arena.wallsDigest = boxes->Digest();
     LoneMatch match(content);
     const K::EntityId player = match.AddPlayer({6, 0, 5});

@@ -23,6 +23,8 @@
 - [entity-ids.zh-Hant.md](entity-ids.zh-Hant.md)：預設的實體配發器 `entity_ids`（`RangeAllotter`）的 Design Invariants EI-1～EI-3 與 Replacement Criteria（`v8-arch-gyo2-world-gen`，使用者 2026-11-22 合併前核准）。
 - [transform.zh-Hant.md](transform.zh-Hant.md)：姿態 `transform`（`Transform`、`GlobalTransform`、沿 Kernel 的父子傳播）的用法、Design Invariants TF-1～TF-5 與 Replacement Criteria（`v8-arch-gyo2-sdl-transform-camera`，SDL 線子批 X1；X2 加父子傳播 `v8-arch-gyo2-sdl-transform-hierarchy`；最終文字在合併前核准）。
 - [camera.zh-Hant.md](camera.zh-Hant.md)：相機 `camera`（元件、投影、2D／3D、推導值、目標大小的副本、座標換算）的用法、Design Invariants CM-1～CM-5 與 Replacement Criteria（同上）。
+- [voxel-map.zh-Hant.md](voxel-map.zh-Hant.md)：分塊地圖 Module `voxel_map`（`gyo.voxel_map`／`gyo.voxel_region` v1，wire 同 master；region 兩步驗證、展開、兩個 loader）的契約、VM-1～VM-7 與 RC（`v8-arch-gyo2-big-map-s1`）。
+- [big-map-declaration.zh-Hant.md](big-map-declaration.zh-Hant.md)：大地圖線的事前宣告（分層重劃、別家對照、地圖來源、量測、loading、分段）與 S1、S2 小宣告（`v8-arch-gyo2-big-map`）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
 - [sdl.zh-Hant.md](sdl.zh-Hant.md)：SDL 的 Plugin（`plugins/sdl*`）——列與依賴、目錄的形、只建被選的 Plugin（`GYO_PLUGINS`）、SDL 3.4.0 的取得與補丁、Design Invariants SDL-1、SDL-2（子批 P `v8-arch-gyo2-sdl-p` 開頁；W、A、R2a 各自補）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
@@ -149,6 +151,7 @@
 - [2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_os_wake_test_backoff.zh-Hant.md)：「loses no signal」退避的調查與撤回（`v8-arch-gyo2-os-wake-test-backoff`；65536 次自旋在 6 次參考量測中讓本機 Mac 的拖延消失（改後都 ≤ 1.4 s），但閒置時檢出力可能變弱；問題在 CI 與 Linux 上沒有，使用者決定撤回，只拿掉 #289 在案例裡的 Note）。
 - [2026_11_23_gyo2_mech_cleanup.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_mech_cleanup.zh-Hant.md)：累積的機械式清理（`v8-arch-gyo2-mech-cleanup`；master 路徑的突變 74 個退役（其中 `tt2-flush-no-wait` 改寫進 logging 清單）、確認前批已做掉的三件、兩份 dev_log 補已合併）。
 - [2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_kernel_diagnostics_exchange.zh-Hant.md)：Kernel 診斷紀錄接上交換函式「出」（`WorldLogging::ForwardKernelDiagnostics`；O-3、O-11、O-12、LG-1 對「誰取」改成一致，使用者同意修訂 1）。
+- [2026_11_25_gyo2_big_map_s1_s2.zh-Hant.md](../../../dev_logs/2026_11_25_gyo2_big_map_s1_s2.zh-Hant.md)：大地圖線 S1 `voxel_map` Module 與 S2 可見性（`visibility` Module、`Queue3d` 依相機清單剔除）。
 - [2026_11_23_gyo2_sdl_i_image.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_i_image.zh-Hant.md)：SDL 線子批 I（`v8-arch-gyo2-sdl-i`；image Module＋stb_image v2.34 adapter，下載經使用者同意；Object_Connect 的 11 張 PNG 在本機載過、和獨立解碼器的像素總和一致）。
 - [2026_11_24_gyo2_model.zh-Hant.md](../../../dev_logs/2026_11_24_gyo2_model.zh-Hant.md)：model Module（`v8-arch-gyo2-model`；ufbx v0.23.1 adapter，下載經使用者同意；PvP 的 4 個 FBX 在本機載過：骨架 77／65／53、片段 43＋5、retarget 43/43）。
 

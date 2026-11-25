@@ -1,17 +1,21 @@
-// The arena files and the baked voxel geometry the game reads itself (port declaration PV8): the contract's unit
-// conversion against the shipped pvp_arena (the alignment test the reader owns), the members it checks and the
-// arena file's rules.
+// The arena files and their maps (big-map declaration section 15): the shipped maps read through Engine's voxel_map
+// Module, the walls of pvp_arena occupying the same cells as the v1 file they were migrated from (the alignment test
+// the game owns), what the reader refuses, the regions' pictures, and the arena file's rules.
 #include <doctest/doctest.h>
 
-#include "object_fps_pvp/data/VoxelMeshFile.hpp"
+#include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/sim/Arena.hpp"
 
+#include <cmath>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
+#include <tuple>
 
 namespace {
 using namespace object_fps_pvp;
+namespace Math = GYO::Engine::Math;
 
 std::string ReadFile(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
@@ -23,73 +27,88 @@ std::string ReadFile(const std::string& path) {
 
 const std::string kMaps = std::string(PVP_CONTENT_ROOT) + "/maps/";
 
-std::string Mesh(const std::string& quads, const std::string& colliders, const std::string& origin = "[0, 0, 0]") {
-    return R"({"schema": "gyo.voxel_mesh", "version": 1, "source_sha256": ")" + std::string(64, 'a') +
-           R"(", "build_version": "test 1", "origin": )" + origin +
-           R"(, "cell_size": 0.5, "palette": [{"name": "a", "faces": [[1,2,3,255],[4,5,6,255],[7,8,9,255],[10,11,12,255],[13,14,15,255],[16,17,18,255]]}], "quads": )" +
-           quads + R"(, "colliders": )" + colliders + "}";
+std::optional<data::ArenaMap> Shipped(const std::string& name, std::string& error) {
+    const std::string dir = kMaps + name + "/";
+    return data::ReadArenaMap(
+        ReadFile(dir + "map.json"),
+        [&dir](const std::string& file, std::string&) -> std::optional<std::string> { return ReadFile(dir + file); }, error);
+}
+
+// The whole cells the boxes cover (every box here is in whole cells).
+std::set<std::tuple<int, int, int>> Cells(const std::vector<Math::Aabb>& boxes) {
+    std::set<std::tuple<int, int, int>> cells;
+    for (const Math::Aabb& b : boxes) {
+        for (int x = static_cast<int>(std::lround(b.minimum.x)); x < std::lround(b.maximum.x); ++x)
+            for (int y = static_cast<int>(std::lround(b.minimum.y)); y < std::lround(b.maximum.y); ++y)
+                for (int z = static_cast<int>(std::lround(b.minimum.z)); z < std::lround(b.maximum.z); ++z) cells.emplace(x, y, z);
+    }
+    return cells;
 }
 } // namespace
 
-TEST_CASE("PvP voxel mesh: pvp_arena's five colliders become the arena's walls in world units") {
+TEST_CASE("PvP map: pvp_arena's walls occupy the cells of the five v1 boxes it was migrated from") {
     std::string error;
-    const auto file = data::ParseVoxelMeshFile(ReadFile(kMaps + "pvp_arena.voxel_mesh.json"), error);
-    REQUIRE_MESSAGE(file.has_value(), error);
-    const auto boxes = data::ColliderBoxes(*file);
-    REQUIRE(boxes.size() == 5);
-    // origin (-1, 0, -1), cell 1: units / 16 + origin.
-    const float expected[5][6] = {
-        {-1, 0, -1, 0, 3, 21},  // the -X wall
-        {0, 0, -1, 20, 3, 0},   // the -Z wall
-        {0, 0, 20, 20, 3, 21},  // the +Z wall
-        {9, 0, 9, 11, 2, 11},   // the pillar
-        {20, 0, -1, 21, 3, 21}, // the +X wall
-    };
-    for (std::size_t i = 0; i < 5; ++i) {
-        CAPTURE(i);
-        CHECK(boxes[i].minimum.x == expected[i][0]);
-        CHECK(boxes[i].minimum.y == expected[i][1]);
-        CHECK(boxes[i].minimum.z == expected[i][2]);
-        CHECK(boxes[i].maximum.x == expected[i][3]);
-        CHECK(boxes[i].maximum.y == expected[i][4]);
-        CHECK(boxes[i].maximum.z == expected[i][5]);
+    const auto map = Shipped("pvp_arena", error);
+    REQUIRE_MESSAGE(map.has_value(), error);
+    const std::vector<Math::Aabb> walls = data::MapColliders(*map);
+    // The v1 file's five colliders in world units (origin (-1, 0, -1), cell 1), before the migration.
+    const std::vector<Math::Aabb> v1{{{-1, 0, -1}, {0, 3, 21}},
+                                     {{0, 0, -1}, {20, 3, 0}},
+                                     {{0, 0, 20}, {20, 3, 21}},
+                                     {{9, 0, 9}, {11, 2, 11}},
+                                     {{20, 0, -1}, {21, 3, 21}}};
+    CHECK(Cells(walls) == Cells(v1));
+    // The tool merges boxes inside each 16-cell chunk: more boxes, the same space.
+    CHECK(walls.size() > v1.size());
+}
+
+TEST_CASE("PvP map: every shipped arena's map reads, with pictures for its regions") {
+    for (const std::string name : {"pvp_arena", "pvp_corners", "biome"}) {
+        CAPTURE(name);
+        std::string error;
+        const auto map = Shipped(name, error);
+        REQUIRE_MESSAGE(map.has_value(), error);
+        CHECK(!data::MapColliders(*map).empty());
+        const auto pictures = data::RegionPictures(*map);
+        REQUIRE(pictures.size() == map->regions.size());
+        for (const data::RegionPicture& picture : pictures) {
+            REQUIRE(picture.model != nullptr);
+            REQUIRE(picture.model->meshes.size() == 1);
+            const auto& mesh = picture.model->meshes[0];
+            CHECK(mesh.positions.size() == mesh.uvs.size());
+            CHECK(mesh.indices.size() == mesh.positions.size() / 4 * 6);
+            // Every vertex lies in the region's box.
+            for (const Math::Vec3& p : mesh.positions) {
+                CHECK(p.x >= picture.bounds.minimum.x);
+                CHECK(p.x <= picture.bounds.maximum.x);
+                CHECK(p.z >= picture.bounds.minimum.z);
+                CHECK(p.z <= picture.bounds.maximum.z);
+            }
+        }
     }
-    CHECK(file->palette.size() == 1);
-    CHECK(!file->quads.empty());
 }
 
-TEST_CASE("PvP voxel mesh: units are 1/16 of a cell from origin, origin in cells") {
+TEST_CASE("PvP map: a region that cannot be read or is not the index's is refused with its reason") {
+    const std::string dir = kMaps + "pvp_arena/";
+    const std::string index = ReadFile(dir + "map.json");
     std::string error;
-    const auto file = data::ParseVoxelMeshFile(Mesh("[[0, 0, 0, 2, 16, 16, 0]]", R"([{"min": [8, 0, 0], "max": [24, 16, 32]}])", "[2, 0, -4]"),
-                                               error);
-    REQUIRE_MESSAGE(file.has_value(), error);
-    const auto boxes = data::ColliderBoxes(*file);
-    REQUIRE(boxes.size() == 1);
-    // x: (8 + 32) x 0.5 / 16 = 1.25; z: (0 - 64) x 0.5 / 16 = -2.
-    CHECK(boxes[0].minimum.x == 1.25F);
-    CHECK(boxes[0].maximum.x == 1.75F);
-    CHECK(boxes[0].minimum.z == -2.0F);
-    CHECK(boxes[0].maximum.z == -1.0F);
-    CHECK(boxes[0].maximum.y == 0.5F);
-    CHECK(file->quads[0].direction == 2);
-    CHECK(file->palette[0][2][0] == 7);
+    const auto missing = data::ReadArenaMap(
+        index, [](const std::string& file, std::string& why) -> std::optional<std::string> { why = file + ": not there"; return std::nullopt; },
+        error);
+    CHECK_FALSE(missing.has_value());
+    CHECK(error.find("not there") != std::string::npos);
+    // The right file with one more space: its SHA-256 is not the index's.
+    const auto changed = data::ReadArenaMap(
+        index, [&dir](const std::string& file, std::string&) -> std::optional<std::string> { return ReadFile(dir + file) + " "; },
+        error);
+    CHECK_FALSE(changed.has_value());
+    CHECK(error.find("R3") != std::string::npos);
+    CHECK_FALSE(data::ReadArenaMap("not json", [](const std::string&, std::string&) { return std::optional<std::string>{}; }, error)
+                    .has_value());
+    CHECK(error.find("M1") != std::string::npos);
 }
 
-TEST_CASE("PvP voxel mesh: what the reader refuses") {
-    std::string error;
-    CHECK_FALSE(data::ParseVoxelMeshFile(Mesh("[[0, 0, 0, 6, 16, 16, 0]]", "[]"), error).has_value());
-    CHECK(error.find("direction") != std::string::npos);
-    CHECK_FALSE(data::ParseVoxelMeshFile(Mesh("[[0, 0, 0, 1, 16, 16, 1]]", "[]"), error).has_value());
-    CHECK(error.find("palette") != std::string::npos);
-    CHECK_FALSE(data::ParseVoxelMeshFile(Mesh("[[0, 0, 0, 1, 0, 16, 0]]", "[]"), error).has_value());
-    CHECK_FALSE(data::ParseVoxelMeshFile(Mesh("[[0, 0, 0, 1, 16, 16, 0]]", R"([{"min": [0, 0, 0], "max": [0, 16, 16]}])"), error).has_value());
-    CHECK(error.find("min") != std::string::npos);
-    CHECK_FALSE(data::ParseVoxelMeshFile(R"({"schema": "gyo.voxel_map", "version": 1})", error).has_value());
-    CHECK(error.find("schema") != std::string::npos);
-    CHECK_FALSE(data::ParseVoxelMeshFile("not json", error).has_value());
-}
-
-TEST_CASE("PvP arena: the shipped arenas read with their spawns and geometry") {
+TEST_CASE("PvP arena: the shipped arenas read with their spawns and map") {
     std::string error;
     const auto list = sim::ParseArenaList(ReadFile(kMaps + "arenas.json"), error);
     REQUIRE_MESSAGE(list.has_value(), error);
@@ -100,11 +119,12 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and geometry") {
         const auto arena = sim::ParseArena(ReadFile(kMaps + name), error);
         REQUIRE_MESSAGE(arena.has_value(), error);
         CHECK(arena->spawns.size() >= 2);
-        CHECK(!arena->geometry.empty());
+        CHECK(!arena->map.empty());
     }
     const auto arena = sim::ParseArena(ReadFile(kMaps + "pvp_arena.json"), error);
     REQUIRE(arena.has_value());
     CHECK(arena->id == "pvp_training_v1");
+    CHECK(arena->map == "pvp_arena");
     CHECK(arena->width == 20.0F);
     CHECK(arena->movementSpeed == 3.0F);
     CHECK(arena->jumpHeight == 0.6F);  // not in the file: the default
@@ -114,7 +134,7 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and geometry") {
 
 TEST_CASE("PvP arena: the rules of an arena file") {
     const auto arena = [](const std::string& patch) {
-        return R"({"version": 2, "id": "a", "width": 10, "depth": 10, "geometry": "a.voxel_mesh.json", )" + patch + "}";
+        return R"({"version": 3, "id": "a", "width": 10, "depth": 10, "map": "a", )" + patch + "}";
     };
     const std::string twoSpawns = R"("spawns": [{"position": [1, 0, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])";
     std::string error;
@@ -125,36 +145,9 @@ TEST_CASE("PvP arena: the rules of an arena file") {
     CHECK_FALSE(sim::ParseArena(arena(R"("eye_height": 2, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("body_height": 0.4, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("movement_speed": -1, )" + twoSpawns), error).has_value());
-    CHECK_FALSE(sim::ParseArena(R"({"version": 2, "id": "a", "width": 10, "depth": 10, "geometry": "../a.json", )" + twoSpawns + "}", error)
+    CHECK_FALSE(sim::ParseArena(R"({"version": 3, "id": "a", "width": 10, "depth": 10, "map": "../a", )" + twoSpawns + "}", error)
                     .has_value());
-    CHECK_FALSE(sim::ParseArena(R"({"version": 1, "id": "a", "width": 10, "depth": 10, "walls": [], )" + twoSpawns + "}", error).has_value());
-}
-
-TEST_CASE("PvP voxel mesh: the faces expand to four vertices each with the colour's texel, the palette to an image") {
-    std::string error;
-    const auto file = data::ParseVoxelMeshFile(
-        Mesh("[[0, 0, 0, 2, 16, 32, 0], [16, 0, 0, 1, 16, 16, 0]]", "[]"), error);
-    REQUIRE_MESSAGE(file.has_value(), error);
-    const data::VoxelSurface surface = data::ExpandQuads(*file);
-    REQUIRE(surface.positions.size() == 8);
-    REQUIRE(surface.indices.size() == 12);
-    // The +Y face at y 0 runs 16 units along X (0.5) and 32 along Z (1.0).
-    CHECK(surface.positions[2].x == 0.5F);
-    CHECK(surface.positions[2].z == 1.0F);
-    CHECK(surface.normals[0].y == 1.0F);
-    // The -X face at x 16 units (0.5): along Z and Y.
-    CHECK(surface.positions[4].x == 0.5F);
-    CHECK(surface.positions[6].y == 0.5F);
-    CHECK(surface.normals[4].x == -1.0F);
-    // The texel centres: one column, row = direction.
-    CHECK(surface.uvs[0][0] == 0.5F);
-    CHECK(surface.uvs[0][1] == doctest::Approx(2.5 / 6.0));
-    CHECK(surface.uvs[4][1] == doctest::Approx(1.5 / 6.0));
-    CHECK(surface.indices[6] == 4);
-    const data::VoxelPaletteImage image = data::PaletteImage(*file);
-    CHECK(image.width == 1);
-    CHECK(image.height == 6);
-    REQUIRE(image.pixels.size() == 24);
-    CHECK(image.pixels[2 * 4 + 0] == 7);  // the +Y row's red
-    CHECK(image.pixels[5 * 4 + 2] == 18); // the -Z row's blue
+    // Version 2 named a v1 single file; it is gone, even when the rest would read as version 3.
+    CHECK_FALSE(sim::ParseArena(R"({"version": 2, "id": "a", "width": 10, "depth": 10, "map": "a", )" + twoSpawns + "}", error)
+                    .has_value());
 }

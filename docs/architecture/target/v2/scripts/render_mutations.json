@@ -991,8 +991,8 @@
     "render RD-8"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if ((item.layers & camera.layers) == 0) continue;\n        if (item.mesh == MeshId{} && item.indices.empty()) continue;",
-   "replace": "        if (item.mesh == MeshId{} && item.indices.empty()) continue;",
+   "find": "        if ((item.layers & camera.layers) == 0) continue;\n        if (std::binary_search(camera.culled.begin()",
+   "replace": "        if (std::binary_search(camera.culled.begin()",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a 3D camera*",
    "expect": "\\[p3\\-layers\\]"
