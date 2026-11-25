@@ -366,9 +366,9 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
 
 // live-frame-sim-thread declaration J5 (R5): the program lends the Sim World to a thread of its own; here the test's
 // "Sim thread" runs its rounds with the Match and the MemoryLink (whose ends are used from one thread), one round a
-// step in real time, while the main thread runs the Frame World's frames and stops 600 ms between two of them, as
+// step in real time, while the main thread runs the Frame World's frames and stops 1500 ms between two of them, as
 // when the OS holds the window. The stop is longer than J5's 250 ms so it also passes the controls' stale limit
-// (SimControls: 200 ms here): first the held W goes on, then the movement is neutral and the view stays (the
+// (SimControls: at least 200 ms, longer when the Frame World's frames are slow, as on a CI machine): first the held W goes on, then the movement is neutral and the view stays (the
 // user's decision 2026-11-25, after master's D30); the Match gets an input every step all the while.
 TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, the Match gets its input every step, and stale controls stop the movement") {
     Setup setup;
@@ -448,7 +448,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     };
     frames(20);
     phase = 1;
-    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     phase = 2;
     frames(40);
     stop = true;
@@ -469,7 +469,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     CHECK_MESSAGE(last.consumed - first.consumed == stopped.size() - 1,
                   "[pvp-sim-thread-input] the Match took this Client's input every step: " << last.consumed - first.consumed);
     CHECK_MESSAGE(last.missing == first.missing, "[pvp-sim-thread-input] no step without its input: " << last.missing - first.missing);
-    // Fresh at the stop's start: the held W goes on. Stale by its end (600 ms past the last controls): no movement,
+    // Fresh at the stop's start: the held W goes on. Stale by its end (1500 ms past the last controls): no movement,
     // and once stale it stays so; the view stays where it was.
     CHECK_MESSAGE(first.forward > 0.0F, "[pvp-sim-thread-input] the held W goes on at the stop's start");
     CHECK_MESSAGE((last.forward == 0.0F && last.present == 0), "[pvp-sim-thread-stale] stale controls move nothing: forward " << last.forward);
@@ -478,10 +478,11 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
         if (stopped[i].forward == 0.0F && neutralAt == stopped.size()) neutralAt = i;
         if (neutralAt < i) CHECK_MESSAGE(stopped[i].forward == 0.0F, "[pvp-sim-thread-stale] W again at round " << i << " of the stop");
     }
-    // The limit is 200 ms of the Sim World's time, 12.8 of its steps after the last controls (which came at most a
-    // round or so before the stop), and the Match applies the input of a tick the Client sent a few steps ahead (its
-    // prediction's lead): neither at once nor much later.
-    CHECK_MESSAGE((neutralAt >= 8 && neutralAt <= 20), "[pvp-sim-thread-stale-limit] neutral from round " << neutralAt << " of the stop");
+    // Not at once: the limit is at least 200 ms of the Sim World's time, 12.8 of its steps after the last controls
+    // (which came at most a round or so before the stop), and the Match applies the input of a tick the Client sent a
+    // few steps ahead (its prediction's lead). (No upper bound here: the limit grows with the Frame World's slowest
+    // recent frames; 15 or 16 rounds on the author's machine, 30 on a CI runner.)
+    CHECK_MESSAGE(neutralAt >= 8, "[pvp-sim-thread-stale-limit] neutral from round " << neutralAt << " of the stop");
     CHECK_MESSAGE(last.yaw == doctest::Approx(first.yaw), "[pvp-sim-thread-stale] the view stays");
     // After the stop the Frame World shows the newest picture, not the ones it missed; its controls come again and the
     // held W with them.

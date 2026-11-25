@@ -71,6 +71,6 @@ blocker 0、should 3、nit 7。審查者自己做了兩個臨時突變（都存�
    - 做法（`SimControls`、`TakeControls`、`WriteStepInput`）：Sim 的「進」記下控制送達的時刻（Sim 的 `RealTime.elapsed`）與最近 16 次送達間隔；`now - 上次送達 > 期限` 就算過期。期限＝最近間隔中最長的 × 4，至少 200 ms；超過期限的間隔是停住，不算進最近。過期時 `WriteStepInput` 送出 `forward = right = 0`、`present = false`、按下 false；`yaw`、`pitch`、`crouch` 保留（`present = false` 時 Match 的 `StepBody` 本來就保留視角與蹲姿）。
    - 常數是遊戲自己的（200 ms＝20 fps 的四幀、4 倍、16 次），沒有照搬 master；只讀了 D30 的做法（`ClientSimulationLoop::StaleLimitSeconds`、`IntentStale`）。
    - 和 master 的不同：master 的意圖帶取樣時刻，送到時已過期的按下會被丟掉；這裡的送達時刻就是取樣的時刻（每幀的「出」），按下總是跟著新的控制來，沒有「過期的按下」這種情況。
-   - J5 改寫：模擬執行緒改成照真實時間一步一輪（`sleep_until`），停住 600 ms（超過 J5 的 250 ms 與期限）。判定加上：停住一開始按住的 W 照送、停住末尾移動歸零且 `present = 0`、一旦歸零就不再有 W、視角不變、歸零的時刻在停住後第 8～20 輪（200 ms＝12.8 步，加上 Client 的預測超前；本機連跑五次都是第 15～16 輪）、停住後控制再來就又走。
+   - J5 改寫：模擬執行緒改成照真實時間一步一輪（`sleep_until`），停住 1500 ms（超過 J5 的 250 ms 與期限；第一版 600 ms）。判定加上：停住一開始按住的 W 照送、停住末尾移動歸零且 `present = 0`、一旦歸零就不再有 W、視角不變、歸零不早於停住後第 8 輪（200 ms＝12.8 步，加上 Client 的預測超前；本機第 15～16 輪）。第一版另設上限 20 輪，L1 macos-arm64（run 45562409040）是第 30 輪而失敗：期限照設計跟著 Frame 最近最慢的間隔變長，CI 的機器幀慢、期限約 420 ms；上限拿掉、停住從 600 ms 拉長到 1500 ms，讓慢機器上也在停住內過期、停住後控制再來就又走。
    - 突變：`pvp-stale-ignored`（過期照樣走）、`pvp-stale-limit-zero`（期限為 0）與相關的既有 4 個（`pvp-press-lost`、`pvp-exchange-press-not-accumulated`、`pvp-step-press-repeats`、`pvp-exchange-add-overwrites`）共 6/6 killed。
    - **沒測**：「超過期限的間隔不算進最近」（要第二次停住才看得出來）。
