@@ -219,3 +219,81 @@ v8-arch-gyo2-big-map
 1. **第 4 節地圖從哪來**：建議 (d1)＋(c)＋(d2)，(b) 併進 (d1)，(a) 照原排程。
 2. 確認（卡片判、你可推翻）：格式放可選 Module `voxel_map`（2.1，依你 11-21「用 Module 來增加地圖」）；Match 整張一個 `BoxSet`（2.3）；`MapMarkers` 現在不做（RC-BM4）。
 3. S0 的 Client 部分、S5：到時候先問（5.2）。
+
+## 12. S1 小宣告：`voxel_map` Module（`v8-arch-gyo2-big-map-s1`）
+
+2026-11-25 開工（主會話轉達：S1、S2 不依賴地圖來源，現在動工）。Opus／high。
+
+### 12.1 範圍
+
+- 新 Module `engine/modules/voxel_map`（`GYO::VoxelMap`，`library_only`，作者選用）。依賴：`GYO::Base`、`GYO::Math`、`GYO::Asset`（公開，loader 介面）、`GYO::Json`（私有）。
+- 格式：`gyo.voxel_map` v1、`gyo.voxel_region` v1，規則 M1～M10、R1～R5、C1～C5 照 master `docs/architecture/voxel-mesh.md`（wire 一字不改）。契約頁在 gyo2 寫 `docs/architecture/target/v2/voxel-map.zh-Hant.md`。
+- 不做：v1 單檔（PvP 自己的讀者照舊，S4 退役）、`MapMarkers`、烘焙、平行解析（asset 的 worker 負責）。
+
+### 12.2 和 master 不同的兩處（卡片判）
+
+1. **region 的驗證拆成兩步**：asset 的 loader 只拿得到位元組與 settings，拿不到索引（`LoadContext.hpp`）。
+   - `ParseVoxelRegion(text)`：不需要索引的規則（R1、R2、R4 的結構、順序與「區塊屬於 `at`」、R5、C1 的非空、C2 的形狀、C3、C4、C5），並記下文字的 SHA-256。
+   - `CheckVoxelRegion(region, map, expected)`：要對照索引的規則（R3 的 `at`＝`expected` 與 sha、R4／C1 的 bounds、C2 的 palette 範圍）。
+   - `ValidateVoxelChunk(chunk, map)`＝兩步的區塊規則一起。三者呼叫同一組規則函式（master DI 3「一個驗證者」照守）。
+2. **索引的 loader 宣告每個 region 為參照**（`ReferencePath`，依索引順序）：讀索引就會讀整張（整張載入，2.3）；就緒用 asset 的「連同依賴 Complete」。Product 的 catalog 要列出每個 region 檔（asset 決定 8 的「region 級 id」）。
+3. 展開多給法線（由面的方向導出，不是新資料），輸出形狀直接對上 `Model::Mesh`（positions、normals、uvs、indices），並提供「附加到既有幾何」的版本，讓遊戲把一個 region 的區塊併成一個網格不必再複製。三角形照 gyo2 的正面（螢幕上逆時針，`RenderCommands.hpp:140`）；gyo2 是左手系，所以 (v1−v0)×(v2−v0) 背向面的法線（和 master 的順序相反）。
+
+### 12.3 判定（合併前）
+
+- J1：每條規則（M1～M10、R1～R5、C1～C5）各有一個「違反就被拒、路徑指到那個值」的測試，與一個通過的例子。
+- J2：同一個違規，`ParseVoxelRegion`＋`CheckVoxelRegion` 與 `ValidateVoxelChunk` 給同一個規則結論（錯誤路徑前綴不同）。
+- J3：世界座標在 ±2²⁰ 兩端逐位元等於公式 `float(local + 256 × key + 16 × origin) × cell_size / 16`；三角形朝外；uv 指到 palette 圖的格中心。
+- J4：兩個 loader 經 asset 讀到與直接 Parse 相同的結果；索引的參照依索引順序、路徑相對於索引檔。
+- J5：連結守衛：`gyo_voxel_map` 的連結恰為 Base、Math、Asset、Json（不連 render、physics_3d、Kernel）。
+- J6：第 9 節 S1 的突變全部 killed（件數照實記）；建置與 `cpu` 標籤測試通過；L1 三平台。
+
+### 12.4 測試與突變
+
+- 測試：`tests/common/voxel_map/VoxelMapTests.cpp`（doctest，標籤 `cpu`）。
+- 突變：`tests/common/voxel_map/mutations.json`，id 前綴 `vmap-`（索引）、`vreg-`（region）、`vchunk-`（區塊）、`vexp-`（展開）、`vload-`（loader）、`vlink-`（連結）。第 9 節的候選為準，加減照 `tests/common/mutation/README.md`，數量與理由寫 dev_log。
+
+## 13. S2 小宣告：可見性（`v8-arch-gyo2-big-map-s2`）
+
+2026-11-25 開工。Opus／high（上段：Engine 公開介面、新 Module）。
+
+### 13.1 放哪裡（卡片判）
+
+- **不放 camera**：camera 的 CM-1 寫明「不做可見性」。**不放 `world_render` 的 System**：render 頁第 97 行寫明它「不跑 System」。改這兩條都是 Architecture Delta。
+- **照 Bevy 的分法**：Bevy 的元件（`Aabb`、`NoFrustumCulling`、`VisibilityRange`、`VisibleEntities`）是 bevy_camera 的 visibility，System `check_visibility_cpu_culling`（`bevy_camera/src/visibility/mod.rs:748`）在 PostUpdate、傳播與相機更新之後。gyo2：
+  - **元件**是可畫物的設定，型別在 `render` 的 `Drawables.hpp`，由 `world_render` 登記（它的職責「登記可畫元件與相機的繪製設定」）。和其他可畫元件一樣不進雜湊（不是決定的狀態）。
+  - **System** `CheckVisibility` 在新 Module **`visibility`**（來源側，依賴 render、transform、camera；`default=no`），掛在 frame／PostUpdate，排在 `TransformPropagate` 與 `CameraUpdate` 之後，公開 set `CheckVisibility`。
+  - **抽取與排隊**：`camera_render` 把相機的 `VisibleEntities` 抽進 `ExtractedCamera`；`mesh_render` 在 `Extracted3dItem` 記下「這個實體受剔除管」；`Queue3d` 對受剔除管、又不在該相機清單裡的項目不排（Bevy 的 queue 也只看該 view 的 `RenderVisibleEntities`）。
+- **沒帶 `visibility` 的 World**：相機沒有清單 → 全部照畫（和現在一樣）。PvP、Object_Connect 不必改。
+
+### 13.2 規則
+
+- **`Aabb`**（實體本地座標的盒）：有它的實體由 `CheckVisibility` 逐相機判斷。盒子經 `GlobalTransform` 的八個角換成世界 AABB（保守），用 `Math::Intersects(Frustum, Aabb)`；視錐是 `MakeFrustum(clipFromView × viewFromWorld)`。
+- **`NoFrustumCulling`**：不做視錐判斷（仍受 `VisibilityRange` 管）。
+- **`VisibilityRange`**（照 Bevy 的形狀：`startMargin`、`endMargin` 兩段、`useAabb`）：相機位置到實體位置（或盒心）的距離在 `[startMargin.start, endMargin.end)` 內才看得到（Bevy 的 `is_visible_at_all`）。漸變（crossfade）要 shader，屬渲染管線線；現在兩段 margin 重疊時兩個 LOD 都會畫，作者把 margin 設成零寬即是硬切換。
+- **`VisibleEntities`**（相機上的推導值，`CheckVisibility` 寫）：受剔除管（有 `Aabb` 或 `VisibilityRange`）而這個相機看得到的實體，EntityId 升冪。沒有 `Aabb` 也沒有 `VisibilityRange` 的實體永遠畫（Bevy：沒有 Aabb 的不被視錐剔除）。只在內容改變時寫（同 CM-3 的做法）。
+- `RenderLayers` 照舊在 `Queue3d` 判斷，與可見性無關。
+- **不做**：自動算 `Aabb`（Bevy 的 `calculate_bounds`；大地圖的 region 盒由 `ChunkWorldBounds` 精確給出，RC-VS1）、2D 的剔除、遮擋剔除、GPU 剔除、`ViewVisibility`（給玩法讀的「這一幀有沒有被看到」，RC-VS2）。
+
+### 13.3 和 Bevy 的差別與膠水
+
+| Bevy | gyo2 | 膠水 |
+|---|---|---|
+| `Aabb` 由 `calculate_bounds` 自動算 | 作者給 | 無；RC-VS1 |
+| `VisibleEntities` 按 `VisibilityClass` 分類，包含沒有 `Aabb` 的 | 只列受剔除管的；沒有 `Aabb` 的永遠畫 | `Extracted3dItem` 一個旗標；camera 不必認得可畫物的種類 |
+| `ViewVisibility`、`InheritedVisibility`、`Visibility` 階層 | 不做 | RC-VS2 |
+| 抽取前就剔除（只抽看得到的） | 每幀照抽、排隊時剔除 | gyo2 的抽取每幀重建、多相機共用一份；被剔除的蒙皮網格仍在 CPU 蒙皮（RC-VS3） |
+
+### 13.4 判定（合併前）
+
+- K1：視錐外的不排、跨平面的保留、`NoFrustumCulling` 不做視錐判斷、沒有 `Aabb` 的永遠排、兩個相機各算各的、`VisibilityRange` 的兩端（含下界、不含上界）、`useAabb`。
+- K2：沒帶 `visibility` 的 World 照舊全部排（既有的 render 測試不變）。
+- K3：`VisibleEntities` 只在內容改變時寫（`Changed` 不每幀亮）。
+- K4：連結：`gyo_visibility` 的連結恰為 Base、Kernel、Orchestration、Math 與 render、transform、camera。
+- K5：突變全部 killed；既有 render、camera、transform 的測試通過；L1 三平台。
+
+### 13.5 RC
+
+- **RC-VS1**：要畫很多個不知道盒子的網格（角色、道具）且要剔除 → 加自動 bounds（照 Bevy 的 `calculate_bounds`）。
+- **RC-VS2**：玩法要讀「這一幀有沒有被看到」（動畫降頻、AI 降頻）→ 加 `ViewVisibility`。
+- **RC-VS3**：量到被剔除的項目在抽取的成本（CPU 蒙皮）超過預算 → 把剔除移到抽取前。

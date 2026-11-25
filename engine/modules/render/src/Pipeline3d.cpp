@@ -105,6 +105,10 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     for (std::size_t i = 0; i < items.size(); ++i) {
         const Extracted3dItem& item = items[i];
         if ((item.layers & camera.layers) == 0) continue;
+        if (item.visibilityChecked && camera.visible &&
+            !std::binary_search(camera.visible->begin(), camera.visible->end(), item.entity)) {
+            continue;
+        }
         if (item.mesh == MeshId{} && item.indices.empty()) continue;
         const int group = !item.depthTest ? 2 : (item.blend == BlendMode::Opaque ? 0 : 1);
         const Math::Vec3 origin{item.world.values[12], item.world.values[13], item.world.values[14]};

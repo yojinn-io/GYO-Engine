@@ -47,6 +47,9 @@ struct ExtractedCamera final {
     // A 3D camera: its pass starts with a cleared depth (Camera3dDepth).
     bool clearDepth = true;
     std::uint32_t layers = 1;
+    // The camera's VisibleEntities (ascending EntityId), when the visibility Module has checked it: Queue3d leaves out
+    // the items whose entity has visibilityChecked and is not in it. None: nothing is left out.
+    std::optional<std::vector<std::uint64_t>> visible;
 };
 
 // render's Resource in the render World (camera_render): the active, valid cameras of this frame, by order, then by

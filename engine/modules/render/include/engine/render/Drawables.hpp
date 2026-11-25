@@ -22,6 +22,7 @@
 #include "engine/asset/Handle.hpp"
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Hash.hpp"
+#include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/geometry/Rect.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
@@ -134,6 +135,49 @@ struct SkinPose final {
     std::vector<Math::Matrix4> nodes;
 };
 
+// Visibility (big-map declaration section 13; after bevy_camera's visibility: Aabb in primitives.rs, NoFrustumCulling
+// and VisibleEntities in visibility/mod.rs:318 and :344, VisibilityRange in visibility/range.rs:80). The visibility
+// Module's CheckVisibility decides, per camera, which entities with an Aabb or a VisibilityRange it sees and writes
+// them into the camera's VisibleEntities; Queue3d leaves out the others. An entity with neither is always drawn, and
+// without the visibility Module no camera has a list, so everything is drawn.
+
+// The entity's bounds in its own space (Bevy's Aabb): the frustum test puts its eight corners through the entity's
+// GlobalTransform and tests the box around them.
+struct Aabb final {
+    Math::Aabb local{};
+};
+
+// The entity is not tested against the frustum (it still is against its VisibilityRange).
+struct NoFrustumCulling final {};
+
+// A half-open range of distances [start, end) (Bevy's Range<f32>).
+struct DistanceRange final {
+    float start = 0.0F;
+    float end = 0.0F;
+};
+
+// Seen only from distances in [startMargin.start, endMargin.end) (Bevy's VisibilityRange and is_visible_at_all): the
+// distance from the camera's position to the entity's (or, with useAabb, to its Aabb's centre). The margins are where
+// Bevy fades one level of detail into the next; that needs a shader (the render pipeline line), so both levels are
+// drawn there for now: zero-width margins switch at once.
+struct VisibilityRange final {
+    DistanceRange startMargin{};
+    DistanceRange endMargin{};
+    bool useAabb = false;
+};
+
+// On a camera, written by CheckVisibility: the entities with an Aabb or a VisibilityRange this camera sees, in
+// ascending EntityId. A camera without it (no visibility Module, or not checked yet) culls nothing.
+struct VisibleEntities final {
+    std::vector<std::uint64_t> entities;
+
+    friend bool operator==(const VisibleEntities&, const VisibleEntities&) = default;
+};
+
+inline void HashValue(Kernel::Hasher&, const Aabb&) {}
+inline void HashValue(Kernel::Hasher&, const NoFrustumCulling&) {}
+inline void HashValue(Kernel::Hasher&, const VisibilityRange&) {}
+inline void HashValue(Kernel::Hasher&, const VisibleEntities&) {}
 inline void HashValue(Kernel::Hasher&, const RenderLayers&) {}
 inline void HashValue(Kernel::Hasher&, const Mesh3d&) {}
 inline void HashValue(Kernel::Hasher&, const SkinPose&) {}
