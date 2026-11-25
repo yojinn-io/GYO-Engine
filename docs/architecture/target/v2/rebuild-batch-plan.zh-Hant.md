@@ -184,7 +184,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | PvP：連線目標、userId、token 在 `NetProductOptions`（建 Product 時定）、前台 World 一準備好就握手；要「每次換前台時才給目標、大廳不連線」要由遊戲或 net 定（R1b 的用法：前台 World＋渲染 World，runner `ReplaceWorld("front", {extra})`） | R1b 卡 2026-11-25 | **主會話判 (1)**（`v8-arch-gyo2-net-connect-target-per-world`）：PvP 卡另開 net PR；PvP 改成換前台 World 要等 R1b 與它都合 |
 | gyo2 上原本就 stale 的 15 個突變（find 對不上現在的程式），R1b #334 的 dev_log 列了清單 | R1b 卡 2026-11-25 | 整理突變的卡（未開） |
 | 給使用者知悉、目前不採：由 Kernel 給 World 唯一 id（像 Bevy 的 `WorldId`），讓 Extract 參數自己偵測來源換了（R1b 實作審查提的替代做法；Kernel 要加新概念） | R1b #334 實作審查 | 不排；要用時再議 |
-| **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | 待排（主會話建議：PvP 移植的下一張卡） |
+| **Gateway 的移植與其後的服務**（`v8-arch-gyo2-game-flow-and-gateway`）：Match 以外所有事情的入口（大廳房間列表、建房與加入、準備與鎖房、配對與分配 Match、存檔讀寫、身分與連線憑證），有狀態的在它後面的服務；master 的 `services/gyo_gateway`（Go）未移；交給 Client 的是 `NetConnectTarget`，token 由 Match 的 admission 驗；建置已有 `gyo_game_add_go_service` | 使用者 2026-11-25（PvP 卡轉） | **算在 PvP 移植裡**（`v8-arch-gyo2-gateway-in-pvp-port`）；待開卡 |
 | 房間 World（商人交易、接任務）與合作／生存兩種模式的規則與結算（`v8-arch-gyo2-game-flow-and-gateway`）：master PvP 沒有，是新功能 | 使用者 2026-11-25（PvP 卡轉） | 待排（移植之後） |
 
 ## 不擋路的小事
