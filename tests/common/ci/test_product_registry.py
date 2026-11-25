@@ -100,7 +100,7 @@ class RegistryMatrixTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
             tools = product_registry.export_tools(registry, repository_root=self.root)
         self.assertEqual(tools, {platform: [] for platform in RELEASE_PLATFORMS})
-        self.assertIn("No release tool is registered", stderr.getvalue())
+        self.assertIn("No enabled release tool is registered", stderr.getvalue())
 
     def test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so(self):
         registry = self.root / "tools.csv"
@@ -134,14 +134,16 @@ class RegistryMatrixTests(unittest.TestCase):
         with (ROOT / "config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
             table = list(csv.DictReader(rows))
         registered = [row["name"] for row in table]
-        released = [row["name"] for row in table if row["release"].strip().lower() in ("1", "true", "yes", "on")]
+        # CMake's reading (GyoRegistryCsv.cmake: "true" or "1", any case): enabled release tools.
+        released = [row["name"] for row in table
+                    if row["enabled"].strip().lower() in ("1", "true") and row["release"].strip().lower() in ("1", "true")]
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
             tools = product_registry.export_tools()
             pairs = export_registry()
         self.assertEqual(list(tools), list(RELEASE_PLATFORMS))
         self.assertEqual(all(tools.values()), bool(released), tools)
         self.assertEqual("No tool is registered" in stderr.getvalue(), not registered)
-        self.assertEqual("No release tool is registered" in stderr.getvalue(), bool(registered) and not released)
+        self.assertEqual("No enabled release tool is registered" in stderr.getvalue(), bool(registered) and not released)
         selected = {tool.split(":", 1)[0] for row in tools.values() for tool in row}
         self.assertLessEqual(selected, set(registered))
         self.assertTrue(all(platform in RELEASE_PLATFORMS for _, platform in pairs))

@@ -212,15 +212,15 @@ S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預�
 - **量測程式**：照 PvP Client 的畫法，每個 region 一個 `Mesh3d`（持有的模型＋`Aabb`），經 `visibility` 剔除，由 `mesh_render` 與 `sdl_gpu`（Vulkan）畫。
   - 視窗 1280×720，相機用 PvP 的投影（垂直視角 1.2 rad、near 0.05、far 150 m），眼睛在地面上 1.6 m。
   - VSync 關閉，實際的 present mode 是 Mailbox。
-  - 量的是每幀 `Pump`＋`RunFrame` 的牆鐘時間。SDL GPU 有 frames-in-flight 上限，所以這個時間等於 CPU＋GPU 的出幀間隔。GPU 的 timestamp 沒有量。
+  - 量的是每幀 `Pump`＋`RunFrame` 的牆鐘時間。SDL GPU 有 frames-in-flight 上限，所以這個時間是出幀間隔，由 CPU 與 GPU 中較慢的一方決定；兩者各自的時間（GPU timestamp）沒有量。
 - **地圖**：`kiriyu_extraction_250m`，16 region、130,273 quads、33,022 盒。
 - **件數**：40 個方向 × 300 幀＝12,000 幀量測（加上暖機，共 13,260 幀）。13,260 幀都交給了視窗（skipped 0、failed 0），被拒的貼圖、網格請求都是 0。
 
 | 量 | 值 |
 |---|---|
-| 40 個方向的中位數，再取中位數 | 0.19 ms |
+| 40 個方向的中位數，再取中位數 | 0.18 ms |
 | 最差方向的 p95（p2 朝 225°、畫 13 個 region、剔除 3 個） | 0.47 ms |
-| 所有方向的最大單幀 | 4.6 ms（p0 開頭的三個方向，暖機剛過） |
+| 所有方向的最大單幀 | 4.6 ms（出現在 p0 開頭的三個方向；原因未確認） |
 | 每個方向畫的 region | 1～13 個（16 個裡）；看向地圖中央時畫得最多 |
 | 程序峰值 RSS | 194 MB |
 
@@ -228,8 +228,8 @@ S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預�
 
 - 250 m 這個量級，Client 的畫面時間遠在 16.7 ms（60 fps）之內。目前的著色器沒有光照，是最簡單的那一種；光照、陰影等加進來時（渲染管線線），要重量。
 - 剔除有作用：一個方向大多只畫 2～9 個 region。
-- 第一輪（`linux-run1-unverified/`）沒有記錄「實際交給視窗的幀數」，所以不採用那一輪。補上 `FramesShown`／`FramesSkipped` 重跑後，結果和第一輪一致，各方向差在 0.01 ms 以內。
-- **沒量**：km²（S5，要用 (d2) 的合成圖）、GPU timestamp、Windows 與 Mac 的 GPU、有角色和 HUD 的實際遊戲畫面。
+- 第一輪（`linux-run1-unverified/`）沒有記錄「實際交給視窗的幀數」，所以不採用那一輪。補上 `FramesShown`／`FramesSkipped` 重跑後，兩輪各方向的差：中位數最多 0.011 ms、p95 最多 0.108 ms、最大單幀最多 0.807 ms。
+- **沒量**：km²（S5，要用 (d2) 的合成圖）、GPU timestamp、Windows 與 Mac 的 GPU、有角色和 HUD 的實際遊戲畫面、Client 端的地圖載入時間、1280×720 以外的解析度。
 
 ## 6. 和 loading 的關係（流程框架卡 `local_8a21ecb9`）
 

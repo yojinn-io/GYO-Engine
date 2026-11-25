@@ -439,7 +439,7 @@ class PackageTests(unittest.TestCase):
                 result = subprocess.run([*script, *command, *empty], text=True, capture_output=True, check=False,
                                         env=environment)
                 self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertIn("Train tools has nothing to release: no tool is registered", result.stderr)
+                self.assertIn("Train tools has nothing to release: no enabled release tool is registered", result.stderr)
                 self.assertFalse(output.exists())
         result = subprocess.run([*script, *prepare, "--registry", str(registry), *self.tool_registry_arguments()],
                                 text=True, capture_output=True, check=False, env=environment)

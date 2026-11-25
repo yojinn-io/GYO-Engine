@@ -213,9 +213,9 @@
     },
     {
       "id": "ci-python-silent-empty",
-      "what": "the Python consumer accepts an empty registry without saying so",
+      "what": "the Python consumer accepts an empty selection without repeating CMake's notice",
       "file": "build/ci/common/product_registry.py",
-      "find": "        print(\"No tool is registered: the toolchain rows select no tool and assemble no package\", file=sys.stderr)",
+      "find": "        print(notices[0] if notices else \"No tool is selected on any release platform\", file=sys.stderr)",
       "replace": "        pass",
       "command": [
         "{python}",
@@ -232,22 +232,18 @@
     },
     {
       "id": "ci-cmake-empty-never-refused",
-      "what": "CMake exports an empty selection for a registry that lists tools",
+      "what": "CMake exports an empty selection for a platform although an enabled release tool is registered (the rule kept after 2026-11-26)",
       "file": "build/cmake/GyoToolRegistry.cmake",
-      "find": "if(selected_count EQUAL 0 AND count GREATER 0)",
+      "find": "if(selected_count EQUAL 0 AND release_count GREATER 0)",
       "replace": "if(FALSE)",
       "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/ci",
-        "-p",
-        "test_product_registry.py"
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ToolRegistryTests.cmake"
       ],
-      "expect": "(FAIL|ERROR): test_registered_tools_without_a_release_selection_are_rejected "
+      "expect": "missing_platform_release"
     },
     {
       "id": "ci-tools-train-without-tools",
@@ -473,6 +469,42 @@
         "test_workflow_gates.py"
       ],
       "expect": "(FAIL|ERROR): test_build_record_lists_every_field_ci_reads "
+    },
+    {
+      "id": "ci-cmake-release-count-ignores-enabled",
+      "what": "a disabled release tool counts as a release tool, so a registry with only a disabled one is refused",
+      "guards": [
+        "v8-arch-gyo2-decisions-2026-11-26-night"
+      ],
+      "file": "build/cmake/GyoToolRegistry.cmake",
+      "find": "            if(enabled AND release)\n",
+      "replace": "            if(release)\n",
+      "command": [
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ToolRegistryTests.cmake"
+      ],
+      "expect": "Registry with a disabled release tool only"
+    },
+    {
+      "id": "ci-cmake-release-count-all-tools",
+      "what": "every registered tool counts as a release tool (the rule before 2026-11-26), so a registry without a release tool is refused",
+      "guards": [
+        "v8-arch-gyo2-decisions-2026-11-26-night"
+      ],
+      "file": "build/cmake/GyoToolRegistry.cmake",
+      "find": "            if(enabled AND release)\n",
+      "replace": "            if(TRUE)\n",
+      "command": [
+        "{cmake}",
+        "-DGENERATOR=Ninja",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ToolRegistryTests.cmake"
+      ],
+      "expect": "Registry without a release tool"
     }
   ]
 }

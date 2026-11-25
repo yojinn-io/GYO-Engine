@@ -205,7 +205,7 @@ jobs:
           GYO_PRODUCT_EXECUTABLE: ${{ steps.configure.outputs.product_executable }}
         run: |
           if [ "$GYO_PRODUCT" = toolchain ] && [ -z "$GYO_SELECTED_TOOLS" ]; then
-            echo "::notice::No tool is registered for $GYO_PACKAGE_PLATFORM: the toolchain row assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."
+            echo "::notice::No release tool is selected for $GYO_PACKAGE_PLATFORM: the toolchain row assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."
             echo "assemble=false" >> "$GITHUB_OUTPUT"
           elif [ "$GYO_PRODUCT" != toolchain ] && [ "$GYO_PRODUCT_EXECUTABLE" != true ]; then
             echo "::notice::Game $GYO_PRODUCT registers no product executable yet: the row builds and tests it for $GYO_PACKAGE_PLATFORM but assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."

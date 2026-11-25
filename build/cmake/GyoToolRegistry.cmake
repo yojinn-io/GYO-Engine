@@ -207,13 +207,15 @@ function(gyo_read_tool_project file requested_variant output)
     set(${output} "${result}" PARENT_SCOPE)
 endfunction()
 
-# Every release platform gets a toolchain row. A registry that lists a release
-# tool must select a release tool on every platform. A registry without one (no
-# tool at all, or only tools that are not released, such as a command-line
-# tool for content) yields rows with no tools, announced on stderr, so the
-# engine still builds and tests on every platform (the user's decision of
-# 2026-11-26, v8-arch-gyo2-decisions-2026-11-26-night: the rule applies once
-# there is a release tool).
+# Every release platform gets a toolchain row. A registry that lists an enabled
+# release tool must select a release tool on every platform. A registry without
+# one (no tool at all, or only tools that are not released or not enabled, such
+# as a command-line tool for content) yields rows with no tools, announced on
+# stderr, so the engine still builds and tests on every platform (the user's
+# decision of 2026-11-26, v8-arch-gyo2-decisions-2026-11-26-night: the rule
+# applies once there is a release tool; a disabled one is never built, so it
+# does not count). This is the one place that decides it: the Python consumer
+# repeats this notice as it is.
 function(gyo_export_tool_matrix registry root output)
     set(entries "[]")
     string(JSON count LENGTH "${registry}" tools)
@@ -231,7 +233,7 @@ function(gyo_export_tool_matrix registry root output)
     if(count EQUAL 0)
         message(NOTICE "No tool is registered: every release platform's toolchain row selects no tool")
     elseif(release_count EQUAL 0)
-        message(NOTICE "No release tool is registered: every release platform's toolchain row selects no tool")
+        message(NOTICE "No enabled release tool is registered: every release platform's toolchain row selects no tool")
     endif()
     foreach(platform windows linux macos)
         set(tools "[]")

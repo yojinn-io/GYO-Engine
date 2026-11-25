@@ -114,7 +114,7 @@ fails(reserved_toolchain "Reserved tool name 'toolchain'" -DCASE=read "-DCSV=${w
 file(WRITE "${work}/no_release.csv" "${header}\nidle,,,true,true,false,true,true,true\n")
 execute_process(COMMAND "${CMAKE_COMMAND}" "-DGYO_TOOL_REGISTRY_FILE=${work}/no_release.csv" "-DGYO_REPOSITORY_ROOT=${work}"
     -P "${repository}/build/cmake/ExportToolRegistry.cmake" RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err)
-if(NOT result EQUAL 0 OR NOT "${err}" MATCHES "No release tool is registered")
+if(NOT result EQUAL 0 OR NOT "${err}" MATCHES "No enabled release tool is registered")
     message(FATAL_ERROR "Registry without a release tool: expected success with a notice, got ${result}: ${out}${err}")
 endif()
 string(JSON no_release_rows LENGTH "${out}" include)
@@ -123,6 +123,13 @@ foreach(index RANGE 0 3)
     string(JSON selected LENGTH "${out}" include ${index} tools)
     equal("${selected}" 0 "Registry without a release tool selects none on row ${index}")
 endforeach()
+# A disabled release tool is never built, so it does not count: the same as no release tool.
+file(WRITE "${work}/disabled_release.csv" "${header}\nidle,,,false,false,true,true,true,true\n")
+execute_process(COMMAND "${CMAKE_COMMAND}" "-DGYO_TOOL_REGISTRY_FILE=${work}/disabled_release.csv" "-DGYO_REPOSITORY_ROOT=${work}"
+    -P "${repository}/build/cmake/ExportToolRegistry.cmake" RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT result EQUAL 0 OR NOT "${err}" MATCHES "No enabled release tool is registered")
+    message(FATAL_ERROR "Registry with a disabled release tool only: expected success with a notice, got ${result}: ${out}${err}")
+endif()
 file(WRITE "${work}/tools/linux_tool/project.json" "${valid}")
 file(WRITE "${work}/linux_release.csv" "${header}\nlinux_tool,,,true,true,true,false,true,false\n")
 fails(missing_platform_release "No release tools selected for windows" -DCASE=export

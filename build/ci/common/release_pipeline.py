@@ -531,11 +531,11 @@ def load_train_archives(train: Train, commit: str, package_directory: Path, serv
 
 def require_train_content(train_id: str, selected_tools: dict[str, list[str]]) -> None:
     """The tools train delivers the toolchain package, which holds the release
-    tools. With no tool registered no toolchain package is assembled, so the
+    tools. With no enabled release tool registered no toolchain package is assembled, so the
     train has nothing to deliver: say so before any build or remote work
     instead of failing on missing archives afterwards."""
     if train_id == TOOLS_TRAIN and not any(selected_tools.values()):
-        raise ReleaseError(f"Train {TOOLS_TRAIN} has nothing to release: no tool is registered, so no toolchain "
+        raise ReleaseError(f"Train {TOOLS_TRAIN} has nothing to release: no enabled release tool is registered, so no toolchain "
                            "package is assembled. Register a release tool first")
 
 
