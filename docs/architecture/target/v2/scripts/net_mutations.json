@@ -1516,8 +1516,8 @@
     "net D-8"
    ],
    "file": "engine/modules/net/src/ServerHost.cpp",
-   "find": "    // A newer handshake from that endpoint (a larger salt: the client reconnected) is checked like any other; only\n    // one that passes ends the old connection, so a refused one leaves the live connection as it was.\n    if (auto mismatch = CompareFacts(request->facts, facts_)) {\n        Reject(from, std::move(*mismatch));\n        return;\n    }\n    if (admission_) {\n        if (auto admitted = admission_(*request, from); !admitted) {\n            Reject(from, Rejection{DisconnectReason::Refused, admitted.error().message});\n            return;\n        }\n    }\n    if (known != byEndpoint_.end()) End(peers_.find(known->second), DisconnectReason::ClosedByRemote);\n",
-   "replace": "    if (known != byEndpoint_.end()) End(peers_.find(known->second), DisconnectReason::ClosedByRemote);\n    // A newer handshake from that endpoint (a larger salt: the client reconnected) is checked like any other; only\n    // one that passes ends the old connection, so a refused one leaves the live connection as it was.\n    if (auto mismatch = CompareFacts(request->facts, facts_)) {\n        Reject(from, std::move(*mismatch));\n        return;\n    }\n    if (admission_) {\n        if (auto admitted = admission_(*request, from); !admitted) {\n            Reject(from, Rejection{DisconnectReason::Refused, admitted.error().message});\n            return;\n        }\n    }\n",
+   "find": "    if (auto mismatch = CompareFacts(request->facts, facts_)) {\n        Reject(from, std::move(*mismatch));\n        return;\n    }\n    if (admission_) {\n        if (auto admitted = admission_(*request, from); !admitted) {\n            Reject(from, Rejection{DisconnectReason::Refused, admitted.error().message});\n            return;\n        }\n    }\n    if (known != byEndpoint_.end()) End(peers_.find(known->second), DisconnectReason::ClosedByRemote);\n",
+   "replace": "    if (known != byEndpoint_.end()) End(peers_.find(known->second), DisconnectReason::ClosedByRemote);\n    if (auto mismatch = CompareFacts(request->facts, facts_)) {\n        Reject(from, std::move(*mismatch));\n        return;\n    }\n    if (admission_) {\n        if (auto admitted = admission_(*request, from); !admitted) {\n            Reject(from, Rejection{DisconnectReason::Refused, admitted.error().message});\n            return;\n        }\n    }\n",
    "target": "gyo_net_tests",
    "cases": "handshake: a newer handshake from the same endpoint that is refused*",
    "expect": "\\[nt\\-refused\\-keeps\\-live\\]"
@@ -1533,7 +1533,7 @@
    "replace": "",
    "target": "gyo_net_tests",
    "cases": "handshake: a new handshake from the same endpoint is a new connection*",
-   "expect": "host\\.ConnectionCount\\(\\) == 1"
+   "expect": "\\[nt\\-reconnect\\-old\\-ended\\]"
   }
  ]
 }

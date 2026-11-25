@@ -43,8 +43,8 @@ Owner：Engine（net）＋突變清單。GYO2 主會話開的小卡做。作者 
 | `or-exch-break-calls-out` | orchestration | (a) `RunOn` 多了 lease 參數 | 照現在的呼叫 | killed |
 | `or-exch-round-after-failed-in` | orchestration | (a) 同上 | 同上 | killed |
 | `g3-depth-not-cleared` | render | (a) depth 改成依 `Pass3D::clearDepth` 清或留、store 改 STORE | find 照現在五行；replace 一律 LOAD、不 cycle | killed |
-| `rb-alive-not-restored` | rollback | (a) 變數 `alive` → `after` | 照改 | killed |
-| `rb-authority-not-laid-over` | rollback | (a) 同上 | 照改 | killed |
+| `rb-alive-not-restored` | rollback | (a) 寫進 set 的存活集合改成 `after`（`alive` ∪ 標記的實體，`StateRollbackStrategy.cpp:279-281`），性質（不還原存活集合）不變 | find 照現在那行 | killed |
+| `rb-authority-not-laid-over` | rollback | (a) 同上，`AddTo` 也改傳 `after` | 照改 | killed |
 | `sw-motion-missing` | window_input | (a) 位移改經 `MotionDelta` 換單位 | find 照現在那行 | killed |
 | `pvp-room-not-full` | object_fps_pvp | (a) 座位計數搬進 `Seats::Take` | find 改成 `if (connections_.size() >= capacity_) return` | killed |
 | `jw-oom-escapes-endarray` | json | (a) pretty（#343）在 `try` 裡加了換行 | find 從 `out_ += close;` 起 | killed |
@@ -58,10 +58,17 @@ Owner：Engine（net）＋突變清單。GYO2 主會話開的小卡做。作者 
 - 突變（D184，只跑相關的）：net 5/5（新的 2 條＋這段程式的 `nt-admission-ignored`、`nt-reconnect-reuses-connection`、`nt-older-salt-ends-connection`）；上表 23/23（`g8-kernel-only-failure` 改 replace 後單獨重跑 killed）。紀錄：`build/target/_build/test/mutations-net-order.txt`（本機）。
 - 沒驗：L1 三平台（PR 上 dispatch）。
 
-## 設計審查
+## 設計審查（Opus／high，唯讀，只給成果物與原始要求）
 
-見下一節（審查後補）。
+blocker 0、should 3、nit 7。net 的改動是最小、單一出口的「先驗再換」；其餘 22 條 (a) 的歸類站得住，沒有等價突變、沒有改測試的判定。
+
+- S1（`g8-kernel-only-failure` 的 replace 遷就 `Product.cpp:315-321` 的冗餘條件，打到的性質變寬）→ 不在本卡（orchestration）；轉主會話當後續：拿掉一項，突變回到只關單一項。
+- S2（`RunScheduleSteps` 與 `Lend` 各寫一份「RequireNotRunning → Ended → Find → UnknownWorld」，是 3 條 stale 的源頭，`Lend` 那份的順序沒有突變守）→ 不在本卡；轉主會話當後續：抽成共用的前置檢查。
+- S3（系譜引錯函式、沒寫和 netcode.io 的偏離）→ 照改：引 `server.rs:691-782`，補「netcode.io 拒絕已連線的位址（`:720-726`），這裡驗過後替換」。
+- N1（缺句號）、N2（`nt-reconnect-ends-before-check` 的 find 帶註解）、N3（`nt-reconnect-old-kept` 的 expect 改成 tag `[nt-reconnect-old-ended]`，測試那個 CHECK 加訊息）、N4（`rb-*` 的描述）、N7（NT-1 列上新突變）→ 照改；net 5 條重跑 5/5 killed。
+- N5（`what` 一直疊改寫歷史）、N6（`we-j32` 的 find 橫跨 ApplySync 數十行）→ 記錄，不在本卡。
 
 ## 留給之後
 
+- 審查 S1、S2（orchestration，見上）；N5、N6。
 - `Product.cpp` 建置第 5 步的 `kernelFailed` 與 `unchecked` 現在互相涵蓋（kernel 錯誤必設 `notChecked`），條件裡有一個是多的；要不要拿掉屬於 orchestration，下一個碰它的批決定。

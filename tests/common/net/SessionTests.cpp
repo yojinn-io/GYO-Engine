@@ -226,7 +226,7 @@ TEST_CASE("handshake: a new handshake from the same endpoint is a new connection
     REQUIRE_MESSAGE(second.State() == N::ClientState::Connected,
                     "a reconnect from the same endpoint is a new connection: the newer handshake connects");
     CHECK_MESSAGE(second.Accepted()->connectionId != oldId, "a reconnect from the same endpoint is a new connection");
-    CHECK(host.ConnectionCount() == 1);
+    CHECK_MESSAGE(host.ConnectionCount() == 1, "[nt-reconnect-old-ended] a reconnect that passes ends the old connection");
     const auto events = host.TakeEvents();
     REQUIRE(events.size() == 2);
     CHECK(events[0].kind == N::HostEventKind::Disconnected);
