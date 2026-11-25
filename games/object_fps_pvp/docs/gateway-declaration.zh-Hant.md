@@ -32,7 +32,7 @@ v8-product-pvp-gateway
 | 段 | 範圍 | 不做 | 測試 |
 |---|---|---|---|
 | 1 services | `games/object_fps_pvp/services/`（Go module，`gyo_game_add_go_service`）：五個服務的套件、一個執行檔帶子命令（`gateway`、`identity`、`rooms`、`matches`、`saves`、`all`）；外部 HTTP 協議 v1（D3）、內部協議（D4）、token（D5）；matches 的 provider 介面與「本機行程」實作（第 2 段才真的起 Match） | Client、Match 的 C++；快速配對 | `go test`：各服務單元；`all` 在行程內起五個服務（各自 listener），兩個使用者經 Gateway 建房→加入→準備→開始→各拿到自己的連線目標；token 驗得過、換 user／換 Match／過期都驗不過；冪等鍵重送回同一結果 |
-| 2 admission | Match：`--match-id`、`--capacity`、金鑰從環境變數 `GYO_PVP_ADMISSION_KEY`（hex）；admission 驗 token（D5）並拒絕同一 userId 第二條連線；`--exit-when-empty`；matches 的本機 provider 起 Match、看行程結束、回收 port | 存檔 | C++：token 驗證的外部測試（Go 產生的向量檔，兩邊對同一份）；network 標籤：Go 的 matches 起真的 Match，兩個 MemoryLink 以外的 UDP Client 用拿到的 token 連上、錯的 token 被拒 |
+| 2 admission | Match：`--match-id`、`--capacity`、`--admission-key-stdin`（金鑰是標準輸入的第一行 hex）；admission 驗 token（D5）並拒絕同一 userId 從別的 endpoint 來的第二條連線；`--idle-seconds N`（沒人在 Match 裡 N 秒就結束，〔審查 S2〕取代原本的 `--exit-when-empty`）；matches 的本機 provider 起 Match、看行程結束、回收 port | 存檔 | C++：token 驗證的外部測試（Go 產生的向量檔，兩邊對同一份）、admission 與座位的單元；network 標籤：本機 provider 起真的 Match（金鑰經 stdin）、它在 port 上 listen；壞的金鑰拒絕啟動。〔動工後改〕Client 帶 token 連上真的 Match 的測試移到第 5 段（Client 的連線參數等 #332 改成 `NetConnectTarget`，現在寫會在合併後重寫） |
 | 3 http | `engine/core/os` 加 `StreamSocket`（非阻塞 IPv4 TCP client：Open/Connect、State、Send、Receive、Close；錯誤是中性碼）；新 library-only Module `http`：純的 HTTP/1.1 請求組裝與回應解析（Content-Length、chunked），加上用 `StreamSocket` 的 `HttpRequest`（呼叫者每幀 `Poll`） | DNS（只收 IPv4 字面值，和現在的大廳一樣）、TLS、keep-alive、HTTP/2 | os：本機 loopback 的連線、送收、對方關閉、連不上（network 標籤）；http：解析的單元（分段到達、chunked、錯的格式）＋對本機 Go 測試伺服器的請求（network） |
 | 4 saves | Match：玩家連上後向 saves 讀檔（非阻塞），離場時寫回（冪等鍵＝matchId＋userId＋離場序號）；存檔格式 v1（D7），`save_version` 的 `Check` | 合作／生存的結算規則 | Match＋saves 的 network 測試：連上→讀到→離場→寫回→再連讀到新值 |
 | 5 client | 大廳 World（房間列表、建房：模式、地圖）→ 房間 World（成員、準備、開始）→ 遊戲 World 帶 `NetConnectTarget`；回到大廳；用 U（`ui`、`world_ui`、`ui_render`，ui 頁第 9 節）；裝置 id 存在使用者資料夾 | 商人、任務、合作／生存 | client：大廳與房間的流程經本行程的 Go stack（network）；`--connect` 照舊；最後在這台 Mac 兩個 Client 經 Gateway 對戰、撤離後存檔寫回再讀到（實機試玩交使用者） |
@@ -98,7 +98,7 @@ PR 標題 `type(scope): 說明（v8-product-pvp-gateway）`；draft、base 前�
 兩種 token，都是「自含、HMAC-SHA256 簽名、不查表就能驗」：
 
 - **session token**（Client ↔ gateway）：identity 簽、gateway 驗，共用 identity 金鑰；內容 userId、到期時間。
-- **admission token**（Client → Match，裝在 `NetConnectTarget::token`，網路的 `ConnectRequest::token` 原樣帶到 Match）：matches 簽，金鑰是**每個 Match 各一把**（matches 起 Match 時隨機產生，經環境變數交給 Match 行程）。二進位、固定長度 57 bytes：
+- **admission token**（Client → Match，裝在 `NetConnectTarget::token`，網路的 `ConnectRequest::token` 原樣帶到 Match）：matches 簽，金鑰是**每個 Match 各一把**（matches 起 Match 時隨機產生，寫進 Match 行程的標準輸入；不放命令列與環境，別的使用者讀不到）。〔動工後改〕原本寫環境變數：C++ 讀環境要 `getenv`，MSVC 會警告（C4996），改成 stdin。二進位、固定長度 57 bytes：
 
 ```text
 version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32] = HMAC-SHA256(key, 前 25 bytes)
@@ -114,9 +114,9 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 
 ### D6 Gateway 怎麼找到並分配 Match
 
-- matches 有 provider 介面：`Start(spec{matchId, key, capacity, mode, map}) → Running{address, ended, stop}`（Match 結束時 `ended` 關閉；`stop` 提早結束）。〔審查 S8：原本寫 `Allocate`／`Release`，實作的形狀比較好，改宣告〕本卡的實作是**本機行程**：從設定的 port 範圍挑空的，起 `gyo_object_fps_pvp_match --port P --match-id M --capacity N --exit-when-empty`（環境變數帶金鑰），看行程結束就回收。之後換成機群（Agones、PlayFab MPS 那類）只換 provider。
+- matches 有 provider 介面：`Start(spec{matchId, key, capacity, mode, map}) → Running{address, ended, stop}`（Match 結束時 `ended` 關閉；`stop` 提早結束）。〔審查 S8：原本寫 `Allocate`／`Release`，實作的形狀比較好，改宣告〕本卡的實作是**本機行程**：從設定的 port 範圍挑空的，起 `gyo_object_fps_pvp-match --port P --match-id M --capacity N --arena A --admission-key-stdin --idle-seconds 60`（金鑰寫進 stdin；斷線的玩家在 60 秒內回來，Match 還在），看行程結束就回收。之後換成機群（Agones、PlayFab MPS 那類）只換 provider。
 - 地址：provider 回 `advertise IP:port`（本機預設 127.0.0.1；跨機時設定 advertise）。
-- Match 起來前就交出連線目標：Client 的網路握手會重送，Match 晚一點 listen 不影響（網路的握手逾時內）。第 2 段量本機起 Match 的時間，若接近握手逾時再改成等 Match 回報。
+- Match 起來前就交出連線目標：Client 的網路握手會重送，Match 晚一點 listen 不影響（網路的握手逾時內）。〔第 2 段量了〕本機（Intel Mac）從起行程到 listen 約 0.39 秒（`object_fps_pvp.match_process` 的紀錄），遠小於握手逾時，維持先交出。
 
 ### D7 存檔放哪裡、誰寫
 
@@ -166,6 +166,8 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 - L2 rooms 的狀態在記憶體：rooms 重啟，房間全沒；已開始的 Match 不受影響（Client 已拿到連線目標）。
 - L3 只收 IPv4 字面值（沒有 DNS），沿用現在的大廳。
 - L4 內部協議沒有認證，只靠綁 loopback／私網。
+- L5 同一 userId 只收一條連線：從**同一個 endpoint** 重連（較新的握手，伺服器先結束舊的、再問 admission）照收，座位按連線計數；〔審查 S1〕從**別的 endpoint**（Client 換了 socket）重連時，Match 上舊的那條要等逾時（現在 10 秒）才移除，這段時間新的會被拒絕（「the user is already in the match」）。沒有封包加密時「舊的優先」比「新的踢掉舊的」安全（netcode 同規則）。PvP 卡 2026-11-25 指出的既有行為（握手中途沒有 Disconnect 可送）。
+- L6 rooms 的地圖：`--content` 給了就只收 content 的 `maps/arenas.json` 列的 arena id；沒給時收任何 `[a-z0-9_]{1,64}`，選到 Match 沒有的地圖時 Match 啟動失敗、Client 連不上（`all` 的本機腳本會給 `--content`）。
 - L7 裝置 id 就是憑證：知道別人的裝置 id 就能登入成那個人。Client 要用高熵亂數產生並存好（第 5 段）；不加守衛（AGENTS §3）。〔審查 N6〕
 - L8 gateway 與 identity 共用 session 金鑰，所以 gateway 也簽得出 session。要分開時換成非對稱簽章（例如 ed25519：identity 拿私鑰、gateway 只拿公鑰）。〔審查 N7〕
 - L9 本機 provider 不先檢查 port 有沒有被別的程式占用：占用時 Match 啟動失敗、行程結束、port 回收，這一場的 Client 連不上。〔審查 N8〕

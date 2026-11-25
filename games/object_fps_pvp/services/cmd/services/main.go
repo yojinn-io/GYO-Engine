@@ -13,6 +13,7 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -81,7 +83,7 @@ func run(name string, arguments []string) error {
 	listen := set.String("listen", "127.0.0.1:0", "the address to listen on")
 	data := set.String("data", "", "the data directory (identity.json, saves/)")
 	capacity := set.Int("capacity", 4, "the players a room and its Match hold")
-	maps := set.String("maps", "", "the maps rooms may choose, comma-separated (empty: any)")
+	maps := set.String("maps", "", "the maps rooms may choose, comma-separated (empty: the content's arenas, or any without --content)")
 	var match matchFlags
 	switch name {
 	case "all":
@@ -92,8 +94,12 @@ func run(name string, arguments []string) error {
 		if err != nil {
 			return err
 		}
+		allowed, err := mapsOf(*maps, match.content)
+		if err != nil {
+			return err
+		}
 		running, err := stack.Start(stack.Config{Gateway: *gatewayAddress, Data: *data, Provider: provider,
-			Capacity: *capacity, Maps: split(*maps)})
+			Capacity: *capacity, Maps: allowed})
 		if err != nil {
 			return err
 		}
@@ -128,8 +134,13 @@ func run(name string, arguments []string) error {
 		return serve(*listen, service.Handler())
 	case "rooms":
 		matchesURL := set.String("matches", "", "the matches service's URL")
+		content := set.String("content", "", "the Match's content directory, for the maps rooms may choose")
 		_ = set.Parse(arguments)
-		service, err := rooms.New(rooms.Config{Matches: api.NewClient(*matchesURL), Capacity: *capacity, Maps: split(*maps)})
+		allowed, err := mapsOf(*maps, *content)
+		if err != nil {
+			return err
+		}
+		service, err := rooms.New(rooms.Config{Matches: api.NewClient(*matchesURL), Capacity: *capacity, Maps: allowed})
 		if err != nil {
 			return err
 		}
@@ -157,6 +168,47 @@ func serve(address string, handler http.Handler) error {
 	server := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	log.Printf("listening %s", address)
 	return server.ListenAndServe()
+}
+
+// installedMaps reads the arena ids the Match can play from its content
+// (maps/arenas.json lists the arena files; each has its id).
+func installedMaps(content string) ([]string, error) {
+	var index struct {
+		Arenas []string `json:"arenas"`
+	}
+	body, err := os.ReadFile(filepath.Join(content, "maps", "arenas.json"))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &index); err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, file := range index.Arenas {
+		var arena struct {
+			ID string `json:"id"`
+		}
+		body, err := os.ReadFile(filepath.Join(content, "maps", file))
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(body, &arena); err != nil {
+			return nil, err
+		}
+		if arena.ID == "" {
+			return nil, fmt.Errorf("the arena %s has no id", file)
+		}
+		ids = append(ids, arena.ID)
+	}
+	return ids, nil
+}
+
+// mapsOf is --maps, or with none the content's arenas when --content is given.
+func mapsOf(list, content string) ([]string, error) {
+	if list != "" || content == "" {
+		return split(list), nil
+	}
+	return installedMaps(content)
 }
 
 func split(list string) []string {

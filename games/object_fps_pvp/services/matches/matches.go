@@ -29,11 +29,12 @@ type Spec struct {
 	Map      string
 }
 
-// Running is a Match a provider started: where players connect, and a channel
-// closed when it ends.
+// Running is a Match a provider started: where players connect, a channel
+// closed when it ends, and how to end it early.
 type Running struct {
 	Address string
 	Ended   <-chan struct{}
+	Stop    func()
 }
 
 // Provider starts Matches (D6): the local one starts processes on this

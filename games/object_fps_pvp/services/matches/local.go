@@ -5,22 +5,22 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 )
-
-// AdmissionKeyVariable carries a Match's key to its process (not its command
-// line, which other users of the machine can read).
-const AdmissionKeyVariable = "GYO_PVP_ADMISSION_KEY"
 
 // Local starts each Match as a process on this machine (D6), on a free port
 // of [FirstPort, LastPort]; the port is free again when the process ends.
 type Local struct {
 	// Command is the Match executable; Arguments come before the ones Local
-	// adds (--port, --match-id, --capacity, --arena, --exit-when-empty).
+	// adds (--port, --match-id, --capacity, --arena, --admission-key-stdin,
+	// --idle-seconds). The key goes to the Match's standard input, in neither
+	// its command line nor its environment.
 	Command   string
 	Arguments []string
 	// Advertise is the address players are told to connect to (an IPv4
@@ -30,6 +30,13 @@ type Local struct {
 	LastPort  int
 	// Environment is added to this process's environment for each Match.
 	Environment []string
+	// IdleSeconds: a Match ends once nobody has been in it this long (from
+	// its start, or since the last player left; a player who drops may come
+	// back within it). Zero: 60.
+	IdleSeconds int
+	// Output receives the Match's standard output and error (nil: this
+	// process's standard output).
+	Output io.Writer
 
 	mu    sync.Mutex
 	inUse map[int]bool
@@ -38,6 +45,10 @@ type Local struct {
 var ErrNoPort = errors.New("no free Match port")
 
 func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
+	idle := l.IdleSeconds
+	if idle <= 0 {
+		idle = 60
+	}
 	port, err := l.takePort()
 	if err != nil {
 		return Running{}, err
@@ -46,14 +57,19 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		"--port", strconv.Itoa(port),
 		"--match-id", strconv.FormatUint(spec.MatchID, 10),
 		"--capacity", strconv.Itoa(spec.Capacity),
-		"--exit-when-empty")
+		"--admission-key-stdin", "--idle-seconds", strconv.Itoa(idle))
 	if spec.Map != "" {
 		arguments = append(arguments, "--arena", spec.Map)
 	}
 	// Not CommandContext: the Match outlives the allocation request.
 	command := exec.Command(l.Command, arguments...)
-	command.Env = append(append(os.Environ(), l.Environment...), AdmissionKeyVariable+"="+hex.EncodeToString(spec.Key))
-	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	command.Env = append(os.Environ(), l.Environment...)
+	command.Stdin = strings.NewReader(hex.EncodeToString(spec.Key) + "\n")
+	var output io.Writer = os.Stdout
+	if l.Output != nil {
+		output = l.Output
+	}
+	command.Stdout, command.Stderr = output, output
 	if err := command.Start(); err != nil {
 		l.givePort(port)
 		return Running{}, fmt.Errorf("start Match: %w", err)
@@ -66,7 +82,8 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		close(ended)
 	}()
 	log.Printf("match started match=%d port=%d pid=%d", spec.MatchID, port, command.Process.Pid)
-	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended}, nil
+	process := command.Process
+	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended, Stop: func() { _ = process.Kill() }}, nil
 }
 
 func (l *Local) takePort() (int, error) {

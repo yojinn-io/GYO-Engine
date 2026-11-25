@@ -891,6 +891,202 @@
     "./services/stack/"
    ],
    "expect": "not_player"
+  },
+  {
+   "id": "pvp-gw-cpp-mac",
+   "what": "the Match does not check the token's signature",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "if (difference != 0) return AdmissionRefusal::Signature;",
+   "replace": "if (false) return AdmissionRefusal::Signature;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say signature"
+  },
+  {
+   "id": "pvp-gw-cpp-match",
+   "what": "the Match takes another Match's token",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "if (ReadU64(token, 1) != matchId) return AdmissionRefusal::Match;",
+   "replace": "(void)matchId;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say match"
+  },
+  {
+   "id": "pvp-gw-cpp-user",
+   "what": "the Match takes another user's token",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "if (ReadU64(token, 9) != userId) return AdmissionRefusal::User;",
+   "replace": "(void)userId;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say user"
+  },
+  {
+   "id": "pvp-gw-cpp-expiry",
+   "what": "the Match takes a token at its expiry",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "static_cast<std::uint64_t>(nowUnixSeconds) >= expiresAt",
+   "replace": "static_cast<std::uint64_t>(nowUnixSeconds) > expiresAt",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say expired"
+  },
+  {
+   "id": "pvp-gw-cpp-hmac-pad",
+   "what": "the Match's HMAC uses another inner pad",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "inner[i] = k ^ std::byte{0x36};",
+   "replace": "inner[i] = k ^ std::byte{0x37};",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "RFC 4231"
+  },
+  {
+   "id": "pvp-gw-cpp-long-key",
+   "what": "a key longer than a block is not hashed first",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "if (key.size() > kBlock) {",
+   "replace": "if (false) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "long_key"
+  },
+  {
+   "id": "pvp-gw-seat-twice",
+   "what": "one user takes two seats",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (seated->second.endpoint != from) return \"the user is already in the match\";\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "from another endpoint"
+  },
+  {
+   "id": "pvp-gw-seat-kept",
+   "what": "a seat stays taken after its user left",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (--seated->second.connections == 0) seats_.erase(seated);",
+   "replace": "    --seated->second.connections;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "a user who left"
+  },
+  {
+   "id": "pvp-gw-admission-token-ignored",
+   "what": "a keyed Match admits without checking the token",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (const auto refused = match::VerifyAdmission(check.key, request.token, check.nowUnixSeconds(), check.matchId, request.userId)) {",
+   "replace": "        if (const auto refused = std::optional<match::AdmissionRefusal>{}) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "another user's token"
+  },
+  {
+   "id": "pvp-gw-match-bad-key",
+   "what": "the Match starts with a key that is not hex",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match_main.cpp",
+   "find": "if (!key || key->empty()) {",
+   "replace": "if (false) {",
+   "target": "gyo_object_fps_pvp-match",
+   "command": [
+    "ctest",
+    "--test-dir",
+    "{build}",
+    "-R",
+    "^object_fps_pvp\\.match_process$",
+    "--output-on-failure"
+   ],
+   "expect": "a bad key"
+  },
+  {
+   "id": "pvp-gw-cpp-length",
+   "what": "the Match reads a token of another length",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "    if (token.size() != kAdmissionSize) return AdmissionRefusal::Length;",
+   "replace": "    if (token.size() < kAdmissionSigned) return AdmissionRefusal::Length;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say length"
+  },
+  {
+   "id": "pvp-gw-cpp-version",
+   "what": "the Match takes a token of another version",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match/AdmissionToken.cpp",
+   "find": "    if (std::to_integer<std::uint8_t>(token[0]) != kAdmissionVersion) return AdmissionRefusal::Version;",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "admission token:*",
+   "expect": "services say version"
+  },
+  {
+   "id": "pvp-gw-seat-reconnect-refused",
+   "what": "a reconnect from the same endpoint is refused",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        ++seated->second.connections;\n        return std::nullopt;",
+   "replace": "        return \"the user is already in the match\";",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a*seat*,world: a reconnect*,world: a keyed*,world: a Match without*",
+   "expect": "same endpoint is refused"
+  },
+  {
+   "id": "pvp-gw-match-never-idle",
+   "what": "the Match never ends when nobody is in it",
+   "guards": [
+    "gateway-declaration 5"
+   ],
+   "file": "games/object_fps_pvp/src/match_main.cpp",
+   "find": "            } else if (now - emptySince >= std::chrono::seconds(*idleSeconds)) {",
+   "replace": "            } else if (false) {",
+   "target": "gyo_object_fps_pvp-match",
+   "command": [
+    "ctest",
+    "--test-dir",
+    "{build}",
+    "-R",
+    "^object_fps_pvp\\.match_process$",
+    "--output-on-failure"
+   ],
+   "expect": "no player for 1 s"
   }
  ]
 }
