@@ -45,6 +45,7 @@ primitives here.
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
 | Wait | The wake primitive behind `Time::Waiter` (`WakeSignal`: `Create`, `Signal`, `Block`, `Mechanism`) | v8-arch-gyo2-os-wait (landed; the user's owner decision of 2026-11-21 lifted the D78 freeze, and the batch was accepted by CI L1, the guards and mutants instead of the Wait timing L2) |
 | Datagram | A non-blocking IPv4 UDP socket and its address (`DatagramSocket`: `Open`, `LocalAddress`, `Send`, `Receive`; `DatagramAddress`: `Loopback`, `Any`, `Parse`, `ToString`), failures in neutral codes | v8-arch-gyo2-net-module step 0 (the user approved the net Module declaration on 2026-11-22, its Q5: the foreseen pressure of the net Module, which comes before the products, replaces D78's "no observed pressure"; which errors are transient stays with the caller, Invariant 7) |
+| Stream | A non-blocking IPv4 TCP client connection on the datagram socket's address type (`StreamSocket`: `Connect`, `State`, `Send`, `Receive`), failures in neutral codes; no listener (no product needs one) | v8-product-pvp-gateway segment 3 (the observed pressure of a Feature, D78: the user put the PvP Gateway in the PvP port on 2026-11-25, `v8-arch-gyo2-gateway-in-pvp-port`, and its Client and Match talk HTTP to the Gateway's services; declaration D8 in `games/object_fps_pvp/docs/gateway-declaration.zh-Hant.md`) |
 
 Only the components whose batch has landed exist. A frozen or not-started component comes back only with observed
 pressure, a Feature that needs it, or the user's owner decision (Replacement Criterion 9).
@@ -279,6 +280,27 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     one `WSAStartup` reference per socket and links `ws2_32`. `DatagramAddress::Parse` (four decimal octets) has no
     OS call and lives in `src/common`.
   - IPv6 is not here: no named Feature needs it (the net Module declaration, step 0).
+- **Stream** (v8-product-pvp-gateway segment 3). `StreamSocket` is one IPv4 TCP client connection and never blocks;
+  the caller asks again on its next frame.
+  - `Connect(to)` starts connecting (non-blocking, not inherited by child processes, `TCP_NODELAY`). The OS refusing
+    to start it is `InvalidAddress`, `AccessDenied` or `IOFailed`; everything after that is reported by `State`.
+  - `State` is `Connecting` or `Connected`; a connect that failed is `Unreachable` (refused, no route, timed out) or
+    `IOFailed`, and it stays failed. The OS's own connect timeout (tens of seconds; it differs by platform) is the
+    only timeout here: a caller that wants a shorter one drops the socket.
+  - `Send` returns the bytes the OS took: 0 when it has no room or the connect has not finished. `Receive` returns
+    the bytes taken, 0 when the peer closed its side (an empty buffer also reads 0), none when nothing is waiting or
+    the connect has not finished. Both check the connection's own state first, so the three platforms answer alike
+    before `Connected` and after a failed connect (State's error); a reset connection is `IOFailed`.
+  - A send to a reset connection never raises a signal: `MSG_NOSIGNAL` on each send where the C library has it (Linux,
+    macOS SDKs since 2023), else `SO_NOSIGPIPE` on the socket (older macOS SDKs); the feature macros choose one, no OS
+    macro. macOS and Linux share `src/sys/StreamSocket.cpp` (`poll` and `SO_ERROR`);
+    Windows (`src/sys/windows/StreamSocket.cpp`) uses `select` (WSAPoll does not report a failed connect before
+    Windows 10 2004) and holds one `WSAStartup` reference per socket.
+  - The address is `DatagramAddress` (an IPv4 address and port). A connect to `0.0.0.0` is the OS's to answer
+    (POSIX reaches the local host, Windows refuses it). In Linux, `EADDRNOTAVAIL` from a connect can mean the local
+    ports ran out; it is reported as `InvalidAddress` like the address that is not local.
+  - No listener: no product serves TCP from C++ (a game's servers are its own services). The tests' listener is
+    the test library `gyo_test_loopback_listener` in tests/common/os.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -405,7 +427,7 @@ Known blind spots, left to review:
    controls. A Plugin's own tests (plugins/<name>/tests/) are bound by it like the rest of plugins/: there is no
    exclusion inside a runtime root (`v8-arch-gyo2-sdl-p`).
 3. **engine/core/os is the lowest layer for OS differences** (R5 and the link check). `GYO::OS` links only `GYO::Base`
-   and OS system libraries (`shell32` and, for `DatagramSocket`, `ws2_32` on Windows (v8-arch-gyo2-net-module step 0); `Threads::Threads` elsewhere, since the thread naming moved in,
+   and OS system libraries (`shell32` and, for `DatagramSocket` and `StreamSocket`, `ws2_32` on Windows (v8-arch-gyo2-net-module step 0, v8-product-pvp-gateway segment 3); `Threads::Threads` elsewhere, since the thread naming moved in,
    os-threads-backend, D69, and for the wait fallback, v8-arch-gyo2-os-wait). engine/core/os
    includes only engine/core/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.

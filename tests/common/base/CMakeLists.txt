@@ -5,6 +5,7 @@ add_executable(gyo_base_tests
     IdIssuerTests.cpp
     PreprocessorTests.cpp
     ResultTests.cpp
+    Sha256Tests.cpp
     TraceTests.cpp
 )
 # IdIssuerTests starts threads (the base library itself links nothing).

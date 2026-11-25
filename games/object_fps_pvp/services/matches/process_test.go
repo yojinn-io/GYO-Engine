@@ -59,6 +59,7 @@ func waitFor(t *testing.T, lines <-chan string, text string, within time.Duratio
 			if !open {
 				t.Fatalf("the Match ended before saying %q", text)
 			}
+			t.Logf("match: %s", line)
 			if strings.Contains(line, text) {
 				return
 			}
@@ -84,11 +85,15 @@ func TestTheRealMatchListensWithItsKey(t *testing.T) {
 
 func TestTheRealMatchEndsWhenNobodyCame(t *testing.T) {
 	running, lines := startWatched(t, 1, 47813)
+	// Whatever the outcome, no Match is left holding the port.
+	defer func() {
+		running.Stop()
+		<-running.Ended
+	}()
 	waitFor(t, lines, "no player for 1 s: the match ends", 20*time.Second)
 	select {
 	case <-running.Ended:
 	case <-time.After(10 * time.Second):
-		running.Stop()
 		t.Fatal("the Match said it ends but its process went on")
 	}
 }
