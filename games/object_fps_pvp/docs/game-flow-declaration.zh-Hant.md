@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-25（修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-25（修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -60,7 +60,7 @@
 
 | World | 單位（描述，不隨場景變） | 依場景的 `build` |
 |---|---|---|
-| `Solo` | `entity_ids world_time authority transform physics_3d`（**沒有 net**），借給自己的執行緒 | 單人遊戲：PvP 的 Local 端（3.3）＋交換；其他場景：空 |
+| `Solo` | `entity_ids world_time rollback authority transform physics_3d`（**沒有 net**；rollback 在但沒有策略：`authority` 依賴它），借給自己的執行緒 | 單人遊戲：PvP 的 Local 端（3.3）＋交換；其他場景：空 |
 | `Sim` | 現在的（PvP client World＋net＋rollback），借給自己的執行緒 | 多人遊戲：現在的內容＋`NetConnectTarget`；其他場景：空（沒有目標＝不連，#332 回到沒有目標時關 socket） |
 | `Frame` | 現在的＋`world_ui`；`sdl_window` | 每個場景各自的 UI 與 System（下表） |
 | `Render` | 現在的＋`ui_render`；`sdl_gpu`；`extractFrom = "Frame"` | 不換（R1b：留著、改讀新的 Frame） |
@@ -176,3 +176,8 @@ struct SDLWindowBetweenFrames final {
   - 3.2：`run` 回 `Result<void, OrchestrationError>`，不是 `std::string`。`Base::Result` 的錯誤要是帶碼的錯誤（`CodedError`），而產品在 `run` 裡做的就是 `ReplaceWorld`，它的錯誤（含壞掉時的 `WorldFailure`）原樣帶出最直接；產品自己的錯誤用 `PrepareFailed` 加 `reporterCode`。
   - 3.4：連線目標不經 `ReplaceRequest::extra`，改由 `Sim` 的 `build` 讀 `SceneDirector` 現在場景的 `connect`、放進準備函式。換場景時的參數都在 `SceneDirector` 一處，`ChangeScene` 不必知道每個場景要什麼。
   - 第 4 節第 1 段：先做三個槽；`Solo` 隨第 2 段加。
+- 修訂 2（第 2 段實作、設計審查之後）：
+  - 3.1：`Solo` 的單位加 `rollback`（沒有策略，什麼都不記錄）：`authority` 依賴它（O-E3）。
+  - 3.3：本機玩家由 `SpawnLocalPlayer`（`Main/Update`，沒有玩家時生一次）生，不在準備函式：生實體要經 `entity_ids` 的分配器（`K::Spawn`），準備函式沒有那條路。死亡數由 Solo World 照 Match 的同一條規則（`CountDeath`：沒看過的 respawn tick）數（`LocalDeaths`），Frame 撤退時只拿它的數字結算——結算是權威端的事（審查 S1）。
+  - 3.3：暫停（指標還給玩家）時單人的 Solo World 停下（world_time 的 `TimeControl::paused`，經交換帶過去）；多人不停（Match 不等人），暫停畫面的標題寫「メニュー（対戦は続いています）」。暫停畫面有「続ける」「撤退する」（審查 S2）。
+  - 第 4 節第 2 段的突變「Local 帶 net」換成「Local 把權威端的 System 掛上 `net.OnServer`」（`pvp-local-authority-conditioned`）：沒有 net 角色的 World 帶 net 單位什麼也不登記（G-1），那個突變守不到行為；守的是「權威端的 System 在 Local 也跑」。

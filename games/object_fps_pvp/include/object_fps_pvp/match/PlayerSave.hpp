@@ -1,7 +1,9 @@
 #pragma once
 
 // A player's save in the save service (gateway declaration D7): the body of the service's save, in this game's own
-// format; the service does not read it. Only the Match writes it (the authority), when the player leaves.
+// format; the service does not read it. Only the Match writes it (the authority), when the player leaves. The single
+// player's save is the same format in a file of the Client's (game-flow declaration 3.3): each game is one "match",
+// numbered from lastMatch, and lastWrite names that write.
 //
 //   {"saveVersion": 1, "matches": N, "deaths": N, "lastMatch": ID, "lastWrite": "KEY"}
 //

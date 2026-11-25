@@ -1,6 +1,6 @@
 // The Client: one Product for the whole program (game-flow declaration 3.1; client/Scenes.hpp), its Worlds replaced
-// when the scene changes, the window open throughout: "Sim" (the game's client World, on its own thread; it plays only
-// in a game connected to a Match), "Frame" (sdl_window: the scene the player sees -- the menu, the lobby, the game),
+// when the scene changes, the window open throughout: "Solo" (the single player's game, no net, on its own thread),
+// "Sim" (the game's client World, on its own thread; it plays only in a game connected to a Match), "Frame" (sdl_window: the scene the player sees -- the menu, the lobby, the game),
 // "Render" (extracts from it, sdl_gpu) and sdl_audio for the sound. sdl_window's runner changes the scene between two
 // frames (SDLWindowBetweenFrames) and runs until the window closes (the menu's Quit, or closing it).
 //
@@ -10,6 +10,9 @@
 //   gyo_object_fps_pvp --frames N              closes itself after N frames (the tests): the menu, or the game with
 //                                              --connect; a frame must have been shown
 //   gyo_object_fps_pvp --content DIR           reads the content from DIR (default: next to the executable)
+//   gyo_object_fps_pvp --profile NAME          keeps this player's files (the single player's save) under NAME in
+//                                              the user's data directory (default: "default"); two Clients on one
+//                                              machine take two names
 //   gyo_object_fps_pvp --verbose               logs the connection, the own player and the drawing driver
 //
 // Controls: click (or Tab) to take the mouse; W A S D to move, mouse to look, Space to jump, left Ctrl to crouch,
@@ -28,6 +31,7 @@
 #include "engine/net/Replication.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/os/SocketAddress.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/threads/WorkerPool.hpp"
@@ -151,6 +155,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
             });
         };
     }
+    description.worlds.push_back(PC::ClientSoloWorld(options));
     description.worlds.push_back(PC::ClientSimWorld(options));
     description.worlds.push_back(std::move(frameWorld));
     description.worlds.push_back(PC::ClientRenderWorld());
@@ -165,7 +170,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     sdl.minFrameInterval = std::chrono::milliseconds(4);
     // The Sim World on its own thread (live-frame-sim-thread declaration 4.3): while the OS holds the window (a
     // drag, a resize) the steps and the packets go on, so the Match does not see this Client go quiet.
-    sdl.ownThreadWorlds = {"Sim"};
+    sdl.ownThreadWorlds = {"Solo", "Sim"};
     // The scene changes, between two frames (client/Scenes.hpp).
     sdl.betweenFrames.wanted = [](O::Product& product) { return PC::SceneChangeWanted(product); };
     sdl.betweenFrames.run = [](O::Product& product) { return PC::ChangeScene(product); };
@@ -230,6 +235,7 @@ int main(int argc, char** argv) {
     std::uint64_t userId = 0;
     std::int64_t frames = -1;
     std::optional<std::string> contentRoot;
+    std::string profile = "default";
     bool verbose = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -253,11 +259,17 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--content" && hasValue) {
             contentRoot = argv[++index];
+        } else if (argument == "--profile" && hasValue) {
+            profile = argv[++index];
+            if (profile.empty() || profile == "." || profile == ".." || profile.find_first_of("/\\") != std::string::npos) {
+                Log(GYO::Engine::Base::LogLevel::Error, "--profile takes a name without / or \\");
+                return 2;
+            }
         } else if (argument == "--verbose") {
             verbose = true;
         } else {
             Log(GYO::Engine::Base::LogLevel::Error, "unknown argument '" + std::string(argument) +
-                                                        "' (--connect A.B.C.D:P, --user N, --frames N, --content DIR, --verbose)");
+                                                        "' (--connect A.B.C.D:P, --user N, --frames N, --content DIR, --profile NAME, --verbose)");
             return 2;
         }
     }
@@ -292,6 +304,12 @@ int main(int argc, char** argv) {
 
     PC::ClientStart start;
     start.frames = frames;
+    // This player's files: <the user's data directory>/<profile>. None found: nothing is saved (the scenes say so).
+    if (auto data = GYO::Engine::OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)) {
+        start.dataDirectory = *data + "/" + profile;
+    } else {
+        Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
+    }
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}, .address = connect->ToString()};
     }

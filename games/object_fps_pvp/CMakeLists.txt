@@ -70,7 +70,9 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     SOURCES
     src/client/ClientWorld.cpp
     src/client/LobbyWorld.cpp
-    src/client/Scenes.cpp)
+    src/client/LocalFiles.cpp
+    src/client/Scenes.cpp
+    src/client/SoloScene.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main

@@ -35,7 +35,9 @@
 #include "engine/render/Drawables.hpp"
 #include "engine/rollback/Registrations.hpp"
 #include "engine/text/FontLoader.hpp"
+#include "engine/ui/UiAsset.hpp"
 #include "engine/ui/UiDocumentLoader.hpp"
+#include "engine/ui/UiRoot.hpp"
 #include "engine/text/GlyphAtlas.hpp"
 #include "engine/text/TextContext.hpp"
 #include "engine/text/TextLayout.hpp"
@@ -50,6 +52,7 @@
 #include "engine/world_time/WorldTimeModule.hpp"
 
 #include <algorithm>
+#include <random>
 #include <cmath>
 #include <deque>
 #include <map>
@@ -75,6 +78,7 @@ namespace RB = GYO::Engine::Rollback;
 namespace T = GYO::Engine::Transform;
 namespace TM = GYO::Engine::Time;
 namespace TX = GYO::Engine::Text;
+namespace Ui = GYO::Engine::Ui;
 namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
 namespace WT = GYO::Engine::WorldTime;
@@ -94,6 +98,7 @@ constexpr K::EntityId kHpText = 3'000'015;
 constexpr K::EntityId kAmmoText = 3'000'016;
 constexpr K::EntityId kStatusText = 3'000'017;
 constexpr K::EntityId kHitDirection = 3'000'019;
+constexpr K::EntityId kOverlay = 3'000'020;
 
 // The 2D layer: 1280 x 720 units, the origin at the centre, y up; drawn by the HUD camera only.
 constexpr float kHudWidth = 1280.0F;
@@ -130,6 +135,8 @@ void HashValue(K::Hasher&, const ClientAssets&) {}
 
 struct ClientControls final {
     present::Controls controls;
+    // The next frame takes the pointer, as a click does (the pause's pvp.resume).
+    bool resume = false;
     // The life the view was turned to (a new life faces its spawn's yaw).
     std::uint32_t facedLife = 0;
     K::EntityId facedPlayer = 0;
@@ -433,7 +440,10 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     frame.insideWindow = cursor->position.has_value();
     frame.tab = keys->JustPressed(I::KeyCode::Tab);
     frame.escape = keys->JustPressed(I::KeyCode::Escape);
-    frame.click = mouse->JustPressed(I::MouseButton::Left);
+    // The pause's resume takes the pointer as a click would, unless the click that pressed it already took it (then a
+    // second click would be a shot).
+    const bool resume = std::exchange(c.resume, false) && !c.controls.Captured();
+    frame.click = mouse->JustPressed(I::MouseButton::Left) || resume;
     frame.jump = keys->JustPressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
     frame.forward = keys->Pressed(I::KeyCode::W);
@@ -459,19 +469,13 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
     return {};
 }
 
-// The input of the step that runs now, written into the own Peer's slot of this step before the net Module's entry
-// (ApplyInput) reads it: each slot is written once, before its step runs and before it is sent (the net Module sends
-// a tick's slots once and the Match keeps each (Peer, tick) once). FixedUpdate/First, not while resimulating (the
-// rollback writes the recorded inputs back then). lightyear's client input System in FixedPreUpdate
-// (crates/inputs/inputs/src/client.rs:41, 186-190, 418-445).
-K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
-                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
-    if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    // The held keys and the view as last sent; the presses go to this step only. Stale controls (SimControls): no
-    // movement, no press; the view and the crouch stay.
-    present::StepInput step = state.Read().pending;
-    state->pending.jump = state->pending.fire = state->pending.reload = false;
-    if (state.Read().stale) {
+// The input of the step that runs now from the controls the Frame World sent: the held keys and the view as last
+// sent; the presses go to this step only. Stale controls (SimControls): no movement, no press; the view and the crouch
+// stay.
+PW::PlayerInput StepInputOf(SimControls& state) {
+    present::StepInput step = state.pending;
+    state.pending.jump = state.pending.fire = state.pending.reload = false;
+    if (state.stale) {
         step.forward = step.right = 0.0F;
         step.present = false;
         step.jump = step.fire = step.reload = false;
@@ -486,6 +490,18 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
+    return input;
+}
+
+// The input of the step that runs now, written into the own Peer's slot of this step before the net Module's entry
+// (ApplyInput) reads it: each slot is written once, before its step runs and before it is sent (the net Module sends
+// a tick's slots once and the Match keeps each (Peer, tick) once). FixedUpdate/First, not while resimulating (the
+// rollback writes the recorded inputs back then). lightyear's client input System in FixedPreUpdate
+// (crates/inputs/inputs/src/client.rs:41, 186-190, 418-445).
+K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
+                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
+    if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
+    const PW::PlayerInput input = StepInputOf(*state);
     // The time the player saw (net F2): the other players' timeline of the frame the controls came from (a tick and
     // its fraction in a byte), or the confirmed point before it is timed.
     N::ViewTime seen{replica->latestConfirmed.value_or(0), 0};
@@ -495,6 +511,17 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
         seen.overstep = static_cast<std::uint8_t>(std::clamp(std::floor((*view - whole) * 256.0), 0.0, 255.0));
     }
     inputs.GetMut<N::PeerInput<PW::PlayerInput>>(link->clientPeer)->Set(static_cast<std::uint32_t>(tick->value), input, seen);
+    return {};
+}
+
+// The Solo World (no net): the step's input straight into the local player's PlayerInput, FixedUpdate/First (before
+// the game's Systems read it).
+K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::PlayerInput>> players, K::Res<PW::LocalUser> user,
+                                K::ResMut<SimControls> state) {
+    const PW::PlayerInput input = StepInputOf(*state);
+    for (const K::EntityId id : players.Entities()) {
+        if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;
+    }
     return {};
 }
 
@@ -960,11 +987,52 @@ K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::Re
     return {};
 }
 
-// Where the game scene came from: the lobby's address text, given back when the scene ends.
+// Which game the scene is and where it goes back to: the lobby's address text (multiplayer), the single player's save.
 struct GameOrigin final {
+    Scene scene = Scene::MultiGame;
     std::string address;
+    std::string savePath;
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
+
+// The game's overlay (assets/object_fps_pvp/ui/pvp_game.json): "pause" while the pointer is the player's (Tab or Esc
+// gave it back), "play" (nothing) while the game has it.
+K::SystemResult ShowPause(K::Res<ClientControls> controls, K::Query<K::Write<Ui::UiRoot>> roots) {
+    const bool paused = !controls->controls.Captured();
+    auto root = roots.GetMut<Ui::UiRoot>(kOverlay);
+    if (!root) return {};
+    const std::string canvas = paused ? "pause" : "play";
+    if (root->canvas != canvas) root->canvas = canvas;
+    if (root->acceptsInput != paused) root->acceptsInput = paused;
+    return {};
+}
+
+// pvp.resume: the game takes the pointer again (ReadControls, next frame, as for a click).
+K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientControls> controls) {
+    for (const Ui::UiAction* action : actions.Read()) {
+        if (action->action == "pvp.resume") controls->resume = true;
+    }
+    return {};
+}
+
+// pvp.evacuate: the game ends here. Single player: the game is settled into the save (the Solo World counted the
+// deaths), back to the menu with what was written (or why not). Multiplayer: back to the lobby (the Sim World of the
+// lobby has no target: the connection closes, and the Match writes the save when it sees the player leave).
+K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
+                         K::ResMut<SceneRequest> request) {
+    for (const Ui::UiAction* action : actions.Read()) {
+        if (action->action != "pvp.evacuate" || request.Read().next) continue;
+        if (origin->scene == Scene::MultiGame) {
+            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました", .address = origin->address};
+            continue;
+        }
+        const auto settled = SettleSolo(origin->savePath, sim->deaths);
+        const std::string status = settled ? "撤退しました（死亡 " + std::to_string(sim->deaths) + " 回）。記録しました"
+                                           : "撤退しました。記録できません: " + SoloSaveText(settled.error());
+        request->next = SceneChange{.scene = Scene::Menu, .status = status};
+    }
+    return {};
+}
 
 // Frame World: the connection ended or the Match's content differs (the Sim World's picture says so): back to the
 // lobby with the reason, noted for the program (FrameNotes).
@@ -1022,6 +1090,12 @@ void TakeControls(ClientExchange& exchange, K::World& world) {
     state.stale = !state.lastArrival || now - *state.lastArrival > StaleLimit(state);
 }
 
+// T's value in the World, or null (also when the World does not register T: a Solo World has no net).
+template <class T>
+const T* Find(const K::World& world) {
+    return world.Types().ResourceIdOf<T>() ? world.Resource<T>() : nullptr;
+}
+
 WorldSnapshot SnapshotOf(K::World& world) {
     WorldSnapshot snapshot;
     for (const K::EntityId id : world.Keys<PW::Owner>()) {
@@ -1045,11 +1119,13 @@ WorldSnapshot SnapshotOf(K::World& world) {
     ClientView& view = snapshot.view;
     if (const auto* tick = world.Resource<WT::Tick>()) view.tick = tick->value;
     if (const auto* fixed = world.Resource<WT::FixedTime>()) view.stepNanoseconds = static_cast<std::uint64_t>(fixed->accumulator.Step());
-    if (const auto* replica = world.Resource<N::NetReplicaState>()) {
+    if (const auto* replica = Find<N::NetReplicaState>(world)) {
         if (replica->latestConfirmed) view.latestConfirmed = *replica->latestConfirmed;
     }
-    if (const auto* link = world.Resource<N::NetWorldLink>()) view.connected = link->clientPeer != 0 && world.Alive(link->clientPeer);
-    if (const auto* clock = world.Resource<N::ClockSync>(); clock != nullptr && clock->synced) {
+    // Connected: the own Peer is there; a World without net (Solo) has nothing to connect to and is always there.
+    const auto* link = Find<N::NetWorldLink>(world);
+    view.connected = link == nullptr || (link->clientPeer != 0 && world.Alive(link->clientPeer));
+    if (const auto* clock = Find<N::ClockSync>(world); clock != nullptr && clock->synced) {
         view.synced = true;
         view.remoteTick = clock->remoteTick;
         view.rttTicks = clock->rttTicks;
@@ -1057,7 +1133,8 @@ WorldSnapshot SnapshotOf(K::World& world) {
     }
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
-    if (const auto* session = world.Resource<ClientSessionEnd>()) {
+    if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
+    if (const auto* session = Find<ClientSessionEnd>(world)) {
         view.ended = session->ended;
         view.endReason = session->reason;
     }
@@ -1244,6 +1321,35 @@ void BuildSim(O::WorldSetup& setup) {
     });
 }
 
+// The Solo World's part: the controls in, the picture out (the same exchange as the Sim World's), and the step's input
+// written into the local player.
+void BuildSolo(O::WorldSetup& setup) {
+    K::Registrar& r = setup.Registrar();
+    r.Resource<SimControls>({.name = "object_fps_pvp.SimControls"});
+    K::SystemOptions write;
+    write.name = "object_fps_pvp.WriteLocalInput";
+    Mount(write, O::DefaultSchedules::fixed, O::DefaultSchedules::first);
+    r.AddSystem<&WriteLocalInput>(std::move(write));
+    ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
+    GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
+    setup.Prepare([](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        world.SetResource(SimControls{});
+        return {};
+    });
+    setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        TakeControls(*exchange, world);
+        // The pause: virtual time stops (world_time's TimeControl), so do the steps.
+        WT::TimeControl& time = *world.ResourceMut<WT::TimeControl>();
+        const std::uint8_t paused = exchange->Paused() ? 1 : 0;
+        if (time.paused != paused) time.paused = paused;
+        return {};
+    });
+    setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        exchange->PutSnapshot(SnapshotOf(world));
+        return {};
+    });
+}
+
 // The game scene's types, registered in every scene: the Render World reads them (an extracted type must be
 // registered in the source, R1b declaration section 8 point 3).
 void RegisterFrameTypes(O::WorldSetup& setup) {
@@ -1271,7 +1377,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<GameOrigin>({.name = "object_fps_pvp.GameOrigin"});
 }
 
-void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change) {
+void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
     K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
@@ -1295,11 +1401,15 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
+    r.AddSystem<&ShowPause>(InUpdate("object_fps_pvp.ShowPause"));
+    r.AddSystem<&Resume>(InUpdate("object_fps_pvp.Resume"));
+    r.AddSystem<&Evacuate>(InUpdate("object_fps_pvp.Evacuate"));
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    setup.Prepare([options, port, address = change.address](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        world.SetResource(GameOrigin{address});
+    GameOrigin origin{change.scene, change.address, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string()};
+    setup.Prepare([options, port, origin](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        world.SetResource(origin);
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const PW::InstalledArena& arena = options.game->arenas[options.arena];
         PW::GameRules rules;
@@ -1385,16 +1495,30 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         text(kHpText, {-kHudWidth / 2 + 24, -kHudHeight / 2 + 20, 2}, {-0.5F, -0.5F});
         text(kAmmoText, {kHudWidth / 2 - 24, -kHudHeight / 2 + 20, 2}, {0.5F, -0.5F});
         text(kStatusText, {0, kHudHeight / 2 - 80, 2}, {0.0F, 0.5F});
+        // The overlay (pause, evacuate) over the HUD camera; ShowPause picks its canvas.
+        Ui::UiRoot overlay;
+        overlay.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game"));
+        overlay.canvas = "play";
+        overlay.camera = kHudCamera;
+        overlay.acceptsInput = false;
+        world.Insert(kOverlay, std::move(overlay));
+        world.Insert(kOverlay, Ui::UiRootState{});
+        Ui::UiBindings overlayBindings;
+        overlayBindings.Set("title", std::string(origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"));
+        world.Insert(kOverlay, std::move(overlayBindings));
         return {};
     });
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ApplySnapshot(*exchange, world);
         return {};
     });
-    setup.ExchangeOut([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    const bool solo = change.scene == Scene::SoloGame;
+    setup.ExchangeOut([exchange, solo](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+        ClientControls& controls = *world.ResourceMut<ClientControls>();
         const RemoteView& remote = *world.Resource<RemoteView>();
-        exchange->AddControls(world.ResourceMut<ClientControls>()->controls.Take(),
-                              remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
+        exchange->AddControls(controls.controls.Take(), remote.timeline.synced ? std::optional<double>(remote.timeline.tick) : std::nullopt);
+        // Single player's pause: the Solo World stops while the pointer is the player's (a Match does not wait).
+        exchange->SetPaused(solo && !controls.controls.Captured());
         return {};
     });
 }
@@ -1640,6 +1764,22 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
     return world;
 }
 
+O::WorldDescription ClientSoloWorld(ClientOptions options) {
+    O::WorldDescription world = PW::LocalWorld({.content = options.game, .arena = options.arena, .localUser = options.userId});
+    world.name = "Solo";
+    // The game only in the single player's game scene; its player at a spawn picked at random for each game.
+    world.build = [options](O::WorldSetup& setup) {
+        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
+        if (!SoloPlays(director->Current().scene)) return;
+        std::random_device device;
+        PW::BuildWorld(setup, {.content = options.game, .arena = options.arena, .localUser = options.userId, .spawn = device()},
+                       PW::WorldEnd::Local);
+        BuildSolo(setup);
+    };
+    return world;
+}
+
 O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
     O::WorldDescription world;
     world.name = "Frame";
@@ -1657,10 +1797,14 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         const SceneChange& scene = director->Current();
         RegisterFrameTypes(setup);
         BuildSceneCommon(setup);
+        const auto* start = setup.ProductBuffer().Find<ClientStart>();
+        const std::string directory = start != nullptr ? start->dataDirectory : std::string();
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
+        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory); break;
         case Scene::Lobby: BuildLobby(setup, scene, options.userId); break;
-        case Scene::MultiGame: BuildGame(setup, options, scene); break;
+        case Scene::SoloGame:
+        case Scene::MultiGame: BuildGame(setup, options, scene, directory); break;
         }
     };
     return world;

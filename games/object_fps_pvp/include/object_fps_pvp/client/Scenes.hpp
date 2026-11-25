@@ -4,6 +4,7 @@
 // and the World that draws staying (R1b: the Render World reads the new Frame World).
 //
 //   World    units (fixed: the description)               build, by the scene
+//   "Solo"   the game's Local World, no net (own thread)   SoloGame: the game, its player at a random spawn; else empty
 //   "Sim"    the game's client World and net (own thread)  MultiGame: the game and its NetConnectTarget; else empty
 //   "Frame"  window, input, cameras, world_ui, sdl_window  each scene its own (the menu, the lobby, the game)
 //   "Render" extracts from "Frame", ui_render, sdl_gpu      never replaced
@@ -26,6 +27,8 @@ namespace O = GYO::Engine::Orchestration;
 
 enum class Scene : std::uint8_t {
     Menu,       // the main menu: solo, multiplayer, settings, quit
+    SoloRoom,   // single player: the room before a game (the merchant and the tasks have their place), the record
+    SoloGame,   // a single player's game: no server
     Lobby,      // multiplayer: where the player says whom to play with
     MultiGame,  // a game connected to a Match
 };
@@ -69,20 +72,27 @@ private:
     SceneChange current_;
 };
 
-// Product options: the first scene and the frame budget (none: the menu, no budget).
+// Product options: the first scene, the frame budget, and this player's directory (none: the menu, no budget, no
+// directory -- nothing is saved).
 struct ClientStart final {
     SceneChange first;
     std::int64_t frames = -1;
+    // The directory of this player's files (the user's data directory and the profile); empty: none.
+    std::string dataDirectory;
 };
 
-// Whether the Sim World plays (connects) in this scene.
+// Whether the Sim World plays (connects) in this scene; whether the Solo World plays.
 [[nodiscard]] bool SimPlays(Scene scene) noexcept;
+[[nodiscard]] bool SoloPlays(Scene scene) noexcept;
+
+// The single player's save in the player's directory (empty directory: none).
+[[nodiscard]] std::string SoloSavePath(const std::string& dataDirectory);
 
 // The runner's part: whether the Frame World asks for another scene.
 [[nodiscard]] bool SceneChangeWanted(O::Product& product);
-// Enters the requested scene: the Sim World is replaced when its part changes (into or out of MultiGame), then the
-// Frame World (the Render World reads the new one). A refused replacement is returned as it came; the SceneDirector
-// already names the new scene then (the runner ends the Product on the error: nothing reads it again).
+// Enters the requested scene: the Solo and Sim Worlds are replaced when their part changes (into or out of SoloGame,
+// MultiGame), then the Frame World (the Render World reads the new one). A refused replacement is returned as it came;
+// the SceneDirector already names the new scene then (the runner ends the Product on the error: nothing reads it again).
 [[nodiscard]] GYO::Engine::Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product);
 
 } // namespace object_fps_pvp::client

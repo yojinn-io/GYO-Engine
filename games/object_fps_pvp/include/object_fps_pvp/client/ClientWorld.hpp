@@ -35,6 +35,11 @@
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
 //                    LeaveOnEnd     the connection ended, or the Match's content differs: back to the lobby
+//                    ShowPause      the overlay's pause canvas while the pointer is the player's (single player: the
+//                                   Solo World's time stops meanwhile, through the exchange)
+//                    Resume         pvp.resume: the game takes the pointer again (as a click does)
+//                    Evacuate       pvp.evacuate: single player settles the game (the Solo World's deaths) into the
+//                                   save and goes to the menu; multiplayer goes back to the lobby (the connection closes)
 //
 // The pictures are drawn by "Render" (render_world, camera_render, sprite_render, mesh_render and sdl_gpu). The
 // Frame World has no rollback: what it makes stays until it takes it away.
@@ -133,6 +138,8 @@ inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3
 // with sdl_gpu when gpu is true, false for a test without a device). Sim and Frame need ConfigureClient (their
 // ClientExchange and SceneDirector).
 [[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
+// "Solo": the game's Local World (world::LocalWorld; no net), the single player's game; the same exchange as "Sim".
+[[nodiscard]] O::WorldDescription ClientSoloWorld(ClientOptions options);
 [[nodiscard]] O::WorldDescription ClientFrameWorld(ClientOptions options, bool window = true);
 [[nodiscard]] O::WorldDescription ClientRenderWorld(bool gpu = true);
 
@@ -148,6 +155,7 @@ struct ClientView final {
     bool connected = false;                         // the own Peer is there
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
     std::string mismatch;                           // world::ContentMismatch
+    std::uint64_t deaths = 0;                       // a Local World's: its player's deaths so far (world::LocalDeaths)
     bool ended = false;                             // the connection ended (refused, timed out, closed by the Match)
     std::string endReason;                          // why, in the player's words
 };

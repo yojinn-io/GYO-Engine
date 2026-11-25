@@ -1578,6 +1578,136 @@
    "expect": "pvp-notes-carried"
   },
   {
+   "id": "pvp-local-spawn-fixed",
+   "what": "the Local World's player always stands at the first spawn",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "rules->arena.spawns[chosen->index % rules->arena.spawns.size()]",
+   "replace": "rules->arena.spawns[0 % rules->arena.spawns.size()]",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World seats*",
+   "expect": "pvp-local-spawn"
+  },
+  {
+   "id": "pvp-solo-input-ignored",
+   "what": "the Solo World does not write the step's input into its player",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-walks"
+  },
+  {
+   "id": "pvp-solo-never-plays",
+   "what": "the Solo World plays in no scene",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }",
+   "replace": "bool SoloPlays(const Scene) noexcept { return false; }",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-world"
+  },
+  {
+   "id": "pvp-solo-start-ignored",
+   "what": "the room's start goes nowhere",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-start"
+  },
+  {
+   "id": "pvp-solo-not-saved",
+   "what": "the evacuation settles nothing into the file",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "    auto written = WriteLocalText(path, match::EncodePlayerSave(after));\n    if (!written) return Base::Err(SoloSaveFailure::Make(SoloSaveFailureCode::WriteFailed, path, Base::Describe(written.error())));\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-saved"
+  },
+  {
+   "id": "pvp-pause-not-shown",
+   "what": "the overlay never shows the pause canvas",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    const std::string canvas = paused ? \"pause\" : \"play\";",
+   "replace": "    const std::string canvas = \"play\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-pause-shown"
+  },
+  {
+   "id": "pvp-local-authority-conditioned",
+   "what": "a Local World mounts the authority's Systems on net.OnServer (it has no net: they never run, or the World does not start)",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (onServer) mount.conditions.push_back(N::OnServer());",
+   "replace": "    if (onServer || true) mount.conditions.push_back(N::OnServer());",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World is its own authority*",
+   "expect": "R-E4"
+  },
+  {
+   "id": "pvp-local-deaths-not-counted",
+   "what": "a Local World does not count its player's deaths",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            ++deaths->count;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Local World is its own authority*",
+   "expect": "pvp-local-deaths"
+  },
+  {
+   "id": "pvp-pause-not-stopping",
+   "what": "the single player's pause does not stop the Solo World",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        exchange->SetPaused(solo && !controls.controls.Captured());",
+   "replace": "        exchange->SetPaused(false && solo);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-pause-stops"
+  },
+  {
+   "id": "pvp-solo-game-number-fixed",
+   "what": "every single player's game settles as the same game (the count stops at one)",
+   "guards": [
+    "game-flow-declaration 4 (segment 2)"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "    const std::uint64_t game = before.lastMatch + 1;",
+   "replace": "    const std::uint64_t game = 1;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player*",
+   "expect": "pvp-solo-games"
+  },
+  {
    "id": "pvp-map-colliders-dropped",
    "what": "MapColliders leaves out the boxes of every chunk after the first of a region",
    "guards": [

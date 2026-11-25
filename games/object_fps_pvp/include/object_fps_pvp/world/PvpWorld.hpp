@@ -11,6 +11,12 @@
 //   Main/Update         SeatPlayers              Match only: a player for each Peer that connects, gone when it goes
 //                       ControlOwnPlayer         Client only: PeerControls and PlayerInput on the player it owns
 //   Main/PreUpdate      FollowMatchArena         Client only: the Match's arena (MatchInfo)
+//   Main/Update         SpawnLocalPlayer         Local only: the local user's player at LocalSpawn
+//
+// Three ends: the Match (the server), a Client (predicts its own player) and Local (single player: no net; the rollback
+// Module is there without a strategy, as authority needs it; the World is the authority, "Match only" runs there too,
+// and the World's own product writes the player's PlayerInput). A Local World also counts its player's deaths
+// (LocalDeaths, Frame/Last CountLocalDeaths), by the same rule as the Match's saves (CountDeath).
 //
 // The Client predicts its own player (K3: the rollback strategy) and takes everything else from the Match. A player
 // without input in a step (a player the Client does not control) neither moves nor turns.
@@ -140,16 +146,39 @@ struct WorldOptions final {
     std::uint64_t localUser = 0;
     // The Match: its seats (Seats); a Client: none.
     std::shared_ptr<Seats> seats;
+    // Local: the spawn index of the local player (taken modulo the arena's spawns; the product picks it at random).
+    std::size_t spawn = 0;
 };
 
-// Registers the game in the World (the table above). The World's description carries NetWorldOptions,
-// AuthorityOptions{ServerAuthorityStrategy}, dynamicInsert = false, the id range and, at a Client,
-// RollbackOptions{StateRollbackStrategy} (MatchWorld and ClientWorld do that).
-void BuildWorld(O::WorldSetup& setup, const WorldOptions& options);
+// Which end a World is.
+enum class WorldEnd : std::uint8_t { Match, Client, Local };
 
-// The World descriptions of the two ends, named "Game".
+// Local: where its player first stands (WorldOptions::spawn).
+struct LocalSpawn final {
+    std::size_t index = 0;
+};
+void HashValue(K::Hasher&, const LocalSpawn&);
+
+// A death of a player as a save counts it: a dead player whose respawn tick (set when it dies) was not seen before.
+// respawnSeen: the last one seen for that player.
+[[nodiscard]] bool CountDeath(const PlayerCombat& combat, std::uint64_t& respawnSeen) noexcept;
+
+// Local: the deaths of its player so far (CountDeath).
+struct LocalDeaths final {
+    std::uint64_t count = 0;
+    std::uint64_t respawnSeen = 0;
+};
+void HashValue(K::Hasher&, const LocalDeaths&);
+
+// Registers the game in the World (the table above). The World's description carries AuthorityOptions
+// {ServerAuthorityStrategy}, dynamicInsert = false, the id range and, at the networked ends, NetWorldOptions and, at a
+// Client, RollbackOptions{StateRollbackStrategy} (MatchWorld, ClientWorld and LocalWorld do that).
+void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, WorldEnd end);
+
+// The World descriptions of the three ends, named "Game".
 [[nodiscard]] O::WorldDescription MatchWorld(WorldOptions options);
 [[nodiscard]] O::WorldDescription ClientWorld(WorldOptions options);
+[[nodiscard]] O::WorldDescription LocalWorld(WorldOptions options);
 
 // What one player is doing for its animation, from its state at tick (seconds are the World's steps of
 // stepNanoseconds).

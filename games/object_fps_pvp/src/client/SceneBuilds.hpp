@@ -5,12 +5,14 @@
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
+#include "object_fps_pvp/client/SoloSave.hpp"
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/ui/UiRoot.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +39,8 @@ void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
+// dataDirectory: the player's (ClientStart).
+void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory);
 // user: the user id the lobby connects with.
 void BuildLobby(O::WorldSetup& setup, const SceneChange& change, std::uint64_t user);
 

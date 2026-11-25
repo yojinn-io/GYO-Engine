@@ -1,6 +1,6 @@
 #pragma once
 
-// What the Sim World and the Frame World hand each other: one object of the Product
+// What the Sim World (or the Solo World) and the Frame World hand each other: one object of the Product
 // (ConfigureClient makes it), shared by every scene.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
@@ -9,6 +9,7 @@
 
 #include "engine/kernel/Kernel.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -88,6 +89,10 @@ public:
         into.reload = reload;
     }
 
+    // Whether the game is paused (single player's pause: the Frame World's out sets it, the Solo World's in reads it).
+    void SetPaused(const bool paused) noexcept { paused_.store(paused, std::memory_order_relaxed); }
+    [[nodiscard]] bool Paused() const noexcept { return paused_.load(std::memory_order_relaxed); }
+
     // A scene change (both Worlds are being replaced): neither the picture nor the controls of the World that goes
     // reach the next one.
     void Reset() {
@@ -99,6 +104,7 @@ public:
         controls_ = {};
         viewTick_.reset();
         haveControls_ = false;
+        paused_.store(false, std::memory_order_relaxed);
     }
 
 private:
@@ -109,6 +115,7 @@ private:
     present::StepInput controls_;
     std::optional<double> viewTick_;
     bool haveControls_ = false;
+    std::atomic<bool> paused_{false};
 };
 
 } // namespace object_fps_pvp::client
