@@ -856,7 +856,8 @@ TEST_CASE("client: the loading screen waits for the Sim World's walls, not only 
         setup.Frame();
         REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-sim-walls] not ready before the Sim World's walls");
     }
-    CHECK(setup.Binding("loading") == "地図を組み立てています…");
+    CHECK_MESSAGE(setup.Binding("loading") == "地図を組み立てています…",
+                  "[pvp-loading-sim-walls] the assets step waits for the walls: " << setup.Binding("loading"));
     REQUIRE(jobs.RunOne());
     CHECK(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
 }
