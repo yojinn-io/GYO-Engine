@@ -188,7 +188,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
   - **挑戰無狀態**：挑戰＝伺服器的隨機 secret、來源 endpoint、請求的位元組做 SHA-256 取前 64 位元（`Detail::ChallengeOf`）。Match 收到回應時重算，對了才比對、才配連線；在那之前不為握手留任何東西。系譜：netcode.io 的 challenge token（lightyear 的 netcode crate）。
   - **比對的順序**（`CompareFacts`，第一個不同的回拒絕）：網路協議版本、協議雜湊（都是 `ProtocolMismatch`，說明寫哪一項）→ 步長（`StepLengthMismatch`）→ 配發器範圍重疊（`IdRangeOverlap`，說明寫兩個範圍）→ 指紋（`FingerprintMismatch`）。
   - **K1 不比指紋**：Client 沒送指紋（它的 World 沒有權威策略）時不比；送了時，Match 也要有、而且相同。
-  - **產品決定收不收**：`NetProductOptions::admission` 在「接受」之前呼叫，回 `Err` 就是 `Refused`，說明是錯誤的訊息。
+  - **產品決定收不收**：`NetProductOptions::admission` 在「接受」之前呼叫，回 `Err` 就是 `Refused`，說明是錯誤的訊息同一個 endpoint 的重連也在這之後才結束舊連線（第 9 節）。
   - 挑戰回錯：`ChallengeFailed`。同一個 Client 重送回應（它的「接受」掉了）時，Match 回同一個連線識別。
 - **斷線理由**（`DisconnectReason`）：`Closed`、`Timeout`、`ClosedByRemote`、`ProtocolMismatch`、`StepLengthMismatch`、`IdRangeOverlap`、`FingerprintMismatch`、`ChallengeFailed`、`HandshakeTimeout`、`Refused`。關閉時冗餘送 10 個 Disconnect（第 2 節）。
 - **存活**：
@@ -310,7 +310,7 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 
 - Client 斷線後網路發 `PeerDisconnected`，不替產品換 World。產品換一個新的 Client World（`ReplaceWorld`），新 World 的第一幀照它的 `NetConnectTarget` 用同一個使用者 id 重新握手：新連線、新 Peer、Match 重送整份（新 World 也送 resync）。〔`v8-arch-gyo2-net-connect-target`，使用者 2026-11-25「選(1)，socket延後開」，[事前宣告](net-connect-target-declaration.zh-Hant.md)；**最終文字在合併前核准**〕
 - 斷掉的 session 還沒送完的 Disconnect 先送，再開新的握手。
-- 握手的請求帶 salt：同一個 endpoint 帶更大的 salt 的回應是新的握手，Match 先結束舊的連線（`ClosedByRemote`）再配新的連線識別；同一個 salt 是重送的回應，回同一個連線識別；更小的 salt 是舊握手晚到的回應，丟掉並計 `Unexpected`，現有的連線不動（審查 S2 (a)）。Client 只採用帶自己 salt 的接受，別的計 `Unexpected`（S2 (b)）。系譜：netcode.io 的 connect token 帶建立時間、伺服器不接受過期的（時間決定新舊）；這裡只比大小、不設期限。
+- 握手的請求帶 salt：同一個 endpoint 帶更大的 salt 的回應是新的握手，照一般的握手先比事實、問 `admission`，都過了 Match 才結束舊的連線（`ClosedByRemote`）、配新的連線識別；被拒的新握手（過期或不合法的 token、事實不同）只回「拒絕」，舊的連線照舊（Gateway #340 審查 N9，`v8-arch-gyo2-net-order-mutations`；守衛 `net.handshake`，突變 `nt-reconnect-ends-before-check`、`nt-reconnect-old-kept`。系譜：netcode.io 先驗 challenge token 才動連線表，lightyear `crates/connection/netcode/src/server.rs:799` `process_connection_response`）；同一個 salt 是重送的回應，回同一個連線識別；更小的 salt 是舊握手晚到的回應，丟掉並計 `Unexpected`，現有的連線不動（審查 S2 (a)）。Client 只採用帶自己 salt 的接受，別的計 `Unexpected`（S2 (b)）。系譜：netcode.io 的 connect token 帶建立時間、伺服器不接受過期的（時間決定新舊）；這裡只比大小、不設期限。
 - 舊連線還在飛的 datagram：新連線連上後是連線識別不符（`ConnectionMismatch`），連上之前是 `UnknownSource`，都計數；已斷的 session 收到的也計 `UnknownSource`。
 - **tick 對齊**：3b 的對時（第 10 節）。Client 的入口與送件以對時後的自己的 `Tick` 為鍵（3a 測試裡「讀 Match 的 tick 加提前量」的暫時做法已拿掉）。
 

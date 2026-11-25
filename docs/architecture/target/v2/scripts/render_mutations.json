@@ -1360,14 +1360,14 @@
   },
   {
    "id": "g3-depth-not-cleared",
-   "what": "a 3D pass loads the depth instead of clearing it (not cycled: SDL refuses to cycle a loaded target)",
+   "what": "a 3D pass loads the depth instead of clearing it (not cycled: SDL refuses to cycle a loaded target) (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "render section 8",
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "        depthTarget.load_op = SDL_GPU_LOADOP_CLEAR;\n        depthTarget.store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.cycle = true;",
-   "replace": "        depthTarget.load_op = SDL_GPU_LOADOP_LOAD;\n        depthTarget.store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_LOAD;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.cycle = false;",
+   "find": "        depthTarget.load_op = pass.clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;\n        depthTarget.store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.cycle = pass.clearDepth;",
+   "replace": "        depthTarget.load_op = SDL_GPU_LOADOP_LOAD;\n        depthTarget.store_op = SDL_GPU_STOREOP_STORE;\n        depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;\n        depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;\n        depthTarget.cycle = false;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: each pass*",
    "expect": "\\[g3\\-pass\\-"

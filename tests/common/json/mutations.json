@@ -1306,28 +1306,28 @@
   },
   {
    "id": "jw-oom-escapes-endarray",
-   "what": "5.5 / J-5: an allocation failure escapes EndArray as std::bad_alloc",
+   "what": "5.5 / J-5: an allocation failure escapes EndArray as std::bad_alloc (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "json-module-declaration 5.5",
     "json J-5"
    ],
    "file": "engine/modules/json/src/Writer.cpp",
-   "find": "    try {\n        out_ += close;\n    } catch (const std::bad_alloc&) {",
-   "replace": "    try {\n        out_ += close;\n    } catch (const std::logic_error&) {",
+   "find": "        out_ += close;\n    } catch (const std::bad_alloc&) {",
+   "replace": "        out_ += close;\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
    "cases": "Writer: an allocation failure in any call*",
    "expect": "failure in EndArray\\n"
   },
   {
    "id": "jw-oom-escapes-key",
-   "what": "5.5 / J-5: an allocation failure escapes Key as std::bad_alloc",
+   "what": "5.5 / J-5: an allocation failure escapes Key as std::bad_alloc (find/replace updated to the current code by v8-arch-gyo2-net-order-mutations; the property is the same)",
    "guards": [
     "json-module-declaration 5.5",
     "json J-5"
    ],
    "file": "engine/modules/json/src/Writer.cpp",
-   "find": "        out_ += ':';\n    } catch (const std::bad_alloc&) {",
-   "replace": "        out_ += ':';\n    } catch (const std::logic_error&) {",
+   "find": "        out_ += layout_.indent == 0 ? \":\" : \": \";\n    } catch (const std::bad_alloc&) {",
+   "replace": "        out_ += layout_.indent == 0 ? \":\" : \": \";\n    } catch (const std::logic_error&) {",
    "target": "gyo_json_tests",
    "cases": "Writer: an allocation failure in any call*",
    "expect": "failure in Key\\n"

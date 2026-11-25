@@ -48,11 +48,11 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
         Reject(from, Rejection{DisconnectReason::ChallengeFailed, "the response does not carry this server's challenge"});
         return;
     }
-    // A second response of the same handshake (its first Accepted was lost): the same answer again. A newer
-    // handshake from that endpoint (a larger salt: the client reconnected) ends the old connection first; a late copy
-    // of an older one (a smaller salt) is dropped and counted, and the connection stays (S2).
-    if (const auto known = byEndpoint_.find(from.value); known != byEndpoint_.end()) {
-        auto& peer = peers_.at(known->second);
+    // A second response of the same handshake (its first Accepted was lost): the same answer again. A late copy of
+    // an older one (a smaller salt) is dropped and counted, and the connection stays (S2).
+    const auto known = byEndpoint_.find(from.value);
+    if (known != byEndpoint_.end()) {
+        const auto& peer = peers_.at(known->second);
         if (peer.salt == request->salt && peer.userId == request->userId && !peer.closing) {
             Reply reply{from, PacketKind::Accepted, known->second, {}};
             replies_.push_back(std::move(reply));
@@ -62,8 +62,9 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
             Count(DropReason::Unexpected);
             return;
         }
-        End(peers_.find(known->second), DisconnectReason::ClosedByRemote);
     }
+    // A newer handshake from that endpoint (a larger salt: the client reconnected) is checked like any other; only
+    // one that passes ends the old connection, so a refused one leaves the live connection as it was.
     if (auto mismatch = CompareFacts(request->facts, facts_)) {
         Reject(from, std::move(*mismatch));
         return;
@@ -74,6 +75,7 @@ void ServerHost::Respond(const Endpoint from, const std::span<const std::byte> b
             return;
         }
     }
+    if (known != byEndpoint_.end()) End(peers_.find(known->second), DisconnectReason::ClosedByRemote);
     const std::uint32_t id = NewConnectionId();
     ConnectionSettings transport = settings_.transport;
     transport.connectionId = id;
