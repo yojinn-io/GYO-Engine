@@ -43,6 +43,8 @@ struct BackendSettings final {
     Engine::Window::WindowSettings window;
     // SDL's IME hint: the program draws the composition itself (SDL_HINT_IME_IMPLEMENTED_UI "composition").
     bool drawComposition = false;
+    // MouseMotionUnit::LogicalPixels: SDL's relative-mode system scale on, and MouseMotion in logical pixels.
+    bool logicalMotion = false;
     // Longer clipboard texts are cut (ClipboardChanged::truncated).
     std::size_t clipboardLimit = 1U << 20U;
 };

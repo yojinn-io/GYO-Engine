@@ -243,6 +243,14 @@ TEST_CASE("sdl_window: logical pixels per SDL window coordinate") {
     CHECK_MESSAGE(Adapter::LogicalPerCoordinate(0.0F, 2.0F) == 1.0F, "[sw-coord-unknown] no usable value: 1");
 }
 
+TEST_CASE("sdl_window: MouseMotion in the device's units or in logical pixels") {
+    const auto device = Adapter::MotionDelta(3.0F, -2.0F, 1.0F / 1.5F, Adapter::MotionUnit::Device);
+    CHECK_MESSAGE((device.x == 3.0F && device.y == -2.0F), "[sw-motion-device] as SDL gives it");
+    const auto logical = Adapter::MotionDelta(3.0F, -3.0F, 1.0F / 1.5F, Adapter::MotionUnit::Logical);
+    CHECK_MESSAGE((logical.x == doctest::Approx(2.0F) && logical.y == doctest::Approx(-2.0F)),
+                  "[sw-motion-logical] Windows at 150 %: window coordinates are pixels, times 1 / 1.5");
+}
+
 TEST_CASE("sdl_window: the input method's positions become bytes of the composition") {
     using Adapter::EditingByteOffset;
     using Adapter::EditingUnit;
@@ -339,13 +347,15 @@ O::RegisteredUnits Units() {
     return units;
 }
 
-std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings = Hidden(), std::size_t queueCapacity = 1024) {
+std::unique_ptr<O::Product> Make(bool runner = false, W::WindowSettings settings = Hidden(), std::size_t queueCapacity = 1024,
+                                 S::MouseMotionUnit mouseMotion = S::MouseMotionUnit::Device) {
     static_cast<void>(dummyDriver);
     O::ProductDescription d;
     d.name = "game";
     S::SDLWindowOptions options;
     options.installRunner = runner;
     options.queueCapacity = queueCapacity;
+    options.mouseMotion = mouseMotion;
     d.options.Set(options);
     d.options.Set(settings);
     O::WorldDescription w;
@@ -477,6 +487,36 @@ TEST_CASE("sdl_window: a window that cannot be made is the startup error SDL-E1"
     bool reported = false;
     for (const auto& error : built.error().unitErrors) reported = reported || error.code == "SDL-E1";
     CHECK_MESSAGE(reported, "[sw-e1-code] sdl_window reports SDL-E1");
+}
+
+TEST_CASE("sdl_window: MouseMotionUnit::LogicalPixels holds SDL's relative system scale while the window lives") {
+    {
+        auto device = Make();
+        CHECK_MESSAGE(!SDL_GetHintBoolean(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, false),
+                      "[sw-motion-default-raw] the default leaves SDL's relative motion raw");
+    }
+    {
+        auto p = Make(false, Hidden(), 1024, S::MouseMotionUnit::LogicalPixels);
+        CHECK_MESSAGE(SDL_GetHintBoolean(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, false),
+                      "[sw-motion-hint-held] the option reaches the adapter: the system scale is on while the window lives");
+        PumpOf(*p).Pump();
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.windowID = SDL_GetWindowID(WindowOf(*p));
+        motion.motion.x = 10.0F;
+        motion.motion.y = 10.0F;
+        motion.motion.xrel = 6.0F;
+        motion.motion.yrel = 0.0F;
+        Push(motion);
+        Frame(*p);
+        // The dummy driver's window coordinates are logical pixels (k = 1), so this shows the motion goes through,
+        // not the scaling: that is [sw-motion-logical] and Translate's argument, which has no default.
+        const float k = Adapter::LogicalPerWindowCoordinate(WindowOf(*p));
+        CHECK_MESSAGE(Res<I::AccumulatedMouseMotion>(*p).delta.x == doctest::Approx(6.0F * k),
+                      "[sw-motion-logical-pump] the pumped motion arrives (k is 1 on the dummy driver)");
+    }
+    CHECK_MESSAGE(!SDL_GetHintBoolean(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, false),
+                  "[sw-motion-hint-reset] put back when the window goes");
 }
 
 TEST_CASE("sdl_window: a window made not resizable") {
