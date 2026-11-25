@@ -216,8 +216,8 @@ struct Match {
         End c = GameEnd(N::NetRole::Client, clientSetup.rules);
         c.build = [clientSetup](O::WorldSetup& setup) { RegisterEnd(setup, clientSetup); };
         c.net.link = std::make_shared<N::MemoryLink>(links.second);
-        c.net.serverEndpoint = N::MemoryLink::EndpointA();
-        c.net.userId = 5;
+        c.target.server = N::MemoryLink::EndpointA();
+        c.target.userId = 5;
         c.net.clock = clock.Reader();
         auto builtServer = O::Product::Build(Describe(s), Units(true));
         REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));

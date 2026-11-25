@@ -1404,6 +1404,71 @@
    "target": "gyo_net_tests",
    "cases": "k3: the client's own Peer entity*",
    "expect": "\\[nt\\-k3\\-peer\\-kept\\]"
+  },
+  {
+   "id": "nt-target-none-connects",
+   "what": "a World without a target keeps the connection of the one before",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    std::optional<Target> wanted;\n",
+   "replace": "    std::optional<Target> wanted = target_;\n",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-none\\-closes\\]"
+  },
+  {
+   "id": "nt-target-same-not-kept",
+   "what": "the same target does not keep the live connection",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "    if (wanted && target_ && *wanted == *target_ && live) return;  // the same connection goes on into the new World\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-same\\-kept\\]"
+  },
+  {
+   "id": "nt-target-end-not-sent",
+   "what": "a connection the new World does not keep is dropped without its Disconnect (the server waits for the timeout). Another target to the same endpoint is ended by the server anyway (a larger salt), so the World without a target kills it",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "        EndClient(now);  // to the old target: its Disconnect packets go out now",
+   "replace": "        client_.reset();",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J2 J3*",
+   "expect": "\\[nt\\-target\\-none\\-closes\\]"
+  },
+  {
+   "id": "nt-target-socket-early",
+   "what": "a client's UDP socket opens at the start (Configure)",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetModule.cpp",
+   "find": "    if (!link && options.role == NetRole::Server) {",
+   "replace": "    if (!link) {",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5*",
+   "expect": "\\[nt\\-target\\-no\\-socket\\]"
+  },
+  {
+   "id": "nt-target-wrong-kind-connects",
+   "what": "an Endpoint over UDP is taken as a target",
+   "guards": [
+    "net D-8 (net-connect-target declaration 5)"
+   ],
+   "file": "engine/modules/net/src/NetService.cpp",
+   "find": "        } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr && options_.link) {",
+   "replace": "        } else if (const auto* endpoint = std::get_if<Endpoint>(&target->server); endpoint != nullptr) {",
+   "target": "gyo_net_tests",
+   "cases": "connect-target: J4 J5*",
+   "expect": "\\[nt\\-target\\-wrong\\-kind\\]"
   }
  ]
 }

@@ -195,16 +195,17 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
   - 這條連線的任何 datagram（連線識別相符，重複的也算）都刷新「最後收到」。別的連線的不算。
   - 距上次送出超過 `keepaliveInterval`、這一幀又沒有別的要送時，送一個 AckOnly 當 keepalive（不另設種類：AckOnly 本來就不引發回 ack）。有資料要送的那一幀不送 keepalive。
   - Client：超過 `interruptAfter` 沒收到 →「中斷」（連線保留，收到任何東西就回到「連線」）；超過 `timeoutAfter` →「斷線（`Timeout`）」。伺服器：超過 `timeoutAfter` 就斷線。
-  - 斷線之後不自己重連：重連是新的 Client World（產品的 `ReplaceWorld`），新 World 準備時才開新的握手（D-8）。
+  - 斷線之後不自己重連：重連是新的 Client World（產品的 `ReplaceWorld`），新 World 準備時才開新的握手（D-8）。〔`v8-arch-gyo2-net-connect-target`，使用者 2026-11-25「選(1)，socket延後開」，[事前宣告](net-connect-target-declaration.zh-Hant.md)；**最終文字在合併前核准**〕新 client World 的第一幀照它的 `NetConnectTarget` 開新的握手；沒有就不連（有單人模式的遊戲啟動時不連）。
 
 ## 7. 接線（宣告 D-3、D-10；編排層 O-12、O-15）
 
 - **Product 一份**：`ProductDescription::options` 有 `NetProductOptions` 時，`NetModule::Configure` 建 `NetService` 放進 Product 一份的共用處：
-  - Link：給了 `link`（例：`MemoryLink` 的一端）就用它；沒給就照 `bind` 開 UDP（`UdpLink`；開不了回報 `NT-E4`），Client 連 `server`。
+  - Link：給了 `link`（例：`MemoryLink` 的一端）就用它；沒給就照 `bind` 開 UDP（`UdpLink`）。〔`v8-arch-gyo2-net-connect-target`，使用者 2026-11-25「選(1)，socket延後開」，[事前宣告](net-connect-target-declaration.zh-Hant.md)；**最終文字在合併前核准**〕Server 在這裡開（要 listen；開不了回報 `NT-E4`）；Client 在第一次拿到 `NetConnectTarget` 時才開（單人模式不開 port），開不了計一次 link failure（`NetLinkFailed`）、不連。
+  - **連誰**：〔`v8-arch-gyo2-net-connect-target`，使用者 2026-11-25「選(1)，socket延後開」，[事前宣告](net-connect-target-declaration.zh-Hant.md)；**最終文字在合併前核准**〕不在 `NetProductOptions`：client World 的 Resource `NetConnectTarget{server, userId, token}`（`server` 是 UDP 的位址或產品給的 Link 上的 Endpoint），由產品的準備函式或替換的 `ReplaceRequest::extra` 放入。net 在 World 的第一幀（`ReceiveNet` 最前面）讀一次：沒有（或位址種類和傳輸不合：計一次 link failure）就關掉還活著的連線、不連；和還活著的連線同一個目標就沿用（新 World 照 R2 送 resync）；不同的目標就關掉舊的（Disconnect 當場送出）、開新的；斷掉的連線丟掉、開新的。系譜：Unity 的單人 `CreateLocalWorld`／多人 `CreateClientWorld`（`ClientServerBootstrap.cs:98`、`:339`）；lightyear、Godot 在執行中給位址。
   - 角色、使用者 id、token、`SessionSettings`、`admission`；`clock`（沒給就讀 `core/time` 的單調時鐘）；`seed`（伺服器的挑戰 secret 與連線識別的種子，沒給就用 `std::random_device`）。
   - 沒有 `NetProductOptions`：什麼都不建、不開 socket（G-1）。
 - **World 的角色**：`WorldDescription::options` 的 `NetWorldOptions{role, idRange}`。沒有就**什麼都不登記**（G-1）。有角色時登記：
-  - ECS 元件 `Peer`（連線識別、使用者 id、丟棄計數）、Resource `NetWorldLink`、訊息 `PeerConnected`、`PeerDisconnected`；
+  - ECS 元件 `Peer`（連線識別、使用者 id、丟棄計數）、Resource `NetWorldLink`、`NetConnectTarget`（產品放入，`v8-arch-gyo2-net-connect-target`）、訊息 `PeerConnected`、`PeerDisconnected`；
   - 收件 System `ReceiveNet` 在 `Main`／`First`、送件 System `SendNet` 在 `Main`／`Last`（套用點）；
   - 有權威策略的 World：兩個 System 經 `authority.OneEndOnly` 標記；沒有權威策略的（K1）不碰權威 Module（否則 AU-E2）。
   - `Check`：有角色但 Product 沒有 `NetProductOptions` 是 `NT-E1`；角色和 Product 的不同是 `NT-E2`；一個 Product 第二個有角色的 World 是 `NT-E3`。
@@ -307,7 +308,7 @@ Net::NetEntry(setup).Input<Move>("Move", options);
 
 **重連**（D-8）：
 
-- Client 斷線後網路發 `PeerDisconnected`，不替產品換 World。產品換一個新的 Client World（`ReplaceWorld`），新 World 準備時用同一個使用者 id 重新握手：新連線、新 Peer、Match 重送整份（新 World 也送 resync）。
+- Client 斷線後網路發 `PeerDisconnected`，不替產品換 World。產品換一個新的 Client World（`ReplaceWorld`），新 World 準備時用同一個使用者 id 重新握手：新連線、新 Peer、Match 重送整份（新 World 也送 resync）。〔`v8-arch-gyo2-net-connect-target`，使用者 2026-11-25「選(1)，socket延後開」，[事前宣告](net-connect-target-declaration.zh-Hant.md)；**最終文字在合併前核准**〕「準備時」＝新 World 的第一幀照它的 `NetConnectTarget`（上面第 6 節「連誰」）。
 - 斷掉的 session 還沒送完的 Disconnect 先送，再開新的握手。
 - 握手的請求帶 salt：同一個 endpoint 帶更大的 salt 的回應是新的握手，Match 先結束舊的連線（`ClosedByRemote`）再配新的連線識別；同一個 salt 是重送的回應，回同一個連線識別；更小的 salt 是舊握手晚到的回應，丟掉並計 `Unexpected`，現有的連線不動（審查 S2 (a)）。Client 只採用帶自己 salt 的接受，別的計 `Unexpected`（S2 (b)）。系譜：netcode.io 的 connect token 帶建立時間、伺服器不接受過期的（時間決定新舊）；這裡只比大小、不設期限。
 - 舊連線還在飛的 datagram：新連線連上後是連線識別不符（`ConnectionMismatch`），連上之前是 `UnknownSource`，都計數；已斷的 session 收到的也計 `UnknownSource`。

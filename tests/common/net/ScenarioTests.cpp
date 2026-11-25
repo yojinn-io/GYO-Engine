@@ -63,8 +63,8 @@ TEST_CASE("scenario: a server and two clients: players move, a door opens, both 
         End client = GameEnd(N::NetRole::Client, rules);
         client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
         client.net.link = std::make_shared<N::MemoryLink>(i == 0 ? first.second : second.second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = static_cast<std::uint64_t>(i + 1);
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = static_cast<std::uint64_t>(i + 1);
         client.net.clock = reader;
         clients.push_back(client);
     }
@@ -160,8 +160,8 @@ JoinRun RunJoins(const int delay) {
         End client = GameEnd(N::NetRole::Client, rules);
         client.range = E::EntityIdsOptions{static_cast<K::EntityId>(200'001 + i * 100'000), static_cast<K::EntityId>(300'000 + i * 100'000)};
         client.net.link = std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second);
-        client.net.serverEndpoint = N::MemoryLink::EndpointA();
-        client.net.userId = static_cast<std::uint64_t>(i + 1);
+        client.target.server = N::MemoryLink::EndpointA();
+        client.target.userId = static_cast<std::uint64_t>(i + 1);
         client.net.clock = reader;
         auto built = O::Product::Build(Describe(client), Units(true));
         REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));

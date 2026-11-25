@@ -277,8 +277,8 @@ struct Sample {
         c.authority = std::make_shared<A::ServerAuthorityStrategy>();
         c.build = [reshape](O::WorldSetup& setup) { RegisterSample(setup, 1, 0, reshape); };
         c.net.link = std::make_shared<N::MemoryLink>(links.second);
-        c.net.serverEndpoint = N::MemoryLink::EndpointA();
-        c.net.userId = 9;
+        c.target.server = N::MemoryLink::EndpointA();
+        c.target.userId = 9;
         c.net.clock = reader;
         auto builtServer = O::Product::Build(Describe(s), Units(true));
         REQUIRE_MESSAGE(static_cast<bool>(builtServer), Reported(builtServer));

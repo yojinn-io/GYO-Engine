@@ -912,8 +912,10 @@ SystemResult ApplyReplication(ReplicaWorld world) {
     RollingBack rollingBack;
     std::vector<bool> rollbackComponents, rollbackResources;
     bool rollsBack = false;
+    bool resyncPending = false;
     (void)world.Read<NetWorldLink>([&](const NetWorldLink& link) {
         service = link.service;
+        resyncPending = link.resyncPending;
         registry = link.registry;
         rollsBack = link.rollsBack;
         rollbackComponents = link.rollbackComponents;
@@ -932,13 +934,14 @@ SystemResult ApplyReplication(ReplicaWorld world) {
     NetReplicaState state;
     (void)world.Modify<NetReplicaState>([&](NetReplicaState& kept) { state = std::move(kept); });
 
-    if (state.resyncNeeded) {
-        // This World replaced an earlier one: ask for everything again, under its epoch (set when it was prepared).
+    if (resyncPending) {
+        // This World replaced an earlier one on the same connection: ask for everything again, under its epoch (set
+        // when it was prepared).
         std::vector<std::byte> body;
         NetWriter writer(body);
         Head(writer, Kind::Resync, state.generation.value_or(0), state.epoch);
         (void)connection->Send(kReliableChannel, body);
-        state.resyncNeeded = false;
+        (void)world.Modify<NetWorldLink>([](NetWorldLink& link) { link.resyncPending = false; });
     }
 
     SystemResult result;
