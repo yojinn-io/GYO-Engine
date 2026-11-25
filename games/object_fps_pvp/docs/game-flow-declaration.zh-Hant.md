@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-25（修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-25（修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -186,3 +186,10 @@ struct SDLWindowBetweenFrames final {
   - 3.4：session 不放 `SceneDirector`：`GatewayClient` 本身是 Frame World 的 Resource，`CarryOver` 帶過每個場景（進行中的呼叫也帶著），第一個場景放入（裝置 id 讀或第一次產生；拿不到時每個呼叫立刻以 `no_device` 結束並說明）。
   - 3.4：只有玩家自己撤退時離開房間（撤退在遊戲場景 `Ask` leave，呼叫隨 `GatewayClient` 帶到大廳完成）；連線自己結束（被拒、逾時、`ClosedByRemote`）時不離開：玩家還是房間的成員，Match 還在時房間會給新的 connect（掉線規則「位子保留」；審查 B1）。
   - 3.4：列表最多 6 列（文件的 `max_items`），選房是 ▲▼＋「参加する」（`fixed_step_list` 的樣板不能放按鈕）；選中的房間以 id 記，列表更新後找回位置。房間收到 404、410、`not_member` 回大廳。
+- 修訂 4（第 4 段實作、設計審查之後）：
+  - 3.5 第 1 點：資產失敗**不**擋住遊戲、不回上一個場景：失敗的那一個由它自己的地方顯示（沒有那個模型、沒有那個聲音），整局不能玩比少一樣東西更糟；loading 的「中止」讓玩家自己回去。就緒每一幀重算到 `ready` 為止：Client 先畫自己的第一張地圖、跟著 Match 換地圖時，新模型的載入讓這一步重來（審查 B1）。進度＝頂層 Handle 中完成的比例（失敗也算），只增不減。
+  - 3.5 第 2 點：預熱的「畫了幾幀」叫 `DrawnFrames`（Frame World 的 Resource），由程式經 Frame World 的交換函式（進）從 `SDLGPUStatus` 寫，不經 runner 掛鉤的 `wanted`；兩幀沒有略過的 draw，或資產完成後最多 120 幀（略過一直有時不卡住）。overlay 的文件出來之前，相機什麼都不看、世界相機清成黑色（審查 S6）。
+  - 3.5「Match 的開始」：`MatchInfo` 多帶 `startTick`，開始前不動以「tick < startTick」判（Client 重算開始前後的步時答案和 Match 一樣；審查 S7）。等待的使用者去重。
+  - 3.5：loading 期間點擊與 Tab 不拿指標（給 loading 畫面的「中止」）；「中止」：多人照撤退（離開房間），單人回單人房間、不結算。
+  - 3.5：進度條用 `horizontal_slider`：`gyo.ui` 的 slider 一定有 action、在 focus 順序裡（UI 的驗證），所以它可以被聚焦與拖動，發出的 `pvp.progress` 沒有人讀。只顯示的元素是 Engine（U）的事，有人點名時再加。
+  - 就緒用每一步的輸入帶（`PlayerInput::ready`）：net 沒有 client→server 的訊息（只有 `ServerMessage`），Unity 是用 RPC（`NetworkStreamInGame`）。要不要補 client 訊息是 net 的 Engine 題目，記成後續。

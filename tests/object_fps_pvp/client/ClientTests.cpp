@@ -133,6 +133,8 @@ struct Setup final {
     // other Client run one frame (one step) every framesPerStep frames, and the clock moves by a Client frame.
     int framesPerStep = 1;
     int frame = 0;
+    // The Match does not run (its packets wait): a slow Match.
+    bool holdMatch = false;
 
     std::shared_ptr<const PC::PresentationContent> presentation;
 
@@ -140,7 +142,7 @@ struct Setup final {
     // scene (none: the game, connected to the Match over the memory link).
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
-                   std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt)
+                   std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, std::vector<std::uint64_t> expectUsers = {})
         : framesPerStep(perStep) {
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
@@ -148,7 +150,7 @@ struct Setup final {
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
         auto reader = [c = clock] { return *c; };
         match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(std::vector<N::MemoryLink>{first.first, second.first}),
-                           SeatsOf(seats), reader, matchArena);
+                           SeatsOf(seats), reader, matchArena, std::move(expectUsers));
         other = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(second.second), 2, reader);
 
         std::string error;
@@ -234,7 +236,7 @@ struct Setup final {
     Pending& Next() { return *Client().ResourceMut<Pending>(); }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
-        if (step) REQUIRE(static_cast<bool>(match->RunFrame()));
+        if (step && !holdMatch) REQUIRE(static_cast<bool>(match->RunFrame()));
         auto ran = client->RunFrame();
         REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
         // The scene changes between two frames, as sdl_window's runner does (SDLWindowBetweenFrames).
@@ -1543,4 +1545,43 @@ TEST_CASE("client: gateway: the error codes in the player's words; a call withou
     REQUIRE(static_cast<bool>(PC::WriteLocalText(path, "kept-device")));
     std::string error;
     CHECK_MESSAGE(PC::LoadDeviceId(path, error) == "kept-device", "[pvp-gw-device-kept] " << error);
+}
+
+TEST_CASE("client: the loading screen waits for the Match's start; it is judged on the arena the Match plays") {
+    {
+        // The Match waits for users 1 and 2; the other Client (user 2) never says it is ready.
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {1, 2});
+        REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
+        setup.Frames(10);
+        CHECK_FALSE(PC::StatusOf(setup.Client()).started);
+        const auto* root = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+        CHECK_MESSAGE(root->canvas == "loading", "[pvp-loading-waits-start] ready, but the match has not started: still covered");
+        CHECK(setup.Binding("loading") == "ほかのプレイヤーを待っています…");
+    }
+    // The Match plays arena 1 and is slow: the Client loads arena 0 (its first) before the Match says which; when the
+    // Match comes, the Client follows, and is ready only once arena 1's model is shown and loaded.
+    Setup setup(1, 4, 1);
+    setup.holdMatch = true;
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).progress >= 0.8; }));
+    setup.holdMatch = false;
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
+    bool shown = false;
+    const auto* view = setup.Client().Resource<WA::AssetView>();
+    for (const K::EntityId id : setup.Client().Entities()) {
+        const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
+        if (mesh == nullptr) continue;
+        const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh->image);
+        if (image != nullptr && *image == setup.presentation->arenaPalettes[1]) {
+            shown = view->State(mesh->model) == GYO::Engine::Asset::AssetState::Loaded;
+        }
+    }
+    CHECK_MESSAGE(shown, "[pvp-loading-arena] when ready, the Match's arena is shown and its model loaded");
+}
+
+TEST_CASE("client: without its own player from the Match the loading screen does not end") {
+    Setup setup;
+    setup.holdMatch = true;  // nothing comes from the Match
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).progress >= 0.85; }));
+    setup.Frames(20);
+    CHECK_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-needs-player] the assets are done, the own player is not there");
 }

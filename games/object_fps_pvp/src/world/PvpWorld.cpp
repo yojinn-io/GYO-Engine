@@ -218,6 +218,7 @@ N::Codec<MatchInfo> MatchInfoCodec() {
                 for (const char c : v.arenaId) w.Value(static_cast<std::uint8_t>(c));
                 w.Value(v.wallsDigest);
                 w.Value(static_cast<std::uint8_t>(v.phase));
+                w.Value(v.startTick);
             },
             [](N::NetReader& r, MatchInfo& v) {
                 std::uint16_t size = 0;
@@ -229,7 +230,7 @@ N::Codec<MatchInfo> MatchInfoCodec() {
                     v.arenaId.push_back(static_cast<char>(c));
                 }
                 std::uint8_t phase = 0;
-                if (!r.Value(v.wallsDigest) || !r.Value(phase) || phase > 1) return false;
+                if (!r.Value(v.wallsDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) return false;
                 v.phase = static_cast<MatchPhase>(phase);
                 return true;
             },
@@ -356,21 +357,23 @@ std::uint64_t StepNanos(const WT::ActiveTime& time) { return static_cast<std::ui
 
 // ---- The Systems of the fixed step
 
-// Before the start the players wait: their input is none (they neither move, turn nor fire).
-const PlayerInput& Playable(const PlayerInput& input, const MatchInfo& info) {
+// Before the start the players wait: their input is none (they neither move, turn nor fire). By the step, so a Client
+// simulating the steps around the start again gives each the Match's answer.
+const PlayerInput& Playable(const PlayerInput& input, const MatchInfo& info, const std::uint64_t tick) {
     static const PlayerInput none{};
-    return info.phase == MatchPhase::Playing ? input : none;
+    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;
 }
 
 K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Read<PlayerCombat>, K::Write<PlayerBody>> players,
-                            Walls walls, K::Res<GameRules> rules, K::Res<MatchInfo> info, K::Res<WT::ActiveTime> time) {
+                            Walls walls, K::Res<GameRules> rules, K::Res<MatchInfo> info, K::Res<WT::Tick> tick,
+                            K::Res<WT::ActiveTime> time) {
     std::optional<P::Physics3dError> failure;
     const double seconds = StepSeconds(*time);
     if (!(seconds > 0.0)) return {};
     players.ForEach([&](K::EntityId, const PlayerInput& input, const PlayerCombat& combat, K::Mut<PlayerBody> body) {
         if (failure) return;
         PlayerBody next = body.Read();
-        auto stepped = StepBody(walls, *rules, next, Playable(input, *info), combat.life == sim::LifeState::Alive, seconds);
+        auto stepped = StepBody(walls, *rules, next, Playable(input, *info, tick->value), combat.life == sim::LifeState::Alive, seconds);
         if (!stepped) {
             failure = std::move(stepped).error();
             return;
@@ -387,7 +390,7 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
     const std::uint64_t now = tick->value;
     const std::uint64_t step = StepNanos(*time);
     players.ForEach([&](K::EntityId, const PlayerInput& given, K::Mut<PlayerCombat> cell) {
-        const PlayerInput& input = Playable(given, *info);
+        const PlayerInput& input = Playable(given, *info, now);
         PlayerCombat next = cell.Read();
         if (next.life != sim::LifeState::Alive) return;
         if (next.reloadEndTick != 0 && now >= next.reloadEndTick) {
@@ -672,21 +675,29 @@ K::SystemResult StartMatch(K::Query<K::Read<Owner>, K::Read<PlayerInput>> player
                            K::ResMut<MatchInfo> info, K::Res<WT::Tick> tick, K::Res<WT::ActiveTime> time) {
     if (info.Read().phase == MatchPhase::Playing) return {};
     const MatchStart& waiting = start.Read();
-    std::size_t ready = 0;
+    // The expected users whose player says ready (each once: a user's players are counted by the user).
+    std::vector<std::uint64_t> ready;
     bool anyone = false;
     players.ForEach([&](K::EntityId, const Owner& owner, const PlayerInput& input) {
         anyone = true;
-        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end()) ++ready;
+        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&
+            std::find(ready.begin(), ready.end(), owner.userId) == ready.end()) {
+            ready.push_back(owner.userId);
+        }
     });
     if (anyone && !waiting.firstTick) start->firstTick = tick->value;
     const std::uint64_t step = StepNanos(*time);
     const bool late = waiting.firstTick && waiting.deadlineSeconds > 0 && step > 0 &&
                       tick->value - *waiting.firstTick >= sim::TicksFor(static_cast<float>(waiting.deadlineSeconds), step);
-    if (ready >= waiting.expect.size() || late) info->phase = MatchPhase::Playing;
+    if (ready.size() >= waiting.expect.size() || late) {
+        info->phase = MatchPhase::Playing;
+        info->startTick = tick->value;
+    }
     return {};
 }
 
-// The Match: before the start a connection sees only the player it controls (net's PeerVisibility: the others'
+// The Match: before the start a connection sees only the player it controls (it is the only rule of relevance so far:
+// from the start the PeerVisibility is taken away, which another rule -- distance, teams -- would have to join) (net's PeerVisibility: the others'
 // places are not sent, so no Client can show them); from the start it sees everything. Main/Update, after
 // SeatPlayers.
 K::SystemResult ShowPlayers(K::Query<K::Read<N::PeerControls>> controlling, K::Query<K::Read<N::PeerVisibility>> visibility,
@@ -1047,6 +1058,8 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         // started by hand), a Local World's own player.
         MatchStart start;
         start.expect = end == WorldEnd::Local ? std::vector<std::uint64_t>{options.localUser} : options.expectUsers;
+        std::sort(start.expect.begin(), start.expect.end());
+        start.expect.erase(std::unique(start.expect.begin(), start.expect.end()), start.expect.end());
         start.deadlineSeconds = end == WorldEnd::Local ? 0 : options.startDeadlineSeconds;
         world.SetResource(std::move(start));
         // The Match (and a Local World) says which arena it plays; a Client's MatchInfo comes from the Match.

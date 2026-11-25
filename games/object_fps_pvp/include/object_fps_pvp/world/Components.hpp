@@ -149,6 +149,8 @@ struct MatchInfo final {
     std::string arenaId;
     std::uint64_t wallsDigest = 0;
     MatchPhase phase = MatchPhase::Waiting;
+    // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
+    std::uint64_t startTick = 0;
     friend bool operator==(const MatchInfo&, const MatchInfo&) = default;
 };
 void HashValue(K::Hasher&, const MatchInfo&);

@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     bool keyOnStdin = false;
     std::optional<std::int64_t> idleSeconds;
     std::vector<std::uint64_t> expectUsers;
-    std::uint32_t startDeadline = 60;
+    std::uint32_t startDeadline = PW::WorldOptions{}.startDeadlineSeconds;
     std::optional<GYO::Engine::OS::SocketAddress> saves;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);

@@ -602,7 +602,13 @@ PW::PlayerInput Ready(PW::PlayerInput input) {
 
 TEST_CASE("world: before the start each Client sees only its own player and nobody moves; ready together, the match starts") {
     Session session(2, 4, 0, ShippedContent(), {1, 2});
-    session.Frames(90);
+    // Never sent, not once: each frame of the wait.
+    bool everSeen = false;
+    for (int i = 0; i < 90; ++i) {
+        session.Frame();
+        everSeen = everSeen || PlayerOf(session.Client(0), 2) != 0 || PlayerOf(session.Client(1), 1) != 0;
+    }
+    CHECK_MESSAGE(!everSeen, "[pvp-start-hidden] the other player's place is not sent before the start, in no frame");
     const K::EntityId one = PlayerOf(session.Match(), 1);
     const K::EntityId two = PlayerOf(session.Match(), 2);
     REQUIRE(one != 0);
@@ -616,8 +622,13 @@ TEST_CASE("world: before the start each Client sees only its own player and nobo
     // One ready Client walking: nothing moves yet (the other is not ready).
     const Math::Vec3 start = session.Match().Get<PW::PlayerBody>(one)->feet;
     const float yaw = session.Match().Get<PW::PlayerBody>(one)->yaw;
-    session.Frames(40, {Ready(Input(1, 0, yaw))});
+    PW::PlayerInput fire = Ready(Input(1, 0, yaw + 0.5F));
+    fire.fire = 1;
+    session.Frames(40, {fire});
     CHECK_MESSAGE(Math::Length(session.Match().Get<PW::PlayerBody>(one)->feet - start) < 1e-4F, "[pvp-start-frozen] nobody moves before the start");
+    CHECK_MESSAGE(Math::Length(session.Client(0).Get<PW::PlayerBody>(one)->feet - start) < 1e-4F, "[pvp-start-frozen] ... not in the Client's prediction either");
+    CHECK(session.Match().Get<PW::PlayerBody>(one)->yaw == yaw);
+    CHECK_MESSAGE(session.Match().Get<PW::PlayerCombat>(one)->shots == 0, "[pvp-start-no-shot] nobody fires before the start");
     CHECK(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Waiting);
     // Both ready: the match starts; everybody sees everybody, and the walk moves.
     session.Frames(30, {Ready(Input(0, 0, yaw)), Ready(Input(0, 0, 0))});

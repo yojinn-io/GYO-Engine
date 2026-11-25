@@ -18,6 +18,15 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡（遊戲流�
 - client：loading 畫面在第一幀、進度單調遞增且經過 0～1 之間、載完畫完自己的玩家到了才 `ready`、Match 那邊這個 Client 的玩家 `ready == 1`、之後畫面拿掉；單人一輪先 loading 再開始。端到端（`object_fps_pvp.gateway_client`）：Match 等房間的成員準備好才開始，Client 在開始後走暫停畫面撤退。
 - 突變：`pvp-start-ignores-ready`、`pvp-start-not-hidden`、`pvp-start-not-frozen`、`pvp-start-no-deadline`、`pvp-loading-not-shown`、`pvp-loading-not-told`，加 find 改了的 `pvp-pause-not-shown`、`pvp-pause-not-stopping`、`pvp-gw-evacuate-no-leave`：9/9 killed。
 
+## 設計審查（Opus／high，作者同模型，審查者只拿成果物與原始要求）
+
+blocker 1、should 9、nit 12。
+
+- B1（就緒的資產一步先鎖住：Client 先載自己的第一張地圖，Match 的地圖還沒來時就判定齊了；換地圖後新模型沒載完也 `ready`）→ 每一幀重算到 `ready`，新模型的載入讓這一步與之後重來；新案「Match 很慢、地圖不是第一張：就緒時那張地圖的模型已載入」。
+- S1（每幀都略過 draw 時預熱不結束）→ 最多 120 幀。S2（自己的身體、別人的身體與第三人稱武器在 loading 期間沒畫過）→ 不改：要放替身或 Engine 的 pipeline 預熱（Bevy `PipelineCache`），記成後續。S3（進度分子分母單位不同）→ 頂層 Handle 的比例、只增不減。S4（空 Handle 讓 loading 不結束）→ 空的不算。S5（失敗不回上一個場景，偏離宣告）→ 宣告修訂 4 寫理由。S6（overlay 的文件出來前遊戲露出）→ 相機先什麼都不看、清成黑色，overlay 出來才給回。S7（Client 重算時 phase 拿最新值）→ `MatchInfo::startTick`，以 tick 判。S8（測試缺口）→ 開始前每一幀都沒送過、Client 預測也不動、開始前不能開槍、準備好但還沒開始時仍蓋著、沒有自己的玩家不會 `ready`；突變 `pvp-start-fires-before`、`pvp-loading-no-wait-start`、`pvp-loading-skip-network`。宣告列的「`pvp-loading-arena-follow`」（資產一步鎖住）在本機載入快過握手時分不出，留給上面的案與審查。S9（loading 期間點擊拿走指標）→ loading 期間點擊與 Tab 不拿。
+- nit：N1 具名常數；N2 期限預設值一處；N3 Go 註解位置；N6 等待的使用者去重；N8「対戦に接続しています…」；N9 註解記下「開始時整個拿掉 `PeerVisibility`，別的相關性規則要加入」。不改並記下：N4、N5（進度條可聚焦：宣告修訂 4）、N7（多人開始前中止，Match 等到期限：照位子保留）、N10（CI 上多人「撤退する」由共用的分支守）、N11（HUD 與 overlay 在同一台相機上的先後：實機看）、N12（就緒放在輸入：宣告修訂 4、net 的後續）。
+- 審查後：world 28/28、client 23/23；突變第 4 段 9/9 killed。
+
 ## 沒驗
 
 - 真的 GPU 上的預熱（`DrawnFrames` 從 `SDLGPUStatus` 來的那條）、畫面上 loading 蓋住的樣子與進度條：交使用者試玩。
