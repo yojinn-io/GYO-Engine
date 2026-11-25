@@ -8,6 +8,7 @@
 #include "engine/orchestration/ScheduleSkeleton.hpp"
 #include "engine/orchestration/Setup.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -25,7 +26,8 @@
 // (docs/architecture/target/v2/exchange-declaration.zh-Hant.md, sections 5.1, 5.2).
 //
 // Everything happens on the calling thread (CCR-5): building, running,
-// replacing, inserting and destroying the Product.
+// replacing, inserting and destroying the Product. The one exception is a World lent to another thread
+// (O-13, Product::Lend): while lent only the thread holding its WorldLease touches it.
 
 namespace GYO::Engine::Orchestration {
 
@@ -91,6 +93,48 @@ struct ReplaceRequest {
 // A dynamic insert's registration (section 3.10).
 using InsertFn = std::function<void(Kernel::Registrar&)>;
 
+class Product;
+
+namespace Detail {
+// What a lease and its Product share (O-13 (4)): set once by the lending thread when the World breaks in a
+// round (failure written first, then broken with release); read by the Product's thread after an acquire.
+struct LeaseShared {
+    std::atomic<bool> broken{false};
+    std::optional<WorldFailure> failure;
+};
+} // namespace Detail
+
+// A World lent to another thread (O-13 (2); live-frame-sim-thread declaration 4.2): moved to that thread, which
+// alone runs it (RunRound) and reads or writes it between rounds (World). Product::Return takes it back on the
+// Product's thread; a Product is not destroyed with a World lent (GYO_ASSERT).
+class WorldLease {
+public:
+    WorldLease() = default;
+    WorldLease(WorldLease&& other) noexcept;
+    WorldLease& operator=(WorldLease&& other) noexcept;
+    WorldLease(const WorldLease&) = delete;
+    WorldLease& operator=(const WorldLease&) = delete;
+    ~WorldLease();
+
+    [[nodiscard]] bool Valid() const noexcept { return product_ != nullptr; }
+    // One round of the World, as RunFrame runs it for one World: the generation's step, the exchange functions'
+    // "in", the frame list, the "out" (exchange declaration W-10). The World breaking ends the Product (O-11):
+    // the error carries the WorldFailure, and the Product's next entry point returns WorldInterrupted. After a
+    // break every call returns that error again. GYO_ASSERT: not Valid.
+    Base::Result<void, OrchestrationError> RunRound();
+    // The World, for the holding thread between rounds (the runner's direct read and write, O-12).
+    [[nodiscard]] Kernel::World& World();
+    [[nodiscard]] const std::string& Name() const;
+
+private:
+    friend class Product;
+    // RunRound's steps, inside its trace span (trace declaration D6).
+    Base::Result<void, OrchestrationError> RunRoundSteps();
+    Product* product_ = nullptr;
+    std::size_t slot_ = 0;
+    std::shared_ptr<Detail::LeaseShared> shared_;
+};
+
 class Product {
 public:
     // Builds the Product (section 3.4): checks, every unit's Configure, then
@@ -143,6 +187,16 @@ public:
     Base::Result<void, OrchestrationError> InsertSystems(std::string_view world, std::string owner,
                                                                    InsertFn build);
 
+    // Lends a whole World to another thread (O-13): until Return, RunFrame skips it, RunSchedule, ReplaceWorld
+    // and InsertSystems naming it return WorldLent, World(name) and Generating(name) on it are GYO_ASSERTs, and only
+    // the lease's holder touches it. LendRefused: game initialization has not run, it is lent already, or it is an
+    // Extract source or reader. A broken Product is refused like a Run.
+    Base::Result<WorldLease, OrchestrationError> Lend(std::string_view world);
+    // Takes a lent World back (after the holding thread stopped using it; the caller makes that happen-before,
+    // e.g. by joining the thread). A World that broke while lent stays broken: the Product has ended.
+    // GYO_ASSERT: the lease is not this Product's.
+    void Return(WorldLease&& lease);
+
     [[nodiscard]] bool GameInitRan() const noexcept { return gameInitRan_; }
     // The World that ended the Product, or nullptr while every World is healthy.
     [[nodiscard]] const WorldFailure* Failure() const noexcept { return failure_ ? &*failure_ : nullptr; }
@@ -167,6 +221,8 @@ private:
     };
     struct WorldSlot {
         WorldDescription description;
+        // Lent to another thread (O-13): set and cleared on the Product's thread, before and after the lend.
+        std::shared_ptr<Detail::LeaseShared> lease;
         // Indices into units_, in unit order.
         std::vector<std::size_t> units;
         std::unique_ptr<Kernel::Registry> registry;
@@ -212,12 +268,14 @@ private:
     Base::Result<void, OrchestrationError> Prepare(WorldSlot& slot, Kernel::World& world,
                                                              const std::vector<PrepareFn>& unitPrepares,
                                                              const PrepareFn* extra);
+    // lease: the World is lent and runs on the holder's thread; its failure goes to the lease, not the Product.
     Base::Result<void, OrchestrationError> RunOn(WorldSlot& slot, std::string_view schedule,
-                                                           std::string_view entry);
+                                                           std::string_view entry, Detail::LeaseShared* lease = nullptr);
     // One World's round of a RunFrame (world-gen declaration 5.1): the generation's step before (a generating World
     // is written {true, false}), the frame list, the generation's judgement after (nobody held: {false, false}).
     // The entry point that will run one World's round on its own (the exchange declaration's lent World) shares it.
-    Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot);
+    Base::Result<void, OrchestrationError> RunRound(WorldSlot& slot, Detail::LeaseShared* lease = nullptr);
+    friend class WorldLease;
     // The refusal of an entry point while a World is broken (nullopt: every World is healthy).
     // A World found interrupted without a recorded failure (run outside the Product) is recorded here.
     std::optional<OrchestrationError> Ended();

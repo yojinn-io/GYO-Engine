@@ -170,6 +170,13 @@ struct ClientHud final {
 };
 void HashValue(K::Hasher&, const ClientHud&) {}
 
+// How the connection ended, once it did (net's PeerDisconnected: refused, timed out, closed by the Match).
+struct ClientSessionEnd final {
+    bool ended = false;
+    std::string reason;
+};
+void HashValue(K::Hasher&, const ClientSessionEnd&) {}
+
 // What the sounds have already played for.
 struct ClientSound final {
     AU::Submitter* submitter = nullptr;
@@ -804,6 +811,31 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     return {};
 }
 
+// The player's words for why the connection ended.
+std::string EndText(const N::PeerDisconnected& end) {
+    const std::string detail = end.detail.empty() ? std::string() : "（" + end.detail + "）";
+    switch (end.reason) {
+    case N::DisconnectReason::Refused: return "Match に断られました" + detail;
+    case N::DisconnectReason::HandshakeTimeout: return "Match から応答がありません。アドレスと Match の起動を確かめてください";
+    case N::DisconnectReason::Timeout: return "Match との接続が切れました（応答がなくなりました）";
+    case N::DisconnectReason::ClosedByRemote: return "Match が接続を閉じました";
+    case N::DisconnectReason::Closed: return "接続を閉じました";
+    default: return std::string("Match と合いません: ") + N::ToString(end.reason) + detail;
+    }
+}
+
+// The connection's end, as the program and the lobby show it: the window closes (the program goes back to the
+// lobby with the reason).
+K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::ResMut<ClientSessionEnd> session,
+                               K::ResMut<W::WindowRequest> request) {
+    for (const N::PeerDisconnected* end : ends.Read()) {
+        session->ended = true;
+        session->reason = EndText(*end);
+        request->close = true;
+    }
+    return {};
+}
+
 K::SystemOptions InUpdate(std::string name, std::vector<std::string> after = {}) {
     K::SystemOptions options;
     options.name = std::move(name);
@@ -823,6 +855,8 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
+    r.Resource<ClientSessionEnd>({.name = "object_fps_pvp.ClientSessionEnd"});
+    r.AddSystem<&NoteSessionEnd>(InUpdate("object_fps_pvp.NoteSessionEnd"));
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
@@ -858,6 +892,7 @@ void BuildClient(O::WorldSetup& setup, const ClientOptions& options) {
         world.SetResource(ClientScene{options.presentation, {}});
         world.SetResource(ClientHud{});
         world.SetResource(ClientCharacters{});
+        world.SetResource(ClientSessionEnd{});
         ClientSound sound;
         sound.submitter = port != nullptr ? &port->submitter : nullptr;
         world.SetResource(std::move(sound));
@@ -1155,6 +1190,10 @@ ClientStatus StatusOf(K::World& world) {
     status.playing = PW::OwnPlayer(world) != 0;
     if (const auto* controls = world.Resource<ClientControls>()) status.captured = controls->controls.Captured();
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) status.mismatch = mismatch->reason;
+    if (const auto* session = world.Resource<ClientSessionEnd>()) {
+        status.ended = session->ended;
+        status.endReason = session->reason;
+    }
     return status;
 }
 

@@ -3938,6 +3938,58 @@
    "expect": "\\[or\\-ex\\-setup\\-from\\]"
   },
   {
+   "id": "or-lend-not-skipped",
+   "what": "RunFrame runs a lent World too",
+   "guards": [
+    "orchestration O-13"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        if (slot.lease) continue;  // lent to another thread: its holder runs it (O-13)\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "lend: J1 RunFrame skips*",
+   "expect": "\\[or\\-lend\\-skip\\]"
+  },
+  {
+   "id": "or-lend-flag-not-set",
+   "what": "a World broken on its holder's thread does not end the Product",
+   "guards": [
+    "orchestration O-13"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "        lease->broken.store(true, std::memory_order_release);\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "lend: J3*",
+   "expect": "\\[or\\-lend\\-broken\\]"
+  },
+  {
+   "id": "or-lend-schedule-allowed",
+   "what": "RunSchedule runs a lent World",
+   "guards": [
+    "orchestration O-13"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "    if (slot->lease) return Base::Err(LentError(world));\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "lend: J2*",
+   "expect": "\\[or\\-lend\\-schedule\\]"
+  },
+  {
+   "id": "or-lend-extract-allowed",
+   "what": "an Extract source is lent",
+   "guards": [
+    "orchestration O-13"
+   ],
+   "file": "engine/orchestration/src/Product.cpp",
+   "find": "            return refused(\"World \" + Quoted(other.description.name) + \" extracts from it\");\n",
+   "replace": "",
+   "target": "gyo_orchestration_tests",
+   "cases": "lend: J2*",
+   "expect": "\\[or\\-lend\\-source\\]"
+  },
+  {
    "id": "or-rx-readers-skipped",
    "what": "ReplaceWorld does not move the Worlds extracting from the replaced one to the new World (O-8, DI-KS 38): they keep a Registry that goes.",
    "guards": [

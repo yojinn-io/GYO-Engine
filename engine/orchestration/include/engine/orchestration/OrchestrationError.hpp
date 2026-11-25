@@ -177,6 +177,12 @@ enum class OrchestrationErrorCode : std::uint8_t {
     // the World, "in" or "out" and the unit; the function's own code is in reporterCode. The World is
     // not broken and the Product goes on (E2); the Worlds before it ran this round.
     ExchangeFailed,
+    // An entry point named a World that is lent to another thread (O-13; Product::Lend). The request was not
+    // done; the Product goes on (E2).
+    WorldLent,
+    // Product::Lend refused: game initialization has not run, the World is already lent, or it extracts from
+    // another World or another extracts from it (O-13). Nothing changed (E2).
+    LendRefused,
 };
 
 [[nodiscard]] std::string_view ToString(OrchestrationErrorCode code) noexcept;

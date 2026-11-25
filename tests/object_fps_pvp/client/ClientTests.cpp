@@ -7,12 +7,14 @@
 #include "../world/WorldTestSupport.hpp"
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
+#include "object_fps_pvp/client/LobbyWorld.hpp"
 
 #include "engine/audio/Mixer.hpp"
 #include "engine/image/ImageData.hpp"
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/model/Animation.hpp"
 #include "engine/net/NetService.hpp"
+#include "engine/ui/UiRoot.hpp"
 #include "engine/camera/Camera.hpp"
 #include "engine/input/Input.hpp"
 #include "engine/input/InputModule.hpp"
@@ -48,13 +50,14 @@ struct Pending final {
     std::vector<I::MouseMotion> motions;
     std::vector<W::WindowFocused> focus;
     std::vector<W::WindowResized> sizes;
+    std::vector<I::TextCommitted> committed;
 };
 void HashValue(K::Hasher&, const Pending&) {}
 
 K::SystemResult WriteEvents(K::ResMut<Pending> pending, K::MessageWriter<I::KeyboardInput> keys,
                             K::MessageWriter<I::MouseButtonInput> buttons, K::MessageWriter<I::CursorMoved> moves,
                             K::MessageWriter<I::MouseMotion> motions, K::MessageWriter<W::WindowFocused> focus,
-                            K::MessageWriter<W::WindowResized> sizes) {
+                            K::MessageWriter<W::WindowResized> sizes, K::MessageWriter<I::TextCommitted> committed) {
     Pending& p = pending.Get();
     for (auto& m : p.keys) keys.Send(m);
     for (auto& m : p.buttons) buttons.Send(m);
@@ -62,6 +65,7 @@ K::SystemResult WriteEvents(K::ResMut<Pending> pending, K::MessageWriter<I::Keyb
     for (auto& m : p.motions) motions.Send(m);
     for (auto& m : p.focus) focus.Send(m);
     for (auto& m : p.sizes) sizes.Send(m);
+    for (auto& m : p.committed) committed.Send(m);
     p = {};
     return {};
 }
@@ -89,6 +93,12 @@ K::SystemResult KeepPicture(K::Res<R::RenderCommands> commands) {
     return {};
 }
 
+std::shared_ptr<PW::Seats> SeatsOf(const std::uint32_t capacity) {
+    auto seats = std::make_shared<PW::Seats>();
+    seats->capacity = capacity;
+    return seats;
+}
+
 struct Setup final {
     std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
     std::pair<N::MemoryLink, N::MemoryLink> first = N::MemoryLink::Pair({});
@@ -102,14 +112,14 @@ struct Setup final {
     int framesPerStep = 1;
     int frame = 0;
 
-    explicit Setup(const int perStep = 1) : framesPerStep(perStep) {
+    explicit Setup(const int perStep = 1, const std::uint32_t seats = 4) : framesPerStep(perStep) {
         auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test assets", .threadCount = 2});
         REQUIRE(static_cast<bool>(started));
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
         auto reader = [c = clock] { return *c; };
         match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(std::vector<N::MemoryLink>{first.first, second.first}),
-                           std::make_shared<PW::Seats>(), reader);
+                           SeatsOf(seats), reader);
         other = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(second.second), 2, reader);
 
         std::string error;
@@ -472,4 +482,167 @@ TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, 
     CHECK(arc() == nullptr);
     CHECK_FALSE(hpRed());
     CHECK(cameraRoll() < 1e-5F);
+}
+
+TEST_CASE("client: a Match that refuses (no seat) ends the connection: the window closes and the status says why") {
+    Setup setup(1, 0);
+    setup.Frames(120);
+    const PC::ClientStatus status = PC::StatusOf(setup.Client());
+    CHECK_FALSE(status.connected);
+    CHECK_MESSAGE(status.ended, "[pvp-session-end] the end is noted");
+    CHECK_MESSAGE(status.endReason.find("断られました") != std::string::npos, status.endReason);
+    CHECK_MESSAGE(status.endReason.find("the match is full") != std::string::npos, status.endReason);
+    CHECK_MESSAGE(setup.Client().Resource<W::WindowRequest>()->close, "the window closes (the program goes back to the lobby)");
+}
+
+namespace {
+
+// The lobby as its own Product, without a window or a GPU: the input and window Messages from the test's writer.
+struct Lobby final {
+    std::unique_ptr<GYO::Engine::Threads::WorkerPool> pool;
+    std::unique_ptr<WA::WorkerPoolExecutor> executor;
+    std::unique_ptr<O::Product> product;
+
+    explicit Lobby(std::string status = {}) {
+        auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "lobby assets", .threadCount = 1});
+        REQUIRE(static_cast<bool>(started));
+        pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
+        executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
+        O::WorldDescription game = PC::LobbyGameWorld({"127.0.0.1:40000", std::move(status)}, false);
+        game.build = [inner = std::move(game.build)](O::WorldSetup& setup) {
+            inner(setup);
+            K::Registrar& r = setup.Registrar();
+            r.Resource<Pending>({.name = "test.Pending"});
+            K::SystemOptions write;
+            write.name = "test.WriteEvents";
+            K::Mount mount;
+            mount.schedule = std::string(O::DefaultSchedules::frame);
+            mount.stage = std::string(O::DefaultSchedules::preUpdate);
+            mount.before = {std::string(I::kInputSet), std::string(W::kWindowSet)};
+            write.mounts.push_back(std::move(mount));
+            r.AddSystem<&WriteEvents>(std::move(write));
+            setup.Prepare([](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+                Pending first;
+                first.focus.push_back(W::WindowFocused{true, {}});
+                first.sizes.push_back(W::WindowResized{{1280, 720}, 1.0F, {}});
+                w.SetResource(std::move(first));
+                return {};
+            });
+        };
+        O::ProductDescription description;
+        description.name = "pvp-lobby";
+        description.worlds.push_back(std::move(game));
+        O::WorldDescription render = PC::LobbyRenderWorld(false);
+        render.build = [](O::WorldSetup& setup) {
+            K::SystemOptions keep;
+            keep.name = "test.KeepPicture";
+            K::Mount mount;
+            mount.schedule = std::string(O::DefaultSchedules::frame);
+            mount.stage = std::string(GYO::Engine::RenderWorld::kSubmitStage);
+            keep.mounts.push_back(std::move(mount));
+            setup.Registrar().AddSystem<&KeepPicture>(std::move(keep));
+        };
+        description.worlds.push_back(std::move(render));
+        description.configure = [](O::ProductSetup& setup) { PC::ConfigureLobby(setup); };
+        WA::AssetOptions assets;
+        assets.contentRoot = PVP_CONTENT_ROOT;
+        assets.executor = executor.get();
+        description.options.Set(assets);
+        auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
+        REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
+        product = std::move(built).value();
+    }
+    ~Lobby() { product.reset(); }
+    K::World& World() { return GameWorld(*product); }
+    Pending& Next() { return *World().ResourceMut<Pending>(); }
+    const PC::LobbyOutcome& Outcome() { return *World().Resource<PC::LobbyOutcome>(); }
+    void Frames(const int n) {
+        for (int i = 0; i < n; ++i) {
+            auto ran = product->RunFrame();
+            REQUIRE_MESSAGE(static_cast<bool>(ran), (ran ? std::string() : ran.error().message + "\n" + ran.error().detail));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+    // The lobby's root (its UiRoot, its state, its bindings).
+    K::EntityId Root() {
+        for (const K::EntityId id : World().Entities()) {
+            if (World().Get<GYO::Engine::Ui::UiRoot>(id) != nullptr) return id;
+        }
+        return 0;
+    }
+    std::string Binding(const std::string_view id) {
+        const auto* bindings = World().Get<GYO::Engine::Ui::UiBindings>(Root());
+        if (bindings == nullptr) return {};
+        const auto* value = bindings->Find(id);
+        if (value == nullptr) return {};
+        const auto* text = std::get_if<std::string>(value);
+        return text != nullptr ? *text : std::string();
+    }
+    // Loads the document and its font (the asset thread works in the background).
+    void Load() {
+        for (int i = 0; i < 400; ++i) {
+            Frames(1);
+            const auto* state = World().Get<GYO::Engine::Ui::UiRootState>(Root());
+            if (state != nullptr && state->runtime) return;
+        }
+    }
+    // Starts editing the address field, replaces its text with text and presses Enter.
+    void Submit(const std::string& text) {
+        // The field is the first in the focus order: Enter on it starts editing, select-all and the committed text
+        // replace its text, Enter submits.
+        Next().keys.push_back(Key(I::KeyCode::Enter));
+        Frames(1);
+        I::KeyboardInput all = Key(I::KeyCode::A);
+        all.modifiers.Add(I::KeyModifier::Super);
+        all.character = U'a';
+        Next().keys.push_back(all);
+        Frames(1);
+        Next().committed.push_back(I::TextCommitted{text, {}});
+        Frames(1);
+        Next().keys.push_back(Key(I::KeyCode::Enter));
+        Frames(2);
+    }
+};
+
+} // namespace
+
+TEST_CASE("client: the lobby shows its document; a valid address closes it with that server, a wrong one says why") {
+    Lobby lobby;
+    lobby.Load();
+    const auto* state = lobby.World().Get<GYO::Engine::Ui::UiRootState>(lobby.Root());
+    REQUIRE_MESSAGE((state != nullptr && state->runtime), "[pvp-lobby-loaded] the document and its font load");
+    CHECK_MESSAGE(!state->failure, (state->failure ? state->failure->message : std::string()));
+    CHECK_MESSAGE(!state->drawList.commands.empty(), "the lobby is laid out");
+    CHECK_MESSAGE(lobby.Outcome().shown, "[pvp-lobby-shown]");
+    CHECK(lobby.Outcome().failure.empty());
+    CHECK_MESSAGE((lastPicture.passes2d >= 1 && lastPicture.draws2d >= 1), "[pvp-lobby-drawn] the render World draws its UI pass");
+    CHECK(lobby.Binding("status").find("アドレス") != std::string::npos);
+    CHECK(state->runtime->InteractionState().focusedElement == "address");
+
+    // A wrong form: the status says so, the window stays.
+    lobby.Submit("192.168.0");
+    CHECK_FALSE(lobby.Outcome().server.has_value());
+    CHECK_MESSAGE(lobby.Binding("status").find("形が違います") != std::string::npos, lobby.Binding("status"));
+    CHECK_FALSE(lobby.World().Resource<W::WindowRequest>()->close);
+
+    // Full-width digits and the ideographic full stop from an input method become ASCII (the game's filter); a valid
+    // address closes the window with the server.
+    lobby.Submit("１９２。１６８．０．１０：４００００");
+    REQUIRE_MESSAGE(lobby.Outcome().server.has_value(), "[pvp-lobby-submit] " << lobby.Binding("status") << " / typed: " << lobby.Binding("address"));
+    CHECK(lobby.Outcome().server->ToString() == "192.168.0.10:40000");
+    CHECK(lobby.Outcome().address == "192.168.0.10:40000");
+    CHECK(lobby.World().Resource<W::WindowRequest>()->close);
+}
+
+TEST_CASE("client: the lobby's Quit closes it with nothing; a reason given to it is its first status") {
+    Lobby lobby("Match に断られました（the match is full）");
+    lobby.Load();
+    CHECK(lobby.Binding("status") == "Match に断られました（the match is full）");
+    // Tab from the address field to Quit; Enter presses it.
+    lobby.Next().keys.push_back(Key(I::KeyCode::Tab));
+    lobby.Frames(1);
+    lobby.Next().keys.push_back(Key(I::KeyCode::Enter));
+    lobby.Frames(2);
+    CHECK_FALSE(lobby.Outcome().server.has_value());
+    CHECK_MESSAGE(lobby.World().Resource<W::WindowRequest>()->close, "[pvp-lobby-quit] the window closes with no server");
 }

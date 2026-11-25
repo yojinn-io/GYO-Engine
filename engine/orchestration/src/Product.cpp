@@ -83,7 +83,8 @@ OrchestrationError FromKernel(OrchestrationErrorCode code, std::string message, 
 
 Product::~Product() {
     // Exchange declaration 5.2 point 5: an explicit order (the order members and vector elements are
-    // destroyed in is not relied on). No World is lent to another thread (O-13; lending is not built yet).
+    // destroyed in is not relied on). No World is lent to another thread (O-13): the runner returned them.
+    for (const WorldSlot& slot : worlds_) GYO_ASSERT(!slot.lease && "a Product is destroyed with a World lent to another thread");
     // 1. Every World, in the reverse order of the description (a World that extracts from another comes
     //    after it, so it goes first): its exchange functions, the World, its Registry.
     for (auto slot = worlds_.rbegin(); slot != worlds_.rend(); ++slot) {
@@ -523,7 +524,7 @@ const Product::WorldSlot* Product::Find(std::string_view name) const noexcept {
 
 void Product::RequireNotRunning() const {
     for (const WorldSlot& slot : worlds_) {
-        if (!slot.executor) continue;
+        if (!slot.executor || slot.lease) continue;  // a lent World is its holder's (O-13 (2))
         const Kernel::WorldState state = slot.executor->GetWorld().State();
         GYO_ASSERT(state != Kernel::WorldState::Running && state != Kernel::WorldState::Applying);
     }
@@ -548,12 +549,22 @@ OrchestrationError Product::EndedError() const {
 }
 
 std::optional<OrchestrationError> Product::Ended() {
+    // A World that broke while lent (O-13 (4)): its failure was written before the flag (release).
+    if (!failure_) {
+        for (const WorldSlot& slot : worlds_) {
+            if (slot.lease && slot.lease->broken.load(std::memory_order_acquire)) {
+                Break(*slot.lease->failure);
+                break;
+            }
+        }
+    }
     if (!failure_) {
         // An interrupted World without a recorded failure was run outside the
         // Product (WorldExecutor::Run called directly). An empty place without
         // one is a DropOldFirst replacement in progress (its game initialization
         // step); a failed one is always recorded.
         for (WorldSlot& slot : worlds_) {
+            if (slot.lease) continue;  // its holder's; its failure comes through the lease
             if (!slot.executor) {
                 // Error levels P12: an empty place without a failure is only a DropOldFirst
                 // replacement in progress (its game initialization step); anything else is a
@@ -576,7 +587,16 @@ std::optional<OrchestrationError> Product::Ended() {
 }
 
 Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::string_view schedule,
-                                                              std::string_view entry) {
+                                                              std::string_view entry, Detail::LeaseShared* lease) {
+    // Where the failure that ends the Product goes: the Product, or the lease of a World run on its holder's thread
+    // (written first, then the flag with release; the Product's thread reads it after an acquire, O-13 (4)).
+    const auto record = [this, lease](WorldFailure&& failure) -> const WorldFailure& {
+        if (lease == nullptr) return Break(std::move(failure));
+        if (failure.product.empty()) failure.product = name_;
+        lease->failure = std::move(failure);
+        lease->broken.store(true, std::memory_order_release);
+        return *lease->failure;
+    };
     // DI-KS 35: an extract schedule needs the World it extracts from. Checked before the run, so the
     // Programmer Error is not taken for an exception that left the schedule (which ends the Product).
     GYO_ASSERT((!IsExtractSchedule(slot.executor->GetWorld().Types(), schedule) || ExtractSourceIndex(slot) < worlds_.size()) &&
@@ -603,11 +623,11 @@ Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::stri
             } catch (...) {
                 // No memory for the text: the preset one stays.
             }
-            Break(std::move(failure));
+            record(std::move(failure));
             throw;
         } catch (...) {
             failure.kind = WorldFailureKind::Interrupted;
-            Break(std::move(failure));
+            record(std::move(failure));
             throw;
         }
     }();
@@ -619,7 +639,7 @@ Base::Result<void, OrchestrationError> Product::RunOn(WorldSlot& slot, std::stri
         OrchestrationError error = FromKernel(OrchestrationErrorCode::ScheduleFailed,
                                               "schedule " + Quoted(schedule) + " on World " + Quoted(slot.description.name) + " failed",
                                               std::move(kernelError));
-        error.failure = Break(std::move(failure));
+        error.failure = record(std::move(failure));
         return Base::Err(std::move(error));
     }
     slot.lastSchedule = std::string(schedule);
@@ -700,6 +720,7 @@ Base::Result<void, OrchestrationError> Product::RunFrameSteps() {
     // Each World: its "in" exchange functions, its round, its "out" ones (exchange declaration 5.1).
     // A World breaking in its round stops here: neither its "out" nor any later World's exchange runs.
     for (WorldSlot& slot : worlds_) {
+        if (slot.lease) continue;  // lent to another thread: its holder runs it (O-13)
         if (auto ran = RunRound(slot); !ran) return ran;
     }
     return {};
@@ -721,7 +742,7 @@ Base::Result<void, OrchestrationError> Product::Exchange(std::vector<Detail::Exc
     return {};
 }
 
-Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
+Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot, Detail::LeaseShared* lease) {
     Kernel::World& world = slot.executor->GetWorld();
     const WorldGeneration* before = world.Resource<WorldGeneration>();
     const bool generating = before != nullptr && before->generating;
@@ -731,7 +752,7 @@ Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
     // an "in" that holds generation for this frame is not cleared by it.
     if (auto exchanged = Exchange(slot.exchangeIn, world, "in"); !exchanged) return exchanged;
     for (const std::string& schedule : slot.frame) {
-        if (auto ran = RunOn(slot, schedule, "RunFrame"); !ran) return ran;
+        if (auto ran = RunOn(slot, schedule, lease == nullptr ? "RunFrame" : "WorldLease::RunRound", lease); !ran) return ran;
     }
     // Judged once the whole frame list ran (an interrupted World is not written): nobody held, generation ends.
     if (generating) {
@@ -743,6 +764,15 @@ Base::Result<void, OrchestrationError> Product::RunRound(WorldSlot& slot) {
     return {};
 }
 
+namespace {
+
+OrchestrationError LentError(const std::string_view world) {
+    return OrchestrationError(OrchestrationErrorCode::WorldLent,
+                              "World " + Quoted(world) + " is lent to another thread (O-13): its holder runs it until it is returned");
+}
+
+} // namespace
+
 Base::Result<void, OrchestrationError> Product::RunScheduleSteps(std::string_view world, std::string_view schedule) {
     RequireNotRunning();
     if (auto ended = Ended()) return Base::Err(std::move(*ended));
@@ -750,6 +780,7 @@ Base::Result<void, OrchestrationError> Product::RunScheduleSteps(std::string_vie
     if (slot == nullptr) {
         return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(world)));
     }
+    if (slot->lease) return Base::Err(LentError(world));
     if (!gameInitRan_) {
         if (auto ran = RunGameInit(); !ran) return ran;
     }
@@ -778,12 +809,14 @@ RunnerExit Product::Run() {
 Kernel::WorldExecutor& Product::World(std::string_view name) {
     WorldSlot* slot = Find(name);
     GYO_ASSERT(slot != nullptr && slot->executor != nullptr);
+    GYO_ASSERT(!slot->lease && "Product::World: the World is lent to another thread (use its WorldLease)");
     return *slot->executor;
 }
 
 bool Product::Generating(std::string_view name) const {
     const WorldSlot* slot = Find(name);
     GYO_ASSERT(slot != nullptr && slot->executor != nullptr && "Product::Generating: no World of that name, or its place is empty");
+    GYO_ASSERT(!slot->lease && "Product::Generating: the World is lent to another thread (W-5: through its out)");
     const WorldGeneration* generation = slot->executor->GetWorld().Resource<WorldGeneration>();
     return generation != nullptr && generation->generating;
 }
@@ -802,9 +835,11 @@ Base::Result<void, OrchestrationError> Product::ReplaceWorldSteps(std::string_vi
         return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(name)));
     }
     WorldSlot& slot = *found;
+    if (slot.lease) return Base::Err(LentError(name));
     // O-8 (v8-arch-gyo2-sdl-r1b): the Worlds that extract from this one stay; their Registries read the new
     // World's Registry from the swap on (Kernel DI-KS 38). Their rounds are staged once the new World is ready
-    // and taken in together at the swap, so none of them is left reading a Registry that goes.
+    // and taken in together at the swap, so none of them is left reading a Registry that goes. None of them is
+    // lent: Lend refuses a World with an extract relation (O-13).
     std::vector<WorldSlot*> readers;
     for (WorldSlot& other : worlds_) {
         if (other.description.extractFrom == slot.description.name) readers.push_back(&other);
@@ -1052,6 +1087,7 @@ Base::Result<void, OrchestrationError> Product::InsertSystemsSteps(std::string_v
     if (slot == nullptr) {
         return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(worldName)));
     }
+    if (slot->lease) return Base::Err(LentError(worldName));
     const bool taken = owner == name_ ||
                        std::any_of(units_.begin(), units_.end(), [&](const UnitSlot& unit) { return unit.row == owner; });
     if (taken) {
@@ -1082,6 +1118,91 @@ Base::Result<void, OrchestrationError> Product::InsertSystemsSteps(std::string_v
                                                       "BuildPlans of World " + Quoted(worldName) + " failed", report.detail));
     }
     return {};
+}
+
+} // namespace GYO::Engine::Orchestration
+
+namespace GYO::Engine::Orchestration {
+
+// ---- Lending a World to another thread (O-13; live-frame-sim-thread declaration 4.2)
+
+Base::Result<WorldLease, OrchestrationError> Product::Lend(std::string_view world) {
+    RequireNotRunning();
+    if (auto ended = Ended()) return Base::Err(std::move(*ended));
+    WorldSlot* slot = Find(world);
+    if (slot == nullptr) {
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::UnknownWorld, "no World " + Quoted(world)));
+    }
+    const auto refused = [&](const std::string& why) {
+        return Base::Err(OrchestrationError(OrchestrationErrorCode::LendRefused, "World " + Quoted(world) + " is not lent: " + why));
+    };
+    if (!gameInitRan_) return refused("game initialization has not run (O-1: it runs before a World is lent)");
+    if (slot->lease) return refused("it is lent already");
+    if (!slot->description.extractFrom.empty()) return refused("it extracts from World " + Quoted(slot->description.extractFrom));
+    for (const WorldSlot& other : worlds_) {
+        if (other.description.extractFrom == slot->description.name) {
+            return refused("World " + Quoted(other.description.name) + " extracts from it");
+        }
+    }
+    WorldLease lease;
+    lease.product_ = this;
+    lease.slot_ = static_cast<std::size_t>(slot - worlds_.data());
+    lease.shared_ = std::make_shared<Detail::LeaseShared>();
+    slot->lease = lease.shared_;
+    return lease;
+}
+
+void Product::Return(WorldLease&& lease) {
+    GYO_ASSERT(lease.product_ == this && lease.slot_ < worlds_.size() && worlds_[lease.slot_].lease == lease.shared_ &&
+               "Product::Return: the lease is not this Product's");
+    WorldSlot& slot = worlds_[lease.slot_];
+    // A World that broke while lent ends the Product (O-11): recorded here if no entry point has seen it yet.
+    if (!failure_ && lease.shared_->broken.load(std::memory_order_acquire)) Break(*lease.shared_->failure);
+    slot.lease.reset();
+    lease.product_ = nullptr;
+    lease.shared_.reset();
+}
+
+WorldLease::WorldLease(WorldLease&& other) noexcept
+    : product_(std::exchange(other.product_, nullptr)), slot_(other.slot_), shared_(std::move(other.shared_)) {}
+
+WorldLease& WorldLease::operator=(WorldLease&& other) noexcept {
+    if (this != &other) {
+        GYO_ASSERT(product_ == nullptr && "a WorldLease is overwritten before it was returned");
+        product_ = std::exchange(other.product_, nullptr);
+        slot_ = other.slot_;
+        shared_ = std::move(other.shared_);
+    }
+    return *this;
+}
+
+WorldLease::~WorldLease() { GYO_ASSERT(product_ == nullptr && "a WorldLease is dropped without Product::Return"); }
+
+Base::Result<void, OrchestrationError> WorldLease::RunRound() {
+    return Traced("WorldLease::RunRound", [&] { return RunRoundSteps(); });
+}
+
+Base::Result<void, OrchestrationError> WorldLease::RunRoundSteps() {
+    GYO_ASSERT(product_ != nullptr);
+    Product::WorldSlot& slot = product_->worlds_[slot_];
+    if (shared_->broken.load(std::memory_order_relaxed)) {
+        const WorldFailure& failure = *shared_->failure;
+        OrchestrationError error(OrchestrationErrorCode::WorldInterrupted,
+                                 "World " + Quoted(failure.world) + " is interrupted: the Product has ended", failure.Text());
+        error.failure = failure;
+        return Base::Err(std::move(error));
+    }
+    return product_->RunRound(slot, shared_.get());
+}
+
+Kernel::World& WorldLease::World() {
+    GYO_ASSERT(product_ != nullptr);
+    return product_->worlds_[slot_].executor->GetWorld();
+}
+
+const std::string& WorldLease::Name() const {
+    GYO_ASSERT(product_ != nullptr);
+    return product_->worlds_[slot_].description.name;
 }
 
 } // namespace GYO::Engine::Orchestration
