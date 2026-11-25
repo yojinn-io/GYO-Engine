@@ -12,6 +12,8 @@ add_executable(gyo_object_fps_pvp_logic_tests
     ControlsTests.cpp
     HitFeedbackTests.cpp
     PlanarMovementTests.cpp
+    PlayerSaveTests.cpp
+    SaveSyncTests.cpp
     RulesTests.cpp
     SoundCuesTests.cpp)
 target_link_libraries(gyo_object_fps_pvp_logic_tests PRIVATE ${object_fps_pvp_logic} doctest::doctest)
@@ -33,8 +35,11 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 # The game in a World: a lone Match the test steers, and a Match with Clients over
 # the net Module's memory links (no socket), one fixed step a frame.
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
-add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp)
+add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp
+    world/ReplaceTests.cpp world/SavesTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
+# SavesTests answers as the save service through the test library gyo_test_loopback_listener (tests/common/os).
+target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE gyo_test_loopback_listener)
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE ${object_fps_pvp_world} doctest::doctest)
 gyo_product_units(gyo_object_fps_pvp_world_tests MODULES physics_3d)
 target_compile_definitions(gyo_object_fps_pvp_world_tests PRIVATE

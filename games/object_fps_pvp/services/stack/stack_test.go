@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -147,6 +148,9 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 		t.Fatalf("the provider was asked %+v, want one survival pvp_training_v1 Match of 2", provider.specs)
 	}
 	spec := provider.specs[0]
+	if spec.Saves != strings.TrimPrefix(s.SavesURL, "http://") {
+		t.Fatalf("the Match is given the save service at %q, want %s", spec.Saves, s.SavesURL)
+	}
 	for _, p := range []*player{host, guest} {
 		view := p.must(http.MethodGet, roomPath(room, ""), "", nil)
 		connect, ok := view["connect"].(map[string]any)

@@ -33,30 +33,19 @@ std::string Detail(const N::NetResult<void>& result) { return result ? std::stri
 
 } // namespace
 
-TEST_CASE("world: a seat per user") {
+TEST_CASE("world: a seat per user, counted per connection") {
     PW::Seats seats(2);
-    CHECK_FALSE(seats.Take(1, kHere).has_value());
-    CHECK_MESSAGE(seats.Take(1, kThere).value_or("seated") == "the user is already in the match",
-                  "a second seat for one user from another endpoint");
-    CHECK_FALSE(seats.Take(2, kThere).has_value());
-    CHECK_MESSAGE(seats.Take(3, kHere).value_or("seated") == "the match is full", "a seat past the capacity");
-    CHECK(seats.Taken() == 2);
-    seats.Release(1);
+    CHECK_FALSE(seats.Take(1).has_value());
+    CHECK_MESSAGE(!seats.Take(1).has_value(), "a user's newer connection was refused (it replaces the older one)");
     CHECK(seats.Taken() == 1);
-    CHECK_MESSAGE(!seats.Take(1, kThere).has_value(), "a user who left cannot come back");
-}
-
-TEST_CASE("world: a reconnect from the same endpoint keeps its seat") {
-    // The server ends the old connection and asks the admission before the World has seen the old one go: the new
-    // connection comes in, and the old one's release afterwards leaves the new one seated.
-    PW::Seats seats(1);
-    CHECK_FALSE(seats.Take(5, kHere).has_value());
-    CHECK_MESSAGE(!seats.Take(5, kHere).has_value(), "a reconnect from the same endpoint is refused");
-    seats.Release(5);
-    CHECK_MESSAGE(seats.Taken() == 1, "the old connection's release freed the new one's seat");
-    CHECK_MESSAGE(seats.Take(6, kThere).value_or("seated") == "the match is full", "the seat was given away");
-    seats.Release(5);
-    CHECK(seats.Taken() == 0);
+    CHECK_FALSE(seats.Take(2).has_value());
+    CHECK_MESSAGE(seats.Take(3).value_or("seated") == "the match is full", "a seat past the capacity");
+    // The older connection of user 1 ends: the newer one keeps the seat.
+    seats.Release(1);
+    CHECK_MESSAGE(seats.Taken() == 2, "the older connection's release freed the newer one's seat");
+    seats.Release(1);
+    CHECK_MESSAGE(seats.Taken() == 1, "a user whose last connection ended still holds a seat");
+    CHECK_MESSAGE(!seats.Take(1).has_value(), "a user who left cannot come back");
 }
 
 TEST_CASE("world: a keyed Match admits only its tokens") {
@@ -79,8 +68,8 @@ TEST_CASE("world: a keyed Match admits only its tokens") {
     CHECK_MESSAGE(Detail(admission(Request(9, {}), kHere)) == "token length", "no token");
     CHECK(seats->Taken() == 0);
     CHECK_MESSAGE(Detail(admission(Request(9, token), kHere)) == "admitted", "the user's own token");
-    CHECK_MESSAGE(Detail(admission(Request(9, token), kThere)) == "the user is already in the match",
-                  "the token used again from another endpoint");
+    CHECK_MESSAGE(Detail(admission(Request(9, token), kThere)) == "admitted", "the user's newer connection was refused");
+    seats->Release(9);
     seats->Release(9);
     now = 1'800'000'600;
     CHECK_MESSAGE(Detail(admission(Request(9, token), kHere)) == "token expired", "a token at its expiry");

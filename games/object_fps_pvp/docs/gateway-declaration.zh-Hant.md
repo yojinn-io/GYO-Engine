@@ -26,7 +26,7 @@ v8-product-pvp-gateway
 ├─ 第 2 段 admission  high｜Match：驗 token（HMAC）、照 matches 給的參數起來、人走光就結束；matches 真的起 Match 行程
 ├─ 第 3 段 http       high｜Engine：core/os 的 TCP（StreamSocket）＋ library-only Module `http`（非阻塞的 HTTP/1.1 client）
 ├─ 第 4 段 saves      high｜Match 進場讀檔、離場（撤離）寫檔，經 saves 服務
-└─ 第 5 段 client     high｜PvP 的大廳換成走 Gateway：房間列表、建房、房間（準備、開始）→ 帶 NetConnectTarget 的遊戲 World（等 #332）
+└─ 第 5 段 client     high｜PvP 的大廳換成走 Gateway：房間列表、建房、房間（準備、開始）→ 帶 NetConnectTarget 的遊戲 World〔主會話 2026-11-25：移交遊戲流程框架卡；本卡交 Client 介面的交接說明 gateway-client-handoff.zh-Hant.md〕
 ```
 
 | 段 | 範圍 | 不做 | 測試 |
@@ -34,7 +34,7 @@ v8-product-pvp-gateway
 | 1 services | `games/object_fps_pvp/services/`（Go module，`gyo_game_add_go_service`）：五個服務的套件、一個執行檔帶子命令（`gateway`、`identity`、`rooms`、`matches`、`saves`、`all`）；外部 HTTP 協議 v1（D3）、內部協議（D4）、token（D5）；matches 的 provider 介面與「本機行程」實作（第 2 段才真的起 Match） | Client、Match 的 C++；快速配對 | `go test`：各服務單元；`all` 在行程內起五個服務（各自 listener），兩個使用者經 Gateway 建房→加入→準備→開始→各拿到自己的連線目標；token 驗得過、換 user／換 Match／過期都驗不過；冪等鍵重送回同一結果 |
 | 2 admission | Match：`--match-id`、`--capacity`、`--admission-key-stdin`（金鑰是標準輸入的第一行 hex）；admission 驗 token（D5）並拒絕同一 userId 從別的 endpoint 來的第二條連線；`--idle-seconds N`（沒人在 Match 裡 N 秒就結束，〔審查 S2〕取代原本的 `--exit-when-empty`）；matches 的本機 provider 起 Match、看行程結束、回收 port | 存檔 | C++：token 驗證的外部測試（Go 產生的向量檔，兩邊對同一份）、admission 與座位的單元；network 標籤：本機 provider 起真的 Match（金鑰經 stdin）、它在 port 上 listen；壞的金鑰拒絕啟動。〔動工後改〕Client 帶 token 連上真的 Match 的測試移到第 5 段（Client 的連線參數等 #332 改成 `NetConnectTarget`，現在寫會在合併後重寫） |
 | 3 http | `engine/core/os` 加 `StreamSocket`（非阻塞 IPv4 TCP client：Open/Connect、State、Send、Receive、Close；錯誤是中性碼）；新 library-only Module `http`：純的 HTTP/1.1 請求組裝與回應解析（Content-Length、chunked），加上用 `StreamSocket` 的 `HttpRequest`（呼叫者每幀 `Poll`） | DNS（只收 IPv4 字面值，和現在的大廳一樣）、TLS、keep-alive、HTTP/2 | os：本機 loopback 的連線、送收、對方關閉、連不上（network 標籤）；http：解析的單元（分段到達、chunked、錯的格式）＋對本機 Go 測試伺服器的請求（network） |
-| 4 saves | Match：玩家連上後向 saves 讀檔（非阻塞），離場時寫回（冪等鍵＝matchId＋userId＋離場序號）；存檔格式 v1（D7），`save_version` 的 `Check` | 合作／生存的結算規則 | Match＋saves 的 network 測試：連上→讀到→離場→寫回→再連讀到新值 |
+| 4 saves | Match：玩家連上後向 saves 讀檔（非阻塞），離場時寫回（冪等鍵＝matchId＋userId＋離場序號）；存檔格式 v1（D7，版本由遊戲自己比）；狀態機是純類別 `match/SaveSync`，World 裡由 `SyncSaves` 驅動 | 合作／生存的結算規則 | `SaveSync` 的單元（同幀重連、409、退避重試、在途寫入時又離開、讀失敗後重連）；Match 對 loopback 假 save 服務的讀寫。〔動工後改〕「再連讀到新值」的跨行程測試隨 Client 移交框架卡 |
 | 5 client | 大廳 World（房間列表、建房：模式、地圖）→ 房間 World（成員、準備、開始）→ 遊戲 World 帶 `NetConnectTarget`；回到大廳；用 U（`ui`、`world_ui`、`ui_render`，ui 頁第 9 節）；裝置 id 存在使用者資料夾 | 商人、任務、合作／生存 | client：大廳與房間的流程經本行程的 Go stack（network）；`--connect` 照舊；最後在這台 Mac 兩個 Client 經 Gateway 對戰、撤離後存檔寫回再讀到（實機試玩交使用者） |
 
 先後：1 → 2 → 3 → 4 → 5。第 5 段要等 #332 合併；碰到 PvP 卡正在改的 Client 檔案時 SendMessage 協調。第 3 段改 Engine，單獨 commit，PR 本文寫明。
@@ -122,7 +122,10 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 
 - 存在 saves 服務的資料夾 `<data>/saves/<userId>.json`（`--data` 指定；本機 stack 的腳本放在建置輸出下，不放 home）；檔內 `{"version": <樂觀鎖的號碼>, "body": <產品的 JSON>}`，寫入先寫暫存檔再改名。
 - **只有 Match 寫**（權威在 Match）；Client 經 gateway 只能讀自己的。
-- PvP 的存檔格式 v1（產品的）：`{"saveVersion":1,"matches":n,"kills":k,"deaths":d}`，用 `save_version` 的 `Policy{1,1}` 檢查。撤離＝玩家離開這場 Match（現在 PvP 沒有撤離點；生存模式「撤離立刻結算」的最小版本）；合作「活著的人全部撤離才結算」是之後的規則，寫入點同一個。
+- PvP 的存檔格式 v1（產品的）：`{"saveVersion":1,"matches":n,"deaths":d,"lastMatch":id,"lastWrite":"key"}`（`match/PlayerSave.hpp`）；版本由遊戲自己比（不是 1 就拒絕）。`matches` 是離開過的 Match 數，同一場離開幾次都只算一次（`lastMatch`）；`deaths` 每次離開都加上那段的死亡；`lastWrite` 是寫出這份存檔的冪等鍵：寫入碰到 409 時重讀，存檔已帶著自己的鍵就表示這次寫入已經在裡面（save 服務重啟、忘了冪等紀錄的情形），否則把同一次離開結算在新的存檔上再寫一次。〔第 4 段審查 B1、B2、S2、S5〕
+- 〔第 4 段動工後改〕原本寫 `kills` 與 `save_version` 的 `Policy{1,1}`。擊殺本卡不記：兇手在 `HitRecord.attacker` 有，但「一場的擊殺怎麼歸屬、怎麼結算」是之後合作／生存的結算規則（審查 S4 指出原本「規則層沒記兇手」的理由不對，更正）。`save_version` 的 `Check` 回 `OrchestrationError`、給「讀檔換 World」用，Match 裡逐個玩家讀檔不是那個場合。
+- 限制：`lastWrite` 的判定在極少見的情況下會把同一次離開套用兩次（save 服務重啟、忘了冪等紀錄，而且重讀之前另一個 Match 又寫了一次）。退避與回應期限用 tick 算（預設 64 Hz：退避合計約 3.75 秒、回應期限 5 秒），作者改步長會跟著變。玩家在場時讀檔失敗，要等他重新加入才重讀。「同一幀死亡又復活不會發生」依賴復活秒數（預設 3 秒）。〔第 4 段重做審查 N5、N6、N7〕
+- 限制：玩家斷線那一幀的固定步裡的死亡不計（`SeatPlayers` 在 Update 刪掉玩家，`SyncSaves` 在 Last 看；要準確得在判定死亡處發 Message，動到回滾步驟，本卡不做）。撤離＝玩家離開這場 Match（現在 PvP 沒有撤離點；生存模式「撤離立刻結算」的最小版本）；合作「活著的人全部撤離才結算」是之後的規則，寫入點同一個。
 
 ### D8 C++ 端怎麼講 HTTP → core/os 的 `StreamSocket`＋Engine 的 `http` Module
 
@@ -164,11 +167,12 @@ version u8 (=1) | matchId u64 | userId u64 | expiresAt u64 (Unix 秒) | mac [32]
 
 ## 4. 限制（本卡結束時仍在）
 
-- L1 token 重放：沒有封包加密，同一網路上看得到 token 的人可以搶先用（Match 只收同一 userId 一條連線，搶先的人會占走）。解除：網路加密（Q7）。
+- 〔使用者 2026-11-25：「現在不用考慮資安」〕TLS、rate limit、防偽造、封包加密都不做；遊戲用 UDP 直連 Match，Gateway 只負責 HTTP 與簽發 admission token（UDP 中繼之後再議）。
+- L1 token 重放：沒有封包加密，同一網路上看得到 token 的人可以拿去用，而且同一 userId 新的頂掉舊的（L5），會把本人擠掉。解除：網路加密（Q7），使用者定為現在不做。
 - L2 rooms 的狀態在記憶體：rooms 重啟，房間全沒；已開始的 Match 不受影響（Client 已拿到連線目標）。
 - L3 只收 IPv4 字面值（沒有 DNS），沿用現在的大廳。
 - L4 內部協議沒有認證，只靠綁 loopback／私網。
-- L5 同一 userId 只收一條連線：從**同一個 endpoint** 重連（較新的握手，伺服器先結束舊的、再問 admission）照收，座位按連線計數；〔審查 S1〕從**別的 endpoint**（Client 換了 socket）重連時，Match 上舊的那條要等逾時（現在 10 秒）才移除，這段時間新的會被拒絕（「the user is already in the match」）。沒有封包加密時「舊的優先」比「新的踢掉舊的」安全（netcode 同規則）。PvP 卡 2026-11-25 指出的既有行為（握手中途沒有 Disconnect 可送）。
+- L5 〔使用者 2026-11-25 改定，`v8-arch-gyo2-direct-connect-and-kick-old`，原話「先直連。同一個userId可以頂掉，現在不用考慮資安」〕同一 userId 帶有效 token 再連線（不論從哪個 endpoint）時，**新的頂掉舊的**：座位按連線計數、admission 照收；Match 的 `SeatPlayers` 讓新連線接手舊連線的角色，再關掉舊連線（`NetWorldLink` 的 `ServerHost::Close`，網路頁寫明的入口，不動 net）；舊連線的斷線事件照常發，只刪它還控制著的角色（已經沒有）。Client 當掉後馬上重開不必等 10 秒逾時。別家：netcode.io（lightyear `crates/connection/netcode/src/server.rs:727-733`）是拒絕已在線的 client id（舊的優先）；這裡照使用者的決定偏離。原本的「舊的優先」（第 2 段審查時的取捨）撤回。代價：搶先拿到別人 token 的人可以把本人擠掉（L1；不做資安是使用者的決定）。掉線後的規則（結算時還掉線的算死亡、位子保留、不准中途加入）是 `v8-arch-gyo2-disconnect-rules`，不在本卡。
 - L6 rooms 的地圖：`--content` 給了就只收 content 的 `maps/arenas.json` 列的 arena id；沒給時收任何 `[a-z0-9_]{1,64}`，選到 Match 沒有的地圖時 Match 啟動失敗、Client 連不上（`all` 的本機腳本會給 `--content`）。
 - L7 裝置 id 就是憑證：知道別人的裝置 id 就能登入成那個人。Client 要用高熵亂數產生並存好（第 5 段）；不加守衛（AGENTS §3）。〔審查 N6〕
 - L8 gateway 與 identity 共用 session 金鑰，所以 gateway 也簽得出 session。要分開時換成非對稱簽章（例如 ed25519：identity 拿私鑰、gateway 只拿公鑰）。〔審查 N7〕
