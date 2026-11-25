@@ -1,0 +1,3 @@
+# Golden inputs and outputs are compared byte for byte, sha256 included:
+# keep them exactly as committed on every platform.
+* -text

@@ -1,0 +1,149 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the visibility Module and its two ends in camera_render, mesh_render and Queue3d (big-map declaration section 13, v8-arch-gyo2-big-map-s2; K1 to K4). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): the order after TransformPropagate and CameraUpdate (with no order the kernel still runs CheckVisibility after them, as visibility is registered after both, so no test can tell; review guards it, as Bevy's .after()); the inserting of a camera's first list; the flag on extracted items (retired with the negative list, design review S-3: the decision of what is culled at all is the visibility Module's alone) (a camera without a list culls nothing: removing the insert is caught by every list test, criterion 1).",
+ "mutants": [
+  {
+   "id": "vs-frustum-off",
+   "what": "K1: an entity whose box is out of the frustum is still seen",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    if (candidate.aabb != nullptr && !candidate.noFrustumCulling &&",
+   "replace": "    if (false && candidate.aabb != nullptr && !candidate.noFrustumCulling &&",
+   "target": "gyo_render_tests",
+   "cases": "visibility: a camera sees*",
+   "expect": "\\[vs-frustum\\]"
+  },
+  {
+   "id": "vs-no-frustum-culling-ignored",
+   "what": "K1: NoFrustumCulling does not stop the frustum test",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    if (candidate.aabb != nullptr && !candidate.noFrustumCulling &&",
+   "replace": "    if (candidate.aabb != nullptr &&",
+   "target": "gyo_render_tests",
+   "cases": "visibility: a camera sees*",
+   "expect": "\\[vs-frustum\\]"
+  },
+  {
+   "id": "vs-world-box-local",
+   "what": "K1: the box is tested where it is in the entity's own space, not placed by its GlobalTransform",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    return {low, high};",
+   "replace": "    return local;",
+   "target": "gyo_render_tests",
+   "cases": "visibility: the box is placed*",
+   "expect": "\\[vs-world-box\\]"
+  },
+  {
+   "id": "vs-range-start-exclusive",
+   "what": "K1: a distance equal to the start of startMargin is not seen",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    return distance >= range.startMargin.start && distance < range.endMargin.end;",
+   "replace": "    return distance > range.startMargin.start && distance < range.endMargin.end;",
+   "target": "gyo_render_tests",
+   "cases": "visibility: VisibilityRange*",
+   "expect": "\\[vs-range\\]"
+  },
+  {
+   "id": "vs-range-end-inclusive",
+   "what": "K1: a distance equal to the end of endMargin is seen",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    return distance >= range.startMargin.start && distance < range.endMargin.end;",
+   "replace": "    return distance >= range.startMargin.start && distance <= range.endMargin.end;",
+   "target": "gyo_render_tests",
+   "cases": "visibility: VisibilityRange*",
+   "expect": "\\[vs-range\\]"
+  },
+  {
+   "id": "vs-range-aabb-centre-ignored",
+   "what": "K1: useAabb measures from the entity's position anyway",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/Visibility.cpp",
+   "find": "    if (candidate.range->useAabb && candidate.aabb != nullptr) {",
+   "replace": "    if (false) {",
+   "target": "gyo_render_tests",
+   "cases": "visibility: VisibilityRange*",
+   "expect": "\\[vs-range\\]"
+  },
+  {
+   "id": "vs-inactive-checked",
+   "what": "K1: an inactive camera gets a list",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/visibility/src/VisibilityModule.cpp",
+   "find": "        if (!settings.active || !computed.valid) return;",
+   "replace": "        if (!computed.valid) return;",
+   "target": "gyo_render_tests",
+   "cases": "visibility: each 3D camera*",
+   "expect": "\\[vs-inactive\\]"
+  },
+  {
+   "id": "vs-write-every-frame",
+   "what": "K3: the list is written every frame, so Changed is always on",
+   "guards": [
+    "big-map-declaration K3"
+   ],
+   "file": "engine/modules/visibility/src/VisibilityModule.cpp",
+   "find": "        } else if (lists.Get<Render::CulledEntities>(camera)->entities != next.entities) {",
+   "replace": "        } else {",
+   "target": "gyo_render_tests",
+   "cases": "visibility: the list is written*",
+   "expect": "\\[vs-write-changes\\]"
+  },
+  {
+   "id": "vs-queue-filter-off",
+   "what": "K1: Queue3d draws an item of an entity in the camera's culled list",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (std::binary_search(camera.culled.begin(), camera.culled.end(), item.entity)) continue;",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "visibility: Queue3d*,render_extract: with the visibility*",
+   "expect": "\\[vs-(?:queue|extract)\\]"
+  },
+  {
+   "id": "vs-camera-list-not-extracted",
+   "what": "K1: camera_render does not take the camera's CulledEntities",
+   "guards": [
+    "big-map-declaration K1"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "        if (const Render::CulledEntities* list = culled.Get(id)) e.culled = list->entities;",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: with the visibility*",
+   "expect": "\\[vs-extract\\]"
+  },
+  {
+   "id": "vs-link-render-world",
+   "what": "K4: the visibility Module links a render World unit",
+   "guards": [
+    "big-map-declaration K4"
+   ],
+   "file": "engine/modules/visibility/CMakeLists.txt",
+   "find": "target_link_libraries(gyo_visibility PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math)",
+   "replace": "target_link_libraries(gyo_visibility PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math GYO::RenderWorld)",
+   "target": "gyo_render_tests",
+   "expect": "gyo_visibility links",
+   "expect_build_failure": true
+  }
+ ]
+}

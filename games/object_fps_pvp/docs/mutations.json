@@ -94,19 +94,6 @@
    "expect": "the spawn farthest"
   },
   {
-   "id": "pvp-collider-origin-ignored",
-   "what": "the unit conversion leaves out origin",
-   "guards": [
-    "port-declaration 4"
-   ],
-   "file": "games/object_fps_pvp/src/data/VoxelMeshFile.cpp",
-   "find": "const std::int64_t sum = std::int64_t{units[i]} + 16 * std::int64_t{file.origin[i]};",
-   "replace": "const std::int64_t sum = std::int64_t{units[i]};",
-   "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "PvP voxel mesh:*",
-   "expect": "units are 1/16 of a cell|pvp_arena's five colliders"
-  },
-  {
    "id": "pvp-no-input-moves",
    "what": "a player without input steers by its last input",
    "guards": [
@@ -1589,6 +1576,45 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
    "expect": "pvp-notes-carried"
+  },
+  {
+   "id": "pvp-map-colliders-dropped",
+   "what": "MapColliders leaves out the boxes of every chunk after the first of a region",
+   "guards": [
+    "big-map-declaration L1"
+   ],
+   "file": "games/object_fps_pvp/src/data/ArenaMap.cpp",
+   "find": "            boxes.insert(boxes.end(), expanded.colliders.begin(), expanded.colliders.end());",
+   "replace": "            if (boxes.empty()) boxes.insert(boxes.end(), expanded.colliders.begin(), expanded.colliders.end());",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP map: pvp_arena's walls*",
+   "expect": "Cells\\(walls\\) == Cells\\(v1\\)"
+  },
+  {
+   "id": "pvp-map-unchecked",
+   "what": "ReadArenaMap does not check the regions against the index (R3's SHA-256, bounds, palette)",
+   "guards": [
+    "big-map-declaration L3"
+   ],
+   "file": "games/object_fps_pvp/src/data/ArenaMap.cpp",
+   "find": "    if (auto checked = VM::CheckVoxelMap(map.index, regions); !checked) {",
+   "replace": "    if (auto checked = VM::VoxelMapResult<void>{}; !checked) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP map: a region that cannot be read*",
+   "expect": "R3"
+  },
+  {
+   "id": "pvp-arena-version",
+   "what": "an arena file of another version (2, the v1 single file's) is read",
+   "guards": [
+    "big-map-declaration 15.2"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": "!= 3) throw std::runtime_error(\"unsupported arena version\");",
+   "replace": "< 2) throw std::runtime_error(\"unsupported arena version\");",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: the rules of an arena file",
+   "expect": "version\\\": 2"
   }
  ]
 }
