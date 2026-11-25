@@ -281,6 +281,18 @@ struct Setup final {
     K::World& Sim() { return client->World("Sim").GetWorld(); }
     K::World& Solo() { return client->World("Solo").GetWorld(); }
     Pending& Next() { return *Client().ResourceMut<Pending>(); }
+    // Runs frames until the game scene's Worlds have their map (they generate until then; the map is read on the asset
+    // threads), at most a few seconds.
+    void Loaded() {
+        const auto generating = [this] {
+            return client->Generating("Sim") || client->Generating("Solo") || client->Generating("Frame");
+        };
+        for (int i = 0; i < 2000 && generating(); ++i) {
+            Frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE_FALSE(generating());
+    }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
         if (step && !holdMatch) REQUIRE(static_cast<bool>(match->RunFrame()));
@@ -378,6 +390,7 @@ I::KeyboardInput Key(const I::KeyCode code, const I::ButtonState state) {
 
 TEST_CASE("client: it connects, shows the arena and the other player, takes the pointer with a click and walks") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     PC::ClientStatus status = PC::StatusOf(setup.Client());
     REQUIRE(status.connected);
@@ -459,6 +472,7 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
 
 TEST_CASE("client: a click in a frame that runs no step still fires at the Match (four frames a step)") {
     Setup setup(4);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -495,6 +509,7 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
 TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, the Match gets its input every step, and stale controls stop the movement") {
     Setup setup;
     setup.other.reset();
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -624,6 +639,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
 TEST_CASE("client: with the Sim World lent, a click among several frames between two of its rounds fires once") {
     Setup setup;
     setup.other.reset();
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -677,6 +693,7 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   for (const std::uint32_t delay : {0U, 13U}) {
     CAPTURE(delay);
     Setup setup(4, 4, 0, std::nullopt, {}, std::nullopt, {}, delay);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -726,6 +743,7 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
 // new one, never between (port declaration, segment 6, design 3).
 TEST_CASE("client: the other player's new life is not blended from where it was") {
     Setup setup(4);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -756,6 +774,7 @@ TEST_CASE("client: the other player's new life is not blended from where it was"
 // The viewmodel's recoil (port declaration, segment 6): a shot turns the weapon up, the anchor stays, and it comes back.
 TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const PC::ViewmodelDefinition& viewmodel = setup.presentation->viewmodel;
@@ -804,6 +823,21 @@ TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     CHECK_MESSAGE(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-3), "[pvp-recoil] back at rest a second later: " << *partRotationY());
 }
 
+namespace {
+
+// Runs frames until done says so (at most n); an answer may come from another thread (the Gateway, the asset threads).
+template <class Done>
+bool FramesUntil(Setup& setup, Done done, const int n = 600) {
+    for (int i = 0; i < n; ++i) {
+        if (done()) return true;
+        setup.Frame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return done();
+}
+
+} // namespace
+
 // The Match plays another arena than the one the Client starts with (a Match reached by its address): a World plays one
 // arena, so the game is built again on the Match's (big-map declaration 15.3).
 TEST_CASE("client: a game whose Match plays another arena is built again on it") {
@@ -811,6 +845,7 @@ TEST_CASE("client: a game whose Match plays another arena is built again on it")
     const object_fps_pvp::sim::ArenaContent& played = ShippedContent()->arenas[1];
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().map == played.id; }),
                     "[pvp-arena-again] the game is built again on the Match's arena");
+    setup.Loaded();
     setup.Frames(240);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     REQUIRE(setup.Sim().Resource<PW::GameRules>()->arena.id == played.id);
@@ -835,6 +870,7 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
     Setup setup(1, 4, 1);
     const object_fps_pvp::sim::ArenaContent& played = ShippedContent()->arenas[1];
     REQUIRE(FramesUntil(setup, [&] { return setup.Scene().map == played.id; }));
+    setup.Loaded();
     setup.Frames(240);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const auto pictures = object_fps_pvp::data::RegionPictures(ShippedMapOf(played));
@@ -851,7 +887,13 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
             if (box->local.minimum.x != region.bounds.minimum.x || box->local.minimum.z != region.bounds.minimum.z) continue;
             ++regions;
             CHECK_MESSAGE(box->local.maximum.x == region.bounds.maximum.x, "[pvp-region-box] the region's box");
-            CHECK_MESSAGE((*held)->meshes.front().positions == region.model->meshes.front().positions, "[pvp-region-model] the region's faces");
+            const auto& shown = (*held)->meshes.front().positions;
+            const auto& expected = region.model->meshes.front().positions;
+            const bool same = shown.size() == expected.size() &&
+                              std::equal(shown.begin(), shown.end(), expected.begin(), [](const Math::Vec3& a, const Math::Vec3& b) {
+                                  return a.x == b.x && a.y == b.y && a.z == b.z;
+                              });
+            CHECK_MESSAGE(same, "[pvp-region-model] the region's faces");
         }
     }
     CHECK_MESSAGE(regions == pictures.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
@@ -866,6 +908,7 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
 
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
@@ -948,6 +991,7 @@ TEST_CASE("client: the first-person weapon's idle pose sits before the viewmodel
 
 TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, the HP in red, the camera shaken") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -1078,20 +1122,6 @@ TEST_CASE("client: the menu's Quit closes the window; a reason given to the lobb
     CHECK(setup.Binding("status") == "Match に断られました（the match is full）");
 }
 
-namespace {
-
-// Runs frames until done says so (at most n); an answer may come from another thread (the Gateway, the asset threads).
-template <class Done>
-bool FramesUntil(Setup& setup, Done done, const int n = 600) {
-    for (int i = 0; i < n; ++i) {
-        if (done()) return true;
-        setup.Frame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
-    return done();
-}
-
-} // namespace
 
 namespace {
 
@@ -1204,8 +1234,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
 
 TEST_CASE("client: leaving the game closes the connection; a new game connects again and sees nothing of the last") {
     Setup setup;
-    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
-    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).playing; }));
     REQUIRE(PlayerOf(GameWorld(*setup.match), 1) != 0);
     // To the lobby (as its scene's System would ask): the lobby's Sim World has no target, so the session closes.
     setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{.scene = PC::Scene::Lobby};
@@ -1226,8 +1255,7 @@ TEST_CASE("client: leaving the game closes the connection; a new game connects a
         setup.client->Return(std::move(*lent));
     }
     CHECK_MESSAGE(!PC::StatusOf(setup.Client()).playing, "[pvp-scene-exchange-reset] the last game's own player is not shown");
-    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
-    CHECK_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-scene-reconnects] the new game is played");
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).playing; }), "[pvp-scene-reconnects] the new game is played");
     CHECK(setup.Scene().scene == PC::Scene::MultiGame);
 }
 
