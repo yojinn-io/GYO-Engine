@@ -45,7 +45,8 @@ enum class IndentCharacter : char { Space = ' ', Tab = '\t' };
 // on one line with no spaces. With indent n > 0 every member and element starts
 // a line indented n characters per level, a key is followed by ": ", the
 // closing bracket of a non-empty container has its own line, and an empty
-// container stays "{}" or "[]".
+// container stays "{}" or "[]". Unlike nlohmann::json's dump(0), indent 0 does
+// not mean "new lines without indentation": it is the one-line form.
 struct Layout final {
     std::size_t indent = 0;
     IndentCharacter character = IndentCharacter::Space;

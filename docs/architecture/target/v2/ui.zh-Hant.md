@@ -250,4 +250,4 @@ blocker 0、should 5、nit 8。報告在主 checkout `build/evidence/gyo2-sdl-u/
 
 - 節點模型照 L17 選了文件樹（第 3.1 節）；總宣告第 6.6 節寫的是「U 的宣告比、交使用者」——新 AGENTS 下卡片自己判，請主會話判要不要再交使用者。
 - `gyo.ui` 經 JSON Module 讀的行為與版本不升（第 4.1 節）：JSON 宣告第 452 行寫「交使用者」，同上。
-- ~~寫出由兩格縮排改成一行（J-5）~~：`v8-arch-gyo2-json-pretty` 在 JSON Module 加了排版（`Layout`），`gyo.ui` 恢復 master 的兩格縮排（指數的寫法除外）。
+- 寫出是 master 的兩格縮排（第 4.1 節）；和 master 的差別只剩指數的寫法。
