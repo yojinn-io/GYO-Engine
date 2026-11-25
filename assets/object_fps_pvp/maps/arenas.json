@@ -1,4 +1,11 @@
 {
   "version": 1,
-  "arenas": ["pvp_arena.json", "pvp_corners.json", "biome.json"]
+  "arenas": [
+    "pvp_arena.json",
+    "pvp_corners.json",
+    "biome.json",
+    "kiriyu_extraction_250m.json",
+    "kiriyu_town_graybox.json",
+    "kiriyu_incident_250m.json"
+  ]
 }

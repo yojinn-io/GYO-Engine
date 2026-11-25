@@ -409,7 +409,7 @@ class WorkflowGateTests(unittest.TestCase):
         configure = step_with(native, "id: configure")
         self.assertIn('"product_executable=$((@($build.products) -contains $env:GYO_PRODUCT)', configure)
         script = run_script(plan)
-        no_tool = "::notice::No tool is registered for linux-x64"
+        no_tool = "::notice::No release tool is selected for linux-x64"
         no_executable = "::notice::Game sample registers no product executable yet"
         for product, tools, executable, assemble, notice in (
                 ("toolchain", "", "false", "false", no_tool), ("toolchain", "alpha:gui", "true", "true", None),

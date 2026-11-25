@@ -91,12 +91,16 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertEqual(tools, {"windows-x64": ["alpha:native"],
             "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"]})
 
-    def test_registered_tools_without_a_release_selection_are_rejected(self):
+    def test_registered_tools_without_a_release_tool_select_none_and_say_so(self):
+        # The release rule applies once a release tool is registered (the user's decision of 2026-11-26): tools that
+        # are not released (a command-line tool for content) select no tool on any platform.
         registry = self.root / "tools.csv"
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
                             "local,Local,,1,1,0,1,1,1\n", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "registry export failed"):
-            product_registry.export_tools(registry, repository_root=self.root)
+        with contextlib.redirect_stderr(io.StringIO()) as stderr:
+            tools = product_registry.export_tools(registry, repository_root=self.root)
+        self.assertEqual(tools, {platform: [] for platform in RELEASE_PLATFORMS})
+        self.assertIn("No enabled release tool is registered", stderr.getvalue())
 
     def test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so(self):
         registry = self.root / "tools.csv"
@@ -126,15 +130,20 @@ class RegistryMatrixTests(unittest.TestCase):
         # rules (a release tool on every platform, a packageable default
         # variant) are checked by the export alone, and the workflows export
         # only after the pull request gate; this case exports at the gate.
-        # No tool is selected exactly when none is registered.
+        # No tool is selected exactly when no release tool is registered.
         with (ROOT / "config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
-            registered = [row["name"] for row in csv.DictReader(rows)]
+            table = list(csv.DictReader(rows))
+        registered = [row["name"] for row in table]
+        # CMake's reading (GyoRegistryCsv.cmake: "true" or "1", any case): enabled release tools.
+        released = [row["name"] for row in table
+                    if row["enabled"].strip().lower() in ("1", "true") and row["release"].strip().lower() in ("1", "true")]
         with contextlib.redirect_stderr(io.StringIO()) as stderr:
             tools = product_registry.export_tools()
             pairs = export_registry()
         self.assertEqual(list(tools), list(RELEASE_PLATFORMS))
-        self.assertEqual(all(tools.values()), bool(registered), tools)
+        self.assertEqual(all(tools.values()), bool(released), tools)
         self.assertEqual("No tool is registered" in stderr.getvalue(), not registered)
+        self.assertEqual("No enabled release tool is registered" in stderr.getvalue(), bool(registered) and not released)
         selected = {tool.split(":", 1)[0] for row in tools.values() for tool in row}
         self.assertLessEqual(selected, set(registered))
         self.assertTrue(all(platform in RELEASE_PLATFORMS for _, platform in pairs))

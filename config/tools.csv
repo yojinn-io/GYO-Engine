@@ -1,1 +1,2 @@
 name,description,version,enabled,default,release,windows,linux,macos
+voxel_map_editor,GYO Voxel Map Editor (headless bake and import),1,true,true,false,true,true,true
