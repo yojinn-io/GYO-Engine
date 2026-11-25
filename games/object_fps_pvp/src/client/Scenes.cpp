@@ -62,9 +62,11 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::
     for (const Ui::UiAction* action : actions.Read()) {
         if (action->action == "pvp.quit") {
             window->close = true;
+        } else if (action->action == "pvp.solo") {
+            request->next = SceneChange{Scene::SoloRoom, {}, std::nullopt, {}};
         } else if (action->action == "pvp.multi") {
             request->next = SceneChange{Scene::Lobby, {}, std::nullopt, {}};
-        } else if (action->action == "pvp.solo" || action->action == "pvp.settings") {
+        } else if (action->action == "pvp.settings") {
             if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("status", std::string(kNotYet));
         }
     }
@@ -74,6 +76,12 @@ K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::Query<K::
 } // namespace
 
 bool SimPlays(const Scene scene) noexcept { return scene == Scene::MultiGame; }
+bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }
+bool GameScene(const Scene scene) noexcept { return scene == Scene::SoloGame || scene == Scene::MultiGame; }
+
+std::string SoloSavePath(const std::string& dataDirectory) {
+    return dataDirectory.empty() ? std::string() : dataDirectory + "/solo-save.json";
+}
 
 bool SceneChangeWanted(O::Product& product) {
     const auto* request = std::as_const(product.World("Frame").GetWorld()).Resource<SceneRequest>();
@@ -85,12 +93,17 @@ Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product) {
     auto* request = product.World("Frame").GetWorld().ResourceMut<SceneRequest>();
     if (director == nullptr || request == nullptr || !request->next) return {};
     const bool simBefore = SimPlays(director->Current().scene);
+    const bool soloBefore = SoloPlays(director->Current().scene);
     SceneChange next = std::move(*request->next);
     request->next.reset();
     const bool simAfter = SimPlays(next.scene);
+    const bool soloAfter = SoloPlays(next.scene);
     director->Enter(std::move(next));
     // Neither World's last picture or controls reach the next scene.
     if (auto* exchange = product.Buffer().Find<ClientExchange>()) exchange->Reset();
+    if (soloBefore || soloAfter) {
+        if (auto replaced = product.ReplaceWorld("Solo", {}); !replaced) return Base::Err(std::move(replaced).error());
+    }
     if (simBefore || simAfter) {
         if (auto replaced = product.ReplaceWorld("Sim", {}); !replaced) return Base::Err(std::move(replaced).error());
     }

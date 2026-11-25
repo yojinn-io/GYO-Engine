@@ -69,7 +69,9 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     SOURCES
     src/client/ClientWorld.cpp
     src/client/LobbyWorld.cpp
+    src/client/LocalFiles.cpp
     src/client/Scenes.cpp
+    src/client/SoloScene.cpp
     src/client/VoxelModelLoader.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 

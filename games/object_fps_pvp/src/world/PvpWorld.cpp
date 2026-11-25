@@ -93,6 +93,7 @@ void HashValue(K::Hasher& h, const PlayerInput& v) {
 void HashValue(K::Hasher&, const GameRules&) {}
 void HashValue(K::Hasher&, const MatchInfo&) {}
 void HashValue(K::Hasher&, const LocalUser&) {}
+void HashValue(K::Hasher& h, const LocalSpawn& v) { HashValue(h, static_cast<std::uint64_t>(v.index)); }
 void HashValue(K::Hasher&, const MatchSeats&) {}
 void HashValue(K::Hasher&, const SeatedPlayers&) {}
 void HashValue(K::Hasher&, const ContentRef&) {}
@@ -636,6 +637,22 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
     return {};
 }
 
+// Local (a game without a Match): the local user's player, once, at the spawn LocalSpawn chose (a random one: single
+// player's randomness is not decision data two ends must agree on). It holds a PlayerInput the World writes itself.
+K::SystemResult SpawnLocalPlayer(K::Query<K::Read<Owner>> players, K::Res<LocalUser> user, K::Res<LocalSpawn> chosen,
+                                 K::Res<GameRules> rules, K::Res<WT::Tick> tick,
+                                 K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn) {
+    bool there = false;
+    players.ForEach([&](K::EntityId, const Owner& owner) { there = there || owner.userId == user->userId; });
+    if (there || rules->arena.spawns.empty()) return {};
+    const sim::SpawnPoint& point = rules->arena.spawns[chosen->index % rules->arena.spawns.size()];
+    PlayerCombat combat = FreshCombat(rules->combat, 1);
+    combat.lifeTick = tick->value;
+    auto id = spawn.New(BodyAt(point), combat, ShotRecord{}, HitRecord{}, Owner{user->userId}, PlayerInput{}, PlayerMotion{});
+    if (!id) return Base::Err(std::move(id).error());
+    return {};
+}
+
 // Client: the player it owns gets the Peer's PeerControls and a PlayerInput (the net Module writes the input into it).
 K::SystemResult ControlOwnPlayer(K::Query<K::Read<N::Peer>, K::Without<N::PeerControls>> peers,
                                  K::Query<K::Read<Owner>, K::Without<PlayerInput>> players, K::Res<LocalUser> user,
@@ -683,6 +700,8 @@ K::SystemResult FollowMatchArena(K::ExclusiveWorld<> world) {
     return {};
 }
 
+// serverOnly: a System of the authority alone; the condition is the net Module's, so only a networked end has it (the
+// Local end is the authority itself).
 K::SystemOptions Fixed(std::string name, std::string stage, std::vector<std::string> after, const bool serverOnly) {
     K::SystemOptions options;
     options.name = std::move(name);
@@ -854,7 +873,7 @@ N::ServerHost::Admission MatchAdmission(std::shared_ptr<Seats> seats, AdmissionC
     };
 }
 
-void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
+void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEnd end) {
     GYO_ASSERT(options.content && options.arena < options.content->arenas.size());
     K::Registrar& r = setup.Registrar();
     A::AuthorityEntry authority(setup);
@@ -872,31 +891,45 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
     r.Resource<SeatedPlayers>({.name = "SeatedPlayers"});
     r.Resource<ContentRef>({.name = "ContentRef"});
     r.Resource<ContentMismatch>({.name = "ContentMismatch"});
+    r.Resource<LocalSpawn>({.name = "LocalSpawn"});
+    const bool networked = end != WorldEnd::Local;
 
-    N::NetEntry net(setup);
-    net.Replicate<PlayerBody>("PlayerBody", BodyCodec());
-    net.Replicate<PlayerCombat>("PlayerCombat", CombatCodec());
-    net.Replicate<ShotRecord>("ShotRecord", ShotCodec());
-    net.Replicate<HitRecord>("HitRecord", HitCodec());
-    net.Replicate<Owner>("Owner", OwnerCodec());
-    N::NetEntry::ResourceOptions<MatchInfo> info;
-    info.codec = MatchInfoCodec();
-    net.ReplicateResource<MatchInfo>("MatchInfo", std::move(info));
-    net.Input<PlayerInput>("PlayerInput", InputOptions());
-    R::RollbackEntry(setup).StepSchedule();
+    if (networked) {
+        N::NetEntry net(setup);
+        net.Replicate<PlayerBody>("PlayerBody", BodyCodec());
+        net.Replicate<PlayerCombat>("PlayerCombat", CombatCodec());
+        net.Replicate<ShotRecord>("ShotRecord", ShotCodec());
+        net.Replicate<HitRecord>("HitRecord", HitCodec());
+        net.Replicate<Owner>("Owner", OwnerCodec());
+        N::NetEntry::ResourceOptions<MatchInfo> info;
+        info.codec = MatchInfoCodec();
+        net.ReplicateResource<MatchInfo>("MatchInfo", std::move(info));
+        net.Input<PlayerInput>("PlayerInput", InputOptions());
+    }
+    if (networked) R::RollbackEntry(setup).StepSchedule();
 
     const std::string update = std::string(O::DefaultSchedules::update);
     const std::string postUpdate = std::string(O::DefaultSchedules::postUpdate);
     r.AddSystem<&MovePlayers>(Fixed("MovePlayers", update, {}, false));
     r.AddSystem<&UseWeapons>(Fixed("UseWeapons", update, {"MovePlayers"}, false));
     r.AddSystem<&AnimatePlayers>(Fixed("AnimatePlayers", postUpdate, {}, true));
-    r.AddSystem<&JudgeShots>(Fixed("JudgeShots", postUpdate, {"AnimatePlayers"}, true));
-    r.AddSystem<&RespawnPlayers>(Fixed("RespawnPlayers", postUpdate, {"JudgeShots"}, true));
-    r.AddSystem<&SeatPlayers>(Frame("SeatPlayers", update, N::OnServer()));
-    r.AddSystem<&ControlOwnPlayer>(Frame("ControlOwnPlayer", update, N::OnClient()));
-    r.AddSystem<&FollowMatchArena>(Frame("FollowMatchArena", std::string(O::DefaultSchedules::preUpdate), N::OnClient()));
+    r.AddSystem<&JudgeShots>(Fixed("JudgeShots", postUpdate, {"AnimatePlayers"}, networked));
+    r.AddSystem<&RespawnPlayers>(Fixed("RespawnPlayers", postUpdate, {"JudgeShots"}, networked));
+    if (networked) {
+        r.AddSystem<&SeatPlayers>(Frame("SeatPlayers", update, N::OnServer()));
+        r.AddSystem<&ControlOwnPlayer>(Frame("ControlOwnPlayer", update, N::OnClient()));
+        r.AddSystem<&FollowMatchArena>(Frame("FollowMatchArena", std::string(O::DefaultSchedules::preUpdate), N::OnClient()));
+    } else {
+        K::SystemOptions local;
+        local.name = "SpawnLocalPlayer";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = update;
+        local.mounts.push_back(std::move(mount));
+        r.AddSystem<&SpawnLocalPlayer>(std::move(local));
+    }
 
-    setup.Prepare([options](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         const InstalledArena& arena = options.content->arenas[options.arena];
         GameRules rules;
         rules.arena = arena.content;
@@ -910,8 +943,9 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options) {
         world.SetResource(SeatedPlayers{});
         world.SetResource(ContentRef{options.content});
         world.SetResource(ContentMismatch{});
-        // The Match says which arena it plays; a Client's MatchInfo comes from the Match.
-        world.SetResource(options.localUser == 0 ? MatchInfo{arena.content.id, arena.wallsDigest} : MatchInfo{});
+        world.SetResource(LocalSpawn{options.spawn});
+        // The Match (and a Local World) says which arena it plays; a Client's MatchInfo comes from the Match.
+        world.SetResource(end != WorldEnd::Client ? MatchInfo{arena.content.id, arena.wallsDigest} : MatchInfo{});
         auto boxes = P::BoxSet::Build(arena.walls);
         GYO_ASSERT(static_cast<bool>(boxes) && "LoadGameContent built these walls");
         world.Insert(kArenaEntity, P::Collider{P::Shape{std::move(*boxes)}});
@@ -937,7 +971,9 @@ O::WorldDescription Describe(WorldOptions options, const N::NetRole role) {
         rollback.strategy = std::make_shared<R::StateRollbackStrategy>();
         world.options.Set(std::move(rollback));
     }
-    world.build = [options = std::move(options)](O::WorldSetup& setup) { BuildWorld(setup, options); };
+    world.build = [options = std::move(options), role](O::WorldSetup& setup) {
+        BuildWorld(setup, options, role == N::NetRole::Server ? WorldEnd::Match : WorldEnd::Client);
+    };
     return world;
 }
 
@@ -945,6 +981,18 @@ O::WorldDescription Describe(WorldOptions options, const N::NetRole role) {
 
 O::WorldDescription MatchWorld(WorldOptions options) { return Describe(std::move(options), N::NetRole::Server); }
 O::WorldDescription ClientWorld(WorldOptions options) { return Describe(std::move(options), N::NetRole::Client); }
+
+O::WorldDescription LocalWorld(WorldOptions options) {
+    O::WorldDescription world;
+    world.name = "Game";
+    // No net and no rollback: the World is the authority and nobody predicts it.
+    world.units = {"entity_ids", "world_time", "authority", "transform", "physics_3d"};
+    world.options.Set(kMatchIds);
+    world.options.Set(A::AuthorityOptions{std::make_shared<A::ServerAuthorityStrategy>()});
+    world.dynamicInsert = false;
+    world.build = [options = std::move(options)](O::WorldSetup& setup) { BuildWorld(setup, options, WorldEnd::Local); };
+    return world;
+}
 
 sim::AnimationInput AnimationInputOf(const PlayerBody& body, const PlayerCombat& combat, const HitRecord& hits, const GameRules& rules,
                                      const std::uint64_t tick, const std::uint64_t stepNanoseconds) {

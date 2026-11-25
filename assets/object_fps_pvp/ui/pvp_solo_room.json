@@ -1,0 +1,36 @@
+{
+  "schema": "gyo.ui", "version": 2,
+  "design_canvas": {"size": [1280, 720], "scale_mode": "fit"},
+  "fonts": {"ui": "object_fps_pvp.font.ui"}, "default_font": "ui",
+  "colors": {
+    "backdrop": "#101724FF", "panel": "#1D2A3AFF", "slot": "#24354AFF", "accent": "#66D9EFFF",
+    "text": "#EAF1FAFF", "muted": "#A3B7CBFF", "button": "#2B4159FF",
+    "focused": "#285F84FF", "pressed": "#307EA2FF"
+  },
+  "actions": [
+    {"id": "pvp.start", "payload": "none"},
+    {"id": "pvp.back", "payload": "none"}
+  ],
+  "bindings": [
+    {"id": "record", "type": "string", "preview": "出撃 3 回・死亡 5 回"},
+    {"id": "status", "type": "string", "preview": "準備ができたら出撃してください"}
+  ],
+  "canvases": [{
+    "id": "room", "backdrop_color": "backdrop", "default_focus": "start",
+    "focus_order": ["start", "back"],
+    "children": [
+      {"type": "panel", "id": "panel", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [120, 48], "size_delta": [1040, 624]}, "color": {"color": "panel"}},
+      {"type": "text", "id": "title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [160, 72], "size_delta": [960, 52]}, "text": {"literal": "シングルプレイ"}, "point_size": 32, "text_color": {"color": "accent"}, "vertical_align": "center"},
+      {"type": "text", "id": "record", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [160, 132], "size_delta": [960, 32]}, "text": {"binding": "record"}, "point_size": 18, "text_color": {"color": "muted"}, "vertical_align": "center"},
+      {"type": "panel", "id": "merchant", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [160, 184], "size_delta": [460, 300]}, "color": {"color": "slot"}},
+      {"type": "text", "id": "merchant_title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [184, 200], "size_delta": [412, 36]}, "text": {"literal": "商人"}, "point_size": 22, "text_color": {"color": "text"}},
+      {"type": "text", "id": "merchant_body", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [184, 244], "size_delta": [412, 30]}, "text": {"literal": "準備中"}, "point_size": 18, "text_color": {"color": "muted"}},
+      {"type": "panel", "id": "tasks", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [660, 184], "size_delta": [460, 300]}, "color": {"color": "slot"}},
+      {"type": "text", "id": "tasks_title", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [684, 200], "size_delta": [412, 36]}, "text": {"literal": "任務"}, "point_size": 22, "text_color": {"color": "text"}},
+      {"type": "text", "id": "tasks_body", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [684, 244], "size_delta": [412, 30]}, "text": {"literal": "準備中"}, "point_size": 18, "text_color": {"color": "muted"}},
+      {"type": "text", "id": "status", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [160, 512], "size_delta": [960, 40]}, "text": {"binding": "status"}, "point_size": 18, "text_color": {"color": "accent"}},
+      {"type": "button", "id": "start", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [580, 584], "size_delta": [260, 52]}, "text": {"literal": "出撃"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.start", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}},
+      {"type": "button", "id": "back", "rect": {"anchor_min": [0, 0], "anchor_max": [0, 0], "pivot": [0, 0], "position": [860, 584], "size_delta": [260, 52]}, "text": {"literal": "戻る"}, "point_size": 22, "text_color": {"color": "text"}, "horizontal_align": "center", "vertical_align": "center", "action": "pvp.back", "background": {"normal": "button", "focused": "focused", "pressed": "pressed"}}
+    ]
+  }]
+}
