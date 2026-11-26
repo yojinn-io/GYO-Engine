@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <compare>
+#include <map>
 #include <numeric>
 #include <memory>
 #include <utility>
@@ -12,6 +14,35 @@
 #include "engine/world_asset/AssetView.hpp"
 
 namespace GYO::Engine::Render {
+
+namespace {
+
+// What two items must share to be instances of one draw: the retained mesh (Bevy's BatchCompareData, the mesh asset,
+// bevy_pbr/src/render/mesh.rs:2910), the texture (its material bind group, :2892-2899) and the pipeline (blend, depth,
+// cull; Bevy's pipeline id, bevy_render/src/batching/mod.rs:41-52). The world and the colour go with each instance.
+struct BatchKey final {
+    std::uint32_t mesh = 0;
+    std::uint32_t texture = 0;
+    BlendMode blend = BlendMode::Opaque;
+    bool depthTest = true;
+    bool depthWrite = true;
+    CullMode cull = CullMode::None;
+
+    friend auto operator<=>(const BatchKey&, const BatchKey&) = default;
+};
+
+BatchKey KeyOf(const Extracted3dItem& item) {
+    BatchKey key;
+    key.mesh = item.mesh.value;
+    key.texture = item.texture.value;
+    key.blend = item.blend;
+    key.depthTest = item.depthTest;
+    key.depthWrite = item.depthWrite;
+    key.cull = item.cull;
+    return key;
+}
+
+} // namespace
 
 std::vector<Vertex3D> MeshVertices(const Model::Mesh& mesh) {
     std::vector<Vertex3D> out(mesh.positions.size());
@@ -149,11 +180,57 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
         return a.index < b.index;
     });
 
-    for (const Entry& e : order) {
+    // Automatic batching (big-map declaration section 16; Bevy's batch_and_prepare_*_render_phase,
+    // bevy_render/src/batching/): each batch is one draw, its items the draw's instances. The opaque group is binned by
+    // key (Bevy's Opaque3d bins, no_gpu_preprocessing.rs:122-154): a bin is made where its nearest item stands, so the
+    // bins are drawn by their nearest instance and a pass where nothing shares a key is drawn as before. The blended and
+    // the not depth-tested are sorted phases: only neighbours with the same key join (Bevy's batching/mod.rs:236-243),
+    // so the far-to-near order holds. Items with geometry of their own (skinned on the CPU) never join.
+    // batchOf[k]: the batch of order[k]; firstOf[b]: the item that opened batch b (its draw's state).
+    std::vector<std::size_t> batchOf(order.size());
+    std::vector<std::size_t> firstOf;
+    std::map<BatchKey, std::size_t> bins;
+    for (std::size_t k = 0; k < order.size(); ++k) {
+        const Entry& e = order[k];
         const Extracted3dItem& item = items[e.index];
+        if (item.mesh == MeshId{}) {
+            batchOf[k] = firstOf.size();
+            firstOf.push_back(e.index);
+            continue;
+        }
+        const BatchKey key = KeyOf(item);
+        if (e.group == 0) {
+            const auto [bin, made] = bins.try_emplace(key, firstOf.size());
+            if (made) firstOf.push_back(e.index);
+            batchOf[k] = bin->second;
+            continue;
+        }
+        // An item with geometry of its own has mesh 0 in its key, so it never matches an item with a mesh.
+        if (!firstOf.empty() && KeyOf(items[firstOf.back()]) == key) {
+            batchOf[k] = firstOf.size() - 1;
+        } else {
+            batchOf[k] = firstOf.size();
+            firstOf.push_back(e.index);
+        }
+    }
+
+    // Each batch's instances in one range, in the order of its items (near to far in a bin): a count, then a fill.
+    std::vector<std::uint32_t> offsetOf(firstOf.size() + 1, 0);
+    for (const std::size_t b : batchOf) ++offsetOf[b + 1];
+    for (std::size_t b = 0; b < firstOf.size(); ++b) offsetOf[b + 1] += offsetOf[b];
+    std::vector<std::uint32_t> cursor(offsetOf.begin(), offsetOf.end() - 1);
+    pass.instances.resize(order.size());
+    for (std::size_t k = 0; k < order.size(); ++k) {
+        const Extracted3dItem& item = items[order[k].index];
+        pass.instances[cursor[batchOf[k]]++] = Instance3D{item.world, item.color};
+    }
+
+    pass.draws.reserve(firstOf.size());
+    for (std::size_t b = 0; b < firstOf.size(); ++b) {
+        const Extracted3dItem& item = items[firstOf[b]];
         Draw3D draw;
-        draw.world = item.world;
-        draw.color = item.color;
+        draw.instanceOffset = offsetOf[b];
+        draw.instanceCount = offsetOf[b + 1] - offsetOf[b];
         draw.texture = item.texture;
         draw.blend = item.blend;
         draw.depthTest = item.depthTest;

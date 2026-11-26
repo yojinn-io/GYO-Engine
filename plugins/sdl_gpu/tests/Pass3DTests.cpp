@@ -72,6 +72,14 @@ std::vector<R::Vertex3D> QuadVertices(const float x0, const float y0, const floa
             {{x0, y1, z}, {0, 0, -1}, {0, 0}}};
 }
 
+// Gives the draw one more instance at the end of the pass's: placed by world, tinted by colour. The draw's instances
+// must be the pass's last ones (a draw being made).
+void Instance(R::Pass3D& pass, R::Draw3D& draw, const R::Color8 colour, const M::Matrix4& world = {}) {
+    if (draw.instanceCount == 0) draw.instanceOffset = static_cast<std::uint32_t>(pass.instances.size());
+    ++draw.instanceCount;
+    pass.instances.push_back(R::Instance3D{world, colour});
+}
+
 // Adds the rectangle to the pass's own geometry and a draw of it; returns the draw to adjust.
 R::Draw3D& Quad(R::Pass3D& pass, const float x0, const float y0, const float x1, const float y1, const float z, const R::Color8 colour) {
     const auto base = static_cast<std::uint32_t>(pass.vertices.size());
@@ -81,7 +89,7 @@ R::Draw3D& Quad(R::Pass3D& pass, const float x0, const float y0, const float x1,
     R::Draw3D draw;
     draw.indexOffset = first;
     draw.indexCount = 6;
-    draw.color = colour;
+    Instance(pass, draw, colour);
     pass.draws.push_back(draw);
     return pass.draws.back();
 }
@@ -217,7 +225,7 @@ TEST_CASE("sdl_gpu pass3d: cull Back leaves out triangles clockwise on the scree
         pass.indices = {0, 1, 2, 3, 4, 5};
         R::Draw3D draw;
         draw.indexCount = 6;
-        draw.color = kRed;
+        Instance(pass, draw, kRed);
         draw.cull = cull;
         pass.draws.push_back(draw);
         R::RenderCommands commands;
@@ -245,8 +253,7 @@ TEST_CASE("sdl_gpu pass3d: a retained mesh and the pass's own vertices draw; off
         mesh.mesh = id;
         mesh.indexOffset = 6;
         mesh.indexCount = 6;
-        mesh.world = M::MakeTranslation({4.0F, 0.0F, 0.0F});
-        mesh.color = kRed;
+        Instance(pass, mesh, kRed, M::MakeTranslation({4.0F, 0.0F, 0.0F}));
         pass.draws.push_back(mesh);
         // Own vertices: x 0..2 (vertices 0..3) and x 2..4 (vertices 4..7); the draw names the first's indices and
         // vertexOffset 4: x 2..4.
@@ -315,6 +322,55 @@ TEST_CASE("sdl_gpu pass3d: Alpha blends straight alpha over the target; Opaque r
     CHECK_MESSAGE(p.All(4, 0, 8, 8, R::Color8{255, 0, 0, 128}), "[g3-blend-opaque] Opaque writes the colour and its alpha as they are");
 }
 
+TEST_CASE("sdl_gpu pass3d: a draw of several instances draws the mesh once per instance, each placed and tinted by its own") {
+    // big-map declaration section 16, I5: one retained column (x 0..1, the picture's height), drawn by two draws of the
+    // same pass: three instances, then one (its instances after the first draw's, so its range starts at 3).
+    R::RenderMeshes meshes;
+    const R::MeshId column = meshes.Create(QuadVertices(0, 0, 1, 8, 0.5F), {0, 1, 2, 0, 2, 3});
+    R::RenderCommands commands;
+    commands.passes.push_back(Cleared(kBlue));
+    R::Pass3D pass = Scene();
+    R::Draw3D three;
+    three.mesh = column;
+    three.indexCount = 6;
+    Instance(pass, three, kRed);
+    Instance(pass, three, kGreen, M::MakeTranslation({2.0F, 0.0F, 0.0F}));
+    Instance(pass, three, kYellow, M::MakeTranslation({4.0F, 0.0F, 0.0F}));
+    pass.draws.push_back(three);
+    R::Draw3D one;
+    one.mesh = column;
+    one.indexCount = 6;
+    Instance(pass, one, kMagenta, M::MakeTranslation({6.0F, 0.0F, 0.0F}));
+    pass.draws.push_back(one);
+    // Blended instances of a full-width strip at the top row: drawn in their order, the second over the first.
+    R::Draw3D blended;
+    blended.indexCount = 6;
+    blended.blend = R::BlendMode::Alpha;
+    blended.depthTest = false;
+    blended.depthWrite = false;
+    const auto base = static_cast<std::uint32_t>(pass.vertices.size());
+    for (const R::Vertex3D& v : QuadVertices(0, 7, 8, 8, 0.1F)) pass.vertices.push_back(v);
+    blended.indexOffset = static_cast<std::uint32_t>(pass.indices.size());
+    for (const std::uint32_t i : {0U, 1U, 2U, 0U, 2U, 3U}) pass.indices.push_back(base + i);
+    Instance(pass, blended, kRed);
+    Instance(pass, blended, R::Color8{0, 255, 0, 128});
+    pass.draws.push_back(blended);
+    commands.passes.push_back(std::move(pass));
+    const Picture p = Draw(commands, nullptr, &meshes);
+    CHECK_MESSAGE(p.All(0, 1, 1, 8, kRed), "[g3-instances-first] the first instance where its world puts it, in its colour");
+    CHECK_MESSAGE((p.All(2, 1, 3, 8, kGreen) && p.All(4, 1, 5, 8, kYellow)), "[g3-instances-each] every instance of the draw, each its own");
+    CHECK_MESSAGE(p.All(6, 1, 7, 8, kMagenta), "[g3-instances-offset] a later draw starts at its own first instance");
+    CHECK_MESSAGE((p.All(1, 1, 2, 8, kBlue) && p.All(3, 1, 4, 8, kBlue) && p.All(5, 1, 6, 8, kBlue) && p.All(7, 1, 8, 8, kBlue)),
+                  "[g3-instances-only] nothing between them");
+    const R::Color8 top = p.At(3, 0);
+    CHECK_MESSAGE((Diff(top.r, 127) <= 1 && Diff(top.g, 128) <= 1 && top.b == 0),
+                  "[g3-instances-order] blended instances in their order: half green over red");
+    CHECK_MESSAGE(p.tally.skippedDraws == 0, "[g3-instances-none-skipped] nothing skipped");
+    meshes.ClearPending();
+    meshes.Release(column);
+    static_cast<void>(Draw(R::RenderCommands{}, nullptr, &meshes));
+}
+
 TEST_CASE("sdl_gpu pass3d: each pass starts with cleared depth and keeps the colour") {
     R::RenderCommands commands;
     R::Pass3D first = Scene();
@@ -376,7 +432,7 @@ TEST_CASE("sdl_gpu pass3d: drawn among 2D passes in their order; a pass on anoth
     R::Draw3D draw;
     draw.mesh = whole;
     draw.indexCount = 6;
-    draw.color = kWhite;
+    Instance(elsewhere, draw, kWhite);
     elsewhere.draws.push_back(draw);
     commands.passes.push_back(std::move(elsewhere));
     const Picture p = Draw(commands, nullptr, &meshes);
@@ -418,7 +474,7 @@ K::SystemResult ProduceMeshFrame(K::ResMut<R::RenderCommands> commands, K::ResMu
         R::Draw3D draw;
         draw.mesh = frameMesh;
         draw.indexCount = 6;
-        draw.color = kRed;
+        Instance(pass, draw, kRed);
         pass.draws.push_back(draw);
     }
     commands.Get().passes.push_back(std::move(pass));

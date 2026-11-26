@@ -1161,24 +1161,24 @@
     "render RD-4"
    ],
    "file": "engine/modules/render/shaders/mesh3d.frag.hlsl",
-   "find": "    return meshTexture.Sample(meshSampler, input.uv) * drawColor;",
-   "replace": "    return drawColor;",
+   "find": "    return meshTexture.Sample(meshSampler, input.uv) * input.color;",
+   "replace": "    return input.color;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu shaders:*",
    "expect": "\\[g3\\-abi\\-fragment\\-samplers\\]"
   },
   {
    "id": "g3-abi-frag-no-colour",
-   "what": "the 3D fragment shader ignores the draw's colour",
+   "what": "the 3D fragment shader ignores the instance's colour (rewritten for instancing, big-map declaration section 16: the same property on the new code)",
    "guards": [
     "render RD-4"
    ],
    "file": "engine/modules/render/shaders/mesh3d.frag.hlsl",
-   "find": "    return meshTexture.Sample(meshSampler, input.uv) * drawColor;",
+   "find": "    return meshTexture.Sample(meshSampler, input.uv) * input.color;",
    "replace": "    return meshTexture.Sample(meshSampler, input.uv);",
    "target": "gyo_sdl_gpu_tests",
-   "cases": "sdl_gpu shaders:*",
-   "expect": "\\[g3\\-abi\\-fragment\\-uniforms\\]"
+   "cases": "sdl_gpu pass3d: a texture*",
+   "expect": "\\[g3\\-tex\\-tint\\]"
   },
   {
    "id": "g3-depth-less",
@@ -1416,42 +1416,42 @@
   },
   {
    "id": "g3-transform-world-ignored",
-   "what": "the draw's world is not applied",
+   "what": "the instance's world is not applied (rewritten for instancing, big-map declaration section 16: the same property on the new code)",
    "guards": [
     "render section 8",
     "sdl section 7"
    ],
-   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "Abi::ToUniform(Engine::Math::Multiply(pass.clipFromWorld, draw.world))",
-   "replace": "Abi::ToUniform(pass.clipFromWorld)",
+   "file": "engine/modules/render/shaders/mesh3d.vert.hlsl",
+   "find": "    output.position = mul(mul(float4(input.position, 1.0f), world), clipFromWorld);",
+   "replace": "    output.position = mul(float4(input.position, 1.0f), clipFromWorld);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-mesh\\-world\\]"
   },
   {
    "id": "g3-transform-order",
-   "what": "the world is applied after clipFromWorld",
+   "what": "the instance's world is applied after clipFromWorld (rewritten for instancing, big-map declaration section 16: the same property on the new code)",
    "guards": [
     "render section 8",
     "sdl section 7"
    ],
-   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "Abi::ToUniform(Engine::Math::Multiply(pass.clipFromWorld, draw.world))",
-   "replace": "Abi::ToUniform(Engine::Math::Multiply(draw.world, pass.clipFromWorld))",
+   "file": "engine/modules/render/shaders/mesh3d.vert.hlsl",
+   "find": "    output.position = mul(mul(float4(input.position, 1.0f), world), clipFromWorld);",
+   "replace": "    output.position = mul(mul(float4(input.position, 1.0f), clipFromWorld), world);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-mesh\\-world\\]"
   },
   {
    "id": "g3-colour-ignored",
-   "what": "the draw's colour is not pushed (white)",
+   "what": "the instance's colour is read from the wrong bytes (its world's) (rewritten for instancing, big-map declaration section 16: the same property on the new code)",
    "guards": [
     "render section 8",
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "Abi::ToUniform(draw.color)",
-   "replace": "Abi::ToUniform(R::Color8{255, 255, 255, 255})",
+   "find": "SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kMesh3DColorOffset};",
+   "replace": "SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kMesh3DWorldOffset};",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a texture*",
    "expect": "\\[g3\\-tex\\-tint\\]"
@@ -1531,8 +1531,8 @@
     "render section 8"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
-   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, 0, firstVertex, 0);",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, 0, firstVertex, draw.instanceOffset);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-mesh\\-index\\-offset\\]"
@@ -1544,8 +1544,8 @@
     "render section 8"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, firstVertex, 0);",
-   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, 0, 0);",
+   "find": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);",
+   "replace": "SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, 0, draw.instanceOffset);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a retained*",
    "expect": "\\[g3\\-vertex\\-offset\\]"

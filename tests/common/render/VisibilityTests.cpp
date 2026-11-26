@@ -256,11 +256,11 @@ TEST_CASE("visibility: Queue3d leaves out the items of the entities in the camer
     camera.culled = {11};
     auto pass = R::Queue3d(camera, items);
     REQUIRE(pass.has_value());
-    CHECK_MESSAGE(pass->draws.size() == 2, "[vs-queue] the culled entity's item is left out");
+    CHECK_MESSAGE(pass->instances.size() == 2, "[vs-queue] the culled entity's item is left out");
     camera.culled.clear();
     pass = R::Queue3d(camera, items);
     REQUIRE(pass.has_value());
-    CHECK_MESSAGE(pass->draws.size() == 3, "[vs-queue-no-list] a camera without a list leaves nothing out");
+    CHECK_MESSAGE(pass->instances.size() == 3, "[vs-queue-no-list] a camera without a list leaves nothing out");
 }
 
 TEST_CASE("visibility: WorldBox and InRange") {

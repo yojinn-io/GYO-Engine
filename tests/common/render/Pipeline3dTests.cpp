@@ -110,6 +110,127 @@ TEST_CASE("pipeline3d: a skinned item's vertices go into the pass, each draw nam
                   "[p3-own-offsets] the second draw names its range");
 }
 
+namespace {
+
+// An opaque item of mesh 10 (no texture), its colour's red the entity.
+R::Extracted3dItem Copy(const std::uint64_t entity, const float z) {
+    R::Extracted3dItem item = Item(entity, z);
+    item.mesh = R::MeshId{10};
+    item.color = R::Color8{static_cast<std::uint8_t>(entity), 0, 0, 255};
+    return item;
+}
+
+// The red of each instance of a draw (Copy's entity), in the draw's order.
+std::vector<std::uint32_t> Reds(const R::Pass3D& pass, const R::Draw3D& draw) {
+    std::vector<std::uint32_t> out;
+    for (std::uint32_t i = 0; i < draw.instanceCount; ++i) out.push_back(pass.instances[draw.instanceOffset + i].color.r);
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("pipeline3d: opaque items of one mesh, texture and pipeline are instances of one draw, where the nearest stands") {
+    // big-map declaration section 16, I1, I2, I4.
+    std::vector<R::Extracted3dItem> items{Copy(1, 9.0F), Copy(2, 3.0F), Copy(3, 6.0F), Copy(4, 12.0F)};
+    items.push_back(Copy(5, 5.0F));
+    items.back().mesh = R::MeshId{11};  // another mesh
+    items.push_back(Copy(6, 4.0F));
+    items.back().texture = R::TextureId{7};  // another texture
+    items.push_back(Copy(7, 2.0F));
+    items.back().cull = R::CullMode::Back;  // another cull
+    items.push_back(Copy(8, 1.0F));
+    items.back().depthWrite = false;  // another depth write
+    const std::optional<R::Pass3D> pass = R::Queue3d(Camera3d(), items);
+    REQUIRE(pass.has_value());
+    CHECK_MESSAGE(pass->instances.size() == 8, "[in-every-item] every item is an instance");
+    CHECK_MESSAGE(pass->draws.size() == 5, "[in-one-draw] the four copies are one draw, the four others one each");
+    // The instances (by entity) of the draw that matches, or none when no draw does.
+    const auto of = [&](const auto& match) {
+        for (const R::Draw3D& d : pass->draws) {
+            if (match(d)) return Reds(*pass, d);
+        }
+        return std::vector<std::uint32_t>{};
+    };
+    CHECK_MESSAGE(of([](const R::Draw3D& d) { return !d.depthWrite; }) == (std::vector<std::uint32_t>{8}),
+                  "[in-depth-write-apart] another depth write is a draw of its own");
+    CHECK_MESSAGE(of([](const R::Draw3D& d) { return d.cull == R::CullMode::Back; }) == (std::vector<std::uint32_t>{7}),
+                  "[in-cull-apart] another cull is a draw of its own");
+    CHECK_MESSAGE(of([](const R::Draw3D& d) { return d.texture == R::TextureId{7}; }) == (std::vector<std::uint32_t>{6}),
+                  "[in-texture-apart] another texture is a draw of its own");
+    CHECK_MESSAGE(of([](const R::Draw3D& d) { return d.mesh == R::MeshId{11}; }) == (std::vector<std::uint32_t>{5}),
+                  "[in-mesh-apart] another mesh is a draw of its own");
+    const auto isCopies = [](const R::Draw3D& d) {
+        return d.mesh == R::MeshId{10} && d.texture == R::TextureId{} && d.cull == R::CullMode::None && d.depthWrite;
+    };
+    CHECK_MESSAGE(of(isCopies) == (std::vector<std::uint32_t>{2, 3, 1, 4}), "[in-bin-near-first] the copies, one draw, near to far");
+    // Bins where their nearest item stands: 8 (z 1), 7 (z 2), the copies (from z 3), 6 (z 4), 5 (z 5).
+    std::vector<std::uint32_t> firsts;
+    for (const R::Draw3D& d : pass->draws) firsts.push_back(pass->instances[d.instanceOffset].color.r);
+    CHECK_MESSAGE(firsts == (std::vector<std::uint32_t>{8, 7, 2, 6, 5}), "[in-bins-by-nearest] each draw where its nearest instance stands");
+    for (const R::Draw3D& d : pass->draws) {
+        if (!isCopies(d)) continue;
+        CHECK_MESSAGE(d.indexCount == 3, "[in-draw-mesh] the draw names the shared mesh's indices");
+        CHECK_MESSAGE((Near(pass->instances[d.instanceOffset].world.values[14], 3.0F) &&
+                       Near(pass->instances[d.instanceOffset + 3].world.values[14], 12.0F)),
+                      "[in-instance-world] each instance carries its item's world");
+    }
+}
+
+TEST_CASE("pipeline3d: blended and overlay items join only their neighbours of the same key, far to near") {
+    // big-map declaration section 16, I2, I4: the sorted groups keep their order.
+    const auto blended = [](const std::uint64_t entity, const float z, const std::uint32_t mesh) {
+        R::Extracted3dItem item = Copy(entity, z);
+        item.mesh = R::MeshId{mesh};
+        item.blend = R::BlendMode::Alpha;
+        return item;
+    };
+    std::vector<R::Extracted3dItem> items{blended(1, 10.0F, 20), blended(2, 8.0F, 20), blended(3, 9.0F, 21), blended(4, 7.0F, 20),
+                                          blended(5, 6.0F, 20)};
+    // Overlays: the farthest is mesh 20 blended like 5, but not depth-tested; then two of mesh 30 that differ in blend.
+    items.push_back(blended(6, 100.0F, 20));
+    items.back().depthTest = false;
+    items.push_back(blended(7, 5.0F, 30));
+    items.back().depthTest = false;
+    items.push_back(Copy(8, 4.0F));
+    items.back().mesh = R::MeshId{30};
+    items.back().depthTest = false;
+    const std::optional<R::Pass3D> pass = R::Queue3d(Camera3d(), items);
+    REQUIRE(pass.has_value());
+    std::vector<std::vector<std::uint32_t>> draws;
+    for (const R::Draw3D& d : pass->draws) draws.push_back(Reds(*pass, d));
+    REQUIRE(draws.size() >= 3);
+    CHECK_MESSAGE((draws[0] == std::vector<std::uint32_t>{1} && draws[1] == std::vector<std::uint32_t>{3}),
+                  "[in-blend-neighbours-only] the same mesh with another between is not joined");
+    CHECK_MESSAGE(draws[2] == (std::vector<std::uint32_t>{2, 4, 5}), "[in-blend-neighbours-join] neighbours of one key join, far to near");
+    CHECK_MESSAGE((draws.size() == 6 && draws[3] == std::vector<std::uint32_t>{6}),
+                  "[in-depth-test-apart] a neighbour that is not depth-tested is a draw of its own");
+    CHECK_MESSAGE((draws.size() == 6 && draws[4] == std::vector<std::uint32_t>{7} && draws[5] == std::vector<std::uint32_t>{8}),
+                  "[in-blend-apart] neighbours of another blend are draws of their own");
+}
+
+TEST_CASE("pipeline3d: culled items and items of other layers are not instances; items of their own geometry never join") {
+    // big-map declaration section 16, I3.
+    std::vector<R::Extracted3dItem> items{Copy(1, 5.0F), Copy(2, 6.0F), Copy(3, 7.0F), Copy(4, 8.0F)};
+    items[2].layers = 2;
+    R::ExtractedCamera camera = Camera3d();
+    camera.culled = {2};
+    R::Extracted3dItem skinned = Copy(5, 9.0F);
+    skinned.mesh = R::MeshId{};
+    skinned.vertices.resize(3);
+    skinned.indices = {0, 1, 2};
+    items.push_back(skinned);
+    skinned.entity = 6;
+    skinned.world = At(0, 0, 10.0F);
+    items.push_back(skinned);
+    const std::optional<R::Pass3D> pass = R::Queue3d(camera, items);
+    REQUIRE(pass.has_value());
+    REQUIRE(!pass->draws.empty());
+    CHECK_MESSAGE(Reds(*pass, pass->draws[0]) == (std::vector<std::uint32_t>{1, 4}), "[in-culled-out] the culled and the other layer's are no instances");
+    CHECK_MESSAGE((pass->draws.size() == 3 && pass->draws[1].instanceCount == 1 && pass->draws[2].instanceCount == 1 &&
+                   pass->draws[2].vertexOffset == 3),
+                  "[in-own-apart] items with vertices of their own are a draw each");
+}
+
 TEST_CASE("pipeline3d: a 2D camera or a camera without a size draws no 3D pass") {
     R::ExtractedCamera camera = Camera3d();
     camera.is3d = false;
