@@ -711,6 +711,19 @@ LOD、串流、GPU 效能量測（本機的重 GPU 量測要先問）、2D 的 i
 - L5：Linux 1 km 的 Client 穩定 RSS 比改前少，數字寫進 dev_log。
 - 新加的突變全部 killed；L1 三平台。
 
+### 17.7 結果（2026-11-26，Linux 主機，1 km）
+
+原始碼 `b63ba3f2`。同一個 probe（17.4：建好網格就放掉 region 文件與碰撞盒，模型只交給 `Mesh3d`），同樣 5 處 × 8 方向 × 300 幀（12,000／12,000 幀，跳過 0）。證據：主 checkout `build/evidence/gyo2-big-map/s5/linux/client_2000*`。
+
+| 形式 | 載入後的 RSS | 結束時的 RSS | 峰值 RSS | 中位數 | 最壞 p95 |
+|---|---|---|---|---|---|
+| 改前（持有的模型、不限上傳） | 1,045 MB | 1,045 MB | 1,767 MB | 0.89 ms | 1.27 ms |
+| 改後（`HandedModel`、64 MiB） | 345 MB | 346 MB | 1,127 MB | 0.89 ms | 1.27 ms |
+
+- 穩定值少 700 MB（−67%），峰值少 640 MB；畫面時間不變。
+- 預期的穩定值約 0.2 GB，量到 0.35 GB；改前的穩定值也比推算的 1.6 GB 少（1.05 GB）。transfer buffer 這類 GPU 可見的記憶體有多少算進 RSS，我沒有分開量，所以兩項各省多少沒有拆開。
+- 峰值的大部分是 worker 做好、交給 render 之前的 `ModelData`（17.4 預期的那一份）。
+
 ### 17.6 不做
 
 資產形式的「只給 render」旗標、transfer buffer 的縮回、頂點壓縮（要遊戲自己的 shader）、平行解析（5.2.2 的待辦）、LOD（S7，延後）。
