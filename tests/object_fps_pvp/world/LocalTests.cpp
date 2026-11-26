@@ -11,16 +11,19 @@ namespace {
 std::unique_ptr<O::Product> BuildLocal(const std::size_t spawn, const std::uint64_t user = 9) {
     O::ProductDescription description;
     description.name = "pvp-solo";
-    description.worlds.push_back(Stepped(PW::LocalWorld({ShippedContent(), 0, user, nullptr, spawn})));
+    ReadShippedMaps(description);
+    description.worlds.push_back(Stepped(PW::LocalWorld({.content = ShippedContent(), .arena = 0, .localUser = user, .spawn = spawn})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
-    return std::move(built).value();
+    auto product = std::move(built).value();
+    Generate(*product);
+    return product;
 }
 
 } // namespace
 
 TEST_CASE("world: a Local World seats its own player at the spawn it was given, without net, and moves it by its input") {
-    const object_fps_pvp::sim::ArenaContent& arena = ShippedContent()->arenas[0].content;
+    const object_fps_pvp::sim::ArenaContent& arena = ShippedContent()->arenas[0];
     REQUIRE(arena.spawns.size() >= 2);
     auto product = BuildLocal(1);
     K::World& world = GameWorld(*product);
@@ -51,7 +54,7 @@ TEST_CASE("world: a Local World seats its own player at the spawn it was given, 
 }
 
 TEST_CASE("world: a Local World's spawn index wraps around the arena's spawns") {
-    const object_fps_pvp::sim::ArenaContent& arena = ShippedContent()->arenas[0].content;
+    const object_fps_pvp::sim::ArenaContent& arena = ShippedContent()->arenas[0];
     auto product = BuildLocal(arena.spawns.size());
     REQUIRE(static_cast<bool>(product->RunFrame()));
     K::World& world = GameWorld(*product);

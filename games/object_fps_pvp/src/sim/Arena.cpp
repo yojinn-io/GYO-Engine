@@ -73,7 +73,8 @@ std::optional<ArenaContent> ParseArena(const std::string_view text, std::string&
         if (arena.eyeHeight > arena.bodyHeight) throw std::runtime_error("the eye is above the top of the body");
         if (arena.bodyHeight < 2 * arena.radius) throw std::runtime_error("the body is shorter than its two caps");
         if (!std::isfinite(2 * arena.gravity * arena.jumpHeight)) throw std::runtime_error("the jump speed is not finite");
-        arena.map = PlainName(data::Member(json, "map"), "map");
+        arena.map = data::String(data::Member(json, "map"), "map");
+        if (arena.map.empty()) throw std::runtime_error("map is empty");
         if (data::HasMember(json, "floor")) arena.floor = Finite(data::Member(json, "floor"), "floor");
         arena.killHeight = Finite(data::Member(json, "kill_height"), "kill_height");
         if (arena.floor && !(arena.killHeight < *arena.floor)) throw std::runtime_error("the kill height is not below the floor");

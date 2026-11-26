@@ -32,6 +32,7 @@
 #include "engine/io/helpers/ReadAllText.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec2.hpp"
+#include "engine/physics_3d/Collider.hpp"
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
@@ -52,6 +53,8 @@
 #include "engine/transform/Transform.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
+#include "engine/orchestration/WorldGeneration.hpp"
+#include "engine/voxel_map/VoxelMapLoaders.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/AssetView.hpp"
 #include "engine/world_time/TimeTypes.hpp"
@@ -91,6 +94,7 @@ namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
 namespace WT = GYO::Engine::WorldTime;
 namespace PW = object_fps_pvp::world;
+namespace VM = GYO::Engine::VoxelMap;
 
 void HashValue(K::Hasher&, const ClientView&) {}
 void HashValue(K::Hasher&, const DrawnFrames&) {}
@@ -167,12 +171,11 @@ void HashValue(K::Hasher&, const CoverState&) {}
 const R::ClearColorConfig kSky{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}};
 
 // The loading of the game scene (game-flow declaration 3.5). The steps are judged again every frame until ready, so
-// a later change (the Match's arena, a new model to load) undoes the steps after it; the progress never goes back.
+// a later change (a new model to load) undoes the steps after it; the progress never goes back.
 struct GameReadiness final {
     double progress = 0.0;
     bool covered = false;                   // the overlay is shown: the game may be drawn under it
-    bool assets = false;                    // the game's assets finished
-    std::string arena;                      // the arena shown when they were (ShowArena): another one is warmed again
+    bool assets = false;                    // the game's assets finished, and both Worlds' maps
     std::optional<std::uint64_t> warmFrom;  // DrawnFrames::shown when the assets were done (or a draw was last skipped)
     std::optional<std::uint64_t> warmStart; // ... when they were first done: the warm-up's limit counts from here
     std::uint64_t skippedAt = 0;            // DrawnFrames::skipped at warmFrom
@@ -287,11 +290,18 @@ void HashValue(K::Hasher&, const ClientCharacters&) {}
 
 struct ClientScene final {
     std::shared_ptr<const PresentationContent> presentation;
-    std::string shownArena;
-    // The entities that show the arena's map, one per region.
-    std::vector<K::EntityId> regionEntities;
 };
 void HashValue(K::Hasher&, const ClientScene&) {}
+
+// The Frame World's map while it becomes the arena's picture (ShowArena's state).
+struct ArenaPictureLoading final {
+    // The map's asset id (ArenaContent::map).
+    std::string map;
+    A::AssetExecutor* jobs = nullptr;
+    A::Handle<VM::VoxelMapAsset> handle;
+    PW::WorkerTask<ArenaPicture> picture;
+};
+void HashValue(K::Hasher&, const ArenaPictureLoading&) {}
 
 // The HUD's texts: one picture each, made again only when the text changes.
 struct HudText final {
@@ -324,6 +334,9 @@ struct ClientSound final {
     std::map<K::EntityId, std::uint64_t> shotsHeard;  // per player: the last shot tick played
     std::uint64_t confirmedHeard = 0;                 // the own ShotRecord tick played
     std::map<K::EntityId, present::FootstepTracker> steps;  // per player
+    // The walls of the arena the Sim (or Solo) World plays, from its picture (none before they are built): the
+    // other players' cues behind them are occluded.
+    std::optional<GYO::Engine::Physics3d::BoxSet> walls;
     // The own player's hits, as the hit feedback sees them (a new hit of a living player sounds).
     present::LocalHitFeedback hits;
 };
@@ -608,31 +621,56 @@ K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::Player
     return {};
 }
 
-// The arena's picture: one entity per region of the arena the World plays (FollowMatchArena may have changed it), each
-// a Mesh3d of the region's model the Client holds, with the region's box so the visibility Module culls it. The
-// entities come from the Frame World's allotter; the previous arena's go when the arena changes.
-K::SystemResult ShowArena(K::Res<PW::GameRules> rules, K::Res<PW::ContentRef> content, K::ResMut<ClientScene> scene,
-                          K::Spawn<K::Bundle<T::Transform, R::Mesh3d, R::Aabb>> spawn, K::Despawn despawn) {
-    const sim::ArenaContent& arena = rules->arena;
-    if (scene.Read().shownArena == arena.id || !scene.Read().presentation || !content->content) return {};
-    for (const K::EntityId id : scene.Read().regionEntities) despawn.Entity(id);
-    scene->regionEntities.clear();
-    const auto& arenas = content->content->arenas;
-    for (std::size_t i = 0; i < arenas.size() && i < scene.Read().presentation->arenaPictures.size(); ++i) {
-        if (arenas[i].content.id != arena.id) continue;
-        const ArenaPicture& picture = scene.Read().presentation->arenaPictures[i];
-        for (const data::RegionPicture& region : picture.regions) {
-            R::Mesh3d mesh;
-            mesh.model = region.model;
-            mesh.image = picture.palette;
-            mesh.filter = R::TextureFilter::Nearest;
-            auto id = spawn.New(T::Transform{}, std::move(mesh), R::Aabb{region.bounds});
-            if (!id) return Base::Err(std::move(id).error());
-            scene->regionEntities.push_back(*id);
+// Main/Update while the Frame World generates: the arena's picture. The map comes from the asset store (the Sim or
+// Solo World reads the same one: the store reads it once); only its faces reach the worker, which makes one model per
+// region and the palette picture; then one entity per region, a Mesh3d of the model the Client holds with the region's
+// box (the visibility Module culls it). The World generates until they are there; a map that fails keeps it
+// generating, and MapLoad says why (LeaveOnEnd leaves).
+K::SystemResult ShowArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetView> view, K::ResMut<ArenaPictureLoading> loading,
+                          K::ResMut<PW::MapLoad> load, K::ResMut<O::WorldGeneration> generation,
+                          K::Spawn<K::Bundle<T::Transform, R::Mesh3d, R::Aabb>> spawn) {
+    const PW::MapStage stage = load.Read().stage;
+    if (stage == PW::MapStage::Done) return {};
+    // Every frame but the one the map is done in holds the generation.
+    const auto hold = [&generation] {
+        generation->Hold();
+        return K::SystemResult{};
+    };
+    if (stage == PW::MapStage::Failed) return hold();
+    ArenaPictureLoading& arena = loading.Get();
+    if (stage == PW::MapStage::Reading) {
+        if (arena.handle.Id().Empty()) arena.handle = requests->Load<VM::VoxelMapAsset>(A::AssetId(arena.map));
+        const PW::MapReading reading = PW::ReadMap(*view, arena.handle);
+        if (!reading.failure.empty()) {
+            arena.handle = {};
+            load->stage = PW::MapStage::Failed;
+            load->failure = arena.map + ": " + reading.failure;
+            return hold();
         }
-        break;
+        if (load.Read().done != reading.done || load.Read().total != reading.total) {
+            load->done = reading.done;
+            load->total = reading.total;
+        }
+        if (!reading.complete) return hold();
+        data::ArenaMap faces = data::CopyMapPart(*reading.index, reading.regions, data::MapPart::Faces);
+        arena.handle = {};
+        arena.picture = PW::WorkerTask<ArenaPicture>::Start(arena.jobs, [faces = std::move(faces)] {
+            return ArenaPicture{data::RegionPictures(faces), PaletteOf(faces)};
+        });
+        load->stage = PW::MapStage::Building;
+        return hold();
     }
-    scene->shownArena = arena.id;
+    std::optional<ArenaPicture> picture = arena.picture.Take();
+    if (!picture) return hold();
+    for (data::RegionPicture& region : picture->regions) {
+        R::Mesh3d mesh;
+        mesh.model = std::move(region.model);
+        mesh.image = picture->palette;
+        mesh.filter = R::TextureFilter::Nearest;
+        auto id = spawn.New(T::Transform{}, std::move(mesh), R::Aabb{region.bounds});
+        if (!id) return Base::Err(std::move(id).error());
+    }
+    load->stage = PW::MapStage::Done;
     return {};
 }
 
@@ -992,7 +1030,6 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
 
 K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view,
                            K::Res<ClientScene> scene, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
-                           K::Res<PW::ContentRef> content,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
                            K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
@@ -1018,13 +1055,12 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     });
     // The other players' cues are heard at the own player's ear, from the middle of their body; the arena between them
     // lowers them (PW::Blocked).
-    const PW::InstalledArena* arena = content->content ? content->content->Find(rules->arena.id) : nullptr;
     const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
         if (own == nullptr) return;
         const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->arena, rules->stance, own->crouched != 0), 0.0F};
         const Math::Vec3 source =
             body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->arena, rules->stance, body.crouched != 0), 0.0F};
-        const bool occluded = arena != nullptr && PW::Blocked(*arena, ear, source);
+        const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
         if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
     };
     const double now = static_cast<double>(time->elapsed) / 1e9;
@@ -1112,6 +1148,8 @@ struct GameOrigin final {
     std::uint64_t room = 0;
     std::string savePath;
     std::string map;  // the scene's (SceneChange::map): the single player's room comes back to it
+    std::optional<N::NetConnectTarget> connect;  // the scene's (SceneChange::connect): the game again on another arena
+    std::shared_ptr<const PW::GameContent> game;  // the arenas this Client has
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
 
@@ -1124,13 +1162,13 @@ constexpr std::uint64_t kWarmFramesAtMost = 120;
 
 // The steps of the loading, in order; each waits for the ones before it.
 K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<DrawnFrames> drawn,
-                               K::Res<ClientScene> scene, K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::ResMut<GameReadiness> readiness) {
+                               K::Res<PW::MapLoad> map, K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots,
+                               K::ResMut<GameReadiness> readiness) {
     if (readiness.Read().ready) return {};
     GameReadiness next = readiness.Read();
     next.covered = next.covered || (roots.Get<Ui::UiRootState>(kOverlay) != nullptr && roots.Get<Ui::UiRootState>(kOverlay)->runtime.has_value());
-    // The assets: the game's and the overlay's document. The arena's regions are models the Client holds (read with the
-    // content): ShowArena, before this, shows the arena the World plays at once, with nothing to load -- but another
-    // arena than the one warmed up (the Match's, come later) is drawn anew: the steps after the assets again.
+    // The assets: the game's and the overlay's document, and the map: this World's picture of it (its regions count
+    // in the bar) and the Sim (or Solo) World's walls.
     bool assetsDone = false;
     if (assets->requested) {
         std::vector<WA::UntypedHandle> handles;
@@ -1150,24 +1188,22 @@ K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView
         }
         const WA::AssetReadiness ready = view->Ready(handles);
         // A failed asset does not hold the game: it shows without it (game-flow declaration, revision 4).
-        const double done = handles.empty() ? 0.0 : static_cast<double>(ready.loaded + ready.failed) / static_cast<double>(handles.size());
+        const std::size_t total = handles.size() + map->total;
+        const double done = total == 0 ? 0.0 : static_cast<double>(ready.loaded + ready.failed + map->done) / static_cast<double>(total);
         next.progress = std::max(next.progress, kAssetsShare * done);
-        assetsDone = ready.allFinished && ready.dependenciesFinished;
+        assetsDone = ready.allFinished && ready.dependenciesFinished && map->stage == PW::MapStage::Done &&
+                     sim->mapLoad.stage == PW::MapStage::Done;
     }
-    const bool otherArena = next.assets && next.arena != scene->shownArena;
-    if (!assetsDone || otherArena) {
-        // Not (or no more), or another arena: everything after it again (another arena's warm-up has its own limit).
-        next.assets = assetsDone;
+    if (!assetsDone) {
+        // Not (or no more): everything after it again.
+        next.assets = false;
         next.warmed = next.network = false;
         next.warmFrom.reset();
-        if (otherArena) next.warmStart.reset();
         next.lastFrom.reset();
-        next.arena = scene->shownArena;
         readiness.Get() = std::move(next);
         return {};
     }
     next.assets = true;
-    next.arena = scene->shownArena;
     // The warm-up: the game drawn under the overlay until two frames are shown with no draw skipped (the textures,
     // meshes and pipelines made), at most kWarmFramesAtMost frames after the assets were done.
     if (next.covered && !next.warmed) {
@@ -1220,8 +1256,14 @@ K::SystemResult RevealUnderCover(K::Res<GameReadiness> readiness, K::Query<K::Wr
 }
 
 // The player's words for where the loading is.
-std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const Scene scene) {
-    if (!readiness.assets) return "データを読み込んでいます…";
+std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const PW::MapLoad& map, const Scene scene) {
+    if (!readiness.assets) {
+        if (map.stage == PW::MapStage::Reading && map.total > 0) {
+            return "地図を読み込んでいます…（" + std::to_string(map.done) + "/" + std::to_string(map.total) + "）";
+        }
+        if (map.stage == PW::MapStage::Building || sim.mapLoad.stage == PW::MapStage::Building) return "地図を組み立てています…";
+        return "データを読み込んでいます…";
+    }
     if (!readiness.warmed) return "描画の準備をしています…";
     if (!readiness.network) return scene == Scene::MultiGame ? "対戦に接続しています…" : "準備しています…";
     if (!readiness.ready) return "最初の画面を描いています…";
@@ -1275,7 +1317,7 @@ K::SystemResult EnterPaused(K::Res<OverlayDocument> overlay, OverlayRoots roots)
 }
 
 // Loading: the loading screen's words and bar; the game, once ready and started.
-K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> sim, K::Res<GameOrigin> origin,
+K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::Res<GameOrigin> origin,
                             K::Query<K::Write<Ui::UiBindings>> roots, K::ResMut<GamePageRequest> page) {
     if (readiness->ready && sim->started) {
         page->Request(GamePage::Playing);
@@ -1283,7 +1325,7 @@ K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> 
     }
     auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
     if (!bindings) return {};
-    const std::string text = LoadingText(*readiness, *sim, origin->scene);
+    const std::string text = LoadingText(*readiness, *sim, *map, origin->scene);
     const auto* shown = bindings->Find("loading");
     if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
     const auto* progress = bindings->Find("progress");
@@ -1340,18 +1382,35 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
     return {};
 }
 
-// Frame World: the connection ended or the Match's content differs (the Sim World's picture says so): back to the
-// lobby with the reason, noted for the program (FrameNotes).
-K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
+// Frame World: a map did not load (this World's picture or the Sim World's walls), the Match's content differs, or the
+// connection ended (the Sim World's picture says so): back to where the game came from with the reason, noted for the
+// program (FrameNotes). The Match plays another arena this Client has (a Match reached by its address): the game again
+// on that arena, as a World plays one arena (big-map declaration 15.3).
+K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::Res<PW::GameRules> rules, K::Res<GameOrigin> origin,
+                           K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
     if (request.Read().next) return {};
+    const GameOrigin& from = *origin;
+    const std::string& mapFailure = !map->failure.empty() ? map->failure : sim->mapLoad.failure;
     std::string reason;
-    if (!sim->mismatch.empty()) {
+    if (!mapFailure.empty()) {
+        notes->map = mapFailure;
+        reason = "地図を読み込めません: " + mapFailure;
+    } else if (!sim->mismatch.empty()) {
+        if (from.scene == Scene::MultiGame && from.connect && !sim->mismatchArena.empty() && sim->mismatchArena != rules->arena.id &&
+            from.game && from.game->Find(sim->mismatchArena) != nullptr) {
+            request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = sim->mismatchArena};
+            return {};
+        }
         notes->mismatch = sim->mismatch;
         reason = "Match の内容がこの Client と違います: " + sim->mismatch;
     } else if (sim->ended) {
         notes->endReason = sim->endReason;
         reason = sim->endReason;
     } else {
+        return {};
+    }
+    if (from.scene == Scene::SoloGame) {
+        request->next = SceneChange{.scene = Scene::SoloRoom, .status = std::move(reason), .map = from.map};
         return {};
     }
     // The room is not left: the player is still its member, and may come back to the Match (the room gives a new
@@ -1424,6 +1483,9 @@ WorldSnapshot SnapshotOf(K::World& world) {
         snapshot.arenaId = rules->arena.id;
         snapshot.wallsDigest = rules->wallsDigest;
     }
+    if (const auto* collider = world.Get<GYO::Engine::Physics3d::Collider>(PW::kArenaEntity)) {
+        if (const auto* boxes = std::get_if<GYO::Engine::Physics3d::BoxSet>(&collider->shape)) snapshot.walls = *boxes;
+    }
     ClientView& view = snapshot.view;
     if (const auto* tick = world.Resource<WT::Tick>()) view.tick = tick->value;
     if (const auto* fixed = world.Resource<WT::FixedTime>()) view.stepNanoseconds = static_cast<std::uint64_t>(fixed->accumulator.Step());
@@ -1440,7 +1502,11 @@ WorldSnapshot SnapshotOf(K::World& world) {
         view.jitterTicks = clock->jitterTicks;
     }
     view.ownPlayer = PW::OwnPlayer(world);
-    if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) view.mismatch = mismatch->reason;
+    if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) {
+        view.mismatch = mismatch->reason;
+        view.mismatchArena = mismatch->matchArena;
+    }
+    if (const auto* map = Find<PW::MapLoad>(world)) view.mapLoad = *map;
     if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
     if (const auto* info = Find<PW::MatchInfo>(world)) view.started = info->phase == PW::MatchPhase::Playing;
     if (const auto* session = Find<ClientSessionEnd>(world)) {
@@ -1504,17 +1570,12 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
         }
     }
     mirror.players = std::move(players);
-    // The arena the Sim World follows (FollowMatchArena); one this Client does not have stays as it is (the Sim
-    // World's ContentMismatch says why).
-    PW::GameRules* rules = world.ResourceMut<PW::GameRules>();
-    if (!snapshot->arenaId.empty() && (rules->arena.id != snapshot->arenaId || rules->wallsDigest != snapshot->wallsDigest)) {
-        const auto* content = world.Resource<PW::ContentRef>();
-        const PW::InstalledArena* arena = content != nullptr && content->content ? content->content->Find(snapshot->arenaId) : nullptr;
-        if (arena != nullptr && arena->wallsDigest == snapshot->wallsDigest) {
-            rules->arena = arena->content;
-            rules->wallsDigest = arena->wallsDigest;
-        }
+    // The walls the Sim World built for the arena both Worlds play.
+    if (const PW::GameRules* rules = world.Resource<PW::GameRules>();
+        snapshot->arenaId == rules->arena.id && rules->wallsDigest != snapshot->wallsDigest) {
+        world.ResourceMut<PW::GameRules>()->wallsDigest = snapshot->wallsDigest;
     }
+    if (auto* sound = world.ResourceMut<ClientSound>(); sound != nullptr && snapshot->walls) sound->walls = snapshot->walls;
     world.SetResource(snapshot->view);
 }
 
@@ -1677,7 +1738,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Component<PW::ShotRecord>({.name = "ShotRecord"});
     r.Resource<PW::GameRules>({.name = "GameRules"});
     r.Resource<PW::LocalUser>({.name = "LocalUser"});
-    r.Resource<PW::ContentRef>({.name = "ContentRef"});
+    r.Resource<PW::MapLoad>({.name = "MapLoad"});
     r.Resource<ClientView>({.name = "object_fps_pvp.ClientView"});
     r.Resource<FrameMirror>({.name = "object_fps_pvp.FrameMirror"});
     r.Resource<RemoteView>({.name = "object_fps_pvp.RemoteView"});
@@ -1699,7 +1760,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
 std::size_t ArenaOf(const SceneChange& change, const ClientOptions& options) {
     const auto& arenas = options.game->arenas;
     for (std::size_t i = 0; i < arenas.size(); ++i) {
-        if (arenas[i].content.id == change.map) return i;
+        if (arenas[i].id == change.map) return i;
     }
     return options.arena;
 }
@@ -1719,7 +1780,12 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     interpolate.name = "object_fps_pvp.InterpolateRemotes";
     Mount(interpolate, O::DefaultSchedules::frame, O::DefaultSchedules::preUpdate);
     r.AddSystem<&InterpolateRemotes>(std::move(interpolate));
-    r.AddSystem<&ShowArena>(InUpdate("object_fps_pvp.ShowArena"));
+    {
+        K::SystemOptions show = InUpdate("object_fps_pvp.ShowArena");
+        show.mounts.front().conditions.push_back(O::WhileGenerating());
+        r.AddSystem<&ShowArena>(std::move(show));
+    }
+    r.Resource<ArenaPictureLoading>({.name = "object_fps_pvp.ArenaPictureLoading"});
     r.AddSystem<&PlaceCamera>(InUpdate("object_fps_pvp.PlaceCamera", {"object_fps_pvp.ShowHud"}));
     r.AddSystem<&PoseCharacters>(InUpdate("object_fps_pvp.PoseCharacters"));
     r.AddSystem<&AddCharacters>(InUpdate("object_fps_pvp.AddCharacters", {"object_fps_pvp.PoseCharacters", "object_fps_pvp.RequestAssets"}));
@@ -1755,7 +1821,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
-    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map};
+    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map,
+                      change.connect, options.game};
     const std::uint64_t user = LocalUserOf(change, options);
     const std::size_t played = ArenaOf(change, options);
     setup.Prepare([options, port, origin, user, played](K::World& world) -> Base::Result<void, O::OrchestrationError> {
@@ -1764,22 +1831,22 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.SetResource(CoverState{});
         if (world.Resource<DrawnFrames>() == nullptr) world.SetResource(DrawnFrames{});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
-        const PW::InstalledArena& arena = options.game->arenas[played];
+        const sim::ArenaContent& arena = options.game->arenas[played];
         PW::GameRules rules;
-        rules.arena = arena.content;
+        rules.arena = arena;
         rules.stance = options.game->stance;
         rules.combat = options.game->combat;
-        rules.wallsDigest = arena.wallsDigest;
         rules.character = options.game->character;
         world.SetResource(std::move(rules));
         world.SetResource(PW::LocalUser{user});
-        world.SetResource(PW::ContentRef{options.game});
+        world.SetResource(PW::MapLoad{});
+        world.SetResource(ArenaPictureLoading{.map = arena.map, .jobs = options.jobs});
         world.SetResource(ClientView{});
         world.SetResource(FrameMirror{});
         world.SetResource(RemoteView{});
         world.SetResource(ClientAssets{});
         world.SetResource(ClientControls{});
-        world.SetResource(ClientScene{options.presentation, {}});
+        world.SetResource(ClientScene{options.presentation});
         world.SetResource(ClientHud{});
         world.SetResource(ClientCharacters{});
         ClientSound sound;
@@ -2023,7 +2090,7 @@ float RecoilRadians(const ViewmodelDefinition& viewmodel, const double seconds) 
     return left < 1e-3 ? 0.0F : viewmodel.recoilKickRadians * static_cast<float>(left);
 }
 
-std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game, std::string& error) {
+std::optional<PresentationContent> LoadPresentation(const std::string& root, std::string& error) {
     error.clear();
     GYO::Engine::IO::FS::NativeFileSystem fs;
     PresentationContent content;
@@ -2053,9 +2120,6 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, con
         error = exception.what();
         return std::nullopt;
     }
-    for (const world::InstalledArena& arena : game.arenas) {
-        content.arenaPictures.push_back(ArenaPicture{data::RegionPictures(*arena.map), PaletteOf(*arena.map)});
-    }
     return content;
 }
 
@@ -2077,6 +2141,7 @@ void ConfigureClient(O::ProductSetup& setup) {
         setup.Report("LoaderRefused", std::string("the ") + what + " loader was refused: " + Base::Describe(result.error()));
         return true;
     };
+    PW::ConfigureGame(setup);
     if (refused("fbx", registry->template Register<GYO::Engine::Model::FbxLoader>())) return;
     if (refused("png", registry->template Register<IM::PngLoader>())) return;
     if (refused("font", registry->template Register<TX::FontLoader>())) return;
@@ -2106,7 +2171,8 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
             RB::RollbackEntry(setup).StepSchedule();
             return;
         }
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options)},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options),
+                               .jobs = options.jobs},
                        PW::WorldEnd::Client);
         BuildSim(setup);
         if (scene.connect) {
@@ -2129,7 +2195,8 @@ O::WorldDescription ClientSoloWorld(ClientOptions options) {
         const SceneChange& scene = director->Current();
         if (!SoloPlays(scene.scene)) return;
         std::random_device device;
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = options.userId, .spawn = device()},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = options.userId, .spawn = device(),
+                               .jobs = options.jobs},
                        PW::WorldEnd::Local);
         BuildSolo(setup);
     };
@@ -2158,7 +2225,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         const std::string& directory = start->dataDirectory;
         // The maps a room offers: the installed arenas, by id.
         std::vector<std::string> maps;
-        for (const PW::InstalledArena& arena : options.game->arenas) maps.push_back(arena.content.id);
+        for (const sim::ArenaContent& arena : options.game->arenas) maps.push_back(arena.id);
         GatewayContext gateway{directory, start->gateway, maps};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;

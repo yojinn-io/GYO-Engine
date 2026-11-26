@@ -55,6 +55,12 @@ struct LoneMatch {
         return id;
     }
     void Steer(const K::EntityId id, const PW::PlayerInput& input) { *World().GetMut<PW::PlayerInput>(id) = input; }
+    // Other walls than the map's (a test's own geometry).
+    void SetWalls(const std::vector<Math::Aabb>& boxes) {
+        auto built = GYO::Engine::Physics3d::BoxSet::Build(boxes);
+        REQUIRE(static_cast<bool>(built));
+        World().Insert(PW::kArenaEntity, GYO::Engine::Physics3d::Collider{GYO::Engine::Physics3d::Shape{std::move(*built)}});
+    }
     void Run(const int frames) {
         for (int i = 0; i < frames; ++i) {
             REQUIRE(static_cast<bool>(product->RunFrame()));
@@ -135,15 +141,9 @@ TEST_CASE("world: a jump rises to the arena's height and lands") {
 }
 
 TEST_CASE("world: a crouched player under a low roof cannot stand up until it leaves it") {
-    // An arena of the shipped one's rules with a roof from y 1.5 to 3 over x in [8, 12] (no pillar).
-    auto content = std::make_shared<PW::GameContent>(*ShippedContent());
-    PW::InstalledArena& arena = content->arenas.front();
-    const std::vector<GYO::Engine::Math::Aabb> roof{{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}};
-    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(roof);
-    REQUIRE(static_cast<bool>(boxes));
-    arena.walls = *boxes;
-    arena.wallsDigest = boxes->Digest();
-    LoneMatch match(content);
+    // The shipped arena's rules with a roof from y 1.5 to 3 over x in [8, 12] for walls (no pillar).
+    LoneMatch match;
+    match.SetWalls({{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}});
     const K::EntityId player = match.AddPlayer({6, 0, 5});
     PW::PlayerInput crouch = Input(0, 1, 0);
     crouch.crouch = 1;
@@ -280,10 +280,11 @@ struct Session {
     std::unique_ptr<O::Product> match;
     std::vector<std::unique_ptr<O::Product>> clients;
 
-    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step).
+    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step). clientArena: the arena
+    // the Clients play (none: the Match's).
     Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
             std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
-            const std::uint32_t startDeadlineSeconds = 60) {
+            const std::uint32_t startDeadlineSeconds = 60, const std::optional<std::size_t> clientArena = std::nullopt) {
         seats = std::make_shared<PW::Seats>(capacity);
         std::vector<N::MemoryLink> serverEnds;
         for (int i = 0; i < clientCount; ++i) {
@@ -299,7 +300,7 @@ struct Session {
                            startDeadlineSeconds);
         for (int i = 0; i < clientCount; ++i) {
             clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
-                                          static_cast<std::uint64_t>(i + 1), reader));
+                                          static_cast<std::uint64_t>(i + 1), reader, clientArena.value_or(matchArena)));
         }
     }
     K::World& Match() { return GameWorld(*match); }
@@ -436,28 +437,31 @@ TEST_CASE("world: a Client that leaves takes its player with it and gives its se
     CHECK(PlayerOf(session.Client(0), 2) == 0);
 }
 
-TEST_CASE("world: a Client follows the Match's arena; one it does not have is a content mismatch") {
+TEST_CASE("world: a Client plays the arena it was built with; the Match playing another one is a content mismatch") {
     {
-        // The Match plays the second installed arena (pvp_corners); the Client starts with the first.
+        // Both play the second installed arena (pvp_corners): the same walls, read by each from the map.
         Session session(1, 4, 1);
         session.Frames(90);
         K::World& client = session.Client(0);
         CHECK(client.Resource<PW::GameRules>()->arena.id == "pvp_corners_v1");
-        CHECK(client.Resource<PW::GameRules>()->wallsDigest == ShippedContent()->arenas[1].wallsDigest);
+        const std::uint64_t matchWalls = session.Match().Resource<PW::GameRules>()->wallsDigest;
+        CHECK(matchWalls != 0);
+        CHECK(session.Match().Resource<PW::MatchInfo>()->wallsDigest == matchWalls);
+        CHECK(client.Resource<PW::GameRules>()->wallsDigest == matchWalls);
         const auto* walls = client.Get<GYO::Engine::Physics3d::Collider>(PW::kArenaEntity);
         REQUIRE(walls != nullptr);
         const auto* boxes = std::get_if<GYO::Engine::Physics3d::BoxSet>(&walls->shape);
         REQUIRE(boxes != nullptr);
-        CHECK(boxes->Digest() == ShippedContent()->arenas[1].wallsDigest);
+        CHECK(boxes->Digest() == matchWalls);
         CHECK(client.Resource<PW::ContentMismatch>()->reason.empty());
     }
     {
-        auto onlyFirst = std::make_shared<PW::GameContent>(*ShippedContent());
-        onlyFirst->arenas.resize(1);
-        Session session(1, 4, 1, onlyFirst);
+        // The Client plays the first; the Match the second: the Client says which one the Match plays, and stays.
+        Session session(1, 4, 1, ShippedContent(), {}, 60, 0);
         session.Frames(90);
-        const std::string& reason = session.Client(0).Resource<PW::ContentMismatch>()->reason;
-        CHECK_MESSAGE(reason.find("pvp_corners_v1") != std::string::npos, reason);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.reason.find("pvp_corners_v1") != std::string::npos, mismatch.reason);
+        CHECK(mismatch.matchArena == "pvp_corners_v1");
         CHECK(session.Client(0).Resource<PW::GameRules>()->arena.id == "pvp_training_v1");
     }
 }
@@ -653,8 +657,10 @@ TEST_CASE("world: an expected player who never comes does not hold the start pas
 }
 
 TEST_CASE("world: the arena stands between two points when its walls cut the segment (the sounds' occlusion)") {
-    const PW::InstalledArena& arena = ShippedContent()->arenas.front();
-    // The pillar: x and z in [9, 11], up to y 2.
+    // The shipped training arena's pillar: x and z in [9, 11], up to y 2.
+    auto built = GYO::Engine::Physics3d::BoxSet::Build(std::vector<GYO::Engine::Math::Aabb>{{{9.0F, 0.0F, 9.0F}, {11.0F, 2.0F, 11.0F}}});
+    REQUIRE(static_cast<bool>(built));
+    const GYO::Engine::Physics3d::BoxSet& arena = *built;
     CHECK(PW::Blocked(arena, {8, 1, 10}, {12, 1, 10}));
     CHECK(PW::Blocked(arena, {12, 1, 10}, {8, 1, 10}));
     // Over it, beside it, or stopping before it: nothing between.
@@ -667,26 +673,25 @@ TEST_CASE("world: the arena stands between two points when its walls cut the seg
 }
 
 namespace {
-// The shipped arena's rules with no walls but one small box far outside it (a BoxSet is built from boxes): the bounds
-// alone hold the bodies. floor: the arena's floor plane (none: nothing holds them up).
-// ground: a slab of map under the whole arena (its top at y = 0) in place of the floor plane.
-std::shared_ptr<PW::GameContent> OpenArena(const std::optional<float> floor, const bool ground = false) {
+// The shipped arena's rules with its floor plane at floor (none: nothing holds the bodies up but the walls).
+std::shared_ptr<PW::GameContent> WithFloor(const std::optional<float> floor) {
     auto content = std::make_shared<PW::GameContent>(*ShippedContent());
-    PW::InstalledArena& arena = content->arenas.front();
+    content->arenas.front().floor = floor;
+    return content;
+}
+// Walls for LoneMatch::SetWalls: none in the arena but one small box far outside it (a BoxSet is built from boxes), so
+// the bounds alone hold the bodies; ground: a slab of map under the whole arena (its top at y = 0).
+std::vector<GYO::Engine::Math::Aabb> OpenWalls(const bool ground = false) {
     std::vector<GYO::Engine::Math::Aabb> walls{{{100.0F, 0.0F, 100.0F}, {101.0F, 1.0F, 101.0F}}};
     if (ground) walls.push_back({{0.0F, -1.0F, 0.0F}, {20.0F, 0.0F, 20.0F}});
-    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(walls);
-    REQUIRE(static_cast<bool>(boxes));
-    arena.walls = *boxes;
-    arena.wallsDigest = boxes->Digest();
-    arena.content.floor = floor;
-    return content;
+    return walls;
 }
 } // namespace
 
 TEST_CASE("world: the arena's bounds are an invisible wall: a body walking out stops at its radius and slides along") {
-    LoneMatch match(OpenArena(0.0F));
-    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    LoneMatch match(WithFloor(0.0F));
+    match.SetWalls(OpenWalls());
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front();
     // Straight at the -Z edge, then along the +X edge.
     const K::EntityId walker = match.AddPlayer({5, 0, 3});
     match.Steer(walker, Input(1, 0, std::numbers::pi_v<float>));
@@ -702,8 +707,9 @@ TEST_CASE("world: the arena's bounds are an invisible wall: a body walking out s
 }
 
 TEST_CASE("world: a body that falls below the kill height dies, and respawns after the respawn time") {
-    LoneMatch match(OpenArena(std::nullopt));
-    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    LoneMatch match(WithFloor(std::nullopt));
+    match.SetWalls(OpenWalls());
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front();
     REQUIRE(arena.killHeight < 0.0F);
     // Nothing under it: it falls.
     const K::EntityId faller = match.AddPlayer({5, 0, 5});
@@ -721,14 +727,15 @@ TEST_CASE("world: a body that falls below the kill height dies, and respawns aft
 }
 
 TEST_CASE("world: a landing from above the safe height costs HP by the metres beyond it; a high enough fall kills") {
-    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front();
     REQUIRE(arena.fallDamage.has_value());
     const sim::CombatRules combat;
   // On the floor plane, and on the map's own ground (no floor plane: the kiriyu maps).
   for (const bool ground : {false, true}) {
     CAPTURE(ground);
     const auto landFrom = [&](const float height) {
-        LoneMatch match(ground ? OpenArena(std::nullopt, true) : OpenArena(0.0F));
+        LoneMatch match(WithFloor(ground ? std::nullopt : std::optional<float>{0.0F}));
+        match.SetWalls(OpenWalls(ground));
         const K::EntityId id = match.AddPlayer({5, height, 5});
         match.World().GetMut<PW::PlayerBody>(id)->grounded = 0;
         match.Steer(id, Input(0, 0, 0));

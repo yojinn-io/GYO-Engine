@@ -51,6 +51,26 @@ std::optional<ArenaMap> ReadArenaMap(const std::string_view indexText, const Reg
     return map;
 }
 
+ArenaMap CopyMapPart(const VM::VoxelMapDocument& index, const std::span<const VM::VoxelRegionDocument* const> regions,
+                     const MapPart part) {
+    ArenaMap map;
+    map.index = index;
+    map.regions.reserve(regions.size());
+    for (const VM::VoxelRegionDocument* region : regions) {
+        VM::VoxelRegionDocument copy;
+        copy.at = region->at;
+        copy.textSha256 = region->textSha256;
+        for (const VM::VoxelChunkDocument& chunk : region->chunks) {
+            VM::VoxelChunkDocument kept{chunk.at, {}, {}};
+            if (part == MapPart::Walls) kept.colliders = chunk.colliders;
+            else kept.quads = chunk.quads;
+            if (!kept.colliders.empty() || !kept.quads.empty()) copy.chunks.push_back(std::move(kept));
+        }
+        map.regions.push_back(std::move(copy));
+    }
+    return map;
+}
+
 std::vector<Math::Aabb> MapColliders(const ArenaMap& map) {
     std::vector<Math::Aabb> boxes;
     for (const VM::VoxelRegionDocument& region : map.regions) {

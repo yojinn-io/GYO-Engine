@@ -8,6 +8,7 @@
 #include "object_fps_pvp/world/Components.hpp"
 
 #include "engine/kernel/Kernel.hpp"
+#include "engine/physics_3d/Shapes.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -40,6 +41,9 @@ struct WorldSnapshot final {
     std::vector<PlayerSnapshot> players;  // every entity with an Owner
     std::string arenaId;                  // the arena the Sim World plays (GameRules)
     std::uint64_t wallsDigest = 0;
+    // Those walls once built (a BoxSet's body is shared and immutable: a copy is a reference), for the sounds'
+    // occlusion in the Frame World.
+    std::optional<GYO::Engine::Physics3d::BoxSet> walls;
     ClientView view;
 };
 class ClientExchange final {

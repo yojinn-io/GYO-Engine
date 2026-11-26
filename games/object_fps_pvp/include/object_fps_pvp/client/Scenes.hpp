@@ -69,6 +69,7 @@ struct FrameNotes final {
     std::string failure;           // why a scene's document was not shown (empty: no failure seen)
     std::string mismatch;          // the Match's content differs from this Client's
     std::string endReason;         // why the last connection ended
+    std::string map;               // why the game's map did not load
 };
 inline void HashValue(GYO::Kernel::Hasher&, const FrameNotes&) {}
 

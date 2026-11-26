@@ -57,10 +57,11 @@ target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_
 
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
-        GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d GYO::VoxelMap
+        GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d GYO::VoxelMap GYO::Asset GYO::WorldAsset
     PRIVATE_LIBRARIES GYO::IO GYO::Http
     SOURCES
     src/data/ArenaMap.cpp
+    src/world/ArenaLoad.cpp
     src/world/MatchSaves.cpp
     src/world/PvpWorld.cpp)
 
@@ -89,7 +90,7 @@ gyo_product_units(${object_fps_pvp_main} MODULES physics_3d render_world world_r
     PLUGINS sdl_window sdl_audio sdl_gpu)
 
 gyo_game_add_executable(match OUT_TARGET object_fps_pvp_match
-    LIBRARIES ${object_fps_pvp_world} GYO::OS GYO::Time
+    LIBRARIES ${object_fps_pvp_world} GYO::OS GYO::Time GYO::Threads GYO::WorldAsset
     SOURCES
     src/match_main.cpp)
 gyo_product_units(${object_fps_pvp_match} MODULES physics_3d)

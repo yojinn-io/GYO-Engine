@@ -7,6 +7,7 @@
 #include "../world/WorldTestSupport.hpp"
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
+#include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
 #include "object_fps_pvp/client/LocalFiles.hpp"
 #include "object_fps_pvp/client/SoloSave.hpp"
@@ -40,6 +41,8 @@
 #include <cctype>
 #include <mutex>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <random>
 #include <chrono>
 #include <set>
@@ -56,6 +59,36 @@ namespace WA = GYO::Engine::WorldAsset;
 namespace sim = object_fps_pvp::sim;
 
 namespace {
+
+// The shipped map an arena plays, read from its files (its catalog id names maps/<name>/), as the asset store reads it.
+object_fps_pvp::data::ArenaMap ShippedMapOf(const object_fps_pvp::sim::ArenaContent& arena) {
+    const std::string prefix = "object_fps_pvp.map.";
+    REQUIRE(arena.map.rfind(prefix, 0) == 0);
+    const std::string dir = std::string(PVP_CONTENT_ROOT) + "/maps/" + arena.map.substr(prefix.size()) + "/";
+    const auto read = [](const std::string& path) -> std::optional<std::string> {
+        std::ifstream in(path, std::ios::binary);
+        if (!in) return std::nullopt;
+        std::ostringstream text;
+        text << in.rdbuf();
+        return text.str();
+    };
+    std::string error;
+    auto index = read(dir + "map.json");
+    REQUIRE(index.has_value());
+    auto map = object_fps_pvp::data::ReadArenaMap(
+        *index, [&](const std::string& file, std::string&) { return read(dir + file); }, error);
+    REQUIRE_MESSAGE(map.has_value(), error);
+    return std::move(*map);
+}
+
+// Whether a Mesh3d's picture is the map's palette (the Frame World makes its own copy: compared by its pixels).
+bool ShowsPalette(const R::Mesh3d& mesh, const object_fps_pvp::data::ArenaMap& map) {
+    const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh.image);
+    if (image == nullptr || *image == nullptr) return false;
+    const auto expected = GYO::Engine::VoxelMap::ExpandVoxelPalette(map.index);
+    const auto pixels = (*image)->Pixels();
+    return (*image)->Width() == expected.width && std::equal(pixels.begin(), pixels.end(), expected.pixels.begin(), expected.pixels.end());
+}
 
 // What the next frame's writer sends, as sdl_window would.
 struct Pending final {
@@ -150,7 +183,8 @@ struct Setup final {
     explicit Setup(const int perStep = 1, const std::uint32_t seats = 4, const std::size_t matchArena = 0,
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
                    std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, std::vector<std::uint64_t> expectUsers = {},
-                   const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {})
+                   const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {},
+                   GYO::Engine::Asset::AssetExecutor* jobs = nullptr)
         : framesPerStep(perStep) {
         if (delayAdvances != 0) {
             N::MemoryLinkSettings link;
@@ -168,10 +202,10 @@ struct Setup final {
         other = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(second.second), 2, reader);
 
         std::string error;
-        auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
+        auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
         this->presentation = std::make_shared<const PC::PresentationContent>(std::move(*presentation));
-        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1};
+        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1, jobs};
         O::WorldDescription solo = Stepped(PC::ClientSoloWorld(options), kStep / framesPerStep);
         O::WorldDescription sim = Stepped(PC::ClientSimWorld(options), kStep / framesPerStep);
         O::WorldDescription game = Stepped(PC::ClientFrameWorld(options, false), kStep / framesPerStep);
@@ -250,6 +284,20 @@ struct Setup final {
     K::World& Sim() { return client->World("Sim").GetWorld(); }
     K::World& Solo() { return client->World("Solo").GetWorld(); }
     Pending& Next() { return *Client().ResourceMut<Pending>(); }
+    // Runs frames until the game scene's Worlds have their map (they generate until then; the map is read on the asset
+    // threads) and the own player is there, at most a few seconds: the frames a test counts start from a game that is
+    // played.
+    void Loaded() {
+        const auto waiting = [this] {
+            return client->Generating("Sim") || client->Generating("Solo") || client->Generating("Frame") ||
+                   !PC::StatusOf(Client()).playing;
+        };
+        for (int i = 0; i < 2000 && waiting(); ++i) {
+            Frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE_FALSE(waiting());
+    }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
         if (step && !holdMatch) REQUIRE(static_cast<bool>(match->RunFrame()));
@@ -347,6 +395,7 @@ I::KeyboardInput Key(const I::KeyCode code, const I::ButtonState state) {
 
 TEST_CASE("client: it connects, shows the arena and the other player, takes the pointer with a click and walks") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     PC::ClientStatus status = PC::StatusOf(setup.Client());
     REQUIRE(status.connected);
@@ -428,6 +477,7 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
 
 TEST_CASE("client: a click in a frame that runs no step still fires at the Match (four frames a step)") {
     Setup setup(4);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -464,6 +514,7 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
 TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, the Match gets its input every step, and stale controls stop the movement") {
     Setup setup;
     setup.other.reset();
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -600,6 +651,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
 TEST_CASE("client: with the Sim World lent, a click among several frames between two of its rounds fires once") {
     Setup setup;
     setup.other.reset();
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -653,6 +705,7 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   for (const std::uint32_t delay : {0U, 13U}) {
     CAPTURE(delay);
     Setup setup(4, 4, 0, std::nullopt, {}, std::nullopt, {}, delay);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -699,6 +752,13 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
 }
 
 namespace {
+// Frames until the Client plays (its own player has come; the map is read on a worker, so how long varies), then n more.
+void PlayAndSettle(Setup& setup, const int n) {
+    for (int i = 0; i < 1200 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
+    REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "the Client plays");
+    setup.Frames(n);
+}
+
 // The colour of the hit marker the HUD draws (its strokes run along the diagonals; the crosshair's along the axes), or
 // none when it draws none.
 std::optional<R::Color8> HitMarkerColor(K::World& world) {
@@ -718,8 +778,7 @@ std::optional<R::Color8> HitMarkerColor(K::World& world) {
 // Match's judgement (ShotRecord) is written here as JudgeShots writes it.
 TEST_CASE("client: an own shot that hits shows the hit marker, in the head colour for a head; it fades") {
     Setup setup;
-    setup.Frames(120);
-    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    PlayAndSettle(setup, 60);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
     const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
     REQUIRE(own != 0);
@@ -767,14 +826,13 @@ TEST_CASE("client: an own shot that hits shows the hit marker, in the head colou
 TEST_CASE("client: an own hit sounds at the target: heard near, not across the big map") {
     std::size_t big = 0;
     for (std::size_t i = 0; i < ShippedContent()->arenas.size(); ++i) {
-        if (ShippedContent()->arenas[i].content.id == "kiriyu_extraction_250m") big = i;
+        if (ShippedContent()->arenas[i].id == "kiriyu_extraction_250m") big = i;
     }
     REQUIRE(big != 0);
     for (const std::size_t arena : {std::size_t{0}, big}) {
         CAPTURE(arena);
         Setup setup(1, 4, arena);
-        setup.Frames(240);
-        REQUIRE(PC::StatusOf(setup.Client()).playing);
+        PlayAndSettle(setup, 60);
         const K::EntityId own = PW::OwnPlayer(setup.Sim());
         const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
         REQUIRE(own != 0);
@@ -812,8 +870,7 @@ TEST_CASE("client: an own hit sounds at the target: heard near, not across the b
 // the player stays down. The press of a tap still jumps once.
 TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {
     Setup setup;
-    setup.Frames(120);
-    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    PlayAndSettle(setup, 60);
     REQUIRE(ShippedContent()->stance.holdJump);
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
@@ -855,8 +912,7 @@ TEST_CASE("client: holding Space jumps again on every landing; letting go stops"
 // The other players' steps are heard too, where they walk; a crouched walk is silent (playtest 2026-11-26, item 2).
 TEST_CASE("client: the other player's steps sound while it walks standing, not while it walks crouched") {
     Setup setup(4);
-    setup.Frames(480);
-    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    PlayAndSettle(setup, 60);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
     PW::PlayerInput walk;
@@ -886,6 +942,7 @@ TEST_CASE("client: the other player's steps sound while it walks standing, not w
 // new one, never between (port declaration, segment 6, design 3).
 TEST_CASE("client: the other player's new life is not blended from where it was") {
     Setup setup(4);
+    setup.Loaded();
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
@@ -894,7 +951,7 @@ TEST_CASE("client: the other player's new life is not blended from where it was"
     const GYO::Engine::Math::Vec3 from = match.Get<PW::PlayerBody>(rival)->feet;
     // Another spawn, far from where it stands.
     GYO::Engine::Math::Vec3 to = from;
-    for (const auto& spawn : ShippedContent()->arenas[0].content.spawns) {
+    for (const auto& spawn : ShippedContent()->arenas[0].spawns) {
         if (GYO::Engine::Math::Length(spawn.position - from) > GYO::Engine::Math::Length(to - from)) to = spawn.position;
     }
     REQUIRE(GYO::Engine::Math::Length(to - from) > 2.0F);
@@ -916,6 +973,7 @@ TEST_CASE("client: the other player's new life is not blended from where it was"
 // The viewmodel's recoil (port declaration, segment 6): a shot turns the weapon up, the anchor stays, and it comes back.
 TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const PC::ViewmodelDefinition& viewmodel = setup.presentation->viewmodel;
@@ -964,49 +1022,101 @@ TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     CHECK_MESSAGE(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-3), "[pvp-recoil] back at rest a second later: " << *partRotationY());
 }
 
-// The Match plays another arena than the one the Client starts with: the Frame World follows the Sim World's.
-TEST_CASE("client: the Frame World follows the arena the Match plays") {
+namespace {
+
+// Runs frames until done says so (at most n); an answer may come from another thread (the Gateway, the asset threads).
+template <class Done>
+bool FramesUntil(Setup& setup, Done done, const int n = 600) {
+    for (int i = 0; i < n; ++i) {
+        if (done()) return true;
+        setup.Frame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return done();
+}
+
+} // namespace
+
+// The loading waits for both Worlds' maps: the picture made in the Frame World is not enough while the Sim World's
+// walls are still being built (its fixed steps have not started).
+TEST_CASE("client: the loading screen waits for the Sim World's walls, not only for the Frame World's picture") {
+    HeldJobs jobs;
+    Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
+    // The Sim World reads the map first (it runs before the Frame World): its walls are the first job, the picture
+    // the second.
+    REQUIRE(FramesUntil(setup, [&] { return jobs.Waiting() == 2; }));
+    REQUIRE(jobs.RunAt(1));
+    REQUIRE(FramesUntil(setup, [&] { return setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Done; }));
+    REQUIRE(setup.Client().Resource<PC::ClientView>()->mapLoad.stage == PW::MapStage::Building);
+    for (int i = 0; i < 120; ++i) {
+        setup.Frame();
+        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-sim-walls] not ready before the Sim World's walls");
+    }
+    CHECK_MESSAGE(setup.Binding("loading") == "地図を組み立てています…",
+                  "[pvp-loading-sim-walls] the assets step waits for the walls: " << setup.Binding("loading"));
+    REQUIRE(jobs.RunOne());
+    CHECK(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
+}
+
+// The Match plays another arena than the one the Client starts with (a Match reached by its address): a World plays one
+// arena, so the game is built again on the Match's (big-map declaration 15.3).
+TEST_CASE("client: a game whose Match plays another arena is built again on it") {
     Setup setup(1, 4, 1);
-    setup.Frames(120);
+    const object_fps_pvp::sim::ArenaContent& played = ShippedContent()->arenas[1];
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().map == played.id; }),
+                    "[pvp-arena-again] the game is built again on the Match's arena");
+    setup.Loaded();
+    setup.Frames(240);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
-    const PW::InstalledArena& played = ShippedContent()->arenas[1];
-    REQUIRE(setup.Sim().Resource<PW::GameRules>()->arena.id == played.content.id);
-    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == played.content.id, "[pvp-frame-arena] the Frame World's rules");
-    CHECK(setup.Client().Resource<PW::GameRules>()->wallsDigest == played.wallsDigest);
+    REQUIRE(setup.Sim().Resource<PW::GameRules>()->arena.id == played.id);
+    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == played.id, "[pvp-frame-arena] the Frame World's rules");
+    const std::uint64_t matchWalls = GameWorld(*setup.match).Resource<PW::GameRules>()->wallsDigest;
+    CHECK(setup.Sim().Resource<PW::GameRules>()->wallsDigest == matchWalls);
+    CHECK(setup.Client().Resource<PW::GameRules>()->wallsDigest == matchWalls);
+    CHECK(PC::StatusOf(setup.Client()).mismatch.empty());
+    const object_fps_pvp::data::ArenaMap map = ShippedMapOf(played);
     bool drawn = false;
     for (const K::EntityId id : setup.Client().Entities()) {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
-        if (mesh == nullptr) continue;
-        const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh->image);
-        if (image != nullptr && *image == setup.presentation->arenaPictures[1].palette) drawn = true;
+        if (mesh != nullptr && ShowsPalette(*mesh, map)) drawn = true;
     }
     CHECK_MESSAGE(drawn, "[pvp-frame-arena] the played arena's picture is drawn");
 }
 
 // The arena's map drawn region by region (big-map declaration section 15, L5): one Mesh3d per region of the played
-// arena's map, each the region's model the Client holds, with the region's box, and the 3D camera culled by the
-// visibility Module.
+// arena's map, each the region's model (read while the Frame World generated), with the region's box, and the 3D
+// camera culled by the visibility Module.
 TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each with its box, culled per camera") {
     Setup setup(1, 4, 1);
-    setup.Frames(120);
+    const object_fps_pvp::sim::ArenaContent& played = ShippedContent()->arenas[1];
+    REQUIRE(FramesUntil(setup, [&] { return setup.Scene().map == played.id; }));
+    setup.Loaded();
+    setup.Frames(240);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
-    const std::size_t played = 1;
-    const auto& picture = setup.presentation->arenaPictures[played];
-    REQUIRE(!picture.regions.empty());
+    const auto pictures = object_fps_pvp::data::RegionPictures(ShippedMapOf(played));
+    REQUIRE(!pictures.empty());
     std::size_t regions = 0;
     for (const K::EntityId id : setup.Client().Entities()) {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
         if (mesh == nullptr) continue;
         const auto* held = std::get_if<std::shared_ptr<const GYO::Engine::Model::ModelData>>(&mesh->model);
-        if (held == nullptr) continue;
-        for (const auto& region : picture.regions) {
-            if (*held != region.model) continue;
+        if (held == nullptr || *held == nullptr) continue;
+        const auto* box = setup.Client().Get<R::Aabb>(id);
+        REQUIRE(box != nullptr);
+        for (const auto& region : pictures) {
+            if (box->local.minimum.x != region.bounds.minimum.x || box->local.minimum.z != region.bounds.minimum.z) continue;
             ++regions;
-            const auto* box = setup.Client().Get<R::Aabb>(id);
-            CHECK_MESSAGE((box != nullptr && box->local.maximum.x == region.bounds.maximum.x), "[pvp-region-box] the region's box");
+            CHECK_MESSAGE(box->local.maximum.x == region.bounds.maximum.x, "[pvp-region-box] the region's box");
+            const auto& shown = (*held)->meshes.front().positions;
+            const auto& expected = region.model->meshes.front().positions;
+            const bool same = shown.size() == expected.size() &&
+                              std::equal(shown.begin(), shown.end(), expected.begin(), [](const Math::Vec3& a, const Math::Vec3& b) {
+                                  return a.x == b.x && a.y == b.y && a.z == b.z;
+                              });
+            CHECK_MESSAGE(same, "[pvp-region-model] the region's faces");
         }
     }
-    CHECK_MESSAGE(regions == picture.regions.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
+    CHECK_MESSAGE(regions == pictures.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
     bool culledList = false;
     for (const K::EntityId id : setup.Client().Entities()) {
         if (setup.Client().Get<GYO::Engine::Camera::Camera3d>(id) != nullptr && setup.Client().Get<R::CulledEntities>(id) != nullptr) {
@@ -1018,6 +1128,7 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
 
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
@@ -1044,7 +1155,7 @@ TEST_CASE("client: the other player's stand-in goes when it leaves; closing tell
 
 TEST_CASE("client: the first-person weapon's idle pose sits before the viewmodel camera, low on the right") {
     std::string error;
-    const auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
+    const auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, error);
     REQUIRE_MESSAGE(presentation.has_value(), error);
     const PC::ViewmodelDefinition& viewmodel = presentation->viewmodel;
     const auto& model = *viewmodel.model;
@@ -1100,6 +1211,7 @@ TEST_CASE("client: the first-person weapon's idle pose sits before the viewmodel
 
 TEST_CASE("client: a hit shows where it came from: the arc toward the attacker, the HP in red, the camera shaken") {
     Setup setup;
+    setup.Loaded();
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
@@ -1303,20 +1415,6 @@ TEST_CASE("client: the menu's Quit closes the window; a reason given to the lobb
     CHECK(setup.Binding("status") == "Match に断られました（the match is full）");
 }
 
-namespace {
-
-// Runs frames until done says so (at most n); an answer may come from another thread (the Gateway, the asset threads).
-template <class Done>
-bool FramesUntil(Setup& setup, Done done, const int n = 600) {
-    for (int i = 0; i < n; ++i) {
-        if (done()) return true;
-        setup.Frame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
-    return done();
-}
-
-} // namespace
 
 namespace {
 
@@ -1429,8 +1527,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
 
 TEST_CASE("client: leaving the game closes the connection; a new game connects again and sees nothing of the last") {
     Setup setup;
-    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
-    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).playing; }));
     REQUIRE(PlayerOf(GameWorld(*setup.match), 1) != 0);
     // To the lobby (as its scene's System would ask): the lobby's Sim World has no target, so the session closes.
     setup.Client().ResourceMut<PC::SceneRequest>()->next = PC::SceneChange{.scene = PC::Scene::Lobby};
@@ -1451,8 +1548,7 @@ TEST_CASE("client: leaving the game closes the connection; a new game connects a
         setup.client->Return(std::move(*lent));
     }
     CHECK_MESSAGE(!PC::StatusOf(setup.Client()).playing, "[pvp-scene-exchange-reset] the last game's own player is not shown");
-    for (int i = 0; i < 120 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
-    CHECK_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-scene-reconnects] the new game is played");
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).playing; }), "[pvp-scene-reconnects] the new game is played");
     CHECK(setup.Scene().scene == PC::Scene::MultiGame);
 }
 
@@ -1706,15 +1802,15 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     // Make a room on the second map: the map is the fifth of the focus order (join, prev, next, mode, map, create).
     for (int i = 0; i < 4; ++i) setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
-    const PW::InstalledArena& picked = ShippedContent()->arenas[1];
-    REQUIRE(setup.Binding("map") == "マップ: " + picked.content.id);
+    const object_fps_pvp::sim::ArenaContent& picked = ShippedContent()->arenas[1];
+    REQUIRE(setup.Binding("map") == "マップ: " + picked.id);
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Room; }), "[pvp-gw-create] " << setup.Binding("status"));
     CHECK(setup.Scene().room == 3);
     CHECK(Asked(gateway, "POST", "/v1/rooms"));
     setup.Load();
-    CHECK_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("map") == "マップ: " + picked.content.id; }), "[pvp-room-map] " << setup.Binding("map"));
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("map") == "マップ: " + picked.id; }), "[pvp-room-map] " << setup.Binding("map"));
     // Ready (the first button), then start (the second): the game, connected where the started room says.
     REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する"; }));
     setup.Press(I::KeyCode::Enter);
@@ -1732,9 +1828,9 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     CHECK_MESSAGE(HasResource<N::NetConnectTarget>(setup.Sim()), "[pvp-scene-sim-target] the game's Sim World has the target");
     CHECK_MESSAGE(setup.Sim().Resource<PW::LocalUser>()->userId == 7, "[pvp-gw-user] the player is the Gateway's user");
     // The room's map is the arena the game starts with (the Sim World's and the Frame World's), before any Match says.
-    CHECK_MESSAGE(setup.Scene().map == picked.content.id, "[pvp-gw-map] " << setup.Scene().map);
-    CHECK_MESSAGE(setup.Sim().Resource<PW::GameRules>()->arena.id == picked.content.id, "[pvp-gw-map-sim]");
-    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == picked.content.id, "[pvp-gw-map-frame]");
+    CHECK_MESSAGE(setup.Scene().map == picked.id, "[pvp-gw-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Sim().Resource<PW::GameRules>()->arena.id == picked.id, "[pvp-gw-map-sim]");
+    CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == picked.id, "[pvp-gw-map-frame]");
     CHECK(setup.Client().Resource<PW::LocalUser>()->userId == 7);
     // Every call after the session's carried its token; every change its own key.
     for (const FakeGateway::Seen& seen : gateway.Requests()) {
@@ -2084,21 +2180,22 @@ TEST_CASE("client: the loading screen waits for the Match's start; it is judged 
         CHECK(setup.Binding("loading") == "ほかのプレイヤーを待っています…");
     }
     // The Match plays arena 1 and is slow: the Client loads arena 0 (its first) before the Match says which; when the
-    // Match comes, the Client follows, and is ready only once arena 1 is shown (its regions' models are the Client's own).
+    // Match comes, the game is built again on arena 1, and is ready only once arena 1 is shown.
     Setup setup(1, 4, 1);
     setup.holdMatch = true;
     REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).progress >= 0.8; }));
     setup.holdMatch = false;
+    REQUIRE(FramesUntil(setup, [&] { return setup.Scene().map == ShippedContent()->arenas[1].id; }));
     REQUIRE(FramesUntil(setup, [&] { return PC::StatusOf(setup.Client()).ready; }));
+    const object_fps_pvp::data::ArenaMap shownMap = ShippedMapOf(ShippedContent()->arenas[1]);
+    const object_fps_pvp::data::ArenaMap otherMap = ShippedMapOf(ShippedContent()->arenas[0]);
     bool shown = false;
     bool other = false;
     for (const K::EntityId id : setup.Client().Entities()) {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
         if (mesh == nullptr) continue;
-        const auto* image = std::get_if<std::shared_ptr<const GYO::Engine::Image::ImageData>>(&mesh->image);
-        if (image == nullptr) continue;
-        shown = shown || *image == setup.presentation->arenaPictures[1].palette;
-        other = other || *image == setup.presentation->arenaPictures[0].palette;
+        shown = shown || ShowsPalette(*mesh, shownMap);
+        other = other || (ShowsPalette(*mesh, otherMap) && !ShowsPalette(*mesh, shownMap));
     }
     CHECK_MESSAGE((shown && !other), "[pvp-loading-arena] when ready, the Match's arena is shown (and the first one no more)");
 }
@@ -2136,38 +2233,6 @@ TEST_CASE("client: the pause comes when the window loses its focus, or the point
     setup.Press(I::KeyCode::Tab);
     setup.Frames(2);
     CHECK_MESSAGE(canvas() == "pause", "[pvp-pause-tab] " << canvas());
-}
-
-TEST_CASE("client: an arena changed after the warm-up is warmed again before the loading screen goes") {
-    // The Match plays arena 1 and is slow: the Client warms arena 0 up (a frame shown each frame, nothing skipped);
-    // when the Match comes the Client shows arena 1, whose draws are skipped for a while (its meshes being made).
-    Setup setup(1, 4, 1);
-    setup.holdMatch = true;
-    std::uint64_t shown = 0;
-    std::uint64_t skipped = 0;
-    REQUIRE(FramesUntil(setup, [&] {
-        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
-        return PC::StatusOf(setup.Client()).progress >= 0.85;
-    }));
-    for (int i = 0; i < 5; ++i) {  // two frames shown with nothing skipped: arena 0 is warmed up
-        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
-        setup.Frame();
-    }
-    setup.holdMatch = false;
-    bool readyWhileSkipping = false;
-    for (int i = 0; i < 60; ++i) {
-        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, ++skipped});
-        setup.Frame();
-        readyWhileSkipping = readyWhileSkipping || PC::StatusOf(setup.Client()).ready;
-    }
-    CHECK_MESSAGE(!readyWhileSkipping, "[pvp-loading-rewarm] not ready while the new arena's draws are skipped");
-    REQUIRE(setup.Client().Resource<PW::GameRules>()->arena.id == ShippedContent()->arenas[1].content.id);
-    // The draws stop being skipped: ready.
-    REQUIRE_MESSAGE(FramesUntil(setup, [&] {
-                        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, skipped});
-                        return PC::StatusOf(setup.Client()).ready;
-                    }),
-                    "[pvp-loading-rewarm] ready once the new arena is drawn");
 }
 
 TEST_CASE("client: without its own player from the Match the loading screen does not end") {
@@ -2345,17 +2410,17 @@ TEST_CASE("client: single player: the room is the multiplayer's: the map chosen 
     CHECK_MESSAGE(setup.Binding("mode") == "モード: 生存（固定）", "[pvp-solo-survival] " << setup.Binding("mode"));
     const auto& arenas = ShippedContent()->arenas;
     REQUIRE(arenas.size() >= 2);
-    CHECK(setup.Binding("map") == "マップ: " + arenas[0].content.id);
+    CHECK(setup.Binding("map") == "マップ: " + arenas[0].id);
     // The map (the second button), then the start (the first: the focus goes round).
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
-    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].content.id, "[pvp-solo-map-next] " << setup.Binding("map"));
+    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].id, "[pvp-solo-map-next] " << setup.Binding("map"));
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start] " << setup.Binding("status"));
-    CHECK_MESSAGE(setup.Scene().map == arenas[1].content.id, "[pvp-solo-map] " << setup.Scene().map);
-    CHECK_MESSAGE(setup.Solo().Resource<PW::GameRules>()->arena.id == arenas[1].content.id, "[pvp-solo-map-played]");
+    CHECK_MESSAGE(setup.Scene().map == arenas[1].id, "[pvp-solo-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Solo().Resource<PW::GameRules>()->arena.id == arenas[1].id, "[pvp-solo-map-played]");
     // 中止 on the loading screen (its focused button): back to the room, on the same map.
     for (int i = 0; i < 400; ++i) {
         const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
@@ -2366,7 +2431,7 @@ TEST_CASE("client: single player: the room is the multiplayer's: the map chosen 
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::SoloRoom; }), "[pvp-solo-abort]");
     setup.Load();
-    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].content.id, "[pvp-solo-map-kept] " << setup.Binding("map"));
+    CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].id, "[pvp-solo-map-kept] " << setup.Binding("map"));
 }
 
 namespace {
@@ -2385,9 +2450,9 @@ struct NetworkClient final {
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
         std::string error;
-        auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, *ShippedContent(), error);
+        auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
-        PC::ClientOptions options{ShippedContent(), std::make_shared<const PC::PresentationContent>(std::move(*presentation)), 0, 0};
+        PC::ClientOptions options{ShippedContent(), std::make_shared<const PC::PresentationContent>(std::move(*presentation)), 0, 0, nullptr};
         O::ProductDescription description;
         description.name = "pvp-client";
         N::NetProductOptions net;

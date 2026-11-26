@@ -4,6 +4,9 @@
 #include "object_fps_pvp/sim/PlanarMovement.hpp"
 #include "object_fps_pvp/sim/ViewLimits.hpp"
 
+#include "object_fps_pvp/data/ArenaMap.hpp"
+
+#include "engine/asset/AssetStore.hpp"
 #include "engine/authority/AuthorityStrategy.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/authority/Registrations.hpp"
@@ -13,6 +16,7 @@
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/net/NetModule.hpp"
+#include "engine/orchestration/WorldGeneration.hpp"
 #include "engine/net/Replication.hpp"
 #include "engine/physics_3d/Collider.hpp"
 #include "engine/physics_3d/MoveAndSlide.hpp"
@@ -23,7 +27,11 @@
 #include "engine/rollback/RollbackStrategy.hpp"
 #include "engine/rollback/StateRollbackStrategy.hpp"
 #include "engine/transform/Transform.hpp"
+#include "engine/voxel_map/VoxelMapLoaders.hpp"
+#include "engine/world_asset/AssetRequests.hpp"
+#include "engine/world_asset/AssetView.hpp"
 #include "engine/world_time/TimeTypes.hpp"
+#include "engine/world_time/WorldTimeModule.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +46,9 @@ namespace T = GYO::Engine::Transform;
 namespace WT = GYO::Engine::WorldTime;
 namespace E = GYO::Engine::EntityIds;
 namespace Base = GYO::Engine::Base;
+namespace AS = GYO::Engine::Asset;
+namespace VM = GYO::Engine::VoxelMap;
+namespace WA = GYO::Engine::WorldAsset;
 
 // ---- Hashing (the digest and the consistency of decision data)
 
@@ -112,7 +123,6 @@ bool CountDeath(const PlayerCombat& combat, std::uint64_t& respawnSeen) noexcept
 }
 void HashValue(K::Hasher&, const MatchSeats&) {}
 void HashValue(K::Hasher&, const SeatedPlayers&) {}
-void HashValue(K::Hasher&, const ContentRef&) {}
 void HashValue(K::Hasher&, const ContentMismatch&) {}
 
 namespace {
@@ -638,9 +648,12 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
                             K::Query<K::Read<Owner>, K::Read<PlayerBody>, K::Read<PlayerCombat>> players,
                             K::Query<K::Read<N::Peer>> peers, Walls walls, K::Res<GameRules> rules,
                             K::Res<MatchSeats> seats, K::ResMut<N::NetWorldLink> link, K::ResMut<SeatedPlayers> seated,
-                            K::Res<WT::Tick> tick,
+                            K::Res<WT::Tick> tick, K::Res<O::WorldGeneration> generation,
                             K::Spawn<K::Bundle<PlayerBody, PlayerCombat, ShotRecord, HitRecord, Owner, PlayerInput, PlayerMotion>> spawn,
                             K::Despawn despawn, K::CommandsFor<K::Inserts<N::PeerControls>, K::Removes<N::PeerControls>> controls) {
+    // No walls yet: the connections wait, unread. This System runs every frame, so its readers' cursors exist from the
+    // first frame and hold the records (a reader that has never run holds none: a mount condition would lose them).
+    if (generation->Generating()) return {};
     std::map<K::EntityId, K::EntityId>& byPeer = seated->byPeer;
     // The players of the connections that ended this frame, by user, until the joins of this frame are seen.
     std::map<std::uint64_t, K::EntityId> released;
@@ -657,6 +670,8 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
         if (combat.life == sim::LifeState::Alive) living.push_back(body);
     });
     for (const N::PeerConnected* joined : connected.Read()) {
+        // A connection that ended since it came (read late, after the World generated): nothing to seat.
+        if (peers.Get<N::Peer>(joined->peer) == nullptr) continue;
         // The user's player, if another connection has it: one that ended this frame, or one still open.
         std::optional<K::EntityId> player;
         if (const auto held = released.find(joined->userId); held != released.end()) {
@@ -791,34 +806,114 @@ K::SystemResult ControlOwnPlayer(K::Query<K::Read<N::Peer>, K::Without<N::PeerCo
     return {};
 }
 
-// Client: the arena the Match plays. An arena this Client does not have, or whose walls differ, is a content
-// mismatch (ContentMismatch); the Client's program decides what to do (it disconnects).
-K::SystemResult FollowMatchArena(K::ExclusiveWorld<> world) {
-    auto info = world.Read<MatchInfo>([](const MatchInfo& m) { return m; });
-    if (!info || !info->has_value() || (*info)->arenaId.empty()) return {};
-    const MatchInfo& match = **info;
-    auto current = world.Read<GameRules>([](const GameRules& r) { return std::pair{r.arena.id, r.wallsDigest}; });
-    if (!current || !current->has_value()) return {};
-    if ((*current)->first == match.arenaId && (*current)->second == match.wallsDigest) return {};
-    auto content = world.Read<ContentRef>([](const ContentRef& c) { return c.content; });
-    const InstalledArena* arena = nullptr;
-    if (content && content->has_value() && **content) arena = (**content)->Find(match.arenaId);
-    if (arena == nullptr || arena->wallsDigest != match.wallsDigest) {
-        auto mismatch = world.Read<ContentMismatch>([](const ContentMismatch& m) { return m.reason; });
-        if (mismatch && mismatch->has_value() && !(*mismatch)->empty()) return {};
-        const std::string reason = arena == nullptr ? "the Match plays arena '" + match.arenaId + "', which this Client does not have"
-                                                    : "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
-        auto set = world.SetResource(ContentMismatch{reason});
-        if (!set) return Base::Err(std::move(set).error());
-        return {};
+// Client: whether it plays the Match's arena (MatchInfo), once the Match has said its walls.
+// Another arena, or the same one with other walls, is a content mismatch (ContentMismatch): a World plays one arena, so
+// the program builds another World or leaves (big-map declaration 15.3).
+K::SystemResult FollowMatchArena(K::Res<MatchInfo> info, K::Res<GameRules> rules, K::Res<MapLoad> load,
+                                 K::ResMut<ContentMismatch> mismatch) {
+    const MatchInfo& match = *info;
+    if (match.arenaId.empty() || match.wallsDigest == 0 || !mismatch.Read().reason.empty()) return {};
+    const GameRules& own = *rules;
+    // Another arena is known at once (this World need not read its own map first); the same arena's walls are
+    // compared once this World has built its own.
+    if (match.arenaId == own.arena.id && (load->stage != MapStage::Done || match.wallsDigest == own.wallsDigest)) return {};
+    ContentMismatch& found = mismatch.Get();
+    found.matchArena = match.arenaId;
+    found.reason = match.arenaId != own.arena.id ? "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'"
+                                                 : "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
+    return {};
+}
+
+// The walls the map's boxes build (BoxSet::Build: S0 measured seconds for a million boxes, so a worker builds them).
+using WallsBuilt = Base::Result<P::BoxSet, P::Physics3dError>;
+
+// A World's map while it is read: LoadArena's state. Nothing of it is decision data (the World generates until it is
+// done; only the walls it ends with count, and they are in GameRules::wallsDigest).
+struct ArenaLoading final {
+    // The map's asset id (ArenaContent::map).
+    std::string map;
+    // The authority (the Match, a Local World): MatchInfo says its arena and walls.
+    bool announce = false;
+    AS::AssetExecutor* jobs = nullptr;
+    AS::Handle<VM::VoxelMapAsset> handle;
+    WorkerTask<WallsBuilt> walls;
+};
+void HashValue(K::Hasher&, const ArenaLoading&) {}
+
+// Why a spawn of the arena is inside its walls, or nothing (whether bodies overlap is decided when they spawn).
+std::optional<std::string> SpawnInWall(const sim::ArenaContent& arena, const P::BoxSet& walls) {
+    for (std::size_t index = 0; index < arena.spawns.size(); ++index) {
+        const sim::SpawnPoint& spawn = arena.spawns[index];
+        const auto found = P::FindBoxContacts(BodyShape(arena.bodyHeight, arena.radius), BodyPose(spawn.position, arena.bodyHeight), walls,
+                                              P::Pose{}, 0.0F);
+        bool inside = !found;
+        if (found) {
+            for (const P::BoxContact& contact : *found) inside = inside || contact.contact.distance < -kTouch;
+        }
+        if (inside) return "spawn " + std::to_string(index) + " of arena '" + arena.id + "' is inside a wall";
     }
-    auto inserted = world.Insert(kArenaEntity, P::Collider{P::Shape{arena->walls}});
-    if (!inserted) return Base::Err(std::move(inserted).error());
-    GameRules rules = world.Read<GameRules>([](const GameRules& r) { return r; })->value_or(GameRules{});
-    rules.arena = arena->content;
-    rules.wallsDigest = arena->wallsDigest;
-    auto set = world.SetResource(std::move(rules));
-    if (!set) return Base::Err(std::move(set).error());
+    return std::nullopt;
+}
+
+// Every end, Main/Update while the World generates (world/ArenaLoad.hpp): the arena's map from the asset store, then
+// its walls, built from its boxes on the worker, into kArenaEntity's Collider. The World generates until they are in;
+// a map that fails keeps it generating, and MapLoad says why. Only the boxes reach the worker and the handle goes once
+// they are copied: the World never keeps the map's faces.
+K::SystemResult LoadArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetView> view, K::ResMut<ArenaLoading> loading,
+                          K::ResMut<MapLoad> load, K::ResMut<GameRules> rules, K::ResMut<MatchInfo> info,
+                          K::ResMut<O::WorldGeneration> generation, K::CommandsFor<K::Inserts<P::Collider>, K::Removes<>> walls) {
+    const MapStage stage = load.Read().stage;
+    if (stage == MapStage::Done) return {};
+    // Every frame but the one the map is done in holds the generation.
+    const auto hold = [&generation] {
+        generation->Hold();
+        return K::SystemResult{};
+    };
+    if (stage == MapStage::Failed) return hold();
+    ArenaLoading& arena = loading.Get();
+    const auto fail = [&](std::string why) {
+        arena.handle = {};
+        MapLoad& now = load.Get();
+        now.stage = MapStage::Failed;
+        now.failure = std::move(why);
+    };
+    if (stage == MapStage::Reading) {
+        if (arena.handle.Id().Empty()) arena.handle = requests->Load<VM::VoxelMapAsset>(AS::AssetId(arena.map));
+        const MapReading reading = ReadMap(*view, arena.handle);
+        if (!reading.failure.empty()) {
+            fail(arena.map + ": " + reading.failure);
+            return hold();
+        }
+        if (load.Read().done != reading.done || load.Read().total != reading.total) {
+            load->done = reading.done;
+            load->total = reading.total;
+        }
+        if (!reading.complete) return hold();
+        data::ArenaMap boxes = data::CopyMapPart(*reading.index, reading.regions, data::MapPart::Walls);
+        arena.handle = {};
+        arena.walls = WorkerTask<WallsBuilt>::Start(arena.jobs, [boxes = std::move(boxes)] { return P::BoxSet::Build(data::MapColliders(boxes)); });
+        load->stage = MapStage::Building;
+        return hold();
+    }
+    std::optional<WallsBuilt> built = arena.walls.Take();
+    if (!built) return hold();
+    if (!*built) {
+        fail(arena.map + ": the walls do not build: " + Base::Describe(built->error()));
+        return hold();
+    }
+    P::BoxSet boxes = std::move(**built);
+    if (auto inside = SpawnInWall(rules.Read().arena, boxes)) {
+        fail(std::move(*inside));
+        return hold();
+    }
+    const std::uint64_t digest = boxes.Digest();
+    rules->wallsDigest = digest;
+    if (arena.announce) {
+        info->arenaId = rules.Read().arena.id;
+        info->wallsDigest = digest;
+    }
+    walls.Insert(kArenaEntity, P::Collider{P::Shape{std::move(boxes)}});
+    load->stage = MapStage::Done;
     return {};
 }
 
@@ -863,20 +958,20 @@ std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, c
 
 } // namespace
 
-bool Blocked(const InstalledArena& arena, const Math::Vec3& a, const Math::Vec3& b) {
+bool Blocked(const P::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b) {
     const float length = Math::Distance(a, b);
     // Two points this close are not apart: nothing stands between them.
     constexpr float kApart = 1.0e-3F;
     if (!(length > kApart)) return false;
     const Math::Ray ray{a, (b - a) * (1.0F / length)};
     // A wall the segment only touches at its far end (a source against a wall) does not stand between.
-    const std::optional<P::RayHit> hit = P::CastRay(P::Shape{arena.walls}, P::Pose{}, ray, length);
+    const std::optional<P::RayHit> hit = P::CastRay(P::Shape{walls}, P::Pose{}, ray, length);
     return hit.has_value() && hit->t < length - kApart;
 }
 
-const InstalledArena* GameContent::Find(const std::string& id) const {
-    for (const InstalledArena& arena : arenas) {
-        if (arena.content.id == id) return &arena;
+const sim::ArenaContent* GameContent::Find(const std::string& id) const {
+    for (const sim::ArenaContent& arena : arenas) {
+        if (arena.id == id) return &arena;
     }
     return nullptr;
 }
@@ -916,55 +1011,34 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": the movement rules do not fit the arena's body";
             return std::nullopt;
         }
-        // The map: its index, then each region file the index names (relative to the map's directory).
-        const std::string mapDir = maps + arena->map + "/";
-        auto indexText = ReadText(fs, mapDir + "map.json", error);
-        if (!indexText) return std::nullopt;
-        auto map = data::ReadArenaMap(
-            *indexText, [&](const std::string& file, std::string& readError) { return ReadText(fs, mapDir + file, readError); },
-            error);
-        if (!map) {
-            error = mapDir + ": " + error;
-            return std::nullopt;
-        }
-        InstalledArena installed;
-        installed.content = std::move(*arena);
-        // The walls are built once here; every World shares this BoxSet (S0: a million boxes take seconds to build).
-        auto boxes = P::BoxSet::Build(data::MapColliders(*map));
-        if (!boxes) {
-            error = maps + name + ": the walls do not build: " + Base::Describe(boxes.error());
-            return std::nullopt;
-        }
-        installed.map = std::make_shared<const data::ArenaMap>(std::move(*map));
-        installed.walls = std::move(*boxes);
-        installed.wallsDigest = installed.walls.Digest();
-        // Every spawn is free of the walls (whether bodies overlap is decided when they spawn).
-        for (const sim::SpawnPoint& spawn : installed.content.spawns) {
-            const float height = installed.content.bodyHeight;
-            const auto found = P::FindBoxContacts(BodyShape(height, installed.content.radius), BodyPose(spawn.position, height),
-                                                  installed.walls, P::Pose{}, 0.0F);
-            bool inside = !found;
-            if (found) {
-                for (const P::BoxContact& contact : *found) inside = inside || contact.contact.distance < -kTouch;
-            }
-            if (inside) {
-                error = maps + name + ": a spawn is inside a wall";
-                return std::nullopt;
-            }
-        }
-        content.arenas.push_back(std::move(installed));
+        content.arenas.push_back(std::move(*arena));
     }
     // The character, for the arenas' body (they share one: the character is drawn and judged at that height).
-    for (const InstalledArena& arena : content.arenas) {
-        if (arena.content.bodyHeight != content.arenas.front().content.bodyHeight) {
-            error = maps + arena.content.map + ": the arenas do not share one body height";
+    for (const sim::ArenaContent& arena : content.arenas) {
+        if (arena.bodyHeight != content.arenas.front().bodyHeight) {
+            error = maps + arena.id + ": the arenas do not share one body height";
             return std::nullopt;
         }
     }
-    auto rig = character::LoadCharacterRig(root, content.arenas.front().content.bodyHeight, error);
+    auto rig = character::LoadCharacterRig(root, content.arenas.front().bodyHeight, error);
     if (!rig) return std::nullopt;
     content.character = std::make_shared<const character::CharacterRig>(std::move(*rig));
     return content;
+}
+
+void ConfigureGame(O::ProductSetup& setup) {
+    auto* registry = setup.Buffer().Find<AS::AssetLoaderRegistry>();
+    if (registry == nullptr) {
+        setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried): the maps cannot be read");
+        return;
+    }
+    if (auto map = registry->template Register<VM::VoxelMapLoader>(); !map) {
+        setup.Report("LoaderRefused", "the voxel_map loader was refused: " + Base::Describe(map.error()));
+        return;
+    }
+    if (auto region = registry->template Register<VM::VoxelRegionLoader>(); !region) {
+        setup.Report("LoaderRefused", "the voxel_region loader was refused: " + Base::Describe(region.error()));
+    }
 }
 
 std::optional<std::string> Seats::Take(const std::uint64_t userId) {
@@ -1027,12 +1101,23 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
     r.Resource<LocalUser>({.name = "LocalUser"});
     r.Resource<MatchSeats>({.name = "MatchSeats"});
     r.Resource<SeatedPlayers>({.name = "SeatedPlayers"});
-    r.Resource<ContentRef>({.name = "ContentRef"});
+    r.Resource<MapLoad>({.name = "MapLoad"});
+    r.Resource<ArenaLoading>({.name = "ArenaLoading"});
     r.Resource<ContentMismatch>({.name = "ContentMismatch"});
     r.Resource<LocalSpawn>({.name = "LocalSpawn"});
     r.Resource<LocalDeaths>({.name = "LocalDeaths"});
     r.Resource<MatchStart>({.name = "MatchStart"});
     const bool networked = end != WorldEnd::Local;
+    {
+        K::SystemOptions load;
+        load.name = "LoadArena";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = std::string(O::DefaultSchedules::update);
+        mount.conditions.push_back(O::WhileGenerating());
+        load.mounts.push_back(std::move(mount));
+        r.AddSystem<&LoadArena>(std::move(load));
+    }
 
     if (networked) {
         N::NetEntry net(setup);
@@ -1070,6 +1155,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         K::Mount mount;
         mount.schedule = std::string(O::DefaultSchedules::frame);
         mount.stage = update;
+        mount.conditions.push_back(O::AfterGenerating());
         local.mounts.push_back(std::move(mount));
         r.AddSystem<&SpawnLocalPlayer>(std::move(local));
         K::SystemOptions deaths;
@@ -1082,18 +1168,18 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
     }
 
     setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
-        const InstalledArena& arena = options.content->arenas[options.arena];
+        const sim::ArenaContent& arena = options.content->arenas[options.arena];
         GameRules rules;
-        rules.arena = arena.content;
+        rules.arena = arena;
         rules.stance = options.content->stance;
         rules.combat = options.content->combat;
-        rules.wallsDigest = arena.wallsDigest;
         rules.character = options.content->character;
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
         world.SetResource(SeatedPlayers{});
-        world.SetResource(ContentRef{options.content});
+        world.SetResource(MapLoad{});
+        world.SetResource(ArenaLoading{.map = arena.map, .announce = end != WorldEnd::Client, .jobs = options.jobs});
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
         world.SetResource(LocalDeaths{});
@@ -1105,11 +1191,11 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         start.expect.erase(std::unique(start.expect.begin(), start.expect.end()), start.expect.end());
         start.deadlineSeconds = end == WorldEnd::Local ? 0 : options.startDeadlineSeconds;
         world.SetResource(std::move(start));
-        // The Match (and a Local World) says which arena it plays; a Client's MatchInfo comes from the Match.
-        MatchInfo info = end != WorldEnd::Client ? MatchInfo{arena.content.id, arena.wallsDigest} : MatchInfo{};
+        // The Match (and a Local World) says which arena it plays once its walls are built (LoadArena); a Client's
+        // MatchInfo comes from the Match.
+        MatchInfo info;
         if (end == WorldEnd::Match && options.expectUsers.empty()) info.phase = MatchPhase::Playing;
         world.SetResource(std::move(info));
-        world.Insert(kArenaEntity, P::Collider{P::Shape{arena.walls}});
         world.Insert(kArenaEntity, T::Transform{});
         return {};
     });
@@ -1117,12 +1203,20 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
 
 namespace {
 
+// The fixed steps wait for the World to generate (its walls): before that nothing is played.
+WT::WorldTimeOptions StepsAfterGenerating() {
+    WT::WorldTimeOptions time;
+    time.fixedStepConditions.push_back(O::AfterGenerating());
+    return time;
+}
+
 O::WorldDescription Describe(WorldOptions options, const N::NetRole role) {
     O::WorldDescription world;
     world.name = "Game";
     // The units the game needs, named so a Product that carries more (the Client's render units) does not put them
     // here (an empty list is every unit the Product carries).
-    world.units = {"entity_ids", "world_time", "rollback", "authority", "net", "transform", "physics_3d"};
+    world.units = {"entity_ids", "world_time", "world_asset", "rollback", "authority", "net", "transform", "physics_3d"};
+    world.options.Set(StepsAfterGenerating());
     world.options.Set(N::NetWorldOptions{role, std::nullopt});
     world.options.Set(role == N::NetRole::Server ? kMatchIds : kClientIds);
     world.options.Set(A::AuthorityOptions{std::make_shared<A::ServerAuthorityStrategy>()});
@@ -1148,7 +1242,8 @@ O::WorldDescription LocalWorld(WorldOptions options) {
     world.name = "Game";
     // No net, and the rollback Module without a strategy (authority needs it there; nothing is predicted): the World is
     // the authority.
-    world.units = {"entity_ids", "world_time", "rollback", "authority", "transform", "physics_3d"};
+    world.units = {"entity_ids", "world_time", "world_asset", "rollback", "authority", "transform", "physics_3d"};
+    world.options.Set(StepsAfterGenerating());
     world.options.Set(kMatchIds);
     world.options.Set(A::AuthorityOptions{std::make_shared<A::ServerAuthorityStrategy>()});
     world.dynamicInsert = false;
