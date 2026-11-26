@@ -26,7 +26,9 @@
 // Frame:
 //   Main/PreUpdate   ReadControls   keys and mouse -> the controls (pointer taken or given back: window's cursor
 //                                   grab; the view; the held keys; the presses)
-//   Main/Update      ShowArena      the arena's model (render's Mesh3d of the baked voxel file as a model asset)
+//   Main/Update      ShowArena      while the World generates: the arena's map from the asset store (the same one the
+//                                   Sim World reads), its regions' models made on the worker, then one Mesh3d per
+//                                   region with its box (the visibility Module culls it); MapLoad says how far
 //                    ShowHud        the 2D layer: crosshair, HP, ammo, what the player should do; a hit's feedback
 //                                   (present/HitFeedback): the red flash, the arc toward the attacker, the HP in red
 //                    PlaceCamera    the first-person camera at the own player's eye, turned by the Client's view
@@ -34,9 +36,10 @@
 //                    MoveBodies     a stand-in body for every other living player follows it (or goes)
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
-//                    LeaveOnEnd     the connection ended, or the Match's content differs: back to the lobby
+//                    LeaveOnEnd     the connection ended, the Match's content differs, or a map did not load: back to
+//                                   the lobby (the Match plays another arena this Client has: the game again on it)
 //                    TrackReadiness the loading (game-flow declaration 3.5): the game's assets with their
-//                                   dependencies (the progress), the warm-up (two frames shown with no draw skipped
+//                                   dependencies and both Worlds' maps (the progress), the warm-up (two frames shown with no draw skipped
 //                                   after them, DrawnFrames), the own player from the Match, then one more frame: ready
 //                                   (carried to the Match in the input, PlayerInput::ready)
 //                    ShowLoading    GamePage::Loading (client/Pages.hpp: the overlay's pages, Bevy's States): the loading
@@ -50,6 +53,7 @@
 // The pictures are drawn by "Render" (render_world, camera_render, sprite_render, mesh_render and sdl_gpu). The
 // Frame World has no rollback: what it makes stays until it takes it away.
 
+#include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/HitFeedback.hpp"
 #include "object_fps_pvp/present/SoundCues.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
@@ -103,36 +107,37 @@ struct ViewmodelDefinition final {
 [[nodiscard]] float RecoilRadians(const ViewmodelDefinition& viewmodel, double seconds);
 
 // An arena's picture: one model per region of its map (with the region's world box, for culling) and the map's
-// palette picture the models' uv point into.
+// palette picture the models' uv point into. The game scene's Frame World makes it from the map while it generates.
 struct ArenaPicture final {
     std::vector<data::RegionPicture> regions;
     std::shared_ptr<const GYO::Engine::Image::ImageData> palette;
 };
 
-// What the Client reads before it starts, besides the game's content: the sound and hit feedback settings, the
-// arenas' pictures (by arena index) and the first-person weapon.
+// What the Client reads before it starts, besides the game's content: the sound and hit feedback settings and the
+// first-person weapon.
 struct PresentationContent final {
     present::SoundSettings sound;
     present::HitFeedbackSettings hitFeedback;
-    std::vector<ArenaPicture> arenaPictures;
     ViewmodelDefinition viewmodel;
 };
 
 // Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, weapons/nailer_v2/viewmodel/);
 // nullopt with error naming the file.
-[[nodiscard]] std::optional<PresentationContent> LoadPresentation(const std::string& root, const world::GameContent& game,
-                                                                  std::string& error);
+[[nodiscard]] std::optional<PresentationContent> LoadPresentation(const std::string& root, std::string& error);
 
 struct ClientOptions final {
     std::shared_ptr<const world::GameContent> game;
     std::shared_ptr<const PresentationContent> presentation;
     std::size_t arena = 0;
     std::uint64_t userId = 0;
+    // Where the map's walls and pictures are made (the Product's worker; it outlives the Product). None: in the
+    // System, on the World's thread.
+    GYO::Engine::Asset::AssetExecutor* jobs = nullptr;
 };
 
 // The Product's part (its configure): the ClientExchange and the SceneDirector (from the product option ClientStart;
-// none: the menu), the game's loaders join the asset store (the voxel model loader, fbx, png, fonts, sounds, gyo.ui
-// documents), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
+// none: the menu), the game's loaders join the asset store (the map's, world::ConfigureGame; fbx, png, fonts, sounds,
+// gyo.ui documents), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
 void ConfigureClient(O::ProductSetup& setup);
 
 // The Frame World's own entities (the stand-in bodies): outside the Match's and the Sim World's ranges, whose
@@ -161,7 +166,9 @@ struct ClientView final {
     double jitterTicks = 0.0;                       // ClockSync::jitterTicks
     bool connected = false;                         // the own Peer is there
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
-    std::string mismatch;                           // world::ContentMismatch
+    std::string mismatch;                           // world::ContentMismatch::reason
+    std::string mismatchArena;                      // world::ContentMismatch::matchArena
+    world::MapLoad mapLoad;                         // how far the Sim (or Solo) World has come with its map
     std::uint64_t deaths = 0;                       // a Local World's: its player's deaths so far (world::LocalDeaths)
     bool started = false;                           // the match has started (world::MatchInfo::phase)
     bool ended = false;                             // the connection ended (refused, timed out, closed by the Match)

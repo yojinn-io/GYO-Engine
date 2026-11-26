@@ -35,7 +35,10 @@
 #include "engine/net/NetModule.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/os/Process.hpp"
+#include "engine/threads/WorkerPool.hpp"
 #include "engine/time/Waiter.hpp"
+#include "engine/world_asset/WorkerPoolExecutor.hpp"
+#include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
 #include <algorithm>
@@ -57,6 +60,7 @@ namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 namespace WT = GYO::Engine::WorldTime;
 namespace PW = object_fps_pvp::world;
+namespace WA = GYO::Engine::WorldAsset;
 
 void Log(const GYO::Engine::Base::LogLevel level, const std::string& text) { GYO::Engine::Base::Log(level, GYO_GAME_ID, text); }
 
@@ -235,7 +239,7 @@ int main(int argc, char** argv) {
     auto shared = std::make_shared<const PW::GameContent>(std::move(*content));
     std::size_t arena = 0;
     if (!arenaId.empty()) {
-        const PW::InstalledArena* found = shared->Find(arenaId);
+        const auto* found = shared->Find(arenaId);
         if (found == nullptr) {
             Log(GYO::Engine::Base::LogLevel::Error, "no installed arena has the id '" + arenaId + "'");
             return 2;
@@ -243,16 +247,31 @@ int main(int argc, char** argv) {
         arena = static_cast<std::size_t>(found - shared->arenas.data());
     }
 
+    // The map is read while the World generates: the asset store reads its files on one thread, the walls are built on
+    // another (Bevy keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
+    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = 1});
+    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match compute", .threadCount = 1});
+    if (!pool || !computePool) {
+        Log(GYO::Engine::Base::LogLevel::Error, "no worker thread: " + GYO::Engine::Base::Describe(!pool ? pool.error() : computePool.error()));
+        return 1;
+    }
+    WA::WorkerPoolExecutor executor(*pool);
+    WA::WorkerPoolExecutor compute(*computePool);
     auto seats = std::make_shared<PW::Seats>(capacity);
     O::ProductDescription description;
     description.name = GYO_GAME_ID;
+    WA::AssetOptions assets;
+    assets.contentRoot = *contentRoot;
+    assets.executor = &executor;
+    description.options.Set(assets);
+    description.configure = [](O::ProductSetup& setup) { PW::ConfigureGame(setup); };
     N::NetProductOptions net;
     net.role = N::NetRole::Server;
     net.bind = GYO::Engine::OS::SocketAddress::Any(port);
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .seats = seats, .expectUsers = expectUsers,
-                                                .startDeadlineSeconds = startDeadline});
+                                                .startDeadlineSeconds = startDeadline, .jobs = &compute});
     if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
@@ -287,7 +306,9 @@ int main(int argc, char** argv) {
         Log(GYO::Engine::Base::LogLevel::Error, "no timer to pace the frames: " + GYO::Engine::Base::Describe(waiter.error()));
         return 1;
     }
-    Log(GYO::Engine::Base::LogLevel::Info, "the match plays " + shared->arenas[arena].content.id + " on UDP port " + std::to_string(port));
+    Log(GYO::Engine::Base::LogLevel::Info, "the match plays " + shared->arenas[arena].id + " on UDP port " + std::to_string(port));
+    const auto started = GYO::Engine::Time::MonotonicClock::now();
+    bool mapReady = false;
     // A frame every 4 ms: the time Module runs the fixed steps the real time has made due.
     constexpr auto kFrame = std::chrono::milliseconds(4);
     auto next = GYO::Engine::Time::MonotonicClock::now();
@@ -299,6 +320,19 @@ int main(int argc, char** argv) {
         if (!ran) {
             Log(GYO::Engine::Base::LogLevel::Error, "the match stopped: " + ran.error().message + " " + ran.error().detail);
             return 1;
+        }
+        if (!mapReady) {
+            const PW::MapLoad* load = product->World("Game").GetWorld().Resource<PW::MapLoad>();
+            if (load != nullptr && load->stage == PW::MapStage::Failed) {
+                Log(GYO::Engine::Base::LogLevel::Error, "the map did not load: " + load->failure);
+                return 1;
+            }
+            if (load != nullptr && load->stage == PW::MapStage::Done) {
+                mapReady = true;
+                const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(GYO::Engine::Time::MonotonicClock::now() - started);
+                Log(GYO::Engine::Base::LogLevel::Info, "the map is ready (" + std::to_string(load->total) + " regions, " +
+                                                           std::to_string(ms.count()) + " ms)");
+            }
         }
         if (ticks > 0) {
             const WT::Tick* tick = product->World("Game").GetWorld().Resource<WT::Tick>();

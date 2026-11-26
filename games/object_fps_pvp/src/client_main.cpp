@@ -78,19 +78,28 @@ namespace PW = object_fps_pvp::world;
 
 void Log(const GYO::Engine::Base::LogLevel level, const std::string& text) { GYO::Engine::Base::Log(level, GYO_GAME_ID, text); }
 
-// --verbose: the connection and the own player as they change (the game scene's ClientView), and the arena the game
-// plays (the Frame World's rules: the room's map at first, then the Match's).
+// --verbose: the connection and the own player as they change (the game scene's ClientView), the arena the game
+// plays (the Frame World's rules) and when its map is ready.
 struct VerboseWatch final {
     bool connected = false;
     bool playing = false;
     std::string arena;
+    bool mapReady = false;
+    std::chrono::steady_clock::time_point since = std::chrono::steady_clock::now();
 };
 void HashValue(K::Hasher&, const VerboseWatch&) {}
 
-K::SystemResult WatchArena(K::Res<PW::GameRules> rules, K::ResMut<VerboseWatch> seen) {
-    if (rules->arena.id == seen.Read().arena) return {};
-    Log(GYO::Engine::Base::LogLevel::Info, "the game plays arena " + rules->arena.id);
-    seen->arena = rules->arena.id;
+K::SystemResult WatchArena(K::Res<PW::GameRules> rules, K::Res<PW::MapLoad> map, K::Res<PC::ClientView> view, K::ResMut<VerboseWatch> seen) {
+    if (rules->arena.id != seen.Read().arena) {
+        Log(GYO::Engine::Base::LogLevel::Info, "the game plays arena " + rules->arena.id);
+        seen->arena = rules->arena.id;
+    }
+    // Ready: this World's picture and the Sim (or Solo) World's walls.
+    if (!seen.Read().mapReady && map->stage == PW::MapStage::Done && view->mapLoad.stage == PW::MapStage::Done) {
+        seen->mapReady = true;
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - seen.Read().since);
+        Log(GYO::Engine::Base::LogLevel::Info, "the map is ready (" + std::to_string(map->total) + " regions, " + std::to_string(ms.count()) + " ms)");
+    }
     return {};
 }
 
@@ -405,7 +414,7 @@ int CheckDrawing(O::Product& product, const std::int64_t frames, const O::Runner
 // The Client's Product from its first scene, until its window closes.
 int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::shared_ptr<const PW::GameContent>& game,
                const std::shared_ptr<const PC::PresentationContent>& presentation, const std::string& contentRoot,
-               WA::WorkerPoolExecutor& executor, const bool verbose) {
+               WA::WorkerPoolExecutor& executor, WA::WorkerPoolExecutor& compute, const bool verbose) {
     const std::int64_t frames = start.frames;
     const GYO::Engine::Math::Vec2i resolution = start.settings.resolution;
     const W::WindowMode windowMode = start.settings.window;
@@ -415,7 +424,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     net.role = N::NetRole::Client;
     description.options.Set(net);
     description.options.Set(std::move(start));
-    PC::ClientOptions options{game, presentation, 0, userId};
+    PC::ClientOptions options{game, presentation, 0, userId, &compute};
     O::WorldDescription frameWorld = PC::ClientFrameWorld(options);
     // The loading screen's warm-up reads what sdl_gpu has shown (DrawnFrames), between the Frame World's rounds.
     frameWorld.build = [inner = std::move(frameWorld.build)](O::WorldSetup& setup) {
@@ -551,11 +560,12 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     // A scene whose document was never shown is a blank window: say why (ui page section 9 point 8).
     if (!notes.failure.empty()) Log(GYO::Engine::Base::LogLevel::Error, notes.failure);
     if (!notes.mismatch.empty()) Log(GYO::Engine::Base::LogLevel::Error, "the Match's content differs from this Client's: " + notes.mismatch);
+    if (!notes.map.empty()) Log(GYO::Engine::Base::LogLevel::Error, "the map did not load: " + notes.map);
     if (verbose && !notes.endReason.empty()) Log(GYO::Engine::Base::LogLevel::Info, "the last connection ended: " + notes.endReason);
     int code = CheckDrawing(*product, frames, exit);
     if (frames > 0 && code == 0) {
         // A test's run: a content mismatch fails it; a scene with a document must have shown it.
-        if (!notes.mismatch.empty()) code = 1;
+        if (!notes.mismatch.empty() || !notes.map.empty()) code = 1;
         const auto* director = std::as_const(product->Buffer()).Find<PC::SceneDirector>();
         const bool documentScene = director != nullptr && director->Current().scene != PC::Scene::MultiGame;
         if (documentScene && !notes.shown) {
@@ -633,7 +643,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto sharedGame = std::make_shared<const PW::GameContent>(std::move(*game));
-    auto presentation = PC::LoadPresentation(*contentRoot, *sharedGame, error);
+    auto presentation = PC::LoadPresentation(*contentRoot, error);
     if (!presentation) {
         Log(GYO::Engine::Base::LogLevel::Error, "the content did not load: " + error);
         return 1;
@@ -645,6 +655,14 @@ int main(int argc, char** argv) {
         return 1;
     }
     WA::WorkerPoolExecutor executor(*pool);
+    // The map's walls and pictures are made on their own thread, not behind the files the asset threads read (Bevy
+    // keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
+    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp compute", .threadCount = 1});
+    if (!computePool) {
+        Log(GYO::Engine::Base::LogLevel::Error, "the compute thread did not start: " + GYO::Engine::Base::Describe(computePool.error()));
+        return 1;
+    }
+    WA::WorkerPoolExecutor compute(*computePool);
 
     PC::ClientStart start;
     start.frames = frames;
@@ -663,5 +681,5 @@ int main(int argc, char** argv) {
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     }
-    return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
+    return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, compute, verbose);
 }

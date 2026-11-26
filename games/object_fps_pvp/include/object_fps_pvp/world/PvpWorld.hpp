@@ -10,12 +10,18 @@
 //                       RespawnPlayers           Match only: the farthest free spawn after the respawn time
 //   Main/Update         SeatPlayers              Match only: a player for each Peer that connects, gone when it goes
 //                       ControlOwnPlayer         Client only: PeerControls and PlayerInput on the player it owns
-//   Main/PreUpdate      FollowMatchArena         Client only: the Match's arena (MatchInfo)
+//   Main/Update         LoadArena                every end, while the World generates: its arena's map from the asset
+//                                                store, then the walls on a worker (world/ArenaLoad.hpp; MapLoad)
+//   Main/PreUpdate      FollowMatchArena         Client only: whether it plays the Match's arena (MatchInfo); if not,
+//                                                ContentMismatch (a World plays one arena: another one is another World)
 //   Main/Update         SpawnLocalPlayer         Local only: the local user's player at LocalSpawn
 //                       ShowPlayers              Match only: before the start a connection sees only its player
 //   FixedUpdate/Update  StartMatch               the authority: Waiting -> Playing (MatchInfo::phase) when every
 //                                                expected player is ready, or at the deadline; before it MovePlayers
 //                                                and UseWeapons take no input
+//
+// The fixed steps start when the World has generated (WorldTimeOptions::fixedStepConditions: AfterGenerating), so
+// nothing moves before the walls are there; SeatPlayers keeps the connections that came while it generated.
 //
 // Three ends: the Match (the server), a Client (predicts its own player) and Local (single player: no net; the rollback
 // Module is there without a strategy, as authority needs it; the World is the authority, "Match only" runs there too,
@@ -26,8 +32,10 @@
 // without input in a step (a player the Client does not control) neither moves nor turns.
 
 #include "object_fps_pvp/character/CharacterRig.hpp"
-#include "object_fps_pvp/data/ArenaMap.hpp"
+#include "object_fps_pvp/world/ArenaLoad.hpp"
 #include "object_fps_pvp/world/Components.hpp"
+
+#include "engine/asset/AssetExecutor.hpp"
 
 #include "engine/entity_ids/EntityIdsModule.hpp"
 #include "engine/math/geometry/Aabb.hpp"
@@ -50,43 +58,36 @@ namespace object_fps_pvp::world {
 namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 
-// An installed arena: its file, its map (the Client draws its regions) and its walls, built once into one BoxSet that
-// every World of the Product shares (a BoxSet's body is shared and immutable; big-map declaration section 15).
-struct InstalledArena final {
-    sim::ArenaContent content;
-    std::shared_ptr<const data::ArenaMap> map;
-    GYO::Engine::Physics3d::BoxSet walls;
-    std::uint64_t wallsDigest = 0;
-};
-
-// What the game reads before a World is built: every installed arena (maps/arenas.json, in its order), the stance
-// rules (rules/movement_rules.json), the combat rules (the game's defaults) and the character (its skeleton, clips
-// and hit shapes; the arenas share one body height).
+// What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), the
+// stance rules (rules/movement_rules.json), the combat rules (the game's defaults) and the character (its skeleton,
+// clips and hit shapes; the arenas share one body height). An arena's map is not here: the World that plays the arena
+// reads it (LoadArena, big-map declaration 15.6).
 struct GameContent final {
-    std::vector<InstalledArena> arenas;
+    std::vector<sim::ArenaContent> arenas;
     sim::StanceRules stance;
     sim::CombatRules combat;
     std::shared_ptr<const character::CharacterRig> character;
 
-    [[nodiscard]] const InstalledArena* Find(const std::string& id) const;
+    [[nodiscard]] const sim::ArenaContent* Find(const std::string& id) const;
 };
 
-// The content a World was built with (a Client switches arenas with it).
-struct ContentRef final {
-    std::shared_ptr<const GameContent> content;
-};
-void HashValue(K::Hasher&, const ContentRef&);
-
-// Why this Client's content cannot play the Match's (empty: it can). Set by FollowMatchArena; the program decides.
+// Why this Client cannot play the Match's arena (empty: it can). Set by FollowMatchArena; the program decides (it may
+// build its game again on matchArena, when it has that arena, or leave).
 struct ContentMismatch final {
     std::string reason;
+    // The arena the Match plays.
+    std::string matchArena;
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
 
 // Reads the content under root (the game's asset directory). nullopt with error naming the file and what was wrong:
-// a file that does not read or parse, an arena whose walls do not build, whose stance rules do not fit, or whose
-// spawn is not free of its walls.
+// a file that does not read or parse, or an arena whose stance rules do not fit. Whether its map reads, and its spawns
+// are free of its walls, is known when a World reads the map (MapLoad).
 [[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error);
+
+// What a Product playing the game needs besides its Worlds: the map's loaders (voxel_map's) in its asset store
+// (world_asset, with AssetOptions naming the content root and an executor). A Product's configure calls it.
+void ConfigureGame(O::ProductSetup& setup);
 
 // The seats of a Match: the admission takes one per user (Take), refusing a full Match. A user who connects again
 // while their connection is still open (from any endpoint: the Client crashed and came back, or reconnected) is let
@@ -144,7 +145,7 @@ inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kClientIds{1'000'001, 
 
 struct WorldOptions final {
     std::shared_ptr<const GameContent> content;
-    // The Match plays this arena; a Client starts with it and follows the Match's (MatchInfo).
+    // The arena the World plays (an index into content->arenas): its map is read while the World generates.
     std::size_t arena = 0;
     // A Client: its user id (NetProductOptions::userId). The Match: 0.
     std::uint64_t localUser = 0;
@@ -156,6 +157,9 @@ struct WorldOptions final {
     // after the first player came it waits at most (0: no limit).
     std::vector<std::uint64_t> expectUsers;
     std::uint32_t startDeadlineSeconds = 60;
+    // Where the map's walls are built (the Product's worker; not owned, it outlives the World). None: in the System,
+    // on the World's thread.
+    GYO::Engine::Asset::AssetExecutor* jobs = nullptr;
 };
 
 // Which end a World is.

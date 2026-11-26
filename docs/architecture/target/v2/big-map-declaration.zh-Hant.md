@@ -468,6 +468,53 @@ v8-arch-gyo2-big-map
 
 串流、LOD 代理、GPU 量測（量之前先問）、場景標記的轉換（`.gox` 的場景圖層照舊排除）、Seats 的上限。
 
+### 15.6 S4-C：建 World 時才讀地圖（`v8-arch-gyo2-big-map-s4c`）
+
+2026-11-26。使用者：「大地圖卡接著做 S4-C 和 S6」（主會話轉達）。Opus／high（上段：資料契約、Match 判定）。15.3 的選圖接點由流程框架卡做好（#346～#353）；名字與欄位動工前已通知流程框架卡。
+
+**前提**
+
+| 前提 | 誰定的 | 掛在它上面的決定 |
+|---|---|---|
+| 一個 World 只玩一張圖，換圖就換 World | 15.3（卡片判，`-replace-order-author-choice`） | Client 不在 World 裡跟著 Match 換圖 |
+| 載入放在生成世界階段，沒好就 `Hold()` | world-gen（O-14）；object_connect 的 `LoadGameData` 已用同一形狀 | 遊戲的步在生成結束前不跑 |
+| 讀圖走 asset（索引帶 region 參照，VM-6） | 第 6 節、S1 | 同一個 Product 的 World 共用一次讀取 |
+
+**改成（卡片判）**
+
+1. `GameContent` 只留 arena 檔、規則、角色。`InstalledArena`、`ContentRef`、`PresentationContent::arenaPictures` 拿掉。
+2. arena 檔 v3 的 `map` 是 catalog 裡索引的 id（15.2 第 1 點原本就這樣寫；B 階段暫用目錄名）。
+3. 每個玩這張圖的 World（Match、Client 的 Sim／Solo）在生成期間由 `LoadArena` 讀：
+   - 向 asset 要索引，region 全到後 `CheckVoxelMap`。
+   - 只把碰撞盒複製給 worker 建 `BoxSet`，同時放掉 handle（Match 不留 quads）。
+   - 建好後檢查出生點，放進 `kArenaEntity` 的 `Collider`，寫 `GameRules::wallsDigest`；權威端再寫 `MatchInfo{arenaId, wallsDigest}`。
+   - 完成的那一幀不 `Hold()`，生成在那一幀結束；其他幀都 `Hold()`。
+   - 讀不了（缺 region、sha 不合、出生點在牆裡）：維持生成，`MapLoad{done, total, stage, failure}` 寫原因。Match 的 main 記錄後結束；Client 帶原因回上一頁。
+4. Client 的 Frame World 用同一個 asset（store 只讀一次），在生成期間把 faces 交給 worker 做每個 region 的模型，再生成每個 region 一個 `Mesh3d`。loading 畫面等兩邊的 `MapLoad` 都是 Done；region 數計入進度。
+5. 固定步在生成結束前不跑（`WorldTimeOptions::fixedStepConditions = {AfterGenerating()}`），Match 與 Client 條件相同。生成期間來的連線，`SeatPlayers` 先不讀（未讀的紀錄不會被裁掉），牆好了才入座。
+6. Match 玩的圖和自己的不同：記 `ContentMismatch{reason, matchArena}`，不在 World 裡換。arena id 不同時一收到 `MatchInfo` 就判（不必先讀完自己的圖）；同一張圖則等自己的牆建好再比 digest。Client 有那張圖就以那張重建遊戲，沒有就離開。只要 Match 的圖和這局的不同就會重建；Gateway 的房間照理不會遇到（房間的圖就是 Match 的圖），程式沒有另外限制。
+7. worker 由產品給（`WorldOptions::jobs`、`ClientOptions::jobs`）；沒給時在 System 內同步建。產品給的是**計算用**的執行緒，和 asset 讀檔的執行緒分開（Bevy 的 `IoTaskPool`／`AsyncComputeTaskPool`：`bevy_tasks/src/usages.rs:67`、`:75`）。介面借用 `AssetExecutor`（只是「交一個 job」），不經 asset store。
+8. 生成期間累積的連線紀錄，牆好後才讀：讀到時已經斷掉的連線不入座（設計審查 B1：否則會留下沒人控制的玩家）。
+
+**照誰**
+
+- 背景建、每幀取結果：Bevy `examples/async_tasks/async_compute.rs:66`（`AsyncComputeTaskPool` 上 spawn）、`:128`（`check_ready` 每幀取）。Godot `WorkerThreadPool::add_task`／`is_task_completed`（`core/object/worker_thread_pool.h:246`、`:249`）同型。丟掉 task 時取消還沒開始的 job（Bevy 的 `Task` drop 即取消：`bevy_tasks/src/task_pool.rs:558`）；已在跑的跑完後丟掉結果（Bevy 會在下一個 await 點停，我們的 job 沒有 await 點）。
+- 生成期間的連線改用「牆好後讀積壓的訊息」，而不是 Bevy 常見的「照狀態入座」（每個還在、沒有玩家的 Peer 給一個）：`SeatPlayers` 原本就以訊息處理換手（同一使用者的新連線接手玩家），改成照狀態要重寫整個 System，不在本批。積壓造成的問題（已斷的連線）在讀時排除。
+- 生成期間讀＋`Hold()`：gyo2 world-gen，沒有別家對應（Bevy 用 States 自己寫 loading，同樣是作者的系統等資產）。
+
+**判定（合併前）**
+
+- 15.4 的 L2：region 沒到齊、牆沒建好都維持生成；建好的那一幀結束；進度不倒退；生成期間步數為 0。
+- 15.4 的 L3：缺 region、sha 不合、出生點在牆裡 → `MapLoad` 為 Failed 並帶原因，World 維持生成，不 assert。
+- 15.4 的 L4：Match 與 Client 各自讀圖，`wallsDigest` 相同；Match 牆建好後不再持有地圖。
+- 生成期間連進來的 Client：牆好之前沒有玩家，之後入座。
+- Client：Match 玩另一張已安裝的圖時，以那張重建遊戲並畫出那張圖。
+- 新加與改到的突變全部 killed；L1 三平台。
+
+**不做**
+
+串流、km² 量測（S5，要先問）、Gateway 與房間的流程（不變）。
+
 ## 16. S6 小宣告：instancing（`v8-arch-gyo2-big-map-s6`）
 
 2026-11-26。主會話轉達使用者：「S6：instancing — 照宣告寫的做：做成 Engine 的公開介面，用測試場景裡重複出現的模型驗證。照 Bevy 的做法，偏離 Bevy 時寫出理由。」Opus／high（上段：Engine 公開介面）。第 2.4 節：instancing 對 voxel 幾何沒有幫助，幫的是重複的東西（箱子、樹、路燈），所以驗證用重複的模型，不用地圖。

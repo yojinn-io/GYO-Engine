@@ -8,7 +8,7 @@
   "body_height": 1.8,
   "radius": 0.25,
   "eye_height": 1.6,
-  "map": "pvp_arena",
+  "map": "object_fps_pvp.map.pvp_arena",
   "spawns": [
     {"position": [5, 0, 5], "yaw": 0},
     {"position": [5, 0, 12], "yaw": 3.14159265},

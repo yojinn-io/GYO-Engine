@@ -8,7 +8,7 @@
   "body_height": 1.8,
   "radius": 0.25,
   "eye_height": 1.6,
-  "map": "kiriyu_extraction_250m",
+  "map": "object_fps_pvp.map.kiriyu_extraction_250m",
   "spawns": [
     {"position": [25.25, 11.5, 219.75], "yaw": 2.35619449},
     {"position": [40.25, 11.5, 22.25], "yaw": 0.785398163},
