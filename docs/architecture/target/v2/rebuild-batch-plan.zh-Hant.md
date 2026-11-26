@@ -84,6 +84,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | Windows 上非 Install 的執行緒走到 `std::terminate` 時沒有致命紀錄（日誌 S1） | 日誌批合併前核准頁 | 另開 |
 | Parallel 下 trace 段的父子、段在別的執行緒結束（RC-T1） | trace 批合併前核准頁 | Kernel 解除 LIM-2 時重看 |
 | `bs-` 開頭的突變搬到 Base 的清單 | 突變清點卡（#247） | 下一次動 Base 的批 |
+| `object_fps_pvp.client` 測試越來越慢：gyo2 本身 macOS 117.6 s、Windows 105 s（Linux 38 s），#364 把時限 120 s 放寬到 300 s；根本做法是把 client 測試拆成幾個 ctest 項目平行跑，不再一直調時限 | 大地圖 #364（2026-11-26） | 下一次動 object_fps_pvp 測試的批 |
 | 突變數量的增長判準交風紀委員 | 突變清點卡（#247） | 風紀委員待辦 |
 | 每步除了相關突變，再跑一次只數 find 次數的靜態掃描（第 4 批漏 8 個 stale） | 第 4 批後續卡（#265） | 風紀委員待辦 |
 | 第 5 批開頭的守衛：Kernel「拿掉的名字不回來」、權威 Module 的 `gyo_expect_links`（不必再加 DEFER 突變） | 第 4 批宣告 9.5、#265 | 第 5 批開頭 |
