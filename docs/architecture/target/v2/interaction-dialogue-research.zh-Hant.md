@@ -1,6 +1,6 @@
 # 交互與 NPC 台本：成熟方案比較（`v8-arch-interaction-dialogue-research`）
 
-更新：2026-11-26（同日補：inkcpp 照源碼確認）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。方向由使用者決定；這份文件不改任何已定的決定。**
+更新：2026-11-26（同日補：inkcpp 照源碼確認）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。Q1～Q6 已由使用者決定（2026-11-26，第 6 節）；這份文件不改其他已定的決定。**
 
 查的版本：`gyo2` 7d06d987；Godot、Bevy、bevy_replicon、lightyear 用 `~/Code/GitHome` 裡的本地源碼（引用附檔名與行號，路徑從各 repo 的根算起）。inkcpp 由使用者 clone 到 `~/Code/GitHome/inkcpp`（HEAD d38608d），2.1 的 inkcpp 部分照源碼寫。Yarn Spinner、Godot Dialogue Manager、Unity、Unreal 不在本機，只讀網頁（附 URL），沒有下載或 clone。沒能在原文裡確認的寫「未確認」。
 
@@ -389,3 +389,22 @@ inkcpp 讀了源碼（`~/Code/GitHome/inkcpp`，d38608d；下面 inkcpp 的行�
 | Q4 | 多語系什麼時候做 | 現在就定（台詞 line ID＋字串表，UI 提示也走同一張表）／之後再補 | 現在定：多一條寫作約定與一張表；之後補：每句台詞都要回頭加 ID。這一題會影響 Q3（多語系很重要的話，Yarn 的分數會上升） | 現在先定 line ID 的約定，字串表等第二種語言再做 |
 | Q5 | 台本放哪一層 | Plugin＋遊戲詞的介面，只給一個遊戲用／Engine 的台本 Module＋多後端抽象／完全放遊戲層 | Plugin：照 §1-4，不先抽象；Engine Module：作者可以換後端，但只有一種後端時是在沒有差異處抽象；遊戲層：最快，但第二個遊戲要重接 | Plugin（2.6 第 2 點） |
 | Q6 | Engine 的四個缺口要不要先排 | 等點名再做／先排其中幾個 | 先排：保守的機制選項以後沒人改（`v8-arch-gyo2-mechanism-not-conservative`）；等點名：不做沒人用的東西 | 等點名；`ChildOf` 下的 collider 本來就排在 physics_3d 後續批 |
+
+## 6. 使用者的決定（2026-11-26）
+
+**原話**（使用者對主會話說的，由主會話轉來，逐字照錄）：「交互＋台本研究的 Q1～Q6。」這個照建議」
+
+**決定**：Q1～Q6 全部採用第 5 節的推薦。第 4 節的推薦與理由不變。
+
+| # | 採用的選項 |
+|---|---|
+| Q1 | (a)：多人時輸入只送「按了交互」，Match 用同一 tick 的視線自己打射線找目標 |
+| Q2 | 交互放 `object_fps_pvp`（一扇門），台本放單機 spike |
+| Q3 | Ink＋inkcpp |
+| Q4 | 現在先定 line ID 的約定；字串表等第二種語言再做 |
+| Q5 | Plugin，對外介面用遊戲的詞，只給一個遊戲用 |
+| Q6 | Engine 的四個缺口（`ChildOf` 下的 collider、`BoxSet` 射線的方塊編號、Client → Match 的可靠離散訊息、action map）等有人點名再做 |
+
+**比過的選項**：見第 5 節各列。**理由**：使用者沒有另外說，採用的是第 4、5 節寫的推薦理由。**出處**：主會話轉來的訊息，2026-11-26。
+
+之後的實作卡（PvP 的門、單機的 Ink spike）什麼時候開，由使用者決定。
