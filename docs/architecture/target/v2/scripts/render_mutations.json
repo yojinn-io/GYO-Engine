@@ -1794,8 +1794,8 @@
     "render RD-9"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if (it->first.held != nullptr && !it->second.used) {",
-   "replace": "        if (false) {",
+   "find": "                                               : it->first.held != nullptr && !it->second.used;\n",
+   "replace": "                                               : false;\n",
    "target": "gyo_render_tests",
    "cases": "render_extract: a Mesh3d of a model the author holds*",
    "expect": "\\[mh\\-held\\-let\\-go\\]"
@@ -1898,8 +1898,8 @@
     "big-map-declaration 17.3, 17.5"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) return std::nullopt;\n",
-   "replace": "",
+   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) {\n",
+   "replace": "        if (false) {\n",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: the bytes of new meshes*",
    "expect": "\\[p3\\-bytes\\-wait\\]"
@@ -1911,8 +1911,8 @@
     "big-map-declaration 17.3, 17.5"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) return std::nullopt;\n",
-   "replace": "        if (bytesPerFrame_ && bytesThisFrame_ + mesh.positions.size() * sizeof(Vertex3D) + mesh.indices.size() * sizeof(std::uint32_t) > *bytesPerFrame_) return std::nullopt;\n",
+   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) {\n",
+   "replace": "        if (bytesPerFrame_ && bytesThisFrame_ + mesh.positions.size() * sizeof(Vertex3D) + mesh.indices.size() * sizeof(std::uint32_t) > *bytesPerFrame_) {\n",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: the bytes of new meshes*",
    "expect": "\\[p3\\-bytes\\-soft\\]"
