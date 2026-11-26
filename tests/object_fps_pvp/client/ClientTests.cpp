@@ -298,6 +298,19 @@ struct Setup final {
         }
         REQUIRE_FALSE(waiting());
     }
+    // Frames until the game shows: loaded (Loaded), the loading screen's work done and the match started, and the loading
+    // page gone (its request is applied the next frame). Before that a click or Tab is the loading screen's, not the
+    // game's (ReadControls), however long the own player has been there.
+    void Shown() {
+        Loaded();
+        const auto shown = [this] { return PC::StatusOf(Client()).ready && PC::StatusOf(Client()).started; };
+        for (int i = 0; i < 2000 && !shown(); ++i) {
+            Frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE_MESSAGE(shown(), "the game shows (loaded, drawn and started)");
+        Frames(2);
+    }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
         if (step && !holdMatch) REQUIRE(static_cast<bool>(match->RunFrame()));
@@ -427,6 +440,8 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
     }
     CHECK(cameraAtEye);
     // A click takes the pointer (and is no shot); the window is asked to lock and hide the cursor.
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.state = I::ButtonState::Pressed;
@@ -481,6 +496,8 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -518,6 +535,8 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -655,6 +674,8 @@ TEST_CASE("client: with the Sim World lent, a click among several frames between
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -752,13 +773,6 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
 }
 
 namespace {
-// Frames until the Client plays (its own player has come; the map is read on a worker, so how long varies), then n more.
-void PlayAndSettle(Setup& setup, const int n) {
-    for (int i = 0; i < 1200 && !PC::StatusOf(setup.Client()).playing; ++i) setup.Frame();
-    REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "the Client plays");
-    setup.Frames(n);
-}
-
 // The colour of the hit marker the HUD draws (its strokes run along the diagonals; the crosshair's along the axes), or
 // none when it draws none.
 std::optional<R::Color8> HitMarkerColor(K::World& world) {
@@ -778,7 +792,8 @@ std::optional<R::Color8> HitMarkerColor(K::World& world) {
 // Match's judgement (ShotRecord) is written here as JudgeShots writes it.
 TEST_CASE("client: an own shot that hits shows the hit marker, in the head colour for a head; it fades") {
     Setup setup;
-    PlayAndSettle(setup, 60);
+    setup.Loaded();
+    setup.Frames(60);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
     const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
     REQUIRE(own != 0);
@@ -832,7 +847,8 @@ TEST_CASE("client: an own hit sounds at the target: heard near, not across the b
     for (const std::size_t arena : {std::size_t{0}, big}) {
         CAPTURE(arena);
         Setup setup(1, 4, arena);
-        PlayAndSettle(setup, 60);
+        setup.Loaded();
+        setup.Frames(60);
         const K::EntityId own = PW::OwnPlayer(setup.Sim());
         const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
         REQUIRE(own != 0);
@@ -870,8 +886,11 @@ TEST_CASE("client: an own hit sounds at the target: heard near, not across the b
 // the player stays down. The press of a tap still jumps once.
 TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {
     Setup setup;
-    PlayAndSettle(setup, 60);
+    setup.Loaded();
+    setup.Frames(60);
     REQUIRE(ShippedContent()->stance.holdJump);
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.state = I::ButtonState::Pressed;
@@ -912,7 +931,8 @@ TEST_CASE("client: holding Space jumps again on every landing; letting go stops"
 // The other players' steps are heard too, where they walk; a crouched walk is silent (playtest 2026-11-26, item 2).
 TEST_CASE("client: the other player's steps sound while it walks standing, not while it walks crouched") {
     Setup setup(4);
-    PlayAndSettle(setup, 60);
+    setup.Loaded();
+    setup.Frames(60);
     const K::EntityId rival = PlayerOf(setup.Client(), 2);
     REQUIRE(rival != 0);
     PW::PlayerInput walk;
@@ -1003,6 +1023,8 @@ TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     };
     REQUIRE(partRotationY().has_value());
     CHECK(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-4));
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -1467,7 +1489,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         if (game == 1) {
             // Take the pointer and walk forward: the Solo World moves the player.
             const GYO::Engine::Math::Vec3 start = setup.Solo().Get<PW::PlayerBody>(own)->feet;
-            I::MouseButtonInput click;
+    I::MouseButtonInput click;
             click.button = I::MouseButton::Left;
             click.state = I::ButtonState::Pressed;
             click.position = {640.0F, 360.0F};

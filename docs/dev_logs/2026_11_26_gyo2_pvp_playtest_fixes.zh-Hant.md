@@ -113,3 +113,19 @@ blocker 0。處理：
 - 測試：Client「portable mode: the marker beside the program puts the files there…」（沒有標記→使用者資料目錄；有→執行檔旁；別處的標記不算；Windows 分隔符；`.app` 外面那一層；不是 bundle 的 `MacOS` 目錄；拿不到執行檔路徑；兩者都沒有→不存）。本機實機：`build/target/object_fps_pvp/bin/gyo_object_fps_pvp --frames 20`，沒有標記印使用者資料目錄，放了 `portable` 印 bin 目錄。
 - 突變 3 個，3/3 killed：`pvp-portable-ignored`、`pvp-portable-always`、`pvp-portable-inside-bundle`。
 - 沒做：LAN 試驗包改用這個模式（不在這個 PR）；Windows、Linux 上的實機沒跑（純函式的測試在三平台的 L1 跑）。
+
+## 跟上 #358（S4-C：地圖在 World 生成中讀、牆在 worker 建）
+
+- merge `origin/gyo2`（不 rebase）。衝突：6 個 arena 檔（#358 的 `map` 改成 catalog id ＋ 本卡的 version 4 邊界成員）、`Arena.hpp`／`Arena.cpp`（兩邊的說明與解析合在一起：map 只要非空）、`PvpWorld.hpp`／`.cpp`（`InstalledArena` 拿掉了）、`ArenaTests.cpp`、`mutations.json`（照 id 三方合併，兩邊都改的 id 沒有）。
+- 遮擋的牆：#358 之後牆只在 Sim／Solo World（`kArenaEntity` 的 `Collider`），Frame World 沒有 `InstalledArena` 可查。改成 `WorldSnapshot::walls`（BoxSet 的本體共用、不可變，複製只是參照）帶到 Frame World 的 `ClientSound::walls`；`world::Blocked` 改吃 `BoxSet`。
+- 測試：world 的牆改用 `LoneMatch::SetWalls`；本卡新加的 Client 測試改用 #358 的 `Setup::Loaded()`（等地圖讀完、自己的玩家到了）再多跑 60 幀：merge 後按住連跳的那一案用固定 120 幀，6 次有 2 次還沒 playing。
+- 本機：logic 63／world 38／client 43（network 2 skip），cpu ctest 254/254；突變（本卡的 36 個＋#358 新加的 11 個）47/47 killed。
+
+## L1 run 45772574407 的 linux-x64 紅（`client: with the Sim World lent, a click among several frames…`）
+
+- 那次 run 的 head 是 `246719ce`（dispatch 時可攜模式的 push 還沒到），不是當時 PR 的 head。windows、macos 綠。
+- 失敗在 `ClientTests.cpp:615` 的 `REQUIRE(captured)`：第一下點擊沒有拿到指標。
+- **重現**：點擊在 loading 頁（`GamePage::Loading`）時不拿指標，是規格（`ReadControls`：loading 期間點擊與 Tab 是 loading 畫面的）。那個案等的是「固定 120 幀＋自己的玩家到了（`playing`）」，不是「loading 畫面走了（`ready` 且 `started`）」。本機 8 個並行（模擬 CI 的負載）量：`playing` 之後到 `ready` 有 1～43 幀；在 `playing` 時點擊、`ready` 還沒到的 8 次，8 次都沒有拿到指標（暫時的實驗案，沒有提交）。
+- **判斷**：不是 #360 的回歸。本卡沒有改讀取、就緒、loading 頁、指標的路徑（`ReadControls` 只多一行 `jumpHeld`）；是測試的前提（等的條件）在慢的 runner 上不成立，gyo2 上同樣的案也有這個競爭（只是剛好沒碰到）。
+- **修**：`Setup::Shown()`（`Loaded()`＋等 `ready && started`＋兩幀讓 loading 頁離開），放在「第一下點擊拿指標」之前：`it connects…`、`a click in a frame that runs no step…`、`J5…`、`with the Sim World lent…`、`holding Space…`、`a shot kicks the first-person weapon…`。期望值不變（點擊照樣要拿到指標、照樣只開一槍）。單人與暫停的兩案本來就等 `started`／在遊戲中，不動。
+- 驗證：這 6 案 8 個並行 × 2 輪＝16 次全過。
