@@ -31,6 +31,7 @@
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
 #include "engine/math/linear/Quaternion.hpp"
+#include "engine/math/linear/Vec2.hpp"
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
@@ -61,6 +62,7 @@
 #include <cmath>
 #include <deque>
 #include <map>
+#include <numbers>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -106,6 +108,7 @@ constexpr K::EntityId kAmmoText = 3'000'016;
 constexpr K::EntityId kStatusText = 3'000'017;
 constexpr K::EntityId kHitDirection = 3'000'019;
 constexpr K::EntityId kOverlay = 3'000'020;
+constexpr K::EntityId kHitMarker = 3'000'021;
 
 // The 2D layer: 1280 x 720 units, the origin at the centre, y up; drawn by the HUD camera only.
 constexpr float kHudWidth = 1280.0F;
@@ -303,6 +306,8 @@ struct ClientHud final {
     present::LocalHitFeedback feedback;
     // This frame's hit feedback (ShowHud samples it; PlaceCamera shakes the camera by it).
     present::HitFeedbackSample sample;
+    // The own shots' hit marker (ShowHud observes the own ShotRecord).
+    present::HitMarker marker;
 };
 void HashValue(K::Hasher&, const ClientHud&) {}
 
@@ -415,6 +420,36 @@ R::Shape2d HitDirection(const present::HitFeedbackSettings::Direction& direction
         const float x = direction.radiusPixels * std::sin(angle);
         const float y = direction.radiusPixels * std::cos(angle);
         Rect(shape.vertices, shape.indices, x - half, y - half, x + half, y + half, color);
+    }
+    return shape;
+}
+
+// A stroke from a to b, thickness wide (a quad along the segment).
+void Stroke(std::vector<R::Vertex2D>& vertices, std::vector<std::uint32_t>& indices, const Math::Vec2 a, const Math::Vec2 b,
+            const float thickness, const R::Color8 color) {
+    const Math::Vec2 along = b - a;
+    const float length = std::sqrt(along.x * along.x + along.y * along.y);
+    if (!(length > 0.0F)) return;
+    const Math::Vec2 side{-along.y / length * thickness / 2, along.x / length * thickness / 2};
+    const auto base = static_cast<std::uint32_t>(vertices.size());
+    vertices.push_back({{a.x + side.x, a.y + side.y}, {0, 0}, color});
+    vertices.push_back({{b.x + side.x, b.y + side.y}, {0, 0}, color});
+    vertices.push_back({{b.x - side.x, b.y - side.y}, {0, 0}, color});
+    vertices.push_back({{a.x - side.x, a.y - side.y}, {0, 0}, color});
+    for (const std::uint32_t i : {0U, 1U, 2U, 0U, 2U, 3U}) indices.push_back(base + i);
+}
+
+// The hit marker: an X around the crosshair, four strokes out along the diagonals (none while it does not show).
+R::Shape2d HitMarkerShape(const present::HitFeedbackSettings::HitMarker& marker, const present::HitMarkerSample& sample) {
+    R::Shape2d shape;
+    if (sample.alpha <= 0.0F) return shape;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    const auto& rgb = sample.head ? marker.headColor : marker.color;
+    const R::Color8 color{byte(rgb[0]), byte(rgb[1]), byte(rgb[2]), byte(sample.alpha)};
+    const float inner = marker.gapPixels / std::numbers::sqrt2_v<float>;
+    const float outer = (marker.gapPixels + marker.lengthPixels) / std::numbers::sqrt2_v<float>;
+    for (const Math::Vec2 diagonal : {Math::Vec2{1, 1}, Math::Vec2{-1, 1}, Math::Vec2{-1, -1}, Math::Vec2{1, -1}}) {
+        Stroke(shape.vertices, shape.indices, diagonal * inner, diagonal * outer, marker.thicknessPixels, color);
     }
     return shape;
 }
@@ -861,7 +896,8 @@ K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> 
 K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
                         K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<WT::ActiveTime> time,
                         K::Res<ClientScene> scene,
-                        K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
+                        K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>,
+                                 K::Read<PW::ShotRecord>> players,
                         K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes, K::ResMut<ClientHud> hud) {
     ClientHud& h = hud.Get();
     if (!h.font) {
@@ -875,15 +911,17 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     const PW::PlayerBody* body = nullptr;
     const PW::PlayerCombat* combat = nullptr;
     const PW::HitRecord* hits = nullptr;
+    const PW::ShotRecord* shot = nullptr;
     std::optional<Math::Vec3> attacker;
     std::map<K::EntityId, Math::Vec3> feet;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& b, const PW::PlayerCombat& c,
-                        const PW::HitRecord& r) {
+                        const PW::HitRecord& r, const PW::ShotRecord& s) {
         feet[id] = b.feet;
         if (owner.userId != user->userId) return;
         body = &b;
         combat = &c;
         hits = &r;
+        shot = &s;
     });
     const double now = static_cast<double>(time->elapsed) / 1e9;
     present::HitFeedbackSample feedback;
@@ -893,6 +931,10 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
         feedback = h.feedback.Sample(now, controls->controls.Yaw(), scene->presentation->hitFeedback);
     }
     h.sample = feedback;
+    if (shot != nullptr) h.marker.Observe(shot->tick, shot->kind == sim::ShotHitKind::Player, shot->part == sim::HitPart::Head, now);
+    if (auto marker = shapes.GetMut<R::Shape2d>(kHitMarker)) {
+        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));
+    }
     if (auto flash = shapes.GetMut<R::Shape2d>(kFlash)) {
         flash.Get() = Flash(scene->presentation->hitFeedback.flash.color, feedback.flashAlpha);
     }
@@ -1791,6 +1833,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kCrosshair, Crosshair());
         hudThing(kHitDirection, {0, 0, 1});
         world.Insert(kHitDirection, R::Shape2d{});
+        hudThing(kHitMarker, {0, 0, 1});
+        world.Insert(kHitMarker, R::Shape2d{});
         const auto text = [&](const K::EntityId id, const Math::Vec3 at, const Math::Vec2 anchor) {
             hudThing(id, at);
             R::Sprite sprite;
@@ -2111,6 +2155,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         GatewayContext gateway{directory, start->gateway, maps};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
+        case Scene::Splash: BuildSplash(setup, start->splashSeconds); break;
         case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, maps); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;

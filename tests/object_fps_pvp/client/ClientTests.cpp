@@ -52,6 +52,7 @@ namespace W = GYO::Engine::Window;
 namespace R = GYO::Engine::Render;
 namespace T = GYO::Engine::Transform;
 namespace WA = GYO::Engine::WorldAsset;
+namespace sim = object_fps_pvp::sim;
 
 namespace {
 
@@ -696,6 +697,69 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   }
 }
 
+namespace {
+// The colour of the hit marker the HUD draws (its strokes run along the diagonals; the crosshair's along the axes), or
+// none when it draws none.
+std::optional<R::Color8> HitMarkerColor(K::World& world) {
+    std::optional<R::Color8> found;
+    for (const K::EntityId id : world.Entities()) {
+        const auto* shape = world.Get<R::Shape2d>(id);
+        if (shape == nullptr || shape->vertices.size() < 2) continue;
+        const auto& a = shape->vertices[0].position;
+        const auto& b = shape->vertices[1].position;
+        if (a.x != b.x && a.y != b.y) found = shape->vertices[0].color;
+    }
+    return found;
+}
+} // namespace
+
+// The own shot that hits shows an X beside the crosshair, another colour for the head (playtest 2026-11-26, item 8). The
+// Match's judgement (ShotRecord) is written here as JudgeShots writes it.
+TEST_CASE("client: an own shot that hits shows the hit marker, in the head colour for a head; it fades") {
+    Setup setup;
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+    REQUIRE(own != 0);
+    REQUIRE(rival != 0);
+    CHECK_FALSE(HitMarkerColor(setup.Client()).has_value());
+    const auto& marker = setup.presentation->hitFeedback.hitMarker;
+    const auto judged = [&](const sim::HitPart part) {
+        K::World& match = GameWorld(*setup.match);
+        PW::ShotRecord record;
+        record.tick = TickOf(match);
+        record.kind = sim::ShotHitKind::Player;
+        record.target = rival;
+        record.part = part;
+        record.damage = 1;
+        *match.GetMut<PW::ShotRecord>(own) = record;
+    };
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(v * 255.0F)); };
+    judged(sim::HitPart::Body);
+    std::optional<R::Color8> body;
+    for (int i = 0; i < 20 && !body; ++i) {
+        setup.Frame();
+        body = HitMarkerColor(setup.Client());
+    }
+    REQUIRE_MESSAGE(body.has_value(), "[pvp-hit-marker] a body hit shows the marker");
+    CHECK(body->r == byte(marker.color[0]));
+    CHECK(body->g == byte(marker.color[1]));
+    CHECK(body->b == byte(marker.color[2]));
+    // Gone after its seconds (64 frames a second here).
+    setup.Frames(static_cast<int>(marker.seconds * 64) + 4);
+    CHECK_MESSAGE(!HitMarkerColor(setup.Client()).has_value(), "[pvp-hit-marker] the marker fades away");
+    judged(sim::HitPart::Head);
+    std::optional<R::Color8> head;
+    for (int i = 0; i < 20 && !head; ++i) {
+        setup.Frame();
+        head = HitMarkerColor(setup.Client());
+    }
+    REQUIRE_MESSAGE(head.has_value(), "[pvp-hit-marker] a head hit shows the marker");
+    CHECK_MESSAGE(head->g == byte(marker.headColor[1]), "[pvp-hit-marker-head] the head colour");
+    CHECK(head->b == byte(marker.headColor[2]));
+}
+
 // Space held jumps again on every landing (the shipped movement rules' hold_jump; playtest 2026-11-26, item 7); let go,
 // the player stays down. The press of a tap still jumps once.
 TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {
@@ -1073,6 +1137,40 @@ namespace {
 PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{.scene = PC::Scene::Lobby, .status = std::move(status)}; }
 
 } // namespace
+
+// The start screen (playtest 2026-11-26, item 6): the logo on black, then the menu after its seconds, or at once on a key.
+TEST_CASE("client: the start screen shows the logo document, then the menu after its seconds or at once on a key") {
+    for (const bool key : {false, true}) {
+        CAPTURE(key);
+        Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Splash}, {}, std::nullopt, {}, 0,
+                    [key](PC::ClientStart& start) { start.splashSeconds = key ? 60.0 : 0.5; });
+        setup.Load();
+        REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen stays once laid out");
+        const auto* root = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+        REQUIRE(root != nullptr);
+        CHECK(root->canvas == "splash");
+        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+        REQUIRE(state != nullptr);
+        CHECK_MESSAGE((state->runtime && !state->failure), "[pvp-splash] the logo document is laid out");
+        CHECK(setup.Notes().failure.empty());
+        if (key) {
+            // Long seconds: still the start screen a while later; a key goes on.
+            setup.Frames(30);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen waits its seconds");
+            setup.Press(I::KeyCode::Enter);
+            setup.Frames(2);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-splash-skip] a key goes on to the menu");
+        } else {
+            // Half a second after it was laid out (the Frame World's time moves 1/64 s a frame here): not before, then the menu.
+            setup.Frames(24);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen waits its seconds");
+            setup.Frames(16);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-splash-time] after its seconds the menu");
+        }
+        setup.Load();
+        CHECK(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "menu");
+    }
+}
 
 TEST_CASE("client: the menu goes to the lobby and back; the Render World stays and is told of each new Frame World") {
     Setup setup(1, 4, 0, PC::SceneChange{});

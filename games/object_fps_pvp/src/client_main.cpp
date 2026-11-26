@@ -350,6 +350,7 @@ private:
 std::string SceneName(const PC::Scene scene) {
     switch (scene) {
     case PC::Scene::Menu: return "menu";
+    case PC::Scene::Splash: return "start screen";
     case PC::Scene::SoloRoom: return "single player room";
     case PC::Scene::SoloGame: return "single player game";
     case PC::Scene::Lobby: return "lobby";
@@ -662,6 +663,8 @@ int main(int argc, char** argv) {
     }
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
+    } else {
+        start.first = PC::SceneChange{.scene = PC::Scene::Splash};
     }
     return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, verbose);
 }

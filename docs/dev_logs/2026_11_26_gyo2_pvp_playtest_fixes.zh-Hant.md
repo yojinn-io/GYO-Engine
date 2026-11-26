@@ -59,6 +59,28 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡；決定與�
 - Client：「holding Space jumps again on every landing; letting go stops」（按住 2 秒起跳 ≥ 3 次、放開不再跳、點一下跳一次）；J5（主執行緒停住）加上按住空白鍵：停住前每步都要跳，過期後不跳。
 - 突變 12 個新的＋改 1 個舊的（`pvp-arena-version`：改成「讀了 version 3」），13/13 killed：`pvp-bounds-open`、`pvp-bounds-at-edge`、`pvp-kill-height-ignored`、`pvp-floor-everywhere`、`pvp-landing-unhurt`、`pvp-landing-speed-lost`、`pvp-fall-no-death`、`pvp-fall-safe-ignored`、`pvp-hold-jump-ignored`、`pvp-hold-jump-always`、`pvp-hold-not-carried`、`pvp-hold-kept-stale`。第一次跑 `pvp-arena-version` 存活：v3 的測試文字缺 `kill_height`，本來就會被拒；測試改成帶 v4 成員的 v3 後 killed。
 
+## C HUD／流程
+
+### 8 命中標記（類 COD）
+
+- 自己的一槍打中人時，準心四周的斜角出現一個 X（四條斜線，從中心 6 px 到 15 px、2 px 粗），0.25 秒內淡出；爆頭換色（白→紅 `[1.0, 0.25, 0.2]`）。
+- 來源：Match 的 `ShotRecord`（複製到 Client）。`present::HitMarker` 照 tick 判「新的一槍」：新的命中就顯示；新的沒中不把正在顯示的拿掉；第一次看到的紀錄（加入、換場景）不顯示。和命中音（`PlaySounds` 的 `confirmedHeard`）看同一份紀錄，各自記。
+- `ui/hit_feedback.json` 升到 **version 2**，加 `hit_marker`（`gap_pixels`、`length_pixels`、`thickness_pixels`、`color`、`head_color`、`seconds`，全部必填）。只接受 version 2。
+- 畫法：HUD 層一個 `Shape2d`（`kHitMarker`），四條斜線各是一個沿線段的四邊形（`Stroke`）。
+
+### 6 啟動畫面（先用文字）
+
+- 新場景 `Scene::Splash`：沒有 `--connect` 時程式的第一個場景。Frame World 放 `ui/pvp_splash.json`（canvas `splash`：黑底、「GYO」160 pt、「ENGINE」28 pt），文件排好之後 `ClientStart::splashSeconds`（2 秒）到了、或按任何鍵／滑鼠鍵，就 `SceneRequest{Menu}`。秒數從排好算起（載入慢不會把標識吃掉）。
+- 接現有的流程框架：跳轉是「場景之間」那一層（`SceneRequest` → 兩幀之間 `ChangeScene`），沒有另一套導航；回主菜單時不會再看到。之後換圖檔：文件的 `text` 換成 `image`（加一個資產），程式不動。
+- `game-flow-declaration.zh-Hant.md` 修訂 7 記了這一條。`ClientStart::first` 的預設仍是 `Menu`（現有的測試與 `acceptance_macos.sh` 從主菜單開始）；`client_main` 設 `Splash`。
+
+### 測試與突變（C）
+
+- 邏輯：「Hit marker: a newer own shot that hit a player shows it…」（第一筆不顯示、沒中不顯示、命中顯示並淡出、同一筆不重播、爆頭換色、沒中不拿掉）；`hit_feedback.json` 的解析加三個壞值（沒有 `hit_marker`、`gap_pixels` 0、`head_color` 兩個分量）。
+- Client：「an own shot that hits shows the hit marker, in the head colour for a head; it fades」（在 Match 寫 `ShotRecord`，照 `JudgeShots` 的寫法：Frame World 畫出斜線的形狀、顏色對、淡出後沒有；爆頭時是頭的顏色）；「the start screen shows the logo document, then the menu after its seconds or at once on a key」（0.5 秒：24 幀時還在、40 幀時到主菜單；60 秒：30 幀後還在、按 Enter 就到主菜單；主菜單的文件排得出來）。
+- 突變 9 個，9/9 killed：`pvp-marker-first-shown`、`pvp-marker-replayed`、`pvp-marker-miss-clears`、`pvp-marker-no-head`、`pvp-marker-not-drawn`、`pvp-marker-never-fades`、`pvp-splash-no-wait`、`pvp-splash-stays`、`pvp-splash-unskippable`。`pvp-splash-no-wait` 第一次是 wrong_failure（測試在「排好時還是啟動畫面」用了沒有標籤的 REQUIRE），改成帶 `[pvp-splash-time]` 的訊息後 killed。
+- 畫面的樣子（X 的大小、標識的字）沒有在真的視窗看過，交使用者試玩。
+
 ### 1 命中音（等決定）
 
 使用者 11-26 回「我沒看明白」，主會話再說明後轉決定過來再做。

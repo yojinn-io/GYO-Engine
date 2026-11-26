@@ -42,6 +42,8 @@ void BuildSceneCommon(O::WorldSetup& setup);
 
 // The scenes' own parts.
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
+// The start screen: the logo document for seconds after it is laid out, then the menu.
+void BuildSplash(O::WorldSetup& setup, double seconds);
 // dataDirectory: the player's (ClientStart); maps: the installed arenas, by id.
 void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps);
 // What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a

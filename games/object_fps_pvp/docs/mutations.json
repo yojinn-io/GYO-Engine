@@ -2714,6 +2714,123 @@
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]
+  },
+  {
+   "id": "pvp-marker-first-shown",
+   "what": "the hit marker shows the record seen first (before this Client looked)",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "        seen_ = true;\n        tick_ = shotTick;\n        return;",
+   "replace": "        seen_ = true;\n        tick_ = 0;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-replayed",
+   "what": "a later state of the same shot shows the marker again",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    if (shotTick <= tick_) return;",
+   "replace": "    if (shotTick < tick_) return;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-miss-clears",
+   "what": "a newer miss takes the shown marker away",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    if (!hitPlayer) return;\n    active_ = true;",
+   "replace": "    active_ = hitPlayer;\n    if (!hitPlayer) return;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-no-head",
+   "what": "a head hit shows the body's marker",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "shot->part == sim::HitPart::Head, now);",
+   "replace": "false, now);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker-head",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-not-drawn",
+   "what": "the HUD never draws the hit marker",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));",
+   "replace": "        marker.Get() = R::Shape2d{};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-never-fades",
+   "what": "the hit marker stays once shown",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    return {Fade(nowSeconds - startSeconds_, settings.hitMarker.seconds), head_};",
+   "replace": "    return {1.0F, head_};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-no-wait",
+   "what": "the start screen goes on to the menu at once",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    const bool done = at && static_cast<double>(time->elapsed - *at) / 1e9 >= splash.Read().seconds;",
+   "replace": "    const bool done = at.has_value();",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-time",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-stays",
+   "what": "the start screen never goes on by itself",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "        if (shown) splash->shownAt = time->elapsed;",
+   "replace": "        (void)shown;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-time",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-unskippable",
+   "what": "a key does not go on from the start screen",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    const bool skipped = any(*keys) || any(*mouse);",
+   "replace": "    const bool skipped = false && (any(*keys) || any(*mouse));",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-skip",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
   }
  ]
 }

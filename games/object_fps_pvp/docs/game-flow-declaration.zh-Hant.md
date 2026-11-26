@@ -1,6 +1,6 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
-更新：2026-11-26（修訂 6：使用者的兩個決定（`v8-arch-gyo2-decisions-2026-11-26-night`）：3.3 單人房間和多人同一個房間畫面、3.6 解析度改實體像素；修訂 5：新增 3.7「畫面跳轉的兩層」（主會話轉達使用者的關切）；3.6 照第 5 段實作與審查改寫；修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
+更新：2026-11-26（修訂 7：啟動畫面（`v8-product-pvp-playtest-fixes`）；修訂 6：使用者的兩個決定（`v8-arch-gyo2-decisions-2026-11-26-night`）：3.3 單人房間和多人同一個房間畫面、3.6 解析度改實體像素；修訂 5：新增 3.7「畫面跳轉的兩層」（主會話轉達使用者的關切）；3.6 照第 5 段實作與審查改寫；修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：
 - `v8-arch-gyo2-game-flow-and-gateway`：主菜單（單人、多人、設置、退出）；單人與多人的流程。
@@ -65,7 +65,7 @@
 | `Frame` | 現在的＋`world_ui`；`sdl_window` | 每個場景各自的 UI 與 System（下表） |
 | `Render` | 現在的＋`ui_render`；`sdl_gpu`；`extractFrom = "Frame"` | 不換（R1b：留著、改讀新的 Frame） |
 
-場景（`client::Scene`）：`Menu`（含設置的 canvas）、`SoloRoom`、`SoloGame`、`Lobby`、`Room`、`MultiGame`。
+場景（`client::Scene`）：`Splash`（啟動畫面，修訂 7）、`Menu`（含設置的 canvas）、`SoloRoom`、`SoloGame`、`Lobby`、`Room`、`MultiGame`。
 - 為什麼單人另一個槽（P2、P3）：net 的角色、rollback 的策略是描述的選項；單人不能帶 net 角色當 client（沒有權威），也不能在同一個槽裡拿掉它。Unity 的寫法正是兩種 World：選單與單人 `CreateLocalWorld`（`com.unity.netcode/Runtime/ClientServerWorld/ClientServerBootstrap.cs:98`），多人才 `CreateClientWorld`（`:339`）。空場景的 World 只剩單位本身，每步沒有東西跑。
 - Frame 每個場景都登記 Render 要抽的型別（R1b 宣告第 8 節第 3 點）：單位登記的不變；產品自己的型別（遊戲的 HUD、角色等）各場景都登記，只有 System 與實體隨場景。
 - 「現在要哪一個場景」放在 Product 一份的共用處（O-15）：`ConfigureClient` 建的 `SceneDirector`（現在的場景與它的參數），各 World 的 `build` 讀它。Frame 的 System 要換場景時寫 Frame World 的 Resource `SceneRequest`；runner 掛鉤（3.2）在兩幀之間讀它、更新 `SceneDirector`、替換 World。
@@ -148,7 +148,7 @@ struct SDLWindowBetweenFrames final {
 
 | 跳轉 | 層 |
 |---|---|
-| 主菜單 → 單人房間、大廳；單人房間 → 遊戲、主菜單；大廳 ↔ 房間；房間 → 遊戲；遊戲 → 主菜單（單人撤退、中止）、大廳（多人撤退、中止、連線結束）；大廳 → 主菜單 | 場景（換 World） |
+| 啟動畫面 → 主菜單；主菜單 → 單人房間、大廳；單人房間 → 遊戲、主菜單；大廳 ↔ 房間；房間 → 遊戲；遊戲 → 主菜單（單人撤退、中止）、大廳（多人撤退、中止、連線結束）；大廳 → 主菜單 | 場景（換 World） |
 | 主菜單 ↔ 設定（`MenuPage::Main`／`Settings`） | 頁面 |
 | 遊戲的 loading → 遊戲 ↔ 暫停（`GamePage::Loading`／`Playing`／`Paused`） | 頁面 |
 
@@ -226,3 +226,6 @@ struct SDLWindowBetweenFrames final {
   - 3.3／3.7：暫停（使用者實機試玩：「剛進入遊戲時立刻跳出暫停」）。原因：`GamePage::Playing` 的 `PauseOnRelease` 判的是「指標不是遊戲的」，而遊戲開始時指標本來就還不是遊戲的（第一下點擊才拿），所以 loading 一結束就進暫停。改成判「這一幀要暫停」：指標被交還（Tab、Esc、視窗失去焦點）或按了 Esc；遊戲開始時照舊顯示遊戲，第一下點擊拿指標（不是射擊）。
   - 3.4：「選地圖沒用」（同一次試玩）。使用者：「我看到的都是原始的測試地圖」：試玩的整合版只有 `pvp_training_v1`、`pvp_corners_v1`、`biome_trial`，250 m 的 Extraction 在 #354、還沒合併。選圖的每一層（房間的 map → matches 的 `--arena` → Match 玩那張，services.log 第二場 `pvp_corners_v1` → `SceneChange::map` → Client 的 arena）都接上了，不改程式。另外屬實但不是這次原因的一件：`pvp_training_v1` 與 `pvp_corners_v1` 的幾何是同一份（只差出生點），兩張之間切換畫面不變；要不要改地圖資料由主會話問使用者。`--verbose` 的 log 加「選的地圖」與「遊戲玩的 arena」兩行，給下次試玩當依據。
   - 3.5：`#342`（大地圖）之後 arena 的畫面是每個 region 一個 Mesh3d、模型由 Client 持有，資產那一步不再等 arena 的模型（`ShowArena` 同一幀就換好）；`#348` 的 `ModelRef` 不用另外處理。
+- 修訂 7（`v8-product-pvp-playtest-fixes`，LAN 實機場次的回饋 6「啟動時沒有標識」；使用者的決定「先用文字」）：
+  - 3.1：新增場景 `Splash`：程式不帶 `--connect` 時的第一個場景（`ClientStart::first` 的預設仍是 `Menu`，測試照舊從主菜單開始）。Frame World 只放 `ui/pvp_splash.json` 的 `splash` canvas（黑底、文字「GYO」與「ENGINE」）；文件排好之後 `ClientStart::splashSeconds`（預設 2 秒）到了、或按任何鍵與滑鼠鍵，就 `SceneRequest{Menu}`。秒數從**排好**算起，載入慢不會把標識吃掉。換成圖檔只改那份文件（`text` 換 `image`），不改程式。
+  - 3.7：跳轉照「場景之間」那一層（換 World），沒有另一套導航；啟動畫面只出現在程式的第一個場景，回主菜單（撤退、離開大廳）不會再看到。
