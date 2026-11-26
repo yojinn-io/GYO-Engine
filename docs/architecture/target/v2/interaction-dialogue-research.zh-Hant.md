@@ -1,8 +1,8 @@
 # 交互與 NPC 台本：成熟方案比較（`v8-arch-interaction-dialogue-research`）
 
-更新：2026-11-26。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。方向由使用者決定；這份文件不改任何已定的決定。**
+更新：2026-11-26（同日補：inkcpp 照源碼確認）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。方向由使用者決定；這份文件不改任何已定的決定。**
 
-查的版本：`gyo2` 7d06d987；Godot、Bevy、bevy_replicon、lightyear 用 `~/Code/GitHome` 裡的本地源碼（引用附檔名與行號，路徑從各 repo 的根算起）。inkcpp、Yarn Spinner、Godot Dialogue Manager、Unity、Unreal 不在本機，只讀網頁（附 URL），沒有下載或 clone。沒能在原文裡確認的寫「未確認」。
+查的版本：`gyo2` 7d06d987；Godot、Bevy、bevy_replicon、lightyear 用 `~/Code/GitHome` 裡的本地源碼（引用附檔名與行號，路徑從各 repo 的根算起）。inkcpp 由使用者 clone 到 `~/Code/GitHome/inkcpp`（HEAD d38608d），2.1 的 inkcpp 部分照源碼寫。Yarn Spinner、Godot Dialogue Manager、Unity、Unreal 不在本機，只讀網頁（附 URL），沒有下載或 clone。沒能在原文裡確認的寫「未確認」。
 
 ## 0. 問題與判斷依據
 
@@ -135,7 +135,7 @@ Unity 本體沒有「可交互」的概念；常見的有兩種：社群慣例�
 
 ## 2. NPC 台本（對話）
 
-四種都只讀網頁（inkcpp、Yarn Spinner、Godot Dialogue Manager 不在本機），沒有讀源碼。範例是照文件的語法寫的示意，不是從原文複製。
+inkcpp 讀了源碼（`~/Code/GitHome/inkcpp`，d38608d；下面 inkcpp 的行號從該 repo 的根算起）。Ink 語言本身、Yarn Spinner、Godot Dialogue Manager 只讀網頁，沒有讀源碼。範例是照文件的語法寫的示意，不是從原文複製。
 
 ### 2.1 Ink（inkle）＋inkcpp
 
@@ -166,19 +166,44 @@ Unity 本體沒有「可交互」的概念；常見的有兩種：社群慣例�
     - tag：每行、每個 knot、全域、每個選項都可以有，tag 裡可以放變數。
   - 文件沒說哪一條比較常用（未確認）。
   - 出處：`RunningYourInk.md`。
-- **C++**：inkcpp（<https://github.com/JBenda/inkcpp>，社群維護，不是 inkle 的）。
-  - 授權與版本：MIT；最新 0.1.12+UEPatch_3，2026-09-05。
-  - 支援範圍：README 說「ink 1.1 的全部功能」，用 ink-proof 驗證。官方已到 1.2.1，inkcpp 跟上 1.2 沒有未確認。
-  - 格式：runtime 讀自己的二進位格式（`story::from_file("x.bin")`）。`inkcpp_compiler`（依賴 nlohmann JSON）把 ink.json 轉成它；`.ink` 要靠同目錄或 PATH 上的 inklecate，它自己不解析 `.ink`。編譯器不必連進遊戲。
-  - runtime 的性質：沒有外部依賴；執行中不配置 heap（「除非緊急」）。
-  - 功能：snapshot（存讀檔）、observer、外部函式綁定（樣板產生膠水）。同一個 story 可以開多個 runner，可以共用全域變數。
-  - 介面：有 C API（`clib`）、Unreal plugin、Python 綁定。
-  - 已知缺口：runtime 還有一些 C 標準庫呼叫。snapshot 的 C++ API 在 README 沒寫（未確認）。
-  - 出處：<https://raw.githubusercontent.com/JBenda/inkcpp/master/README.md>、<https://github.com/JBenda/inkcpp/releases>。
+- **C++**：inkcpp（<https://github.com/JBenda/inkcpp>，社群維護，不是 inkle 的；以下照源碼 d38608d）。
+  - 授權與版本：MIT；最新 0.1.12+UEPatch_3，2026-09-05（release 頁）。git 有 242 個 commit，主要是兩位作者（`git shortlog`），最近一次 commit 是 2026-09-20。
+  - **支援到 ink 1.1，不是 1.2**：
+    - 讀的 ink.json 格式版本是 21（`shared/public/version.h:13` `InkVersion = 21`），自己的二進位格式版本是 2（`version.h:12`）。
+    - 測試、CI、Unreal 都釘在 inklecate **v1.1.1**：CMake 下載的是 v1.1.1（`CMakeLists.txt:6-20`），CI 用 v1.1.1 編譯並跑 ink-proof（`.github/workflows/build.yml:22-40`、`:183`），Unreal 也叫使用者裝 v1.1.1（`README.md:48`）。README 寫「ink 1.1 的全部功能」（`README.md:38`）。
+    - 編譯器只讀 `inkVersion`，不檢查上限（`inkcpp_compiler/json_compiler.cpp:48-58`）。21 以上只多一個檢查：舊式的 `#` tag 指令直接報錯（`json_compiler.cpp:444-446`）。ink 1.2.x 的 inklecate 輸出的 JSON 是不是還是 21、能不能讀，沒有測試涵蓋（未確認）。
+    - runtime 只檢查二進位格式的版本（`inkcpp/header.cpp:25`）。
+  - **編譯器與 runtime 分開**：
+    - `inkcpp_compiler`（ink.json → `.bin`）把 nlohmann JSON 3.11.2 的單一標頭**放在自己的目錄裡**（`inkcpp_compiler/json.hpp`，標頭寫 version 3.11.2），不從外部抓。
+    - 它只連 `inkcpp_shared`（只有標頭的 INTERFACE 庫，`shared/CMakeLists.txt:1`），不連 runtime（`inkcpp_compiler/CMakeLists.txt:11-12`、`:25-26`）。
+    - runtime `inkcpp` 也只連 `inkcpp_shared`（`inkcpp/CMakeLists.txt:64`、`:71`），裡面沒有用到 JSON。
+    - 所以遊戲可以只編、只連 runtime；編譯器只放在工具端。
+    - inklecate 只在 `INKCPP_INKLECATE=OS`／`ALL` 時才下載（`CMakeLists.txt:80-95`），預設 `NONE`。
+  - **存讀（snapshot）的 C++ API**：
+    - 建立：`runner->create_snapshot()`（`inkcpp/include/runner.h:111`）或 `globals->create_snapshot()`（`inkcpp/include/globals.h:75`）。同一份 globals 底下的所有 runner 都會一起放進去。
+    - 取出位元組：`snapshot::get_data()`／`get_data_len()`（`inkcpp/include/snapshot.h:74`、`:76`）。從位元組還原：`snapshot::from_binary(data, len)`（`snapshot.h:71`）。另有 `from_file`／`write_to_file`，只在 STL 版（`snapshot.h:88`、`:93`）。
+    - 讀回：先 `story->new_globals_from_snapshot(snap)`，再 `story->new_runner_from_snapshot(snap, globals, runner_id)`（`inkcpp/include/story.h:43`、`:70`）。
+    - 換過台本檔之後的存檔：snapshot 帶 story 的 hash（`inkcpp/snapshot_impl.h:110`），讀回時 hash 不同就走「遷移」（`inkcpp/story_impl.cpp:206-220`）。遷移會退回最近的 knot：還在的全域變數照名字搬過來，list 用名字相似度配對，拜訪次數照名字留下。快照當下如果在 tunnel／thread 裡，就不能遷移（`snapshot.h:14-50`；`can_be_migrated()` 在 `snapshot.h:81`）。
+    - 亂數狀態在 snapshot 裡（`inkcpp/runner_impl.cpp:742` 寫入 `_rng.get_state()`）；不在裡面的是空白處理模式（`runner.h:63`）。
+    - 對 gyo2 來說，snapshot 就是一段位元組，可以放進作者自己的存檔格式。
+  - **C 標準庫呼叫、全域狀態、thread safety**：
+    - 沒有可寫的全域變數：搜 runtime 與 `shared/public` 裡所有非 const 的 `static`，沒有找到。狀態都在 story／globals／runner 物件裡。
+    - **亂數的初始種子是牆鐘**：STL／CSTD 版的 runner 建立時呼叫 `_rng.srand(time(NULL))`（`inkcpp/runner_impl.cpp:530`）。要可重現的話要自己呼叫 `set_rng_seed`（`runner.h:54`）。亂數本身是整數的 LCG（`inkcpp/random.h:10-34`），種子一樣，各平台結果就一樣。
+    - **浮點轉字串用 `snprintf("%.7f")`**（`inkcpp/string_utils.h:62`），整數用 `"%d"`（`:29`、`:47`）。`printf` 系列會跟著 C locale 的 `LC_NUMERIC` 走：程式如果呼叫過 `setlocale`，小數點可能變成逗號。整個執行檔都要留在 `"C"` locale。
+    - 其他 C 呼叫：`memcpy`／`memset`／`strlen`（`snapshot_impl.cpp:107-145`、`list_table.cpp:83`、`string_table.cpp:110`、`hungarian_solver.cpp:37-147`）。
+    - **錯誤處理**：`inkAssert` 在有例外的版本 `throw ink_exception`，沒有例外的版本會 `fprintf(stderr)` 再 `abort()`（`shared/public/system.h:250-272`）；`inkFail` 在 CSTD 版最後會 `exit(EXIT_FAILURE)`（`system.h:286-291`）。例外預設是開的（`shared/public/config.h:29-31`）。gyo2 的 adapter 要用有例外的版本編，並在邊界接住 `ink_exception` 翻成 `Result`（AGENTS §1-9），否則壞掉的台本會讓整個 process 退出。
+    - **thread safety**：README 寫「Multi-thread safe」（`README.md:21`），但 runtime 裡沒有任何 `mutex`、`atomic`、`thread_local`（全 repo 搜尋，只有 ink 語言自己的 thread）。story、runner、globals 的參照計數是一般的 `size_t`（`inkcpp/include/story_ptr.h:25`；`inkcpp/story_ptr.cpp:52-63` 直接 `++`）。所以這句只能讀成「沒有全域狀態，彼此獨立的 story 可以放在不同 thread」。同一個 story 的 runner 和 globals 要留在同一個 thread，或由外面加鎖。gyo2 在一個 System 裡跑台本的話不受影響。
+  - **heap**：容量在 `shared/public/config.h:36-79` 設定。正數是固定大小，負數表示「用動態配置、初始大小是 x」，預設全部是負數（例：`limitGlobalVariables = -50`，`config.h:43`）。README 的「執行中不配置 heap（除非緊急）」指的是先配好之後少擴充，不是零配置。
+  - 功能：外部函式綁定（`runner.h:296` `internal_bind`，對外是 `bind` 樣板）、變數 observer（`globals.h:64`）、多個 runner 共用 globals。
+  - 介面：有 C API（`inkcpp_c`，`CMakeLists.txt:61` `INKCPP_C`）、Unreal plugin（`unreal/`）、Python 綁定（`inkcpp_python`）。
+  - **測試**：
+    - `inkcpp_test` 用 Catch2（`inkcpp_test/catch.hpp`），有 32 個測試檔、70 個 `SCENARIO`／`TEST_CASE`，搭配 54 個 `.ink` 測試台本（`inkcpp_test/ink/`）。
+    - 涵蓋外部函式、fallback、lookahead、observer、多 runner、list、tag、空白、UTF-8、snapshot 遷移（`Migration.cpp`、`ListMatching.cpp`、`MultiRunner.cpp` 等）。CI 在 4 個平台跑 `ctest`（`build.yml:92`）。
+    - ink-proof（官方行為的對照測試，submodule `proofing/ink-proof`，本機沒有 checkout）只在 Windows、Linux 跑，**結果只當 artifact 上傳，不影響 CI 成敗**（`build.yml:16`、`:22`、`:183-199`；`proofing/README.md:1` 也說還不是建置的一環）。實際通過率沒跑、沒看（未確認）。
 - **授權**：ink、Inky 都是 MIT（<https://www.inklestudios.com/ink/>）。
 - **成熟度**：最新 v1.2.1，2026-05-05。inkle 自家的 80 Days、Sorcery! 用它；其他作品（Heaven's Vault、Sable 等）用不用 ink 未確認。
 - **多語系**：官方沒有方案。ink 團隊在 issue #98 說他們自己沒做過本地化，所以沒有驗證過的做法（<https://github.com/inkle/ink/issues/98>）。社群做法是給每行加 tag 當 ID、另做字串表（<https://johnnemann.medium.com/localizing-ink-with-unity-42a4cf3590f3>）。
-- **save**：官方 runtime 用 `story.state.ToJson()`／`LoadJson()`，存的是一整塊 JSON。文件只確定裡面有變數值；位置、拜訪次數、亂數種子、flow 也在裡面是憑記憶（未確認）。inkcpp 用 snapshot。
+- **save**：官方 runtime 用 `story.state.ToJson()`／`LoadJson()`，存的是一整塊 JSON。文件只確定裡面有變數值；位置、拜訪次數、亂數種子、flow 也在裡面是憑記憶（未確認）。inkcpp 用二進位的 snapshot（見上），換台本檔後可以有條件地遷移。
 
 ### 2.2 Yarn Spinner
 
@@ -264,11 +289,11 @@ Unity 本體沒有「可交互」的概念；常見的有兩種：社群慣例�
 | 寫手工具 | Inky（免費），inklecate | VS Code 擴充（節點圖、預覽），線上版 | Godot 編輯器內 | 要自己做 |
 | 條件／變數 | 語言內建（`VAR`、`LIST`、運算式） | 語言內建，Variable Storage 可換 | 運算式直接讀遊戲物件 | 要自己定 |
 | 給遊戲的指令 | `EXTERNAL` 函式（有型別）、tag | `<<command>>` 用名字分派 | 直接呼叫遊戲方法（靠反射） | 自己的指令表 |
-| C++ 能不能用 | **能**：inkcpp（MIT、無依賴、C API） | 沒有和引擎無關的；要自己寫 VM（23 種指令＋protobuf） | **不能** | 能（現有 `json` Module） |
+| C++ 能不能用 | **能**：inkcpp（MIT；runtime 無外部依賴，編譯器自帶 nlohmann、可以不連進遊戲；C API） | 沒有和引擎無關的；要自己寫 VM（23 種指令＋protobuf） | **不能** | 能（現有 `json` Module） |
 | 授權 | MIT（ink、Inky、inkcpp） | 核心 MIT；Godot、Unreal 版 YSPL | MIT | — |
-| 成熟度 | 高（inkle 自家多款）；inkcpp 是社群單一專案、跟到 ink 1.1 | 高（多款出貨）；C++ 這一側不成熟 | 中（Godot 生態常用；出貨作品未列） | 從零開始 |
+| 成熟度 | 高（inkle 自家多款）；inkcpp 是社群專案（主要兩位作者）、釘在 ink 1.1.1，70 個單元測試，ink-proof 不擋 CI | 高（多款出貨）；C++ 這一側不成熟 | 中（Godot 生態常用；出貨作品未列） | 從零開始 |
 | 多語系 | 官方沒有，靠 tag 當 ID 的社群做法 | **最完整**（line ID、CSV、語音對應） | Godot `tr()`、POT／CSV | 可以一開始就設計進去 |
-| save | 整塊 state／snapshot | 變數歸遊戲；節點位置未確認 | 全歸遊戲 | 節點＋變數＝ECS 資料 |
+| save | inkcpp：二進位 snapshot（帶 story hash，可遷移） | 變數歸遊戲；節點位置未確認 | 全歸遊戲 | 節點＋變數＝ECS 資料 |
 | 接進 gyo2 時算 | **Plugin**（inkcpp 型別只在 adapter） | VM 自己寫 → **Module**（protobuf 讀取可以自己寫或另接 Plugin） | 不適用 | **Module** 或遊戲層 |
 
 ### 2.6 接進 gyo2 時的幾個共同問題
@@ -282,9 +307,10 @@ Unity 本體沒有「可交互」的概念；常見的有兩種：社群慣例�
 4. **多人**：
    - 台本只在權威端跑：Match 跑，單機時在本地 World 跑。Client 只拿「現在的台詞與選項」（複製的元件，或 `ServerMessage<M>`），選擇放進每 tick 的輸入（見 1.7）。
    - 這樣一來，台本 runtime 不必在各台機器上決定性相同，也不參加回滾，Ink 的亂數、浮點都不會變成同步的問題。
+   - 就算只在一端跑，存讀之後要接得上，或要重播測試，仍要固定亂數的種子：inkcpp 預設用 `time(NULL)` 當種子（`inkcpp/runner_impl.cpp:530`），adapter 要呼叫 `set_rng_seed`。
    - 要讓 Client 預測台本的話，四種都要重新評估。只有自訂 JSON 能直接放進回滾。
 5. **save 與任務旗標**：
-   - Ink：state 是一整塊。旗標要嘛留在 ink 變數裡（遊戲用 observer 鏡像出來），要嘛放遊戲那邊、經外部函式讀。
+   - Ink：inkcpp 的 snapshot 是一段位元組（`snapshot.h:71-76`），放進作者的存檔即可。旗標要嘛留在 ink 變數裡（遊戲用 observer 鏡像出來），要嘛放遊戲那邊、經外部函式讀。
    - Yarn：Variable Storage 可以直接用遊戲的資料。
    - 自訂 JSON：本來就是遊戲的資料。
    - 不管哪一種，存檔格式都是作者的（`save_version` 只比版本號）。
@@ -327,15 +353,24 @@ Unity 本體沒有「可交互」的概念；常見的有兩種：社群慣例�
   - 第一批先只給一個遊戲用，不做多後端抽象。
 - **理由**：
   1. 四種裡只有 Ink 同時滿足「成熟的語言與免費寫手工具」「和引擎無關的 C++ runtime」「MIT」。
-  2. inkcpp 的性質合 gyo2：無外部依賴、執行中不配置 heap、有 snapshot 可存讀、有 C API。
+  2. inkcpp 的性質合 gyo2（照源碼確認，見 2.1）：
+     - runtime 只依賴自己的標頭庫，JSON 編譯器可以完全留在工具端。
+     - 沒有可寫的全域狀態。
+     - snapshot 是位元組，有 C++ API，換台本檔後還能有條件地遷移。
+     - 有 70 個單元測試，在 4 個平台的 CI 上跑。
   3. Yarn 的多語系最好，但 C++ 這一側要自己寫並維護 VM、跟上游語言版本，Rust 核心也還停在 2.5。Godot Dialogue Manager 離不開 Godot。自訂 JSON 什麼都要自己做（尤其是寫手工具），違反「先參考成熟方案」。
-- **風險**：
-  - inkcpp 是社群的單一專案，跟到 ink 1.1，不是 1.2。
+- **風險**（源碼確認後）：
+  - inkcpp 是社群專案（主要兩位作者），**釘在 ink 1.1.1**（CMake、CI、Unreal 都是 v1.1.1）。寫手的 Inky／inklecate 也要用 1.1.1，不能跟官方升到 1.2。
+  - ink-proof 不擋 CI，對官方行為的一致度沒有門檻（未確認通過率）。
+  - 「Multi-thread safe」沒有同步機制支撐：參照計數不是 atomic。同一個 story 的物件要留在同一個 thread。
+  - 失敗時會丟例外，沒有例外的版本會 `abort`／`exit`：adapter 要用有例外的版本，在邊界接住，翻成 `Result`。
+  - 浮點轉字串用 `snprintf`，會跟著 C locale：整個 process 要留在 `"C"` locale。
   - Ink 官方沒有多語系，要靠「每行 tag 當 ID」的約定，這個約定要在寫第一句台詞前定。
   - 寫手工具 inklecate 要不要 .NET 執行環境未確認。
 - **下一步**（使用者同意方向後）：
   - 做一個 spike：在單機場景跑一段有選項、有外部函式、有存讀的 Ink。
-  - 要 clone inkcpp 的源碼（<https://github.com/JBenda/inkcpp>，大小未確認），照規則先經主會話問使用者同意。
+  - inkcpp 已經 clone 在 `~/Code/GitHome/inkcpp`（d38608d）。spike 要接進 build 時，再決定放 `third_party` 的方式（vendor 或 FetchContent），這屬於接線的批次。
+  - spike 的驗收要含四項：固定種子、例外翻成 `Result`、snapshot 存讀（含換台本檔後的遷移）、只在一個 thread 用。
 
 ### 4.3 NPC 周邊：現在不做
 
