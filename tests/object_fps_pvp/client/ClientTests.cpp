@@ -1155,10 +1155,12 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
 TEST_CASE("client: the loading screen waits while meshes wait for their frame") {
     Setup setup;
     std::uint64_t shown = 0;
-    // Meshes waiting all along (frames shown, nothing skipped): the own player comes, and still it is not ready
-    // (within the warm-up's limit of frames).
+    // Meshes waiting all along, nothing skipped. Until the own player comes no frame is shown (so the warm-up's limit
+    // of frames, counted in frames shown, is not spent however slow the machine is); then frames are shown, and still
+    // it is not ready.
+    ++shown;
     REQUIRE(FramesUntil(setup, [&] {
-        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 3});
+        setup.Client().SetResource(PC::DrawnFrames{true, shown, 0, 3});
         return PC::StatusOf(setup.Client()).playing;
     }));
     for (int i = 0; i < 30; ++i) {
