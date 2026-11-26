@@ -370,6 +370,13 @@ std::string SceneName(const PC::Scene scene) {
     return "?";
 }
 
+// Threads for one kind of loading work (the map's region files, its regions' pictures): the machine's hardware
+// threads, between least and most (std::thread::hardware_concurrency may say 0: not known).
+std::size_t LoadingThreads(const std::size_t least, const std::size_t most) {
+    const unsigned known = std::thread::hardware_concurrency();
+    return std::clamp<std::size_t>(known == 0 ? least : known, least, most);
+}
+
 std::optional<std::string> ContentRoot() {
     auto executable = GYO::Engine::OS::Process::ExecutablePath();
     if (!executable) return std::nullopt;
@@ -651,7 +658,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     const auto sharedPresentation = std::make_shared<const PC::PresentationContent>(std::move(*presentation));
-    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp assets", .threadCount = 2});
+    // The asset files (a map's regions each a job) on up to 8 threads, the regions' pictures on up to 4 (one job per
+    // region; big-map declaration 17.8).
+    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp assets", .threadCount = LoadingThreads(2, 8)});
     if (!pool) {
         Log(GYO::Engine::Base::LogLevel::Error, "the asset threads did not start: " + GYO::Engine::Base::Describe(pool.error()));
         return 1;
@@ -659,7 +668,7 @@ int main(int argc, char** argv) {
     WA::WorkerPoolExecutor executor(*pool);
     // The map's walls and pictures are made on their own thread, not behind the files the asset threads read (Bevy
     // keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
-    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp compute", .threadCount = 1});
+    auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp compute", .threadCount = LoadingThreads(1, 4)});
     if (!computePool) {
         Log(GYO::Engine::Base::LogLevel::Error, "the compute thread did not start: " + GYO::Engine::Base::Describe(computePool.error()));
         return 1;

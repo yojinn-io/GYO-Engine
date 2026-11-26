@@ -9,6 +9,8 @@
 #include "engine/asset/AssetStore.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/physics_3d/Collider.hpp"
+#include "engine/world_asset/WorkerPoolExecutor.hpp"
+#include "engine/threads/WorkerPool.hpp"
 
 #include <algorithm>
 #include <deque>
@@ -16,6 +18,8 @@
 #include <fstream>
 #include <mutex>
 #include <random>
+#include <thread>
+#include <chrono>
 
 using namespace object_fps_pvp::test;
 namespace AS = GYO::Engine::Asset;
@@ -130,6 +134,29 @@ TEST_CASE("world: a World generates until its map's regions are read and its wal
     REQUIRE(static_cast<bool>(product->RunFrame()));
     CHECK(TickOf(world) > 0);
     CHECK(PlayerOf(world, 9) != 0);
+}
+
+TEST_CASE("world: a map read on several threads gives the same walls as on one") {
+    // kiriyu_incident_250m: 16 regions, each a job of the asset store.
+    const std::size_t arena = ArenaIndex("kiriyu_incident_250m");
+    auto inline1 = LocalOn(arena, TestJobs(), nullptr);
+    UntilSettled(*inline1);
+    REQUIRE(LoadOf(*inline1).stage == PW::MapStage::Done);
+    auto files = GYO::Engine::Threads::WorkerPool::Start({.name = "map files", .threadCount = 4});
+    auto compute = GYO::Engine::Threads::WorkerPool::Start({.name = "map compute", .threadCount = 2});
+    REQUIRE((static_cast<bool>(files) && static_cast<bool>(compute)));
+    WA::WorkerPoolExecutor filesExecutor(*files);
+    WA::WorkerPoolExecutor computeExecutor(*compute);
+    auto parallel = LocalOn(arena, filesExecutor, &computeExecutor);
+    for (int frame = 0; frame < 2000 && LoadOf(*parallel).stage != PW::MapStage::Done && LoadOf(*parallel).stage != PW::MapStage::Failed; ++frame) {
+        REQUIRE(static_cast<bool>(parallel->RunFrame()));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE_MESSAGE(LoadOf(*parallel).stage == PW::MapStage::Done, LoadOf(*parallel).failure);
+    const std::uint64_t one = GameWorld(*inline1).Resource<PW::GameRules>()->wallsDigest;
+    CHECK(one != 0);
+    CHECK_MESSAGE(GameWorld(*parallel).Resource<PW::GameRules>()->wallsDigest == one, "[pvp-map-parallel] the same walls (BoxSet digest)");
+    parallel.reset();
 }
 
 TEST_CASE("world: a map with a region missing or not the index's fails with its reason, and the World keeps generating") {

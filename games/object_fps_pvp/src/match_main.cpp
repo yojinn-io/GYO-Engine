@@ -50,6 +50,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -87,6 +88,13 @@ K::SystemResult LogMatch(K::MessageReader<N::PeerConnected> connected, K::Messag
         }
     });
     return {};
+}
+
+// Threads for one kind of loading work (the map's region files, its regions' pictures): the machine's hardware
+// threads, between least and most (std::thread::hardware_concurrency may say 0: not known).
+std::size_t LoadingThreads(const std::size_t least, const std::size_t most) {
+    const unsigned known = std::thread::hardware_concurrency();
+    return std::clamp<std::size_t>(known == 0 ? least : known, least, most);
 }
 
 std::optional<std::string> ContentRoot() {
@@ -249,7 +257,8 @@ int main(int argc, char** argv) {
 
     // The map is read while the World generates: the asset store reads its files on one thread, the walls are built on
     // another (Bevy keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
-    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = 1});
+    // The region files are parsed on up to 8 threads (each a job; big-map declaration 17.8); the walls are one build.
+    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = LoadingThreads(2, 8)});
     auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match compute", .threadCount = 1});
     if (!pool || !computePool) {
         Log(GYO::Engine::Base::LogLevel::Error, "no worker thread: " + GYO::Engine::Base::Describe(!pool ? pool.error() : computePool.error()));

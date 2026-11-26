@@ -300,7 +300,10 @@ struct ArenaPictureLoading final {
     std::string map;
     A::AssetExecutor* jobs = nullptr;
     A::Handle<VM::VoxelMapAsset> handle;
-    PW::WorkerTask<ArenaPicture> picture;
+    // One job per region (the regions are made on as many threads as the executor has), and what each gave.
+    std::vector<PW::WorkerTask<std::optional<data::RegionPicture>>> regions;
+    std::vector<std::optional<std::optional<data::RegionPicture>>> made;
+    std::shared_ptr<const IM::ImageData> palette;
 };
 void HashValue(K::Hasher&, const ArenaPictureLoading&) {}
 
@@ -653,25 +656,39 @@ K::SystemResult ShowArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetVi
             load->total = reading.total;
         }
         if (!reading.complete) return hold();
-        data::ArenaMap faces = data::CopyMapPart(*reading.index, reading.regions, data::MapPart::Faces);
+        auto faces = std::make_shared<const data::ArenaMap>(data::CopyMapPart(*reading.index, reading.regions, data::MapPart::Faces));
         arena.handle = {};
-        arena.picture = PW::WorkerTask<ArenaPicture>::Start(arena.jobs, [faces = std::move(faces)] {
-            return ArenaPicture{data::RegionPictures(faces), PaletteOf(faces)};
-        });
+        arena.palette = PaletteOf(*faces);
+        arena.made.assign(faces->regions.size(), std::nullopt);
+        arena.regions.clear();
+        arena.regions.reserve(faces->regions.size());
+        for (std::size_t region = 0; region < faces->regions.size(); ++region) {
+            arena.regions.push_back(PW::WorkerTask<std::optional<data::RegionPicture>>::Start(
+                arena.jobs, [faces, region] { return data::RegionPictureOf(*faces, region); }));
+        }
         load->stage = PW::MapStage::Building;
         return hold();
     }
-    std::optional<ArenaPicture> picture = arena.picture.Take();
-    if (!picture) return hold();
-    for (data::RegionPicture& region : picture->regions) {
+    bool all = true;
+    for (std::size_t region = 0; region < arena.regions.size(); ++region) {
+        if (!arena.made[region]) arena.made[region] = arena.regions[region].Take();
+        all = all && arena.made[region].has_value();
+    }
+    if (!all) return hold();
+    // In region order, whatever order the jobs ended in (the same entities as made on one thread).
+    for (std::optional<std::optional<data::RegionPicture>>& made : arena.made) {
+        if (!*made) continue;
+        data::RegionPicture& region = **made;
         R::Mesh3d mesh;
         // Handed to the render World: once its GPU mesh is made, the region's vertices are only on the GPU.
         mesh.model = std::make_shared<R::HandedModel>(std::move(region.model));
-        mesh.image = picture->palette;
+        mesh.image = arena.palette;
         mesh.filter = R::TextureFilter::Nearest;
         auto id = spawn.New(T::Transform{}, std::move(mesh), R::Aabb{region.bounds});
         if (!id) return Base::Err(std::move(id).error());
     }
+    arena.made.clear();
+    arena.regions.clear();
     load->stage = PW::MapStage::Done;
     return {};
 }

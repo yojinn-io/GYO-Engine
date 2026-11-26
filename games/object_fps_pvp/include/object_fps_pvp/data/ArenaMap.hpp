@@ -47,5 +47,8 @@ struct RegionPicture final {
     GYO::Engine::Math::Aabb bounds{};
 };
 [[nodiscard]] std::vector<RegionPicture> RegionPictures(const ArenaMap& map);
+// The picture of one region (an index of map.regions): RegionPictures' item for it, or nothing when it has no face.
+// Each region on its own, so the regions of a map can be made on several threads (each result the same).
+[[nodiscard]] std::optional<RegionPicture> RegionPictureOf(const ArenaMap& map, std::size_t region);
 
 } // namespace object_fps_pvp::data

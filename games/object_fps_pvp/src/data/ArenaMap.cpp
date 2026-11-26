@@ -84,28 +84,32 @@ std::vector<Math::Aabb> MapColliders(const ArenaMap& map) {
     return boxes;
 }
 
+std::optional<RegionPicture> RegionPictureOf(const ArenaMap& map, const std::size_t region) {
+    VM::VoxelGeometry geometry;
+    std::optional<Math::Aabb> bounds;
+    for (const VM::VoxelChunkDocument& chunk : map.regions[region].chunks) {
+        if (chunk.quads.empty()) continue;
+        VM::VoxelChunkDocument facesOnly{chunk.at, chunk.quads, {}};
+        VM::AppendVoxelChunk(geometry, facesOnly, map.index);
+        const Math::Aabb box = VM::ChunkWorldBounds(chunk.at, map.index);
+        bounds = bounds ? Union(*bounds, box) : box;
+    }
+    if (geometry.positions.empty()) return std::nullopt;
+    Model::ModelData model;
+    model.nodes.push_back(Model::Node{});
+    Model::Mesh mesh;
+    mesh.positions = std::move(geometry.positions);
+    mesh.normals = std::move(geometry.normals);
+    mesh.uvs = std::move(geometry.uvs);
+    mesh.indices = std::move(geometry.indices);
+    model.meshes.push_back(std::move(mesh));
+    return RegionPicture{std::make_shared<const Model::ModelData>(std::move(model)), *bounds};
+}
+
 std::vector<RegionPicture> RegionPictures(const ArenaMap& map) {
     std::vector<RegionPicture> pictures;
-    for (const VM::VoxelRegionDocument& region : map.regions) {
-        VM::VoxelGeometry geometry;
-        std::optional<Math::Aabb> bounds;
-        for (const VM::VoxelChunkDocument& chunk : region.chunks) {
-            if (chunk.quads.empty()) continue;
-            VM::VoxelChunkDocument facesOnly{chunk.at, chunk.quads, {}};
-            VM::AppendVoxelChunk(geometry, facesOnly, map.index);
-            const Math::Aabb box = VM::ChunkWorldBounds(chunk.at, map.index);
-            bounds = bounds ? Union(*bounds, box) : box;
-        }
-        if (geometry.positions.empty()) continue;
-        Model::ModelData model;
-        model.nodes.push_back(Model::Node{});
-        Model::Mesh mesh;
-        mesh.positions = std::move(geometry.positions);
-        mesh.normals = std::move(geometry.normals);
-        mesh.uvs = std::move(geometry.uvs);
-        mesh.indices = std::move(geometry.indices);
-        model.meshes.push_back(std::move(mesh));
-        pictures.push_back({std::make_shared<const Model::ModelData>(std::move(model)), *bounds});
+    for (std::size_t region = 0; region < map.regions.size(); ++region) {
+        if (auto picture = RegionPictureOf(map, region)) pictures.push_back(std::move(*picture));
     }
     return pictures;
 }

@@ -1145,6 +1145,35 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
     CHECK_MESSAGE(culledList, "[pvp-region-culled] the visibility Module checks the 3D camera");
 }
 
+// The regions' pictures made on several threads (one job per region): every region drawn, in region order.
+TEST_CASE("client: a map's regions made on several threads are all drawn, in region order") {
+    auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test pictures", .threadCount = 4});
+    REQUIRE(static_cast<bool>(started));
+    WA::WorkerPoolExecutor jobs(*started);
+    const auto* town = ShippedContent()->Find("kiriyu_town_graybox");
+    REQUIRE(town != nullptr);
+    const std::size_t index = static_cast<std::size_t>(town - ShippedContent()->arenas.data());
+    {
+        Setup setup(1, 4, index, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().map == town->id; }), "[pvp-arena-again]");
+        setup.Loaded();
+        const auto pictures = object_fps_pvp::data::RegionPictures(ShippedMapOf(*town));
+        REQUIRE(pictures.size() == 4);
+        std::vector<GYO::Engine::Math::Aabb> drawn;
+        for (const K::EntityId id : setup.Client().Entities()) {  // ascending: the order they were made in
+            const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
+            const auto* box = setup.Client().Get<R::Aabb>(id);
+            if (mesh != nullptr && box != nullptr && std::holds_alternative<std::shared_ptr<R::HandedModel>>(mesh->model)) drawn.push_back(box->local);
+        }
+        REQUIRE_MESSAGE(drawn.size() == pictures.size(), "[pvp-regions-parallel] every region: " << drawn.size());
+        for (std::size_t i = 0; i < drawn.size(); ++i) {
+            CAPTURE(i);
+            CHECK_MESSAGE((drawn[i].minimum.x == pictures[i].bounds.minimum.x && drawn[i].minimum.z == pictures[i].bounds.minimum.z),
+                          "[pvp-regions-parallel] in region order");
+        }
+    }
+}
+
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
     Setup setup;
     setup.Loaded();
