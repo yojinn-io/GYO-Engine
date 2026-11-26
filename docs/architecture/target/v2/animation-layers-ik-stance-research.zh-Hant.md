@@ -1,6 +1,6 @@
 # 骨骼動畫的三層、IK、姿勢組：成熟方案比較（`v8-arch-anim-layers-research`）
 
-更新：2026-11-26。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。方向由使用者決定；這份文件不改任何已定的決定。**
+更新：2026-11-27（加第 10 節：手臂的 hitbox）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。方向由使用者決定；這份文件不改任何已定的決定。**
 
 查的版本：`gyo2` 4e370a25。本地源碼（引用附檔名與行號，路徑從各 repo 的根算起）：Bevy 6a911653f（0.20.0-dev）、Godot 94fc09c、lightyear 736e1695、bevy_replicon d80c849、Unity Netcode for Entities 7.2.0（`~/Code/GitHome/com.unity.netcode`）。Unreal、Unity 引擎本體不在本機，只讀官方文件網頁（附 URL），沒有下載或 clone；少數只在社群頁面找到的，標「社群」。沒能在原文確認的寫「未確認」。
 
@@ -199,7 +199,7 @@ URL 前綴 `E` = `https://docs.unity.com/en-us/engine/current/`（Unity 6000.6�
 ### 5.1 gyo2 的事實
 
 - hitbox 只有頭（`Head` 的球）、軀幹（`spine_01→spine_03`、`pelvis→spine_01` 兩個膠囊）、腿（4 個膠囊），**沒有手臂**（`assets/object_fps_pvp/characters/player/hitbox.json`）。
-  - 所以**左手 IK 不影響現在的判定**。
+  - 所以**左手 IK 不影響現在的判定**（手臂要不要判，見第 10 節）。
   - 但上半身的根是 `spine_01`（`presentation.json` 的 `upper_body_root`）：**換姿勢組、換組的 crossfade、瞄準，都會動到頭與軀幹的 hitbox**。這些必須由 Match 也算得出來的 sim 狀態推。
 - Match 在開槍那一步現算姿勢（`PvpWorld.cpp:508-513`），不存姿勢、不存歷史；`Locomotion` 每步累積（`PvpWorld.cpp:548`）。
 - 取樣結果跨平台不同（PV6）：linux-x64＝macos-arm64，windows-x64、macos-x64 各自不同（`porting-inventory.zh-Hant.md:114`）。Match 是 Linux、Client 多是 Windows，兩邊的姿勢不會逐位元相同；因為只有 Match 判，所以沒有出過問題。
@@ -274,7 +274,9 @@ URL 前綴 `E` = `https://docs.unity.com/en-us/engine/current/`（Unity 6000.6�
 | D2 | IK 放哪？ | (a) **two-bone 的純函式放 model**（偏離 Bevy；Godot、Unity、Unreal 都在 Engine）。(b) 遊戲自己寫（照 Bevy；第二個產品要時再移進 model）。(c) Engine 做 modifier stack（Godot `SkeletonModifier3D` 的 ECS 版）：要排程、元件、順序規則，現在沒有需求 | (a) |
 | D3 | 遮罩混合與 additive 要不要補進 model？ | (a) **補**（四家都在 Engine，含 Bevy）。(b) 維持遊戲的手寫迴圈：省一批，但每加一組姿勢就多一份 | (a) |
 | D4 | 每把武器的第三人稱姿勢組，資料長什麼樣？ | (a) **基本組＋每把武器的替換表**（Unity override、Lyra 子 ABP 只填資產）：武器檔小，但換組時要知道「哪些 role 被換了」。(b) 每把武器一份完整的 animset：好讀，16 個 role 每把都抄一遍 | (a) |
-| D5 | 第三人稱的 IK 在 Match 跑不跑？ | (a) **不跑**：hitbox 沒有手臂，不影響判定。(b) 跑：日後加手臂 hitbox 時才需要，Match 要讀武器的握點資料 | (a) |
+| D5 | 第三人稱的 IK 在 Match 跑不跑？ | (a) **不跑**：hitbox 沒有手臂，不影響判定。(b) 跑：加手臂 hitbox（D8 的 (B)／(B')）時才需要，Match 要讀武器的握點資料 | (a)；跟著 D8 |
+| D8 | 手臂要不要判？（第 10 節） | (A) **維持不判**（10-31 的決定）。(B) 加手臂形狀、不擋後面的部位、倍率用軀幹的。(B') (B)＋`HitPart::Arm`（改交換內容）。(C) 手臂照最近的算、會擋頭。(D) 加粗軀幹膠囊 | (A)，先量（G5） |
+| D9 | 量「只中手臂的面積比例」時，多少算夠大、要換 (B)？ | 門檻要在量之前定（例如每組姿勢、正面或側面任一方向超過某個比例）。這張卡不提數字 | 使用者定 |
 | D6 | 換組的 crossfade 期間，Match 的 hitbox 用什麼姿勢？ | (a) **用 crossfade 中的姿勢**（和 Client 畫面一致，Match 推得出來）。(b) 在切換 tick 直接換成新組：簡單，但畫面上頭的位置和判定會差一段 crossfade | (a) |
 | D7 | 命中回溯（PV3）什麼時候做、存什麼？ | 這張卡只列選項（5.3 的 (b)／(c)），時機照 PV3「這一輪不做」。要做時推薦 (b) | 不在 W1～W4 |
 
@@ -289,7 +291,9 @@ W 線（武器）
 ├─ G1 high｜W1 武器資料化：武器檔帶 viewmodel 片段、姿勢組替換表、握點、事件（遊戲）
 ├─ G2 high｜W3 切換：sim 加「目前武器、切換開始 tick」，Hide→Draw、換組 crossfade、Match 的 hitbox 同一推導（遊戲；需 E1、G1）
 ├─ G3 high｜W3 左手 IK，只在 Client（遊戲；需 E2、G1）
-└─ G4 medium｜各武器的事件 → 聲音改用 CrossedEvents（遊戲；需 E1、G1）
+├─ G4 medium｜各武器的事件 → 聲音改用 CrossedEvents（遊戲；需 E1、G1）
+├─ G5 medium｜量「只中手臂」的面積比例，每組姿勢分開報（遊戲；D9 先定門檻）
+└─ G6 high｜（條件：G5 超過門檻且使用者選 (B)）手臂形狀、不擋規則、Match 跑 IK（遊戲；需 E2、G1、G5）
 ```
 
 | 代號 | 內容 | 上段／下段（根據） | 實作者／審查者／檢證者（模型／檔位） |
@@ -300,10 +304,79 @@ W 線（武器）
 | G2 `v8-product-pvp-weapon-switch`（W3） | sim 的切換狀態；`ViewmodelClip` 加 Hide→Draw；`ComposeBody` 依武器取組、換組 crossfade（用 E1）；Match 的 hitbox 測試：換組中頭的位置跟著姿勢 | 上段（判定） | Opus／high；審查 Opus／high；檢證者 Opus／high |
 | G3 `v8-product-pvp-left-hand-ik`（W3） | `PoseCharacters` 在混合之後、算模型空間之前套 E2；只在 Client | 下段 | Opus／high；審查 Opus／high |
 | G4 `v8-product-pvp-weapon-events` | `PoseViewmodel` 的換彈聲改成通用的事件 → 聲音（用 E1） | 下段 | Opus／medium；審查 Opus／high |
+| G5 `v8-product-pvp-arm-exposure-survey` | 量測程式：暫時的手臂膠囊（半徑由頂點量）、射線網格、正面與側面、每組姿勢；只報告，不改判定。門檻（D9）在量之前寫下 | 下段（不改判定；但結果是上段決定的輸入，所以不用小的模型） | Opus／medium；審查 Opus／high |
+| G6 `v8-product-pvp-arm-hitbox`（條件） | `hitbox.json` 加手臂形狀與「不擋」的標記；`PvpWorld` 的同目標規則：其他部位有中就照其他部位；Match 跑 G3 的 IK；測試：只中手臂＝軀幹倍率、手臂後面的頭＝頭 | 上段（判定、資料格式） | Opus／high；審查 Opus／high；檢證者 Opus／high |
 
-順序：E1、E2 可以和 G1 同時做；G2 等 E1、G1；G3 等 E2、G1；G4 等 E1、G1。W2（第二把武器的資產）、W4（撿起與丟掉）不碰動畫的 Engine 部分，不在這張表。
+順序：E1、E2 可以和 G1 同時做；G2 等 E1、G1；G3 等 E2、G1；G4 等 E1、G1；G5 等 D9（有步槍姿勢時再量一次）；G6 等 G5 的結果與使用者的選擇。W2（第二把武器的資產）、W4（撿起與丟掉）不碰動畫的 Engine 部分，不在這張表。
 
 ## 9. 交給主會話的（不在這張卡）
 
-- 批次表 `rebuild-batch-plan.zh-Hant.md` 第 112、113 列仍寫「待使用者定（未決）」，但已在 11-23 定了（`v8-arch-gyo2-model-now`、`-skeletal-animation-layers`）。要改成「已定」並指向 HANDOFF。
+- 批次表 `rebuild-batch-plan.zh-Hant.md` 第 112、113 列原本寫「待使用者定（未決）」；主會話已在 `gyo2` 18d35c90 改成「已定」，不必再處理。
 - `viewmodel.animset.json` 有 `Hide`，程式沒有用（`ClientWorld.cpp:826-839`）。W3 會用到，現在不用處理。
+
+## 10. 手臂的 hitbox（使用者 2026-11-27 追加的分析）
+
+前提：手臂要不要判、怎麼判，是**作者（遊戲）能處理的**：形狀是 `hitbox.json` 的資料，部位與倍率是遊戲的規則；任意方向膠囊的射線相交 Engine 已經有（`PvpWorld.cpp:514` 的 `P::CastRay`），Match 要跑 IK 時用的也是 E2 的 model 純函式（model 可以給 Match 用，`HANDOFF.md:335`）。所以這一節**不產生 Engine 的批次**。
+
+### 10.1 現況與由來
+
+- **決定**：使用者 2026-10-31（`v8-product-hit-rules-three-parts`）：部位只有頭、軀幹、腿，**手臂不設判定**；理由是「沒有塔科夫級的肢體傷害」（master 的 `docs/dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md:48`、`docs/object_fps_pvp/plans/v8/hitbox-plan.md:9`）。這裡只引用決定與理由，不引用 master 的算法或數據。
+- **gyo2 的程式照這個決定**：
+  - `HitPart` 只有 `None`、`Body`、`Head`、`Leg`（`games/object_fps_pvp/include/object_fps_pvp/sim/CombatRules.hpp:16`）；載入時其他部位名直接報錯（`CharacterRig.cpp:219-220`）。
+  - 倍率：頭 2000‰、軀幹 1000‰、腿 750‰（`CombatRules.hpp:25-27`）。
+  - 判定：對每個目標，取射線上**最近**的形狀；同距時頭＞軀幹＞腿（`PvpWorld.cpp:513-519`、`CombatRules.cpp:39-46`）。沒有形狀的地方，射線直接穿過去。
+- **骨架裡有手臂**：`Player_V20.fbx` 有 `clavicle_l/r`、`upperarm_l/r`、`lowerarm_l/r`、`hand_l/r`；第三人稱的槍掛在 `hand_r`（`presentation.json:22-24`）。
+- **部位會往外傳**：`HitPart` 存在 `ShotRecord`、`HitRecord`（`games/object_fps_pvp/include/object_fps_pvp/world/Components.hpp:70-87`），進權威的 hash（`Components.hpp:124-125`）、送給 Client（`games/object_fps_pvp/src/client/ClientExchange.hpp:36-37`）；Client 用它選受擊片段（`PlayerAnimation.cpp:171`）和命中標記的顏色（`ClientWorld.cpp:972`）。**所以多一個 `HitPart` 的值＝改資料格式與交換內容**（上段）。
+- 舊線的測試曾明寫「…let a shot through the arm」：站姿 idle 時，右手握槍在胸前約 0.3 m，不在任何形狀裡（master 的 `docs/dev_logs/2026_11_01_pvp_v8_hitbox_shot_judge.zh-Hant.md:35`）。gyo2 的 `tests/object_fps_pvp` 裡搜不到手臂相關的測試字樣；有沒有等價的測試，**未確認**。
+
+### 10.2 「手臂問題」其實是三件事（用遊戲的例子）
+
+| # | 場面 | 現在的結果 | 是不是問題 |
+|---|---|---|---|
+| 1 | 從側面打敵人伸出去、握著槍的手臂，手臂後面沒有身體 | **沒打中**（射線穿過去，打到後面的牆或什麼都沒有） | 是手感問題：射手看到準星在手臂上，卻沒有命中標記。發生得多不多，**沒量過** |
+| 2 | 從正面打，手臂擋在頭或胸前（舉槍瞄準時常見） | 手臂不擋，算**後面的頭或軀幹** | 對射手有利。CS:GO 2016 的更新刻意做成同樣的結果：打到手臂而射線繼續進頭，算頭的倍率（△，PCGamesN 的報導，見 10.3） |
+| 3 | 加了手臂形狀之後 | — | 手臂的姿勢就會進判定：左手 IK、握點資料、瞄準時手臂的位置，都要 Match 也算得出來（D5 要改成 (b)） |
+
+第 3 件的代價（推論，沒有量）：
+
+- **Match 要跑 IK、讀握點**：G1 的武器檔裡的左手握點，會從「畫面資料」變成「影響判定的資料」。
+- **跨平台差距在手臂上最大**：手是 `spine_03→clavicle→upperarm→lowerarm→hand` 這條鏈的末端，每一節的角度誤差都會往外累積；Client 畫的手臂和 Match 擺的手臂，差距會比頭大（PV6，5.1）。只有 Match 判，所以不會分歧，但「看到打中卻沒算」的距離會變大。
+- **形狀數**：每隻手臂兩個膠囊（`upperarm→lowerarm`、`lowerarm→hand`），7 個變 11 個：每個目標的射線測試多 57%；做 PV3 時（5.3 的 (b)）每 tick 的歷史也從 7 個變 11 個。
+
+還有一個時機的因素：現在第三人稱用的是手槍片段（`animations.animset.json:4` 的 `Pistol_Idle_Loop`），雙手靠近胸前；W2 的第二把武器如果是步槍那種前握的姿勢，左手臂會伸到軀幹外面，第 1 件的面積會變大。所以**要不要加手臂，應該照每一組姿勢量**。
+
+### 10.3 別的遊戲怎麼做（都是二手來源）
+
+| 遊戲 | 手臂 | 查證 |
+|---|---|---|
+| CS:GO／CS2 | 有手臂形狀，倍率和胸口同為 1×，Kevlar 也護手臂；2016 年的更新：打到手臂或腿、射線繼續進頭或腹部時，用較高的倍率 | △ 社群 wiki（https://counterstrikewiki.com/Armor_and_Damage_System）、PCGamesN（https://pcgamesn.com/counterstrike/counter-strike-global-offensive-update-enables-headshots-through-arms）；CS2 是否保留 2016 的規則，**未確認** |
+| Valorant | 早期的武器數值表把「腿與手臂」列為同一級 | △ Sportskeeda 1.03 版的整理（https://sportskeeda.com/esports/valorant-what-damage-ratio-weapon-version-1-03）；現在的版本**未確認** |
+| Overwatch | 形狀是簡化的；有的英雄手臂有形狀，有的手臂下有空隙 | △ 玩家分析（https://www.dexerto.com/overwatch/overwatch-streamer-reveals-true-hitboxes-for-every-hero-in-the-game-1365648） |
+| Unity NfE、lightyear、Unreal | 框架不定義部位；hitbox 是作者的資料（第 5.2 節） | 源碼與官方文件 |
+
+共同點：**有手臂形狀的遊戲，手臂多半用軀幹或腿的倍率，而且（CS）不擋後面的頭**。gyo2 和 CS 只差在第 1 件：只打到手臂時，CS 算 1×，gyo2 算沒打中。
+
+### 10.4 選項
+
+| | 做法 | 好處 | 代價 |
+|---|---|---|---|
+| (A) | **維持：手臂不判**（10-31 的決定） | 不動判定、資料格式、交換內容；IK 只在 Client（D5 (a)） | 第 1 件的手感問題留著，頻率未知 |
+| (B) | 加手臂形狀，**不擋**：同一目標的其他形狀有中，就照現行規則算其他部位；**只中手臂**才算手臂。手臂的倍率先用軀幹的（像 CS 的 1×），不加 `HitPart` 的值 | 第 1 件解決；第 2 件的結果不變；不改交換內容 | Match 要跑 IK、讀握點（D5 改 (b)，G3 變上段）；形狀 7→11；`hitbox.json` 要能標「不擋」（資料格式，上段） |
+| (B') | (B)＋手臂自己的部位與倍率（`HitPart::Arm`） | 可以給手臂獨立的倍率與受擊表現 | 再加：`HitPart` 多一個值＝交換內容、權威 hash、Client 的受擊片段與標記都要跟著改 |
+| (C) | 加手臂形狀，**照最近的算**（手臂擋住後面的頭） | 規則最簡單（現在的判定不用改） | 舉槍時手臂擋頭，對射手不利；和 CS 2016 以後的方向相反 |
+| (D) | 不加手臂，把軀幹膠囊加粗包住手臂 | 不加形狀、不要 IK | 沒有手臂的姿勢（例如手垂下時）身體旁邊的空氣也會中，換成「沒打到卻算中」的抱怨（Overwatch 那種） |
+
+### 10.5 推薦
+
+**先 (A)，同時量第 1 件有多常發生；量到夠大再換 (B)。**
+
+1. 10-31 的前提（「沒有塔科夫級的肢體傷害」）沒有變；第 2 件的結果已經和 CS 一樣。
+2. 第 1 件的頻率沒有量過，先量再評估（量不到成因就修，容易修錯方向）。量法：在 Match 用的同一組姿勢上，先暫時擺上手臂膠囊（半徑由 gyo2 模型的頂點量），從正面、側面打一張射線網格，算「**只中手臂**的面積 ÷ 目標的總面積」，每一組姿勢（idle、瞄準、跑步、換彈；W2 有步槍姿勢時也量）分開報。**門檻要在量之前由使用者定（D9）**。
+3. 換 (B) 時，倍率先對到軀幹，不加 `HitPart` 的值（避開交換內容的改動）；要不要 (B') 另外決定。
+4. (C)、(D) 不推薦：(C) 和成熟方案的方向相反；(D) 換來另一種抱怨。
+
+### 10.6 對前面各節的影響
+
+- D5（第 7 節）：(A) 時維持 (a)；採 (B)／(B') 時改成 (b)，G3 的左手 IK 也要在 Match 跑，變成上段。
+- G1（第 8 節）：武器檔的左手握點，在 (B) 之後是影響判定的資料。
+- 5.3 的 (b)（存擺好的 hit shape）：(B) 之後每 tick 存 11 個形狀。
