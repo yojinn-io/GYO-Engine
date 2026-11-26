@@ -6,8 +6,9 @@
 //
 // Per kind (SDL declaration section 6.1 point 8, render.zh-Hant.md section 8.3): a mesh item is data for this frame
 // (Extracted3dItems, rebuilt each extract; Bevy keeps RenderMeshInstances keyed by the source entity,
-// bevy_pbr/src/render/mesh.rs:1214, because it keeps per-instance GPU data; here the world matrix and material are
-// small and pushed per draw). What stays is keyed by the model mesh: its retained GPU mesh (RenderModelMeshes).
+// bevy_pbr/src/render/mesh.rs:1214, because it keeps per-instance GPU data; here each frame's instances are written
+// again, as Bevy's CPU path clears its instance buffer every frame, no_gpu_preprocessing.rs:64). What stays is keyed by
+// the model mesh: its retained GPU mesh (RenderModelMeshes).
 
 #include <cstdint>
 #include <map>
@@ -121,8 +122,11 @@ inline void HashValue(Kernel::Hasher&, const RenderModelMeshes&) {}
 // opaque, depth-tested ones near to far (fewer pixels shaded behind nearer ones; Bevy bins its Opaque3d by pipeline,
 // material and mesh instead, bevy_core_pipeline/src/core_3d/mod.rs:172-188), then the blended, depth-tested ones far
 // to near (Bevy's Transparent3d), then those not depth-tested far to near (overlays
-// in the world); ties by source entity. Distance: the view-space z of the item's origin. nullopt: the camera is not
-// valid or not a 3D camera.
+// in the world); ties by source entity. Distance: the view-space z of the item's origin. Items that draw the same
+// retained mesh with the same texture, blend, depth and cull are instances of one draw, each with its world and colour
+// (automatic batching, big-map declaration section 16): the opaque ones wherever they stand (a draw where its nearest
+// instance stands, its instances near to far), the others only when they are neighbours in that order. An item with
+// geometry of its own (skinned) is a draw of its own. nullopt: the camera is not valid or not a 3D camera.
 [[nodiscard]] std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, std::span<const Extracted3dItem> items);
 
 } // namespace GYO::Engine::Render

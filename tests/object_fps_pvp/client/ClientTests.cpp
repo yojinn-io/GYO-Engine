@@ -1771,13 +1771,22 @@ TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, i
     PC::GatewayClient client(gateway.Address(), "device");
     client.Ask("list", PC::ListRoomsRequest());
     client.Ask("record", PC::SaveRequest());
+    // The client's time is what each Update is given: one step per Update. An exchange answered within the Update
+    // that started it took no step, so the list is held for a known number of Updates: it took at least those.
+    constexpr std::int64_t kStep = 1'000'000;
+    constexpr int kHeldUpdates = 20;
+    gateway.Hold("GET", "/v1/rooms");
     std::vector<PC::GatewayResult> results;
+    std::int64_t now = 0;
+    int heldUpdates = 0;
     const auto begin = std::chrono::steady_clock::now();
     while (results.size() < 2 && std::chrono::steady_clock::now() - begin < std::chrono::seconds(5)) {
-        const std::int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin).count();
         if (auto result = client.Update(now)) results.push_back(std::move(*result));
+        now += kStep;
+        if (gateway.Held() == 1 && ++heldUpdates == kHeldUpdates) gateway.Release();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    REQUIRE(heldUpdates >= kHeldUpdates);
     REQUIRE(results.size() == 2);
     const std::vector<PC::GatewayCallRecord> calls = client.TakeCalls();
     REQUIRE_MESSAGE(calls.size() == 3, "[pvp-gw-calls-kept] the session's, the list's and the record's: " << calls.size());
@@ -1787,7 +1796,7 @@ TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, i
     // The list went at once (its session first: they share its wait); the record waited behind both.
     CHECK((calls[0].waited == 0 && calls[1].waited == 0));
     CHECK_MESSAGE(calls[2].waited >= calls[0].took + calls[1].took, "[pvp-gw-calls-waited] " << calls[2].waited);
-    CHECK_MESSAGE((calls[0].took > 0 && calls[1].took > 0 && calls[2].took > 0), "[pvp-gw-calls-took]");
+    CHECK_MESSAGE(calls[1].took >= kHeldUpdates * kStep, "[pvp-gw-calls-took] " << calls[1].took);
     CHECK_MESSAGE(client.TakeCalls().empty(), "a take empties them");
 }
 

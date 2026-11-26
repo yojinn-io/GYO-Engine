@@ -100,13 +100,13 @@
 | 碰撞 | 生態不提供（範例用 avian） | 每 chunk | 每 octant 一個 static body | 跟著 actor | 整張一個 `BoxSet`（2.3） |
 | 剔除 | 核心 `check_visibility`（Aabb、Frustum） | 不畫空 section（wiki）；其他未從讀到的頁確認 | 渲染伺服器的實例剔除 | — | 照 Bevy |
 | LOD | 核心 `VisibilityRange`；生態 chunk LOD（降取樣再放大） | — | `visibility_range` | HLOD（離線建、代替未載入格子） | `VisibilityRange`＋工具烘的代理 |
-| instancing | 自動 batching | — | MultiMesh | HLOD 的 Instancing 層 | 照 Bevy，排在後面 |
+| instancing | 自動 batching | — | MultiMesh | HLOD 的 Instancing 層 | 照 Bevy 的自動合批；偏離處見第 16.3 節的表（S6） |
 
 **偏離 Bevy 的地方與膠水**：
 1. **整張載入、不照 bevy_voxel_world 的相機串流**：衝突點是權威——Match 要整張碰撞，Client 的「看不到的先不載」和 Match 的狀態無關，但 region 何時進碰撞要決定性（asset RC-AS1）。不串流就沒有這個膠水。這不是偏離 Bevy 核心（核心沒有串流），是不採用一個生態 crate 的策略。
 2. **格式自己定（master 的）**：Bevy 生態沒有檔案格式可照；接合點是 Bevy 式的 asset loader（我們的 asset Module 已照 Bevy），膠水只有兩個 loader。
 3. **Match 碰撞整張一個 `BoxSet`**：avian 有實體層 broadphase、我們沒有（physics_3d 的取捨，3D 物理卡已定）。一張地圖一個實體正好繞開這個差異，不寫膠水。
-4. 剔除、`VisibilityRange`、instancing 照 Bevy，沒有偏離。
+4. 剔除、`VisibilityRange` 照 Bevy，沒有偏離。instancing 照 Bevy 的自動合批，偏離處（實例資料的放法、bin 的順序、沒有 `NoAutomaticBatching` 等）見第 16.3 節的表。
 
 ## 4. 地圖從哪來（交使用者選）
 
@@ -514,3 +514,111 @@ v8-arch-gyo2-big-map
 **不做**
 
 串流、km² 量測（S5，要先問）、Gateway 與房間的流程（不變）。
+
+## 16. S6 小宣告：instancing（`v8-arch-gyo2-big-map-s6`）
+
+2026-11-26。主會話轉達使用者：「S6：instancing — 照宣告寫的做：做成 Engine 的公開介面，用測試場景裡重複出現的模型驗證。照 Bevy 的做法，偏離 Bevy 時寫出理由。」Opus／high（上段：Engine 公開介面）。第 2.4 節：instancing 對 voxel 幾何沒有幫助，幫的是重複的東西（箱子、樹、路燈），所以驗證用重複的模型，不用地圖。
+
+讀的版本：gyo2 `425d192c`；Bevy `6a911653f`；Godot `94fc09c`；SDL3 是建置抓下來的 `SDL_gpu.h`。
+
+### 16.1 現況（程式，S6 前）
+
+- **排隊**：`Queue3d`（`engine/modules/render/src/Pipeline3d.cpp:117-175`）每個抽出的項目一個 `Draw3D`；`Draw3D` 自己帶 `world`、`color`（`RenderCommands.hpp:145-162`）。
+- **後端**：`sdl_gpu` 的 `RecordPass3D`（`plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp:669-770`）每個 draw 推一次 vertex uniform（`clipFromWorld × world`，`:756-757`）和一次 fragment uniform（顏色，`:758-759`），再畫 1 個實例（`:766`）。
+- **抽取已經共用網格**：`ExtractMeshes3d`（`engine/modules/mesh_render/src/MeshRenderModule.cpp:46-99`）經 `RenderModelMeshes::Use`（`:88-91`，RD-9）讓同一個模型網格的實體拿到同一個 `MeshId`。缺的只是「把它們併成一個 draw」。
+- render 頁第 8.5 節已預告「網格實例不留 GPU 狀態（每個 draw 推 uniform；大量相同網格時 RC-RD 2 的實例化）」。
+
+### 16.2 前提：誰要解決
+
+| 項 | 前提 | 理由 |
+|---|---|---|
+| 判斷哪些 draw 可以併、把每個實例的資料交給 GPU | **〔Engine〕** | 作者伸不進 `Queue3d` 和後端；只有 renderer 知道哪些 draw 共用網格、貼圖與 pipeline |
+| 讓東西重複 | **〔作者〕** | 作者給同一個 `ModelRef`＋`ImageRef` 就是重複；不需要新的元件 |
+| 一個實體帶很多實例（Godot `MultiMesh`） | **〔作者〕（現在）** | 每個實例一個實體作者就做得到；Bevy 核心也沒有這種元件。RC-IN3 |
+
+### 16.3 設計（卡片判）
+
+**公開介面**是 `render` 的資料契約與 shader ABI（後端與測試讀它）；作者那一側**不加任何東西**，合批是自動的（照 Bevy）。
+
+1. **資料**（`RenderCommands.hpp`）：
+   - 新 `Instance3D{world, color}`（68 bytes）＝Bevy 的 `MeshUniform`（`bevy_pbr/src/render/mesh.rs:532-535` 的 `world_from_local`，加上 bindless 材質槽那一份）。
+   - `Pass3D::instances`；`Draw3D::instanceOffset`、`instanceCount`。
+   - `Draw3D::world`、`color` **拿掉**：只留一條路，畫一個東西＝畫一個實例（Bevy 每個 phase item 也都有 `batch_range`，單一項目是長度 1）。
+2. **shader ABI**（`ShaderAbi.hpp`、`Mesh3D.hlsli`）：
+   - 頂點 slot 0 照舊（每頂點）；新的 slot 1 每實例：location 2～5 是 world（`Matrix4` 照存放順序的四欄，HLSL 的 `float4x4` 把它們當列）、6 是顏色。
+   - vertex uniform 改成 pass 的 `clipFromWorld`（每個 pass 推一次）；fragment uniform 拿掉（顏色跟著實例走）。
+   - 位置＝`mul(mul(p, world), clipFromWorld)`，同 Bevy 的 `get_world_from_local(instance_index)`（`mesh_functions.wesl:15`）再乘 view 的 clip_from_world。
+3. **自動合批**（`Queue3d`，〔Engine〕）：
+   - **鍵**：保留網格（`MeshId`）、貼圖（`TextureId`，含 filter）、混合、深度測試、深度寫入、cull。照 Bevy：網格是 `BatchCompareData = AssetId<Mesh>`（`mesh.rs:2910`），貼圖是材質 bind group（`:2892-2899`），其餘是 pipeline id（`bevy_render/src/batching/mod.rs:41-52`）。
+   - **不透明**（RD-8 的第 0 組）：同鍵的進一個 bin，照 Bevy 的 binned phase（`no_gpu_preprocessing.rs:122-154`，一個 bin 一段 `instance_range`）。
+   - 這也會重排 `depthWrite = false` 的不透明項目（它們的先後影響畫面），和 Bevy 一樣。
+   - **半透明、不測深度**：排序後**相鄰**且同鍵的才併，照 Bevy 的 sorted phase（`batching/mod.rs:236-243`）。遠到近不變；GPU 照實例順序畫，混合的先後也不變。
+   - **自己帶頂點的項目**（CPU 蒙皮）不併。Godot 也一樣：有 `mesh_instance` 的不 repeat（`render_forward_clustered.cpp:896`）。
+   - 被剔除的（`CulledEntities`）、層不符的，照舊在合批前去掉（第 13 節不變）。
+4. **後端**（`sdl_gpu`，〔Engine〕）：
+   - 每幀的實例放進一個 instance buffer，和 pass 的頂點一樣每幀重建（Bevy 的 CPU 路徑也每幀清：`no_gpu_preprocessing.rs:64-72`）。
+   - slot 1 每個 pass 只綁一次（在這個 pass 的實例起點）；每個 draw 用 `first_instance`＝`instanceOffset` 指出自己的範圍，同 Bevy 的 `draw_indexed(.., batch_range)`（`mesh.rs:4734-4738`）。
+   - instance-rate 的頂點輸入在三個後端都從 `first_instance` 開始：Vulkan 的 `firstInstance`、D3D12 的 `StartInstanceLocation`、SDL Metal 的 `baseInstance:firstInstance`（`SDL_gpu_metal.m:2862`）。SDL 的註（`SDL_gpu.h:3502-3509`）只說 shader 讀內建的實例編號（`SV_InstanceID`）時不一致，這裡的 shader 不讀它。
+   - 第一版把 slot 1 綁在每個 draw 的第一個實例、`first_instance` 恆 0，理由寫成「`first_instance` 不一致」。這個理由錯了，而且每個 draw 重綁在 SDL Vulkan 上會重綁整組頂點緩衝（`SDL_gpu_vulkan.c:8014-8026`）。設計審查指出後改掉。
+   - `SDL_DrawGPUIndexedPrimitives` 帶 `instanceCount`。
+
+**偏離 Bevy 的地方、理由與膠水**：
+
+| Bevy | gyo2 | 理由 | 膠水 |
+|---|---|---|---|
+| 實例資料放 storage buffer，shader 用 `instance_index` 取（`mesh.wesl:43`；`draw_indexed(..., batch_range)`，`mesh.rs:4734-4738`） | 每實例的頂點輸入（instance-rate），draw 用 `first_instance` 指出範圍 | SDL_GPU 的頂點輸入在三個 API 一樣、照 `first_instance` 開始；shader 不讀內建的實例編號（只有它在各 API 不一致）；shader 工具不必多查 storage buffer | 無（ABI 多一組輸入） |
+| 不透明的 bin 照鍵排（`sort_binned_render_phase`，`batching/mod.rs:199-209`） | bin 照「最近的成員」排，bin 內近到遠 | 留住 RD-8 的近到遠；沒有任何東西可併時，輸出和 S6 前一樣（既有的 `[p3-*]` 不改） | 無 |
+| `NoAutomaticBatching`（`batching/mod.rs:24-26`） | 不做 | Bevy 用它是因為自訂 draw function 需要每實體的資料；gyo2 沒有自訂 shader，合批在畫面上看不出來，沒有使用者的開關測不了 | 無；RC-IN1 |
+| GPU preprocessing、multi-draw indirect（`gpu_preprocessing.rs`） | 不做；只有 CPU 建實例（Bevy 自己的 `no_gpu_preprocessing` 路徑） | 剔除在 CPU（第 13 節）；沒量到 draw 數或實例上傳是瓶頸 | 無；RC-IN2 |
+| 顏色在材質 | 顏色在實例 | gyo2 的材質就是 `Mesh3d` 的 `color`＋`image`（render 頁 8.3）；顏色放實例，只差顏色的也能併（＝Bevy bindless 的材質槽放在 `MeshUniform`） | 無 |
+
+**別家對照**：Godot 兩條都有。自動的是：不透明照鍵排序（`render_forward_clustered.cpp:1999-2001`），**相鄰**同鍵的合成一個 instanced draw（`:896-910`、`:608`、`:623`）。手動的是 `MultiMesh`（`scene/resources/multimesh.h:36`、`:107`、`:112`，GridMap 每種 item 一個，`grid_map.cpp:946`）。gyo2 照 Bevy 只做自動的，手動的留給 RC-IN3。
+
+**clip-from-world（第 14 節 S-4）：不在本批做。**
+- S6 沒有碰相機的推導值。`Pass3D::clipFromWorld` 原本就是每個相機每幀在 `Queue3d` 算一次（`Pipeline3d.cpp:126`）；S6 只是把每個 draw 的 `clipFromWorld × world`（S6 前 `GPUDevice.cpp:756`）移進 shader。
+- 收斂 S-4 要讓 `ComputedCamera`（現在只有 `clipFromView`，`Camera.hpp:122`）多帶 clip-from-world 或 frustum，也就是改 camera 的 CM 條文。這不是 instancing 自然帶出來的，照第 14 節，仍記為後續。
+
+### 16.4 判定（合併前）
+
+- **I1**：N 個同模型同圖的實體＝一個 draw，`instanceCount` N；每個實例帶自己實體的 world 與顏色。驗證有兩處：`Queue3d` 單元測試；測試場景（20 個箱子＋3 個換圖的＋1 盞燈＋5 個在相機背後的）。實體再加 5 個，draw 數不變。
+- **I2**：網格、貼圖、混合、深度測試、深度寫入、cull 任一不同，就不併。
+- **I3**：被剔除的、層不符的不是實例；自己帶頂點的（蒙皮）各自一個 draw。
+- **I4**：
+  - 半透明、不測深度的只併相鄰同鍵的，遠到近不變。
+  - 不透明的 bin 在最近成員的位置，bin 內近到遠。
+  - 沒有東西可併時，draw 的順序和 S6 前一樣（既有 `[p3-*]` 不改）。
+- **I5**（GPU，`sdl_gpu.pass3d`）：
+  - 一個 draw 三個實例畫在三個位置、各自的顏色；第二個 draw 從它自己的第一個實例開始。
+  - 混合的實例照順序疊。
+  - 既有的像素測試照過。
+- **I6**：第 16.5 節的突變全部 killed；`cpu|shader` 通過；L1 三平台（Linux 的 `sdl_gpu.pass3d` 在 Lavapipe 上跑）。
+
+**既有測試的改動**（只改量法，守的性質不變）：
+- `[vs-queue]`／`[vs-queue-no-list]`（`VisibilityTests.cpp`）原本數 draw、代表「畫了幾個項目」，現在同網格的會併成一個 draw，改成數實例。
+- `sdl_gpu` 的 3D 像素測試：`Draw3D` 的 `world`／`color` 改由實例給（資料契約變了）。
+- `[g3-abi-fragment-uniforms]`：fragment uniform 由 1 改成 0。
+
+### 16.5 測試與突變
+
+- 測試：
+  - `tests/common/render/Pipeline3dTests.cpp`（`render.pipeline3d`，標籤 `cpu`）三案。
+  - `PipelineWorldTests.cpp`（`render.extract`）的測試場景一案。
+  - `plugins/sdl_gpu/tests/Pass3DTests.cpp`（`sdl_gpu.pass3d`，標籤 `gpu`）一案。
+- 突變：`tests/common/render/instancing_mutations.json`，15 個。
+  - 合批：`in-batch-off`。
+  - 鍵：`in-key-mesh`、`-texture`、`-cull`、`-depth-write`、`-blend`、`-depth-test`。
+  - 順序：`in-blend-binned`、`in-bin-far-first`。
+  - 蒙皮：`in-own-joined`。
+  - 實例資料：`in-instance-world-lost`、`in-instance-colour-lost`。
+  - GPU：`in-g3-one-instance`、`in-g3-instance-offset-ignored`、`in-g3-instance-base-not-advanced`。
+- `render_mutations.json` 裡 find 已失效的 7 個（`g3-abi-frag-no-texture`、`g3-abi-frag-no-colour`、`g3-transform-world-ignored`、`g3-transform-order`、`g3-colour-ignored`、`g3-mesh-index-offset-ignored`、`g3-vertex-offset-ignored`）改寫到新程式，守同一個性質。
+
+### 16.6 RC
+
+- **RC-IN1**：出現自訂 shader 或 draw function，需要每個實體自己的 uniform → 加 `NoAutomaticBatching`（照 Bevy）。
+- **RC-IN2**：量到 draw 數或每幀的實例上傳成為幀時間的主要部分 → 實例改成保留式（以來源實體為鍵，Bevy 的 `RenderMeshInstances`），或 GPU 剔除＋indirect。
+- **RC-IN3**：量到「每個實例一個實體」本身的成本（抽取、剔除）超過預算（例：上萬株草）→ 加一個實體帶多個實例的元件（Godot `MultiMesh` 的形狀）。
+
+### 16.7 不做
+
+LOD、串流、GPU 效能量測（本機的重 GPU 量測要先問）、2D 的 instancing（2D 已有「相鄰同貼圖同混合」的合批，RD-7）、遮擋剔除。

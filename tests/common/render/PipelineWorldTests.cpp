@@ -517,7 +517,7 @@ TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of
         if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) scene = p3;
     }
     REQUIRE(scene != nullptr);
-    CHECK_MESSAGE(scene->draws.size() == 3, "[vs-extract] the mesh behind the camera with a box is left out, the other three drawn");
+    CHECK_MESSAGE(scene->instances.size() == 3, "[vs-extract] the mesh behind the camera with a box is left out, the other three drawn");
 }
 
 namespace {
@@ -585,4 +585,76 @@ TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without
     Frames(*p);
     CHECK_MESSAGE((kept() == 0 && live() == 0), "[mh-held-let-go] a held model no Mesh3d draws is let go");
     CHECK_MESSAGE(MeshAsks(1) == 1, "[mh-held-released] the backend is told its mesh is released");
+}
+
+TEST_CASE("render_extract: a scene of one model repeated is one instanced draw per model and image; culled copies are not instances") {
+    // big-map declaration section 16, I1 to I3: crates (one model the game holds, one image), a few of them with
+    // another image, one lamp of another model; crates behind the camera carry a box and the visibility Module culls
+    // them.
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "mesh_render"}), nullptr, Game({"visibility"}));
+    K::World& game = GameOf(*p);
+    K::World& render = p->World("Render").GetWorld();
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    const std::shared_ptr<const GYO::Engine::Model::ModelData> crate = HeldTriangle(0.5F);
+    const std::shared_ptr<const I::ImageData> wood = Picture();
+    const std::shared_ptr<const I::ImageData> paint = Picture();
+    const R::Aabb box{{{-1.0F, -1.0F, -1.0F}, {1.0F, 1.0F, 1.0F}}};
+    const auto put = [&](const K::EntityId id, const std::shared_ptr<const GYO::Engine::Model::ModelData>& model,
+                         const std::shared_ptr<const I::ImageData>& image, const float x, const float z) {
+        R::Mesh3d m;
+        m.model = model;
+        m.image = image;
+        m.color = R::Color8{static_cast<std::uint8_t>(id), 255, 255, 255};
+        game.Insert(id, m);
+        game.Insert(id, box);
+        Place(game, id, x, 0.0F, z);
+    };
+    for (K::EntityId id = 10; id < 30; ++id) put(id, crate, wood, static_cast<float>(id % 5) - 2.0F, 5.0F + static_cast<float>(id - 10));
+    for (K::EntityId id = 30; id < 35; ++id) put(id, crate, wood, 0.0F, -20.0F);  // behind the camera
+    for (K::EntityId id = 40; id < 43; ++id) put(id, crate, paint, 1.0F, 3.0F);
+    put(50, HeldTriangle(0.25F), wood, 0.0F, 4.0F);
+    Frames(*p, 2);
+
+    const R::Pass3D* scene = nullptr;
+    for (const R::RenderPass& pass : seen.back().all) {
+        if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) scene = p3;
+    }
+    REQUIRE(scene != nullptr);
+    CHECK_MESSAGE(scene->draws.size() == 3, "[in-scene-draws] one draw for the wooden crates, one for the painted, one for the lamp");
+    CHECK_MESSAGE(scene->instances.size() == 24, "[in-scene-culled] 20 + 3 + 1 instances: the crates behind the camera are none");
+    const R::Draw3D* crates = nullptr;
+    for (const R::Draw3D& d : scene->draws) {
+        if (d.instanceCount == 20) crates = &d;
+    }
+    REQUIRE_MESSAGE(crates != nullptr, "[in-scene-one-draw] the twenty wooden crates in front are one draw");
+    std::vector<std::uint8_t> tints;
+    for (std::uint32_t i = 0; i < crates->instanceCount; ++i) {
+        const R::Instance3D& instance = scene->instances[crates->instanceOffset + i];
+        tints.push_back(instance.color.r);
+        CHECK_MESSAGE(instance.world.values[14] >= 5.0F, "[in-scene-instance-world] each instance placed where its crate stands");
+    }
+    std::sort(tints.begin(), tints.end());
+    std::vector<std::uint8_t> expected;
+    for (std::uint8_t id = 10; id < 30; ++id) expected.push_back(id);
+    CHECK_MESSAGE(tints == expected, "[in-scene-instance-color] each crate's own colour, every front crate once");
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[in-scene-mesh-once] one retained mesh per model");
+
+    // Five more crates in front: still three draws.
+    for (K::EntityId id = 60; id < 65; ++id) put(id, crate, wood, 0.0F, 30.0F);
+    Frames(*p, 2);
+    std::size_t draws = 0;
+    std::size_t instances = 0;
+    for (const R::RenderPass& pass : seen.back().all) {
+        if (const auto* p3 = std::get_if<R::Pass3D>(&pass)) {
+            draws += p3->draws.size();
+            instances += p3->instances.size();
+        }
+    }
+    CHECK_MESSAGE((draws == 3 && instances == 29), "[in-scene-draws-constant] more copies are more instances, not more draws");
 }
