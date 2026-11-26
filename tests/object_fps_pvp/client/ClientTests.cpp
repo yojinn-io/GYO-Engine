@@ -475,8 +475,10 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     setup.Next().buttons.push_back(click);
     setup.Frame();
     REQUIRE(PC::StatusOf(setup.Client()).captured);
-    // W held from here on: every step's input walks forward while the controls are fresh.
+    // W and Space held from here on: every step's input walks forward (and, with the shipped hold_jump, asks to jump)
+    // while the controls are fresh.
     setup.Next().keys.push_back(Key(I::KeyCode::W));
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
     setup.Frames(2);
 
     auto lent = setup.client->Lend("Sim");
@@ -488,6 +490,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
         std::uint64_t consumed = 0, missing = 0;  // the Match's counts of this Client's inputs
         float forward = 0.0F;                     // the input the Match gave the own player this step
         std::uint8_t present = 0;
+        std::uint8_t jump = 0;
         float yaw = 0.0F;                         // the own player's view at the Match
     };
     std::vector<Round> rounds;
@@ -519,6 +522,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
             if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) {
                 round.forward = input->forward;
                 round.present = input->present;
+                round.jump = input->jump;
             }
             if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.yaw = body->yaw;
             round.simTick = TickOf(lease.World());
@@ -562,6 +566,8 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     // and once stale it stays so; the view stays where it was.
     CHECK_MESSAGE(first.forward > 0.0F, "[pvp-sim-thread-input] the held W goes on at the stop's start");
     CHECK_MESSAGE((last.forward == 0.0F && last.present == 0), "[pvp-sim-thread-stale] stale controls move nothing: forward " << last.forward);
+    CHECK_MESSAGE(first.jump != 0, "[pvp-sim-thread-input] the held Space asks to jump at the stop's start");
+    CHECK_MESSAGE(last.jump == 0, "[pvp-hold-stale] stale controls do not jump on a held Space");
     std::size_t neutralAt = stopped.size();
     for (std::size_t i = 0; i < stopped.size(); ++i) {
         if (stopped[i].forward == 0.0F && neutralAt == stopped.size()) neutralAt = i;
@@ -581,6 +587,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     CHECK_MESSAGE(walksAgain, "[pvp-sim-thread-stale] fresh controls walk again after the stop");
     // The Sim World is back on the main thread; still connected, still playing.
     setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
     setup.Frames(10);
     CHECK(PC::StatusOf(setup.Client()).connected);
     CHECK(PlayerOf(GameWorld(*setup.match), 1) != 0);
@@ -687,6 +694,50 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
     CHECK_MESSAGE(fractions > 0, "[pvp-interp-view] the view time sent carries the timeline's fraction");
     CHECK_MESSAGE(viewsAhead == 0, "[pvp-interp-view] the view time sent is never past the confirmed tick: " << viewsAhead);
   }
+}
+
+// Space held jumps again on every landing (the shipped movement rules' hold_jump; playtest 2026-11-26, item 7); let go,
+// the player stays down. The press of a tap still jumps once.
+TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {
+    Setup setup;
+    setup.Frames(120);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    REQUIRE(ShippedContent()->stance.holdJump);
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.state = I::ButtonState::Pressed;
+    click.position = {640.0F, 360.0F};
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    REQUIRE(own != 0);
+    const auto takeoffs = [&](const int frames) {
+        int count = 0;
+        bool grounded = GameWorld(*setup.match).Get<PW::PlayerBody>(own)->grounded != 0;
+        for (int i = 0; i < frames; ++i) {
+            setup.Frame();
+            const bool now = GameWorld(*setup.match).Get<PW::PlayerBody>(own)->grounded != 0;
+            if (grounded && !now) ++count;
+            grounded = now;
+        }
+        return count;
+    };
+    // A jump lasts about 0.52 s (2 x sqrt(2 h / g) at 0.6 m and 18 m/s^2): two seconds held is three or more.
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
+    const int held = takeoffs(128);
+    CHECK_MESSAGE(held >= 3, "[pvp-hold-jump] two seconds of Space held jumped " << held << " times");
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
+    setup.Frames(64);
+    CHECK_MESSAGE(takeoffs(64) == 0, "[pvp-hold-jump] let go, the player stays down");
+    // A tap: one jump.
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
+    setup.Frame();
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
+    CHECK_MESSAGE(takeoffs(128) == 1, "a tap jumps once");
 }
 
 // The other players' steps are heard too, where they walk; a crouched walk is silent (playtest 2026-11-26, item 2).

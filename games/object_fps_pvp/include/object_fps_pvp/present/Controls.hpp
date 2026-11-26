@@ -27,6 +27,7 @@ struct ControlsFrame final {
     bool left = false;
     bool right = false;
     bool crouch = false;
+    bool jumpHeld = false;
     // The mouse's motion this frame, in counts (input's AccumulatedMouseMotion; only used while captured).
     GYO::Engine::Math::Vec2 motion{};
 };
@@ -38,7 +39,10 @@ struct StepInput final {
     float yaw = 0.0F;
     float pitch = 0.0F;
     bool present = false;
+    // jump: pressed since the last step took the presses; jumpHeld: the key is down (the step's rules decide what a
+    // held key does: sim::StepJumps).
     bool jump = false;
+    bool jumpHeld = false;
     bool crouch = false;
     bool fire = false;
     bool reload = false;

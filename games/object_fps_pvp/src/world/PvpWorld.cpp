@@ -245,16 +245,16 @@ using Walls = K::Query<K::Read<P::Collider>, K::Read<T::Transform>, K::Without<K
 P::Shape BodyShape(const float height, const float radius) { return P::CapsuleY(0.5F * height - radius, radius); }
 P::Pose BodyPose(const Math::Vec3& feet, const float height) { return P::Pose{feet + Math::Vec3{0.0F, 0.5F * height, 0.0F}, {}}; }
 
-// The ground probe: a body is on the ground when it stands on the floor (y = 0, a rule of the game) or a short sweep
-// down meets a face that faces up (normal y > 0.5).
+// The ground probe: a body is on the ground when it stands on the arena's floor plane (a rule of the game, when the
+// arena has one) or a short sweep down meets a face that faces up (normal y > 0.5).
 constexpr float kGroundProbe = 0.002F;
 constexpr float kGroundNormalY = 0.5F;
 
 P::MoveAndSlideConfig MoveConfig() { return P::MoveAndSlideConfig{}; }
 
-Base::Result<bool, P::Physics3dError> OnGround(const Walls& walls, const Math::Vec3& feet, const float height,
-                                               const float radius) {
-    if (feet.y <= kGroundProbe) return true;
+Base::Result<bool, P::Physics3dError> OnGround(const Walls& walls, const sim::ArenaContent& arena, const Math::Vec3& feet,
+                                               const float height, const float radius) {
+    if (arena.floor && feet.y <= *arena.floor + kGroundProbe) return true;
     auto hit = P::CastMove(walls, BodyShape(height, radius), BodyPose(feet, height), Math::Vec3{0.0F, -kGroundProbe, 0.0F},
                            MoveConfig().depenetration.skinWidth);
     if (!hit) return Base::Err(std::move(hit).error());
@@ -281,9 +281,18 @@ K::SystemResult PhysicsFailed(const P::Physics3dError& error) {
                                     Base::Describe(error)));
 }
 
+// The arena's invisible wall: the feet stay within [radius, width - radius] x [radius, depth - radius] (a move into it
+// keeps its other axis: the body slides along it).
+Math::Vec3 InsideBounds(const sim::ArenaContent& arena, Math::Vec3 feet) {
+    feet.x = std::clamp(feet.x, arena.radius, arena.width - arena.radius);
+    feet.z = std::clamp(feet.z, arena.radius, arena.depth - arena.radius);
+    return feet;
+}
+
 // One movement step of a living body with input (present): the view, the stance, the jump, the fall and the slide
-// against the walls; a body without input keeps its view and stance and only falls.
-Base::Result<void, P::Physics3dError> StepBody(const Walls& walls, const GameRules& rules, PlayerBody& body,
+// against the walls and inside the arena's bounds; a body without input keeps its view and stance and only falls.
+// Gives the downward speed it landed at in this step (0: it did not land).
+Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRules& rules, PlayerBody& body,
                                                const PlayerInput& input, const bool alive, const double seconds) {
     const sim::ArenaContent& arena = rules.arena;
     const bool steering = alive && input.present != 0;
@@ -312,7 +321,7 @@ Base::Result<void, P::Physics3dError> StepBody(const Walls& walls, const GameRul
                                                                             speed, static_cast<float>(seconds))
                                            : sim::GroundPoint{};
     if (body.grounded != 0) {
-        auto ground = OnGround(walls, start, height, arena.radius);
+        auto ground = OnGround(walls, arena, start, height, arena.radius);
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     }
@@ -321,10 +330,14 @@ Base::Result<void, P::Physics3dError> StepBody(const Walls& walls, const GameRul
         body.grounded = 0;
     }
     float desiredY = start.y;
-    if (body.grounded == 0) {
-        const sim::VerticalStep fall = sim::Fall(start.y, body.verticalVelocity, arena.gravity, seconds);
+    // The downward speed the fall reaches in this step: what it lands at, if it lands.
+    float descent = 0.0F;
+    const bool airborne = body.grounded == 0;
+    if (airborne) {
+        const sim::VerticalStep fall = sim::Fall(start.y, body.verticalVelocity, arena.gravity, seconds, arena.floor);
         desiredY = fall.y;
         body.verticalVelocity = fall.velocity;
+        descent = std::max(fall.impact, -fall.velocity);
     }
     const Math::Vec3 movement{step.x, desiredY - start.y, step.z};
     Math::Vec3 end = start;
@@ -335,21 +348,20 @@ Base::Result<void, P::Physics3dError> StepBody(const Walls& walls, const GameRul
         auto moved = P::MoveAndSlide(walls, BodyShape(height, arena.radius), BodyPose(start, height), movement * invSeconds,
                                      static_cast<float>(seconds), config);
         if (!moved) return Base::Err(std::move(moved).error());
-        end = moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F};
-        // The floor is the plane y = 0.
-        if (end.y < 0.0F) end.y = 0.0F;
+        end = InsideBounds(arena, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});
+        if (arena.floor && end.y < *arena.floor) end.y = *arena.floor;
     }
     body.feet = end;
     if (std::abs(end.y - desiredY) > 0.0001F) body.verticalVelocity = 0.0F;
     if (body.verticalVelocity <= 0.0F) {
-        auto ground = OnGround(walls, end, height, arena.radius);
+        auto ground = OnGround(walls, arena, end, height, arena.radius);
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     } else {
         body.grounded = 0;
     }
     if (body.grounded != 0) body.verticalVelocity = 0.0F;
-    return {};
+    return airborne && body.grounded != 0 ? descent : 0.0F;
 }
 
 double StepSeconds(const WT::ActiveTime& time) { return static_cast<double>(time.delta) / 1e9; }
@@ -364,21 +376,41 @@ const PlayerInput& Playable(const PlayerInput& input, const MatchInfo& info, con
     return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;
 }
 
-K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Read<PlayerCombat>, K::Write<PlayerBody>> players,
+// A living player dies at this tick: the respawn waits the rules' time, a reload in progress is dropped.
+void Die(PlayerCombat& combat, const sim::CombatRules& rules, const std::uint64_t now, const std::uint64_t stepNanos) {
+    combat.life = sim::LifeState::Dead;
+    combat.lifeTick = now;
+    combat.respawnTick = now + sim::TicksFor(rules.respawnSeconds, stepNanos);
+    combat.reloadEndTick = 0;
+}
+
+// Both ends (the Client predicts its own player): the body moves (StepBody); a living body that lands from higher than
+// the arena's safe height loses HP (sim::LandingDamage), and one whose feet are below the kill height dies.
+K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>, K::Write<PlayerBody>> players,
                             Walls walls, K::Res<GameRules> rules, K::Res<MatchInfo> info, K::Res<WT::Tick> tick,
                             K::Res<WT::ActiveTime> time) {
     std::optional<P::Physics3dError> failure;
     const double seconds = StepSeconds(*time);
     if (!(seconds > 0.0)) return {};
-    players.ForEach([&](K::EntityId, const PlayerInput& input, const PlayerCombat& combat, K::Mut<PlayerBody> body) {
+    const std::uint64_t now = tick->value;
+    players.ForEach([&](K::EntityId, const PlayerInput& input, K::Mut<PlayerCombat> combat, K::Mut<PlayerBody> body) {
         if (failure) return;
         PlayerBody next = body.Read();
-        auto stepped = StepBody(walls, *rules, next, Playable(input, *info, tick->value), combat.life == sim::LifeState::Alive, seconds);
+        const bool alive = combat.Read().life == sim::LifeState::Alive;
+        auto stepped = StepBody(walls, *rules, next, Playable(input, *info, now), alive, seconds);
         if (!stepped) {
             failure = std::move(stepped).error();
             return;
         }
         if (!(next == body.Read())) body.Get() = next;
+        if (!alive) return;
+        const std::uint32_t damage = sim::LandingDamage(rules->arena, *stepped);
+        const bool fellOut = sim::BelowKillHeight(rules->arena, next.feet.y);
+        if (damage == 0 && !fellOut) return;
+        PlayerCombat after = combat.Read();
+        after.hp = fellOut ? 0 : after.hp - std::min(damage, after.hp);
+        if (after.hp == 0) Die(after, rules->combat, now, StepNanos(*time));
+        combat.Get() = after;
     });
     if (failure) return PhysicsFailed(*failure);
     return {};
@@ -438,11 +470,13 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
         const PlayerBody& body = *players.Get<PlayerBody>(shooter);
         const Math::Ray ray = ShotRay(*rules, body);
         std::optional<float> world;
-        // The floor: a solid half-space below y = 0.
-        if (ray.origin.y <= 0.0F) {
-            world = 0.0F;
-        } else if (ray.direction.y < 0.0F) {
-            world = ray.origin.y / -ray.direction.y;
+        // The floor plane (when the arena has one): a solid half-space below it.
+        if (const auto floor = rules->arena.floor) {
+            if (ray.origin.y <= *floor) {
+                world = 0.0F;
+            } else if (ray.direction.y < 0.0F) {
+                world = (ray.origin.y - *floor) / -ray.direction.y;
+            }
         }
         auto wall = P::CastRay(walls, ray, range);
         if (!wall) return PhysicsFailed(wall.error());
@@ -493,12 +527,7 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
             ++hits->hits;
             hits->attacker = shooter;
             hits->part = outcome.part;
-            if (targetCombat.Read().hp == 0) {
-                targetCombat->life = sim::LifeState::Dead;
-                targetCombat->lifeTick = now;
-                targetCombat->respawnTick = now + sim::TicksFor(combat.respawnSeconds, StepNanos(*time));
-                targetCombat->reloadEndTick = 0;
-            }
+            if (targetCombat.Read().hp == 0) Die(targetCombat.Get(), combat, now, StepNanos(*time));
         }
         *players.GetMut<ShotRecord>(shooter) = record;
     }

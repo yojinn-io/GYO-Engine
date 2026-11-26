@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "id": "pvp_corners_v1",
   "width": 20,
   "depth": 20,
@@ -9,6 +9,9 @@
   "radius": 0.25,
   "eye_height": 1.6,
   "map": "pvp_corners",
+  "floor": 0,
+  "kill_height": -10,
+  "fall_damage": {"safe_height": 4.0, "points_per_metre": 15},
   "spawns": [
     {"position": [3, 0, 3], "yaw": 0.785398163},
     {"position": [17, 0, 17], "yaw": -2.35619449},

@@ -2171,16 +2171,16 @@
   },
   {
    "id": "pvp-arena-version",
-   "what": "an arena file of another version (2, the v1 single file's) is read",
+   "what": "an arena file of another version (3, before the bounds) is read",
    "guards": [
     "big-map-declaration 15.2"
    ],
    "file": "games/object_fps_pvp/src/sim/Arena.cpp",
-   "find": "!= 3) throw std::runtime_error(\"unsupported arena version\");",
-   "replace": "< 2) throw std::runtime_error(\"unsupported arena version\");",
+   "find": "!= 4) throw std::runtime_error(\"unsupported arena version\");",
+   "replace": "< 3) throw std::runtime_error(\"unsupported arena version\");",
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: the rules of an arena file",
-   "expect": "version\\\": 2"
+   "expect": "version\\\": 3"
   },
   {
    "id": "pvp-pause-when-not-held",
@@ -2555,6 +2555,162 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the other player's steps*",
    "expect": "pvp-crouch-silent",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-bounds-open",
+   "what": "the arena's bounds hold nobody: a body walks out",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        end = InsideBounds(arena, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});",
+   "replace": "        end = moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F};",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena's bounds*",
+   "expect": "pvp-bounds",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-bounds-at-edge",
+   "what": "the invisible wall holds the feet at the edge, not the body's side",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    feet.z = std::clamp(feet.z, arena.radius, arena.depth - arena.radius);",
+   "replace": "    feet.z = std::clamp(feet.z, 0.0F, arena.depth);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena's bounds*",
+   "expect": "pvp-bounds",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-kill-height-ignored",
+   "what": "a body below the kill height lives on",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const bool fellOut = sim::BelowKillHeight(rules->arena, next.feet.y);",
+   "replace": "        const bool fellOut = false;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a body that falls below*",
+   "expect": "pvp-kill-height",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-floor-everywhere",
+   "what": "every arena stands on the plane y = 0, whether it names a floor or not",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "    if (floor && step.y <= *floor) {",
+   "replace": "    if (step.y <= floor.value_or(0.0F)) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: the fall*",
+   "expect": "open",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-unhurt",
+   "what": "a landing never hurts",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->arena, *stepped);",
+   "replace": "        const std::uint32_t damage = 0;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-speed-lost",
+   "what": "the landing speed on a floor plane is not kept (the floor zeroes it first)",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        step.impact = step.velocity < 0 ? -step.velocity : 0.0F;",
+   "replace": "        step.impact = 0.0F;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-fall-no-death",
+   "what": "a fall that takes the last HP leaves the body alive",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (after.hp == 0) Die(after, rules->combat, now, StepNanos(*time));",
+   "replace": "        (void)now;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-kills",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-fall-safe-ignored",
+   "what": "every metre of a fall hurts, the safe height too",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "    const double beyond = height - arena.fallDamage->safeHeight;",
+   "replace": "    const double beyond = height;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: a landing hurts*",
+   "expect": "LandingDamage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-jump-ignored",
+   "what": "holding the jump key never jumps again",
+   "file": "games/object_fps_pvp/include/object_fps_pvp/sim/MovementRules.hpp",
+   "find": "    return pressed || (rules.holdJump && held);",
+   "replace": "    return pressed || (rules.holdJump && false && held);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: holding Space*",
+   "expect": "pvp-hold-jump",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-jump-always",
+   "what": "a held key jumps without hold_jump",
+   "file": "games/object_fps_pvp/include/object_fps_pvp/sim/MovementRules.hpp",
+   "find": "    return pressed || (rules.holdJump && held);",
+   "replace": "    return pressed || held;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: a step jumps*",
+   "expect": "StepJumps",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-not-carried",
+   "what": "the held jump key does not reach the step",
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "        input.jumpHeld = held_.jumpHeld;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: the jump key held*",
+   "expect": "jumpHeld",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-kept-stale",
+   "what": "stale controls keep jumping while the key was held",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = false;",
+   "replace": "        step.jump = step.fire = step.reload = false;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: J5*",
+   "expect": "pvp-hold-stale",
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]

@@ -484,6 +484,7 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     const bool resume = std::exchange(c.resume, false) && !c.controls.Captured();
     frame.click = !loading && (mouse->JustPressed(I::MouseButton::Left) || resume);
     frame.jump = keys->JustPressed(I::KeyCode::Space);
+    frame.jumpHeld = keys->Pressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
     frame.forward = keys->Pressed(I::KeyCode::W);
     frame.back = keys->Pressed(I::KeyCode::S);
@@ -513,15 +514,16 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
 }
 
 // The input of the step that runs now from the controls the Frame World sent: the held keys and the view as last
-// sent; the presses go to this step only. Stale controls (SimControls): no movement, no press; the view and the crouch
-// stay.
-PW::PlayerInput StepInputOf(SimControls& state) {
+// sent; the presses go to this step only, and the jump is the movement rules' (sim::StepJumps: with hold_jump a held
+// key asks for a jump every step). Stale controls (SimControls): no movement, no press, no held jump; the view and the
+// crouch stay.
+PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
     present::StepInput step = state.pending;
     state.pending.jump = state.pending.fire = state.pending.reload = false;
     if (state.stale) {
         step.forward = step.right = 0.0F;
         step.present = false;
-        step.jump = step.fire = step.reload = false;
+        step.jump = step.jumpHeld = step.fire = step.reload = false;
     }
     PW::PlayerInput input;
     input.forward = step.forward;
@@ -529,7 +531,7 @@ PW::PlayerInput StepInputOf(SimControls& state) {
     input.yaw = step.yaw;
     input.pitch = step.pitch;
     input.present = step.present ? 1 : 0;
-    input.jump = step.jump ? 1 : 0;
+    input.jump = sim::StepJumps(step.jump, step.jumpHeld, rules) ? 1 : 0;
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
@@ -544,9 +546,10 @@ PW::PlayerInput StepInputOf(SimControls& state) {
 // rollback writes the recorded inputs back then). lightyear's client input System in FixedPreUpdate
 // (crates/inputs/inputs/src/client.rs:41, 186-190, 418-445).
 K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
-                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
+                               K::Res<PW::GameRules> rules, K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs,
+                               K::ResMut<SimControls> state) {
     if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    const PW::PlayerInput input = StepInputOf(*state);
+    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
     // The time the player saw (net F2): the other players' timeline of the frame the controls came from (a tick and
     // its fraction in a byte), or the confirmed point before it is timed.
     N::ViewTime seen{replica->latestConfirmed.value_or(0), 0};
@@ -562,8 +565,8 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
 // The Solo World (no net): the step's input straight into the local player's PlayerInput, FixedUpdate/First (before
 // the game's Systems read it).
 K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::PlayerInput>> players, K::Res<PW::LocalUser> user,
-                                K::ResMut<SimControls> state) {
-    const PW::PlayerInput input = StepInputOf(*state);
+                                K::Res<PW::GameRules> rules, K::ResMut<SimControls> state) {
+    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
     for (const K::EntityId id : players.Entities()) {
         if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;
     }

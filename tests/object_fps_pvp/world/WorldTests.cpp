@@ -665,3 +665,83 @@ TEST_CASE("world: the arena stands between two points when its walls cut the seg
     CHECK_FALSE(PW::Blocked(arena, {5, 1, 10}, {9, 1, 10}));
     CHECK_FALSE(PW::Blocked(arena, {5, 1, 5}, {5, 1, 5}));
 }
+
+namespace {
+// The shipped arena's rules with no walls but one small box far outside it (a BoxSet is built from boxes): the bounds
+// alone hold the bodies. floor: the arena's floor plane (none: nothing holds them up).
+std::shared_ptr<PW::GameContent> OpenArena(const std::optional<float> floor) {
+    auto content = std::make_shared<PW::GameContent>(*ShippedContent());
+    PW::InstalledArena& arena = content->arenas.front();
+    const std::vector<GYO::Engine::Math::Aabb> far{{{100.0F, 0.0F, 100.0F}, {101.0F, 1.0F, 101.0F}}};
+    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(far);
+    REQUIRE(static_cast<bool>(boxes));
+    arena.walls = *boxes;
+    arena.wallsDigest = boxes->Digest();
+    arena.content.floor = floor;
+    return content;
+}
+} // namespace
+
+TEST_CASE("world: the arena's bounds are an invisible wall: a body walking out stops at its radius and slides along") {
+    LoneMatch match(OpenArena(0.0F));
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    // Straight at the -Z edge, then along the +X edge.
+    const K::EntityId walker = match.AddPlayer({5, 0, 3});
+    match.Steer(walker, Input(1, 0, std::numbers::pi_v<float>));
+    match.Run(64 * 2);
+    CHECK_MESSAGE(match.Body(walker).feet.z == doctest::Approx(arena.radius), "[pvp-bounds] the body stops at the edge");
+    CHECK(match.Body(walker).feet.x == doctest::Approx(5.0F));
+    // Diagonally into the +X edge: it slides along it in z.
+    const K::EntityId slider = match.AddPlayer({arena.width - 1.0F, 0, 5});
+    match.Steer(slider, Input(1, 0, std::numbers::pi_v<float> / 4));
+    match.Run(64 * 2);
+    CHECK_MESSAGE(match.Body(slider).feet.x == doctest::Approx(arena.width - arena.radius), "[pvp-bounds] the body stops at the edge");
+    CHECK(match.Body(slider).feet.z > 8.0F);
+}
+
+TEST_CASE("world: a body that falls below the kill height dies, and respawns after the respawn time") {
+    LoneMatch match(OpenArena(std::nullopt));
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    REQUIRE(arena.killHeight < 0.0F);
+    // Nothing under it: it falls.
+    const K::EntityId faller = match.AddPlayer({5, 0, 5});
+    match.Steer(faller, Input(0, 0, 0));
+    int steps = 0;
+    while (match.Combat(faller).life == sim::LifeState::Alive && steps < 64 * 5) {
+        match.Run(1);
+        ++steps;
+    }
+    CHECK_MESSAGE(match.Combat(faller).life == sim::LifeState::Dead, "[pvp-kill-height] a body below the kill height died");
+    CHECK(match.Combat(faller).hp == 0);
+    CHECK(match.Body(faller).feet.y < arena.killHeight);
+    CHECK(match.Body(faller).feet.y > arena.killHeight - 2.0F);
+    CHECK(match.Combat(faller).respawnTick > match.Combat(faller).lifeTick);
+}
+
+TEST_CASE("world: a landing from above the safe height costs HP by the metres beyond it; a high enough fall kills") {
+    const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
+    REQUIRE(arena.fallDamage.has_value());
+    const sim::CombatRules combat;
+    const auto landFrom = [&](const float height) {
+        LoneMatch match(OpenArena(0.0F));
+        const K::EntityId id = match.AddPlayer({5, height, 5});
+        match.World().GetMut<PW::PlayerBody>(id)->grounded = 0;
+        match.Steer(id, Input(0, 0, 0));
+        match.Run(64 * 3);
+        REQUIRE(match.Body(id).feet.y == 0.0F);
+        return match.Combat(id);
+    };
+    // Within the safe height: nothing.
+    CHECK(landFrom(arena.fallDamage->safeHeight - 0.5F).hp == combat.maximumHp);
+    // Ten metres: the metres beyond the safe height at the points per metre (the landing speed of the last step
+    // overshoots the drop a little).
+    const PW::PlayerCombat ten = landFrom(10.0F);
+    const double expected = (10.0 - arena.fallDamage->safeHeight) * arena.fallDamage->milliPointsPerMetre;
+    CHECK_MESSAGE(ten.life == sim::LifeState::Alive, "[pvp-fall-damage] ten metres hurt, they do not kill");
+    CHECK_MESSAGE(static_cast<double>(combat.maximumHp - ten.hp) == doctest::Approx(expected).epsilon(0.08),
+                  "[pvp-fall-damage] the damage of a ten metre fall: " << (combat.maximumHp - ten.hp));
+    // Thirty metres: dead.
+    const PW::PlayerCombat thirty = landFrom(30.0F);
+    CHECK_MESSAGE(thirty.life == sim::LifeState::Dead, "[pvp-fall-kills] a thirty metre fall kills");
+    CHECK(thirty.hp == 0);
+}

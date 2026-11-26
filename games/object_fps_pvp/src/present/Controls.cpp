@@ -54,6 +54,7 @@ StepInput Controls::Take() noexcept {
         input.forward = (held_.forward ? 1.0F : 0.0F) - (held_.back ? 1.0F : 0.0F);
         input.right = (held_.right ? 1.0F : 0.0F) - (held_.left ? 1.0F : 0.0F);
         input.crouch = held_.crouch;
+        input.jumpHeld = held_.jumpHeld;
         input.fire = pendingFire_;
         input.jump = pendingJump_;
         input.reload = pendingReload_;

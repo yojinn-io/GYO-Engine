@@ -22,5 +22,6 @@ namespace object_fps_pvp::data {
 [[nodiscard]] std::int64_t Integer(const GYO::Engine::Json::Value& value, std::string_view what);
 [[nodiscard]] std::uint64_t Unsigned(const GYO::Engine::Json::Value& value, std::string_view what);
 [[nodiscard]] std::string String(const GYO::Engine::Json::Value& value, std::string_view what);
+[[nodiscard]] bool Boolean(const GYO::Engine::Json::Value& value, std::string_view what);
 
 } // namespace object_fps_pvp::data

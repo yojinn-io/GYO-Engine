@@ -7,6 +7,9 @@
 #include "object_fps_pvp/sim/MovementRules.hpp"
 
 #include <cmath>
+#include <cstdint>
+#include <limits>
+#include <optional>
 #include <numbers>
 #include <vector>
 
@@ -32,7 +35,7 @@ TEST_CASE("PvP movement rules: a jump peaks at the arena's height whatever the s
         float peak = 0;
         int steps = 0;
         do {
-            const VerticalStep next = Fall(y, v, arena.gravity, step);
+            const VerticalStep next = Fall(y, v, arena.gravity, step, 0.0F);
             y = next.y;
             v = next.velocity;
             peak = std::max(peak, y);
@@ -47,12 +50,52 @@ TEST_CASE("PvP movement rules: a jump peaks at the arena's height whatever the s
 }
 
 TEST_CASE("PvP movement rules: the fall is the analytic constant acceleration and the floor stops it") {
-    const VerticalStep step = Fall(2.0F, 1.0F, 18.0F, 0.25);
+    const VerticalStep step = Fall(2.0F, 1.0F, 18.0F, 0.25, 0.0F);
     CHECK(step.y == doctest::Approx(2.0 + 0.25 - 0.5 * 18 * 0.0625));
     CHECK(step.velocity == doctest::Approx(1.0 - 4.5));
-    const VerticalStep landed = Fall(0.1F, -5.0F, 18.0F, 0.1);
+    CHECK(step.impact == 0.0F);
+    const VerticalStep landed = Fall(0.1F, -5.0F, 18.0F, 0.1, 0.0F);
     CHECK(landed.y == 0.0F);
     CHECK(landed.velocity == 0.0F);
+    CHECK(landed.impact == doctest::Approx(5.0 + 1.8));  // the speed the step ends at, where the floor stops it
+    // A floor at another height; and none at all (the map's own ground, or nothing).
+    CHECK(Fall(3.1F, -5.0F, 18.0F, 0.1, 3.0F).y == 3.0F);
+    const VerticalStep open = Fall(0.1F, -5.0F, 18.0F, 0.1, std::nullopt);
+    CHECK(open.y == doctest::Approx(0.1 - 0.5 - 0.09));
+    CHECK(open.velocity == doctest::Approx(-6.8));
+    CHECK(open.impact == 0.0F);
+}
+
+TEST_CASE("PvP movement rules: a landing hurts by the metres beyond the safe height; below the kill height is out") {
+    ArenaContent arena = Arena();
+    arena.gravity = 20.0F;
+    arena.killHeight = -5.0F;
+    CHECK(LandingDamage(arena, 100.0F) == 0U);  // no fall damage in the arena
+    arena.fallDamage = FallDamage{4.0F, 15'000U};
+    // v^2 / 2g: 20 m/s falls 10 m, 6 beyond the safe height.
+    CHECK(LandingDamage(arena, 20.0F) == 90'000U);
+    // Exactly the safe height (v = sqrt(2 g 4)), and a little below: nothing.
+    CHECK(LandingDamage(arena, std::sqrt(2.0F * 20.0F * 4.0F)) == 0U);
+    CHECK(LandingDamage(arena, 12.0F) == 0U);
+    CHECK(LandingDamage(arena, 0.0F) == 0U);
+    // A very fast landing does not wrap around.
+    CHECK(LandingDamage(arena, 1.0e6F) == std::numeric_limits<std::uint32_t>::max());
+    CHECK(BelowKillHeight(arena, -5.01F));
+    CHECK_FALSE(BelowKillHeight(arena, -5.0F));
+    CHECK_FALSE(BelowKillHeight(arena, 0.0F));
+}
+
+TEST_CASE("PvP movement rules: a step jumps on a press; with hold_jump also while the key is held") {
+    StanceRules rules;
+    CHECK_FALSE(rules.holdJump);
+    CHECK(StepJumps(true, false, rules));
+    CHECK(StepJumps(true, true, rules));
+    CHECK_FALSE(StepJumps(false, true, rules));
+    CHECK_FALSE(StepJumps(false, false, rules));
+    rules.holdJump = true;
+    CHECK(StepJumps(false, true, rules));
+    CHECK(StepJumps(true, false, rules));
+    CHECK_FALSE(StepJumps(false, false, rules));
 }
 
 TEST_CASE("PvP movement rules: the stance heights and speeds") {
@@ -71,11 +114,25 @@ TEST_CASE("PvP movement rules: the stance heights and speeds") {
     thin.crouchEyeHeight = 0.3F;
     CHECK_FALSE(StanceFits(arena, thin));
     std::string error;
-    const auto parsed = ParseStanceRules(R"({"version": 1, "crouch_body_height": 1.1, "crouch_eye_height": 0.9, "crouch_speed_scale": 0.4, "sprint_speed_scale": 1})",
-                                         error);
+    const auto parsed = ParseStanceRules(
+        R"({"version": 2, "crouch_body_height": 1.1, "crouch_eye_height": 0.9, "crouch_speed_scale": 0.4, "sprint_speed_scale": 1, "hold_jump": true})",
+        error);
     REQUIRE_MESSAGE(parsed.has_value(), error);
     CHECK(parsed->crouchBodyHeight == 1.1F);
-    CHECK_FALSE(ParseStanceRules(R"({"version": 2})", error).has_value());
+    CHECK(parsed->holdJump);
+    // Version 1 had no hold_jump; version 2 names it (a boolean).
+    CHECK_FALSE(ParseStanceRules(
+                    R"({"version": 1, "crouch_body_height": 1.1, "crouch_eye_height": 0.9, "crouch_speed_scale": 0.4, "sprint_speed_scale": 1})",
+                    error)
+                    .has_value());
+    CHECK_FALSE(ParseStanceRules(
+                    R"({"version": 2, "crouch_body_height": 1.1, "crouch_eye_height": 0.9, "crouch_speed_scale": 0.4, "sprint_speed_scale": 1})",
+                    error)
+                    .has_value());
+    CHECK_FALSE(ParseStanceRules(
+                    R"({"version": 2, "crouch_body_height": 1.1, "crouch_eye_height": 0.9, "crouch_speed_scale": 0.4, "sprint_speed_scale": 1, "hold_jump": 1})",
+                    error)
+                    .has_value());
 }
 
 TEST_CASE("PvP combat rules: the damage of each part") {
