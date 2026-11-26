@@ -33,9 +33,17 @@ struct HitFeedbackSettings final {
         float pitchRadians{}, rollRadians{};
         double seconds{};
     } shake;
+    // The hit marker: an X around the crosshair when the own shot hits a player, four strokes from gapPixels to
+    // gapPixels + lengthPixels out along the diagonals, thicknessPixels wide; headColor for a head.
+    struct HitMarker final {
+        float gapPixels{}, lengthPixels{}, thicknessPixels{};
+        std::array<float, 3> color{};
+        std::array<float, 3> headColor{};
+        double seconds{};
+    } hitMarker;
 };
 
-// Parses ui/hit_feedback.json (version 1); nullopt with an error otherwise.
+// Parses ui/hit_feedback.json (version 2); nullopt with an error otherwise.
 [[nodiscard]] std::optional<HitFeedbackSettings> ParseHitFeedbackSettings(const std::string& text, std::string& error);
 
 // The hits a player took in its current life: which life it is, and how many
@@ -93,6 +101,26 @@ private:
     bool active_{};
     double startSeconds_{};
     std::optional<float> attackerBearing_;
+};
+
+// The hit marker of the own shots (the HUD's X beside the crosshair, as in COD): the own player's last judged shot
+// (the Match's ShotRecord), by its tick. A newer shot that hit a player shows it, in the head colour for a head; a
+// newer miss does not take a shown marker away; the first record seen (a join, a scene) is not shown.
+struct HitMarkerSample final {
+    float alpha{};
+    bool head{};
+};
+class HitMarker final {
+public:
+    void Observe(std::uint64_t shotTick, bool hitPlayer, bool head, double nowSeconds) noexcept;
+    [[nodiscard]] HitMarkerSample Sample(double nowSeconds, const HitFeedbackSettings& settings) const noexcept;
+
+private:
+    bool seen_{};
+    std::uint64_t tick_{};
+    bool active_{};
+    bool head_{};
+    double startSeconds_{};
 };
 
 // The view the player controls and the camera that renders it. The mouse

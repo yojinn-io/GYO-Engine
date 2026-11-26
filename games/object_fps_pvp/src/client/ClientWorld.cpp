@@ -31,6 +31,8 @@
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
 #include "engine/math/linear/Quaternion.hpp"
+#include "engine/math/linear/Vec2.hpp"
+#include "engine/physics_3d/Collider.hpp"
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
@@ -63,6 +65,7 @@
 #include <cmath>
 #include <deque>
 #include <map>
+#include <numbers>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -109,6 +112,7 @@ constexpr K::EntityId kAmmoText = 3'000'016;
 constexpr K::EntityId kStatusText = 3'000'017;
 constexpr K::EntityId kHitDirection = 3'000'019;
 constexpr K::EntityId kOverlay = 3'000'020;
+constexpr K::EntityId kHitMarker = 3'000'021;
 
 // The 2D layer: 1280 x 720 units, the origin at the centre, y up; drawn by the HUD camera only.
 constexpr float kHudWidth = 1280.0F;
@@ -312,6 +316,8 @@ struct ClientHud final {
     present::LocalHitFeedback feedback;
     // This frame's hit feedback (ShowHud samples it; PlaceCamera shakes the camera by it).
     present::HitFeedbackSample sample;
+    // The own shots' hit marker (ShowHud observes the own ShotRecord).
+    present::HitMarker marker;
 };
 void HashValue(K::Hasher&, const ClientHud&) {}
 
@@ -327,7 +333,10 @@ struct ClientSound final {
     AU::Submitter* submitter = nullptr;
     std::map<K::EntityId, std::uint64_t> shotsHeard;  // per player: the last shot tick played
     std::uint64_t confirmedHeard = 0;                 // the own ShotRecord tick played
-    present::FootstepTracker steps;
+    std::map<K::EntityId, present::FootstepTracker> steps;  // per player
+    // The walls of the arena the Sim (or Solo) World plays, from its picture (none before they are built): the
+    // other players' cues behind them are occluded.
+    std::optional<GYO::Engine::Physics3d::BoxSet> walls;
     // The own player's hits, as the hit feedback sees them (a new hit of a living player sounds).
     present::LocalHitFeedback hits;
 };
@@ -428,6 +437,36 @@ R::Shape2d HitDirection(const present::HitFeedbackSettings::Direction& direction
     return shape;
 }
 
+// A stroke from a to b, thickness wide (a quad along the segment).
+void Stroke(std::vector<R::Vertex2D>& vertices, std::vector<std::uint32_t>& indices, const Math::Vec2 a, const Math::Vec2 b,
+            const float thickness, const R::Color8 color) {
+    const Math::Vec2 along = b - a;
+    const float length = std::sqrt(along.x * along.x + along.y * along.y);
+    if (!(length > 0.0F)) return;
+    const Math::Vec2 side{-along.y / length * thickness / 2, along.x / length * thickness / 2};
+    const auto base = static_cast<std::uint32_t>(vertices.size());
+    vertices.push_back({{a.x + side.x, a.y + side.y}, {0, 0}, color});
+    vertices.push_back({{b.x + side.x, b.y + side.y}, {0, 0}, color});
+    vertices.push_back({{b.x - side.x, b.y - side.y}, {0, 0}, color});
+    vertices.push_back({{a.x - side.x, a.y - side.y}, {0, 0}, color});
+    for (const std::uint32_t i : {0U, 1U, 2U, 0U, 2U, 3U}) indices.push_back(base + i);
+}
+
+// The hit marker: an X around the crosshair, four strokes out along the diagonals (none while it does not show).
+R::Shape2d HitMarkerShape(const present::HitFeedbackSettings::HitMarker& marker, const present::HitMarkerSample& sample) {
+    R::Shape2d shape;
+    if (sample.alpha <= 0.0F) return shape;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    const auto& rgb = sample.head ? marker.headColor : marker.color;
+    const R::Color8 color{byte(rgb[0]), byte(rgb[1]), byte(rgb[2]), byte(sample.alpha)};
+    const float inner = marker.gapPixels / std::numbers::sqrt2_v<float>;
+    const float outer = (marker.gapPixels + marker.lengthPixels) / std::numbers::sqrt2_v<float>;
+    for (const Math::Vec2 diagonal : {Math::Vec2{1, 1}, Math::Vec2{-1, 1}, Math::Vec2{-1, -1}, Math::Vec2{1, -1}}) {
+        Stroke(shape.vertices, shape.indices, diagonal * inner, diagonal * outer, marker.thicknessPixels, color);
+    }
+    return shape;
+}
+
 R::Shape2d Flash(const std::array<float, 3> color, const float alpha) {
     R::Shape2d shape;
     const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
@@ -493,6 +532,7 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     const bool resume = std::exchange(c.resume, false) && !c.controls.Captured();
     frame.click = !loading && (mouse->JustPressed(I::MouseButton::Left) || resume);
     frame.jump = keys->JustPressed(I::KeyCode::Space);
+    frame.jumpHeld = keys->Pressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
     frame.forward = keys->Pressed(I::KeyCode::W);
     frame.back = keys->Pressed(I::KeyCode::S);
@@ -522,15 +562,16 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
 }
 
 // The input of the step that runs now from the controls the Frame World sent: the held keys and the view as last
-// sent; the presses go to this step only. Stale controls (SimControls): no movement, no press; the view and the crouch
-// stay.
-PW::PlayerInput StepInputOf(SimControls& state) {
+// sent; the presses go to this step only, and the jump is the movement rules' (sim::StepJumps: with hold_jump a held
+// key asks for a jump every step). Stale controls (SimControls): no movement, no press, no held jump; the view and the
+// crouch stay.
+PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
     present::StepInput step = state.pending;
     state.pending.jump = state.pending.fire = state.pending.reload = false;
     if (state.stale) {
         step.forward = step.right = 0.0F;
         step.present = false;
-        step.jump = step.fire = step.reload = false;
+        step.jump = step.jumpHeld = step.fire = step.reload = false;
     }
     PW::PlayerInput input;
     input.forward = step.forward;
@@ -538,7 +579,7 @@ PW::PlayerInput StepInputOf(SimControls& state) {
     input.yaw = step.yaw;
     input.pitch = step.pitch;
     input.present = step.present ? 1 : 0;
-    input.jump = step.jump ? 1 : 0;
+    input.jump = sim::StepJumps(step.jump, step.jumpHeld, rules) ? 1 : 0;
     input.crouch = step.crouch ? 1 : 0;
     input.fire = step.fire ? 1 : 0;
     input.reload = step.reload ? 1 : 0;
@@ -553,9 +594,10 @@ PW::PlayerInput StepInputOf(SimControls& state) {
 // rollback writes the recorded inputs back then). lightyear's client input System in FixedPreUpdate
 // (crates/inputs/inputs/src/client.rs:41, 186-190, 418-445).
 K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> link, K::Res<N::NetReplicaState> replica,
-                               K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs, K::ResMut<SimControls> state) {
+                               K::Res<PW::GameRules> rules, K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs,
+                               K::ResMut<SimControls> state) {
     if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    const PW::PlayerInput input = StepInputOf(*state);
+    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
     // The time the player saw (net F2): the other players' timeline of the frame the controls came from (a tick and
     // its fraction in a byte), or the confirmed point before it is timed.
     N::ViewTime seen{replica->latestConfirmed.value_or(0), 0};
@@ -571,8 +613,8 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
 // The Solo World (no net): the step's input straight into the local player's PlayerInput, FixedUpdate/First (before
 // the game's Systems read it).
 K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::PlayerInput>> players, K::Res<PW::LocalUser> user,
-                                K::ResMut<SimControls> state) {
-    const PW::PlayerInput input = StepInputOf(*state);
+                                K::Res<PW::GameRules> rules, K::ResMut<SimControls> state) {
+    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
     for (const K::EntityId id : players.Entities()) {
         if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;
     }
@@ -892,7 +934,8 @@ K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> 
 K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
                         K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<WT::ActiveTime> time,
                         K::Res<ClientScene> scene,
-                        K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
+                        K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>,
+                                 K::Read<PW::ShotRecord>> players,
                         K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes, K::ResMut<ClientHud> hud) {
     ClientHud& h = hud.Get();
     if (!h.font) {
@@ -906,15 +949,17 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     const PW::PlayerBody* body = nullptr;
     const PW::PlayerCombat* combat = nullptr;
     const PW::HitRecord* hits = nullptr;
+    const PW::ShotRecord* shot = nullptr;
     std::optional<Math::Vec3> attacker;
     std::map<K::EntityId, Math::Vec3> feet;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& b, const PW::PlayerCombat& c,
-                        const PW::HitRecord& r) {
+                        const PW::HitRecord& r, const PW::ShotRecord& s) {
         feet[id] = b.feet;
         if (owner.userId != user->userId) return;
         body = &b;
         combat = &c;
         hits = &r;
+        shot = &s;
     });
     const double now = static_cast<double>(time->elapsed) / 1e9;
     present::HitFeedbackSample feedback;
@@ -924,6 +969,10 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
         feedback = h.feedback.Sample(now, controls->controls.Yaw(), scene->presentation->hitFeedback);
     }
     h.sample = feedback;
+    if (shot != nullptr) h.marker.Observe(shot->tick, shot->kind == sim::ShotHitKind::Player, shot->part == sim::HitPart::Head, now);
+    if (auto marker = shapes.GetMut<R::Shape2d>(kHitMarker)) {
+        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));
+    }
     if (auto flash = shapes.GetMut<R::Shape2d>(kFlash)) {
         flash.Get() = Flash(scene->presentation->hitFeedback.flash.color, feedback.flashAlpha);
     }
@@ -980,7 +1029,7 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
 }
 
 K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view,
-                           K::Res<ClientScene> scene, K::Res<ClientControls> controls,
+                           K::Res<ClientScene> scene, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
                            K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
@@ -998,13 +1047,27 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     };
     const auto volume = [&](const present::SoundCue cue) { return settings.cues[static_cast<std::size_t>(cue)].volume; };
     const PW::PlayerBody* own = nullptr;
-    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat&, const PW::ShotRecord&,
-                        const PW::HitRecord&) {
+    std::map<K::EntityId, const PW::PlayerBody*> bodies;
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat&,
+                        const PW::ShotRecord&, const PW::HitRecord&) {
+        bodies[id] = &body;
         if (owner.userId == user->userId) own = &body;
     });
+    // The other players' cues are heard at the own player's ear, from the middle of their body; the arena between them
+    // lowers them (PW::Blocked).
+    const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
+        if (own == nullptr) return;
+        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->arena, rules->stance, own->crouched != 0), 0.0F};
+        const Math::Vec3 source =
+            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->arena, rules->stance, body.crouched != 0), 0.0F};
+        const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
+        if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
+    };
     const double now = static_cast<double>(time->elapsed) / 1e9;
+    std::set<K::EntityId> seen;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
                         const PW::ShotRecord& shot, const PW::HitRecord& hits) {
+        seen.insert(id);
         const bool mine = owner.userId == user->userId;
         auto heard = s.shotsHeard.find(id);
         if (heard == s.shotsHeard.end()) {
@@ -1015,16 +1078,31 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
             heard->second = combat.lastShotTick;
             if (mine) {
                 play(present::SoundCue::LocalShot, present::CentredGains(volume(present::SoundCue::LocalShot)));
-            } else if (own != nullptr) {
-                play(present::SoundCue::RemoteShot,
-                     present::SpatialGains(own->feet, controls->controls.Yaw(), body.feet, volume(present::SoundCue::RemoteShot), settings));
+            } else {
+                spatial(present::SoundCue::RemoteShot, body);
+            }
+        }
+        // Every player's steps: the own at the centre, the others where they walk.
+        const auto step = s.steps[id].Observe(body.feet, body.grounded != 0, body.crouched != 0, combat.lives, settings);
+        if (step != present::FootstepTracker::Step::None) {
+            const present::SoundCue cue =
+                step == present::FootstepTracker::Step::Footstep ? present::SoundCue::Footstep : present::SoundCue::Landing;
+            if (mine) {
+                play(cue, present::CentredGains(volume(cue)));
+            } else {
+                spatial(cue, body);
             }
         }
         if (mine) {
             if (shot.tick > s.confirmedHeard) {
                 s.confirmedHeard = shot.tick;
+                // The hit is heard where it lands (the target's body), by the spatial rules: a far hit is not heard
+                // (the user's decision of 2026-11-26, playtest item 1: B, by distance). The hit marker is the feedback
+                // that does not fade with distance.
                 if (shot.kind == sim::ShotHitKind::Player) {
-                    play(present::SoundCue::HitConfirmed, present::CentredGains(volume(present::SoundCue::HitConfirmed)));
+                    if (const auto target = bodies.find(shot.target); target != bodies.end()) {
+                        spatial(present::SoundCue::HitConfirmed, *target->second);
+                    }
                 }
             }
             const present::HitFeedbackObservation taken =
@@ -1032,14 +1110,11 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
             if (present::HitTakenSounds(taken.outcome)) {
                 play(present::SoundCue::HitTaken, present::CentredGains(volume(present::SoundCue::HitTaken)));
             }
-            const auto step = s.steps.Observe(body.feet, body.grounded != 0, combat.lives, settings);
-            if (step == present::FootstepTracker::Step::Footstep) {
-                play(present::SoundCue::Footstep, present::CentredGains(volume(present::SoundCue::Footstep)));
-            } else if (step == present::FootstepTracker::Step::Landing) {
-                play(present::SoundCue::Landing, present::CentredGains(volume(present::SoundCue::Landing)));
-            }
         }
     });
+    // A player gone (left, or no longer seen) starts again silently if it comes back.
+    std::erase_if(s.steps, [&](const auto& entry) { return seen.count(entry.first) == 0; });
+    std::erase_if(s.shotsHeard, [&](const auto& entry) { return seen.count(entry.first) == 0; });
     return {};
 }
 
@@ -1408,6 +1483,9 @@ WorldSnapshot SnapshotOf(K::World& world) {
         snapshot.arenaId = rules->arena.id;
         snapshot.wallsDigest = rules->wallsDigest;
     }
+    if (const auto* collider = world.Get<GYO::Engine::Physics3d::Collider>(PW::kArenaEntity)) {
+        if (const auto* boxes = std::get_if<GYO::Engine::Physics3d::BoxSet>(&collider->shape)) snapshot.walls = *boxes;
+    }
     ClientView& view = snapshot.view;
     if (const auto* tick = world.Resource<WT::Tick>()) view.tick = tick->value;
     if (const auto* fixed = world.Resource<WT::FixedTime>()) view.stepNanoseconds = static_cast<std::uint64_t>(fixed->accumulator.Step());
@@ -1497,6 +1575,7 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
         snapshot->arenaId == rules->arena.id && rules->wallsDigest != snapshot->wallsDigest) {
         world.ResourceMut<PW::GameRules>()->wallsDigest = snapshot->wallsDigest;
     }
+    if (auto* sound = world.ResourceMut<ClientSound>(); sound != nullptr && snapshot->walls) sound->walls = snapshot->walls;
     world.SetResource(snapshot->view);
 }
 
@@ -1828,6 +1907,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kCrosshair, Crosshair());
         hudThing(kHitDirection, {0, 0, 1});
         world.Insert(kHitDirection, R::Shape2d{});
+        hudThing(kHitMarker, {0, 0, 1});
+        world.Insert(kHitMarker, R::Shape2d{});
         const auto text = [&](const K::EntityId id, const Math::Vec3 at, const Math::Vec2 anchor) {
             hudThing(id, at);
             R::Sprite sprite;
@@ -2148,6 +2229,7 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         GatewayContext gateway{directory, start->gateway, maps};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
+        case Scene::Splash: BuildSplash(setup, start->splashSeconds); break;
         case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, maps); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;

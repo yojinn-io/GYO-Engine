@@ -3,6 +3,7 @@
 #include "data/JsonFields.hpp"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace object_fps_pvp::sim {
@@ -12,7 +13,7 @@ std::optional<StanceRules> ParseStanceRules(const std::string_view text, std::st
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the movement rules");
-        if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported version");
+        if (data::Integer(data::Member(json, "version"), "version") != 2) throw std::runtime_error("unsupported version");
         StanceRules rules;
         const auto number = [&](const std::string_view key) {
             const auto value = static_cast<float>(data::Number(data::Member(json, key), key));
@@ -23,6 +24,7 @@ std::optional<StanceRules> ParseStanceRules(const std::string_view text, std::st
         rules.crouchEyeHeight = number("crouch_eye_height");
         rules.crouchSpeedScale = number("crouch_speed_scale");
         rules.sprintSpeedScale = number("sprint_speed_scale");
+        rules.holdJump = data::Boolean(data::Member(json, "hold_jump"), "hold_jump");
         return rules;
     } catch (const std::exception& exception) {
         error = exception.what();
@@ -53,15 +55,26 @@ float MoveSpeed(const ArenaContent& arena, const StanceRules& rules, const bool 
 
 float JumpSpeed(const ArenaContent& arena) noexcept { return std::sqrt(2 * arena.gravity * arena.jumpHeight); }
 
-VerticalStep Fall(const float y, const float velocity, const float gravity, const double seconds) noexcept {
+VerticalStep Fall(const float y, const float velocity, const float gravity, const double seconds, const std::optional<float> floor) noexcept {
     VerticalStep step;
     step.y = static_cast<float>(y + velocity * seconds - 0.5 * gravity * seconds * seconds);
     step.velocity = static_cast<float>(velocity - gravity * seconds);
-    if (step.y <= 0) {
-        step.y = 0;
+    if (floor && step.y <= *floor) {
+        step.y = *floor;
+        step.impact = step.velocity < 0 ? -step.velocity : 0.0F;
         step.velocity = 0;
     }
     return step;
+}
+
+std::uint32_t LandingDamage(const ArenaContent& arena, const float impactSpeed) noexcept {
+    if (!arena.fallDamage || !(impactSpeed > 0) || !(arena.gravity > 0)) return 0;
+    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * arena.gravity);
+    const double beyond = height - arena.fallDamage->safeHeight;
+    if (!(beyond > 0)) return 0;
+    const double damage = std::floor(beyond * arena.fallDamage->milliPointsPerMetre);
+    constexpr double kMost = 4'294'967'295.0;
+    return damage >= kMost ? std::numeric_limits<std::uint32_t>::max() : static_cast<std::uint32_t>(damage);
 }
 
 } // namespace object_fps_pvp::sim

@@ -2158,16 +2158,16 @@
   },
   {
    "id": "pvp-arena-version",
-   "what": "an arena file of another version (2, the v1 single file's) is read",
+   "what": "an arena file of another version (3, before the bounds) is read",
    "guards": [
     "big-map-declaration 15.2"
    ],
    "file": "games/object_fps_pvp/src/sim/Arena.cpp",
-   "find": "!= 3) throw std::runtime_error(\"unsupported arena version\");",
-   "replace": "< 2) throw std::runtime_error(\"unsupported arena version\");",
+   "find": "!= 4) throw std::runtime_error(\"unsupported arena version\");",
+   "replace": "< 3) throw std::runtime_error(\"unsupported arena version\");",
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: the rules of an arena file",
-   "expect": "version\\\": 2"
+   "expect": "version\\\": 3"
   },
   {
    "id": "pvp-pause-when-not-held",
@@ -2571,6 +2571,461 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a Client that comes and goes while the Match generates*",
    "expect": "pvp-seat-gone"
+  },
+  {
+   "id": "pvp-crouch-steps-sound",
+   "what": "a crouched walk steps like a standing one",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (crouched) {\n        travelled_ = 0;",
+   "replace": "    if (false) {\n        travelled_ = 0;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP footsteps: a crouched*",
+   "expect": "Step::None",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-crouch-distance-kept",
+   "what": "the distance walked crouched counts toward the next step",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (crouched) {\n        travelled_ = 0;\n        return Step::None;",
+   "replace": "    if (crouched) {\n        travelled_ += moved;\n        return Step::None;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP footsteps: a crouched*",
+   "expect": "Step::",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-sound-no-range",
+   "what": "a spatial cue is played at any distance",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "if (Math::Distance(listener, source) > c.maximumDistance) return std::nullopt;",
+   "replace": "(void)c.maximumDistance;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP heard gains*",
+   "expect": "HeardGains",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-sound-no-occlusion",
+   "what": "the map between the listener and the cue does not lower it",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (occluded) {\n        gains.left *= settings.occludedGain;",
+   "replace": "    if (false) {\n        gains.left *= settings.occludedGain;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP heard gains*",
+   "expect": "occludedGain",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-blocked-ignores-walls",
+   "what": "nothing ever stands between two points",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    return hit.has_value() && hit->t < length - kApart;",
+   "replace": "    return false && hit.has_value();",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena stands between*",
+   "expect": "Blocked",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-blocked-at-touch",
+   "what": "a source touching a wall counts as behind it",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    return hit.has_value() && hit->t < length - kApart;",
+   "replace": "    return hit.has_value() && hit->t <= length;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena stands between*",
+   "expect": "Blocked",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-remote-steps-silent",
+   "what": "only the own player's steps are played",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            } else {\n                spatial(cue, body);\n            }",
+   "replace": "            }",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's steps*",
+   "expect": "pvp-remote-steps",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-remote-crouch-sounds",
+   "what": "the Client hears a crouched walk",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "s.steps[id].Observe(body.feet, body.grounded != 0, body.crouched != 0, combat.lives, settings);",
+   "replace": "s.steps[id].Observe(body.feet, body.grounded != 0, false, combat.lives, settings);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's steps*",
+   "expect": "pvp-crouch-silent",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-bounds-open",
+   "what": "the arena's bounds hold nobody: a body walks out",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        end = InsideBounds(arena, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});",
+   "replace": "        end = moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F};",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena's bounds*",
+   "expect": "pvp-bounds",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-bounds-at-edge",
+   "what": "the invisible wall holds the feet at the edge, not the body's side",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    feet.z = std::clamp(feet.z, arena.radius, arena.depth - arena.radius);",
+   "replace": "    feet.z = std::clamp(feet.z, 0.0F, arena.depth);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena's bounds*",
+   "expect": "pvp-bounds",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-kill-height-ignored",
+   "what": "a body below the kill height lives on",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const bool fellOut = sim::BelowKillHeight(rules->arena, next.feet.y);",
+   "replace": "        const bool fellOut = false;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a body that falls below*",
+   "expect": "pvp-kill-height",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-floor-everywhere",
+   "what": "every arena stands on the plane y = 0, whether it names a floor or not",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "    if (floor && step.y <= *floor) {",
+   "replace": "    if (step.y <= floor.value_or(0.0F)) {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: the fall*",
+   "expect": "open",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-unhurt",
+   "what": "a landing never hurts",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->arena, *stepped);",
+   "replace": "        const std::uint32_t damage = 0;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-speed-lost",
+   "what": "the landing speed on a floor plane is not kept (the floor zeroes it first)",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        step.impact = step.velocity < 0 ? -step.velocity : 0.0F;",
+   "replace": "        step.impact = 0.0F;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-fall-no-death",
+   "what": "a fall that takes the last HP leaves the body alive",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (after.hp == 0) Die(after, rules->combat, now, StepNanos(*time));",
+   "replace": "        (void)now;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-kills",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-fall-safe-ignored",
+   "what": "every metre of a fall hurts, the safe height too",
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "    const double beyond = height - arena.fallDamage->safeHeight;",
+   "replace": "    const double beyond = height;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: a landing hurts*",
+   "expect": "LandingDamage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-jump-ignored",
+   "what": "holding the jump key never jumps again",
+   "file": "games/object_fps_pvp/include/object_fps_pvp/sim/MovementRules.hpp",
+   "find": "    return pressed || (rules.holdJump && held);",
+   "replace": "    return pressed || (rules.holdJump && false && held);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: holding Space*",
+   "expect": "pvp-hold-jump",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-jump-always",
+   "what": "a held key jumps without hold_jump",
+   "file": "games/object_fps_pvp/include/object_fps_pvp/sim/MovementRules.hpp",
+   "find": "    return pressed || (rules.holdJump && held);",
+   "replace": "    return pressed || held;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: a step jumps*",
+   "expect": "StepJumps",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-not-carried",
+   "what": "the held jump key does not reach the step",
+   "file": "games/object_fps_pvp/src/present/Controls.cpp",
+   "find": "        input.jumpHeld = held_.jumpHeld;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP controls: the jump key held*",
+   "expect": "jumpHeld",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hold-kept-stale",
+   "what": "stale controls keep jumping while the key was held",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = false;",
+   "replace": "        step.jump = step.fire = step.reload = false;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: J5*",
+   "expect": "pvp-hold-stale",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-first-shown",
+   "what": "the hit marker shows the record seen first (before this Client looked)",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "        seen_ = true;\n        tick_ = shotTick;\n        return;",
+   "replace": "        seen_ = true;\n        tick_ = 0;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-replayed",
+   "what": "a later state of the same shot shows the marker again",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    if (shotTick <= tick_) return;",
+   "replace": "    if (shotTick < tick_) return;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-miss-clears",
+   "what": "a newer miss takes the shown marker away",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    if (!hitPlayer) return;\n    active_ = true;",
+   "replace": "    active_ = hitPlayer;\n    if (!hitPlayer) return;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Hit marker*",
+   "expect": "alpha",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-no-head",
+   "what": "a head hit shows the body's marker",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "shot->part == sim::HitPart::Head, now);",
+   "replace": "false, now);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker-head",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-not-drawn",
+   "what": "the HUD never draws the hit marker",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));",
+   "replace": "        marker.Get() = R::Shape2d{};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-marker-never-fades",
+   "what": "the hit marker stays once shown",
+   "file": "games/object_fps_pvp/src/present/HitFeedback.cpp",
+   "find": "    return {Fade(nowSeconds - startSeconds_, settings.hitMarker.seconds), head_};",
+   "replace": "    return {1.0F, head_};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own shot that hits*",
+   "expect": "pvp-hit-marker",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-no-wait",
+   "what": "the start screen goes on to the menu at once",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    const bool done = at && static_cast<double>(time->elapsed - *at) / 1e9 >= splash.Read().seconds;",
+   "replace": "    const bool done = at.has_value();",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-time",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-stays",
+   "what": "the start screen never goes on by itself",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "        if (shown) splash->shownAt = time->elapsed;",
+   "replace": "        (void)shown;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-time",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-splash-unskippable",
+   "what": "a key does not go on from the start screen",
+   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "find": "    const bool skipped = any(*keys) || any(*mouse);",
+   "replace": "    const bool skipped = false && (any(*keys) || any(*mouse));",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the start screen*",
+   "expect": "pvp-splash-skip",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hit-sound-centred",
+   "what": "the shooter hears the hit at the centre, however far the target",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                        spatial(present::SoundCue::HitConfirmed, *target->second);",
+   "replace": "                        play(present::SoundCue::HitConfirmed, present::CentredGains(volume(present::SoundCue::HitConfirmed)));",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own hit sounds*",
+   "expect": "pvp-hit-sound-far",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hit-sound-silent",
+   "what": "the shooter never hears the hit",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                        spatial(present::SoundCue::HitConfirmed, *target->second);",
+   "replace": "                        (void)target;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own hit sounds*",
+   "expect": "pvp-hit-sound-near",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-on-map-unhurt",
+   "what": "a landing on the map's own ground (not the floor plane) never hurts",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        descent = std::max(fall.impact, -fall.velocity);",
+   "replace": "        descent = fall.impact;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-portable-ignored",
+   "what": "the portable marker is never looked at: always the user's data directory",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        if (!directory.empty() && exists(directory + \"/\" + std::string(kPortableMarker))) {",
+   "replace": "        if (false && exists(directory)) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-portable-always",
+   "what": "beside the program whether the marker is there or not",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        if (!directory.empty() && exists(directory + \"/\" + std::string(kPortableMarker))) {",
+   "replace": "        if (!directory.empty()) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-portable-inside-bundle",
+   "what": "a macOS app's marker and files are looked for inside the bundle",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        return std::string(Parent(bundle));",
+   "replace": "        return std::string(directory);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable-bundle",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
   }
  ]
 }

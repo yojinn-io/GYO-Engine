@@ -45,6 +45,7 @@
 #include <sstream>
 #include <random>
 #include <chrono>
+#include <set>
 #include <thread>
 #include <variant>
 
@@ -55,6 +56,7 @@ namespace W = GYO::Engine::Window;
 namespace R = GYO::Engine::Render;
 namespace T = GYO::Engine::Transform;
 namespace WA = GYO::Engine::WorldAsset;
+namespace sim = object_fps_pvp::sim;
 
 namespace {
 
@@ -296,6 +298,19 @@ struct Setup final {
         }
         REQUIRE_FALSE(waiting());
     }
+    // Frames until the game shows: loaded (Loaded), the loading screen's work done and the match started, and the loading
+    // page gone (its request is applied the next frame). Before that a click or Tab is the loading screen's, not the
+    // game's (ReadControls), however long the own player has been there.
+    void Shown() {
+        Loaded();
+        const auto shown = [this] { return PC::StatusOf(Client()).ready && PC::StatusOf(Client()).started; };
+        for (int i = 0; i < 2000 && !shown(); ++i) {
+            Frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE_MESSAGE(shown(), "the game shows (loaded, drawn and started)");
+        Frames(2);
+    }
     void Frame() {
         const bool step = frame++ % framesPerStep == 0;
         if (step && !holdMatch) REQUIRE(static_cast<bool>(match->RunFrame()));
@@ -425,6 +440,8 @@ TEST_CASE("client: it connects, shows the arena and the other player, takes the 
     }
     CHECK(cameraAtEye);
     // A click takes the pointer (and is no shot); the window is asked to lock and hide the cursor.
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.state = I::ButtonState::Pressed;
@@ -479,6 +496,8 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
     setup.Frames(480);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -516,6 +535,8 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -526,8 +547,10 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     setup.Next().buttons.push_back(click);
     setup.Frame();
     REQUIRE(PC::StatusOf(setup.Client()).captured);
-    // W held from here on: every step's input walks forward while the controls are fresh.
+    // W and Space held from here on: every step's input walks forward (and, with the shipped hold_jump, asks to jump)
+    // while the controls are fresh.
     setup.Next().keys.push_back(Key(I::KeyCode::W));
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
     setup.Frames(2);
 
     auto lent = setup.client->Lend("Sim");
@@ -539,6 +562,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
         std::uint64_t consumed = 0, missing = 0;  // the Match's counts of this Client's inputs
         float forward = 0.0F;                     // the input the Match gave the own player this step
         std::uint8_t present = 0;
+        std::uint8_t jump = 0;
         float yaw = 0.0F;                         // the own player's view at the Match
     };
     std::vector<Round> rounds;
@@ -570,6 +594,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
             if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) {
                 round.forward = input->forward;
                 round.present = input->present;
+                round.jump = input->jump;
             }
             if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.yaw = body->yaw;
             round.simTick = TickOf(lease.World());
@@ -613,6 +638,8 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     // and once stale it stays so; the view stays where it was.
     CHECK_MESSAGE(first.forward > 0.0F, "[pvp-sim-thread-input] the held W goes on at the stop's start");
     CHECK_MESSAGE((last.forward == 0.0F && last.present == 0), "[pvp-sim-thread-stale] stale controls move nothing: forward " << last.forward);
+    CHECK_MESSAGE(first.jump != 0, "[pvp-sim-thread-input] the held Space asks to jump at the stop's start");
+    CHECK_MESSAGE(last.jump == 0, "[pvp-hold-stale] stale controls do not jump on a held Space");
     std::size_t neutralAt = stopped.size();
     for (std::size_t i = 0; i < stopped.size(); ++i) {
         if (stopped[i].forward == 0.0F && neutralAt == stopped.size()) neutralAt = i;
@@ -632,6 +659,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
     CHECK_MESSAGE(walksAgain, "[pvp-sim-thread-stale] fresh controls walk again after the stop");
     // The Sim World is back on the main thread; still connected, still playing.
     setup.Next().keys.push_back(Key(I::KeyCode::W, I::ButtonState::Released));
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
     setup.Frames(10);
     CHECK(PC::StatusOf(setup.Client()).connected);
     CHECK(PlayerOf(GameWorld(*setup.match), 1) != 0);
@@ -646,6 +674,8 @@ TEST_CASE("client: with the Sim World lent, a click among several frames between
     setup.Frames(120);
     REQUIRE(PC::StatusOf(setup.Client()).playing);
     const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -742,6 +772,192 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   }
 }
 
+namespace {
+// The colour of the hit marker the HUD draws (its strokes run along the diagonals; the crosshair's along the axes), or
+// none when it draws none.
+std::optional<R::Color8> HitMarkerColor(K::World& world) {
+    std::optional<R::Color8> found;
+    for (const K::EntityId id : world.Entities()) {
+        const auto* shape = world.Get<R::Shape2d>(id);
+        if (shape == nullptr || shape->vertices.size() < 2) continue;
+        const auto& a = shape->vertices[0].position;
+        const auto& b = shape->vertices[1].position;
+        if (a.x != b.x && a.y != b.y) found = shape->vertices[0].color;
+    }
+    return found;
+}
+} // namespace
+
+// The own shot that hits shows an X beside the crosshair, another colour for the head (playtest 2026-11-26, item 8). The
+// Match's judgement (ShotRecord) is written here as JudgeShots writes it.
+TEST_CASE("client: an own shot that hits shows the hit marker, in the head colour for a head; it fades") {
+    Setup setup;
+    setup.Loaded();
+    setup.Frames(60);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+    REQUIRE(own != 0);
+    REQUIRE(rival != 0);
+    CHECK_FALSE(HitMarkerColor(setup.Client()).has_value());
+    const auto& marker = setup.presentation->hitFeedback.hitMarker;
+    const auto judged = [&](const sim::HitPart part) {
+        K::World& match = GameWorld(*setup.match);
+        PW::ShotRecord record;
+        record.tick = TickOf(match);
+        record.kind = sim::ShotHitKind::Player;
+        record.target = rival;
+        record.part = part;
+        record.damage = 1;
+        *match.GetMut<PW::ShotRecord>(own) = record;
+    };
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(v * 255.0F)); };
+    judged(sim::HitPart::Body);
+    std::optional<R::Color8> body;
+    for (int i = 0; i < 20 && !body; ++i) {
+        setup.Frame();
+        body = HitMarkerColor(setup.Client());
+    }
+    REQUIRE_MESSAGE(body.has_value(), "[pvp-hit-marker] a body hit shows the marker");
+    CHECK(body->r == byte(marker.color[0]));
+    CHECK(body->g == byte(marker.color[1]));
+    CHECK(body->b == byte(marker.color[2]));
+    // Gone after its seconds (64 frames a second here).
+    setup.Frames(static_cast<int>(marker.seconds * 64) + 4);
+    CHECK_MESSAGE(!HitMarkerColor(setup.Client()).has_value(), "[pvp-hit-marker] the marker fades away");
+    judged(sim::HitPart::Head);
+    std::optional<R::Color8> head;
+    for (int i = 0; i < 20 && !head; ++i) {
+        setup.Frame();
+        head = HitMarkerColor(setup.Client());
+    }
+    REQUIRE_MESSAGE(head.has_value(), "[pvp-hit-marker] a head hit shows the marker");
+    CHECK_MESSAGE(head->g == byte(marker.headColor[1]), "[pvp-hit-marker-head] the head colour");
+    CHECK(head->b == byte(marker.headColor[2]));
+}
+
+// The hit is heard where it lands, by distance (the user's decision of 2026-11-26, playtest item 1: B): a near target's
+// hit sounds, a target across the 250 m map is too far to hear (the hit marker still shows). The Match's judgement is
+// written as JudgeShots writes it.
+TEST_CASE("client: an own hit sounds at the target: heard near, not across the big map") {
+    std::size_t big = 0;
+    for (std::size_t i = 0; i < ShippedContent()->arenas.size(); ++i) {
+        if (ShippedContent()->arenas[i].id == "kiriyu_extraction_250m") big = i;
+    }
+    REQUIRE(big != 0);
+    for (const std::size_t arena : {std::size_t{0}, big}) {
+        CAPTURE(arena);
+        Setup setup(1, 4, arena);
+        setup.Loaded();
+        setup.Frames(60);
+        const K::EntityId own = PW::OwnPlayer(setup.Sim());
+        const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+        REQUIRE(own != 0);
+        REQUIRE(rival != 0);
+        REQUIRE(setup.Client().Get<PW::PlayerBody>(rival) != nullptr);
+        const float apart = GYO::Engine::Math::Length(setup.Client().Get<PW::PlayerBody>(rival)->feet -
+                                                      setup.Client().Get<PW::PlayerBody>(own)->feet);
+        const auto& cue = setup.presentation->sound.cues[static_cast<std::size_t>(object_fps_pvp::present::SoundCue::HitConfirmed)];
+        const bool near = arena == 0;
+        REQUIRE((near ? apart < cue.maximumDistance : apart > cue.maximumDistance));
+        const std::uint64_t before = SoundsSubmitted(*setup.client);
+        K::World& match = GameWorld(*setup.match);
+        PW::ShotRecord record;
+        record.tick = TickOf(match);
+        record.kind = sim::ShotHitKind::Player;
+        record.target = rival;
+        record.part = sim::HitPart::Body;
+        record.damage = 1;
+        *match.GetMut<PW::ShotRecord>(own) = record;
+        bool marked = false;
+        for (int i = 0; i < 20; ++i) {
+            setup.Frame();
+            marked = marked || HitMarkerColor(setup.Client()).has_value();
+        }
+        CHECK_MESSAGE(marked, "the hit marker shows near and far");
+        if (near) {
+            CHECK_MESSAGE(SoundsSubmitted(*setup.client) == before + 1, "[pvp-hit-sound-near] the hit on a near target sounds");
+        } else {
+            CHECK_MESSAGE(SoundsSubmitted(*setup.client) == before, "[pvp-hit-sound-far] the hit on a far target is not heard");
+        }
+    }
+}
+
+// Space held jumps again on every landing (the shipped movement rules' hold_jump; playtest 2026-11-26, item 7); let go,
+// the player stays down. The press of a tap still jumps once.
+TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {
+    Setup setup;
+    setup.Loaded();
+    setup.Frames(60);
+    REQUIRE(ShippedContent()->stance.holdJump);
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.state = I::ButtonState::Pressed;
+    click.position = {640.0F, 360.0F};
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    REQUIRE(own != 0);
+    const auto takeoffs = [&](const int frames) {
+        int count = 0;
+        bool grounded = GameWorld(*setup.match).Get<PW::PlayerBody>(own)->grounded != 0;
+        for (int i = 0; i < frames; ++i) {
+            setup.Frame();
+            const bool now = GameWorld(*setup.match).Get<PW::PlayerBody>(own)->grounded != 0;
+            if (grounded && !now) ++count;
+            grounded = now;
+        }
+        return count;
+    };
+    // A jump lasts about 0.52 s (2 x sqrt(2 h / g) at 0.6 m and 18 m/s^2): two seconds held is three or more.
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
+    const int held = takeoffs(128);
+    CHECK_MESSAGE(held >= 3, "[pvp-hold-jump] two seconds of Space held jumped " << held << " times");
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
+    setup.Frames(64);
+    CHECK_MESSAGE(takeoffs(64) == 0, "[pvp-hold-jump] let go, the player stays down");
+    // A tap: one jump.
+    setup.Next().keys.push_back(Key(I::KeyCode::Space));
+    setup.Frame();
+    setup.Next().keys.push_back(Key(I::KeyCode::Space, I::ButtonState::Released));
+    CHECK_MESSAGE(takeoffs(128) == 1, "a tap jumps once");
+}
+
+// The other players' steps are heard too, where they walk; a crouched walk is silent (playtest 2026-11-26, item 2).
+TEST_CASE("client: the other player's steps sound while it walks standing, not while it walks crouched") {
+    Setup setup(4);
+    setup.Loaded();
+    setup.Frames(60);
+    const K::EntityId rival = PlayerOf(setup.Client(), 2);
+    REQUIRE(rival != 0);
+    PW::PlayerInput walk;
+    walk.forward = 1.0F;
+    walk.present = 1;
+    walk.yaw = setup.Sim().Get<PW::PlayerBody>(rival)->yaw;
+    walk.crouch = 1;
+    setup.otherInput = walk;
+    // Crouching down and walking two seconds (about three metres): no sound at all (our player stands still).
+    setup.Frames(4 * 16);
+    const std::uint64_t crouchedBefore = SoundsSubmitted(*setup.client);
+    const GYO::Engine::Math::Vec3 crouchedFrom = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+    setup.Frames(4 * 128);
+    REQUIRE(GYO::Engine::Math::Length(setup.Client().Get<PW::PlayerBody>(rival)->feet - crouchedFrom) > 2.0F);
+    CHECK_MESSAGE(SoundsSubmitted(*setup.client) == crouchedBefore, "[pvp-crouch-silent] a crouched walk made no sound");
+    // Standing up and walking one more second (three metres, two strides of 1.5): its steps sound.
+    walk.crouch = 0;
+    walk.yaw += 3.14159265F;
+    setup.otherInput = walk;
+    const std::uint64_t standingBefore = SoundsSubmitted(*setup.client);
+    setup.Frames(4 * 64);
+    CHECK_MESSAGE(SoundsSubmitted(*setup.client) >= standingBefore + 1, "[pvp-remote-steps] the other player's steps were played");
+    setup.otherInput.reset();
+}
+
 // A respawn (a new life somewhere else) is a jump, not a walk: the Frame World's copy is at the old place or at the
 // new one, never between (port declaration, segment 6, design 3).
 TEST_CASE("client: the other player's new life is not blended from where it was") {
@@ -807,6 +1023,8 @@ TEST_CASE("client: a shot kicks the first-person weapon up and it comes back") {
     };
     REQUIRE(partRotationY().has_value());
     CHECK(*partRotationY() == doctest::Approx(0.0F).epsilon(1e-4));
+    // The loading screen gone: a click before it is the screen's, not the game's.
+    setup.Shown();
     I::MouseButtonInput click;
     click.button = I::MouseButton::Left;
     click.position = {640.0F, 360.0F};
@@ -1102,6 +1320,79 @@ PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{.sc
 
 } // namespace
 
+// Portable mode (the user's decision of 2026-11-26, after Godot's self-contained mode): a file named "portable" beside
+// the program puts the settings and the profiles there; without it, the user's data directory.
+TEST_CASE("client: portable mode: the marker beside the program puts the files there; without it, the user's data directory") {
+    std::set<std::string> files;
+    const auto exists = [&files](const std::string& path) { return files.count(path) != 0; };
+    const std::optional<std::string> user = std::string("/home/a/.local/share/GYO/object_fps_pvp");
+    // No marker: the user's data directory.
+    auto place = PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_FALSE(place->portable);
+    CHECK_MESSAGE(place->directory == *user, "[pvp-portable] without the marker the user's data directory");
+    // The marker beside the program.
+    files.insert("/opt/gyo/bin/portable");
+    place = PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_MESSAGE(place->portable, "[pvp-portable] the marker turns portable mode on");
+    CHECK_MESSAGE(place->directory == "/opt/gyo/bin", "[pvp-portable] the files beside the program");
+    // A marker somewhere else does not count.
+    files = {"/opt/gyo/portable", "/opt/gyo/bin/object_fps_pvp/portable"};
+    CHECK_FALSE(PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user)->portable);
+    // Windows' separators.
+    CHECK(PC::PortableDirectory("C:\\Games\\GYO\\object_fps_pvp.exe") == "C:\\Games\\GYO");
+    // A macOS app bundle: the directory that holds the .app (the bundle is read-only).
+    CHECK_MESSAGE(PC::PortableDirectory("/Users/a/Games/GYO.app/Contents/MacOS/object_fps_pvp") == "/Users/a/Games",
+                  "[pvp-portable-bundle] beside the .app");
+    files = {"/Users/a/Games/portable"};
+    place = PC::ChooseDataPlace(std::string("/Users/a/Games/GYO.app/Contents/MacOS/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_MESSAGE((place->portable && place->directory == "/Users/a/Games"), "[pvp-portable-bundle] the marker beside the .app");
+    // Not a bundle: a MacOS directory without Contents in an .app is the program's own directory.
+    CHECK(PC::PortableDirectory("/Users/a/MacOS/object_fps_pvp") == "/Users/a/MacOS");
+    CHECK(PC::PortableDirectory("/Users/a/Tools/Contents/MacOS/object_fps_pvp") == "/Users/a/Tools/Contents/MacOS");
+    // The program's path not known: no portable mode; no user data directory either: nowhere.
+    CHECK_FALSE(PC::ChooseDataPlace(std::nullopt, exists, user)->portable);
+    CHECK_FALSE(PC::ChooseDataPlace(std::nullopt, exists, std::nullopt).has_value());
+    files = {"/opt/gyo/bin/portable"};
+    CHECK(PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, std::nullopt)->portable);
+}
+
+// The start screen (playtest 2026-11-26, item 6): the logo on black, then the menu after its seconds, or at once on a key.
+TEST_CASE("client: the start screen shows the logo document, then the menu after its seconds or at once on a key") {
+    for (const bool key : {false, true}) {
+        CAPTURE(key);
+        Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Splash}, {}, std::nullopt, {}, 0,
+                    [key](PC::ClientStart& start) { start.splashSeconds = key ? 60.0 : 0.5; });
+        setup.Load();
+        REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen stays once laid out");
+        const auto* root = setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root());
+        REQUIRE(root != nullptr);
+        CHECK(root->canvas == "splash");
+        const auto* state = setup.Client().Get<GYO::Engine::Ui::UiRootState>(setup.Root());
+        REQUIRE(state != nullptr);
+        CHECK_MESSAGE((state->runtime && !state->failure), "[pvp-splash] the logo document is laid out");
+        CHECK(setup.Notes().failure.empty());
+        if (key) {
+            // Long seconds: still the start screen a while later; a key goes on.
+            setup.Frames(30);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen waits its seconds");
+            setup.Press(I::KeyCode::Enter);
+            setup.Frames(2);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-splash-skip] a key goes on to the menu");
+        } else {
+            // Half a second after it was laid out (the Frame World's time moves 1/64 s a frame here): not before, then the menu.
+            setup.Frames(24);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Splash, "[pvp-splash-time] the start screen waits its seconds");
+            setup.Frames(16);
+            CHECK_MESSAGE(setup.Scene().scene == PC::Scene::Menu, "[pvp-splash-time] after its seconds the menu");
+        }
+        setup.Load();
+        CHECK(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "menu");
+    }
+}
+
 TEST_CASE("client: the menu goes to the lobby and back; the Render World stays and is told of each new Frame World") {
     Setup setup(1, 4, 0, PC::SceneChange{});
     setup.Load();
@@ -1198,7 +1489,7 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         if (game == 1) {
             // Take the pointer and walk forward: the Solo World moves the player.
             const GYO::Engine::Math::Vec3 start = setup.Solo().Get<PW::PlayerBody>(own)->feet;
-            I::MouseButtonInput click;
+    I::MouseButtonInput click;
             click.button = I::MouseButton::Left;
             click.state = I::ButtonState::Pressed;
             click.position = {640.0F, 360.0F};

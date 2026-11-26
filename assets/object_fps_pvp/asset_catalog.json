@@ -63,6 +63,7 @@
     {"id": "object_fps_pvp.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf"},
     {"id": "object_fps_pvp.ui.lobby", "type": "ui", "path": "ui/pvp_lobby.json"},
     {"id": "object_fps_pvp.ui.menu", "type": "ui", "path": "ui/pvp_menu.json"},
+    {"id": "object_fps_pvp.ui.splash", "type": "ui", "path": "ui/pvp_splash.json"},
     {"id": "object_fps_pvp.ui.game", "type": "ui", "path": "ui/pvp_game.json"},
     {"id": "object_fps_pvp.ui.room", "type": "ui", "path": "ui/pvp_room.json"},
     {"id": "object_fps_pvp.player.character", "type": "text", "path": "characters/player/character.json"},

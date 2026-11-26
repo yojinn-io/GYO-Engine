@@ -87,6 +87,24 @@ TEST_CASE("PvP controls: keys move and the mouse turns only while captured") {
     CHECK(input.pitch == object_fps_pvp::sim::MaximumPitchRadians);
 }
 
+TEST_CASE("PvP controls: the jump key held is carried with every step while captured, unlike the press") {
+    Controls controls;
+    ControlsFrame held = Focused();
+    held.jumpHeld = true;
+    // Not captured: not the player's.
+    controls.Apply(held);
+    CHECK_FALSE(controls.Take().jumpHeld);
+    ControlsFrame tab = Focused();
+    tab.tab = true;
+    controls.Apply(tab);
+    controls.Apply(held);
+    // Held: every step gets it, however many steps a frame runs.
+    CHECK(controls.Take().jumpHeld);
+    CHECK(controls.Take().jumpHeld);
+    controls.Apply(Focused());
+    CHECK_FALSE(controls.Take().jumpHeld);
+}
+
 TEST_CASE("PvP controls: a press waits for a step and goes to that one step only") {
     Controls controls;
     ControlsFrame tab = Focused();

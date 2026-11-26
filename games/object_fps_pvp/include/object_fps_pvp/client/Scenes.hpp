@@ -1,6 +1,6 @@
 #pragma once
 
-// The Client's scenes (game-flow declaration 3.1): one Product, its Worlds replaced when the scene changes, the window
+// The Client's scenes (game-flow declaration 3.1; the start screen, playtest 2026-11-26 item 6): one Product, its Worlds replaced when the scene changes, the window
 // and the World that draws staying (R1b: the Render World reads the new Frame World).
 //
 //   World    units (fixed: the description)               build, by the scene
@@ -33,6 +33,7 @@ namespace O = GYO::Engine::Orchestration;
 
 enum class Scene : std::uint8_t {
     Menu,       // the main menu: solo, multiplayer, settings, quit
+    Splash,     // the start screen: the logo (ui/pvp_splash.json), then the menu
     SoloRoom,   // single player: the room before a game (the merchant and the tasks have their place), the record
     SoloGame,   // a single player's game: no server
     Lobby,      // multiplayer: the Gateway's rooms (create one, or join one)
@@ -95,6 +96,8 @@ struct ClientStart final {
     // The settings the program started with, and their file (empty: not saved).
     ClientSettings settings;
     std::string settingsPath;
+    // How long the start screen shows its logo once it is laid out (a key or a click goes on at once).
+    double splashSeconds = 2.0;
 };
 
 

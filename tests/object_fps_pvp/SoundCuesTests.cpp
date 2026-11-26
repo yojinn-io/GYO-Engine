@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <initializer_list>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -46,15 +47,18 @@ TEST_CASE("PvP sound settings parse the product content and reject bad values") 
     CHECK(settings.cues[static_cast<std::size_t>(SoundCue::HitConfirmed)].clip == "object_fps_pvp.audio.hit_flesh");
     CHECK(settings.strideDistance > 0);
     std::string error;
-    CHECK_FALSE(ParseSoundSettings("{\"version\":3}", error));
+    CHECK_FALSE(ParseSoundSettings("{\"version\":4}", error));
     CHECK_FALSE(error.empty());
     for (const auto& [what, text] : std::vector<std::pair<std::string, std::string>>{
-             {"version 2", Changed("\"version\": 3", "\"version\": 2")},
+             {"version 3", Changed("\"version\": 4", "\"version\": 3")},
              // Event sounds are the weapon's own data since version 3.
              {"version 2's animation_events",
-              Changed("\"version\": 3,",
-                      "\"version\": 3, \"animation_events\": {\"magazine_in\": {\"cue\": \"reload\", \"sync_seconds\": 0.33}},")},
-             {"a volume above 4", Changed("\"volume\": 0.8", "\"volume\": 9.0")}}) {
+              Changed("\"version\": 4,",
+                      "\"version\": 4, \"animation_events\": {\"magazine_in\": {\"cue\": \"reload\", \"sync_seconds\": 0.33}},")},
+             {"a volume above 4", Changed("\"volume\": 0.8", "\"volume\": 9.0")},
+             {"no occluded gain", Changed(", \"occluded_gain\": 0.25", "")},
+             {"an occluded gain above 1", Changed("\"occluded_gain\": 0.25", "\"occluded_gain\": 1.5")},
+             {"a maximum distance of 0", Changed("\"maximum_distance\": 30.0", "\"maximum_distance\": 0")}}) {
         CAPTURE(what);
         CHECK_FALSE(ParseSoundSettings(text, error));
         CHECK_FALSE(error.empty());
@@ -96,22 +100,68 @@ TEST_CASE("PvP footstep tracker steps every stride on the ground and lands once"
     settings.teleportDistance = 2;
     FootstepTracker steps;
     using Step = FootstepTracker::Step;
-    CHECK(steps.Observe({0, 0, 0}, true, 1, settings) == Step::None); // the first sample only starts
-    CHECK(steps.Observe({0.6F, 0, 0}, true, 1, settings) == Step::None);
-    CHECK(steps.Observe({1.2F, 0, 0}, true, 1, settings) == Step::Footstep);
-    CHECK(steps.Observe({1.8F, 0, 0}, true, 1, settings) == Step::None);
-    CHECK(steps.Observe({2.4F, 0, 0}, true, 1, settings) == Step::Footstep);
+    CHECK(steps.Observe({0, 0, 0}, true, false, 1, settings) == Step::None); // the first sample only starts
+    CHECK(steps.Observe({0.6F, 0, 0}, true, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({1.2F, 0, 0}, true, false, 1, settings) == Step::Footstep);
+    CHECK(steps.Observe({1.8F, 0, 0}, true, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({2.4F, 0, 0}, true, false, 1, settings) == Step::Footstep);
     // In the air no steps, however far; touching down is one landing.
-    CHECK(steps.Observe({3.4F, 1, 0}, false, 1, settings) == Step::None);
-    CHECK(steps.Observe({4.4F, 1, 0}, false, 1, settings) == Step::None);
-    CHECK(steps.Observe({4.5F, 0, 0}, true, 1, settings) == Step::Landing);
-    CHECK(steps.Observe({4.6F, 0, 0}, true, 1, settings) == Step::None);
+    CHECK(steps.Observe({3.4F, 1, 0}, false, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({4.4F, 1, 0}, false, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({4.5F, 0, 0}, true, false, 1, settings) == Step::Landing);
+    CHECK(steps.Observe({4.6F, 0, 0}, true, false, 1, settings) == Step::None);
     // Standing still never steps.
-    CHECK(steps.Observe({4.6F, 0, 0}, true, 1, settings) == Step::None);
+    CHECK(steps.Observe({4.6F, 0, 0}, true, false, 1, settings) == Step::None);
     // A teleport or a new life restarts silently.
-    CHECK(steps.Observe({20, 0, 0}, true, 1, settings) == Step::None);
-    CHECK(steps.Observe({20.9F, 0, 0}, false, 1, settings) == Step::None);
-    CHECK(steps.Observe({20.9F, 0, 0}, true, 2, settings) == Step::None); // new life: no landing replay
+    CHECK(steps.Observe({20, 0, 0}, true, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({20.9F, 0, 0}, false, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({20.9F, 0, 0}, true, false, 2, settings) == Step::None); // new life: no landing replay
+}
+
+TEST_CASE("PvP footsteps: a crouched walk is silent and does not count toward the next step; a crouched landing sounds") {
+    SoundSettings settings = ProductSettings();
+    settings.strideDistance = 1;
+    settings.teleportDistance = 2;
+    FootstepTracker steps;
+    using Step = FootstepTracker::Step;
+    CHECK(steps.Observe({0, 0, 0}, true, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({0.9F, 0, 0}, true, false, 1, settings) == Step::None);
+    // Crouched, a whole stride and more passes without a step.
+    CHECK(steps.Observe({1.8F, 0, 0}, true, true, 1, settings) == Step::None);
+    CHECK(steps.Observe({2.7F, 0, 0}, true, true, 1, settings) == Step::None);
+    // Standing again: the stride starts over (the crouched distance and the 0.9 before it are not counted).
+    CHECK(steps.Observe({3.6F, 0, 0}, true, false, 1, settings) == Step::None);
+    CHECK(steps.Observe({4.5F, 0, 0}, true, false, 1, settings) == Step::Footstep);
+    // Falling off a ledge crouched still lands.
+    CHECK(steps.Observe({5.0F, 1, 0}, false, true, 1, settings) == Step::None);
+    CHECK(steps.Observe({5.5F, 0, 0}, true, true, 1, settings) == Step::Landing);
+}
+
+TEST_CASE("PvP heard gains: a cue beyond its maximum distance is not played; the map between lowers it by the occluded gain") {
+    const SoundSettings settings = ProductSettings();
+    const auto& footstep = settings.cues[static_cast<std::size_t>(SoundCue::Footstep)];
+    REQUIRE(footstep.maximumDistance < 1000.0F);
+    REQUIRE(settings.occludedGain > 0.0F);
+    REQUIRE(settings.occludedGain < 1.0F);
+    const Vec3 ear{0, 0, 0};
+    const auto near = HeardGains(SoundCue::Footstep, ear, 0, {0, 0, 2}, false, settings);
+    REQUIRE(near);
+    const auto expected = SpatialGains(ear, 0, {0, 0, 2}, footstep.volume, settings);
+    CHECK(near->left == doctest::Approx(expected.left));
+    CHECK(near->right == doctest::Approx(expected.right));
+    // Just inside and just beyond its distance (measured in 3D).
+    CHECK(HeardGains(SoundCue::Footstep, ear, 0, {0, 0, footstep.maximumDistance - 0.1F}, false, settings));
+    CHECK_FALSE(HeardGains(SoundCue::Footstep, ear, 0, {0, footstep.maximumDistance, 0.5F}, false, settings));
+    // The remote shot carries farther than a step.
+    CHECK(HeardGains(SoundCue::RemoteShot, ear, 0, {0, 0, footstep.maximumDistance + 1}, false, settings));
+    const auto behind = HeardGains(SoundCue::Footstep, ear, 0, {0, 0, 2}, true, settings);
+    REQUIRE(behind);
+    CHECK(behind->left == doctest::Approx(near->left * settings.occludedGain));
+    CHECK(behind->right == doctest::Approx(near->right * settings.occludedGain));
+    // A cue without a maximum distance is heard however far.
+    SoundSettings unlimited = settings;
+    unlimited.cues[static_cast<std::size_t>(SoundCue::Footstep)].maximumDistance = std::numeric_limits<float>::infinity();
+    CHECK(HeardGains(SoundCue::Footstep, ear, 0, {0, 0, 10000}, false, unlimited));
 }
 
 TEST_CASE("PvP hit taken sounds for a new hit and the killing one, never for a new life's first state") {

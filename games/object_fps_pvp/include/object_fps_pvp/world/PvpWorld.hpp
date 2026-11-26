@@ -71,6 +71,10 @@ struct GameContent final {
     [[nodiscard]] const sim::ArenaContent* Find(const std::string& id) const;
 };
 
+// Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
+// (the Client hears a cue behind the map at a lower gain; present/SoundCues.hpp HeardGains).
+[[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
+
 // Why this Client cannot play the Match's arena (empty: it can). Set by FollowMatchArena; the program decides (it may
 // build its game again on matchArena, when it has that arena, or leave).
 struct ContentMismatch final {

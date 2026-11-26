@@ -69,4 +69,10 @@ std::string String(const Json::Value& value, const std::string_view what) {
     return std::string{text.value()};
 }
 
+bool Boolean(const Json::Value& value, const std::string_view what) {
+    const auto flag = value.AsBool();
+    if (!flag) Fail(what, flag.error());
+    return flag.value();
+}
+
 } // namespace object_fps_pvp::data

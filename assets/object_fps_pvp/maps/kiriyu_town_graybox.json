@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "id": "kiriyu_town_graybox",
   "width": 100,
   "depth": 100,
@@ -9,6 +9,8 @@
   "radius": 0.25,
   "eye_height": 1.6,
   "map": "object_fps_pvp.map.kiriyu_town_graybox",
+  "kill_height": -13,
+  "fall_damage": {"safe_height": 4.0, "points_per_metre": 15},
   "spawns": [
     {"position": [8.75, 9, 89.25], "yaw": 2.35619449},
     {"position": [10.25, 7, 10.75], "yaw": 0.785398163},

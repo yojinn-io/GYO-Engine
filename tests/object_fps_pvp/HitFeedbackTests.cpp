@@ -48,12 +48,16 @@ TEST_CASE("Hit feedback settings come from the product file and reject invalid v
     CHECK(settings.direction.dots == 7);
     CHECK(settings.shake.pitchRadians == doctest::Approx(std::numbers::pi / 180));
     CHECK(settings.shake.seconds == doctest::Approx(0.25));
+    CHECK(settings.hitMarker.seconds == doctest::Approx(0.25));
+    CHECK(settings.hitMarker.gapPixels == doctest::Approx(6));
+    CHECK(settings.hitMarker.color != settings.hitMarker.headColor);
     const auto text = ProductSettingsText();
     for (const auto& [from, to] : std::vector<std::pair<std::string, std::string>>{
-             {"\"version\": 1", "\"version\": 2"}, {"\"peak_alpha\": 0.35", "\"peak_alpha\": 0"},
+             {"\"version\": 2", "\"version\": 1"}, {"\"peak_alpha\": 0.35", "\"peak_alpha\": 0"},
              {"\"peak_alpha\": 0.35", "\"peak_alpha\": 1.5"}, {"\"dots\": 7", "\"dots\": 1"},
              {"\"seconds\": 0.25", "\"seconds\": -0.25"}, {"[0.85, 0.05, 0.05]", "[1.85, 0.05, 0.05]"},
-             {"\"shake\"", "\"wobble\""}}) {
+             {"\"shake\"", "\"wobble\""}, {"\"hit_marker\"", "\"marker\""}, {"\"gap_pixels\": 6", "\"gap_pixels\": 0"},
+             {"\"head_color\": [1.0, 0.25, 0.2]", "\"head_color\": [1.0, 0.25]"}}) {
         CAPTURE(to);
         auto changed = text;
         const auto at = changed.find(from);
@@ -215,4 +219,32 @@ TEST_CASE("Hit feedback settings reject a missing number") {
     std::string error;
     CHECK_FALSE(ParseHitFeedbackSettings(text, error));
     CHECK(error.find("seconds") != std::string::npos);
+}
+
+TEST_CASE("Hit marker: a newer own shot that hit a player shows it, the head in its colour; the first record seen never") {
+    const HitFeedbackSettings settings = ProductSettings();
+    HitMarker marker;
+    // The first record seen (before this Client looked), a hit: not shown.
+    marker.Observe(10, true, false, 1.0);
+    CHECK(marker.Sample(1.0, settings).alpha == 0.0F);
+    // A newer miss: nothing.
+    marker.Observe(12, false, false, 2.0);
+    CHECK(marker.Sample(2.0, settings).alpha == 0.0F);
+    // A newer hit: shown at once, fading over its seconds.
+    marker.Observe(14, true, false, 3.0);
+    CHECK(marker.Sample(3.0, settings).alpha == doctest::Approx(1.0F));
+    CHECK_FALSE(marker.Sample(3.0, settings).head);
+    CHECK(marker.Sample(3.0 + settings.hitMarker.seconds / 2, settings).alpha == doctest::Approx(0.5F));
+    CHECK(marker.Sample(3.0 + settings.hitMarker.seconds, settings).alpha == 0.0F);
+    // The same record again (a later state of it) does not start it again.
+    marker.Observe(14, true, false, 4.0);
+    CHECK(marker.Sample(4.0, settings).alpha == 0.0F);
+    // A head: the head colour.
+    marker.Observe(20, true, true, 5.0);
+    CHECK(marker.Sample(5.0, settings).alpha == doctest::Approx(1.0F));
+    CHECK(marker.Sample(5.0, settings).head);
+    // A newer miss while it shows does not take it away.
+    marker.Observe(21, false, false, 5.05);
+    CHECK(marker.Sample(5.05, settings).alpha > 0.0F);
+    CHECK(marker.Sample(5.05, settings).head);
 }

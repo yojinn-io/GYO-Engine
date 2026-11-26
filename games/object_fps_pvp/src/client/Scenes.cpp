@@ -6,15 +6,19 @@
 #include "engine/asset/AssetStore.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/camera/Camera.hpp"
+#include "engine/input/Input.hpp"
 #include "engine/transform/Transform.hpp"
 #include "engine/ui/UiAsset.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 #include "engine/world_asset/AssetView.hpp"
+#include "engine/world_time/TimeTypes.hpp"
 #include "engine/state_machine/RegisterStateMachine.hpp"
 
 #include "client/Pages.hpp"
 
+#include <algorithm>
+#include <optional>
 #include <utility>
 #include <variant>
 
@@ -23,11 +27,13 @@ namespace object_fps_pvp::client {
 namespace A = GYO::Engine::Asset;
 namespace Base = GYO::Engine::Base;
 namespace C = GYO::Engine::Camera;
+namespace I = GYO::Engine::Input;
 namespace T = GYO::Engine::Transform;
 namespace Ui = GYO::Engine::Ui;
 namespace W = GYO::Engine::Window;
 namespace WA = GYO::Engine::WorldAsset;
 namespace SM = GYO::Engine::StateMachine;
+namespace WT = GYO::Engine::WorldTime;
 
 namespace {
 
@@ -209,6 +215,44 @@ K::SystemResult SettingsActions(K::MessageReader<Ui::UiAction> actions, K::ResMu
     return {};
 }
 
+// ---- The start screen (assets/object_fps_pvp/ui/pvp_splash.json, canvas "splash"): the logo, for the seconds the
+// product gives once the document is laid out (a slow load does not cut it short), then the menu; any key or click goes
+// on at once. The logo is the document's: a picture in place of its text needs no code here.
+
+struct SplashState final {
+    double seconds = 0.0;
+    std::optional<WT::Nanoseconds> shownAt;  // the RealTime the document was first laid out
+};
+void HashValue(K::Hasher&, const SplashState&) {}
+
+K::SystemResult LeaveSplash(K::Res<WT::RealTime> time, K::Res<I::ButtonInput<I::KeyCode>> keys,
+                            K::Res<I::ButtonInput<I::MouseButton>> mouse, K::Query<K::Read<Ui::UiRootState>> roots,
+                            K::ResMut<SplashState> splash, K::ResMut<SceneRequest> request) {
+    if (request.Read().next) return {};
+    if (!splash.Read().shownAt) {
+        bool shown = false;
+        bool failed = false;
+        roots.ForEach([&](K::EntityId, const Ui::UiRootState& state) {
+            shown = shown || (state.runtime && !state.failure);
+            failed = failed || state.failure.has_value();
+        });
+        // A logo that cannot be shown (WatchDocument notes why) does not hold the player on a black screen.
+        if (failed) {
+            request->next = SceneChange{.scene = Scene::Menu};
+            return {};
+        }
+        if (shown) splash->shownAt = time->elapsed;
+    }
+    const auto any = [](const auto& buttons) {
+        return std::any_of(buttons.AllPressed().begin(), buttons.AllPressed().end(), [&](const auto b) { return buttons.JustPressed(b); });
+    };
+    const bool skipped = any(*keys) || any(*mouse);
+    const auto& at = splash.Read().shownAt;
+    const bool done = at && static_cast<double>(time->elapsed - *at) / 1e9 >= splash.Read().seconds;
+    if (skipped || done) request->next = SceneChange{.scene = Scene::Menu};
+    return {};
+}
+
 // A System in a page's enter or exit schedule.
 K::SystemOptions OnPage(std::string name, std::string schedule) {
     K::SystemOptions options;
@@ -327,6 +371,17 @@ void BuildSceneCommon(O::WorldSetup& setup) {
         if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
         if (w.Resource<WindowFit>() == nullptr) w.SetResource(WindowFit{});
         PlaceGatewayClient(w, start.gateway, start.dataDirectory, gatewayNeeded);
+        return {};
+    });
+}
+
+void BuildSplash(O::WorldSetup& setup, const double seconds) {
+    K::Registrar& r = setup.Registrar();
+    r.Resource<SplashState>({.name = "object_fps_pvp.SplashState"});
+    r.AddSystem<&LeaveSplash>(InSceneUpdate("object_fps_pvp.LeaveSplash"));
+    setup.Prepare([seconds](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+        w.SetResource(SplashState{seconds, std::nullopt});
+        PlaceSceneDocument(w, "object_fps_pvp.ui.splash", "splash", Ui::UiBindings{}, Ui::UiTextFilter{});
         return {};
     });
 }

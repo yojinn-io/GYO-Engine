@@ -52,7 +52,7 @@ std::optional<HitFeedbackSettings> ParseHitFeedbackSettings(const std::string& t
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the settings");
-        if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported version");
+        if (data::Integer(data::Member(json, "version"), "version") != 2) throw std::runtime_error("unsupported version");
         HitFeedbackSettings settings;
         const auto flash = data::AsObject(data::Member(json, "flash"), "flash");
         settings.flash.color = Color(data::Member(flash, "color"));
@@ -76,6 +76,13 @@ std::optional<HitFeedbackSettings> ParseHitFeedbackSettings(const std::string& t
         settings.shake.pitchRadians = Math::DegreesToRadians(Positive(data::Member(shake, "pitch_degrees")));
         settings.shake.rollRadians = Math::DegreesToRadians(Positive(data::Member(shake, "roll_degrees")));
         settings.shake.seconds = Seconds(data::Member(shake, "seconds"));
+        const auto marker = data::AsObject(data::Member(json, "hit_marker"), "hit_marker");
+        settings.hitMarker.gapPixels = Positive(data::Member(marker, "gap_pixels"));
+        settings.hitMarker.lengthPixels = Positive(data::Member(marker, "length_pixels"));
+        settings.hitMarker.thicknessPixels = Positive(data::Member(marker, "thickness_pixels"));
+        settings.hitMarker.color = Color(data::Member(marker, "color"));
+        settings.hitMarker.headColor = Color(data::Member(marker, "head_color"));
+        settings.hitMarker.seconds = Seconds(data::Member(marker, "seconds"));
         return settings;
     } catch (const std::exception& exception) {
         error = "hit feedback settings: " + std::string(exception.what());
@@ -139,6 +146,26 @@ HitFeedbackSample LocalHitFeedback::Sample(const double nowSeconds, const float 
         }
     }
     return sample;
+}
+
+void HitMarker::Observe(const std::uint64_t shotTick, const bool hitPlayer, const bool head, const double nowSeconds) noexcept {
+    if (!seen_) {
+        // The record before this Client looked is not shown.
+        seen_ = true;
+        tick_ = shotTick;
+        return;
+    }
+    if (shotTick <= tick_) return;
+    tick_ = shotTick;
+    if (!hitPlayer) return;
+    active_ = true;
+    head_ = head;
+    startSeconds_ = nowSeconds;
+}
+
+HitMarkerSample HitMarker::Sample(const double nowSeconds, const HitFeedbackSettings& settings) const noexcept {
+    if (!active_ || !std::isfinite(nowSeconds)) return {};
+    return {Fade(nowSeconds - startSeconds_, settings.hitMarker.seconds), head_};
 }
 
 void ClientView::Reset(const float yaw, const float pitch) noexcept {

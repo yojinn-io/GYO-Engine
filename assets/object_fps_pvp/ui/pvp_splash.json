@@ -1,0 +1,101 @@
+{
+  "schema": "gyo.ui",
+  "version": 2,
+  "design_canvas": {
+    "size": [
+      1280,
+      720
+    ],
+    "scale_mode": "fit"
+  },
+  "fonts": {
+    "ui": "object_fps_pvp.font.ui"
+  },
+  "default_font": "ui",
+  "colors": {
+    "backdrop": "#000000FF",
+    "logo": "#FFFFFFFF",
+    "muted": "#8A8A8AFF"
+  },
+  "actions": [],
+  "bindings": [],
+  "canvases": [
+    {
+      "id": "splash",
+      "backdrop_color": "backdrop",
+      "focus_order": [],
+      "children": [
+        {
+          "type": "text",
+          "id": "logo",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.5
+            ],
+            "anchor_max": [
+              0.5,
+              0.5
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0,
+              24
+            ],
+            "size_delta": [
+              900,
+              200
+            ]
+          },
+          "text": {
+            "literal": "GYO"
+          },
+          "point_size": 160,
+          "text_color": {
+            "color": "logo"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        },
+        {
+          "type": "text",
+          "id": "subtitle",
+          "rect": {
+            "anchor_min": [
+              0.5,
+              0.5
+            ],
+            "anchor_max": [
+              0.5,
+              0.5
+            ],
+            "pivot": [
+              0.5,
+              0.5
+            ],
+            "position": [
+              0,
+              -96
+            ],
+            "size_delta": [
+              900,
+              48
+            ]
+          },
+          "text": {
+            "literal": "ENGINE"
+          },
+          "point_size": 28,
+          "text_color": {
+            "color": "muted"
+          },
+          "horizontal_align": "center",
+          "vertical_align": "center"
+        }
+      ]
+    }
+  ]
+}
