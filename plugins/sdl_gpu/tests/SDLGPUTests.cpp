@@ -92,7 +92,7 @@ TEST_CASE("sdl_gpu shaders: the 3D pass's shaders use what render's ABI says, in
     CHECK_MESSAGE(vertex->resources.samplers == Abi::kMesh3DVertexSamplers, "[g3-abi-vertex-samplers] no vertex sampler");
     CHECK_MESSAGE(fragment->resources.samplers == Abi::kMesh3DFragmentSamplers, "[g3-abi-fragment-samplers] one fragment sampler");
     CHECK_MESSAGE(fragment->resources.uniformBuffers == Abi::kMesh3DFragmentUniformBuffers,
-                  "[g3-abi-fragment-uniforms] one fragment uniform buffer (the colour)");
+                  "[g3-abi-fragment-uniforms] no fragment uniform buffer (the colour comes with the instance)");
     for (const G::EmbeddedShader* shader : {vertex, fragment}) {
         CHECK_MESSAGE(shader->resources.storageTextures == 0, "[g3-abi-no-storage] no storage textures");
         CHECK_MESSAGE(shader->resources.storageBuffers == 0, "[g3-abi-no-storage] no storage buffers");

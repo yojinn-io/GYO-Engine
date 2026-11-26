@@ -142,17 +142,29 @@ enum class CullMode : std::uint8_t {
     Back,
 };
 
-// One draw of a 3D pass: indexCount indices from indexOffset of its mesh's indices (or of the pass's own, mesh {}),
-// each index plus vertexOffset naming a vertex there, as triangles, placed by world.
+// One instance of a 3D draw: where it is and its colour (big-map declaration section 16; Bevy's MeshUniform,
+// bevy_pbr/src/render/mesh.rs:532, whose world_from_local and bindless material slot are these two). Its byte layout
+// is the 3D pass's instance input (ShaderAbi.hpp): world at 0 (Matrix4's 16 floats in order), colour at 64; 68 bytes.
+struct Instance3D final {
+    // Local to world.
+    Math::Matrix4 world{};
+    // Multiplies the texture's colours (bytes as stored, alpha straight, as the 2D pass).
+    Color8 color{255, 255, 255, 255};
+};
+static_assert(sizeof(Instance3D) == 68 && alignof(Instance3D) == 4);
+static_assert(std::is_trivially_copyable_v<Instance3D> && std::is_standard_layout_v<Instance3D>);
+
+// One draw of a 3D pass: instanceCount instances from instanceOffset of the pass's instances, each drawing indexCount
+// indices from indexOffset of its mesh's indices (or of the pass's own, mesh {}), each index plus vertexOffset naming a
+// vertex there, as triangles, placed by the instance's world. Instances are drawn in their order (as draws are), so a
+// blended draw of several instances blends them in that order. A draw of one thing is a draw of one instance.
 struct Draw3D final {
     MeshId mesh{};
     std::uint32_t indexOffset = 0;
     std::uint32_t indexCount = 0;
     std::uint32_t vertexOffset = 0;
-    // Local to world.
-    Math::Matrix4 world{};
-    // Multiplies the texture's colours (bytes as stored, alpha straight, as the 2D pass).
-    Color8 color{255, 255, 255, 255};
+    std::uint32_t instanceOffset = 0;
+    std::uint32_t instanceCount = 0;
     TextureId texture{};
     BlendMode blend = BlendMode::Opaque;
     // false: drawn over whatever is nearer (an overlay in the world).
@@ -176,6 +188,8 @@ struct Pass3D final {
     // Geometry made for this frame only (a mesh skinned on the CPU, a shape that changes), named by draws with mesh {}.
     std::vector<Vertex3D> vertices;
     std::vector<std::uint32_t> indices;
+    // The draws' instances, each draw naming its range.
+    std::vector<Instance3D> instances;
     std::vector<Draw3D> draws;
 };
 

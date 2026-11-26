@@ -2339,6 +2339,19 @@
    "expect": "pvp-gw-calls-waited"
   },
   {
+   "id": "pvp-gw-calls-no-took",
+   "what": "the time an exchange took is not measured",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the log of the Gateway's calls)"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "                           now - going.started});\n",
+   "replace": "                           0});\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: each exchange*",
+   "expect": "pvp-gw-calls-took"
+  },
+  {
    "id": "pvp-gw-calls-timeout-not-kept",
    "what": "an exchange that timed out is not kept for the log",
    "guards": [
