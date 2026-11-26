@@ -1083,8 +1083,8 @@
     "render RD-9"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "    auto found = entries_.find(key);\n    if (found == entries_.end()) {\n        if (mesh.positions.empty()",
-   "replace": "    auto found = entries_.end();\n    if (found == entries_.end()) {\n        if (mesh.positions.empty()",
+   "find": "    auto found = entries_.find(key);\n    if (found == entries_.end()) {\n        if (!HasGeometry(mesh)) return std::nullopt;",
+   "replace": "    auto found = entries_.end();\n    if (found == entries_.end()) {\n        if (!HasGeometry(mesh)) return std::nullopt;",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a model mesh*",
    "expect": "\\[p3\\-mesh\\-once\\]"
