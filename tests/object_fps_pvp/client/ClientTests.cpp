@@ -1155,12 +1155,16 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
 TEST_CASE("client: the loading screen waits while meshes wait for their frame") {
     Setup setup;
     std::uint64_t shown = 0;
-    // Meshes waiting: frames are shown, nothing skipped, yet it is not ready (within the warm-up's limit of frames).
-    for (int i = 0; i < 60; ++i) {
+    // Meshes waiting all along (frames shown, nothing skipped): the own player comes, and still it is not ready
+    // (within the warm-up's limit of frames).
+    REQUIRE(FramesUntil(setup, [&] {
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 3});
+        return PC::StatusOf(setup.Client()).playing;
+    }));
+    for (int i = 0; i < 30; ++i) {
         setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 3});
         setup.Frame();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-waits-meshes] not ready while meshes wait");
+        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-waits-meshes] not ready while meshes wait (frame " << shown << ")");
     }
     REQUIRE_MESSAGE(FramesUntil(setup, [&] {
                         setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 0});
