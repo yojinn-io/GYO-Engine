@@ -76,7 +76,9 @@ else()
     target_compile_options(gyo_object_fps_pvp_client_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 add_test(NAME object_fps_pvp.client COMMAND gyo_object_fps_pvp_client_tests "--test-case=client:*")
-set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 120
+# 300 s: the games' maps load on the asset threads and many cases wait for them (Setup::Loaded); gyo2 alone took up to
+# 118 s on the macOS runner (2026-11-26), at the old 120 s limit.
+set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 300
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
 # The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown, and it
