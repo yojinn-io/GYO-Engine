@@ -221,22 +221,24 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
     return {};
 }
 
-// --verbose: the main loop's heartbeat. The loop marks where it is (systems at the edges of each part of a frame:
-// the Frame World, the Render World up to the drawing, the drawing -- the GPU's acquire and present --, and the rest
-// between two frames: the window's event pump, a scene change, the wait); a watcher on its own thread tells when one
-// part lasts over a second -- while it lasts (a loop that never comes back leaves its line), and how long it lasted.
-// The parts are the product's marks: the pump and the wait are not told apart (they are sdl_window's own).
+// --verbose: the main loop's heartbeat. The loop marks where it is as each part of a frame begins -- the Frame World
+// (its exchange in, the first thing of its round), the Render World up to the drawing (its exchange in, before its
+// extract), sdl_gpu's GPUSubmit (the uploads, the acquire, the draw, the present), a scene change (between frames),
+// and the rest between two frames (the window's event pump, the wait) -- and a watcher on its own thread tells when
+// one part lasts over a second: while it lasts (a loop that never comes back leaves its line), and about how long it
+// lasted. A frame whose parts each take under a second is not told here (slow frame tells it after).
 struct Heartbeat final {
-    enum Part : int { Starting = 0, FrameWorld, RenderWorld, Drawing, BetweenFrames };
-    std::atomic<int> part{Starting};
-    std::atomic<std::int64_t> since{0};  // steady clock, nanoseconds
+    enum class Part : std::uint8_t { Starting, FrameWorld, RenderWorld, Drawing, SceneChange, BetweenFrames };
+    std::atomic<Part> part{Part::Starting};
+    std::atomic<std::int64_t> since{0};  // steady clock, nanoseconds; 0: not marked yet
 
     static std::int64_t Now() {
         return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
+    // The time first: a watcher that reads the new part reads its time too (sequentially consistent).
     void Mark(const Part at) {
-        part.store(at);
         since.store(Now());
+        part.store(at);
     }
 };
 struct HeartbeatRef final {
@@ -244,14 +246,16 @@ struct HeartbeatRef final {
 };
 void HashValue(K::Hasher&, const HeartbeatRef&) {}
 
-const char* PartName(const int part) {
+const char* PartName(const Heartbeat::Part part) {
     switch (part) {
-    case Heartbeat::FrameWorld: return "the Frame World";
-    case Heartbeat::RenderWorld: return "the Render World before the drawing";
-    case Heartbeat::Drawing: return "the drawing (the GPU's acquire and present)";
-    case Heartbeat::BetweenFrames: return "between frames (the window's event pump, a scene change, the wait)";
-    default: return "the start";
+    case Heartbeat::Part::Starting: return "the start";
+    case Heartbeat::Part::FrameWorld: return "the Frame World";
+    case Heartbeat::Part::RenderWorld: return "the Render World before the drawing";
+    case Heartbeat::Part::Drawing: return "sdl_gpu's GPUSubmit (uploads, acquire, draw, present)";
+    case Heartbeat::Part::SceneChange: return "a scene change";
+    case Heartbeat::Part::BetweenFrames: return "between frames (the window's event pump, the wait)";
     }
+    return "?";
 }
 
 template <Heartbeat::Part At>
@@ -260,33 +264,46 @@ K::SystemResult Beat(K::Res<HeartbeatRef> heartbeat) {
     return {};
 }
 
-// The World's HeartbeatRef (once per World, before its beats).
-void AddHeartbeat(O::WorldSetup& setup, const std::shared_ptr<Heartbeat>& heartbeat) {
-    setup.Registrar().Resource<HeartbeatRef>({.name = "HeartbeatRef"});
-    setup.Prepare([heartbeat](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-        w.SetResource(HeartbeatRef{heartbeat});
+// The beat at the start of a World's round: its exchange in runs before its schedules.
+void BeatOnExchangeIn(O::WorldSetup& setup, const std::shared_ptr<Heartbeat>& heartbeat, const Heartbeat::Part at) {
+    setup.ExchangeIn([heartbeat, at](K::World&) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        heartbeat->Mark(at);
         return {};
     });
 }
 
-// A Beat<At> system at schedule/stage (before the systems named in before).
+// A Beat<At> system named name in the frame schedule's stage (before the systems named in before).
 template <Heartbeat::Part At>
-void AddBeat(O::WorldSetup& setup, std::string_view schedule, std::string_view stage, std::vector<std::string> before = {}) {
-    K::Registrar& r = setup.Registrar();
+void AddBeat(K::Registrar& r, std::string name, const std::string_view stage, std::vector<std::string> before) {
     K::SystemOptions beat;
-    beat.name = std::string("Beat.") + std::to_string(static_cast<int>(At));
+    beat.name = std::move(name);
     K::Mount mount;
-    mount.schedule = std::string(schedule);
+    mount.schedule = std::string(O::DefaultSchedules::frame);
     mount.stage = std::string(stage);
     mount.before = std::move(before);
     beat.mounts.push_back(std::move(mount));
     r.AddSystem<&Beat<At>>(std::move(beat));
 }
 
-// The watcher: every 200 ms; a part over a second is told at once, again every five seconds, and when it ends.
+// The Render World's beats in its frame schedule: before GPUSubmit (in the Submit stage) and after it (Cleanup).
+void BeatAroundDrawing(O::WorldSetup& setup, const std::shared_ptr<Heartbeat>& heartbeat) {
+    K::Registrar& r = setup.Registrar();
+    r.Resource<HeartbeatRef>({.name = "HeartbeatRef"});
+    AddBeat<Heartbeat::Part::Drawing>(r, "object_fps_pvp.Heartbeat.Drawing", GYO::Engine::RenderWorld::kSubmitStage, {"GPUSubmit"});
+    AddBeat<Heartbeat::Part::BetweenFrames>(r, "object_fps_pvp.Heartbeat.BetweenFrames", GYO::Engine::RenderWorld::kCleanupStage, {});
+    setup.Prepare([heartbeat](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+        w.SetResource(HeartbeatRef{heartbeat});
+        return {};
+    });
+}
+
+// The watcher: every 200 ms; a part over a second is told at once, again every five seconds, and when it ends (its
+// length as the watcher saw it: up to 200 ms more).
 class HeartbeatWatch final {
 public:
-    explicit HeartbeatWatch(std::shared_ptr<Heartbeat> beat) : beat_(std::move(beat)), thread_([this] { Run(); }) {}
+    explicit HeartbeatWatch(std::shared_ptr<Heartbeat> beat) : beat_(std::move(beat)), thread_([this] { Run(); }) {
+        beat_->Mark(Heartbeat::Part::Starting);
+    }
     ~HeartbeatWatch() {
         {
             const std::lock_guard<std::mutex> lock(mutex_);
@@ -303,15 +320,15 @@ private:
         constexpr std::int64_t kStuck = 1'000'000'000;
         constexpr std::int64_t kAgain = 5'000'000'000;
         std::int64_t stuckSince = -1;  // the since of the part told as stuck
-        int stuckPart = Heartbeat::Starting;
+        Heartbeat::Part stuckPart = Heartbeat::Part::Starting;
         std::int64_t told = 0;
         std::unique_lock<std::mutex> lock(mutex_);
         while (!wake_.wait_for(lock, std::chrono::milliseconds(200), [this] { return stop_; })) {
-            const int part = beat_->part.load();
+            const Heartbeat::Part part = beat_->part.load();
             const std::int64_t since = beat_->since.load();
             const std::int64_t now = Heartbeat::Now();
             if (stuckSince >= 0 && since != stuckSince) {
-                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: going again after ") + Seconds(since - stuckSince) + " in " +
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: going again after about ") + Seconds(since - stuckSince) + " in " +
                                                            PartName(stuckPart));
                 stuckSince = -1;
             }
@@ -320,10 +337,10 @@ private:
                 stuckSince = since;
                 stuckPart = part;
                 told = now;
-                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: no frame for ") + Seconds(now - since) + ", in " + PartName(part));
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: one part of the frame for ") + Seconds(now - since) + ", in " + PartName(part));
             } else if (now - told >= kAgain) {
                 told = now;
-                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: still no frame after ") + Seconds(now - since) + ", in " + PartName(part));
+                Log(GYO::Engine::Base::LogLevel::Info, std::string("heartbeat: still in one part after ") + Seconds(now - since) + ", in " + PartName(part));
             }
         }
     }
@@ -438,8 +455,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                 return watch;
             };
             Log(GYO::Engine::Base::LogLevel::Info, "scene: " + SceneName(scene.scene));
-            AddHeartbeat(setup, heartbeat);
-            AddBeat<Heartbeat::FrameWorld>(setup, O::DefaultSchedules::frame, O::DefaultSchedules::first);
+            BeatOnExchangeIn(setup, heartbeat, Heartbeat::Part::FrameWorld);
             setup.Registrar().Resource<FrameWatch>({.name = "FrameWatch"});
             setup.Registrar().AddSystem<&WatchFrame>(last("WatchFrame"));
             const bool game = scene.scene == PC::Scene::SoloGame || scene.scene == PC::Scene::MultiGame;
@@ -467,10 +483,8 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     if (verbose) {
         renderWorld.build = [inner = std::move(renderWorld.build), heartbeat](O::WorldSetup& setup) {
             inner(setup);
-            AddHeartbeat(setup, heartbeat);
-            AddBeat<Heartbeat::RenderWorld>(setup, GYO::Engine::RenderWorld::kExtractSchedule, GYO::Engine::RenderWorld::kExtractSchedule);
-            AddBeat<Heartbeat::Drawing>(setup, O::DefaultSchedules::frame, GYO::Engine::RenderWorld::kSubmitStage, {"GPUSubmit"});
-            AddBeat<Heartbeat::BetweenFrames>(setup, O::DefaultSchedules::frame, GYO::Engine::RenderWorld::kCleanupStage);
+            BeatOnExchangeIn(setup, heartbeat, Heartbeat::Part::RenderWorld);
+            BeatAroundDrawing(setup, heartbeat);
         };
     }
     description.worlds.push_back(std::move(renderWorld));
@@ -496,7 +510,12 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     sdl.ownThreadWorlds = {"Solo", "Sim"};
     // The scene changes, between two frames (client/Scenes.hpp).
     sdl.betweenFrames.wanted = [](O::Product& product) { return PC::SceneChangeWanted(product); };
-    sdl.betweenFrames.run = [](O::Product& product) { return PC::ChangeScene(product); };
+    sdl.betweenFrames.run = [heartbeat, verbose](O::Product& product) {
+        if (verbose) heartbeat->Mark(Heartbeat::Part::SceneChange);
+        auto changed = PC::ChangeScene(product);
+        if (verbose) heartbeat->Mark(Heartbeat::Part::BetweenFrames);
+        return changed;
+    };
     description.options.Set(sdl);
     WA::AssetOptions assets;
     assets.contentRoot = contentRoot;

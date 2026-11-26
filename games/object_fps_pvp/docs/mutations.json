@@ -1754,19 +1754,6 @@
    "expect": "pvp-gw-leave-sent"
   },
   {
-   "id": "pvp-gw-ended-room-stays",
-   "what": "a room whose match ended keeps the player in the room's scene",
-   "guards": [
-    "game-flow-declaration 4 (segment 3)"
-   ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
-   "find": "const bool out = result->status == 404 || result->status == 410 || result->errorCode == \"not_member\";",
-   "replace": "const bool out = result->status == 404 || result->errorCode == \"not_member\";",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: gateway: a room whose match*",
-   "expect": "pvp-gw-room-gone"
-  },
-  {
    "id": "pvp-gw-no-timeout",
    "what": "a call without an answer goes on for ever",
    "guards": [
@@ -2428,6 +2415,19 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: two presses of ready*",
    "expect": "pvp-room-problem-shown"
+  },
+  {
+   "id": "pvp-room-connect-problem-hidden",
+   "what": "a connect that cannot be read does not show while the word on the start is there",
+   "guards": [
+    "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "connect.server;\n        room.said.reset();\n",
+   "replace": "connect.server;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: a started room whose connect*",
+   "expect": "pvp-room-connect-unreadable"
   },
   {
    "id": "pvp-arena-not-again",

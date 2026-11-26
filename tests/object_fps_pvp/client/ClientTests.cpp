@@ -1327,6 +1327,8 @@ public:
     [[nodiscard]] int Held() const { return heldCount_; }
     // Reads of room 3 answer 503 busy (the Gateway's trouble) while on.
     void FailRoomReads(const bool fail) { failRoomReads_ = fail; }
+    // A started room 3 gives a connect whose server is not an address.
+    void BadConnect(const bool bad) { badConnect_ = bad; }
     // The room's match has ended: reads of the room answer 410 match_ended.
     void EndMatch() {
         const std::lock_guard<std::mutex> lock(mutex_);
@@ -1356,7 +1358,9 @@ private:
     std::string RoomJson(const bool withConnect) const {
         std::string json = "{\"id\":3,\"mode\":\"" + mode_ + "\",\"map\":\"" + map_ + "\",\"players\":1,\"capacity\":4,\"state\":\"" +
                            (started_ ? "started" : "open") + "\",\"owner\":7,\"members\":[{\"userId\":7,\"ready\":" + (ready_ ? "true" : "false") + "}]";
-        if (withConnect && started_) json += ",\"connect\":{\"server\":\"127.0.0.1:47000\",\"userId\":7,\"token\":\"00ff\"}";
+        if (withConnect && started_) {
+            json += std::string(",\"connect\":{\"server\":\"") + (badConnect_ ? "not-an-address" : "127.0.0.1:47000") + "\",\"userId\":7,\"token\":\"00ff\"}";
+        }
         return json + "}";
     }
     std::pair<int, std::string> Route(const std::string& method, const std::string& target, const std::string& body) {
@@ -1442,6 +1446,7 @@ private:
     std::optional<std::pair<std::string, std::string>> held_;
     std::atomic<int> heldCount_{0};
     std::atomic<bool> failRoomReads_{false};
+    std::atomic<bool> badConnect_{false};
     std::thread thread_;
     std::mutex mutex_;
     std::vector<Seen> seen_;
@@ -1742,6 +1747,23 @@ TEST_CASE("client: gateway: two presses of ready before an answer end as the sec
     gateway.FailRoomReads(true);
     run(1600, [] {});
     CHECK_MESSAGE(setup.Binding("status") == "Gateway: busy", "[pvp-room-problem-shown] " << setup.Binding("status"));
+}
+
+TEST_CASE("client: gateway: a started room whose connect cannot be read says so, over the word on the start") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    gateway.BadConnect(true);
+    Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Room, .room = 3}, directory.Utf8(), gateway.Address());
+    setup.Load();
+    REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する" && Asked(gateway, "GET", "/v1/rooms/3"); }));
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE(FramesUntil(setup, [&] { return Asked(gateway, "POST", "/v1/rooms/3/ready"); }));
+    setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE(FramesUntil(setup, [&] { return Asked(gateway, "POST", "/v1/rooms/3/start"); }));
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("status") == "Gateway の接続先を読めません: not-an-address"; }),
+                  "[pvp-room-connect-unreadable] " << setup.Binding("status"));
+    CHECK(setup.Scene().scene == PC::Scene::Room);
 }
 
 TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, its answer, how long it waited and took") {
