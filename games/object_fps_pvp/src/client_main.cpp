@@ -22,6 +22,7 @@
 // left click to fire, R to reload; Tab or Esc gives the mouse back.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
+#include "object_fps_pvp/client/LocalFiles.hpp"
 #include "object_fps_pvp/client/Scenes.hpp"
 
 #include "gyo/GameConfig.hpp"
@@ -650,16 +651,36 @@ int main(int argc, char** argv) {
     PC::ClientStart start;
     start.frames = frames;
     start.gateway = gateway;
-    // This player's files: <the user's data directory>/<profile>. None found: nothing is saved (the scenes say so).
+    // This player's files: <the place>/<profile>, the settings in <the place> (the machine's, not the profile's). The
+    // place is the user's data directory, or beside the program when a file named "portable" is there (PC::DataPlace).
+    // None found: nothing is saved (the scenes say so).
+    std::optional<std::string> executable;
+    if (auto path = GYO::Engine::OS::Process::ExecutablePath()) {
+        executable = std::move(*path);
+    } else {
+        Log(GYO::Engine::Base::LogLevel::Warning, "the program's path is not known, no portable mode: " + GYO::Engine::Base::Describe(path.error()));
+    }
+    std::optional<std::string> userData;
     if (auto data = GYO::Engine::OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)) {
-        start.dataDirectory = *data + "/" + profile;
-        // The settings are the machine's, not the profile's.
-        start.settingsPath = *data + "/settings.json";
+        userData = std::move(*data);
+    } else if (!executable) {
+        Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory: " + GYO::Engine::Base::Describe(data.error()));
+    }
+    const auto exists = [](const std::string& path) {
+        const auto found = GYO::Engine::OS::Files::Exists(path);
+        return found && *found;
+    };
+    if (const auto place = PC::ChooseDataPlace(executable, exists, userData)) {
+        Log(GYO::Engine::Base::LogLevel::Info, std::string(place->portable ? "portable mode: the files are beside the program, in "
+                                                                           : "the files are in the user's data directory, ") +
+                                                   place->directory);
+        start.dataDirectory = place->directory + "/" + profile;
+        start.settingsPath = place->directory + "/settings.json";
         PC::LoadedSettings loaded = PC::LoadSettings(start.settingsPath);
         if (!loaded.problem.empty()) Log(GYO::Engine::Base::LogLevel::Warning, "the settings were not read, the defaults are used: " + loaded.problem);
         start.settings = loaded.settings;
     } else {
-        Log(GYO::Engine::Base::LogLevel::Warning, "no user data directory, nothing will be saved: " + GYO::Engine::Base::Describe(data.error()));
+        Log(GYO::Engine::Base::LogLevel::Warning, "no place for the files, nothing will be saved");
     }
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};

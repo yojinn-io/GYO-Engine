@@ -42,6 +42,7 @@
 #include <filesystem>
 #include <random>
 #include <chrono>
+#include <set>
 #include <thread>
 #include <variant>
 
@@ -1184,6 +1185,45 @@ namespace {
 PC::SceneChange LobbyFirst(std::string status = {}) { return PC::SceneChange{.scene = PC::Scene::Lobby, .status = std::move(status)}; }
 
 } // namespace
+
+// Portable mode (the user's decision of 2026-11-26, after Godot's self-contained mode): a file named "portable" beside
+// the program puts the settings and the profiles there; without it, the user's data directory.
+TEST_CASE("client: portable mode: the marker beside the program puts the files there; without it, the user's data directory") {
+    std::set<std::string> files;
+    const auto exists = [&files](const std::string& path) { return files.count(path) != 0; };
+    const std::optional<std::string> user = std::string("/home/a/.local/share/GYO/object_fps_pvp");
+    // No marker: the user's data directory.
+    auto place = PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_FALSE(place->portable);
+    CHECK_MESSAGE(place->directory == *user, "[pvp-portable] without the marker the user's data directory");
+    // The marker beside the program.
+    files.insert("/opt/gyo/bin/portable");
+    place = PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_MESSAGE(place->portable, "[pvp-portable] the marker turns portable mode on");
+    CHECK_MESSAGE(place->directory == "/opt/gyo/bin", "[pvp-portable] the files beside the program");
+    // A marker somewhere else does not count.
+    files = {"/opt/gyo/portable", "/opt/gyo/bin/object_fps_pvp/portable"};
+    CHECK_FALSE(PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, user)->portable);
+    // Windows' separators.
+    CHECK(PC::PortableDirectory("C:\\Games\\GYO\\object_fps_pvp.exe") == "C:\\Games\\GYO");
+    // A macOS app bundle: the directory that holds the .app (the bundle is read-only).
+    CHECK_MESSAGE(PC::PortableDirectory("/Users/a/Games/GYO.app/Contents/MacOS/object_fps_pvp") == "/Users/a/Games",
+                  "[pvp-portable-bundle] beside the .app");
+    files = {"/Users/a/Games/portable"};
+    place = PC::ChooseDataPlace(std::string("/Users/a/Games/GYO.app/Contents/MacOS/object_fps_pvp"), exists, user);
+    REQUIRE(place.has_value());
+    CHECK_MESSAGE((place->portable && place->directory == "/Users/a/Games"), "[pvp-portable-bundle] the marker beside the .app");
+    // Not a bundle: a MacOS directory without Contents in an .app is the program's own directory.
+    CHECK(PC::PortableDirectory("/Users/a/MacOS/object_fps_pvp") == "/Users/a/MacOS");
+    CHECK(PC::PortableDirectory("/Users/a/Tools/Contents/MacOS/object_fps_pvp") == "/Users/a/Tools/Contents/MacOS");
+    // The program's path not known: no portable mode; no user data directory either: nowhere.
+    CHECK_FALSE(PC::ChooseDataPlace(std::nullopt, exists, user)->portable);
+    CHECK_FALSE(PC::ChooseDataPlace(std::nullopt, exists, std::nullopt).has_value());
+    files = {"/opt/gyo/bin/portable"};
+    CHECK(PC::ChooseDataPlace(std::string("/opt/gyo/bin/object_fps_pvp"), exists, std::nullopt)->portable);
+}
 
 // The start screen (playtest 2026-11-26, item 6): the logo on black, then the menu after its seconds, or at once on a key.
 TEST_CASE("client: the start screen shows the logo document, then the menu after its seconds or at once on a key") {

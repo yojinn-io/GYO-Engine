@@ -2883,6 +2883,45 @@
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]
+  },
+  {
+   "id": "pvp-portable-ignored",
+   "what": "the portable marker is never looked at: always the user's data directory",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        if (!directory.empty() && exists(directory + \"/\" + std::string(kPortableMarker))) {",
+   "replace": "        if (false && exists(directory)) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-portable-always",
+   "what": "beside the program whether the marker is there or not",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        if (!directory.empty() && exists(directory + \"/\" + std::string(kPortableMarker))) {",
+   "replace": "        if (!directory.empty()) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-portable-inside-bundle",
+   "what": "a macOS app's marker and files are looked for inside the bundle",
+   "file": "games/object_fps_pvp/src/client/LocalFiles.cpp",
+   "find": "        return std::string(Parent(bundle));",
+   "replace": "        return std::string(directory);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: portable mode*",
+   "expect": "pvp-portable-bundle",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
   }
  ]
 }

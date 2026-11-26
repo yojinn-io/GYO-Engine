@@ -103,3 +103,13 @@ blocker 0。處理：
 - 9（記下）：啟動畫面的秒數在 `ClientStart`，不在資料；換成動畫時可能要搬。
 - 11（照讀法）：蹲著落地仍有落地聲（使用者的原話只說蹲下移動）。
 - 12、13：沒有重現（邊界外緊貼牆時夾回去可能和牆重疊；測試找命中標記的方法靠「斜線」）。
+
+## 可攜模式（使用者追加：照 Godot）
+
+- 主會話轉來：使用者原話「選1，在 #360 裡一起改」。比過的選項：(1) Godot 式可攜模式；(2) 永遠放在執行檔旁邊。選 (1) 的理由：Program Files 和 macOS 的 `.app` 是唯讀的，Gatekeeper 還會做路徑隨機化；更新時整個資料夾被換掉，設定和存檔也跟著消失。
+- 做法（`client/LocalFiles.hpp` 的 `PortableDirectory`、`ChooseDataPlace`，`client_main.cpp`）：預設照舊 `OS::Files::UserDataDirectory("GYO", GYO_GAME_ID)`；執行檔所在目錄有空檔 `portable` 時，`settings.json` 和各 profile 的資料夾（`<dir>/<profile>`）改放那裡。執行檔在 `X.app/Contents/MacOS` 裡時，到 `.app` 外面那一層找標記、也放在那一層（Godot `editor/file_system/editor_paths.cpp:144-160` 的 self-contained mode；Godot 只看 `MacOS`／`Contents` 兩層，這裡多要求上一層以 `.app` 結尾）。兩種分隔符都認（Windows 的路徑）。
+- **Engine 不改**：OS 層已有三平台的 `OS::Process::ExecutablePath()`（Windows 的 module path、Linux 的 `/proc/self/exe`、macOS 的 image path）；「所在目錄」與選哪一條由遊戲決定。拿不到執行檔路徑時不進可攜模式（記警告）。
+- log：啟動時印一行「portable mode: the files are beside the program, in …」或「the files are in the user's data directory, …」。
+- 測試：Client「portable mode: the marker beside the program puts the files there…」（沒有標記→使用者資料目錄；有→執行檔旁；別處的標記不算；Windows 分隔符；`.app` 外面那一層；不是 bundle 的 `MacOS` 目錄；拿不到執行檔路徑；兩者都沒有→不存）。本機實機：`build/target/object_fps_pvp/bin/gyo_object_fps_pvp --frames 20`，沒有標記印使用者資料目錄，放了 `portable` 印 bin 目錄。
+- 突變 3 個，3/3 killed：`pvp-portable-ignored`、`pvp-portable-always`、`pvp-portable-inside-bundle`。
+- 沒做：LAN 試驗包改用這個模式（不在這個 PR）；Windows、Linux 上的實機沒跑（純函式的測試在三平台的 L1 跑）。
