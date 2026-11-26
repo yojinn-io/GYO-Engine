@@ -10,11 +10,15 @@
 //   without a skin becomes its retained mesh (RenderModelMeshes, made on RenderMeshes the first time) placed at its
 //   node (the entity's SkinPose, else the rest pose); a skinned mesh is skinned on the CPU with the entity's SkinPose
 //   (else the rest pose) into this frame's vertices. Images through render_world's RenderImages, as sprite_render.
+//   A handed model (Render::HandedModel) has its vertices taken once every mesh of it without a skin is made.
+//   MeshRenderOptions::meshBytesPerFrame limits the bytes of new meshes a frame makes (RenderModelMeshes).
 // - Queue3dPasses, in MeshRenderOptions::schedule / stage (Main / Update): puts each extracted 3D camera's Queue3d
 //   pass in its slot of CameraPasses; camera_render composes them.
 //
 // The source World needs transform, camera, world_render and world_asset (else R-E4).
 
+#include <cstdint>
+#include <optional>
 #include <string>
 
 #include "engine/orchestration/Module.hpp"
@@ -27,6 +31,9 @@ namespace GYO::Engine::MeshRender {
 struct MeshRenderOptions final {
     std::string schedule = std::string(Orchestration::DefaultSchedules::frame);
     std::string stage = std::string(Orchestration::DefaultSchedules::update);
+    // The bytes of new retained meshes one frame makes, a soft limit (Bevy's RenderAssetBytesPerFrame; none: no limit,
+    // Bevy's default). A mesh past it is made in a later frame, and is not drawn until then.
+    std::optional<std::uint64_t> meshBytesPerFrame;
 };
 
 class MeshRenderModule final : public Orchestration::Module {

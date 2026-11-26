@@ -3026,6 +3026,19 @@
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]
+  },
+  {
+   "id": "pvp-region-not-handed",
+   "what": "the regions' models stay with the Frame World (their vertices are kept on the CPU after the upload)",
+   "guards": [
+    "big-map declaration 17.3 point 3"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        mesh.model = std::make_shared<R::HandedModel>(std::move(region.model));\n",
+   "replace": "        mesh.model = std::move(region.model);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the arena is drawn as one Mesh3d per region*",
+   "expect": "pvp-region-meshes|pvp-region-handed"
   }
  ]
 }

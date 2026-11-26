@@ -1121,21 +1121,18 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
     for (const K::EntityId id : setup.Client().Entities()) {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
         if (mesh == nullptr) continue;
-        const auto* held = std::get_if<std::shared_ptr<const GYO::Engine::Model::ModelData>>(&mesh->model);
-        if (held == nullptr || *held == nullptr) continue;
+        // The region's model is handed to the render World: drawn once, its vertices are only on the GPU.
+        const auto* handed = std::get_if<std::shared_ptr<R::HandedModel>>(&mesh->model);
+        if (handed == nullptr || *handed == nullptr) continue;
         const auto* box = setup.Client().Get<R::Aabb>(id);
         REQUIRE(box != nullptr);
         for (const auto& region : pictures) {
             if (box->local.minimum.x != region.bounds.minimum.x || box->local.minimum.z != region.bounds.minimum.z) continue;
             ++regions;
             CHECK_MESSAGE(box->local.maximum.x == region.bounds.maximum.x, "[pvp-region-box] the region's box");
-            const auto& shown = (*held)->meshes.front().positions;
-            const auto& expected = region.model->meshes.front().positions;
-            const bool same = shown.size() == expected.size() &&
-                              std::equal(shown.begin(), shown.end(), expected.begin(), [](const Math::Vec3& a, const Math::Vec3& b) {
-                                  return a.x == b.x && a.y == b.y && a.z == b.z;
-                              });
-            CHECK_MESSAGE(same, "[pvp-region-model] the region's faces");
+            CHECK_MESSAGE(((*handed)->Taken() && (*handed)->Model()->meshes.front().positions.empty() &&
+                           region.model->meshes.front().positions.size() > 0),
+                          "[pvp-region-handed] the region's model is handed over and its vertices taken once drawn");
         }
     }
     CHECK_MESSAGE(regions == pictures.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);

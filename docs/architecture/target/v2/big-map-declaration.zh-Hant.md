@@ -235,6 +235,43 @@ S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預�
 - 第一輪（`linux-run1-unverified/`）沒有記錄「實際交給視窗的幀數」，所以不採用那一輪。補上 `FramesShown`／`FramesSkipped` 重跑後，兩輪各方向的差：中位數最多 0.011 ms、p95 最多 0.108 ms、最大單幀最多 0.807 ms。
 - **沒量**：km²（S5，要用 (d2) 的合成圖）、GPU timestamp、Windows 與 Mac 的 GPU、有角色和 HUD 的實際遊戲畫面、Client 端的地圖載入時間、1280×720 以外的解析度。
 
+### 5.2.2 S5：km² 合成城市（2026-11-26，Linux 主機）
+
+- **開始**：使用者「linux啟動了，s5可以開始了」（主會話轉達）。**S5 沒有事先寫下的數字門檻**（第 15 節以前只寫了「超過 S5 宣告值」，值沒有寫）。使用者看過數據後判定：「S7 往後排,記憶體要處理」。主會話看過數據後提過一組參考門檻，使用者沒有採用，這裡不寫。
+- **機器與原始碼**：同 5.2.1（Ryzen 7 6800H、Radeon 680M／RADV、30 GiB），gyo2 `41504a7f`（含 S4-C、S6）。證據：主 checkout `build/evidence/gyo2-big-map/s5/`（`s5_linux.sh`、`probe/`、`content.py`、`watch.py`；輸出在 `linux/`）。
+- **地圖**：(d2) 的 km2-building（master 的合成城市：同一棟 128 m 見方的建築平鋪），三級 1008、1504、2000 格（504 m、752 m、1 km；格數要是 16 的倍數）。
+  - 合成格子是 1 m 一格。km² 的格子檔約 230 MB，超過格子檔 16 MiB 的上限，不能改格子再 `build-map`；所以烘好後把索引的 `cell_size` 改成 0.5。256 格時兩種做法的 region 檔逐位元組相同，索引只差 `source_sha256`（`s5/cell_equivalence.txt`）。
+  - 1 km：256 region、4,872,510 quads、1,032,504 碰撞盒、242 MB 文字。
+- **Match**：真的 Match 程式（`--arena`，生成期間讀圖），另用 probe 照 `LoadArena` 的步驟分段計時。查詢各 2,000 次（done 2000／asked 2000）。
+
+| 大小 | Match 讀圖＋建牆 | 解析（單執行緒） | `BoxSet::Build` | Match 峰值 RSS | 查詢 p95（射線、膠囊） |
+|---|---|---|---|---|---|
+| 504 m | 1.9 s | 1.0 s | 0.63 s | 161 MB | ≤ 4.1 µs |
+| 752 m | 4.3 s | 2.3 s | 1.47 s | 314 MB | ≤ 4.9 µs |
+| 1 km | 7.9 s | 4.0 s | 2.71 s | 471 MB | ≤ 5.1 µs |
+
+- **Client**：5.2.1 的 GPU probe（每 region 一個 `Mesh3d`、visibility 剔除、mesh_render＋sdl_gpu），5 處 × 8 方向 × 300 幀（12,000／12,000 幀），VSync 關。
+  - 主機沒有接螢幕（所有輸出埠 disconnected），改用 SDL 的 offscreen（`VK_EXT_headless_surface`），只用 radeon 的 ICD。同一個設定重量 5.2.1 的 250 m 圖：中位數 0.20 ms（5.2.1 開視窗 0.19）、最壞 p95 0.44 ms（0.47），一致；最大單幀 0.90 ms（開視窗 4.60 ms，有合成器）。
+
+| 大小 | 中位數 | 最壞 p95 | 最大 | 畫的 region（共有） | 讀圖＋展開（單執行緒） | probe 峰值 RSS |
+|---|---|---|---|---|---|---|
+| 504 m | 0.77 ms | 1.28 ms | 1.60 ms | 8～21（64） | 1.2 s | 503 MB |
+| 752 m | 0.83 ms | 1.28 ms | 1.31 ms | 13～21（144） | 2.9 s | 1.04 GB |
+| 1 km | 0.89 ms | 1.27 ms | 1.34 ms | 14～22（256） | 4.8 s | 1.79 GB |
+
+**讀法**（描述）：
+
+- 畫面時間不隨地圖變大：一個方向只畫 14～22 個 region（視錐＋遠裁面 150 m）。
+- Client 的記憶體隨面數成長。1 km 的 1.79 GB 拆開：作者的 `ModelData` 約 740 MB（每頂點 32 B＋索引）、sdl_gpu 的 transfer buffer 約 740 MB（一幀上傳全部，之後不縮回）、probe 自己留著的 region 文件與碰撞盒約 0.18 GB。前兩項是「上傳 GPU 後還留在 CPU 端的頂點」。
+- 載入時間：Match 7.9 s 裡解析佔 4.0 s（Match 讀檔只用一條執行緒）。
+- **沒量**：GTT（內顯的顯存只有 512 MB，其餘在系統記憶體；`mem_info_vram_used` 峰值 486 MB）、GPU timestamp、真正的 Client 程式（沒有角色與 HUD）、Windows 與 Mac。
+
+**處置**（使用者的判定）：
+
+- S7（LOD 代理網格）**延後**，不是取消：畫面時間沒有壓力。
+- 記憶體：先做宣告列的對策裡成本最低的「上傳 GPU 後放掉 CPU 端的頂點」（第 17 節）。
+- 待辦：Match 讀圖的平行解析（使用者沒提，先不做）。
+
 ## 6. 和 loading 的關係（流程框架卡 `local_8a21ecb9`）
 
 - 單人「開始遊戲 → 加載資源、讀檔 → 進入遊戲」、多人「開始遊戲 → 加載…（邊連 Match 邊載）」的「加載」，大地圖接在**生成世界階段**（`WorldGeneration`）：
@@ -264,7 +301,7 @@ v8-arch-gyo2-big-map
 │                       arena v3、只讀這局的地圖、生成階段載入＋進度、整張一個 BoxSet、每 region 一個 Mesh3d、三張遷移、v1 讀者退役
 ├── S5 量 km²           Opus／medium｜依賴 S3 (d2)、S4｜估 4～6 h｜要同意      結果決定 RC-BM1～BM3、頂點壓縮
 ├── S6 instancing       Opus／high（上段：Engine 公開介面）｜估 8～12 h        測試場景用重複模型
-└── S7 LOD 代理網格     只在 S5 超過宣告值時開（RC）
+└── S7 LOD 代理網格     延後（S5 的判定：畫面時間沒有壓力，5.2.2）
 ```
 
 | 段 | 實作者 | 審查者（每批的設計審查） | 驗證者 | 段別根據 |
@@ -622,3 +659,58 @@ v8-arch-gyo2-big-map
 ### 16.7 不做
 
 LOD、串流、GPU 效能量測（本機的重 GPU 量測要先問）、2D 的 instancing（2D 已有「相鄰同貼圖同混合」的合批，RD-7）、遮擋剔除。
+
+## 17. S5 後的記憶體：上傳 GPU 後放掉 CPU 端的頂點（`v8-arch-gyo2-big-map-memory`）
+
+2026-11-26。使用者對 S5 的判定「記憶體要處理」（5.2.2），照宣告列的對策先做成本最低的一項。Opus／high（上段：render 的公開介面）。
+
+### 17.1 現況（程式）
+
+上傳 GPU 之後，CPU 端還留兩份頂點，各約 740 MB（1 km）：
+
+- 作者的 `ModelData`：`Mesh3d::model` 的持有形式（`Drawables.hpp:107` 的 `shared_ptr<const ModelData>`）一直留著；`RenderModelMeshes` 的 holder 也留一份參照（`Pipeline3d.hpp`，為了讓位址當鍵）。
+- sdl_gpu 的 transfer buffer：一個、每幀循環，長到最大一幀的上傳量後不再縮（`GPUDevice.cpp` 的 `EnsureTransfer`）。PvP 一幀上傳 256 個 region，它就留在 740 MB。
+- 另有建立那一幀的 `MeshCreate`（`Vertex3D` 一份），幀結束就清掉，只影響峰值。
+
+### 17.2 前提：誰要解決
+
+| 項 | 前提 | 判 |
+|---|---|---|
+| 作者交出的模型由 render 端拿走 | 〔Engine〕作者伸不進 `ExtractMeshes3d`；作者自己丟掉模型就沒得畫 | Engine：render 加一種持有形式 |
+| 每幀上傳量的上限 | 〔Engine〕機制在 render（照 Bevy）；用多少由作者選 | Engine 給選項，預設不限；PvP 設值 |
+
+### 17.3 設計（卡片判）
+
+1. **交給 render 的模型**（Bevy 的 `RenderAssetUsages::RENDER_WORLD`＋`take_gpu_data`：`bevy_asset/src/render_asset.rs:32`、`bevy_render/src/render_asset.rs:348-358`、`bevy_mesh/src/mesh.rs:2722`）：
+   - `ModelRef` 多一種：`shared_ptr<Render::HandedModel>`。作者把 `ModelData` 交給它，之後只握著這個小物件。
+   - render 為某個 mesh 做好 GPU mesh 的那一幀，拿走那個 mesh 的頂點與索引（清空）。nodes 留著（Bevy 留 AABB：拿走後算不出）。
+   - 帶 skin 的 mesh 不拿（每幀在 CPU 上 skin，要頂點）。
+   - 限制和 Bevy 相同：拿走後 GPU mesh 若被放掉（沒有 `Mesh3d` 再畫它），就畫不回來。
+2. **每幀上傳量的上限**（Bevy `RenderAssetBytesPerFrame`：`bevy_render/src/render_asset.rs:509-560`）：
+   - `MeshRenderOptions::meshBytesPerFrame`，預設不限（Bevy 的預設）。
+   - 軟上限，照 Bevy：一幀內建到超過為止，超過的那一個仍建；之後的留到下一幀，這一幀不畫。
+   - transfer buffer 因此只長到上限附近。
+3. **PvP**：region 的模型改用 `HandedModel`；Render World 設 64 MiB 的上限。loading 的暖機原本就等「沒有被跳過的 draw」，所以分幀上傳不會提前結束 loading。
+
+**偏離 Bevy**：Bevy 的用途旗標放在資產上（`Mesh::asset_usage`）。gyo2 的持有模型不是資產（沒有執行期的 `Assets::add`，見 `Drawables.hpp:104-106`），所以改成持有形式的一種；資產形式（`Handle<ModelData>`）這一批不加（沒有壓力）。
+
+### 17.4 怎麼量、預期
+
+- 同一套 S5 工具，Linux 上 1 km 那一級。probe 改成和 Client 一樣：建好網格就放掉 region 文件與碰撞盒，模型只交給 `Mesh3d`。前後各量一次，用同一個 probe：
+  - 舊的形式＋不限上傳；
+  - `HandedModel`＋64 MiB。
+- RSS 取「畫完第一個位置之後」的穩定值與整段的峰值。
+- 預期（推算）：穩定值從約 1.6 GB 降到約 0.2 GB；峰值降到約 0.9 GB（worker 做好的 `ModelData` 在交給 render 前仍是一份）。
+
+### 17.5 判定（合併前）
+
+- L1：交出的模型在 GPU mesh 做好的那一幀之後，該 mesh 的頂點與索引是空的，nodes 還在，畫面照舊。
+- L2：帶 skin 的 mesh 不被拿走。
+- L3：上限下，一幀內建立的 mesh 位元組不超過「上限＋最後一個」；沒建到的那一幀不畫，之後的幀補上。不限時行為和現在相同。
+- L4：PvP 的 region 用交出的模型，loading 照舊等到全部畫出。
+- L5：Linux 1 km 的 Client 穩定 RSS 比改前少，數字寫進 dev_log。
+- 新加的突變全部 killed；L1 三平台。
+
+### 17.6 不做
+
+資產形式的「只給 render」旗標、transfer buffer 的縮回、頂點壓縮（要遊戲自己的 shader）、平行解析（5.2.2 的待辦）、LOD（S7，延後）。

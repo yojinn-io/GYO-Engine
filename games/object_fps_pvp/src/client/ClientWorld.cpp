@@ -53,6 +53,7 @@
 #include "engine/transform/Transform.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
+#include "engine/mesh_render/MeshRenderModule.hpp"
 #include "engine/orchestration/WorldGeneration.hpp"
 #include "engine/voxel_map/VoxelMapLoaders.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
@@ -664,7 +665,8 @@ K::SystemResult ShowArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetVi
     if (!picture) return hold();
     for (data::RegionPicture& region : picture->regions) {
         R::Mesh3d mesh;
-        mesh.model = std::move(region.model);
+        // Handed to the render World: once its GPU mesh is made, the region's vertices are only on the GPU.
+        mesh.model = std::make_shared<R::HandedModel>(std::move(region.model));
         mesh.image = picture->palette;
         mesh.filter = R::TextureFilter::Nearest;
         auto id = spawn.New(T::Transform{}, std::move(mesh), R::Aabb{region.bounds});
@@ -2248,11 +2250,20 @@ K::SystemResult CopyPresentation(K::ExtractRes<ClientSettings> settings, K::ResM
     return {};
 }
 
+// The bytes of new meshes the Render World makes in a frame (64 MiB: a 250 m map's regions in one or two frames, a
+// km^2 map's in about twelve).
+constexpr std::uint64_t kMeshBytesPerFrame = 64ULL * 1024 * 1024;
+
 O::WorldDescription ClientRenderWorld(const bool gpu) {
     O::WorldDescription world;
     world.name = "Render";
     world.extractFrom = "Frame";
     world.units = {"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render", "ui_render"};
+    // A map's regions are made over several frames (the loading's warm-up waits for every draw), so the upload buffer
+    // stays near this size instead of the whole map's.
+    GYO::Engine::MeshRender::MeshRenderOptions meshes;
+    meshes.meshBytesPerFrame = kMeshBytesPerFrame;
+    world.options.Set(std::move(meshes));
     if (gpu) world.units.push_back("sdl_gpu");
     world.build = [](O::WorldSetup& setup) {
         K::SystemOptions copy;

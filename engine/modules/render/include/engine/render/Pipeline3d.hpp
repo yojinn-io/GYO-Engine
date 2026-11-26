@@ -53,23 +53,26 @@ struct Extracted3dItems final {
     std::vector<Extracted3dItem> items;
 };
 
-// The key of a model mesh's retained GPU mesh: the asset (id and life) or the model the author holds (its address,
-// the model kept alive by RenderModelMeshes while it has a mesh), and the mesh's index.
+// The key of a model mesh's retained GPU mesh: the asset (id and life) or the model the author holds (the address of
+// its ModelData, or of its HandedModel: kept alive by RenderModelMeshes while it has a mesh), and the mesh's index.
 struct ModelMeshKey final {
     std::string asset;
     std::uint64_t life = 0;
-    const Model::ModelData* held = nullptr;
+    const void* held = nullptr;
     std::uint32_t mesh = 0;
 
     friend auto operator<=>(const ModelMeshKey&, const ModelMeshKey&) = default;
 };
 
 // A model as this frame draws it: its key (the mesh index still 0), its data (null: an asset not loaded yet, or no
-// source asset view), and for a model the author holds, the holder that keeps it alive (as ResolveImage).
+// source asset view), and for a model the author holds, the holder that keeps its key alive (as ResolveImage) and
+// the data alive this frame. handed: the HandedModel, when it is one.
 struct ResolvedModel final {
     ModelMeshKey key;
     const Model::ModelData* data = nullptr;
-    std::shared_ptr<const Model::ModelData> holder;
+    std::shared_ptr<const void> holder;
+    std::shared_ptr<const Model::ModelData> current;
+    std::shared_ptr<HandedModel> handed;
 };
 // view: the source World's AssetView (read through ExtractRes), or null when the source has none (an asset then does
 // not resolve; a held model does).
@@ -78,27 +81,37 @@ struct ResolvedModel final {
 // render's Resource in the render World (mesh_render): the retained meshes made from model meshes, made the first
 // time one is drawn (Bevy's RenderAssets<RenderMesh>). As RenderImages: a new life of an asset lets the old life's
 // meshes go, and an asset's stay while the render World lives; a held model's go after a frame in which no Mesh3d drew
-// it (EndFrame).
+// it (EndFrame). bytesPerFrame: how many bytes of new meshes one frame makes (Bevy's RenderAssetBytesPerFrame,
+// bevy_render/src/render_asset.rs:509-560; none: no limit), a soft limit as Bevy's: meshes are made until the frame's
+// bytes reach it (the one that passes it is made), the next ones wait for a later frame.
 class RenderModelMeshes final {
 public:
+    explicit RenderModelMeshes(std::optional<std::uint64_t> bytesPerFrame = std::nullopt) : bytesPerFrame_(bytesPerFrame) {}
+
     // The retained mesh of this model mesh, made on meshes when there is none; its index count in indexCount. holder
-    // keeps a held model alive while its mesh is kept (null for an asset). A mesh without vertices or whole triangles:
-    // nullopt (nothing to draw).
-    std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const Model::ModelData> holder,
+    // keeps a held model's key alive while its mesh is kept (null for an asset). A mesh without vertices or whole
+    // triangles, or a new one past this frame's bytes: nullopt (nothing to draw this frame).
+    std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const void> holder,
                               RenderMeshes& meshes, std::uint32_t& indexCount);
+    // Whether this model mesh has its retained mesh.
+    [[nodiscard]] bool Has(const ModelMeshKey& key) const { return entries_.contains(key); }
     // At the end of the frame's extract (ExtractMeshes3d, the one user): the meshes of held models no Mesh3d drew this
     // frame are released (their release goes with this frame's asks).
     void EndFrame(RenderMeshes& meshes);
     [[nodiscard]] std::size_t Count() const noexcept { return entries_.size(); }
+    // The bytes of the meshes made this frame (vertices and indices as they are handed to RenderMeshes).
+    [[nodiscard]] std::uint64_t BytesThisFrame() const noexcept { return bytesThisFrame_; }
 
 private:
     struct Entry {
         MeshId mesh;
         std::uint32_t indexCount = 0;
-        std::shared_ptr<const Model::ModelData> holder;
+        std::shared_ptr<const void> holder;
         bool used = false;
     };
     std::map<ModelMeshKey, Entry> entries_;
+    std::optional<std::uint64_t> bytesPerFrame_;
+    std::uint64_t bytesThisFrame_ = 0;
 };
 
 inline void HashValue(Kernel::Hasher&, const Extracted3dItems&) {}

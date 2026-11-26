@@ -1825,6 +1825,110 @@
    "target": "gyo_render_tests",
    "cases": "render_extract: a Mesh3d of a model the author holds*",
    "expect": "\\[mh\\-held\\-(?:let\\-go|released)\\]"
+  },
+  {
+   "id": "mh-handed-not-taken",
+   "what": "a handed model keeps its vertices after its GPU meshes are made",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "    if (all) resolved.handed->TakeVertices();\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-handed\\-(?:taken|left|freed)\\]"
+  },
+  {
+   "id": "mh-handed-taken-early",
+   "what": "a handed model's vertices are taken before every mesh without a skin has its GPU mesh",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "    if (all) resolved.handed->TakeVertices();\n",
+   "replace": "    resolved.handed->TakeVertices();\n",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-handed\\-all\\-meshes\\]"
+  },
+  {
+   "id": "mh-handed-undrawn-mesh-skipped",
+   "what": "the meshes of a handed model no Mesh3d draws are not made, so its vertices are never taken",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "        all = modelMeshes.Use(key, mesh, resolved.holder, renderMeshes, indexCount).has_value() && all;\n",
+   "replace": "        all = modelMeshes.Has(key) && all;\n",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-handed\\-(?:taken|all\\-meshes)\\]"
+  },
+  {
+   "id": "p3-handed-skinned-taken",
+   "what": "a skinned mesh of a handed model loses its vertices (it is skinned on the CPU every frame)",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (mesh.skin != Model::kNoSkin) {\n            left->meshes.push_back(mesh);\n            continue;\n        }\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a handed model's vertices are taken*",
+   "expect": "\\[p3\\-handed\\-skinned\\]"
+  },
+  {
+   "id": "p3-handed-place-lost",
+   "what": "a handed model's meshes lose their node when their vertices are taken (they are drawn at the wrong place)",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        stays.node = mesh.node;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: a handed model's vertices are taken*",
+   "expect": "\\[p3\\-handed\\-plain\\]"
+  },
+  {
+   "id": "p3-bytes-unlimited",
+   "what": "the bytes of new meshes per frame are not limited",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) return std::nullopt;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: the bytes of new meshes*",
+   "expect": "\\[p3\\-bytes\\-wait\\]"
+  },
+  {
+   "id": "p3-bytes-hard",
+   "what": "the limit is hard: a mesh that passes it is not made, so one larger than the limit never is",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) return std::nullopt;\n",
+   "replace": "        if (bytesPerFrame_ && bytesThisFrame_ + mesh.positions.size() * sizeof(Vertex3D) + mesh.indices.size() * sizeof(std::uint32_t) > *bytesPerFrame_) return std::nullopt;\n",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: the bytes of new meshes*",
+   "expect": "\\[p3\\-bytes\\-soft\\]"
+  },
+  {
+   "id": "p3-bytes-not-reset",
+   "what": "the frame's bytes are not reset, so meshes past the first frame's limit are never made",
+   "guards": [
+    "big-map-declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "    bytesThisFrame_ = 0;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "pipeline3d: the bytes of new meshes*",
+   "expect": "\\[p3\\-bytes\\-next\\]"
   }
  ]
 }

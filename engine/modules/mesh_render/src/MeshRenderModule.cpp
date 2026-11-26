@@ -43,6 +43,22 @@ std::vector<Math::Matrix4> NodesOf(const Model::ModelData& model, const Render::
     return nodes;
 }
 
+// A handed model (Render::HandedModel): its other meshes without a skin are made too (this frame's bytes allowing), and
+// once every one of them with geometry has its retained mesh, its vertices are taken (they are then only on the GPU).
+void TakeWhenMade(const Render::ResolvedModel& resolved, const Model::ModelData& model, Render::RenderModelMeshes& modelMeshes,
+                  Render::RenderMeshes& renderMeshes) {
+    bool all = true;
+    for (std::uint32_t i = 0; i < model.meshes.size(); ++i) {
+        const Model::Mesh& mesh = model.meshes[i];
+        if (mesh.skin != Model::kNoSkin || mesh.positions.empty() || mesh.indices.size() < 3) continue;
+        Render::ModelMeshKey key = resolved.key;
+        key.mesh = i;
+        std::uint32_t indexCount = 0;
+        all = modelMeshes.Use(key, mesh, resolved.holder, renderMeshes, indexCount).has_value() && all;
+    }
+    if (all) resolved.handed->TakeVertices();
+}
+
 SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshes,
                              Kernel::Extract<Kernel::Read<Transform::GlobalTransform>> globals,
                              Kernel::Extract<Kernel::Read<Render::SkinPose>> poses,
@@ -86,9 +102,10 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             if (item.vertices.empty() || item.indices.empty()) return;
         } else {
             const std::optional<Render::MeshId> retained =
-                modelMeshes.Get().Use(key, mesh, std::move(resolved.holder), renderMeshes.Get(), item.indexCount);
+                modelMeshes.Get().Use(key, mesh, resolved.holder, renderMeshes.Get(), item.indexCount);
             if (!retained) return;
             item.mesh = *retained;
+            if (resolved.handed != nullptr && !resolved.handed->Taken()) TakeWhenMade(resolved, *model, modelMeshes.Get(), renderMeshes.Get());
         }
         items.push_back(std::move(item));
     });
@@ -138,9 +155,9 @@ void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.AddSystem<&Queue3dPasses>(std::move(queue));
 
 
-    setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
+    setup.Prepare([bytes = options.meshBytesPerFrame](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted3dItems>(world);
-        PutIfAbsent<Render::RenderModelMeshes>(world);
+        if (world.Resource<Render::RenderModelMeshes>() == nullptr) world.SetResource(Render::RenderModelMeshes{bytes});
         return {};
     });
 }
