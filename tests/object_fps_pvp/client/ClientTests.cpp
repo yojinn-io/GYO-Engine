@@ -689,6 +689,36 @@ TEST_CASE("client: the other player walks smoothly, a little behind the Match, a
   }
 }
 
+// The other players' steps are heard too, where they walk; a crouched walk is silent (playtest 2026-11-26, item 2).
+TEST_CASE("client: the other player's steps sound while it walks standing, not while it walks crouched") {
+    Setup setup(4);
+    setup.Frames(480);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId rival = PlayerOf(setup.Client(), 2);
+    REQUIRE(rival != 0);
+    PW::PlayerInput walk;
+    walk.forward = 1.0F;
+    walk.present = 1;
+    walk.yaw = setup.Sim().Get<PW::PlayerBody>(rival)->yaw;
+    walk.crouch = 1;
+    setup.otherInput = walk;
+    // Crouching down and walking two seconds (about three metres): no sound at all (our player stands still).
+    setup.Frames(4 * 16);
+    const std::uint64_t crouchedBefore = SoundsSubmitted(*setup.client);
+    const GYO::Engine::Math::Vec3 crouchedFrom = setup.Client().Get<PW::PlayerBody>(rival)->feet;
+    setup.Frames(4 * 128);
+    REQUIRE(GYO::Engine::Math::Length(setup.Client().Get<PW::PlayerBody>(rival)->feet - crouchedFrom) > 2.0F);
+    CHECK_MESSAGE(SoundsSubmitted(*setup.client) == crouchedBefore, "[pvp-crouch-silent] a crouched walk made no sound");
+    // Standing up and walking one more second (three metres, two strides of 1.5): its steps sound.
+    walk.crouch = 0;
+    walk.yaw += 3.14159265F;
+    setup.otherInput = walk;
+    const std::uint64_t standingBefore = SoundsSubmitted(*setup.client);
+    setup.Frames(4 * 64);
+    CHECK_MESSAGE(SoundsSubmitted(*setup.client) >= standingBefore + 1, "[pvp-remote-steps] the other player's steps were played");
+    setup.otherInput.reset();
+}
+
 // A respawn (a new life somewhere else) is a jump, not a walk: the Frame World's copy is at the old place or at the
 // new one, never between (port declaration, segment 6, design 3).
 TEST_CASE("client: the other player's new life is not blended from where it was") {

@@ -651,3 +651,17 @@ TEST_CASE("world: an expected player who never comes does not hold the start pas
     session.Frames(80, {Ready(Input(0, 0, 0))});
     CHECK_MESSAGE(session.Match().Resource<PW::MatchInfo>()->phase == PW::MatchPhase::Playing, "[pvp-start-deadline]");
 }
+
+TEST_CASE("world: the arena stands between two points when its walls cut the segment (the sounds' occlusion)") {
+    const PW::InstalledArena& arena = ShippedContent()->arenas.front();
+    // The pillar: x and z in [9, 11], up to y 2.
+    CHECK(PW::Blocked(arena, {8, 1, 10}, {12, 1, 10}));
+    CHECK(PW::Blocked(arena, {12, 1, 10}, {8, 1, 10}));
+    // Over it, beside it, or stopping before it: nothing between.
+    CHECK_FALSE(PW::Blocked(arena, {8, 2.5F, 10}, {12, 2.5F, 10}));
+    CHECK_FALSE(PW::Blocked(arena, {8, 1, 12}, {12, 1, 12}));
+    CHECK_FALSE(PW::Blocked(arena, {5, 1, 10}, {8.5F, 1, 10}));
+    // A source touching the pillar's face is not behind it; the same point is not apart from itself.
+    CHECK_FALSE(PW::Blocked(arena, {5, 1, 10}, {9, 1, 10}));
+    CHECK_FALSE(PW::Blocked(arena, {5, 1, 5}, {5, 1, 5}));
+}

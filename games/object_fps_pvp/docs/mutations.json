@@ -2454,6 +2454,110 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: a started room whose connect*",
    "expect": "pvp-room-connect-unreadable"
+  },
+  {
+   "id": "pvp-crouch-steps-sound",
+   "what": "a crouched walk steps like a standing one",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (crouched) {\n        travelled_ = 0;",
+   "replace": "    if (false) {\n        travelled_ = 0;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP footsteps: a crouched*",
+   "expect": "Step::None",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-crouch-distance-kept",
+   "what": "the distance walked crouched counts toward the next step",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (crouched) {\n        travelled_ = 0;\n        return Step::None;",
+   "replace": "    if (crouched) {\n        travelled_ += moved;\n        return Step::None;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP footsteps: a crouched*",
+   "expect": "Step::",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-sound-no-range",
+   "what": "a spatial cue is played at any distance",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "if (Math::Distance(listener, source) > c.maximumDistance) return std::nullopt;",
+   "replace": "(void)c.maximumDistance;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP heard gains*",
+   "expect": "HeardGains",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-sound-no-occlusion",
+   "what": "the map between the listener and the cue does not lower it",
+   "file": "games/object_fps_pvp/src/present/SoundCues.cpp",
+   "find": "    if (occluded) {\n        gains.left *= settings.occludedGain;",
+   "replace": "    if (false) {\n        gains.left *= settings.occludedGain;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP heard gains*",
+   "expect": "occludedGain",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-blocked-ignores-walls",
+   "what": "nothing ever stands between two points",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    return hit.has_value() && hit->t < length - kApart;",
+   "replace": "    return false && hit.has_value();",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena stands between*",
+   "expect": "Blocked",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-blocked-at-touch",
+   "what": "a source touching a wall counts as behind it",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    return hit.has_value() && hit->t < length - kApart;",
+   "replace": "    return hit.has_value() && hit->t <= length;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena stands between*",
+   "expect": "Blocked",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-remote-steps-silent",
+   "what": "only the own player's steps are played",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            } else {\n                spatial(cue, body);\n            }",
+   "replace": "            }",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's steps*",
+   "expect": "pvp-remote-steps",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-remote-crouch-sounds",
+   "what": "the Client hears a crouched walk",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "s.steps[id].Observe(body.feet, body.grounded != 0, body.crouched != 0, combat.lives, settings);",
+   "replace": "s.steps[id].Observe(body.feet, body.grounded != 0, false, combat.lives, settings);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the other player's steps*",
+   "expect": "pvp-crouch-silent",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
   }
  ]
 }

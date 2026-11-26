@@ -71,6 +71,10 @@ struct GameContent final {
     [[nodiscard]] const InstalledArena* Find(const std::string& id) const;
 };
 
+// Whether the arena stands between two points: its walls cut the straight segment from a to b. A sound's occlusion asks
+// it (the Client hears a cue behind the map at a lower gain; present/SoundCues.hpp HeardGains).
+[[nodiscard]] bool Blocked(const InstalledArena& arena, const Math::Vec3& a, const Math::Vec3& b);
+
 // The content a World was built with (a Client switches arenas with it).
 struct ContentRef final {
     std::shared_ptr<const GameContent> content;

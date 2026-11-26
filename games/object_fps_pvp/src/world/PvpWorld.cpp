@@ -834,6 +834,17 @@ std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, c
 
 } // namespace
 
+bool Blocked(const InstalledArena& arena, const Math::Vec3& a, const Math::Vec3& b) {
+    const float length = Math::Distance(a, b);
+    // Two points this close are not apart: nothing stands between them.
+    constexpr float kApart = 1.0e-3F;
+    if (!(length > kApart)) return false;
+    const Math::Ray ray{a, (b - a) * (1.0F / length)};
+    // A wall the segment only touches at its far end (a source against a wall) does not stand between.
+    const std::optional<P::RayHit> hit = P::CastRay(P::Shape{arena.walls}, P::Pose{}, ray, length);
+    return hit.has_value() && hit->t < length - kApart;
+}
+
 const InstalledArena* GameContent::Find(const std::string& id) const {
     for (const InstalledArena& arena : arenas) {
         if (arena.content.id == id) return &arena;

@@ -41,7 +41,7 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the settings");
-        if (data::Integer(data::Member(json, "version"), "version") != 3) throw std::runtime_error("unsupported version");
+        if (data::Integer(data::Member(json, "version"), "version") != 4) throw std::runtime_error("unsupported version");
         SoundSettings settings;
         const auto cues = data::AsObject(data::Member(json, "cues"), "cues");
         for (std::size_t i = 0; i < SoundCueCount; ++i) {
@@ -49,11 +49,16 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
             settings.cues[i].clip = data::String(data::Member(cue, "clip"), "clip");
             if (settings.cues[i].clip.empty()) throw std::runtime_error("a cue names its clip");
             settings.cues[i].volume = Bounded(data::Member(cue, "volume"), 0, 4, "volumes are in [0, 4]");
+            if (data::HasMember(cue, "maximum_distance")) {
+                settings.cues[i].maximumDistance =
+                    Bounded(data::Member(cue, "maximum_distance"), 0.01F, 100000, "the maximum distance is positive");
+            }
         }
         const auto spatial = data::AsObject(data::Member(json, "spatial"), "spatial");
         settings.referenceDistance =
             Bounded(data::Member(spatial, "reference_distance"), 0.01F, 1000, "the reference distance is positive");
         settings.minimumGain = Bounded(data::Member(spatial, "minimum_gain"), 0, 1, "the minimum gain is in [0, 1]");
+        settings.occludedGain = Bounded(data::Member(spatial, "occluded_gain"), 0, 1, "the occluded gain is in [0, 1]");
         const auto footsteps = data::AsObject(data::Member(json, "footsteps"), "footsteps");
         settings.strideDistance = Bounded(data::Member(footsteps, "stride_distance"), 0.01F, 100, "the stride is positive");
         settings.teleportDistance =
@@ -86,7 +91,19 @@ StereoGains SpatialGains(const Math::Vec3 listener, const float listenerYaw, con
     return {Math::Min(4.0F, scale * std::cos(angle)), Math::Min(4.0F, scale * std::sin(angle))};
 }
 
-FootstepTracker::Step FootstepTracker::Observe(const Math::Vec3 position, const bool grounded,
+std::optional<StereoGains> HeardGains(const SoundCue cue, const Math::Vec3 listener, const float listenerYaw,
+                                      const Math::Vec3 source, const bool occluded, const SoundSettings& settings) noexcept {
+    const SoundSettings::Cue& c = settings.cues[static_cast<std::size_t>(cue)];
+    if (Math::Distance(listener, source) > c.maximumDistance) return std::nullopt;
+    StereoGains gains = SpatialGains(listener, listenerYaw, source, c.volume, settings);
+    if (occluded) {
+        gains.left *= settings.occludedGain;
+        gains.right *= settings.occludedGain;
+    }
+    return gains;
+}
+
+FootstepTracker::Step FootstepTracker::Observe(const Math::Vec3 position, const bool grounded, const bool crouched,
                                                const std::uint64_t lifeGeneration,
                                                const SoundSettings& settings) noexcept {
     if (!started_ || life_ != lifeGeneration || PlanarDistance(last_, position) > settings.teleportDistance) {
@@ -106,6 +123,10 @@ FootstepTracker::Step FootstepTracker::Observe(const Math::Vec3 position, const 
         return Step::Landing;
     }
     if (!grounded) return Step::None;
+    if (crouched) {
+        travelled_ = 0;
+        return Step::None;
+    }
     travelled_ += moved;
     if (travelled_ < settings.strideDistance) return Step::None;
     travelled_ = std::fmod(travelled_, settings.strideDistance);

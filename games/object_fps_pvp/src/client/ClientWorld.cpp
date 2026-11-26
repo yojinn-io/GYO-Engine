@@ -318,7 +318,7 @@ struct ClientSound final {
     AU::Submitter* submitter = nullptr;
     std::map<K::EntityId, std::uint64_t> shotsHeard;  // per player: the last shot tick played
     std::uint64_t confirmedHeard = 0;                 // the own ShotRecord tick played
-    present::FootstepTracker steps;
+    std::map<K::EntityId, present::FootstepTracker> steps;  // per player
     // The own player's hits, as the hit feedback sees them (a new hit of a living player sounds).
     present::LocalHitFeedback hits;
 };
@@ -946,7 +946,8 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
 }
 
 K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view,
-                           K::Res<ClientScene> scene, K::Res<ClientControls> controls,
+                           K::Res<ClientScene> scene, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
+                           K::Res<PW::ContentRef> content,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
                            K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
@@ -968,9 +969,22 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
                         const PW::HitRecord&) {
         if (owner.userId == user->userId) own = &body;
     });
+    // The other players' cues are heard at the own player's ear, from the middle of their body; the arena between them
+    // lowers them (PW::Blocked).
+    const PW::InstalledArena* arena = content->content ? content->content->Find(rules->arena.id) : nullptr;
+    const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
+        if (own == nullptr) return;
+        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->arena, rules->stance, own->crouched != 0), 0.0F};
+        const Math::Vec3 source =
+            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->arena, rules->stance, body.crouched != 0), 0.0F};
+        const bool occluded = arena != nullptr && PW::Blocked(*arena, ear, source);
+        if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
+    };
     const double now = static_cast<double>(time->elapsed) / 1e9;
+    std::set<K::EntityId> seen;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
                         const PW::ShotRecord& shot, const PW::HitRecord& hits) {
+        seen.insert(id);
         const bool mine = owner.userId == user->userId;
         auto heard = s.shotsHeard.find(id);
         if (heard == s.shotsHeard.end()) {
@@ -981,9 +995,19 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
             heard->second = combat.lastShotTick;
             if (mine) {
                 play(present::SoundCue::LocalShot, present::CentredGains(volume(present::SoundCue::LocalShot)));
-            } else if (own != nullptr) {
-                play(present::SoundCue::RemoteShot,
-                     present::SpatialGains(own->feet, controls->controls.Yaw(), body.feet, volume(present::SoundCue::RemoteShot), settings));
+            } else {
+                spatial(present::SoundCue::RemoteShot, body);
+            }
+        }
+        // Every player's steps: the own at the centre, the others where they walk.
+        const auto step = s.steps[id].Observe(body.feet, body.grounded != 0, body.crouched != 0, combat.lives, settings);
+        if (step != present::FootstepTracker::Step::None) {
+            const present::SoundCue cue =
+                step == present::FootstepTracker::Step::Footstep ? present::SoundCue::Footstep : present::SoundCue::Landing;
+            if (mine) {
+                play(cue, present::CentredGains(volume(cue)));
+            } else {
+                spatial(cue, body);
             }
         }
         if (mine) {
@@ -998,14 +1022,11 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
             if (present::HitTakenSounds(taken.outcome)) {
                 play(present::SoundCue::HitTaken, present::CentredGains(volume(present::SoundCue::HitTaken)));
             }
-            const auto step = s.steps.Observe(body.feet, body.grounded != 0, combat.lives, settings);
-            if (step == present::FootstepTracker::Step::Footstep) {
-                play(present::SoundCue::Footstep, present::CentredGains(volume(present::SoundCue::Footstep)));
-            } else if (step == present::FootstepTracker::Step::Landing) {
-                play(present::SoundCue::Landing, present::CentredGains(volume(present::SoundCue::Landing)));
-            }
         }
     });
+    // A player gone (left, or no longer seen) starts again silently if it comes back.
+    std::erase_if(s.steps, [&](const auto& entry) { return seen.count(entry.first) == 0; });
+    std::erase_if(s.shotsHeard, [&](const auto& entry) { return seen.count(entry.first) == 0; });
     return {};
 }
 
