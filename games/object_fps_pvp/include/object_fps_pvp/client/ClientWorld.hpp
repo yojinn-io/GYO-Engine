@@ -191,6 +191,7 @@ struct DrawnFrames final {
     bool known = false;
     std::uint64_t shown = 0;    // frames drawn and shown
     std::uint64_t skipped = 0;  // draws skipped (a texture, mesh or pipeline not there yet)
+    std::uint64_t waiting = 0;  // meshes not made yet for the bytes a frame may make (mesh_render's MeshRenderStatus)
 };
 void HashValue(GYO::Kernel::Hasher&, const DrawnFrames&);
 

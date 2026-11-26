@@ -3038,7 +3038,7 @@
    "replace": "        mesh.model = std::move(region.model);\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the arena is drawn as one Mesh3d per region*",
-   "expect": "pvp-region-meshes|pvp-region-handed"
+   "expect": "pvp-region-meshes|pvp-region-handed|pvp-region-model"
   },
   {
    "id": "pvp-regions-one-picture",
@@ -3052,6 +3052,19 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a map's regions made on several threads*",
    "expect": "pvp-regions-parallel"
+  },
+  {
+   "id": "pvp-loading-ignores-waiting",
+   "what": "the loading's warm-up ends while meshes still wait for their frame (the map pops in after the screen goes)",
+   "guards": [
+    "big-map declaration 17.5 L4"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        } else if (drawn->skipped != next.skippedAt || drawn->waiting != 0) {\n",
+   "replace": "        } else if (drawn->skipped != next.skippedAt) {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen waits while meshes wait*",
+   "expect": "pvp-loading-waits-meshes"
   }
  ]
 }

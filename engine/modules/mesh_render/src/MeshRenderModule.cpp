@@ -50,14 +50,20 @@ void TakeWhenMade(const Render::ResolvedModel& resolved, const Model::ModelData&
     bool all = true;
     for (std::uint32_t i = 0; i < model.meshes.size(); ++i) {
         const Model::Mesh& mesh = model.meshes[i];
-        if (mesh.skin != Model::kNoSkin || mesh.positions.empty() || mesh.indices.size() < 3) continue;
+        if (mesh.skin != Model::kNoSkin || !Render::HasGeometry(mesh)) continue;
         Render::ModelMeshKey key = resolved.key;
         key.mesh = i;
         std::uint32_t indexCount = 0;
-        all = modelMeshes.Use(key, mesh, resolved.holder, renderMeshes, indexCount).has_value() && all;
+        all = modelMeshes.Use(key, mesh, resolved.holder, renderMeshes, indexCount, true).has_value() && all;
     }
     if (all) resolved.handed->TakeVertices();
 }
+
+// Where the extract tells the program how many meshes wait (the Product's MeshRenderStatus; null: none).
+struct MeshRenderStatusLink final {
+    MeshRenderStatus* status = nullptr;
+};
+void HashValue(Kernel::Hasher&, const MeshRenderStatusLink&) {}
 
 SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshes,
                              Kernel::Extract<Kernel::Read<Transform::GlobalTransform>> globals,
@@ -65,7 +71,8 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
                              Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
                              Kernel::ExtractRes<WorldAsset::AssetView> assets, Kernel::ResMut<Render::Extracted3dItems> out,
                              Kernel::ResMut<Render::RenderModelMeshes> modelMeshes, Kernel::ResMut<Render::RenderMeshes> renderMeshes,
-                             Kernel::ResMut<Render::RenderImages> images, Kernel::ResMut<Render::RenderTextures> textures) {
+                             Kernel::ResMut<Render::RenderImages> images, Kernel::ResMut<Render::RenderTextures> textures,
+                             Kernel::Res<MeshRenderStatusLink> link) {
     const WorldAsset::AssetView* view = assets.Present() ? &*assets : nullptr;
     std::vector<Render::Extracted3dItem> items;
     meshes.ForEach([&](const Kernel::EntityId id, const Render::Mesh3d& m) {
@@ -102,7 +109,7 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
             if (item.vertices.empty() || item.indices.empty()) return;
         } else {
             const std::optional<Render::MeshId> retained =
-                modelMeshes.Get().Use(key, mesh, resolved.holder, renderMeshes.Get(), item.indexCount);
+                modelMeshes.Get().Use(key, mesh, resolved.holder, renderMeshes.Get(), item.indexCount, resolved.handed != nullptr);
             if (!retained) return;
             item.mesh = *retained;
             if (resolved.handed != nullptr && !resolved.handed->Taken()) TakeWhenMade(resolved, *model, modelMeshes.Get(), renderMeshes.Get());
@@ -112,6 +119,7 @@ SystemResult ExtractMeshes3d(Kernel::Extract<Kernel::Read<Render::Mesh3d>> meshe
     out.Get().items = std::move(items);
     // Every Mesh3d of the frame has been met: held models none of them drew let their meshes go.
     modelMeshes.Get().EndFrame(renderMeshes.Get());
+    if (link->status != nullptr) link->status->SetMeshesWaiting(modelMeshes.Read().Waiting());
     return {};
 }
 
@@ -132,11 +140,15 @@ void PutIfAbsent(Kernel::World& world) {
 
 } // namespace
 
+void MeshRenderModule::Configure(Orchestration::ProductSetup& setup) { setup.Buffer().Create<MeshRenderStatus>(); }
+
 void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     const MeshRenderOptions& options = OptionsOf(setup.Options<MeshRenderOptions>());
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::Extracted3dItems>({.name = "Extracted3dItems"});
     r.Resource<Render::RenderModelMeshes>({.name = "RenderModelMeshes"});
+    r.Resource<MeshRenderStatusLink>({.name = "MeshRenderStatusLink"});
+    MeshRenderStatus* status = setup.ProductBuffer().Find<MeshRenderStatus>();
 
     Kernel::SystemOptions extract;
     extract.name = "ExtractMeshes3d";
@@ -155,8 +167,9 @@ void MeshRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.AddSystem<&Queue3dPasses>(std::move(queue));
 
 
-    setup.Prepare([bytes = options.meshBytesPerFrame](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
+    setup.Prepare([bytes = options.meshBytesPerFrame, status](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::Extracted3dItems>(world);
+        world.SetResource(MeshRenderStatusLink{status});
         if (world.Resource<Render::RenderModelMeshes>() == nullptr) world.SetResource(Render::RenderModelMeshes{bytes});
         return {};
     });

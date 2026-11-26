@@ -621,6 +621,20 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     Frames(*p, 2);
     CHECK_MESSAGE(Draws3d() == 1, "[mh-handed-drawn] it is still drawn, from its GPU mesh");
     CHECK_MESSAGE(MeshAsks(0) == 0, "[mh-handed-once] no mesh is made again");
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[mh-handed-kept] the mesh no Mesh3d draws stays too");
+    // Taken off for a while (the author still holds the model): its GPU meshes stay, and it is drawn again.
+    game.Remove<R::Mesh3d>(2);
+    Frames(*p, 2);
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[mh-handed-kept] held by the author, its meshes stay undrawn");
+    game.Insert(2, mesh);
+    Frames(*p);
+    CHECK_MESSAGE((Draws3d() == 1 && MeshAsks(0) == 0), "[mh-handed-back] put back, it is drawn again from the same GPU mesh");
+    // Nothing holds it any more: its meshes go (Bevy's last Handle).
+    game.Remove<R::Mesh3d>(2);
+    mesh.model = HeldTriangle(1.0F);
+    handed.reset();
+    Frames(*p);
+    CHECK_MESSAGE((render.Resource<R::RenderModelMeshes>()->Count() == 0 && MeshAsks(1) == 2), "[mh-handed-released] its GPU meshes go");
 
     // With room for one mesh a frame (MeshRenderOptions::meshBytesPerFrame): the second mesh waits a frame, and the
     // vertices are taken only once it is made.
@@ -647,9 +661,13 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     Frames(*q);
     CHECK_MESSAGE((!slow->Taken() && q->World("Render").GetWorld().Resource<R::RenderModelMeshes>()->Count() == 1),
                   "[mh-handed-all-meshes] one mesh made: the vertices stay until the other is");
+    const auto* status = std::as_const(q->Buffer()).Find<GYO::Engine::MeshRender::MeshRenderStatus>();
+    REQUIRE(status != nullptr);
+    CHECK_MESSAGE(status->MeshesWaiting() == 1, "[mh-status-waiting] the program is told one mesh waits");
     Frames(*q);
     CHECK_MESSAGE((slow->Taken() && q->World("Render").GetWorld().Resource<R::RenderModelMeshes>()->Count() == 2),
                   "[mh-handed-all-meshes] both made: taken");
+    CHECK_MESSAGE(status->MeshesWaiting() == 0, "[mh-status-waiting] none waits any more");
 }
 
 TEST_CASE("render_extract: a scene of one model repeated is one instanced draw per model and image; culled copies are not instances") {

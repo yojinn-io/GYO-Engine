@@ -82,7 +82,7 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main
-    LIBRARIES ${object_fps_pvp_client} GYO::OS GYO::Threads
+    LIBRARIES ${object_fps_pvp_client} GYO::OS GYO::Threads GYO::MeshRender
     SOURCES
     src/client_main.cpp)
 gyo_product_units(${object_fps_pvp_main} MODULES physics_3d render_world world_render camera_render sprite_render mesh_render visibility

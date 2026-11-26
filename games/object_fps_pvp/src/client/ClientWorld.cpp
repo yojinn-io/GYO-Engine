@@ -1232,7 +1232,9 @@ K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView
             next.warmFrom = drawn->shown;
             if (!next.warmStart) next.warmStart = drawn->shown;
             next.skippedAt = drawn->skipped;
-        } else if (drawn->skipped != next.skippedAt) {
+        } else if (drawn->skipped != next.skippedAt || drawn->waiting != 0) {
+            // A draw skipped, or a mesh still waiting for its frame (mesh_render's bytes a frame): the two frames
+            // count again.
             next.warmFrom = drawn->shown;
             next.skippedAt = drawn->skipped;
         }

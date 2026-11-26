@@ -1859,8 +1859,8 @@
     "big-map-declaration 17.3, 17.5"
    ],
    "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
-   "find": "        all = modelMeshes.Use(key, mesh, resolved.holder, renderMeshes, indexCount).has_value() && all;\n",
-   "replace": "        all = modelMeshes.Has(key) && all;\n",
+   "find": "    for (std::uint32_t i = 0; i < model.meshes.size(); ++i) {\n        const Model::Mesh& mesh = model.meshes[i];\n        if (mesh.skin != Model::kNoSkin || !Render::HasGeometry(mesh)) continue;\n",
+   "replace": "    for (std::uint32_t i = 0; i < 1; ++i) {\n        const Model::Mesh& mesh = model.meshes[i];\n        if (mesh.skin != Model::kNoSkin || !Render::HasGeometry(mesh)) continue;\n",
    "target": "gyo_render_tests",
    "cases": "render_extract: a handed model's vertices are taken*",
    "expect": "\\[mh\\-handed\\-(?:taken|all\\-meshes)\\]"
@@ -1929,6 +1929,58 @@
    "target": "gyo_render_tests",
    "cases": "pipeline3d: the bytes of new meshes*",
    "expect": "\\[p3\\-bytes\\-next\\]"
+  },
+  {
+   "id": "mh-handed-frame-released",
+   "what": "a handed model's meshes go after a frame no Mesh3d drew it, though it is still held (its vertices are gone: it cannot be drawn again)",
+   "guards": [
+    "big-map declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        const bool gone = it->second.whileHeld ? it->second.holder.use_count() <= ours[it->second.holder.get()]\n                                               : it->first.held != nullptr && !it->second.used;\n",
+   "replace": "        const bool gone = it->first.held != nullptr && !it->second.used;\n",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-handed\\-(?:kept|back)\\]"
+  },
+  {
+   "id": "mh-handed-never-released",
+   "what": "a handed model's meshes stay after nothing holds it",
+   "guards": [
+    "big-map declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "        const bool gone = it->second.whileHeld ? it->second.holder.use_count() <= ours[it->second.holder.get()]\n",
+   "replace": "        const bool gone = it->second.whileHeld ? false\n",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-handed\\-released\\]"
+  },
+  {
+   "id": "mh-status-not-told",
+   "what": "the program is not told how many meshes wait for their frame",
+   "guards": [
+    "big-map declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+   "find": "    if (link->status != nullptr) link->status->SetMeshesWaiting(modelMeshes.Read().Waiting());\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-status\\-waiting\\]"
+  },
+  {
+   "id": "p3-waiting-not-counted",
+   "what": "a mesh left for a later frame is not counted as waiting",
+   "guards": [
+    "big-map declaration 17.3, 17.5"
+   ],
+   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "find": "            ++waitingThisFrame_;\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a handed model's vertices are taken*",
+   "expect": "\\[mh\\-status\\-waiting\\]"
   }
  ]
 }

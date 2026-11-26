@@ -32,6 +32,7 @@
 #include "engine/ui/UiRoot.hpp"
 #include "engine/ui/UiRuntime.hpp"
 #include "engine/kernel/Kernel.hpp"
+#include "engine/mesh_render/MeshRenderModule.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/NetService.hpp"
 #include "engine/net/Replication.hpp"
@@ -440,10 +441,13 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
         inner(setup);
         const auto* gpu = std::as_const(setup.ProductBuffer()).Find<GYO::Plugins::SDLGPU::SDLGPUStatus>();
         if (gpu == nullptr) return;
-        setup.ExchangeIn([gpu](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
-            const PC::DrawnFrames now{true, gpu->FramesShown(), gpu->SkippedDraws()};
+        const auto* meshes = std::as_const(setup.ProductBuffer()).Find<GYO::Engine::MeshRender::MeshRenderStatus>();
+        setup.ExchangeIn([gpu, meshes](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            const PC::DrawnFrames now{true, gpu->FramesShown(), gpu->SkippedDraws(), meshes != nullptr ? meshes->MeshesWaiting() : 0};
             const auto* drawn = w.Resource<PC::DrawnFrames>();
-            if (drawn == nullptr || drawn->shown != now.shown || drawn->skipped != now.skipped || !drawn->known) w.SetResource(now);
+            if (drawn == nullptr || drawn->shown != now.shown || drawn->skipped != now.skipped || drawn->waiting != now.waiting || !drawn->known) {
+                w.SetResource(now);
+            }
             return {};
         });
     };

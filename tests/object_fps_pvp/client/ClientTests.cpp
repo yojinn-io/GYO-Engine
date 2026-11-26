@@ -26,6 +26,7 @@
 #include "engine/input/InputModule.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "engine/render/Drawables.hpp"
+#include "engine/render/Pipeline3d.hpp"
 #include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -1130,9 +1131,14 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
             if (box->local.minimum.x != region.bounds.minimum.x || box->local.minimum.z != region.bounds.minimum.z) continue;
             ++regions;
             CHECK_MESSAGE(box->local.maximum.x == region.bounds.maximum.x, "[pvp-region-box] the region's box");
-            CHECK_MESSAGE(((*handed)->Taken() && (*handed)->Model()->meshes.front().positions.empty() &&
-                           region.model->meshes.front().positions.size() > 0),
+            CHECK_MESSAGE(((*handed)->Taken() && (*handed)->Model()->meshes.front().positions.empty()),
                           "[pvp-region-handed] the region's model is handed over and its vertices taken once drawn");
+            // What the render World drew for the entity: the region's own triangles.
+            std::uint32_t indices = 0;
+            for (const auto& item : setup.client->World("Render").GetWorld().Resource<R::Extracted3dItems>()->items) {
+                if (item.entity == id) indices = item.indexCount;
+            }
+            CHECK_MESSAGE(indices == region.model->meshes.front().indices.size(), "[pvp-region-model] the region's faces: " << indices);
         }
     }
     CHECK_MESSAGE(regions == pictures.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
@@ -1143,6 +1149,24 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
         }
     }
     CHECK_MESSAGE(culledList, "[pvp-region-culled] the visibility Module checks the 3D camera");
+}
+
+// The loading's warm-up waits for the meshes mesh_render has not made yet (its bytes a frame), as for skipped draws.
+TEST_CASE("client: the loading screen waits while meshes wait for their frame") {
+    Setup setup;
+    std::uint64_t shown = 0;
+    // Meshes waiting: frames are shown, nothing skipped, yet it is not ready (within the warm-up's limit of frames).
+    for (int i = 0; i < 60; ++i) {
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 3});
+        setup.Frame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-waits-meshes] not ready while meshes wait");
+    }
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] {
+                        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 0});
+                        return PC::StatusOf(setup.Client()).ready;
+                    }),
+                    "[pvp-loading-waits-meshes] ready once none waits");
 }
 
 // The regions' pictures made on several threads (one job per region): every region drawn, in region order.

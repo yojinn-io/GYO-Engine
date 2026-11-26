@@ -81,7 +81,10 @@ struct ResolvedModel final {
 // render's Resource in the render World (mesh_render): the retained meshes made from model meshes, made the first
 // time one is drawn (Bevy's RenderAssets<RenderMesh>). As RenderImages: a new life of an asset lets the old life's
 // meshes go, and an asset's stay while the render World lives; a held model's go after a frame in which no Mesh3d drew
-// it (EndFrame). bytesPerFrame: how many bytes of new meshes one frame makes (Bevy's RenderAssetBytesPerFrame,
+// it (EndFrame), a handed model's (HandedModel) once nothing but this cache holds it (Bevy lets a GPU asset go when its
+// last Handle is dropped, bevy_render/src/render_asset.rs:331-339: its vertices are gone, so a frame it is not drawn
+// in -- a Mesh3d taken off for a while, an image still loading -- must not lose it). bytesPerFrame: how many bytes of
+// new meshes one frame makes (Bevy's RenderAssetBytesPerFrame,
 // bevy_render/src/render_asset.rs:509-560; none: no limit), a soft limit as Bevy's: meshes are made until the frame's
 // bytes reach it (the one that passes it is made), the next ones wait for a later frame.
 class RenderModelMeshes final {
@@ -89,18 +92,19 @@ public:
     explicit RenderModelMeshes(std::optional<std::uint64_t> bytesPerFrame = std::nullopt) : bytesPerFrame_(bytesPerFrame) {}
 
     // The retained mesh of this model mesh, made on meshes when there is none; its index count in indexCount. holder
-    // keeps a held model's key alive while its mesh is kept (null for an asset). A mesh without vertices or whole
-    // triangles, or a new one past this frame's bytes: nullopt (nothing to draw this frame).
+    // keeps a held model's key alive while its mesh is kept (null for an asset); whileHeld: the mesh stays while
+    // something else holds holder too (a handed model), not by the frames it is drawn in. A mesh without geometry
+    // (HasGeometry), or a new one past this frame's bytes: nullopt (nothing to draw this frame).
     std::optional<MeshId> Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const void> holder,
-                              RenderMeshes& meshes, std::uint32_t& indexCount);
-    // Whether this model mesh has its retained mesh.
-    [[nodiscard]] bool Has(const ModelMeshKey& key) const { return entries_.contains(key); }
+                              RenderMeshes& meshes, std::uint32_t& indexCount, bool whileHeld = false);
     // At the end of the frame's extract (ExtractMeshes3d, the one user): the meshes of held models no Mesh3d drew this
     // frame are released (their release goes with this frame's asks).
     void EndFrame(RenderMeshes& meshes);
     [[nodiscard]] std::size_t Count() const noexcept { return entries_.size(); }
     // The bytes of the meshes made this frame (vertices and indices as they are handed to RenderMeshes).
     [[nodiscard]] std::uint64_t BytesThisFrame() const noexcept { return bytesThisFrame_; }
+    // The new meshes the last ended frame did not make for its bytes (asked again in a later frame).
+    [[nodiscard]] std::uint64_t Waiting() const noexcept { return waiting_; }
 
 private:
     struct Entry {
@@ -108,11 +112,17 @@ private:
         std::uint32_t indexCount = 0;
         std::shared_ptr<const void> holder;
         bool used = false;
+        bool whileHeld = false;
     };
     std::map<ModelMeshKey, Entry> entries_;
     std::optional<std::uint64_t> bytesPerFrame_;
     std::uint64_t bytesThisFrame_ = 0;
+    std::uint64_t waitingThisFrame_ = 0;
+    std::uint64_t waiting_ = 0;
 };
+
+// Whether a model mesh has something to draw: vertices, and indices of whole triangles.
+[[nodiscard]] bool HasGeometry(const Model::Mesh& mesh) noexcept;
 
 inline void HashValue(Kernel::Hasher&, const Extracted3dItems&) {}
 inline void HashValue(Kernel::Hasher&, const RenderModelMeshes&) {}
