@@ -2010,13 +2010,29 @@ TEST_CASE("client: gateway: two presses of ready before an answer end as the sec
     Setup setup(1, 4, 0, PC::SceneChange{.scene = PC::Scene::Room, .room = 3}, directory.Utf8(), gateway.Address());
     setup.Load();
     REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する" && Asked(gateway, "GET", "/v1/rooms/3"); }));
-    const auto run = [&setup](const int milliseconds, const std::function<void()>& each) {
-        const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(milliseconds);
-        while (std::chrono::steady_clock::now() < until) {
+    // The room is read every 0.75 s of the Client's time (a step a frame, whatever the machine's speed): the windows
+    // here count the reads the Gateway saw, not the wall clock. Reads after the request at `from` (an index of the
+    // requests seen): one is asked only once the calls before it were answered and seen by the room.
+    const auto readsAfter = [&gateway](const std::size_t from) {
+        const std::vector<FakeGateway::Seen> seen = gateway.Requests();
+        std::size_t reads = 0;
+        for (std::size_t i = from; i < seen.size(); ++i) reads += seen[i].method == "GET" && seen[i].target == "/v1/rooms/3" ? 1 : 0;
+        return reads;
+    };
+    const auto lastOf = [&gateway](const std::string& method, const std::string& target) {
+        const std::vector<FakeGateway::Seen> seen = gateway.Requests();
+        for (std::size_t i = seen.size(); i > 0; --i) {
+            if (seen[i - 1].method == method && seen[i - 1].target == target) return i;
+        }
+        return std::size_t{0};
+    };
+    const auto runUntil = [&setup](const std::function<bool()>& done, const std::function<void()>& each) {
+        for (int i = 0; i < 2000 && !done(); ++i) {
             setup.Frame();
             each();
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+        return done();
     };
     // Ready, then not ready again, before the first answer: the first answer (ready) does not turn the button.
     gateway.Hold("POST", "/v1/rooms/3/ready");
@@ -2026,17 +2042,22 @@ TEST_CASE("client: gateway: two presses of ready before an answer end as the sec
     REQUIRE(setup.Binding("ready") == "準備する");
     gateway.Release();
     bool turned = false;
-    run(1000, [&] { turned = turned || setup.Binding("ready") != "準備する"; });
+    // Both ready calls answered, and two reads after them (the room's word on the readiness, read and shown).
+    REQUIRE(runUntil([&] { return readsAfter(lastOf("POST", "/v1/rooms/3/ready")) >= 2; },
+                     [&] { turned = turned || setup.Binding("ready") != "準備する"; }));
     CHECK_MESSAGE(!turned, "[pvp-room-ready-last-asked] the first answer turned the button");
     // The owner starts while not ready: the Gateway refuses (not_all_ready), and the word stays through the reads.
     setup.Press(I::KeyCode::Tab);
     setup.Press(I::KeyCode::Enter);
     REQUIRE(FramesUntil(setup, [&] { return Asked(gateway, "POST", "/v1/rooms/3/start"); }));
-    run(1600, [] {});
+    // Three reads after the start: the refusal and at least two reads were answered.
+    REQUIRE(runUntil([&] { return readsAfter(lastOf("POST", "/v1/rooms/3/start")) >= 3; }, [] {}));
     CHECK_MESSAGE(setup.Binding("status") == "全員の準備がまだです", "[pvp-room-refusal-stays] " << setup.Binding("status"));
     // A read that goes wrong after it is the newer word: it takes the line.
     gateway.FailRoomReads(true);
-    run(1600, [] {});
+    const std::size_t failing = gateway.Requests().size();
+    // Two reads seen after the reads went wrong: the first of them (refused) was answered.
+    REQUIRE(runUntil([&] { return readsAfter(failing) >= 2; }, [] {}));
     CHECK_MESSAGE(setup.Binding("status") == "Gateway: busy", "[pvp-room-problem-shown] " << setup.Binding("status"));
 }
 
