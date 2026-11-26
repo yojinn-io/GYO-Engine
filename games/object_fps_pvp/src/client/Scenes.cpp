@@ -231,7 +231,16 @@ K::SystemResult LeaveSplash(K::Res<WT::RealTime> time, K::Res<I::ButtonInput<I::
     if (request.Read().next) return {};
     if (!splash.Read().shownAt) {
         bool shown = false;
-        roots.ForEach([&](K::EntityId, const Ui::UiRootState& state) { shown = shown || (state.runtime && !state.failure); });
+        bool failed = false;
+        roots.ForEach([&](K::EntityId, const Ui::UiRootState& state) {
+            shown = shown || (state.runtime && !state.failure);
+            failed = failed || state.failure.has_value();
+        });
+        // A logo that cannot be shown (WatchDocument notes why) does not hold the player on a black screen.
+        if (failed) {
+            request->next = SceneChange{.scene = Scene::Menu};
+            return {};
+        }
         if (shown) splash->shownAt = time->elapsed;
     }
     const auto any = [](const auto& buttons) {

@@ -1010,8 +1010,10 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     };
     const auto volume = [&](const present::SoundCue cue) { return settings.cues[static_cast<std::size_t>(cue)].volume; };
     const PW::PlayerBody* own = nullptr;
-    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat&, const PW::ShotRecord&,
-                        const PW::HitRecord&) {
+    std::map<K::EntityId, const PW::PlayerBody*> bodies;
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat&,
+                        const PW::ShotRecord&, const PW::HitRecord&) {
+        bodies[id] = &body;
         if (owner.userId == user->userId) own = &body;
     });
     // The other players' cues are heard at the own player's ear, from the middle of their body; the arena between them
@@ -1058,8 +1060,13 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
         if (mine) {
             if (shot.tick > s.confirmedHeard) {
                 s.confirmedHeard = shot.tick;
+                // The hit is heard where it lands (the target's body), by the spatial rules: a far hit is not heard
+                // (the user's decision of 2026-11-26, playtest item 1: B, by distance). The hit marker is the feedback
+                // that does not fade with distance.
                 if (shot.kind == sim::ShotHitKind::Player) {
-                    play(present::SoundCue::HitConfirmed, present::CentredGains(volume(present::SoundCue::HitConfirmed)));
+                    if (const auto target = bodies.find(shot.target); target != bodies.end()) {
+                        spatial(present::SoundCue::HitConfirmed, *target->second);
+                    }
                 }
             }
             const present::HitFeedbackObservation taken =

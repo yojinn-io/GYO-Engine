@@ -760,6 +760,53 @@ TEST_CASE("client: an own shot that hits shows the hit marker, in the head colou
     CHECK(head->b == byte(marker.headColor[2]));
 }
 
+// The hit is heard where it lands, by distance (the user's decision of 2026-11-26, playtest item 1: B): a near target's
+// hit sounds, a target across the 250 m map is too far to hear (the hit marker still shows). The Match's judgement is
+// written as JudgeShots writes it.
+TEST_CASE("client: an own hit sounds at the target: heard near, not across the big map") {
+    std::size_t big = 0;
+    for (std::size_t i = 0; i < ShippedContent()->arenas.size(); ++i) {
+        if (ShippedContent()->arenas[i].content.id == "kiriyu_extraction_250m") big = i;
+    }
+    REQUIRE(big != 0);
+    for (const std::size_t arena : {std::size_t{0}, big}) {
+        CAPTURE(arena);
+        Setup setup(1, 4, arena);
+        setup.Frames(240);
+        REQUIRE(PC::StatusOf(setup.Client()).playing);
+        const K::EntityId own = PW::OwnPlayer(setup.Sim());
+        const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+        REQUIRE(own != 0);
+        REQUIRE(rival != 0);
+        REQUIRE(setup.Client().Get<PW::PlayerBody>(rival) != nullptr);
+        const float apart = GYO::Engine::Math::Length(setup.Client().Get<PW::PlayerBody>(rival)->feet -
+                                                      setup.Client().Get<PW::PlayerBody>(own)->feet);
+        const auto& cue = setup.presentation->sound.cues[static_cast<std::size_t>(object_fps_pvp::present::SoundCue::HitConfirmed)];
+        const bool near = arena == 0;
+        REQUIRE((near ? apart < cue.maximumDistance : apart > cue.maximumDistance));
+        const std::uint64_t before = SoundsSubmitted(*setup.client);
+        K::World& match = GameWorld(*setup.match);
+        PW::ShotRecord record;
+        record.tick = TickOf(match);
+        record.kind = sim::ShotHitKind::Player;
+        record.target = rival;
+        record.part = sim::HitPart::Body;
+        record.damage = 1;
+        *match.GetMut<PW::ShotRecord>(own) = record;
+        bool marked = false;
+        for (int i = 0; i < 20; ++i) {
+            setup.Frame();
+            marked = marked || HitMarkerColor(setup.Client()).has_value();
+        }
+        CHECK_MESSAGE(marked, "the hit marker shows near and far");
+        if (near) {
+            CHECK_MESSAGE(SoundsSubmitted(*setup.client) == before + 1, "[pvp-hit-sound-near] the hit on a near target sounds");
+        } else {
+            CHECK_MESSAGE(SoundsSubmitted(*setup.client) == before, "[pvp-hit-sound-far] the hit on a far target is not heard");
+        }
+    }
+}
+
 // Space held jumps again on every landing (the shipped movement rules' hold_jump; playtest 2026-11-26, item 7); let go,
 // the player stays down. The press of a tap still jumps once.
 TEST_CASE("client: holding Space jumps again on every landing; letting go stops") {

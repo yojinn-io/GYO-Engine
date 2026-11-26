@@ -25,8 +25,8 @@ float Finite(const Json::Value& value, const std::string_view what) {
     return number;
 }
 
-// A fall may take at most a whole body's HP per metre (the HP of sim::CombatRules' default body).
-constexpr double kMaximumMilliPointsPerMetre = 100'000.0;
+// The milli-points per metre are a std::uint32_t.
+constexpr double kMaximumMilliPointsPerMetre = 4'294'967'295.0;
 
 Math::Vec3 Position(const Json::Value& value) {
     const auto array = value.AsArray();
@@ -85,7 +85,7 @@ std::optional<ArenaContent> ParseArena(const std::string_view text, std::string&
             const double points = data::Number(data::Member(fall, "points_per_metre"), "points_per_metre");
             const double milli = points * 1000.0;
             if (!std::isfinite(milli) || milli < 0 || milli > kMaximumMilliPointsPerMetre || milli != std::floor(milli)) {
-                throw std::runtime_error("points_per_metre is not a whole number of milli-points from 0 to 100000");
+                throw std::runtime_error("points_per_metre is not a whole number of milli-points from 0 to 2^32 - 1");
             }
             damage.milliPointsPerMetre = static_cast<std::uint32_t>(milli);
             arena.fallDamage = damage;

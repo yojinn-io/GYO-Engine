@@ -669,11 +669,13 @@ TEST_CASE("world: the arena stands between two points when its walls cut the seg
 namespace {
 // The shipped arena's rules with no walls but one small box far outside it (a BoxSet is built from boxes): the bounds
 // alone hold the bodies. floor: the arena's floor plane (none: nothing holds them up).
-std::shared_ptr<PW::GameContent> OpenArena(const std::optional<float> floor) {
+// ground: a slab of map under the whole arena (its top at y = 0) in place of the floor plane.
+std::shared_ptr<PW::GameContent> OpenArena(const std::optional<float> floor, const bool ground = false) {
     auto content = std::make_shared<PW::GameContent>(*ShippedContent());
     PW::InstalledArena& arena = content->arenas.front();
-    const std::vector<GYO::Engine::Math::Aabb> far{{{100.0F, 0.0F, 100.0F}, {101.0F, 1.0F, 101.0F}}};
-    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(far);
+    std::vector<GYO::Engine::Math::Aabb> walls{{{100.0F, 0.0F, 100.0F}, {101.0F, 1.0F, 101.0F}}};
+    if (ground) walls.push_back({{0.0F, -1.0F, 0.0F}, {20.0F, 0.0F, 20.0F}});
+    auto boxes = GYO::Engine::Physics3d::BoxSet::Build(walls);
     REQUIRE(static_cast<bool>(boxes));
     arena.walls = *boxes;
     arena.wallsDigest = boxes->Digest();
@@ -722,13 +724,17 @@ TEST_CASE("world: a landing from above the safe height costs HP by the metres be
     const sim::ArenaContent& arena = ShippedContent()->arenas.front().content;
     REQUIRE(arena.fallDamage.has_value());
     const sim::CombatRules combat;
+  // On the floor plane, and on the map's own ground (no floor plane: the kiriyu maps).
+  for (const bool ground : {false, true}) {
+    CAPTURE(ground);
     const auto landFrom = [&](const float height) {
-        LoneMatch match(OpenArena(0.0F));
+        LoneMatch match(ground ? OpenArena(std::nullopt, true) : OpenArena(0.0F));
         const K::EntityId id = match.AddPlayer({5, height, 5});
         match.World().GetMut<PW::PlayerBody>(id)->grounded = 0;
         match.Steer(id, Input(0, 0, 0));
         match.Run(64 * 3);
-        REQUIRE(match.Body(id).feet.y == 0.0F);
+        REQUIRE(match.Body(id).feet.y == doctest::Approx(0.0F).epsilon(0.02));
+        REQUIRE(match.Body(id).grounded == 1);
         return match.Combat(id);
     };
     // Within the safe height: nothing.
@@ -744,4 +750,5 @@ TEST_CASE("world: a landing from above the safe height costs HP by the metres be
     const PW::PlayerCombat thirty = landFrom(30.0F);
     CHECK_MESSAGE(thirty.life == sim::LifeState::Dead, "[pvp-fall-kills] a thirty metre fall kills");
     CHECK(thirty.hp == 0);
+  }
 }

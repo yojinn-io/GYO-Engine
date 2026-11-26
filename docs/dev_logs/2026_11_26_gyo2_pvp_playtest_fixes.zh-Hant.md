@@ -81,6 +81,25 @@ Owner：產品（Object_FPS_PVP）。GYO2 主會話開的任務卡；決定與�
 - 突變 9 個，9/9 killed：`pvp-marker-first-shown`、`pvp-marker-replayed`、`pvp-marker-miss-clears`、`pvp-marker-no-head`、`pvp-marker-not-drawn`、`pvp-marker-never-fades`、`pvp-splash-no-wait`、`pvp-splash-stays`、`pvp-splash-unskippable`。`pvp-splash-no-wait` 第一次是 wrong_failure（測試在「排好時還是啟動畫面」用了沒有標籤的 REQUIRE），改成帶 `[pvp-splash-time]` 的訊息後 killed。
 - 畫面的樣子（X 的大小、標識的字）沒有在真的視窗看過，交使用者試玩。
 
-### 1 命中音（等決定）
+### 1 遠距離擊中聲（使用者的決定：B「照距離」）
 
-使用者 11-26 回「我沒看明白」，主會話再說明後轉決定過來再做。
+- 主會話轉來：使用者原話「這個選B」。B＝保留肉聲，但遠了就聽不到；打遠處的敵人時只能靠準心標記或敵人的反應判斷有沒有打中。比過的選項：A＝UI「嗒」聲不衰減＋肉聲空間化；C＝兩者都要。不加 UI 命中音；第 8 項的命中標記是唯一不受距離影響的命中回饋。
+- 做法：給射手的 `hit_confirmed`（`hit_flesh`）不再 `CentredGains` 置中，改在被擊者身體中段照 `HeardGains` 播（和 3 同一套：距離衰減、最大距離、遮擋）。`sfx.json` 的 `hit_confirmed` 加 `maximum_distance` 40 m（和落地聲同級：肉聲比槍聲輕）。Client 看不到被擊者（不在 Frame World）時不播。
+- 測試：Client「an own hit sounds at the target: heard near, not across the big map」（pvp_arena 的兩個出生點約 7 m：送出一個聲音；`kiriyu_extraction_250m` 的兩個出生點約 200 m：沒有聲音，命中標記照樣出現）。
+- 突變 2 個，2/2 killed：`pvp-hit-sound-centred`（照舊置中）、`pvp-hit-sound-silent`（不播）。
+
+## 設計審查（Opus／high，作者同模型；審查者只拿差分與原始要求）
+
+blocker 0。處理：
+- S1（改）：墜落傷害只測了「落在地板平面」，沒測「落在地圖自己的地面」（kiriyu 三張只有這條路；`descent` 在那裡只靠 `-fall.velocity`）。world 測試改成兩種都跑（加一塊頂在 y = 0 的地面、沒有地板平面），新突變 `pvp-landing-on-map-unhurt`。
+- 6（改）：`points_per_metre` 的上限原本寫「一個身體的 HP（100000）」，和 `CombatRules` 的預設綁在一起；改成只要放得進 `std::uint32_t`（`LandingDamage` 本來就會飽和）。
+- 10（改）：啟動畫面的文件失敗時，原本黑畫面停到按鍵為止；改成失敗就直接去主菜單（原因照舊由 `WatchDocument` 記進 `FrameNotes::failure`）。**這條沒有測試**：文件 id 寫在 `BuildSplash`，測試換不了一份壞文件。
+- S2（接受，記下）：按住空白鍵連跳時，Match 少收到一步輸入（遲到、遺失）就用 held 填（`InputOptions` 把一步一次的按下清掉），那一步不跳；Client 預測了跳，被校正一次（輕微的拉回）。這是「網路的 input 格式不變」的代價；要消掉就得讓 held 填照 `holdJump` 保留 jump，或在輸入帶「按著」——都是改輸入的語意，交主會話。
+- S3（記下）：`hold_jump` 是角色規則，但只有寫輸入的 Client 端套它，Match 不看。之後若技能在 Match 上按玩家改它，Client 要從複製的狀態讀同一個值。另外，按住空白鍵時站在地上按蹲，每一步都先跳（`jumpFromGround` 優先），不是只有按下那一步。
+- S4（記下）：`PlaySounds` 的遮擋與最大距離接線沒有經 Client 測到增益（Mixer 只數送出幾個）；最大距離這次由項目 1 的測試經 Client 測到，遮擋的接線仍只有兩端各自的測試。
+- S5（已查）：kiriyu 三張每一格都有方塊（見 B 的 4），incident 有 1 格洞。
+- 7（接受）：落地速度用那一步結束時的速度，比真正的落差多算一點（10 m 約多 0.3 m）；兩端一樣，不會分歧。
+- 8（記下，後續）：墜落扣血沒有紅閃、命中音或 HP 變紅（不寫 `HitRecord`）；要不要另給墜落的回饋由使用者決定。
+- 9（記下）：啟動畫面的秒數在 `ClientStart`，不在資料；換成動畫時可能要搬。
+- 11（照讀法）：蹲著落地仍有落地聲（使用者的原話只說蹲下移動）。
+- 12、13：沒有重現（邊界外緊貼牆時夾回去可能和牆重疊；測試找命中標記的方法靠「斜線」）。

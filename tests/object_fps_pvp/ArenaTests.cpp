@@ -182,7 +182,7 @@ TEST_CASE("PvP arena: the rules of an arena file") {
     CHECK(hurt->fallDamage->milliPointsPerMetre == 12'500U);
     for (const std::string bad : {R"("fall_damage": {"points_per_metre": 10}, )", R"("fall_damage": {"safe_height": 0, "points_per_metre": 10}, )",
                                   R"("fall_damage": {"safe_height": 4, "points_per_metre": -1}, )",
-                                  R"("fall_damage": {"safe_height": 4, "points_per_metre": 101}, )",
+                                  R"("fall_damage": {"safe_height": 4, "points_per_metre": 5000000}, )",
                                   R"("fall_damage": {"safe_height": 4, "points_per_metre": 0.0001}, )"}) {
         CAPTURE(bad);
         CHECK_FALSE(sim::ParseArena(arena(bad + twoSpawns), error).has_value());

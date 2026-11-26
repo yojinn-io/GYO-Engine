@@ -2831,6 +2831,45 @@
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]
+  },
+  {
+   "id": "pvp-hit-sound-centred",
+   "what": "the shooter hears the hit at the centre, however far the target",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                        spatial(present::SoundCue::HitConfirmed, *target->second);",
+   "replace": "                        play(present::SoundCue::HitConfirmed, present::CentredGains(volume(present::SoundCue::HitConfirmed)));",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own hit sounds*",
+   "expect": "pvp-hit-sound-far",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-hit-sound-silent",
+   "what": "the shooter never hears the hit",
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                        spatial(present::SoundCue::HitConfirmed, *target->second);",
+   "replace": "                        (void)target;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: an own hit sounds*",
+   "expect": "pvp-hit-sound-near",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
+  },
+  {
+   "id": "pvp-landing-on-map-unhurt",
+   "what": "a landing on the map's own ground (not the floor plane) never hurts",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        descent = std::max(fall.impact, -fall.velocity);",
+   "replace": "        descent = fall.impact;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a landing from above*",
+   "expect": "pvp-fall-damage",
+   "guards": [
+    "v8-product-pvp-playtest-fixes"
+   ]
   }
  ]
 }

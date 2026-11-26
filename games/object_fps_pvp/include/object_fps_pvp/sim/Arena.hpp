@@ -58,7 +58,7 @@ inline constexpr std::size_t kMaximumSpawns = 64;
 // two caps (2 x radius), the map is not a plain name, there are not 2 to 64 spawns, a spawn is below the floor,
 // not above the kill height or outside [radius, width - radius] x [radius, depth - radius], the kill height is not
 // finite or not below the floor, or the fall damage's safe height is not finite and positive or its points per metre
-// not a whole number of milli-points from 0 to the HP of a body. Whether a spawn is free of the walls and of the other
+// not a whole number of milli-points (0 to 2^32 - 1). Whether a spawn is free of the walls and of the other
 // spawns needs the geometry: the World checks it when it builds the arena.
 [[nodiscard]] std::optional<ArenaContent> ParseArena(std::string_view text, std::string& error);
 
