@@ -28,14 +28,12 @@ class CopyFixtureTests(unittest.TestCase):
 class MirrorTests(unittest.TestCase):
     # The configure of the copy reads config/modules.csv and config/plugins.csv
     # (GyoBuild.cmake); a mirror without them failed with "Registry does not
-    # exist" (a8065853 added the read, the mirror did not follow).
-    def test_mirror_carries_the_engine_registers_and_plugins_but_no_product_register(self):
+    # exist" (a8065853 added the read, the mirror did not follow). What else the
+    # copy needs is shown by building it (game_copy_integration.py itself).
+    def test_mirror_carries_the_engine_registers_but_no_product_register_product_test_or_ci(self):
         with TemporaryDirectory() as work:
             repository, destination = Path(work) / "repository", Path(work) / "copy"
-            carried = ("CMakeLists.txt", "CMakePresets.json", "config/modules.csv", "config/plugins.csv",
-                       "plugins/sample/CMakeLists.txt", "engine/core/CMakeLists.txt", "services/sample/go.mod",
-                       "third_party/sample/CMakeLists.txt", "build/cmake/GyoBuild.cmake", "build/assemble_runtime.py",
-                       "build/content_contract.py", "build/workspace.py")
+            carried = ("config/modules.csv", "config/plugins.csv")
             left = ("config/games.csv", "config/tools.csv", "games/real/CMakeLists.txt",
                     "tools/real/CMakeLists.txt", "tests/common/CMakeLists.txt", "build/ci/common/ci_scope.py")
             for name in carried + left:

@@ -36,10 +36,11 @@ added later is checked without changing this script.
 N3 (the role suffixes of naming rule 5, DI 3) was removed by v8-arch-gyo2-namespace-root: rule 5 was not carried
 to gyo2 (user 2026-11-14), and the user removed the check on 2026-11-22; names are seen in each batch's design review.
 
-SCAN_ROOTS are the directories the build reads sources from (build/cmake/GyoBuild.cmake): engine/, plugins/,
-games/ and tools/ (one subdirectory per registered product), tests/ and examples/; framework/ was dropped with the
-framework layer (v8-arch-gyo2-naming-cleanup). A scan root that does not exist is skipped (plugins/, games/ and
-tools/ have no entry yet), not a finding; engine/ must exist and hold units. spikes/ is not scanned (an
+SCAN_ROOTS are the top-level directories of the repository's own code, read from build/cmake/GyoSourceRoots.txt
+(the build adds its directories under them): engine/, plugins/, games/ and tools/ (one subdirectory per registered
+product), examples/, build/acceptance/ and tests/; framework/ was dropped with the framework layer
+(v8-arch-gyo2-naming-cleanup). A scan root that does not exist is skipped, not a finding; engine/ must exist and
+hold units. spikes/ is not scanned (an
 independent project). Limits (text level, the rest is review): a top-level
 directory outside SCAN_ROOTS is not read; two units deriving the same name are left to CMake's duplicate-target
 error; a namespace opened through a macro or split across #if branches is not followed; .cppm and *.h.in files
@@ -55,13 +56,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
+from source_roots import source_roots  # noqa: E402
 from source_text import SUFFIXES as C_SUFFIXES, camel_case, line_of, strip_comments_and_strings  # noqa: E402
 
 ENGINE_LAYERS = {"core": "units", "ecs": "units", "modules": "units", "orchestration": "unit"}
 UNIT_OVERRIDES = {"engine/ecs/kernel": "GYO::Kernel"}
 ACRONYMS = {"io": "IO", "os": "OS", "sdl": "SDL", "spsc": "SPSC", "gpu": "GPU"}
 GYO_ROOTS = {"Kernel": "units", "Engine": "units", "Plugins": "plugins", "Test": "tests"}
-SCAN_ROOTS = ("engine", "games", "tools", "plugins", "tests", "examples")
+SCAN_ROOTS = source_roots()  # build/cmake/GyoSourceRoots.txt
 OLD_ROOT = "Engine"
 SUFFIXES = C_SUFFIXES | {".m", ".mm"}  # the C/C++ files the guards read (source_text), plus Objective-C++
 

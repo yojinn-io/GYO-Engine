@@ -6,7 +6,9 @@ cmake_minimum_required(VERSION 3.30)
 # alone; the check (tests/common/os/ProcessCodePageCheck.cmake) refuses an
 # executable the walk missed and lists an exemption. The same tree runs the OS
 # definition check of Design Invariant 1 (tests/common/os/OsDefinitionCheck.cmake)
-# on a root that no OS's real build reaches yet (plugins/).
+# on a root that no OS's real build reaches yet (plugins/) and on examples/. The
+# three read their roots from build/cmake/GyoSourceRoots.txt, which is pinned
+# at the end.
 get_filename_component(repository "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 string(RANDOM LENGTH 8 ALPHABET abcdef0123456789 run_id)
 # WORK_ROOT: where to put the synthetic trees when run outside a build tree
@@ -16,7 +18,7 @@ if(NOT DEFINED WORK_ROOT)
 endif()
 set(work "${WORK_ROOT}/process-code-page-${run_id}")
 set(source "${work}/source")
-foreach(directory engine/core plugins/sample games/sample tools/editor tests/unit vendor/lib)
+foreach(directory engine/core plugins/sample games/sample tools/editor examples/sample tests/unit third_party/lib services/sample)
     file(MAKE_DIRECTORY "${source}/${directory}")
     file(WRITE "${source}/${directory}/main.cpp" "int main() { return 0; }\n")
 endforeach()
@@ -29,11 +31,16 @@ include("${GYO_TEST_REPOSITORY}/tests/common/os/ProcessCodePageCheck.cmake")
 include("${GYO_TEST_REPOSITORY}/tests/common/os/OsDefinitionCheck.cmake")
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_apply_process_code_page)
 set(GYO_CURRENT_TOOL editor)
-foreach(directory engine/core plugins/sample games/sample tools/editor tests/unit vendor/lib)
+set(directories engine/core plugins/sample games/sample tools/editor examples/sample tests/unit third_party/lib)
+if(TEST_CASE STREQUAL "unlisted")
+    list(APPEND directories services/sample)
+endif()
+foreach(directory IN LISTS directories)
     add_subdirectory(${directory})
     if(NOT (TEST_CASE STREQUAL "unrecorded" AND directory STREQUAL "tests/unit") AND
        NOT (TEST_CASE STREQUAL "unrecorded_game" AND directory STREQUAL "games/sample") AND
-       NOT (TEST_CASE STREQUAL "unrecorded_plugin" AND directory STREQUAL "plugins/sample"))
+       NOT (TEST_CASE STREQUAL "unrecorded_plugin" AND directory STREQUAL "plugins/sample") AND
+       NOT (TEST_CASE STREQUAL "unrecorded_example" AND directory STREQUAL "examples/sample"))
         gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/${directory}")
     endif()
 endforeach()
@@ -41,6 +48,14 @@ if(TEST_CASE STREQUAL "exempt")
     set_property(TARGET unit_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT "fixture reason")
 elseif(TEST_CASE STREQUAL "plugin_definition")
     target_compile_definitions(sample_plugin_tool PRIVATE GYO_SAMPLE_LINUX=1)
+elseif(TEST_CASE STREQUAL "example_definition")
+    target_compile_definitions(sample_example PRIVATE GYO_SAMPLE_WINDOWS=1)
+elseif(TEST_CASE STREQUAL "inside_build")
+    # A dependency FetchContent populates in the build tree, which here is
+    # inside the repository: not ours, not refused.
+    file(WRITE "${CMAKE_BINARY_DIR}/_deps/dep-src/CMakeLists.txt" "add_executable(dep_tool main.cpp)\n")
+    file(WRITE "${CMAKE_BINARY_DIR}/_deps/dep-src/main.cpp" "int main() { return 0; }\n")
+    add_subdirectory("${CMAKE_BINARY_DIR}/_deps/dep-src" "${CMAKE_BINARY_DIR}/_deps/dep-build")
 endif()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_process_code_pages)
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_no_os_definitions)
@@ -48,7 +63,7 @@ cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_fixture_report)
 # What the deferred calls left: each target's mark and how the manifest went in.
 function(gyo_fixture_report)
     set(report "")
-    foreach(target IN ITEMS core_tool sample_plugin_tool sample_game editor unit_tests vendor_tool)
+    foreach(target IN ITEMS core_tool sample_plugin_tool sample_game editor sample_example unit_tests vendor_tool)
         get_target_property(mark ${target} GYO_PROCESS_CODE_PAGE)
         if(NOT mark)
             set(mark unmarked)
@@ -71,9 +86,14 @@ file(WRITE "${source}/engine/core/CMakeLists.txt" "add_executable(core_tool main
 file(WRITE "${source}/plugins/sample/CMakeLists.txt" "add_executable(sample_plugin_tool main.cpp)\n")
 # A game directory (games/<game>/), as the build layer adds each selected game.
 file(WRITE "${source}/games/sample/CMakeLists.txt" "add_executable(sample_game main.cpp)\n")
+# An example directory (examples/<example>/), as the build layer adds examples/.
+file(WRITE "${source}/examples/sample/CMakeLists.txt" "add_executable(sample_example main.cpp)\n")
 file(WRITE "${source}/tests/unit/CMakeLists.txt" "add_executable(unit_tests main.cpp)\n")
 # Outside the roots, as third-party programs are: never given the manifest.
-file(WRITE "${source}/vendor/lib/CMakeLists.txt" "add_executable(vendor_tool main.cpp)\n")
+file(WRITE "${source}/third_party/lib/CMakeLists.txt" "add_executable(vendor_tool main.cpp)\n")
+# A top-level directory of the repository's own code that the list of roots
+# does not name: refused, not skipped.
+file(WRITE "${source}/services/sample/CMakeLists.txt" "add_executable(sample_service main.cpp)\n")
 # A standalone tool wrapper, as tools/ui_editor has: run as the top directory,
 # it adds the repository, which adds this same source directory again.
 file(WRITE "${source}/tools/editor/CMakeLists.txt" [=[
@@ -104,6 +124,9 @@ endforeach()
 
 function(configure label success fragment source_dir)
     set(binary "${work}/${label}")
+    if(DEFINED binary_${label})
+        set(binary "${binary_${label}}")
+    endif()
     execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source_dir}" -B "${binary}" ${configure_args} ${ARGN}
         RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr TIMEOUT 180)
     if(success AND NOT result EQUAL 0)
@@ -142,7 +165,8 @@ elseif(NOT CMAKE_HOST_WIN32 AND NOT embedded STREQUAL "none")
 endif()
 expect_report(plain "${work}/plain/report.txt"
     "core_tool=UTF-8 ${embedded}" "sample_plugin_tool=UTF-8 ${embedded}" "sample_game=UTF-8 ${embedded}"
-    "editor=UTF-8 ${embedded}" "unit_tests=UTF-8 ${embedded}" "vendor_tool=unmarked none")
+    "editor=UTF-8 ${embedded}" "sample_example=UTF-8 ${embedded}" "unit_tests=UTF-8 ${embedded}"
+    "vendor_tool=unmarked none")
 
 # The wrapper's top directory has no languages; the tool added again below it
 # still gets the manifest, embedded the same way as in the plain build.
@@ -156,8 +180,27 @@ configure(unrecorded FALSE "Process code page guard: unit_tests (tests/unit)" "$
 configure(unrecorded_game FALSE "Process code page guard: sample_game (games/sample)" "${source}" -DTEST_CASE=unrecorded_game)
 # And plugins/: a Plugin directory the build layer did not record is refused.
 configure(unrecorded_plugin FALSE "Process code page guard: sample_plugin_tool (plugins/sample)" "${source}" -DTEST_CASE=unrecorded_plugin)
+# And examples/: an example directory the build layer did not record is refused.
+configure(unrecorded_example FALSE "Process code page guard: sample_example (examples/sample)" "${source}" -DTEST_CASE=unrecorded_example)
 # Design Invariant 1 covers plugins/ too: a Plugin target that identifies the OS through a definition is refused.
 configure(plugin_definition FALSE "OS definition guard: sample_plugin_tool COMPILE_DEFINITIONS has 'GYO_SAMPLE_LINUX=1'" "${source}" -DTEST_CASE=plugin_definition)
+# And examples/.
+configure(example_definition FALSE "OS definition guard: sample_example COMPILE_DEFINITIONS has 'GYO_SAMPLE_WINDOWS=1'" "${source}" -DTEST_CASE=example_definition)
+# A directory inside the repository under no root (and not third_party/) is refused.
+configure(unlisted FALSE "Process code page guard: services/sample inside the repository under no root" "${source}" -DTEST_CASE=unlisted)
+# The build tree inside the repository: what is populated there is not ours.
+set(binary_inside_build "${source}/build/inside")
+configure(inside_build TRUE "" "${source}" -DTEST_CASE=inside_build)
 configure(exempt TRUE "runs without the UTF-8 manifest: unit_tests: fixture reason" "${source}" -DTEST_CASE=exempt)
 expect_report(exempt "${work}/exempt/report.txt" "unit_tests=unmarked none" "editor=UTF-8 ${embedded}")
 file(REMOVE_RECURSE "${work}")
+
+# The roots all three read (build/cmake/GyoSourceRoots.txt): the top-level
+# directories of the repository's own code. Pinned here, so a root removed from
+# the list fails instead of silently shrinking the manifest, its check, the OS
+# definition check and the source guards (os_boundary_guard, naming_guard).
+include("${repository}/build/cmake/GyoSourceRoots.cmake")
+gyo_source_roots(roots)
+if(NOT roots STREQUAL "engine;plugins;games;tools;examples;build/acceptance;tests")
+    message(FATAL_ERROR "source roots: build/cmake/GyoSourceRoots.txt lists '${roots}'")
+endif()

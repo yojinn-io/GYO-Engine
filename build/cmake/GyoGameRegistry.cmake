@@ -68,12 +68,20 @@ function(gyo_select_games registry target_system selection output)
     set(${output} "${selected}" PARENT_SCOPE)
 endfunction()
 
+# Where a registered game's sources live, relative to the repository (and its
+# build directory, relative to the build tree): the one place that says
+# games/<name>.
+function(gyo_game_directory name output)
+    set(${output} "games/${name}" PARENT_SCOPE)
+endfunction()
+
 function(gyo_validate_game_sources root)
     foreach(name IN LISTS ARGN)
         if(NOT name MATCHES "^[a-z][a-z0-9_]*$")
             message(FATAL_ERROR "Invalid selected game name '${name}'")
         endif()
-        set(directory "${root}/games/${name}")
+        gyo_game_directory("${name}" relative)
+        set(directory "${root}/${relative}")
         if(NOT IS_DIRECTORY "${directory}" OR NOT EXISTS "${directory}/CMakeLists.txt" OR
            IS_DIRECTORY "${directory}/CMakeLists.txt")
             message(FATAL_ERROR "Selected game '${name}' requires ${directory}/CMakeLists.txt")

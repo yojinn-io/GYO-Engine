@@ -20,7 +20,7 @@ def mirror_sources(repository, destination):
         # Plugins travel with the engine; the game and tool registers do not:
         # the copy writes its own game register and carries no tool register.
         include = (name in ("CMakeLists.txt", "CMakePresets.json", "config/modules.csv", "config/plugins.csv")
-                   or name.startswith(("engine/", "plugins/", "services/", "third_party/", "build/cmake/"))
+                   or name.startswith(("engine/", "plugins/", "third_party/", "build/cmake/"))
                    or name in ("build/assemble_runtime.py", "build/content_contract.py", "build/workspace.py"))
         original = repository / path
         if not include or not original.is_file() or original.is_symlink():

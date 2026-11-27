@@ -331,9 +331,6 @@ class GuardTree(unittest.TestCase):
                     self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit")
                 shutil.rmtree(self.root / f"{root}/sample")
 
-    def test_n1_scan_roots_are_pinned(self):
-        self.assertEqual(guard.SCAN_ROOTS, ("engine", "games", "tools", "plugins", "tests", "examples"))
-
     def test_n1_every_source_type_is_scanned(self):
         # A fixed list, not guard.SUFFIXES: shrinking the guard's set must fail here.
         for suffix in (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc",

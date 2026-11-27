@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Mutants for the CI policy cases that R0b-3 added or changed and for the cases its adversarial check added (v8-arch-gyo2-r0b3-closeout). A mutant is killed only when the named case fails. Run from the repository root with cmake on PATH: python3 -B tests/common/mutation/run_mutations.py --build-dir <any existing directory> --catalog tests/common/ci/r0b3_mutations.json (no target is built; remove __pycache__ under tests/common/ci and build/ first).",
+  "description": "Mutants for the CI policy cases that R0b-3 added or changed and for the cases its adversarial check added (v8-arch-gyo2-r0b3-closeout). A mutant is killed only when the named case fails. Run from the repository root with cmake on PATH: python3 -B tests/common/mutation/run_mutations.py --build-dir <any existing directory> --catalog tests/common/ci/r0b3_mutations.json (no target is built; remove __pycache__ under tests/common/ci and build/ first). Retired in v8-arch-gyo2-build-cleanup: gdir-mirror-drops-build-cmake (MirrorTests no longer pins each branch the mirror carries; it keeps the engine registers regression and what the mirror leaves out, and building the copy in game_copy_integration.py shows what else the copy needs).",
   "mutants": [
     {
       "id": "ci-broken-release-selection",
@@ -389,28 +389,6 @@
       "guards": [
         "AGENTS 7",
         "build-games-dir-declaration 10.3"
-      ]
-    },
-    {
-      "id": "gdir-mirror-drops-build-cmake",
-      "what": "the game copy mirror stops carrying build/cmake (any carried branch; MirrorTests now places one file per branch)",
-      "file": "tests/common/ci/game_copy_integration.py",
-      "find": "or name.startswith((\"engine/\", \"plugins/\", \"services/\", \"third_party/\", \"build/cmake/\"))",
-      "replace": "or name.startswith((\"engine/\", \"plugins/\", \"services/\", \"third_party/\"))",
-      "command": [
-        "{python}",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/common/ci",
-        "-p",
-        "test_game_copy_integration.py"
-      ],
-      "expect": "FAIL: test_mirror_carries_the_engine_registers_and_plugins_but_no_product_register",
-      "guards": [
-        "build-games-dir-declaration 5.4"
       ]
     },
     {

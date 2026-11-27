@@ -2,13 +2,14 @@
 # an OS-identifying compile definition from CMake (a name such as GYO_WINDOWS or
 # WIN32_LEAN_AND_MEAN, or a $<PLATFORM_ID:...> condition), so no source can
 # branch on the OS through one. The definition's value is not read: paths and
-# strings may contain any word. Every target and directory under the scanned
-# roots is checked, without naming a product; engine/os, tests/common/os and
-# third_party may define them. Definitions that name no OS but are set only on
+# strings may contain any word. Every target and directory under the roots of
+# build/cmake/GyoSourceRoots.txt is checked, without naming a product;
+# tests/common/os and third_party may define them. Definitions that name no OS but are set only on
 # one OS (NOMINMAX) are not identification and are allowed.
 # A module, like ProcessCodePageCheck.cmake, so cmake.ProcessCodePage can run
 # it on its synthetic tree (every root, plugins/ included, on any OS).
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../build/cmake/GyoSourceRoots.cmake")
 
 function(gyo_os_definition_scope directory out relative_out)
     file(RELATIVE_PATH relative "${GYO_REPOSITORY_ROOT}" "${directory}")
@@ -78,7 +79,7 @@ endfunction()
 function(gyo_expect_no_os_definitions)
     # Set here, not at file scope: the deferred call runs in the top directory's
     # scope, and the helpers above see their caller's variables.
-    set(GYO_OS_DEFINITION_ROOTS engine plugins games tools build/acceptance tests)
+    gyo_source_roots(GYO_OS_DEFINITION_ROOTS)
     # engine/core/os identifies the OS in its sources (the compiler's own macros), never through a build
     # definition, so it is not exempt here; the entry for its old path engine/os was dead (it exempted nothing).
     set(GYO_OS_DEFINITION_EXEMPT tests/common/os)

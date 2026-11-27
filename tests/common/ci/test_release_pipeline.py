@@ -35,7 +35,7 @@ COMMIT = "a" * 40
 OTHER_COMMIT = "b" * 40
 
 
-APP = "sample_app"
+APP = "sample_game"
 ARCHIVE_ROOT = "gyo-" + APP
 METADATA_PATH = ARCHIVE_ROOT + "/build_metadata.json"
 EXPECTED_PAIRS = [(APP, platform) for platform in RELEASE_PLATFORMS]
@@ -399,8 +399,8 @@ class PackageTests(unittest.TestCase):
         event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
         registry = self.work / "games.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
-                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
-        event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+                            "sample_game,,,true,true,false,false\n", encoding="utf-8")
+        event_path.write_text(json.dumps({"inputs": {"train": "sample_game", "version": "v9876.5432.10101",
                                                      "prerelease": "false"}}), encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
@@ -410,8 +410,8 @@ class PackageTests(unittest.TestCase):
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
-                         f"tag=sample_app-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
-                         "train=sample_app\nproduct=sample_app\nl4_items=\nl4_evidence=\n")
+                         f"tag=sample_game-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
+                         "train=sample_game\nproduct=sample_game\nl4_items=\nl4_evidence=\n")
 
     def test_cli_refuses_the_tools_train_while_no_tool_is_registered(self):
         # No tool, no toolchain package: Prepare Release stops at its first
@@ -450,9 +450,9 @@ class PackageTests(unittest.TestCase):
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         registry, contracts = self.work / "games.csv", self.work / "contracts"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
-                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
+                            "sample_game,,,true,true,false,false\n", encoding="utf-8")
         tool_registry = self.tool_registry_arguments()
-        contract = contracts / "build/acceptance/sample_app/checks.json"
+        contract = contracts / "build/acceptance/sample_game/checks.json"
         contract.parent.mkdir(parents=True)
         contract.write_text(json.dumps({"version": 1, "checks": [], "release_evidence": [
             {"name": "visible_latency", "description": "Timed GUI latency run", "platforms": ["windows-x64"]}]}),
@@ -461,7 +461,7 @@ class PackageTests(unittest.TestCase):
         def prepare(inputs):
             event_path, output_path = self.work / "event.json", self.work / "outputs.txt"
             output_path.unlink(missing_ok=True)
-            event_path.write_text(json.dumps({"inputs": {"train": "sample_app", "version": "v9876.5432.10101",
+            event_path.write_text(json.dumps({"inputs": {"train": "sample_game", "version": "v9876.5432.10101",
                                                          "prerelease": "false", **inputs}}), encoding="utf-8")
             result = subprocess.run([
                 sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
@@ -492,10 +492,10 @@ class PackageTests(unittest.TestCase):
         # as another option; the mismatched commit stops before any API call.
         registry = self.work / "games.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
-                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
+                            "sample_game,,,true,true,false,false\n", encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
-            "draft", "--train", "sample_app", "--tag", "sample_app-v1.0.0", "--commit", "0" * 40,
+            "draft", "--train", "sample_game", "--tag", "sample_game-v1.0.0", "--commit", "0" * 40,
             "--prerelease", "false", "--package-directory", str(self.work), "--service-directory", str(self.work),
             "--l4-evidence=-issue#12", "--output", str(self.work / "outputs.txt"),
             "--registry", str(registry), *self.tool_registry_arguments(),
@@ -560,15 +560,15 @@ class PackageTests(unittest.TestCase):
             prepare_draft(api, "v1.2.3", COMMIT, False, inputs)
         self.assertEqual(api.calls, [])
 
-    def test_archive_rejects_another_app_installation_even_with_valid_own_evidence(self):
-        other = json.dumps(manifest(product="other_app")).encode()
-        item = package(extra_files=[(manifest_path("other_app"), other)])
-        with self.assertRaisesRegex(ReleaseError, "another product installation: other_app"):
+    def test_archive_rejects_another_game_installation_even_with_valid_own_evidence(self):
+        other = json.dumps(manifest(product="other_game")).encode()
+        item = package(extra_files=[(manifest_path("other_game"), other)])
+        with self.assertRaisesRegex(ReleaseError, "another product installation: other_game"):
             validate_archive(item.name, item.data, item.platform, COMMIT)
 
     def test_path_traversal_absolute_and_duplicate_members_fail(self):
-        for name in ("../escape", "/absolute", "gyo-sample_app/../../escape", "other/file",
-                     "gyo-sample_app\\escape", "C:/escape", METADATA_PATH):
+        for name in ("../escape", "/absolute", "gyo-sample_game/../../escape", "other/file",
+                     "gyo-sample_game\\escape", "C:/escape", METADATA_PATH):
             item = package(extra=[tarfile.TarInfo(name)])
             with self.subTest(name=name), self.assertRaises(ReleaseError):
                 validate_archive(item.name, item.data, item.platform, COMMIT)
@@ -644,7 +644,7 @@ class DraftTests(unittest.TestCase):
         self.assertFalse(any(path == "/git/refs" for _, path, _ in api.calls))
 
     def test_unexpected_managed_assets_block_all_remote_mutation(self):
-        extra = package(product="other_app", commit=OTHER_COMMIT)
+        extra = package(product="other_game", commit=OTHER_COMMIT)
         for names in ((extra.name,), (extra.name + ".sha256",),
                       (extra.name, extra.name + ".sha256")):
             api = FakeApi()
@@ -670,7 +670,7 @@ class DraftTests(unittest.TestCase):
     def test_final_verification_rejects_managed_assets_added_during_upload(self):
         api = FakeApi()
         upload = api.upload
-        extra = package(product="other_app", commit=OTHER_COMMIT)
+        extra = package(product="other_game", commit=OTHER_COMMIT)
 
         def upload_with_unexpected_asset(release_id, name, data):
             result = upload(release_id, name, data)

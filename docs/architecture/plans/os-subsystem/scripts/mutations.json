@@ -387,10 +387,10 @@
     },
     {
       "id": "os-g11-roots-skip-products",
-      "what": "The guard stops scanning games, so a new product site goes unseen (Invariant 1, os-guard-wide)",
+      "what": "The guard stops scanning games, so a new product site goes unseen (Invariant 1, os-guard-wide) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
-      "replace": "ROOTS = (\"engine\", \"plugins\", \"tools\", \"build/acceptance\", \"tests\")",
+      "find": "ROOTS = source_roots()\n",
+      "replace": "ROOTS = tuple(root for root in source_roots() if root != \"games\")\n",
       "command": [
         "{python}",
         "-m",
@@ -1446,10 +1446,10 @@
     },
     {
       "id": "pu-x8-code-page-walk-skips-tests",
-      "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check)",
+      "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine plugins games tools build/acceptance)",
+      "find": "    gyo_source_roots(roots)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots tests)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
       "expect": "Process code page guard:"
@@ -1573,10 +1573,10 @@
     },
     {
       "id": "gdir-code-page-walk-skips-games",
-      "what": "The build layer stops applying the UTF-8 code page manifest under games/ (only the games/sample fixture of cmake.ProcessCodePage catches it; pu-x8 drops tests, not a product root)",
+      "what": "The build layer stops applying the UTF-8 code page manifest under games/ (only the games/sample fixture of cmake.ProcessCodePage catches it; pu-x8 drops tests, not a product root) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine plugins tools build/acceptance tests)",
+      "find": "    gyo_source_roots(roots)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots games)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
@@ -1591,17 +1591,17 @@
     },
     {
       "id": "gdir-code-page-check-skips-games",
-      "what": "The configure-time check stops walking games/, so a game directory the build layer did not record goes unseen (only the unrecorded_game case catches it)",
+      "what": "The configure-time check stops walking games/, so a game directory the build layer did not record goes unseen (only the unrecorded_game case catches it) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it) (since B1 of v8-arch-gyo2-build-cleanup-b1-b2 the check refuses the dropped root's directory as under no root)",
       "file": "tests/common/os/ProcessCodePageCheck.cmake",
-      "find": "    if(relative MATCHES \"^(engine|plugins|games|tools|build/acceptance|tests)(/|$)\")",
-      "replace": "    if(relative MATCHES \"^(engine|plugins|tools|build/acceptance|tests)(/|$)\")",
+      "find": "    gyo_source_roots(roots)\n    list(JOIN roots \"|\" alternatives)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots games)\n    list(JOIN roots \"|\" alternatives)\n",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
         "-P",
         "tests/common/cmake/ProcessCodePageTests.cmake"
       ],
-      "expect": "unrecorded_game: configuration unexpectedly succeeded",
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard:[\\s\\S]*games/sample\\s+inside\\s+the\\s+repository\\s+under\\s+no\\s+root",
       "guards": [
         "os DI 11",
         "build-games-dir-declaration 5.3"
@@ -2510,14 +2510,14 @@
     },
     {
       "id": "sdlp-roots-skip-plugins",
-      "what": "The OS boundary guard stops scanning plugins/, so OS knowledge in a Plugin goes unseen (Invariant 1; v8-arch-gyo2-sdl-p)",
+      "what": "The OS boundary guard stops scanning plugins/, so OS knowledge in a Plugin goes unseen (Invariant 1; v8-arch-gyo2-sdl-p) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "guards": [
         "os DI 1",
         "sdl-declaration 9.1"
       ],
       "file": "tests/common/os/os_boundary_guard.py",
-      "find": "ROOTS = (\"engine\", \"plugins\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
-      "replace": "ROOTS = (\"engine\", \"games\", \"tools\", \"build/acceptance\", \"tests\")",
+      "find": "ROOTS = source_roots()\n",
+      "replace": "ROOTS = tuple(root for root in source_roots() if root != \"plugins\")\n",
       "command": [
         "{python}",
         "-m",
@@ -2554,10 +2554,10 @@
     },
     {
       "id": "sdlp-code-page-walk-skips-plugins",
-      "what": "The build layer stops applying the UTF-8 code page manifest under plugins/ (a Plugin's program, such as sdl_gpu's shader compiler, runs with the system code page; Invariant 11; v8-arch-gyo2-sdl-p)",
+      "what": "The build layer stops applying the UTF-8 code page manifest under plugins/ (a Plugin's program, such as sdl_gpu's shader compiler, runs with the system code page; Invariant 11; v8-arch-gyo2-sdl-p) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "file": "build/cmake/GyoCodePage.cmake",
-      "find": "    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)",
-      "replace": "    foreach(root IN ITEMS engine games tools build/acceptance tests)",
+      "find": "    gyo_source_roots(roots)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots plugins)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
@@ -2572,17 +2572,17 @@
     },
     {
       "id": "sdlp-code-page-check-skips-plugins",
-      "what": "The configure-time check stops walking plugins/, so a Plugin directory the build layer did not record goes unseen (Invariant 11; v8-arch-gyo2-sdl-p)",
+      "what": "The configure-time check stops walking plugins/, so a Plugin directory the build layer did not record goes unseen (Invariant 11; v8-arch-gyo2-sdl-p) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it) (since B1 of v8-arch-gyo2-build-cleanup-b1-b2 the check refuses the dropped root's directory as under no root)",
       "file": "tests/common/os/ProcessCodePageCheck.cmake",
-      "find": "    if(relative MATCHES \"^(engine|plugins|games|tools|build/acceptance|tests)(/|$)\")",
-      "replace": "    if(relative MATCHES \"^(engine|games|tools|build/acceptance|tests)(/|$)\")",
+      "find": "    gyo_source_roots(roots)\n    list(JOIN roots \"|\" alternatives)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots plugins)\n    list(JOIN roots \"|\" alternatives)\n",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
         "-P",
         "tests/common/cmake/ProcessCodePageTests.cmake"
       ],
-      "expect": "unrecorded_plugin: configuration unexpectedly succeeded",
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard:[\\s\\S]*plugins/sample\\s+inside\\s+the\\s+repository\\s+under\\s+no\\s+root",
       "guards": [
         "os DI 11",
         "sdl-declaration 9.1"
@@ -2590,10 +2590,10 @@
     },
     {
       "id": "sdlp-definition-roots-skip-plugins",
-      "what": "The OS definition guard stops walking plugins/: a Plugin target identifies the OS through a compile definition unseen (Invariant 1; v8-arch-gyo2-sdl-p)",
+      "what": "The OS definition guard stops walking plugins/: a Plugin target identifies the OS through a compile definition unseen (Invariant 1; v8-arch-gyo2-sdl-p) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
       "file": "tests/common/os/OsDefinitionCheck.cmake",
-      "find": "    set(GYO_OS_DEFINITION_ROOTS engine plugins games tools build/acceptance tests)",
-      "replace": "    set(GYO_OS_DEFINITION_ROOTS engine games tools build/acceptance tests)",
+      "find": "    gyo_source_roots(GYO_OS_DEFINITION_ROOTS)\n",
+      "replace": "    gyo_source_roots(GYO_OS_DEFINITION_ROOTS)\n    list(REMOVE_ITEM GYO_OS_DEFINITION_ROOTS plugins)\n",
       "command": [
         "cmake",
         "-DWORK_ROOT=build/target",
@@ -2622,6 +2622,173 @@
       "guards": [
         "os DI 1",
         "sdl-declaration 9.1"
+      ]
+    },
+    {
+      "id": "bcl-source-roots-drop-examples",
+      "what": "The list of the repository's own code roots loses examples/: no example gets the UTF-8 manifest and no reader sees examples/ (os DI 11, v8-arch-gyo2-build-cleanup item 2) (since B1 of v8-arch-gyo2-build-cleanup-b1-b2 the check refuses the dropped root's directory as under no root)",
+      "file": "build/cmake/GyoSourceRoots.txt",
+      "find": "examples\n",
+      "replace": "",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard:[\\s\\S]*examples/sample\\s+inside\\s+the\\s+repository\\s+under\\s+no\\s+root",
+      "guards": [
+        "os DI 11",
+        "build-cleanup item 2"
+      ]
+    },
+    {
+      "id": "bcl-source-roots-drop-build-acceptance",
+      "what": "The list of the repository's own code roots loses build/acceptance/, which no synthetic directory covers: only the pin catches it",
+      "file": "build/cmake/GyoSourceRoots.txt",
+      "find": "build/acceptance\n",
+      "replace": "",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "source roots: build/cmake/GyoSourceRoots.txt lists",
+      "guards": [
+        "os DI 1",
+        "os DI 11",
+        "build-cleanup item 1"
+      ]
+    },
+    {
+      "id": "bcl-code-page-walk-skips-examples",
+      "what": "The build layer stops applying the UTF-8 code page manifest under examples/ (the walk drops it from the roots it reads)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    gyo_source_roots(roots)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots examples)\n    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard: sample_example \\(examples/sample\\)",
+      "guards": [
+        "os DI 11",
+        "build-cleanup item 2"
+      ]
+    },
+    {
+      "id": "bcl-code-page-check-skips-examples",
+      "what": "The code page check stops walking examples/ on its own, so an example directory the build layer did not record passes (since B1 of v8-arch-gyo2-build-cleanup-b1-b2 the check refuses the dropped root's directory as under no root)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "    gyo_source_roots(roots)\n    list(JOIN roots \"|\" alternatives)\n",
+      "replace": "    gyo_source_roots(roots)\n    list(REMOVE_ITEM roots examples)\n    list(JOIN roots \"|\" alternatives)\n",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard:[\\s\\S]*examples/sample\\s+inside\\s+the\\s+repository\\s+under\\s+no\\s+root",
+      "guards": [
+        "os DI 11",
+        "build-cleanup item 2"
+      ]
+    },
+    {
+      "id": "bcl-definition-roots-skip-examples",
+      "what": "The OS definition check stops reading examples/, so an example target that identifies the OS through a definition passes",
+      "file": "tests/common/os/OsDefinitionCheck.cmake",
+      "find": "    gyo_source_roots(GYO_OS_DEFINITION_ROOTS)\n",
+      "replace": "    gyo_source_roots(GYO_OS_DEFINITION_ROOTS)\n    list(REMOVE_ITEM GYO_OS_DEFINITION_ROOTS examples)\n",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "example_definition: configuration unexpectedly succeeded",
+      "guards": [
+        "os DI 1",
+        "build-cleanup item 1"
+      ]
+    },
+    {
+      "id": "bcl-os-guard-skips-examples",
+      "what": "The OS boundary guard drops examples/ from the roots it reads, so OS knowledge in an example goes unseen",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "ROOTS = source_roots()\n",
+      "replace": "ROOTS = tuple(root for root in source_roots() if root != \"examples\")\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_os_knowledge_in_examples_is_reported",
+      "guards": [
+        "os DI 1",
+        "build-cleanup item 1"
+      ]
+    },
+    {
+      "id": "bcl-check-misses-unlisted",
+      "what": "The code page check stops refusing a directory inside the repository under no root of build/cmake/GyoSourceRoots.txt, so a top-level directory the list misses goes without the manifest and without the check (v8-arch-gyo2-build-cleanup-b1-b2, B1)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "            set_property(GLOBAL APPEND PROPERTY GYO_OS_CODE_PAGE_UNLISTED \"${relative}\")\n",
+      "replace": "",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "unlisted: configuration unexpectedly succeeded",
+      "guards": [
+        "os DI 11",
+        "build-cleanup B1"
+      ]
+    },
+    {
+      "id": "bcl-check-unlisted-third-party",
+      "what": "The unlisted-directory check no longer leaves third_party/ out, so the vendored code is refused",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "           AND NOT relative MATCHES \"^third_party(/|$)\")",
+      "replace": "           )",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "plain: configuration failed[\\s\\S]*Process code page guard:[\\s\\S]*third_party/lib\\s+inside\\s+the\\s+repository\\s+under\\s+no\\s+root",
+      "guards": [
+        "os DI 11",
+        "build-cleanup B1"
+      ]
+    },
+    {
+      "id": "bcl-check-unlisted-build-tree",
+      "what": "The unlisted-directory check no longer leaves the build tree out, so what FetchContent populates in a build tree inside the repository is refused",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "        if(IS_ABSOLUTE \"${in_build}\" OR in_build MATCHES \"^\\\\.\\\\./\")",
+      "replace": "        if(TRUE)",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "inside_build: configuration failed",
+      "guards": [
+        "os DI 11",
+        "build-cleanup B1"
       ]
     }
   ]

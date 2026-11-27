@@ -177,9 +177,11 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     the module is included, in the scope that enabled the compilers.
   - The build layer (`build/cmake/GyoCodePage.cmake`, included by `GyoBuild.cmake`) chooses the executables. It
     records each directory it adds (engine, every selected Plugin, every game and tool, their tests and acceptance
-    programs, tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source
+    programs, tests/common, examples) by its binary directory, since a standalone tool wrapper reuses the tool's source
     directory, and once every target exists applies the manifest to every executable target there and below whose
-    source directory is under engine, plugins, games, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
+    source directory is under a root of `build/cmake/GyoSourceRoots.txt` (engine, plugins, games, tools, examples,
+    build/acceptance and tests: the repository's own code, one list that the checks and guards below read too,
+    `v8-arch-gyo2-build-cleanup`). It marks each with `GYO_PROCESS_CODE_PAGE`
     on every platform. No product is named: a new, cloned or removed product needs no common change. A target
     that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
     programs that FetchContent adds (protoc, and SDL's own) are outside the roots and keep their own manifests; Go services are
@@ -337,8 +339,9 @@ Invariants 1–3 as text, so the result is the same on every platform:
   name without its suffix resolves to the wide entry point.
 
 engine/core/os/src is scanned for R5 and R6 only; engine/core/os/include is scanned for everything. Comments, string literals and
-character literals are ignored; `#include` lines are matched as written. The scan covers engine, plugins, games,
-tools, build/acceptance and tests (except tests/common/os, third_party and build/target). engine and tests must yield
+character literals are ignored; `#include` lines are matched as written. The scan covers the roots of
+`build/cmake/GyoSourceRoots.txt`: engine, plugins, games, tools, examples, build/acceptance and tests (except
+tests/common/os, third_party and build/target). engine and tests must yield
 at least one source; the other roots are skipped, and reported as skipped, while they hold none (removing the SDL
 Plugins may leave plugins/ empty, Design Invariant SDL-2 of `target/v2/sdl.zh-Hant.md`). The roots name no product or
 Plugin, so adding or removing one changes no guard file.
@@ -365,9 +368,17 @@ code page walks it follows each directory once along its ancestry. The third
 (`tests/common/os/ProcessCodePageCheck.cmake`) checks Invariant 11: every executable target under the scanned roots
 carries the `GYO_PROCESS_CODE_PAGE` mark the build layer sets, or an exemption with its reason, which is listed. It
 is written apart from the walk that applies the manifest, walks from the top directory by source path as well as
-from the recorded directories, and runs on every platform, so a target the walk misses fails anywhere.
+from the recorded directories, and runs on every platform, so a target the walk misses fails anywhere. It also
+refuses a directory inside the repository that is under no root of `build/cmake/GyoSourceRoots.txt`, nor under
+third_party/ or the build tree (where FetchContent populates): such a directory is the repository's own code that
+the list does not name yet, and would get neither the manifest nor the check (plugins/ and examples/ were missed that
+way; `v8-arch-gyo2-build-cleanup-b1-b2`).
 `cmake.ProcessCodePage` runs the build layer and the check on a synthetic tree: a plain build, a standalone tool
-wrapper, a directory the build layer did not record (refused) and an exemption (listed).
+wrapper, a directory the build layer did not record (refused), a directory under no root (refused), a dependency
+populated in a build tree inside the repository (not refused) and an exemption (listed). The walk, the check and the
+OS definition check read the same roots (`build/cmake/GyoSourceRoots.txt`); the walk and the check stay apart in
+everything else. `cmake.ProcessCodePage` pins that list, so a root removed from it fails there instead of silently
+narrowing every reader.
 
 `OSHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/core/os public
 headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
@@ -412,7 +423,7 @@ Known blind spots, left to review:
 ## Design Invariants
 
 1. **OS knowledge lives only in engine/core/os.** C/C++ sources outside engine/core/os/src (engine, plugins, games,
-   tools, build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
+   tools, examples, build/acceptance and tests, except tests/common/os) include no OS header (R1), branch on no OS macro in a
    preprocessor condition (R2) and call no listed OS or CRT-split API (R3). A non-os target gets no
    OS-identifying compile definition from CMake. Compiler and architecture macros are not OS branches. Exceptions
    live only in an owner's ratchet allowlist.
@@ -479,7 +490,11 @@ Known blind spots, left to review:
     refuses the ANSI code page constants and ANSI Win32 entry points in engine/core/os (R6); `cmake.ProcessCodePage`.
     Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6, pu-x5, gdir-code-page-walk-skips-games and
     gdir-code-page-check-skips-games (the games/ root, `v8-arch-gyo2-build-games-dir`), sdlp-code-page-walk-skips-plugins
-    and sdlp-code-page-check-skips-plugins (the plugins/ root, `v8-arch-gyo2-sdl-p`).
+    and sdlp-code-page-check-skips-plugins (the plugins/ root, `v8-arch-gyo2-sdl-p`), bcl-code-page-walk-skips-examples,
+    bcl-code-page-check-skips-examples, the two that drop a root from `build/cmake/GyoSourceRoots.txt`,
+    bcl-source-roots-drop-examples and bcl-source-roots-drop-build-acceptance, and the three of the directory under no
+    root, bcl-check-misses-unlisted, bcl-check-unlisted-third-party and bcl-check-unlisted-build-tree
+    (`v8-arch-gyo2-build-cleanup`).
 
 ### Replacement Criteria
 

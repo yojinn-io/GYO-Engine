@@ -1,0 +1,16 @@
+# The top-level directories that hold the repository's own code, one per line.
+# The build layer applies the UTF-8 code page manifest under them, and the
+# checks and source guards scan them (readers: GyoSourceRoots.cmake for CMake,
+# tests/common/support/source_roots.py for Python). No product or Plugin is named, so adding or
+# removing one changes nothing here. Every directory GyoBuild.cmake adds
+# for the repository's own code lies under one of them (third_party/ is not
+# ours); the code page check refuses a directory of the repository under none
+# of them. tests/common/cmake/ProcessCodePageTests.cmake pins this list, so a
+# root removed here fails there instead of shrinking every guard.
+engine
+plugins
+games
+tools
+examples
+build/acceptance
+tests

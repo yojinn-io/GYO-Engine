@@ -1,13 +1,14 @@
 # Design Invariant 11 of docs/architecture/os.md: every Windows executable of
 # the repository's own sources declares UTF-8 as its ANSI code page. engine/os
 # owns the manifest and its embedding; the build layer decides which targets
-# get it: every executable under engine, plugins, games, tools,
-# build/acceptance and tests, without naming a product (AGENTS.md sections 7
-# and 9). Third-party programs that FetchContent adds (protoc, SDL's own, for
-# example) live in the binary tree, outside those roots, and keep their own
-# manifests. tests/common/os checks the result.
+# get it: every executable under the roots of GyoSourceRoots.txt, without
+# naming a product (AGENTS.md sections 7 and 9). Third-party programs that
+# FetchContent adds (protoc, SDL's own, for example) live in the binary tree,
+# outside those roots, and keep their own manifests. tests/common/os checks
+# the result.
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/../../engine/core/os/cmake/GyoProcessCodePage.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/GyoSourceRoots.cmake")
 
 # Records a directory the build layer adds, by its binary directory. A
 # standalone tool wrapper reuses the tool's source directory, so looking the
@@ -17,7 +18,7 @@ function(gyo_record_code_page_directory binary_directory)
     set_property(GLOBAL APPEND PROPERTY GYO_CODE_PAGE_DIRECTORIES "${binary_directory}")
 endfunction()
 
-function(_gyo_code_page_walk directory)
+function(_gyo_code_page_walk directory roots)
     set(ancestors ${ARGN})
     if(directory IN_LIST ancestors)
         return()
@@ -25,7 +26,7 @@ function(_gyo_code_page_walk directory)
     list(APPEND ancestors "${directory}")
     get_property(source DIRECTORY "${directory}" PROPERTY SOURCE_DIR)
     file(RELATIVE_PATH relative "${GYO_REPOSITORY_ROOT}" "${source}")
-    foreach(root IN ITEMS engine plugins games tools build/acceptance tests)
+    foreach(root IN LISTS roots)
         if(relative STREQUAL root OR relative MATCHES "^${root}/")
             get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
             foreach(target IN LISTS targets)
@@ -41,7 +42,7 @@ function(_gyo_code_page_walk directory)
     endforeach()
     get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
     foreach(child IN LISTS children)
-        _gyo_code_page_walk("${child}" ${ancestors})
+        _gyo_code_page_walk("${child}" "${roots}" ${ancestors})
     endforeach()
 endfunction()
 
@@ -50,8 +51,9 @@ endfunction()
 # target exists. A target that must run without it sets
 # GYO_PROCESS_CODE_PAGE_EXEMPT to the reason, which the check lists.
 function(gyo_apply_process_code_page)
+    gyo_source_roots(roots)
     get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)
     foreach(directory IN LISTS directories)
-        _gyo_code_page_walk("${directory}")
+        _gyo_code_page_walk("${directory}" "${roots}")
     endforeach()
 endfunction()

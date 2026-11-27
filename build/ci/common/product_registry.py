@@ -141,7 +141,6 @@ def main():
             stream.write(f"baseline={json.dumps(baseline, separators=(',', ':'))}\n")
             builds = {"include": baseline["include"] + matrix["include"]}
             stream.write(f"build_matrix={json.dumps(builds, separators=(',', ':'))}\n")
-            stream.write(f"has_games={str(bool(pairs)).lower()}\n")
     print(json.dumps(matrix))
 
 

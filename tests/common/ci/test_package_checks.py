@@ -119,7 +119,7 @@ class InstalledCheckTests(unittest.TestCase):
     def test_generic_products_need_no_startup_and_paths_are_confined(self):
         validate_manifest({**self.contract, "checks": []}, APP, "linux-x64")
         for change in ({"executables": {APP:"../escape"}},
-                       {"required_files": ["/absolute"]}, {"product": "other_app"}):
+                       {"required_files": ["/absolute"]}, {"product": "other_game"}):
             contract = {**self.contract, **change}
             with self.subTest(change=change), self.assertRaises(ValueError):
                 validate_manifest(contract, APP, "linux-x64")
@@ -420,7 +420,7 @@ class InstalledCheckTests(unittest.TestCase):
         self.assertTrue(self.run_checks(gpu=True, driver="vulkan"))
 
     def test_foreign_game_payload_and_acceptance_executable_are_not_products(self):
-        for relative in ("bin/assets/other_game/data.txt", "bin/gyo_other_game", "bin/gyo_sample_app_acceptance.exe"):
+        for relative in ("bin/assets/other_game/data.txt", "bin/gyo_other_game", "bin/gyo_sample_game_acceptance.exe"):
             with self.subTest(relative=relative):
                 foreign = self.stage / relative
                 foreign.parent.mkdir(parents=True, exist_ok=True)

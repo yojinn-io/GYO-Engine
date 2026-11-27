@@ -51,9 +51,9 @@ def content_files(assets, shaders):
     return files, content
 
 
-def assemble(product, kind, stage, assets=None, shaders=None, executable=None):
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", product) or kind not in ("game", "toolchain"):
-        raise ValueError("Invalid product identity/kind")
+def assemble(product, stage, assets=None, shaders=None, executable=None):
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", product):
+        raise ValueError("Invalid product identity")
     shaders = shaders or {}
     stage = stage.resolve()
     destination = stage / "bin" / "assets" / product
@@ -94,7 +94,6 @@ def assemble(product, kind, stage, assets=None, shaders=None, executable=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--product", required=True)
-    parser.add_argument("--kind", choices=("game", "toolchain"), required=True)
     parser.add_argument("--stage", type=Path, required=True)
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--shader", action="append", default=[])
@@ -107,7 +106,7 @@ def main():
             if not path or name in shaders:
                 raise ValueError(f"Invalid or duplicate --shader: {value}")
             shaders[name] = Path(path)
-        assemble(args.product, args.kind, args.stage, args.assets, shaders, args.executable)
+        assemble(args.product, args.stage, args.assets, shaders, args.executable)
     except (ValueError, OSError) as error:
         parser.exit(1, f"Runtime assembly failed: {error}\n")
 

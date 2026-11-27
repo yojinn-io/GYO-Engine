@@ -26,9 +26,12 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-# Top-level roots scanned for R1-R3, and those of them that are runtime code (R4). No product is named: removing one
-# leaves this list unchanged (AGENTS.md sections 7 and 9).
-ROOTS = ("engine", "plugins", "games", "tools", "build/acceptance", "tests")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
+from source_roots import source_roots  # noqa: E402
+
+# Top-level roots scanned for R1-R3 (the repository's own code, build/cmake/GyoSourceRoots.txt), and those of them
+# that are runtime code (R4). No product is named: removing one leaves these unchanged (AGENTS.md sections 7 and 9).
+ROOTS = source_roots()
 RUNTIME_ROOTS = ("engine", "plugins", "games", "tools")
 # Roots that always exist and hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
 REQUIRED_ROOTS = ("engine", "tests")

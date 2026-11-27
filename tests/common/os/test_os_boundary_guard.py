@@ -202,16 +202,16 @@ class Rules(GuardTree):
         self.assertEqual(problems, ["engine: no C/C++ source scanned (does not exist); is the root right?",
                                     "tests: no C/C++ source scanned (does not exist); is the root right?"])
         self.assertEqual(skipped, ["plugins (does not exist)", "games (does not exist)", "tools (does not exist)",
-                                   "build/acceptance (does not exist)"])
+                                   "examples (does not exist)", "build/acceptance (does not exist)"])
 
     def test_product_roots_without_sources_are_skipped_and_named(self):
-        # No Plugin, product or tool is registered: plugins, games and tools are absent, build/acceptance holds
-        # only scripts. plugins/ is not required: removing the SDL Plugins may leave it without sources (SDL-2).
+        # No Plugin, product, tool or example is there: plugins, games, tools and examples are absent,
+        # build/acceptance holds only scripts. plugins/ is not required: removing the SDL Plugins may leave it without sources (SDL-2).
         self.write("build/acceptance/common/check.py", "print('x')\n")
         skipped = []
         self.assertEqual(guard.check(self.root, skipped=skipped), [])
         self.assertEqual(skipped, ["plugins (does not exist)", "games (does not exist)", "tools (does not exist)",
-                                   "build/acceptance (holds no C/C++ source)"])
+                                   "examples (does not exist)", "build/acceptance (holds no C/C++ source)"])
         self.write("games/sample/project.json", "{}\n")
         skipped = []
         self.assertEqual(guard.check(self.root, skipped=skipped), [])
@@ -229,10 +229,19 @@ class Rules(GuardTree):
         self.write("engine/render/shaders/pipeline/src/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.assertReported("engine/render/shaders/pipeline/src/main.cpp:1: R4 std::ifstream")
 
-    def test_roots_name_no_product(self):
-        # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
-        self.assertEqual(guard.ROOTS, ("engine", "plugins", "games", "tools", "build/acceptance", "tests"))
+    def test_runtime_roots_name_no_product(self):
+        # Removing or adding a product must leave the runtime roots unchanged (AGENTS.md sections 7 and 9). The
+        # scanned roots are build/cmake/GyoSourceRoots.txt, pinned by cmake.ProcessCodePage.
         self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "plugins", "games", "tools"))
+
+    def test_os_knowledge_in_examples_is_reported(self):
+        # examples/ holds programs that use the Engine as a product would: R1-R3 apply; R4 does not (not a runtime
+        # root).
+        self.write("examples/sample/main.cpp", "#include <unistd.h>\n#if defined(_WIN32)\n#endif\n"
+                                               "void F() { std::ifstream in(\"x\"); }\n")
+        self.assertReported("examples/sample/main.cpp:1: R1 unistd.h")
+        self.assertReported("examples/sample/main.cpp:2: R2 _WIN32")
+        self.assertNotIn("examples/sample/main.cpp:4: R4 std::ifstream", self.problems())
 
     def test_exclusions_and_required_roots_are_pinned(self):
         # Each of these narrows the guard when it grows (an exclusion, an allowlist scope) or shrinks (a required
