@@ -93,11 +93,25 @@ if(MSVC)
 else()
     target_compile_options(gyo_object_fps_pvp_client_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-add_test(NAME object_fps_pvp.client COMMAND gyo_object_fps_pvp_client_tests "--test-case=client:*")
-# 300 s: the games' maps load on the asset threads and many cases wait for them (Setup::Loaded); gyo2 alone took up to
-# 118 s on the macOS runner (2026-11-26), at the old 120 s limit.
-set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 300
-    FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+# Four ctest entries that run in parallel, each a range of the "client:" cases in their order in the file (doctest's
+# --first/--last; the last range is open, so a case added at the end is run): the cases wait for the maps the asset
+# threads read (Setup::Loaded), and one process took up to 118 s on the macOS runner (2026-11-26, big map #364). The
+# ranges are cut by the cases' time (macOS, 2026-11-27: about 13 s, 14 s, 12 s and 8 s).
+set(object_fps_pvp_client_ranges "1:6" "7:14" "15:30" "31:")
+set(object_fps_pvp_client_part 0)
+foreach(range IN LISTS object_fps_pvp_client_ranges)
+    math(EXPR object_fps_pvp_client_part "${object_fps_pvp_client_part} + 1")
+    string(REPLACE ":" ";" bounds "${range}")
+    list(GET bounds 0 first)
+    list(GET bounds 1 last)
+    set(arguments "--test-case=client:*" "--first=${first}")
+    if(NOT last STREQUAL "")
+        list(APPEND arguments "--last=${last}")
+    endif()
+    add_test(NAME object_fps_pvp.client.${object_fps_pvp_client_part} COMMAND gyo_object_fps_pvp_client_tests ${arguments})
+    set_tests_properties(object_fps_pvp.client.${object_fps_pvp_client_part} PROPERTIES LABELS "cpu" TIMEOUT 300
+        FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+endforeach()
 
 # The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown, and it
 # closes its window and exits with 0 -- the lobby (main), and the Client with --connect (no Match: it shows that it
