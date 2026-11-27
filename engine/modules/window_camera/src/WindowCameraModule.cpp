@@ -1,7 +1,5 @@
 #include "engine/window_camera/WindowCameraModule.hpp"
 
-#include <bit>
-#include <cstdint>
 #include <utility>
 
 #include "engine/base/Result.hpp"
@@ -22,20 +20,12 @@ const WindowCameraOptions& OptionsOf(const WindowCameraOptions* given) {
     return given != nullptr ? *given : defaults;
 }
 
-bool SameSize(const Camera::TargetSize& a, const Camera::TargetSize& b) noexcept {
-    return a.physicalSize == b.physicalSize &&
-           std::bit_cast<std::uint32_t>(a.scaleFactor) == std::bit_cast<std::uint32_t>(b.scaleFactor);
-}
-
-// The main target is the window: its size once known, written only when it differs (a write every frame would mark
-// CameraTargetSizes changed every frame).
+// The main target is the window: its size once known, written only when it differs (camera's WriteTargetSize; a
+// write every frame would mark CameraTargetSizes changed every frame).
 SystemResult WriteWindowTargetSize(Kernel::Res<Window::WindowState> window, Kernel::ResMut<Camera::CameraTargetSizes> sizes) {
     const Window::WindowState& state = *window;
     if (!state.known) return {};
-    const Camera::TargetSize size{state.physicalSize, state.scaleFactor};
-    const Camera::TargetSize* current = sizes.Read().Find(Camera::CameraTarget{0});
-    if (current != nullptr && SameSize(*current, size)) return {};
-    sizes.Get().Set(Camera::CameraTarget{0}, size);
+    Camera::WriteTargetSize(sizes, Camera::kMainTarget, Camera::TargetSize{state.physicalSize, state.scaleFactor});
     return {};
 }
 

@@ -1,5 +1,6 @@
 # world_render (docs/architecture/target/v2/render.zh-Hant.md, section 7): the source World end of render. It registers
-# the drawables and clear colours an author puts in the source World, for the render World to extract.
+# the drawables, clear colours and render targets (RenderTargets) an author puts in the source World, for the render
+# World to extract, and runs WriteRenderTargetSizes (the targets' sizes into camera's CameraTargetSizes; section 3).
 add_library(gyo_world_render STATIC
     src/WorldRenderModule.cpp
 )

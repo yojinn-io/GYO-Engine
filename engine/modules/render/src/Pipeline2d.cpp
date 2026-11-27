@@ -129,9 +129,9 @@ std::vector<std::uint32_t> TriangleListOf(const Shape2d& shape) {
 }
 
 std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items) {
-    if (!camera.is2d || !camera.computed.valid) return std::nullopt;
-    // The camera's one world-to-clip value (camera's CM-3), not made again here.
-    const Math::Matrix4& clipFromWorld = camera.computed.clipFromWorld;
+    if (!camera.is2d || !camera.computed.valid || !camera.view.valid) return std::nullopt;
+    // The camera's one world-to-clip value (camera's CM-7), not made again here.
+    const Math::Matrix4& clipFromWorld = camera.view.clipFromWorld;
     const Camera::Viewport& vp = camera.computed.viewport;
     const float width = static_cast<float>(vp.size.x);
     const float height = static_cast<float>(vp.size.y);

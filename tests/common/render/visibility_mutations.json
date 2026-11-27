@@ -87,8 +87,8 @@
     "big-map-declaration K1"
    ],
    "file": "engine/modules/visibility/src/VisibilityModule.cpp",
-   "find": "        if (!settings.active || !computed.valid) return;",
-   "replace": "        if (!computed.valid) return;",
+   "find": "        if (!settings.active || !cameraView.valid) return;",
+   "replace": "        if (!cameraView.valid) return;",
    "target": "gyo_render_tests",
    "cases": "visibility: each 3D camera*",
    "expect": "\\[vs-inactive\\]"

@@ -228,6 +228,7 @@ void CameraAt(K::World& world, const K::EntityId id, const std::int32_t order = 
     world.Insert(id, C::CameraTarget{});
     world.Insert(id, C::Projection{C::OrthographicProjection::Default2d()});
     world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
     T::Transform t;
     world.Insert(id, t);
     world.Insert(id, T::GlobalTransform{T::ToMatrix(t)});

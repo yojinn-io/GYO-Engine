@@ -50,7 +50,8 @@ using DeviceFailure = Engine::Base::Error<DeviceFailureCode>;
 enum class FrameOutcome : std::uint8_t {
     // Drawn and handed to the window to show.
     Shown = 1,
-    // The window gave no picture to draw on (minimized, hidden or occluded): nothing drawn, the asks applied.
+    // The window gave no picture to draw on (minimized, hidden or occluded): nothing drawn on it, the asks applied and
+    // the render targets drawn.
     Skipped,
     // SDL refused a step (the text in LastError()); what is applied stays applied.
     Failed,

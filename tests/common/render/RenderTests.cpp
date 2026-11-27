@@ -26,7 +26,6 @@ Vec2 Apply(const R::ViewTransform& t, const Vec2 p) { return {p.x * t.scale.x + 
 
 std::vector<std::uint8_t> Pixels(std::uint32_t w, std::uint32_t h) { return std::vector<std::uint8_t>(std::size_t{w} * h * 4, 7); }
 
-bool PassTargetOfOk(const std::optional<std::uint32_t>& got, const std::uint32_t expected) { return got.has_value() && *got == expected; }
 
 } // namespace
 
@@ -195,12 +194,15 @@ TEST_CASE("render: targets take their ids from the textures' counter, never give
     CHECK_MESSAGE(again.value == 3, "[rd-target-no-reuse] a released target's id is not given again");
     CHECK_MESSAGE(textures.FindTarget(target) == nullptr, "[rd-target-released-gone] a released target is not live");
     REQUIRE(textures.FindTarget(again) != nullptr);
-    CHECK_MESSAGE(!textures.FindTarget(again)->size.has_value(), "[rd-target-find] its description is kept (follows the main target)");
+    CHECK_MESSAGE((textures.FindTarget(again)->size == std::variant<R::TargetSize, R::FollowTarget>{R::FollowTarget{}}),
+                  "[rd-target-find] its description is kept (by default it follows the main target)");
     CHECK_MESSAGE((textures.Find(again) == nullptr && textures.FindTarget(picture) == nullptr),
                   "[rd-target-apart] a target is not a texture of pixels, nor the other way round");
     CHECK_MESSAGE(textures.LiveCount() == 2, "[rd-target-live-count] the texture and the target");
+    const R::TextureId follower = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{again}});
+    CHECK_MESSAGE((std::get<R::FollowTarget>(textures.FindTarget(follower)->size).target == again), "[rd-target-follows] a target may follow another");
     const auto pending = textures.Pending();
-    REQUIRE_MESSAGE(pending.size() == 4, "[rd-target-ask] making a target is an ask, in order");
+    REQUIRE_MESSAGE(pending.size() == 5, "[rd-target-ask] making a target is an ask, in order");
     const auto* made = std::get_if<R::TextureTargetCreate>(&pending[1]);
     REQUIRE_MESSAGE(made != nullptr, "[rd-target-ask] making a target is an ask, in order");
     CHECK_MESSAGE((made->id == target && made->desc == fixed), "[rd-target-ask] the ask carries the id and the description");
@@ -219,70 +221,95 @@ TEST_CASE("render: a texture keeps its format; Rgba8Unorm is the default") {
 }
 
 TEST_CASE("render: wrong target asks are Programmer Errors") {
+    namespace C = GYO::Engine::Camera;
     R::RenderTextures textures;
     GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{0, 8}}));
+    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Rgba8UnormSrgb}));
+    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{R::TextureId{9}}}));
     const R::TextureId target = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}});
     GYO_CHECK_ASSERTS(textures.Update(target, R::TextureRegion{0, 0, 1, 1}, Pixels(1, 1)));
     R::RenderTargets targets;
-    GYO_CHECK_ASSERTS(targets.Create(R::RenderTargetDesc{R::TargetSize{8, 0}}));
-    GYO_CHECK_ASSERTS(targets.Release(GYO::Engine::Camera::CameraTarget{1}));
+    GYO_CHECK_ASSERTS(targets.Create(R::SourceTargetDesc{R::TargetSize{8, 0}}));
+    GYO_CHECK_ASSERTS(targets.Create(R::SourceTargetDesc{C::CameraTarget{4}}));
+    GYO_CHECK_ASSERTS(targets.Release(C::CameraTarget{1}));
 }
 
 TEST_CASE("render: the source's targets: ids from 1 for cameras, never given twice; the sizes a camera computes with") {
     namespace C = GYO::Engine::Camera;
     R::RenderTargets targets;
-    const C::CameraTarget a = targets.Create(R::RenderTargetDesc{R::TargetSize{8, 4}});
-    const C::CameraTarget b = targets.Create(R::RenderTargetDesc{});
+    const C::CameraTarget a = targets.Create(R::SourceTargetDesc{R::TargetSize{8, 4}});
+    const C::CameraTarget b = targets.Create(R::SourceTargetDesc{});
     CHECK_MESSAGE((a.id == 1 && b.id == 2), "[rt-ids] from 1 (0 is the main target), growing");
     targets.Release(a);
-    CHECK_MESSAGE(targets.Create(R::RenderTargetDesc{}).id == 3, "[rt-no-reuse] a released id is not given again");
-    CHECK_MESSAGE((targets.Find(a) == nullptr && targets.Find(b) != nullptr && targets.Find(C::CameraTarget{0}) == nullptr), "[rt-find]");
+    CHECK_MESSAGE(targets.Create(R::SourceTargetDesc{}).id == 3, "[rt-no-reuse] a released id is not given again");
+    CHECK_MESSAGE((targets.Find(a) == nullptr && targets.Find(b) != nullptr && targets.Find(C::kMainTarget) == nullptr), "[rt-find]");
     CHECK_MESSAGE(targets.Live().size() == 2, "[rt-live]");
+    CHECK_MESSAGE((R::RenderTargets{}.Table() != targets.Table() && R::RenderTargets{targets}.Table() == targets.Table()),
+                  "[rt-table] a new table is another; a copy is the same");
 
-    const C::TargetSize main{{1920, 1080}, 2.0F};
-    const auto fixed = R::TargetSizeOf(R::RenderTargetDesc{R::TargetSize{8, 4}}, &main);
+    C::CameraTargetSizes sizes;
+    const auto fixed = R::TargetSizeOf(R::SourceTargetDesc{R::TargetSize{8, 4}}, sizes);
     REQUIRE(fixed.has_value());
     CHECK_MESSAGE((fixed->physicalSize == GYO::Engine::Math::Vec2i{8, 4} && fixed->scaleFactor == 1.0F),
                   "[rt-size-fixed] a fixed size, scale factor 1 whatever the window's");
-    const auto follows = R::TargetSizeOf(R::RenderTargetDesc{}, &main);
+    CHECK_MESSAGE(!R::TargetSizeOf(R::SourceTargetDesc{}, sizes).has_value(), "[rt-size-unknown] none before the main size is known");
+    sizes.Set(C::kMainTarget, C::TargetSize{{1920, 1080}, 2.0F});
+    sizes.Set(b, C::TargetSize{{64, 32}, 1.0F});
+    const auto follows = R::TargetSizeOf(R::SourceTargetDesc{}, sizes);
     REQUIRE_MESSAGE(follows.has_value(), "[rt-size-follows] a following target has the main target's size");
-    CHECK_MESSAGE((follows->physicalSize == main.physicalSize && follows->scaleFactor == 2.0F), "[rt-size-follows] the main target's size and scale");
-    CHECK_MESSAGE(!R::TargetSizeOf(R::RenderTargetDesc{}, nullptr).has_value(), "[rt-size-unknown] none before the main size is known");
+    CHECK_MESSAGE((follows->physicalSize == GYO::Engine::Math::Vec2i{1920, 1080} && follows->scaleFactor == 2.0F), "[rt-size-follows] and scale");
+    const auto followsB = R::TargetSizeOf(R::SourceTargetDesc{b}, sizes);
+    REQUIRE_MESSAGE(followsB.has_value(), "[rt-size-follows-other] a target may follow another target");
+    CHECK_MESSAGE(followsB->physicalSize == (GYO::Engine::Math::Vec2i{64, 32}), "[rt-size-follows-other] its size, not the main one");
+    const auto fixedNow = R::TargetSizeOf(R::SourceTargetDesc{R::TargetSize{8, 4}}, sizes);
+    CHECK_MESSAGE((fixedNow.has_value() && fixedNow->scaleFactor == 1.0F), "[rt-size-fixed] scale factor 1 with a window of scale 2 too");
 }
 
-TEST_CASE("render: the render World keeps one target of its own per source target, in step; cameras map to it") {
+TEST_CASE("render: the render World keeps one target of its own per source target, in step; another table starts again") {
     namespace C = GYO::Engine::Camera;
     R::RenderTargets source;
     R::RenderTextures textures;
     R::TargetTextures mapped;
     const R::TextureId picture = textures.Create(R::TextureDesc{1, 1}, Pixels(1, 1));  // an image's texture, id 1
-    const C::CameraTarget minimap = source.Create(R::RenderTargetDesc{R::TargetSize{8, 8}});
+    const C::CameraTarget minimap = source.Create(R::SourceTargetDesc{R::TargetSize{8, 8}});
+    const C::CameraTarget glow = source.Create(R::SourceTargetDesc{minimap});
     R::SyncTargetTextures(&source, textures, mapped);
-    REQUIRE(mapped.Find(minimap.id) != nullptr);
-    const R::TextureId made = *mapped.Find(minimap.id);
+    REQUIRE(mapped.Find(minimap) != nullptr);
+    REQUIRE(mapped.Find(glow) != nullptr);
+    const R::TextureId made = *mapped.Find(minimap);
     CHECK_MESSAGE((made.value != picture.value && textures.FindTarget(made) != nullptr), "[rt-sync-made] a render target of RenderTextures, its own id");
-    CHECK_MESSAGE((PassTargetOfOk(R::PassTargetOf(minimap.id, mapped), made.value)), "[rt-pass-target] a camera on it draws on that target");
-    CHECK_MESSAGE((PassTargetOfOk(R::PassTargetOf(0, mapped), 0)), "[rt-pass-target-main] 0 stays 0");
-    CHECK_MESSAGE(!R::PassTargetOf(9, mapped).has_value(), "[rt-pass-target-none] an id the source has no target for maps to nothing");
+    CHECK_MESSAGE((std::get<R::FollowTarget>(textures.FindTarget(*mapped.Find(glow))->size).target == made),
+                  "[rt-sync-follows] a follower follows the render target made for the source target it follows");
+    CHECK_MESSAGE(mapped.Find(C::kMainTarget) == nullptr, "[rt-sync-main] nothing is made for the main target");
 
     textures.ClearPending();
     R::SyncTargetTextures(&source, textures, mapped);
-    CHECK_MESSAGE((textures.Pending().empty() && *mapped.Find(minimap.id) == made), "[rt-sync-kept] the same target is kept, nothing asked");
+    CHECK_MESSAGE((textures.Pending().empty() && *mapped.Find(minimap) == made), "[rt-sync-kept] the same target is kept, nothing asked");
 
-    // A replaced source World gives id 1 again, to a target of another size: a new render target, the old let go.
+    // The minimap gets another size: made again, and its follower too (it follows the new one); the old ones let go.
+    source.Release(glow);
+    source.Release(minimap);
+    R::RenderTargets& same = source;
+    const C::CameraTarget resized = same.Create(R::SourceTargetDesc{R::TargetSize{4, 4}});
+    R::SyncTargetTextures(&same, textures, mapped);
+    CHECK_MESSAGE((mapped.Find(minimap) == nullptr && mapped.Find(glow) == nullptr && textures.FindTarget(made) == nullptr),
+                  "[rt-sync-gone] a target the source no longer has is let go");
+    REQUIRE(mapped.Find(resized) != nullptr);
+
+    // A replaced source World: another table gives id 1 again, with the same description. The old target is let go and
+    // a new one made: the new World never sees the old one's picture.
     R::RenderTargets replaced;
-    const C::CameraTarget other = replaced.Create(R::RenderTargetDesc{R::TargetSize{4, 4}});
-    REQUIRE(other.id == minimap.id);
+    for (std::uint32_t i = 0; i < resized.id; ++i) static_cast<void>(replaced.Create(R::SourceTargetDesc{R::TargetSize{4, 4}}));
+    const R::TextureId before = *mapped.Find(resized);
     R::SyncTargetTextures(&replaced, textures, mapped);
-    REQUIRE(mapped.Find(other.id) != nullptr);
-    CHECK_MESSAGE((*mapped.Find(other.id) != made && textures.FindTarget(made) == nullptr && textures.FindTarget(*mapped.Find(other.id)) != nullptr),
-                  "[rt-sync-changed] another description: made again, the old one let go");
+    REQUIRE(mapped.Find(resized) != nullptr);
+    CHECK_MESSAGE((*mapped.Find(resized) != before && textures.FindTarget(before) == nullptr),
+                  "[rt-sync-other-table] another table: what was made for the old one is let go, the same id made again");
 
     textures.ClearPending();
-    const R::TextureId last = *mapped.Find(other.id);
+    const R::TextureId last = *mapped.Find(resized);
     R::SyncTargetTextures(nullptr, textures, mapped);
-    CHECK_MESSAGE((mapped.entries.empty() && textures.FindTarget(last) == nullptr && textures.Pending().size() == 1),
-                  "[rt-sync-gone] a target the source no longer has is let go");
+    CHECK_MESSAGE((mapped.entries.empty() && textures.FindTarget(last) == nullptr), "[rt-sync-none] no source: everything is let go");
 }
 
 TEST_CASE("render: the shader ABI's vertex layout is Vertex2D's") {

@@ -26,7 +26,7 @@ using SystemResult = Base::Result<void, Kernel::KernelError>;
 // for every camera); the camera's list is written only when it differs (inserted the first time), so
 // Changed<CulledEntities> means it changed.
 SystemResult CheckVisibility(
-    Kernel::Query<Kernel::Read<Camera::Camera>, Kernel::Read<Camera::ComputedCamera>,
+    Kernel::Query<Kernel::Read<Camera::Camera>, Kernel::Read<Camera::CameraView>,
                   Kernel::Read<Transform::GlobalTransform>, Kernel::With<Camera::Camera3d>>
         cameras,
     Kernel::Query<Kernel::Write<Render::CulledEntities>> lists,
@@ -51,11 +51,11 @@ SystemResult CheckVisibility(
         candidates.emplace_back(id, candidate);
     }
 
-    cameras.ForEach([&](const Kernel::EntityId camera, const Camera::Camera& settings, const Camera::ComputedCamera& computed,
+    cameras.ForEach([&](const Kernel::EntityId camera, const Camera::Camera& settings, const Camera::CameraView& cameraView,
                         const Transform::GlobalTransform& view) {
-        if (!settings.active || !computed.valid) return;
-        // The camera's one world-to-clip value (CM-3), made by UpdateCameras from this frame's view point.
-        const Math::Frustum frustum = Math::MakeFrustum(computed.clipFromWorld);
+        if (!settings.active || !cameraView.valid) return;
+        // The camera's one world-to-clip value (camera's CM-7), made by UpdateCameraViews from this frame's view point.
+        const Math::Frustum frustum = Math::MakeFrustum(cameraView.clipFromWorld);
         const Math::Vec3 position{view.matrix.values[12], view.matrix.values[13], view.matrix.values[14]};
         Render::CulledEntities next;
         for (const auto& [id, candidate] : candidates) {

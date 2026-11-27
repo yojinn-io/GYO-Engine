@@ -194,6 +194,7 @@ void Camera2dAt(K::World& world, const K::EntityId id, const std::int32_t order 
     world.Insert(id, C::CameraTarget{});
     world.Insert(id, C::Projection{o});
     world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
     world.Insert(id, C::Letterbox{1280.0F, 720.0F});
     Place(world, id, 0.0F, 0.0F, 0.0F);
 }
@@ -286,62 +287,97 @@ TEST_CASE("render_extract: a 2D camera's pass draws the source's sprites and sha
     CHECK_MESSAGE(Count(seen[0].asks, 0) + Count(seen[1].asks, 0) == 1, "[re-texture-once] the picture is made once");
 }
 
+namespace {
+// In the source World's Last (after its cameras are computed), from the frame after the flag is set: lets the target go.
+C::CameraTarget releaseLate{};
+bool releaseNow = false;
+K::SystemResult ReleaseLate(K::ResMut<R::RenderTargets> targets) {
+    if (releaseNow && targets.Read().Find(releaseLate) != nullptr) targets.Get().Release(releaseLate);
+    return {};
+}
+std::size_t PassesOn(const std::vector<R::RenderPass>& passes, const std::optional<R::TextureId> target) {
+    std::size_t n = 0;
+    for (const R::RenderPass& pass : passes) n += R::TargetOf(pass) == target ? 1 : 0;
+    return n;
+}
+std::vector<R::TextureId> TargetsMade(const std::vector<R::TextureOp>& asks) {
+    std::vector<R::TextureId> made;
+    for (const R::TextureOp& op : asks) {
+        if (const auto* t = std::get_if<R::TextureTargetCreate>(&op)) made.push_back(t->id);
+    }
+    return made;
+}
+bool Released(const std::vector<R::TextureOp>& asks, const R::TextureId id) {
+    for (const R::TextureOp& op : asks) {
+        if (const auto* r = std::get_if<R::TextureRelease>(&op); r != nullptr && r->id == id) return true;
+    }
+    return false;
+}
+} // namespace
+
 TEST_CASE("render_extract: a camera on a source render target computes with its size and draws on the render World's target for it") {
-    auto p = Make();
-    K::World& game = GameOf(*p);
-    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{2560, 1600}, 2.0F});
-    // A target made and let go first: the source's ids (2, 3) are not the render World's (1, 2).
-    game.ResourceMut<R::RenderTargets>()->Release(game.ResourceMut<R::RenderTargets>()->Create(R::RenderTargetDesc{}));
-    const C::CameraTarget minimap = game.ResourceMut<R::RenderTargets>()->Create(R::RenderTargetDesc{R::TargetSize{64, 32}});
-    const C::CameraTarget hdr = game.ResourceMut<R::RenderTargets>()->Create(R::RenderTargetDesc{});
-    Camera2dAt(game, 1);
-    game.Insert(1, minimap);
-    game.Remove<C::Letterbox>(1);
-    Camera2dAt(game, 2, 1);
-    game.Insert(2, hdr);
-    Camera2dAt(game, 3, 2);
-    game.Insert(3, C::CameraTarget{9});  // no such target; the author gave it a size, so it is valid
-    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{9}, C::TargetSize{{16, 16}, 1.0F});
+    releaseNow = false;
+    O::WorldDescription game = Game();
+    game.build = [](O::WorldSetup& s) { s.Registrar().AddSystem<&ReleaseLate>(In("TestReleaseLate", "Main", O::DefaultSchedules::last)); };
+    auto p = Make(Render(), nullptr, std::move(game));
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{2560, 1600}, 2.0F});
+    R::RenderTargets& targets = *source.ResourceMut<R::RenderTargets>();
+    // A target made and let go first: the source's ids (2, 3, 4) are not the render World's (1, 2, 3).
+    targets.Release(targets.Create(R::SourceTargetDesc{}));
+    const C::CameraTarget minimap = targets.Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    const C::CameraTarget hdr = targets.Create(R::SourceTargetDesc{});
+    releaseLate = targets.Create(R::SourceTargetDesc{minimap});
+    Camera2dAt(source, 1);
+    source.Insert(1, minimap);
+    source.Remove<C::Letterbox>(1);
+    Camera2dAt(source, 2, 1);
+    source.Insert(2, hdr);
+    Camera2dAt(source, 3, 2);
+    source.Insert(3, releaseLate);
+    source.Remove<C::Letterbox>(3);
     Frames(*p, 2);
     // world_render copies the sizes (CM-5) before CameraUpdate: the cameras on targets compute in the same frame.
-    const C::TargetSize* fixed = game.Resource<C::CameraTargetSizes>()->Find(minimap);
+    const C::TargetSize* fixed = source.Resource<C::CameraTargetSizes>()->Find(minimap);
     REQUIRE_MESSAGE(fixed != nullptr, "[wr-target-size] the fixed target's size is in CameraTargetSizes");
     CHECK_MESSAGE((fixed->physicalSize == GYO::Engine::Math::Vec2i{64, 32} && fixed->scaleFactor == 1.0F), "[wr-target-size] 64 x 32, scale 1");
-    const C::TargetSize* follows = game.Resource<C::CameraTargetSizes>()->Find(hdr);
+    const C::TargetSize* follows = source.Resource<C::CameraTargetSizes>()->Find(hdr);
     REQUIRE_MESSAGE(follows != nullptr, "[wr-target-size-follows] the following target's size is in CameraTargetSizes");
     CHECK_MESSAGE((follows->physicalSize == GYO::Engine::Math::Vec2i{2560, 1600} && follows->scaleFactor == 2.0F), "[wr-target-size-follows] the window's");
-    CHECK_MESSAGE(game.Get<C::ComputedCamera>(1)->viewport.size == (GYO::Engine::Math::Vec2i{64, 32}), "[wr-target-camera] the camera on it computes with its size");
-    // The render World made a render target for each and the cameras' passes go to them; the camera on target 9 has none.
+    const C::TargetSize* followsMinimap = source.Resource<C::CameraTargetSizes>()->Find(releaseLate);
+    REQUIRE_MESSAGE(followsMinimap != nullptr, "[wr-target-size-follows-other] a target following another has its size");
+    CHECK_MESSAGE(followsMinimap->physicalSize == (GYO::Engine::Math::Vec2i{64, 32}), "[wr-target-size-follows-other] the minimap's");
+    CHECK_MESSAGE(source.Get<C::ComputedCamera>(1)->viewport.size == (GYO::Engine::Math::Vec2i{64, 32}), "[wr-target-camera] the camera on it computes with its size");
+    // The render World made a render target for each and the cameras' passes go to them.
     REQUIRE(seen.size() == 2);
-    std::vector<std::uint32_t> made;
-    for (const R::TextureOp& op : seen[0].asks) {
-        if (const auto* t = std::get_if<R::TextureTargetCreate>(&op)) made.push_back(t->id.value);
-    }
-    REQUIRE_MESSAGE(made.size() == 2, "[re-target-made] one render target for each source target, in the first frame");
-    std::size_t firstFrame = 0;
-    for (const R::RenderPass& pass : seen[0].all) firstFrame += R::TargetOf(pass) == made[0] ? 1 : 0;
-    CHECK_MESSAGE(firstFrame > 0, "[wr-target-same-frame] the sizes are copied before CameraUpdate: the camera draws in the first frame");
-    CHECK_MESSAGE(Count(seen[1].asks, 3) == 0, "[re-target-kept] not made again the next frame");
-    std::vector<std::uint32_t> drawnOn;
-    for (const R::RenderPass& pass : seen[1].all) drawnOn.push_back(R::TargetOf(pass));
-    CHECK_MESSAGE((std::count(drawnOn.begin(), drawnOn.end(), made[0]) > 0 && std::count(drawnOn.begin(), drawnOn.end(), made[1]) > 0),
+    const std::vector<R::TextureId> made = TargetsMade(seen[0].asks);
+    REQUIRE_MESSAGE(made.size() == 3, "[re-target-made] one render target for each source target, in the first frame");
+    CHECK_MESSAGE(PassesOn(seen[0].all, made[0]) > 0, "[wr-target-same-frame] the sizes are copied before CameraUpdate: the camera draws in the first frame");
+    CHECK_MESSAGE(TargetsMade(seen[1].asks).empty(), "[re-target-kept] not made again the next frame");
+    CHECK_MESSAGE((PassesOn(seen[1].all, made[0]) > 0 && PassesOn(seen[1].all, made[1]) > 0 && PassesOn(seen[1].all, made[2]) > 0),
                   "[re-target-pass] each camera draws on the render target made for its source target");
-    CHECK_MESSAGE((std::count(drawnOn.begin(), drawnOn.end(), 9U) == 0 && std::count(drawnOn.begin(), drawnOn.end(), 0U) == 0),
-                  "[re-target-none] a camera on an id the source has no target for is not drawn");
+    CHECK_MESSAGE(PassesOn(seen[1].all, std::nullopt) == 0, "[re-target-not-main] no camera draws on the main target");
+
+    // The source lets the third target go in its Last, after its camera was computed: the render World lets its target
+    // go and does not extract the camera (nothing to draw on), the main target included.
+    releaseNow = true;
+    Frames(*p);
+    REQUIRE(seen.size() == 3);
+    CHECK_MESSAGE(Released(seen[2].asks, made[2]), "[re-target-released] the render World lets its target for it go");
+    CHECK_MESSAGE((PassesOn(seen[2].all, made[2]) == 0 && PassesOn(seen[2].all, std::nullopt) == 0),
+                  "[re-target-none] a camera whose target the source let go is not drawn");
 
     // The window grows: the following target's copy follows. The source lets the minimap go: its size and target go.
-    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 800}, 1.0F});
-    game.ResourceMut<R::RenderTargets>()->Release(minimap);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{1280, 800}, 1.0F});
+    source.ResourceMut<R::RenderTargets>()->Release(minimap);
     Frames(*p);
-    CHECK_MESSAGE(game.Resource<C::CameraTargetSizes>()->Find(hdr)->physicalSize == (GYO::Engine::Math::Vec2i{1280, 800}),
+    CHECK_MESSAGE(source.Resource<C::CameraTargetSizes>()->Find(hdr)->physicalSize == (GYO::Engine::Math::Vec2i{1280, 800}),
                   "[wr-target-size-follows] a new window size reaches the following target's copy");
-    CHECK_MESSAGE(game.Resource<C::CameraTargetSizes>()->Find(minimap) == nullptr, "[wr-target-size-removed] a released target's size goes");
-    REQUIRE(seen.size() == 3);
-    bool released = false;
-    for (const R::TextureOp& op : seen[2].asks) {
-        if (const auto* r = std::get_if<R::TextureRelease>(&op)) released = released || r->id.value == made[0];
-    }
-    CHECK_MESSAGE(released, "[re-target-released] the render World lets its target for it go");
+    CHECK_MESSAGE((source.Resource<C::CameraTargetSizes>()->Find(minimap) == nullptr &&
+                   source.Resource<C::CameraTargetSizes>()->Find(releaseLate) == nullptr),
+                  "[wr-target-size-removed] a released target's size goes");
+    REQUIRE(seen.size() == 4);
+    CHECK_MESSAGE(Released(seen[3].asks, made[0]), "[re-target-released] the render World lets its target for it go");
 }
 
 TEST_CASE("render_extract: a HUD camera on another layer draws after, without clearing; a gone entity is not drawn") {
@@ -503,6 +539,7 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
     game.Insert(2, C::CameraTarget{});
     game.Insert(2, C::Projection{C::PerspectiveProjection{}});
     game.Insert(2, C::ComputedCamera{});
+    game.Insert(2, C::CameraView{});
     Place(game, 2, 0.0F, 0.0F, -5.0F);
     R::Mesh3d mesh;
     mesh.model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(GYO::Engine::Asset::AssetId("model.bar"));
@@ -550,6 +587,7 @@ TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     const auto model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(
         GYO::Engine::Asset::AssetId("model.bar"));
@@ -619,6 +657,7 @@ TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     R::Mesh3d mesh;
     mesh.model = HeldTriangle(1.0F);
@@ -656,6 +695,7 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     // Two meshes; the Mesh3d draws the first only.
     GYO::Engine::Model::ModelData model = *HeldTriangle(1.0F);
@@ -709,6 +749,7 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     game2.Insert(1, C::CameraTarget{});
     game2.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game2.Insert(1, C::ComputedCamera{});
+    game2.Insert(1, C::CameraView{});
     Place(game2, 1, 0.0F, 0.0F, -5.0F);
     GYO::Engine::Model::ModelData two = *HeldTriangle(1.0F);
     two.meshes.push_back(two.meshes.front());
@@ -742,6 +783,7 @@ TEST_CASE("render_extract: a scene of one model repeated is one instanced draw p
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     const std::shared_ptr<const GYO::Engine::Model::ModelData> crate = HeldTriangle(0.5F);
     const std::shared_ptr<const I::ImageData> wood = Picture();

@@ -124,6 +124,7 @@ void Camera3dAt(K::World& world, const K::EntityId id, const M::Vec3 position, c
     projection.farClip = 100.0F;
     world.Insert(id, C::Projection{projection});
     world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
     Place(world, id, position);
 }
 
@@ -259,7 +260,7 @@ TEST_CASE("visibility: Queue3d leaves out the items of the entities in the camer
     camera.computed.valid = true;
     camera.computed.viewport.size = {8, 8};
     camera.computed.clipFromView = M::MakePerspective(M::Pi / 2.0F, 1.0F, 0.1F, 100.0F);
-    camera.view = M::Matrix4{};
+    camera.view = C::ViewOf(camera.computed, T::GlobalTransform{});
     std::vector<R::Extracted3dItem> items(3);
     for (std::size_t i = 0; i < items.size(); ++i) {
         items[i].entity = 10 + i;

@@ -1,8 +1,8 @@
 #include "engine/world_render/WorldRenderModule.hpp"
 
 #include <algorithm>
-#include <bit>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -21,35 +21,26 @@ namespace {
 
 using SystemResult = Base::Result<void, Kernel::KernelError>;
 
-bool SameSize(const Camera::TargetSize& a, const Camera::TargetSize& b) noexcept {
-    return a.physicalSize == b.physicalSize &&
-           std::bit_cast<std::uint32_t>(a.scaleFactor) == std::bit_cast<std::uint32_t>(b.scaleFactor);
-}
-
 // The ids this System wrote a size for, so a target let go has its size removed.
 struct WrittenTargets {
     std::vector<std::uint32_t> ids;
 };
 
-// Each live target's size into CameraTargetSizes, written only when it differs (a write every frame would mark
-// CameraTargetSizes changed every frame); the sizes of targets let go are removed.
+// Each live target's size into CameraTargetSizes, in id order (a followed target's before its follower's), through
+// camera's WriteTargetSize (written only when it differs); the sizes of targets let go are removed.
 SystemResult WriteRenderTargetSizes(Kernel::Res<Render::RenderTargets> targets, Kernel::ResMut<Camera::CameraTargetSizes> sizes,
                                     Kernel::Local<WrittenTargets> written) {
-    const Camera::TargetSize* main = sizes.Read().Find(Camera::CameraTarget{0});
-    const std::optional<Camera::TargetSize> mainSize = main != nullptr ? std::optional<Camera::TargetSize>(*main) : std::nullopt;
     std::vector<std::uint32_t> now;
+    now.reserve(targets->Live().size());
     for (const auto& [id, desc] : targets->Live()) {
         now.push_back(id);
-        const std::optional<Camera::TargetSize> size = Render::TargetSizeOf(desc, mainSize ? &*mainSize : nullptr);
-        if (!size) continue;
-        const Camera::TargetSize* current = sizes.Read().Find(Camera::CameraTarget{id});
-        if (current != nullptr && SameSize(*current, *size)) continue;
-        sizes.Get().Set(Camera::CameraTarget{id}, *size);
-    }
-    for (const std::uint32_t id : written->ids) {
-        if (std::find(now.begin(), now.end(), id) == now.end() && sizes.Read().Find(Camera::CameraTarget{id}) != nullptr) {
-            sizes.Get().Remove(Camera::CameraTarget{id});
+        if (const std::optional<Camera::TargetSize> size = Render::TargetSizeOf(desc, sizes.Read())) {
+            Camera::WriteTargetSize(sizes, Camera::CameraTarget{id}, *size);
         }
+    }
+    // Both lists are in id order.
+    for (const std::uint32_t id : written->ids) {
+        if (!std::binary_search(now.begin(), now.end(), id)) Camera::RemoveTargetSize(sizes, Camera::CameraTarget{id});
     }
     written->ids = std::move(now);
     return {};

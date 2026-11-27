@@ -22,7 +22,7 @@ namespace {
 R::ExtractedCamera CameraOn(const std::uint64_t entity, const int x, const int y, const int w, const int h) {
     R::ExtractedCamera camera;
     camera.entity = entity;
-    camera.target = 0;
+    camera.target = std::nullopt;  // the main target
     camera.computed.valid = true;
     camera.computed.viewport.position = {x, y};
     camera.computed.viewport.size = {w, h};

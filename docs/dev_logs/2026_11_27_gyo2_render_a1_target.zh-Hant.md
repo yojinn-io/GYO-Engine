@@ -10,6 +10,8 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（從 `origi
 
 ## 做了什麼
 
+（這一節是第一個 commit `ac2f7a57` 的內容。審查之後改了的地方在「設計審查與修正」：clip-from-world 移到 `CameraView`、pass 的目標改成 `std::optional<TextureId>`、`FollowTarget`、畫面跨幀保留、表的身分、後端的一次解析。）
+
 1. **render target**（`RenderTextures.hpp`、`Render.cpp`）：`CreateTarget(RenderTargetDesc{size, format, filter})` 回 `TextureId`，和圖片共用計數器、不重用（RD-3）；pass 以 `target = id.value` 畫進去、draw 以 `texture = id` 取樣（同 Bevy 的 `Image::new_target_texture`）。`size` 沒給＝跟主目標走。新要求 `TextureTargetCreate`；`FindTarget`。
 2. **格式**：`TextureFormat{Rgba8Unorm, Rgba8UnormSrgb}`，`TextureDesc::format` 預設 `Rgba8Unorm`（既有的呼叫者全部照舊）。`Rgba16Float`（A4）、深度（A2）、壓縮（F1）沒加，是加 enum 值與後端一列。
 3. **SDL_GPU 能不能對一張貼圖開兩種格式的 view**（總宣告第 4.4 節的未確認點）：**不能**。`SDL_GPUTextureCreateInfo` 只有一個 `format`（`SDL_gpu.h:1769-1781`），沒有建 view 的 API，綁定 `SDL_GPUTextureSamplerBinding{texture, sampler}`（`:2142`）不帶格式；Vulkan 後端不開 `MUTABLE_FORMAT`（`SDL_gpu_vulkan.c:5607-5640`）。Bevy（wgpu `view_formats`，`bevy_image/src/image.rs:30-50`）、Godot（`texture_create_shared`＋`shareable_formats`→`MUTABLE_FORMAT`，`rendering_device_driver_vulkan.cpp:2316-2317`）都做得到。判：要兩種讀法時建兩份（B4 在 `RenderImages` 以圖＋格式為鍵）。
@@ -49,6 +51,96 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（從 `origi
   - find 失效的 16 個：15 個改寫到新程式、守同一個性質，`g3-unmapped-drawn` 併入 `gp-unmapped-drawn`（2D 與 3D 的 pass 現在走同一條路到目標，同一個改動讓兩邊都畫到主目標；cases 與 expect 照 README 的合わせ方）。
   - find 落在改過的程式裡、或被改過的測試（`Camera2d`／`Camera3d`）殺的：`render_mutations.json` 21 個（改寫的與 find 在改過的程式裡的）＋`p2-`／`p3-`／`cp-`／`mh-` 其餘 54 個、`instancing_mutations.json` 13 個（`in-g3-instance-base-not-advanced`＋CPU 的 12 個）、`camera_mutations.json` 4 個、`visibility_mutations.json` 1 個。
   - 結果：93 個全部 killed（`gp-`／`g3-`／`in-g3-` 在 Metal 上）。加上新的 27 個，本批共跑 120 個、120 killed。
+
+## 設計審查與修正（同日）
+
+兩份審查，報告在主 checkout 的 `build/evidence/v8-arch-gyo2-render-a1/`（不在 git）：
+- 每批的設計審查（Opus／high）：Blocker 0、Should 3、Nit 7、Note 6。
+- 純淨 Code Review（Fable／high，只看程式）：高 3、中 8、低 5。
+
+修正是另一個 commit（不 amend）。小宣告第 13.3～13.6 節照修正後的程式重寫（修訂 1）。
+
+### 設計審查
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| S-1 「跟主目標走」太窄 | 採用 | `size` 改成 `variant<TargetSize, FollowTarget>`，可以跟主目標或另一個 target；來源的 `SourceTargetDesc` 跟一個相機目標。A4 的 HDR 中間圖要跟相機的目標 |
+| S-2 每幀第一個 pass 清成透明黑 | 採用（照 Bevy） | render target 沒清除色時 `LOAD`，只有剛建或重建後清；主目標照舊。突變 `gt-target-first-shared` 退役，改成 `gt-target-not-kept` |
+| S-3 「不同才寫」兩份 | 採用 | 相機的 `WriteTargetSize`／`RemoveTargetSize` 是唯一的出口，`window_camera` 與 `world_render` 都用它 |
+| N-1 前綴 `a1-` | 採用 | 改成 `vs-clip-from-world-own` |
+| N-2 CMake 註解 | 採用 | `world_render/CMakeLists.txt` 寫明 `RenderTargets` 與 System |
+| N-3 `Queue3d` 的死分支 | 採用 | `Queue3d` 改讀 `CameraView::viewFromWorld`，不再自己求反矩陣 |
+| N-4 CM-3 寫成全域唯一 | 採用 | 範圍寫成「visibility 與 render 的管線取它」；換算函式照 Bevy 自己算 |
+| N-5 `EnsureTargets` 掃整張表、兩次查詢 | 採用 | target 另成一張表；pass 的目標每幀只解析一次 |
+| N-6 字串字面量 | 採用 | `kExtractCameras` 常數 |
+| N-7 條文數不一 | 採用 | 統一成 5 條（CM-1、CM-5、CM-7、RD-3、RD-11） |
+| No-1 clipFromWorld 放在 `ComputedCamera` | 改了（見 H1） | 純淨審查 H1 指出的問題更重；改成照 Bevy 分開 |
+| No-2 兩套 id、身分用近似 | 採用 | 身分改用 `RenderTargets::Table()`：換了表就全部放掉。移到 `render_world` 留給 RC-A1-1 |
+| No-3、No-4 A2／A4 的準備 | 記錄 | 宣告第 13.3 節第 3 點、RC-A1-3 |
+| No-5 多視窗時的 id 空間 | 記錄 | 新 RC-A1-4 |
+| No-6 sRGB target 與 2D | 採用 | sRGB 改成不能當 target（見 M3） |
+| (a) `world_render` 跑 System | 照判定 | 理由改寫成依賴的方向（宣告第 13.3 節第 2 點） |
+| (b) 突變 27 個 | 照判定 | 合併前核准用的理由寫在宣告第 13.5 節；修正後是 33 個 |
+
+### 純淨 Code Review
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| H1 clipFromWorld | 採用 (1) | 新元件 `CameraView{valid, viewFromWorld, clipFromWorld}`，由 `UpdateCameraViews` 在 propagation 之後寫（Bevy 的 `Frustum`／`update_frusta`，`bevy_camera/src/visibility/mod.rs:503-507,627`）。`ComputedCamera` 回到原樣（CM-3 不動），視點不可逆時回 `InvalidData`（`[cm-singular-invalid-data]`）。可選的 `view` 參數拿掉，`ExtractedCamera` 只帶 `CameraView` |
+| H1 跨 stage 過期 | 寫成契約、不加守衛 | `CameraOptions` 要指 transform 的 schedule 與 stage（同 visibility）。Kernel 只在同一個 stage 加順序邊 |
+| H1 `WorldToViewport` 自己算 | 不改 | Bevy 的 `world_to_ndc` 也收 `GlobalTransform` 現算（`camera.rs:740-747`） |
+| H2 主目標沒有名字 | 採用 | `Camera::kMainTarget`；pass 的目標改成 `std::optional<TextureId>`（`nullopt`＝主目標） |
+| H2 id 空間沒有擁有者 | 採用 | 0 以外只有 `RenderTargets` 配（CM-5）。作者亂寫大小是誤用，不加守衛；測試裡的 `CameraTarget{9}` 拿掉，改測「相機算完後才放掉 target」這個真的會發生的情形 |
+| H2 身分靠啟發式 | 採用 | `Table()` 世代 |
+| H3 兩階段兩條件 | 採用 | `ResolveTargets` 一張表，`PlaceGeometry` 與 `RecordPasses` 都照它，沒有對應的只計一次 |
+| H3 swapchain 拿不到時離屏也不畫 | 採用 | 先拿畫面，沒有畫面時 render target 照畫 |
+| H3 Submit 與 Capture 共用跟隨者 | 不改 | `Capture` 只給測試與工具用，交替時只多一次重建、結果正確（主目標的深度本來也共用）；寫在 render 頁的範囲の限界 |
+| H3 旗標結構 | 採用 | `GPUTexture`（圖片）與 `GPUTarget`（target）分開，查詢合成 `SampledOf` |
+| H3 回授 | 採用 | 跳過並計 `skippedDraws`（`[gt-feedback-skipped]`） |
+| H3 格式檢查寫兩次 | 採用 | 只在 `MakeTexture` 查 |
+| H3 每幀 `++refusedAsks` | 採用 | 記住被拒的大小，同一個大小不再試、不再計 |
+| H3 引數位置的副作用 | 採用 | `StartColour` 在呼叫之前的一句裡 |
+| M1 兩張平行表 | 採用 | `RenderTextures` 一張表（`variant<TextureDesc, RenderTargetDesc>`）；`Update` 的訊息寫明 target 沒有像素 |
+| M2 四份 id 表 | 部分 | 零尺寸 assert 的重複隨 `SourceTargetDesc` 分開了。共用的 `IdTable` 要動 A1 以前的 `RenderMeshes`，不在 A1 |
+| M3 sRGB target 未定義 | 採用（拒絕） | target 只收 `Rgba8Unorm`（Programmer Error），A4 定線性路徑時再加 |
+| M3 `ToString(TextureFormat)` 沒人用 | 採用 | 拿掉 |
+| M3 enum 從 1 開始 | 不改 | 全專案的 enum 都這樣 |
+| M3 sRGB 沒有生產者、`ImageRef` 不能指 target | 不改 | B4 才有生產者；RC-A1-1 |
+| M4 `SameSize` 重複、差分 O(n²)、optional 取址 | 採用 | 改用 `WriteTargetSize`；差分照 id 順序用 `binary_search`；`TargetSizeOf` 直接收 `CameraTargetSizes` |
+| M4 `world_render` 要和 camera 同 schedule | 寫明 | `WorldRenderOptions` 的註解 |
+| M5 兩個同名的 `TargetSize` | 不改名 | `Render::TargetSize` 是 A1 以前就有的公開名字；新程式一律寫 `Camera::` 加以區分。uint32→int32 不檢查：超過 2³¹ 的大小 SDL 本來就拒絕 |
+| M6 重複字面值 | 採用 | 同 N-6 |
+| M7 `HashValue(RenderTargets)` 是空的 | 不改，寫明理由 | 作者給 render 的資料，同可畫元件；`CameraTarget` 是相機的設定，所以進雜湊 |
+| M8 靜默丟掉相機、14 個參數 | 不改 | 只有「算完後才放」那一幀會發生，同無效的相機不計數；參數數是 Extract 的形狀 |
+| 低：一案驗太多件 | 部分 | 拆出 helper（`PassesOn`、`TargetsMade`、`Released`）；跨幀的情節保留在一案 |
+| 低：variant 索引 3 | 採用 | 改用 `get_if` |
+| 低：`Device()` 單例 | 採用 | `TargetCase` RAII，每案自己放掉 |
+| 低：缺 sRGB target 案 | 採用 | 改成 Programmer Error 的案（`render.data`） |
+| 低：缺不支援格式被拒的案 | 不加 | CI 的 driver 都支援這兩種格式，碰不到 |
+| 低：缺取樣自己 target、指向已放掉 target 的案 | 採用 | `[gt-feedback-*]`、`[gt-target-released-unmapped]` |
+| 低：`MoveCamera` 的魔術數字 | 採用 | 改成宿主在兩幀之間移動相機 |
+| 低：`PassTargetOfOk` 命名 | 採用 | `PassTargetOf` 拿掉了（主目標由 `ExtractCameras` 自己判） |
+| 低：visibility 的 `after(kPropagateSet)` 多餘 | 不改 | A1 以前的程式，無害 |
+
+### 修正後的突變
+
+- 新 `target_mutations.json` 重寫成 33 個，全部 killed（`gt-` 的 7 個在 Metal 上）。
+- 沒加的：
+  - `UpdateCameraViews` 排在 `UpdateCameras`／propagation 之後的順序：Kernel 照登記順序排，拿掉也一樣，存活。
+  - 新 target 是透明黑：Metal 上新貼圖本來是 0，分不出來。
+  - 其餘理由寫在清單的 `description`。
+- 既有的：find 落在改過的程式裡的 176 個重跑（render 118、instancing 15、visibility 4、camera 38、window_input 1），結果 175/176 killed。存活的 1 個是 `cm-update-set-missing`：`UpdateCameraViews` 也在 set 裡、又排在 `UpdateCameras` 之後，只把 `UpdateCameras` 拿出 set，set 的讀者照樣在它之後，所以成了等價突變。改寫成兩個 System 都拿出 set（守同一個性質：set 的讀者看得到這一幀的相機），重跑 killed。
+  - 改寫的：`vs-inactive-checked`、`gp-load-always`、`gp-clear-ignored`、`gp-release-kept`、`gp-unmapped-drawn`、`p2-view-ignored`、`p2-3d-drawn`、`p3-view-ignored`、`p3-2d-drawn`、`g3-texture-missing-not-counted`、`g3-first-kept`、`gp-frames-never-shown`、`g3-frames-never-shown`。
+  - 回到 A1 前 find 的：`rd-tex-reuse`、`rd-tex-release-kept-live`、`cm-target-always-zero`、`cm-letterbox-ignored`。
+  - 改寫的（存活後）：`cm-update-set-missing`（見上）。
+  - 合併的：`g3-colour-cleared`→`gp-load-always`；`rd-target-release-kept`→`rd-tex-release-kept-live`（照 README 的合わせ方）。
+
+### 修正後的驗證（本機 macOS Intel、Metal）
+
+- 全量建置成功。新出現的警告只有 A1 以外既有的（`Scenes.cpp:370`、`SDLWindowTests.cpp`），因為標頭改了而重新編譯。
+- `ctest -L 'cpu|shader'`：253/254。失敗的是 `cmake.PluginSelection`，同上，是借用依賴的環境問題。
+- GPU 的 `render.*`／`sdl_gpu.*`：5/5，`sdl_gpu.targets` 五案在其中。
+- PvP 的程式：`ClientWorld.cpp`、`Scenes.cpp` 宿主組的相機各加一行 `CameraView{}`。PvP 的 cpu 測試在上面的 253 裡，通過。
 
 ## 沒做／沒跑
 

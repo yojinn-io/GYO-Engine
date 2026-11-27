@@ -61,7 +61,8 @@ public:
     explicit SDLGPUStatus(Service& service) : service_(&service) {}
     // Frames drawn and handed to the window.
     [[nodiscard]] std::uint64_t FramesShown() const;
-    // Frames the window gave no picture for (minimized, hidden): nothing drawn, the texture asks applied.
+    // Frames the window gave no picture for (minimized, hidden): nothing drawn on it, the texture asks applied, the
+    // render targets drawn.
     [[nodiscard]] std::uint64_t FramesSkipped() const;
     // Frames SDL refused a step of. LastFailure(): SDL's text for the last refused frame, texture or pipeline.
     [[nodiscard]] std::uint64_t FramesFailed() const;
@@ -69,7 +70,8 @@ public:
     // Texture asks SDL refused (that texture has no GPU texture; also the textures made in a frame whose uploads
     // failed), mesh asks SDL refused (the same for meshes), draws skipped (their texture or mesh has no GPU object,
     // their pipeline could not be made, or a 3D pass's depth texture could not be), passes whose target is not mapped
-    // (neither 0, the window, nor a render target of render's asks that SDL made).
+    // (neither the main target, the window, nor a render target of render's asks that SDL made), each once a frame;
+    // draws that sample the target their pass draws on are skipped too.
     [[nodiscard]] std::uint64_t RefusedTextureAsks() const;
     [[nodiscard]] std::uint64_t RefusedMeshAsks() const;
     [[nodiscard]] std::uint64_t SkippedDraws() const;

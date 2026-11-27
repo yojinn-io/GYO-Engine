@@ -37,13 +37,12 @@ M::Matrix4 At(const float x, const float y, const float z) {
 bool Near(const float a, const float b) { return std::fabs(a - b) <= 1e-4F; }
 
 // A 3D camera at (1, 0, -2) looking along +Z on a 100 x 100 target.
-R::ExtractedCamera Camera3d(const std::uint32_t target = 0, const std::int32_t order = 0) {
+R::ExtractedCamera Camera3d(const std::optional<R::TextureId> target = std::nullopt, const std::int32_t order = 0) {
     const C::TargetSize size{{100, 100}, 1.0F};
-    // The view point goes through Compute, as UpdateCameras does: Queue3d takes its clipFromWorld.
-    const T::GlobalTransform view{At(1, 0, -2)};
     R::ExtractedCamera camera;
-    camera.computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size, nullptr, &view);
-    camera.view = view.matrix;
+    camera.computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size);
+    // The view as UpdateCameraViews makes it (camera's ViewOf): Queue3d takes its clipFromWorld and viewFromWorld.
+    camera.view = C::ViewOf(camera.computed, T::GlobalTransform{At(1, 0, -2)});
     camera.is3d = true;
     camera.order = order;
     camera.target = target;
@@ -78,7 +77,7 @@ TEST_CASE("pipeline3d: a 3D camera's pass: opaque near to far, then blended far 
     CHECK_MESSAGE((order.size() == 7 && order[5] == 6 && order[6] == 5), "[p3-overlay-last] not depth-tested last, far to near");
     CHECK_MESSAGE(pass->draws[0].indexCount == 3, "[p3-retained] a retained mesh's index count");
     const R::ExtractedCamera camera = Camera3d();
-    const std::optional<M::Matrix4> viewFromWorld = M::Inverse(camera.view);
+    const std::optional<M::Matrix4> viewFromWorld = M::Inverse(At(1, 0, -2));
     REQUIRE(viewFromWorld.has_value());
     const M::Matrix4 expected = M::Multiply(camera.computed.clipFromView, *viewFromWorld);
     bool same = true;
@@ -340,16 +339,16 @@ TEST_CASE("pipeline3d: a handed model's vertices are taken from its meshes witho
 
 TEST_CASE("compose: cameras in order, each clear first: the first on a target clears it, a later one its viewport") {
     R::ExtractedCameras cameras;
-    R::ExtractedCamera world = Camera3d(0, 0);
+    R::ExtractedCamera world = Camera3d(std::nullopt, 0);
     world.clear = R::Color8{1, 2, 3, 255};
-    R::ExtractedCamera hud = Camera3d(0, 1);
+    R::ExtractedCamera hud = Camera3d(std::nullopt, 1);
     hud.is3d = false;
     hud.is2d = true;
     hud.clear = std::nullopt;
-    R::ExtractedCamera split = Camera3d(0, 2);
+    R::ExtractedCamera split = Camera3d(std::nullopt, 2);
     split.clear = R::Color8{9, 9, 9, 255};
     split.computed.viewport = C::Viewport{{50, 0}, {50, 100}};
-    R::ExtractedCamera other = Camera3d(5, 3);
+    R::ExtractedCamera other = Camera3d(R::TextureId{5}, 3);
     other.clear = R::Color8{7, 7, 7, 255};
     cameras.cameras = {world, hud, split, other};
     R::CameraPasses passes;
@@ -370,7 +369,7 @@ TEST_CASE("compose: cameras in order, each clear first: the first on a target cl
                    splitClear->vertices[2].position.x == 50.0F && splitClear->vertices[0].color == R::Color8{9, 9, 9, 255}),
                   "[cp-later-viewport] a later camera clears its viewport with an opaque rectangle");
     const auto* otherClear = std::get_if<R::Pass2D>(&out.passes[4]);
-    CHECK_MESSAGE((otherClear != nullptr && otherClear->clear == R::Color8{7, 7, 7, 255} && otherClear->target == 5),
+    CHECK_MESSAGE((otherClear != nullptr && otherClear->clear == R::Color8{7, 7, 7, 255} && otherClear->target == R::TextureId{5}),
                   "[cp-per-target] the first camera on another target clears that target");
     CHECK_MESSAGE((passes.byCamera[0].empty() && passes.byCamera[1].empty()), "[cp-emptied] the slots are emptied");
 }

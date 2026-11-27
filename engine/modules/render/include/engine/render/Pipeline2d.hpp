@@ -35,10 +35,11 @@ struct ExtractedCamera final {
     // The source entity (Kernel's EntityId).
     std::uint64_t entity = 0;
     std::int32_t order = 0;
-    std::uint32_t target = 0;
+    // The pass target its CameraTarget maps to (nullopt: the main target).
+    std::optional<TextureId> target;
     Camera::ComputedCamera computed;
-    // The camera entity's GlobalTransform: the view point.
-    Math::Matrix4 view{};
+    // The camera's view (CameraView): world to clip space and view space, the one value the pipelines take.
+    Camera::CameraView view;
     // A Camera2d draws the 2D items; a Camera3d the 3D ones (batch r2b-3d).
     bool is2d = false;
     bool is3d = false;

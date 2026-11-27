@@ -21,6 +21,7 @@
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Hash.hpp"
+#include "engine/kernel/Params.hpp"
 #include "engine/math/geometry/Ray.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
@@ -49,14 +50,18 @@ struct Camera final {
     std::optional<Viewport> viewport;
 };
 
-// Where the camera draws: a neutral id. 0 is the main target (the main window when there is one); another id is a
-// render target render's data side handed out (render's RenderTargets::Create in the source World; render-pipeline
-// declaration section 13). The camera Module knows nothing of what an id names, only its size (CameraTargetSizes).
+// Where the camera draws: a neutral id. kMainTarget (0) is the main target (the main window when there is one); every
+// other id belongs to render's RenderTargets, which hands them out in the source World (render-pipeline declaration
+// section 13): nothing else gives a camera target id or writes its size. The camera Module knows nothing of what an id
+// names, only its size (CameraTargetSizes).
 struct CameraTarget final {
     std::uint32_t id = 0;
 
     friend bool operator==(const CameraTarget&, const CameraTarget&) = default;
 };
+
+// The main target: the main window (window_camera writes its size).
+inline constexpr CameraTarget kMainTarget{0};
 
 struct PerspectiveProjection final {
     float verticalFov = Math::Pi / 4.0F;
@@ -113,7 +118,7 @@ struct Camera3d final {};
 
 // Derived, written only by the camera Module (CM-3).
 struct ComputedCamera final {
-    // The target size is known, the viewport size is not zero and the view point has an inverse.
+    // The target size is known and the viewport size is not zero.
     bool valid = false;
     Math::Vec2i targetPhysicalSize{};
     // Physical pixels per logical pixel.
@@ -121,16 +126,31 @@ struct ComputedCamera final {
     // The viewport used (the whole target when Camera has none), clamped into the target.
     Viewport viewport{};
     Math::Matrix4 clipFromView{};
-    // clipFromView times the inverse of the view point (the camera entity's GlobalTransform; none: the origin), the
-    // one value every reader of world to clip space takes: visibility's frustum, the 2D and 3D pipelines' passes
-    // (render-pipeline declaration section 13; Bevy computes it twice, update_frusta and prepare_view_uniforms).
+};
+
+// Derived from ComputedCamera and the camera entity's GlobalTransform, written only by the camera Module after the
+// transform propagation (CM-7; Bevy's Frustum, which update_frusta writes after TransformSystems::Propagate,
+// bevy_camera/src/visibility/mod.rs:503-507,627). World to clip space is made here once: visibility's frustum and the
+// render pipelines' passes take clipFromWorld, the 3D pipeline's distances viewFromWorld. ComputedCamera stays the
+// projection and the target alone (as Bevy's Camera::computed).
+struct CameraView final {
+    // The camera is valid (ComputedCamera::valid) and its view point has an inverse.
+    bool valid = false;
+    Math::Matrix4 viewFromWorld{};
     Math::Matrix4 clipFromWorld{};
 };
+
+// The CameraView of a camera with these derived values at this view point: valid only when computed is valid and the
+// view point has an inverse (else every matrix is the identity). A pure function, as Compute.
+[[nodiscard]] CameraView ViewOf(const ComputedCamera& computed, const Transform::GlobalTransform& view);
 
 struct TargetSize final {
     Math::Vec2i physicalSize{};
     float scaleFactor = 1.0F;
 };
+
+// Bit by bit (a NaN does not make two sizes differ every frame).
+[[nodiscard]] bool SameTargetSize(const TargetSize& a, const TargetSize& b) noexcept;
 
 // Resource: target id -> its size. A copy of what the window (and render, for textures) own, kept to compute the
 // projections and nothing else (CM-5). Written by authors, tests and, later, the glue batch W decides on.
@@ -144,6 +164,12 @@ private:
     // Ordered by id.
     std::vector<std::pair<std::uint32_t, TargetSize>> sizes_;
 };
+
+// The one way an owner's glue writes a size (window_camera for the main target, world_render for render targets;
+// CM-5): only when it differs bit by bit, so CameraTargetSizes is marked changed only when a size changed.
+void WriteTargetSize(Kernel::ResMut<CameraTargetSizes>& sizes, CameraTarget target, const TargetSize& size);
+// The same for taking a size away: only when there is one.
+void RemoveTargetSize(Kernel::ResMut<CameraTargetSizes>& sizes, CameraTarget target);
 
 enum class ViewportConversionFailureCode : std::uint8_t {
     NoViewportSize = 1,
@@ -169,13 +195,12 @@ static_assert(Base::CodedError<ViewportConversionFailure>);
 
 // The derived values of one camera, the function UpdateCameras writes ComputedCamera with: the viewport clamped
 // into the target, the projection (perspective: the viewport's aspect; orthographic: Bevy's ScalingMode on the
-// logical viewport size, scale and viewportOrigin) and world to clip space through the view point. valid is false
-// when size is null, its scale factor is not positive, the viewport size is zero or the view point has no inverse.
-// A pure function: a caller that needs the values of a camera that is not in a World (a tool's preview, a test)
-// calls it; it writes nothing.
-// letterbox: the camera's Letterbox, or null. view: the camera entity's GlobalTransform, or null (the origin).
+// logical viewport size, scale and viewportOrigin). valid is false when size is null, its scale factor is not
+// positive or the viewport size is zero. A pure function: a caller that needs the values of a camera that is not
+// in a World (a tool's preview, a test) calls it; it writes nothing.
+// letterbox: the camera's Letterbox, or null.
 [[nodiscard]] ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size,
-                                     const Letterbox* letterbox = nullptr, const Transform::GlobalTransform* view = nullptr);
+                                     const Letterbox* letterbox = nullptr);
 
 // Bevy's world_to_viewport: the point's position in the target's logical pixels. NDC depth below 0 is PastNearPlane,
 // above 1 PastFarPlane (so a point behind a perspective camera is PastFarPlane, as in Bevy).
@@ -230,8 +255,9 @@ inline void HashValue(Kernel::Hasher& h, const Letterbox& v) {
 }
 inline void HashValue(Kernel::Hasher&, const Camera2d&) {}
 inline void HashValue(Kernel::Hasher&, const Camera3d&) {}
-// Hashes nothing: derived (CM-3).
+// Hashes nothing: derived (CM-3, CM-7).
 inline void HashValue(Kernel::Hasher&, const ComputedCamera&) {}
+inline void HashValue(Kernel::Hasher&, const CameraView&) {}
 // Hashes nothing: a copy of the window's size, which differs between machines; not state two runs must agree on
 // (as net's Peer and AssetView; CM-5).
 inline void HashValue(Kernel::Hasher&, const CameraTargetSizes&) {}

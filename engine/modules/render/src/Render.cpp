@@ -90,7 +90,7 @@ TextureId RenderTextures::Create(const TextureDesc desc, std::vector<std::uint8_
 
 void RenderTextures::Update(const TextureId id, const TextureRegion region, std::vector<std::uint8_t> pixels) {
     const TextureDesc* desc = Find(id);
-    GYO_ASSERT(desc != nullptr && "an update of a texture that is not live");
+    GYO_ASSERT(desc != nullptr && "an update of a texture that is not live or is a target (it has no pixels)");
     GYO_ASSERT(region.width > 0 && region.height > 0 && "an update of zero size");
     GYO_ASSERT(region.x <= desc->width && region.width <= desc->width - region.x && "an update outside the texture");
     GYO_ASSERT(region.y <= desc->height && region.height <= desc->height - region.y && "an update outside the texture");
@@ -99,37 +99,36 @@ void RenderTextures::Update(const TextureId id, const TextureRegion region, std:
 }
 
 void RenderTextures::Release(const TextureId id) {
-    const auto same = [&](const auto& entry) { return entry.first == id.value; };
-    if (const auto it = std::find_if(live_.begin(), live_.end(), same); it != live_.end()) {
-        live_.erase(it);
-    } else {
-        const auto target = std::find_if(targets_.begin(), targets_.end(), same);
-        GYO_ASSERT(target != targets_.end() && "a release of a texture that is not live");
-        targets_.erase(target);
-    }
+    const auto it = std::find_if(live_.begin(), live_.end(), [&](const auto& entry) { return entry.first == id.value; });
+    GYO_ASSERT(it != live_.end() && "a release of a texture that is not live");
+    live_.erase(it);
     pending_.emplace_back(TextureRelease{id});
 }
 
 TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
-    GYO_ASSERT((!desc.size || (desc.size->width > 0 && desc.size->height > 0)) && "a target of zero size");
-    // One counter for textures and targets: a draw names either by the same kind of id (RD-3).
+    if (const auto* fixed = std::get_if<TargetSize>(&desc.size)) {
+        GYO_ASSERT(fixed->width > 0 && fixed->height > 0 && "a target of zero size");
+    } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc.size).target) {
+        GYO_ASSERT(FindTarget(*followed) != nullptr && "a target following an id that is not a live target");
+    }
+    GYO_ASSERT(desc.format == TextureFormat::Rgba8Unorm && "a target format other than Rgba8Unorm");
     GYO_ASSERT(next_ != 0 && "every texture id has been given");
     const TextureId id{next_++};
-    targets_.emplace_back(id.value, desc);
+    live_.emplace_back(id.value, desc);
     pending_.emplace_back(TextureTargetCreate{id, desc});
     return id;
 }
 
 const TextureDesc* RenderTextures::Find(const TextureId id) const noexcept {
     for (const auto& [value, desc] : live_) {
-        if (value == id.value) return &desc;
+        if (value == id.value) return std::get_if<TextureDesc>(&desc);
     }
     return nullptr;
 }
 
 const RenderTargetDesc* RenderTextures::FindTarget(const TextureId id) const noexcept {
-    for (const auto& [value, desc] : targets_) {
-        if (value == id.value) return &desc;
+    for (const auto& [value, desc] : live_) {
+        if (value == id.value) return std::get_if<RenderTargetDesc>(&desc);
     }
     return nullptr;
 }

@@ -46,21 +46,14 @@ enum class TextureFilter : std::uint8_t {
 // compressed ones with F1).
 enum class TextureFormat : std::uint8_t {
     // R, G, B, A, 8 bits each, sampled as stored: the 2D pass's pictures (it blends bytes, RP-4), data pictures (the
-    // normal map _N, _ORM), a target whose bytes are blended as they are.
+    // normal map _N, _ORM), every render target (its bytes are blended as they are).
     Rgba8Unorm = 1,
     // The same bytes, R, G and B sRGB-encoded: sampling decodes them to linear (the colour pictures _D, _E that 3D
-    // lights in linear space), drawing encodes linear values (alpha is linear in both). Bevy's default for colour
-    // pictures (ImageLoaderSettings::is_srgb, bevy_image/src/image_loader.rs:148,176).
+    // lights in linear space; alpha as stored). Bevy's default for colour pictures (ImageLoaderSettings::is_srgb,
+    // bevy_image/src/image_loader.rs:148,176). Not a render target's format yet: what a clear colour and blending mean
+    // on one comes with the linear path (A4).
     Rgba8UnormSrgb,
 };
-
-[[nodiscard]] constexpr const char* ToString(const TextureFormat format) noexcept {
-    switch (format) {
-    case TextureFormat::Rgba8Unorm: return "Rgba8Unorm";
-    case TextureFormat::Rgba8UnormSrgb: return "Rgba8UnormSrgb";
-    }
-    return "Unknown";
-}
 
 struct TextureDesc final {
     std::uint32_t width = 0;
@@ -82,11 +75,21 @@ struct TargetSize final {
     friend bool operator==(const TargetSize&, const TargetSize&) = default;
 };
 
+// A target whose size is another target's: the main target (nullopt: the window, or the picture a backend captures) or
+// a render target of the same RenderTextures. The backend makes it again whenever that size changes (an HDR camera's
+// picture follows the camera's target, a post-processing step's input follows its output; Bevy's ViewTarget textures
+// take the camera's physical target size, bevy_render/src/view/mod.rs:1416).
+struct FollowTarget final {
+    std::optional<TextureId> target;
+
+    friend bool operator==(const FollowTarget&, const FollowTarget&) = default;
+};
+
 // A render target: a texture passes draw into and later draws sample.
 struct RenderTargetDesc final {
-    // Its size; nullopt: the size of the main target (target 0: the window, or the picture a backend captures), made
-    // again by the backend whenever that size changes (an HDR camera's picture, a post-processing step's input).
-    std::optional<TargetSize> size;
+    // Its size: fixed, or another target's.
+    std::variant<TargetSize, FollowTarget> size = FollowTarget{};
+    // Rgba8Unorm alone for now (TextureFormat).
     TextureFormat format = TextureFormat::Rgba8Unorm;
     // How a draw that samples it reads between its pixels.
     TextureFilter filter = TextureFilter::Linear;
@@ -139,11 +142,12 @@ public:
     // texture or of zero size, or pixels of another size, is a Programmer Error.
     void Update(TextureId id, TextureRegion region, std::vector<std::uint8_t> pixels);
     // Lets the texture (or the target) go; draws and passes must not name it any more. An id that is not live is a
-    // Programmer Error.
+    // Programmer Error. A target that follows it has no picture from then on.
     void Release(TextureId id);
-    // A new render target: passes name it by the id's value as their target, draws sample it by the id. A fixed size
-    // of zero width or height is a Programmer Error. Its picture is undefined until a pass of the frame draws on it
-    // (the first pass of a frame on a target with no clear starts from transparent black, as the main target's).
+    // A new render target: passes name it as their target, draws sample it by the id. Its picture is kept from frame
+    // to frame (a pass with no clear draws over it, as Bevy's LoadOp::Load); it is transparent black when it is made
+    // and when the backend makes it again at a new size. A fixed size of zero width or height, a format other than
+    // Rgba8Unorm, or following an id that is not a live target, is a Programmer Error.
     TextureId CreateTarget(RenderTargetDesc desc);
 
     // The live texture's description, or nullptr (also for a target).
@@ -151,7 +155,7 @@ public:
     // The live target's description, or nullptr (also for a texture made from pixels).
     [[nodiscard]] const RenderTargetDesc* FindTarget(TextureId id) const noexcept;
     // Textures and targets.
-    [[nodiscard]] std::size_t LiveCount() const noexcept { return live_.size() + targets_.size(); }
+    [[nodiscard]] std::size_t LiveCount() const noexcept { return live_.size(); }
     // This frame's asks, in the order they were made.
     [[nodiscard]] std::span<const TextureOp> Pending() const noexcept { return pending_; }
     // render_world, after each frame was drawn (Cleanup).
@@ -159,8 +163,8 @@ public:
 
 private:
     std::uint32_t next_ = 1;
-    std::vector<std::pair<std::uint32_t, TextureDesc>> live_;
-    std::vector<std::pair<std::uint32_t, RenderTargetDesc>> targets_;
+    // One table for both: one id space, one counter (RD-3).
+    std::vector<std::pair<std::uint32_t, std::variant<TextureDesc, RenderTargetDesc>>> live_;
     std::vector<TextureOp> pending_;
 };
 

@@ -319,6 +319,7 @@ void PlaceSceneCamera(K::World& world) {
     world.Insert(kSceneCamera, C::CameraTarget{});
     world.Insert(kSceneCamera, C::Projection{C::OrthographicProjection::Default2d()});
     world.Insert(kSceneCamera, C::ComputedCamera{});
+    world.Insert(kSceneCamera, C::CameraView{});
     const T::Transform at;
     world.Insert(kSceneCamera, at);
     world.Insert(kSceneCamera, T::GlobalTransform{T::ToMatrix(at)});

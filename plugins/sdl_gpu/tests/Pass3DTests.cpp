@@ -428,7 +428,7 @@ TEST_CASE("sdl_gpu pass3d: drawn among 2D passes in their order; a pass on anoth
     Quad2D(after, Rect{6, 6, 2, 2}, kGreen);
     commands.passes.push_back(std::move(after));
     R::Pass3D elsewhere = Scene();
-    elsewhere.target = 7;  // no picture for target 7
+    elsewhere.target = R::TextureId{7};  // no picture for target 7
     R::Draw3D draw;
     draw.mesh = whole;
     draw.indexCount = 6;

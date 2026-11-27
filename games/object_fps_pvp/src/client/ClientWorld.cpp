@@ -1883,6 +1883,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kCamera, C::CameraTarget{});
         world.Insert(kCamera, C::Projection{perspective});
         world.Insert(kCamera, C::ComputedCamera{});
+        world.Insert(kCamera, C::CameraView{});
         // Black, seeing no layer, until the overlay covers the game (RevealUnderCover).
         world.Insert(kCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::Custom, R::Color8{0, 0, 0, 255}});
         world.Insert(kCamera, R::RenderLayers{0});
@@ -1900,6 +1901,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kViewCamera, C::CameraTarget{});
         world.Insert(kViewCamera, C::Projection{close});
         world.Insert(kViewCamera, C::ComputedCamera{});
+        world.Insert(kViewCamera, C::CameraView{});
         world.Insert(kViewCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
         world.Insert(kViewCamera, R::RenderLayers{0});
         Place(world, kViewCamera, T::Transform{});
@@ -1913,6 +1915,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.Insert(kHudCamera, C::CameraTarget{});
         world.Insert(kHudCamera, C::Projection{flat});
         world.Insert(kHudCamera, C::ComputedCamera{});
+        world.Insert(kHudCamera, C::CameraView{});
         world.Insert(kHudCamera, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
         world.Insert(kHudCamera, R::RenderLayers{0});
         Place(world, kHudCamera, T::Transform{});
