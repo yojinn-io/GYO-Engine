@@ -6,6 +6,7 @@
 #include "object_fps_pvp/match/LoadThreads.hpp"
 
 #include <optional>
+#include <ostream> // doctest's CAPTURE of a string_view (MSVC needs the stream declared)
 #include <string_view>
 
 namespace M = object_fps_pvp::match;
