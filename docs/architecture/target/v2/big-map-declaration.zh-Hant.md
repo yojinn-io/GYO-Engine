@@ -241,6 +241,7 @@ S0 的 Client 部分與 S5 開跑前，我會先送「量什麼、多大、預�
 - **門檻**（2026-11-26，使用者「對s5門檻，2個都要」，經主會話轉達）。下面的判定門檻是主會話**看過數據之後**才提的，使用者同意採用：
   - 判定門檻：Client 幀 p95 ≤ 8 ms、Client 記憶體 ≤ 2 GB、載入時間 ≤ 10 s（Match、Client 各自）、Match 記憶體 ≤ 1 GB。
   - 回歸基準（之後動到大地圖的批次用同一套工具重量，不能比這差）：1 km 的 Client 1.79 GB、幀 p95 1.27 ms、Match 讀圖＋建牆 7.9 s／471 MB、Client 讀圖 4.8 s（probe 單執行緒的讀、解析與展開）。
+    - 2026-11-27 更新 Match 的基準（17.8，預設的執行緒數）：讀圖＋建牆 3,686 ms、峰值 RSS 602 MB（`/usr/bin/time`，精確；兩次取較差的一次）。
   - 照這組門檻，S5 的 1 km 全部在門檻內。
 - **機器與原始碼**：同 5.2.1（Ryzen 7 6800H、Radeon 680M／RADV、30 GiB），gyo2 `41504a7f`（含 S4-C、S6）。證據：主 checkout `build/evidence/gyo2-big-map/s5/`（`s5_linux.sh`、`probe/`、`content.py`、`watch.py`；輸出在 `linux/`）。
 - **地圖**：(d2) 的 km2-building（master 的合成城市：同一棟 128 m 見方的建築平鋪），三級 1008、1504、2000 格（504 m、752 m、1 km；格數要是 16 的倍數）。
@@ -750,7 +751,7 @@ LOD、串流、GPU 效能量測（本機的重 GPU 量測要先問）、2D 的 i
 
 - **現況**：region 的解析本來就是 asset store 每個 region 一個 job，但 Match 讀檔只有 1 條執行緒、Client 2 條；Client 的網格展開是一個 job 做全部 region。
 - **改成**（卡片判）：
-  - Match 與 Client 的 asset 執行緒照機器的硬體執行緒數，2～8 條（`LoadingThreads`）。
+  - Match 與 Client 的 asset 執行緒照機器的硬體執行緒數，2～8 條（Match：`match/LoadThreads.hpp` 的 `MachineLoadThreads`；Client：`client_main.cpp` 的 `LoadingThreads`）。Match 可以用 `--load-threads N` 覆寫（下面的處置）。
   - Client 的 region 網格每個 region 一個 job，計算用執行緒 1～4 條；完成順序不定，**組回時照 region 的索引順序**，所以生成的實體和單執行緒相同。
   - Match 的牆仍是一次 `BoxSet::Build`（建構本身的平行化不在這批）。
 - **決定性**：同一張地圖用 1 條與多條執行緒讀，`BoxSet` 的 digest 相同（`[pvp-map-parallel]`）；每個 region 單獨做的網格和整張一起做的逐位元組相同（`[pvp-region-alone]`）；4 條執行緒下 Client 畫出全部 region、照 region 順序（`[pvp-regions-parallel]`）。
@@ -765,3 +766,16 @@ LOD、串流、GPU 效能量測（本機的重 GPU 量測要先問）、2D 的 i
 
   - S5 的基準 4.8 s 是 probe 單執行緒的數字；真正的 Client 改前是 6.2 s。兩個都比改後的 4.0 s 長。
   - **Match 的記憶體比基準多 37 MB（+6.6%）**：同時解析的 region 變多。4 條執行緒時 579 MB、4.2 s。S5 寫的 471 MB 是看門狗每 0.5 s 的取樣，低估了峰值；同一個看門狗量改後是 505 MB。照判定門檻（≤ 1 GB）在內；「不能比基準差」這一條要不要容許這 37 MB，交使用者決定。
+
+**處置**（2026-11-27，使用者，經主會話轉達；出處 HANDOFF `v8-arch-gyo2-364-load-threads`）：
+
+- 原話：「2個都要，如果不加參數，系統執行期自動決定，如果加參數則按照參數來，超過最大（最小）設定值（例如：-1，100 這種），就轉回自動判斷。」
+- **沒有參數**：照機器決定，硬體執行緒數夾在 2～8（就是上面量的 3.7 s／600 MB）。37 MB 照這個預設接受，回歸基準更新成精確數字（5.2.2）。
+- **`--load-threads N`**（Match 的命令列，照既有參數的寫法）：N 在 1～8 就用 N。
+  - 下限是 1，不是自動的 2（卡片判）：1 條就是改前的 Match（7.9 s／563 MB），要能用參數重現；上限 8 和自動相同（量過的最大值）。
+  - N 超出 1～8（-1、0、100、超過 64 位元的數字）：**不夾值**，改回機器的決定，並記一行 info log 說明 N 被忽略、實際用幾條（只告訴外面發生了什麼）。
+  - N 不是整數（`abc`、空字串）：和其他參數一樣是用法錯誤，結束碼 2。
+- **測試**（`object_fps_pvp.logic`，cpu，CI 會跑）：`load threads:` 4 案，沒有參數（硬體 0、1、4、8、16）、範圍內（1、3、8，不論硬體）、範圍外（-1、0、9、100、極大數，取機器的數而不是最近的端點）、不是整數。程式層級另有 `object_fps_pvp.match_load_threads`（network，只在本機）：`--load-threads 100` 時 log 有那一行。
+- **突變**：5 個（`pvp-load-threads-*`：自動不夾 2～8、範圍內被忽略、範圍外被夾到端點、範圍外沒說、空字串被當 0），5/5 killed。
+- Client 要不要也給覆寫，使用者還沒決定；這批只做 Match。
+- **沒重量**：預設的程式路徑和量的那一版相同（同樣夾在 2～8），基準用 17.8 已量的數字。

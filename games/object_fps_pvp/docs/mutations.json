@@ -3065,6 +3065,71 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the loading screen waits while meshes wait*",
    "expect": "pvp-loading-waits-meshes"
+  },
+  {
+   "id": "pvp-load-threads-machine-unbounded",
+   "what": "without --load-threads the Match takes every hardware thread (no 2 to 8)",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    return std::clamp<std::size_t>(hardware == 0 ? kLeastLoadThreads : hardware, kLeastLoadThreads, kMostLoadThreads);\n",
+   "replace": "    return hardware == 0 ? kLeastLoadThreads : hardware;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "without --load-threads"
+  },
+  {
+   "id": "pvp-load-threads-asked-ignored",
+   "what": "a --load-threads count in the range is ignored for the machine's",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    return LoadThreads{.count = static_cast<std::size_t>(value), .askedOutOfRange = false};\n",
+   "replace": "    return machine;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "used as given"
+  },
+  {
+   "id": "pvp-load-threads-clamped",
+   "what": "a --load-threads count outside the range is clamped to its nearest end instead of the machine's choice",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "        return LoadThreads{.count = machine.count, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "replace": "        return LoadThreads{.count = value < 1 ? std::size_t{1} : kMostLoadThreads, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "is not clamped"
+  },
+  {
+   "id": "pvp-load-threads-not-told",
+   "what": "a --load-threads count outside the range is replaced without saying so",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "        return LoadThreads{.count = machine.count, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "replace": "        return LoadThreads{.count = machine.count, .askedOutOfRange = false};\n    }\n    return LoadThreads{",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "is not clamped"
+  },
+  {
+   "id": "pvp-load-threads-empty-taken",
+   "what": "an empty --load-threads is read as the number 0 (out of the range: the machine decides) instead of refused",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    if (asked->empty() || parsed.ptr != asked->data() + asked->size()) return std::nullopt;\n",
+   "replace": "    if (parsed.ptr != asked->data() + asked->size()) return std::nullopt;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "not a whole number"
   }
  ]
 }

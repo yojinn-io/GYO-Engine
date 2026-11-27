@@ -13,6 +13,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     ControlsTests.cpp
     HitFeedbackTests.cpp
     InterpolationTests.cpp
+    LoadThreadsTests.cpp
     PlanarMovementTests.cpp
     PlayerSaveTests.cpp
     SaveSyncTests.cpp
@@ -95,6 +96,11 @@ set_tests_properties(object_fps_pvp.main_connect PROPERTIES LABELS "gpu" TIMEOUT
 gyo_get_game_target(object_fps_pvp match object_fps_pvp_match)
 add_test(NAME object_fps_pvp.match COMMAND ${object_fps_pvp_match} --port 0 --ticks 64)
 set_tests_properties(object_fps_pvp.match PROPERTIES LABELS "network" TIMEOUT 60)
+# --load-threads outside 1 to 8 (big-map declaration 17.8): the Match still plays, on the machine's choice, and says
+# that it ignored the count.
+add_test(NAME object_fps_pvp.match_load_threads COMMAND ${object_fps_pvp_match} --port 0 --ticks 1 --load-threads 100)
+set_tests_properties(object_fps_pvp.match_load_threads PROPERTIES LABELS "network" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "--load-threads 100 is outside 1 to 8: the map loads on [2-8] threads")
 
 # The Match executable as the matches service starts it (gateway declaration, segment 2): its key on the standard
 # input, listening on its port; a bad key refuses to start. Go on the host; label network (a real UDP port).
