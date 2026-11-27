@@ -147,6 +147,11 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 - 測試：`render.data` 二案（大小與畫面、沿用與 RP-3 的資料判斷）；`render.extract` 一案（Disabled 第一幀畫、之後沿用、視窗變大那一幀畫、Once）；`sdl_gpu.phases` 的沿用後取樣；`sdl_gpu.unwritten` 改成「前一幀畫過、這一幀沒畫也沒沿用」。既有測試只改輸入：`render.data` 的要求清單多一個大小要求（A1 的案）、`sdl_gpu.targets` 的 `TargetCase::Frame` 照 `Capture` 的大小呼叫 `SetMainSize`。
 - 突變：`phase_mutations.json` 新增 10 個（`rd-reuse-not-written`、`rd-size-picture-kept`、`rd-picture-not-marked`、`rd-picture-by-reuse`、`re-update-disabled-ignored`、`re-update-picture-ignored`、`re-update-once-reused`、`re-main-size-not-set`、`wr-once-never-settled`、`wr-once-settled-unseen`），退役 `rd-unwritten-drawn-ignored`；A1 的 `gt-target-not-resized`、`gt-follows-other-as-main` 改寫到資料側（`render.data`）；`gt-unwritten-not-asserted`、`rd-writes-3d-depth-dropped`、`rd-unwritten-drawing-ignored` 的 find 跟著改。
 
+### 第 14.11 節的驗證
+
+- 本機（macOS Intel，只跑 cpu）：全量建置成功；`ctest -L 'cpu|shader'` 254/255（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 82/82 killed（phase、target、render 的 `cp-`／`rd-`／`re-`、`vs-camera-list-not-extracted`）；runner 結束後確認每個突變的 find 原文都在（沒有殘留）。
+- Linux 主機（`b1b173a5`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 255/255；`sdl_gpu.phases`、`unwritten`、`targets`、`pass2d` 4/4；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 59/59 killed（D184 的 GPU 既有突變加 phase 的 GPU 突變，不含會開視窗的 3 個）。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
