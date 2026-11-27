@@ -273,58 +273,6 @@ TEST_CASE("world: an empty magazine fires nothing; a reload fills it after the r
 
 namespace {
 
-struct Session {
-    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
-    std::vector<std::pair<N::MemoryLink, N::MemoryLink>> links;
-    std::shared_ptr<PW::Seats> seats = std::make_shared<PW::Seats>();
-    std::unique_ptr<O::Product> match;
-    std::vector<std::unique_ptr<O::Product>> clients;
-
-    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step). clientArena: the arena
-    // the Clients play (none: the Match's).
-    Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
-            std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
-            const std::uint32_t startDeadlineSeconds = 60, const std::optional<std::size_t> clientArena = std::nullopt) {
-        seats = std::make_shared<PW::Seats>(capacity);
-        std::vector<N::MemoryLink> serverEnds;
-        for (int i = 0; i < clientCount; ++i) {
-            N::MemoryLinkSettings settings;
-            settings.seed = static_cast<std::uint64_t>(60 + i);
-            settings.aToB.fixedDelaySteps = 2;
-            settings.bToA.fixedDelaySteps = 2;
-            links.push_back(N::MemoryLink::Pair(settings));
-            serverEnds.push_back(links.back().first);
-        }
-        auto reader = [c = clock] { return *c; };
-        match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena, std::move(expectUsers),
-                           startDeadlineSeconds);
-        for (int i = 0; i < clientCount; ++i) {
-            clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
-                                          static_cast<std::uint64_t>(i + 1), reader, clientArena.value_or(matchArena)));
-        }
-    }
-    K::World& Match() { return GameWorld(*match); }
-    K::World& Client(const std::size_t i) { return GameWorld(*clients[i]); }
-    // One frame everywhere; inputs[i] (when given) is client i's input for its next step.
-    void Frame(const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
-        for (std::size_t i = 0; i < clients.size(); ++i) {
-            if (i < inputs.size() && inputs[i]) {
-                if (auto* local = N::LocalInput<PW::PlayerInput>(Client(i))) {
-                    const auto target = static_cast<std::uint32_t>(TickOf(Client(i)) + 1);
-                    local->Set(target, *inputs[i], N::ViewTime{target, 0});
-                }
-            }
-        }
-        REQUIRE(static_cast<bool>(match->RunFrame()));
-        for (auto& client : clients) REQUIRE(static_cast<bool>(client->RunFrame()));
-        for (auto& link : links) link.first.Advance();
-        *clock += Ms(16);
-    }
-    void Frames(const int n, const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
-        for (int i = 0; i < n; ++i) Frame(inputs);
-    }
-};
-
 std::size_t PeerCount(K::World& world) {
     std::size_t count = 0;
     for (const K::EntityId id : world.Entities()) count += world.Get<N::Peer>(id) != nullptr ? 1 : 0;

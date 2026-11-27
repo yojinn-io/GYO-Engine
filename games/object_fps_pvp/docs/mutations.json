@@ -3331,6 +3331,84 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the rules digest follows*",
    "expect": "the hit shapes"
+  },
+  {
+   "id": "pvp-set-always-on",
+   "what": "a gameplay set runs whatever the mode",
+   "guards": [
+    "mode-config-declaration 2.4, 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/GameplaySets.cpp",
+   "find": "    return mode->on.test(Slot);",
+   "replace": "    return true;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a gameplay set the mode leaves off*",
+   "expect": "pvp-set-off"
+  },
+  {
+   "id": "pvp-set-never-on",
+   "what": "a gameplay set the mode turns on does not run",
+   "guards": [
+    "mode-config-declaration 2.4, 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/GameplaySets.cpp",
+   "find": "    return mode->on.test(Slot);",
+   "replace": "    return false;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a gameplay set the mode turns on*",
+   "expect": "pvp-set-on"
+  },
+  {
+   "id": "pvp-set-arena-block-always",
+   "what": "an arena's block is put for a set the mode leaves off",
+   "guards": [
+    "mode-config-declaration 2.4, 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "                if (mode.on.test(slot) && read.put) read.put(world);",
+   "replace": "                if (read.put) read.put(world);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a gameplay set the mode leaves off*",
+   "expect": "ProbeArena"
+  },
+  {
+   "id": "pvp-set-unknown-accepted",
+   "what": "a set the game does not have is taken",
+   "guards": [
+    "mode-config-declaration 2.4, 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/GameplaySets.cpp",
+   "find": "            error = \"the game has no gameplay set '\" + name + \"'\";\n            return std::nullopt;",
+   "replace": "            continue;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode's gameplay sets read*",
+   "expect": "no gameplay set 'doors'"
+  },
+  {
+   "id": "pvp-set-settings-undigested",
+   "what": "the rules digest leaves a set's settings out",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "    for (const auto& [slot, read] : mode.sets) sets.emplace_back(table[slot].name, read.digest);",
+   "replace": "    for (const auto& [slot, read] : mode.sets) sets.emplace_back(table[slot].name, 0);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode's gameplay sets read*",
+   "expect": "the set's settings are in the rules digest"
+  },
+  {
+   "id": "pvp-set-mode-settings-not-put",
+   "what": "the mode's settings of a set it turns on are not put into the World",
+   "guards": [
+    "mode-config-declaration 2.4, 4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            if (read.put) read.put(world);\n        }\n        const std::vector<SetBlocks>& arenaSets",
+   "replace": "            (void)read;\n        }\n        const std::vector<SetBlocks>& arenaSets",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a gameplay set the mode turns on*",
+   "expect": "ProbeState"
   }
  ]
 }

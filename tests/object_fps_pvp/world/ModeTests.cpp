@@ -47,7 +47,7 @@ struct ModeFolder {
     }
     std::optional<std::vector<PW::ModeContent>> Load(std::string& error) const {
         const auto& content = *ShippedContent();
-        return PW::LoadModes(root.string(), content.arenas, content.combat, *content.character, error);
+        return PW::LoadModes(root.string(), content.arenas, content.combat, *content.character, PW::GameSets(), error);
     }
 };
 
@@ -101,7 +101,7 @@ TEST_CASE("world: the rules digest follows each rule value: the movement rules, 
         folder.Write("rules/movement.json", movement);
         folder.Modes({{"a.json", Mode("same", R"({"movement": "rules/movement.json"})")}});
         std::string error;
-        const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, rig, error);
+        const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, rig, PW::GameSets(), error);
         REQUIRE_MESSAGE(modes.has_value(), error);
         return modes->front().rulesDigest;
     };

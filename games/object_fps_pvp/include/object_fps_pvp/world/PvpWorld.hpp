@@ -61,12 +61,16 @@ namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 
 // What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), every
-// installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables), the combat rules (the game's
-// defaults) and the character (its skeleton, clips and hit shapes; the arenas share one body height). An arena's map
-// is not here: the World that plays the arena reads it (LoadArena, big-map declaration 15.6).
+// installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables and gameplay sets), the gameplay
+// sets' table (world/GameplaySets.hpp; every World registers all of them) with each arena's set blocks (arenaSets, by
+// arena), the combat rules (the game's defaults) and the character (its skeleton, clips and hit shapes; the arenas
+// share one body height). An arena's map is not here: the World that plays the arena reads it (LoadArena, big-map
+// declaration 15.6).
 struct GameContent final {
     std::vector<sim::ArenaContent> arenas;
     std::vector<ModeContent> modes;
+    std::vector<GameplaySet> sets;
+    std::vector<SetBlocks> arenaSets;
     sim::CombatRules combat;
     std::shared_ptr<const character::CharacterRig> character;
 
@@ -90,10 +94,12 @@ struct ContentMismatch final {
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
 
-// Reads the content under root (the game's asset directory). nullopt with error naming the file and what was wrong:
-// a file that does not read or parse, or an arena whose stance rules do not fit. Whether its map reads, and its spawns
+// Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
+// nullopt with error naming the file and what was wrong: a file that does not read or parse, an arena whose stance
+// rules do not fit, a set block a set does not read. Whether its map reads, and its spawns
 // are free of its walls, is known when a World reads the map (MapLoad).
-[[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error);
+[[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error,
+                                                         const std::vector<GameplaySet>& sets = GameSets());
 
 // What a Product playing the game needs besides its Worlds: the map's loaders (voxel_map's) in its asset store
 // (world_asset, with AssetOptions naming the content root and an executor). A Product's configure calls it.
@@ -176,14 +182,6 @@ struct WorldOptions final {
 
 // Which end a World is.
 enum class WorldEnd : std::uint8_t { Match, Client, Local };
-
-// The mode this World plays (WorldOptions::mode): put before the first frame, never written after. Not decision data,
-// and not GameRules (LoadArena writes that while the World generates).
-struct ActiveMode final {
-    std::string id;
-    std::uint64_t rulesDigest = 0;
-};
-void HashValue(K::Hasher&, const ActiveMode&);
 
 // Local: where its player first stands (WorldOptions::spawn).
 struct LocalSpawn final {

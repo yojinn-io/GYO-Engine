@@ -124,7 +124,6 @@ bool CountDeath(const PlayerCombat& combat, std::uint64_t& respawnSeen) noexcept
 void HashValue(K::Hasher&, const MatchSeats&) {}
 void HashValue(K::Hasher&, const SeatedPlayers&) {}
 void HashValue(K::Hasher&, const ContentMismatch&) {}
-void HashValue(K::Hasher&, const ActiveMode&) {}
 
 namespace {
 
@@ -1008,11 +1007,13 @@ std::optional<std::size_t> GameContent::FindMode(const std::string_view id) cons
     return std::nullopt;
 }
 
-std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error) {
+std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error, const std::vector<GameplaySet>& sets) {
     error.clear();
     GYO::Engine::IO::FS::NativeFileSystem fs;
     const std::string maps = root + "/maps/";
     GameContent content;
+    content.sets = sets;
+    GYO_ASSERT(sets.size() <= kMaxGameplaySets);
     auto listText = ReadText(fs, maps + "arenas.json", error);
     if (!listText) return std::nullopt;
     auto list = sim::ParseArenaList(*listText, error);
@@ -1028,7 +1029,13 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": " + error;
             return std::nullopt;
         }
+        auto blocks = ReadArenaSets(*arenaText, content.sets, error);
+        if (!blocks) {
+            error = maps + name + ": " + error;
+            return std::nullopt;
+        }
         content.arenas.push_back(std::move(*arena));
+        content.arenaSets.push_back(std::move(*blocks));
     }
     // The character, for the arenas' body (they share one: the character is drawn and judged at that height).
     for (const sim::ArenaContent& arena : content.arenas) {
@@ -1040,7 +1047,7 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     auto rig = character::LoadCharacterRig(root, content.arenas.front().bodyHeight, error);
     if (!rig) return std::nullopt;
     content.character = std::make_shared<const character::CharacterRig>(std::move(*rig));
-    auto modes = LoadModes(root, content.arenas, content.combat, *content.character, error);
+    auto modes = LoadModes(root, content.arenas, content.combat, *content.character, content.sets, error);
     if (!modes) return std::nullopt;
     content.modes = std::move(*modes);
     return content;
@@ -1188,6 +1195,16 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         r.AddSystem<&CountLocalDeaths>(std::move(deaths));
     }
 
+    // The gameplay sets, after every registration of the core (the core's authority numbers and wire ids stay), all of
+    // them whatever the mode: each one's two Kernel sets run only when the mode turns it on.
+    const std::vector<GameplaySet>& sets = options.content->sets;
+    for (std::size_t slot = 0; slot < sets.size(); ++slot) {
+        const GameplaySet& set = sets[slot];
+        r.Set({.name = GameplaySetFixed(set.name), .schedule = std::string(O::DefaultSchedules::fixed)}, {GameplaySetOn(slot, set.name)});
+        r.Set({.name = GameplaySetFrame(set.name), .schedule = std::string(O::DefaultSchedules::frame)}, {GameplaySetOn(slot, set.name)});
+        set.build(setup);
+    }
+
     setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         const sim::ArenaContent& arena = options.content->arenas[options.arena];
         const ModeContent& mode = options.content->modes[options.mode];
@@ -1205,7 +1222,17 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
         world.SetResource(LocalDeaths{});
-        world.SetResource(ActiveMode{mode.id, mode.rulesDigest});
+        world.SetResource(ActiveMode{mode.id, mode.rulesDigest, mode.on});
+        // What the sets the mode turns on read: the mode's settings, then the arena's blocks.
+        for (const auto& [slot, read] : mode.sets) {
+            if (read.put) read.put(world);
+        }
+        const std::vector<SetBlocks>& arenaSets = options.content->arenaSets;
+        if (options.arena < arenaSets.size()) {
+            for (const auto& [slot, read] : arenaSets[options.arena]) {
+                if (mode.on.test(slot) && read.put) read.put(world);
+            }
+        }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.
         MatchStart start;

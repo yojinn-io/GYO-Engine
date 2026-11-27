@@ -76,7 +76,7 @@ std::optional<std::vector<std::string>> ParseModeList(const std::string_view tex
     }
 }
 
-std::optional<ModeFile> ParseMode(const std::string_view text, std::string& error) {
+std::optional<ModeFile> ParseMode(const std::string_view text, const std::vector<GameplaySet>& sets, std::string& error) {
     error.clear();
     try {
         const auto document = data::ParseDocument(text);
@@ -93,12 +93,10 @@ std::optional<ModeFile> ParseMode(const std::string_view text, std::string& erro
             }
             mode.rules.emplace_back(std::move(kind), ContentPath(rule.value, "a rule file"));
         }
-        for (const auto set : data::AsObject(data::Member(json, "sets"), "sets")) {
-            std::string name(set.key);
-            (void)data::AsObject(set.value, "a set's settings");
-            if (std::find(mode.sets.begin(), mode.sets.end(), name) != mode.sets.end()) throw std::runtime_error("sets names '" + name + "' twice");
-            mode.sets.push_back(std::move(name));
-        }
+        std::string why;
+        auto blocks = ReadSetBlocks(data::AsObject(data::Member(json, "sets"), "sets"), sets, false, why);
+        if (!blocks) throw std::runtime_error(why);
+        mode.sets = std::move(*blocks);
         mode.arenas = Names(data::Member(json, "arenas"), "arenas");
         return mode;
     } catch (const std::exception& exception) {
@@ -131,7 +129,7 @@ std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, c
 
 std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
                                                   const sim::CombatRules& combat, const character::CharacterRig& character,
-                                                  std::string& error) {
+                                                  const std::vector<GameplaySet>& sets, std::string& error) {
     error.clear();
     GYO::Engine::IO::FS::NativeFileSystem fs;
     const std::string folder = root + "/modes/";
@@ -151,7 +149,7 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
         };
         auto text = ReadText(fs, path, error);
         if (!text) return std::nullopt;
-        auto file = ParseMode(*text, error);
+        auto file = ParseMode(*text, sets, error);
         if (!file) return fail(error);
         if (std::any_of(modes.begin(), modes.end(), [&](const ModeContent& mode) { return mode.id == file->id; })) {
             return fail("another installed mode has the id '" + file->id + "'");
@@ -174,7 +172,6 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
             movement = true;
         }
         if (!movement) return fail("rules names no movement rules");
-        if (!file->sets.empty()) return fail("the game has no gameplay set '" + file->sets.front() + "'");
         for (const std::string& id : mode.arenas) {
             if (std::none_of(arenas.begin(), arenas.end(), [&](const sim::ArenaContent& arena) { return arena.id == id; })) {
                 return fail("no installed arena has the id '" + id + "'");
@@ -185,19 +182,23 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
                 return fail("the movement rules do not fit the body of arena '" + arena.id + "'");
             }
         }
-        mode.rulesDigest = RulesDigest(*file, mode.stance, combat, character);
+        for (const auto& [slot, read] : file->sets) mode.on.set(slot);
+        mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat, character);
+        mode.sets = std::move(file->sets);
         modes.push_back(std::move(mode));
     }
     return modes;
 }
 
-std::uint64_t RulesDigest(const ModeFile& mode, const sim::StanceRules& stance, const sim::CombatRules& combat,
-                          const character::CharacterRig& character) {
+std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& table, const sim::StanceRules& stance,
+                          const sim::CombatRules& combat, const character::CharacterRig& character) {
     K::Hasher h;
     // The mode: what decides the match (its display name does not).
     HashValue(h, std::string("gyo.object_fps_pvp.rules/1"));
     HashValue(h, mode.id);
-    std::vector<std::string> sets = mode.sets;
+    // The sets it turns on, by name, each with the digest of its settings.
+    std::vector<std::pair<std::string, std::uint64_t>> sets;
+    for (const auto& [slot, read] : mode.sets) sets.emplace_back(table[slot].name, read.digest);
     std::sort(sets.begin(), sets.end());
     HashValue(h, sets);
     std::vector<std::string> arenas = mode.arenas;

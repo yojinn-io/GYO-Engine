@@ -13,6 +13,7 @@
 #include "object_fps_pvp/sim/Arena.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
+#include "object_fps_pvp/world/GameplaySets.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -34,8 +35,8 @@ struct ModeFile final {
     std::string name;
     // Rule kind -> file (relative to the content root), in the file's order.
     std::vector<std::pair<std::string, std::string>> rules;
-    // The gameplay sets it turns on, by name, each with its settings (the set reads them); in the file's order.
-    std::vector<std::string> sets;
+    // The gameplay sets it turns on, each with what the set read of its settings (SetBlocks: by slot).
+    SetBlocks sets;
     // The arenas it plays, by id (empty: every installed arena).
     std::vector<std::string> arenas;
 };
@@ -43,10 +44,11 @@ struct ModeFile final {
 // Reads modes/modes.json. nullopt with error: not version 1, not a list of plain file names, or empty.
 [[nodiscard]] std::optional<std::vector<std::string>> ParseModeList(std::string_view text, std::string& error);
 
-// Reads a mode file. nullopt with error: a member missing or of the wrong kind, not version 1, an empty id, a rule kind
-// twice or a rule file that is not a relative path inside the content root, a set or an arena named twice.
-// Whether the rule kinds, the sets and the arenas are known is LoadModes' to say.
-[[nodiscard]] std::optional<ModeFile> ParseMode(std::string_view text, std::string& error);
+// Reads a mode file; its sets with the table's readers (ReadSetBlocks). nullopt with error: a member missing or of the
+// wrong kind, not version 1, an empty id, a rule kind twice or a rule file that is not a relative path inside the
+// content root, an arena named twice, or what ReadSetBlocks says. Whether the rule kinds and the arenas are known is
+// LoadModes' to say.
+[[nodiscard]] std::optional<ModeFile> ParseMode(std::string_view text, const std::vector<GameplaySet>& sets, std::string& error);
 
 // One installed mode, read.
 struct ModeContent final {
@@ -55,6 +57,9 @@ struct ModeContent final {
     sim::StanceRules stance;
     // The arenas it plays (empty: all).
     std::vector<std::string> arenas;
+    // The gameplay sets it turns on (by slot), and what each read of its settings.
+    SetsOn on;
+    SetBlocks sets;
     // What a Client compares with the Match's (MatchInfo::rulesDigest): the mode (its id, sets and arenas) and the
     // rules a match of it plays with (its rule tables, the combat rules and the character's hit shapes), as values.
     std::uint64_t rulesDigest = 0;
@@ -64,15 +69,16 @@ struct ModeContent final {
 
 // Reads the installed modes under root (the game's asset directory): modes/modes.json and the files it lists, and each
 // mode's rule tables. nullopt with error naming the file and what was wrong: a file that does not read or parse, two
-// modes with one id, a rule kind the game does not know, no movement rules, a set the game does not have, an arena
-// that is not installed, or one whose body the movement rules do not fit.
+// modes with one id, a rule kind the game does not know, no movement rules, a set the table does not have (or its
+// settings do not read), an arena that is not installed, or one whose body the movement rules do not fit.
 [[nodiscard]] std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
                                                                 const sim::CombatRules& combat, const character::CharacterRig& character,
-                                                                std::string& error);
+                                                                const std::vector<GameplaySet>& sets, std::string& error);
 
 // The rules digest of a mode (ModeContent::rulesDigest): the parsed values through the Kernel's Hasher, never the
 // files' bytes (a line ending, a space or the order of an object's members does not change it).
-[[nodiscard]] std::uint64_t RulesDigest(const ModeFile& mode, const sim::StanceRules& stance, const sim::CombatRules& combat,
-                                        const character::CharacterRig& character);
+// The sets are hashed by name (from the table) with the digest of what each read.
+[[nodiscard]] std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& sets, const sim::StanceRules& stance,
+                                        const sim::CombatRules& combat, const character::CharacterRig& character);
 
 } // namespace object_fps_pvp::world
