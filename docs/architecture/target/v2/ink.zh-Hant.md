@@ -109,7 +109,7 @@ plugins/ink/
 - **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。
 - **D3 第一次 `Advance` 之前存的檔，讀回來已經結束**。
 
-**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。tunnel 裡也可以，讀回同一個台本會逐字接上，讀進新版台本也能遷移（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」）。在選項處存要等 D2 有結論。要打補丁、回報 upstream、還是限制存檔點，交使用者決定（宣告第 12 節）。
+**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。tunnel 裡也可以，讀回同一個台本會逐字接上，讀進新版台本也能遷移（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」）。使用者的決定（宣告 11.1 U5）：存檔時機照 inkcpp 作者在 #146 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存。這是**遊戲的規則**，adapter 不擋：在選項處存仍然回位元組，讀不回來時 `Restore` 回錯誤。D2 由另一張卡回報 upstream，不打補丁。要不要在 `Save` 上露出「讀不讀得回來」，等 U7 (a)。
 
 ## Design Invariants
 

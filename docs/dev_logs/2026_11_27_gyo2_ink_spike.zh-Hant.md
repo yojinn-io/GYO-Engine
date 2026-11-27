@@ -75,4 +75,5 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 
 ## 交使用者決定的事
 
-宣告 12.3：U5（D2：不處理、打補丁、或先回報 upstream；卡片建議先回報、等遊戲要在選項處存檔時再決定）、U6（產品怎麼選 `library_only` 的 Plugin；卡片建議等第一個用 ink 的遊戲開卡時再定）；12.5：U7。
+- U5 已決定（宣告 11.1，HANDOFF `v8-arch-gyo2-ink-spike-u5`）：「照建議，不過讓主會話開一張任務卡來專門處理回報的問題」。D2 由另一張回報卡回報 upstream；存檔時機（選完之後、下一次 `Advance` 之前，選項畫面不存）是遊戲的規則，adapter 不改。要不要在 `Save` 上露出，等 U7 (a)。
+- 還沒定：宣告 12.3 的 U6（產品怎麼選 `library_only` 的 Plugin；卡片建議等第一個用 ink 的遊戲開卡時再定）；12.5：U7。

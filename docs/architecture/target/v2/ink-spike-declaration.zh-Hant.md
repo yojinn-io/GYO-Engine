@@ -333,6 +333,17 @@ v8-arch-gyo2-ink-spike
 - **卡片判、使用者沒有推翻的**：Plugin 名 `ink`、`library_only`（5.5）；只做沒有回傳值的指令（5.4）；沒有 line ID 不算錯誤（6.2）；locale 寫成契約（7.5）；`Restore` 用快照的亂數狀態（7.1）。
 - 開始實作（I1）等主會話另外通知；合併等使用者說「合併」。
 
+### 11.1 U5：inkcpp 的存檔缺陷 D2（2026-11-27）
+
+出處：HANDOFF `v8-arch-gyo2-ink-spike-u5`，由主會話轉交。
+
+- **原話**：「照建議，不過讓主會話開一張任務卡來專門處理回報的問題。詳細溝通我會在任務卡裡進行。」
+- 選的是主會話列出的 (2)＋(3)：
+  - **(2) 回報上游**（12.3 的 (c)）：由主會話另開的回報卡處理，這張卡不發 issue。回報卡要最小重現的台本、或釘住現行為的測試（`plugins/ink/tests/DialogueTests.cpp` 裡名字以「inkcpp defect, not patched」開頭的三個測試，D2 是第 394 行那個；台本在 `plugins/ink/tests/data/`）時，這張卡配合提供。
+  - **(3) 存檔時機**：照 inkcpp 作者在 #146 的建議，在「選完選項之後、要下一次 `Advance` 之前」存檔，**選項畫面不存**。**這是遊戲的規則，不是 Engine 的**：adapter 不擋、不改，在選項處存仍然照現狀回位元組，`Restore` 讀不回來時照第 6 節回 `SnapshotUnreadable`／`SnapshotNotMigratable`。
+- 這條規則要不要在 adapter 的文件或介面上露出來（例如 `Save` 回報「現在存的檔讀不回來」），和 U7 (a) 有關，**等 U7 定了再做**。
+- 不打補丁（12.3 的 (b) 沒有選）。
+
 ## 12. 實作時發現的事（I1、I2，2026-11-27）
 
 細節與程式位置在 owner 頁 [ink.zh-Hant.md](ink.zh-Hant.md)。
@@ -361,7 +372,7 @@ v8-arch-gyo2-ink-spike
 
 | # | 事 | 選項 | 卡片的建議 |
 |---|---|---|---|
-| U5 | **inkcpp 的存檔缺陷 D2**：在選項處存的檔，只要台本裡有任何 sequence（`{a\|b}`、`{&…}`、`{!…}`、`{~…}`），連讀回同一個台本都失敗（`globals_impl.cpp:294-297`）。能存的點是「選完之後、下一次 `Advance` 之前」。D1（跳過的選項的 tag 給了下一個選項）、D3（第一次 `Advance` 前存的檔讀回已結束）比較輕 | (a) 現在不處理，把能存的點寫進契約（現狀）；(b) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍）；(c) 先回報 upstream，等遊戲真的要在選項處存檔時再決定（RC-INK1） | (c)：spike 沒有遊戲在用；三個缺陷各有釘住現狀的測試，inkcpp 修好時測試會失敗、提醒我們改 |
+| U5 | **inkcpp 的存檔缺陷 D2**：在選項處存的檔，只要台本裡有任何 sequence（`{a\|b}`、`{&…}`、`{!…}`、`{~…}`），連讀回同一個台本都失敗（`globals_impl.cpp:294-297`）。能存的點是「選完之後、下一次 `Advance` 之前」。D1（跳過的選項的 tag 給了下一個選項）、D3（第一次 `Advance` 前存的檔讀回已結束）比較輕 | (a) 現在不處理，把能存的點寫進契約（現狀）；(b) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍）；(c) 先回報 upstream，等遊戲真的要在選項處存檔時再決定（RC-INK1） | (c)：spike 沒有遊戲在用；三個缺陷各有釘住現狀的測試，inkcpp 修好時測試會失敗、提醒我們改 <br>**已決定（11.1）**：回報上游（另一張卡）＋存檔時機是遊戲的規則 |
 | U6 | **產品選不了 `library_only` 的 Plugin**：`gyo_product_units(... PLUGINS ...)` 只收放進 World 的 Plugin，`ink` 現在只能經 `GYO_PLUGINS` 選。spike 的測試自己連 `GYO::Ink` | (a) 等第一個用 ink 的遊戲開卡時再定；(b) 現在就讓產品能選 `library_only` 的 Plugin（改建置層，擴大範圍）；(c) 給 `ink` 一個放進 World 的單位（推翻 `library_only`） | (a) |
 
 ### 12.4 I3：審查與修正
