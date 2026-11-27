@@ -229,6 +229,7 @@ GYO 沒有 reflection，不能像 Bevy 那樣「檔裡寫 component 的型別、
 | `objects[].data` | 那一組自己的資料，由組的 `readScene` 解析 | 組的 reader 說的 |
 
 - 門的 `data`：`hinge`（關著時門軸那一邊的底角）、`yaw`（關著時的朝向，照 `PlayerBody::yaw`）、`swing`（開的角度，正負決定方向）、`open`（初值）、`color`。錯誤：寬高厚不是正數、`swing` 為 0 或超過 π。
+- **`id` 的分配（手寫期間的約定）**：門從 1 起、靶子（頭頂 UI 卡 #372 的 `targets` 組，`overhead-ui-declaration.zh-Hant.md` 3.5、6）從 101 起（2026-11-28 和該卡約定）。只是寫檔的人之間的約定，格式不規定、reader 不檢查哪一組用哪一段；之後由工具負責分配。寫進資料契約頁。
 - 和 Bevy 的對應：`objects[]` ＝ `DynamicWorld::entities`；`id` ＝ `DynamicEntity::entity`（檔內的編號）；`set`＋`data` ＝ component 的型別與值（Bevy 靠 reflection，GYO 靠組的 reader）。差別：Bevy 寫進 World 時換新編號（`dynamic_world.rs:92-111`），GYO 照固定公式換（5.3），因為兩端要同號。
 
 ### 5.2 遊戲層的膠水
@@ -309,9 +310,9 @@ Client 是三個 World（`ClientWorld.hpp:3-19`）：Sim 跑網路與預測，Fr
 
 - **按鍵**：Frame 的 `ReadControls` 讀 `E`（照 `R` 的 `JustPressed`，`ClientWorld.cpp:554`），`present::StepInput` 加 `interact`；照現有按鍵寫死，不做改鍵（不碰 Q6 的 action map）。模式沒開 `interaction` 時按了沒效果。
 - **焦點與提示**：Frame 每幀從自己的眼睛沿視線打射線（牆用 `WorldSnapshot::walls`，`ClientExchange.hpp:46`；門用 scene 的形狀與 Sim 傳來的 `DoorState`），規則同 2.3；焦點是門時顯示「[E] 開ける」／「[E] 閉める」（照門的狀態）。提示由種類各自的 System 寫，HUD 只顯示目前焦點的提示。字串照 HUD 現有的寫法在程式裡（`ClientWorld.cpp:1022-1032`）。
-- **門的畫面**：每扇門一個 `Mesh3d`（長方體，和地圖的 region 同一條路在程式裡做），狀態變了就照擺動秒數轉過去。擺動秒數、音量、距離放 Client 讀的表現檔（`audio/sfx.json` 加 `door_open`、`door_close`，版本號加一）。
+- **門的畫面**：每扇門一個 `Mesh3d`（長方體，和地圖的 region 同一條路在程式裡做），狀態變了就照擺動秒數轉過去。長方體的網格做成**共用的 helper**（大小、顏色、原點在長方體裡的哪一點：門用門軸那一邊、靶子用底面中心），門先做、#372 的靶子沿用（2026-11-28 和該卡約定）。擺動秒數、音量、距離放 Client 讀的表現檔（`audio/sfx.json` 加 `door_open`、`door_close`，版本號加一）。
 - **音效**：0 → 1 播 `door_open`、1 → 0 播 `door_close`，用現有的空間化（`ClientWorld.cpp:1091`）。素材自製或 CC0，來源寫進 `assets/object_fps_pvp/LICENSES/SOURCES.zh-Hant.md`。
-- `WorldSnapshot` 加門（編號、`DoorState`）；Frame World 從 scene 自己知道門的形狀。
+- `WorldSnapshot` 加門（編號、`DoorState`）；Frame World 從 scene 自己知道門的形狀。**scene 物件的狀態一律照同一個形**：每個玩法組一個 `std::vector`，元素是 `{EntityId id; 該組複製的 component}`，照 `id` 由小到大，由該組在 Sim 那一側的 System 填；Frame World 照 `id` 對上自己的網格。門是 `doors{id, DoorState}`，#372 的靶子是 `targets{id, TargetState}`（2026-11-28 和該卡約定）。
 
 ---
 
