@@ -507,6 +507,34 @@ TEST_CASE("inkcpp defect, not patched: a save right after a choice inside a tunn
                                                        "> play_sound(3)\n"));
 }
 
+// globals_impl.cpp snap_load: a save taken after a choice is flagged
+// migratable, so even a restore into the same story takes the migration path,
+// which keeps only the visit counts of named containers; a sequence's container
+// has no name (JBenda/inkcpp#178).
+TEST_CASE("inkcpp defect, not patched: a save taken right after a choice restores with its sequences started over, and Save calls it restorable") {
+    const I::Story story = Load("sequence.ink.json");
+    I::Dialogue dialogue = Start(story, I::DialogueOptions{});
+    Advance(dialogue);
+    Choose(dialogue, 0);
+    const I::Saved saved = TakeSave(dialogue);
+    CHECK(saved.restorable); // the restore succeeds and goes on: Save does not see the sequences
+    const std::string original = Render(Advance(dialogue));
+    auto restored = I::Dialogue::Restore(story, saved.bytes, I::DialogueOptions{});
+    REQUIRE_MESSAGE(restored, Why(restored));
+    CHECK(original == "stopping: second [sequence_stopping]\ncycle: two [sequence_cycle]\n* Again [sequence_again]\n");
+    CHECK(Render(Advance(restored->dialogue)) ==
+          "stopping: first [sequence_stopping]\ncycle: one [sequence_cycle]\n* Again [sequence_again]\n");
+}
+
+// runner_impl.cpp Command::SEQUENCE drops the shuffle index the compiler gives
+// and picks at random on every visit (JBenda/inkcpp#182).
+TEST_CASE("inkcpp defect, not patched: a shuffle shows the same element twice within one pass") {
+    const I::Story story = Load("shuffle.ink.json");
+    I::Dialogue dialogue = Start(story, I::DialogueOptions{});
+    // Two visits of a two-element shuffle once: ink shows y then x.
+    CHECK(Play(dialogue, {0}) == "y [shuffle_y]\n* Again [shuffle_again]\n--\ny [shuffle_y]\n* Again [shuffle_again]\n");
+}
+
 TEST_CASE("a save taken right after a choice inside a tunnel restores the same dialogue") {
     const I::Story story = Load("merchant.ink.json");
     I::Dialogue straight = Start(story, MerchantOptions(0));

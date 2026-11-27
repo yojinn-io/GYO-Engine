@@ -96,3 +96,14 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 - 突變：新增 4 個；`Rebuild` 抽出後 4 個舊突變的 `find` 更新。跑了相關的 12 個（新 5＋`find` 更新的 4＋`find` 在 `Restore` 附近的 `ink-migrated-inverted`、`ink-migration-failure-unreadable`、`ink-save-version-unchecked`）：11 killed，`ink-save-choices-uncompared` 存活（上一條，連同突變拿掉）。拿掉之後受影響的 2 個重跑，2/2 killed。目錄共 19 個。
 - 驗證：`ink.dialogue` 27 案通過；ASan＋UBSan 27 案通過，沒有記憶體錯誤，UBSan 同樣 6 處都在 inkcpp。
 - 另：主會話發現一個跑了約 3 小時的 probe（PID 2113，查 D2 時留下）。原因是當時的測試在 `-s` 下對成功的 `Result` 呼叫 `.error()`，GYO 的 assert 觸發 abort，doctest 的 signal handler 再去鎖已持有的 mutex，於是死鎖；不是 inkcpp 的行為。已結束它；之後的探測都加逾時。
+
+## I5 上游回報後的登記：D2b、D5 與 issue 的 URL
+
+- 主會話轉達：上游回報卡已在 JBenda/inkcpp 發了五件（#178 D2b、#179 D1、#180 D3、#181 D4、#182 D5）。D2 由上游 PR #176 處理，還是 OPEN、未合併，d38608d 不含。證據在主 checkout 的 `build/evidence/gyo2-inkcpp-upstream/`。
+- owner 頁第 8 節：D2b、D5 用正式編號登記，D1～D5 都附上游的 URL，D2 寫明 PR #176 OPEN 未合併；「能存的時間點」改寫成「沒有一個點對所有台本都對」，並寫明 U5 (3) 已交使用者重新決定。
+- 測試（照 D1～D4 的做法，各一個「inkcpp defect, not patched」）：
+  - D2b：新台本 `sequence.ink`（stopping＋cycle）。選完之後存，原本接著是「second」「two」，讀回是「first」「one」。
+  - D5：新台本 `shuffle.ink`（照上游回報，台本自己 `SEED_RANDOM(21)`）。兩個元素拜訪兩次都是「y」。
+- `restorable` 對 D2b：**true**（試讀成功、`can_continue` 相同，`Save` 看不出 sequence 回到開頭），D2b 的測試把這一點也釘住。要看出來得比對 inkcpp 不公開的拜訪次數，或每次存檔多跑一段台本，都沒有做，等存檔時機的重新決定一起看（owner 頁第 9 節）。
+- 之前 `merchant.ink` 的存讀測試能逐字接上，是因為它只有 `{~…}` 的 shuffle：shuffle 每次重抽（D5），拜訪次數歸零看不出來。
+- 驗證：`ink.dialogue` 29 案通過。突變沒有跑：這一批沒有改 adapter 的程式，只加了測試與註解。

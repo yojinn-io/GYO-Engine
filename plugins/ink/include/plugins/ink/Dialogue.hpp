@@ -174,7 +174,8 @@ struct Saved {
     // dialogue it got goes on as this one does (or both wait or have ended).
     // False where this inkcpp cannot restore a save
     // (docs/architecture/target/v2/ink.zh-Hant.md): the restore failed, or
-    // gave a dialogue that has ended where this one goes on.
+    // gave a dialogue that has ended where this one goes on. True does not
+    // see a restore that starts the story's sequences over (the owner page, D2b).
     bool restorable = false;
     // Restorable, and inkcpp says it can move the save to another version of
     // the story (not while waiting for a choice, not in a thread, at a place it

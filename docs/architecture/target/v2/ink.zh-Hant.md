@@ -103,14 +103,22 @@ plugins/ink/
 
 ## 8. inkcpp d38608d 的缺陷（沒有打補丁）
 
-四個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住（D1 用自己的台本 `once.ink`，主台本 `merchant.ink` 不碰它）。inkcpp 修好時，只有那個測試會失敗。
+六個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住（名字以「inkcpp defect, not patched」開頭；D1、D2b、D5 用自己的台本 `once.ink`、`sequence.ink`、`shuffle.ink`，主台本 `merchant.ink` 不碰它們）。inkcpp 修好時，只有那個測試會失敗。上游的回報由另一張卡做（2026-11-27 發出；證據在主 checkout 的 `build/evidence/gyo2-inkcpp-upstream/`，重現在其中的 `repro/`）。
 
-- **D1 跳過的選項的 tag 給了下一個選項**：一次性選項（`*`）已經選過、或條件為假時，`runner_impl.cpp:1554-1573` 在 `assign_tags` 之前就 `break`。已經算好的 tag 沒有被收走，於是跟到下一個選項上。line ID 的約定會因此拿錯。
-- **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。
-- **D3 第一次 `Advance` 之前存的檔，讀回來已經結束**。
-- **D4 tunnel 裡選完之後存的檔，inkcpp 說能遷移，搬到新版之後 tunnel 回到別的地方**（I4 設計審查發現）：`runner_impl::can_be_migrated`（`runner_impl.cpp:695-717`）不看堆疊上 tunnel 的返回點，`migrate_to`（`runner_impl.cpp:870-916`）也不清堆疊，`->->` 用舊版台本的位移返回。`snapshot.h` 自己寫的是 tunnel 用著時不能遷移，旗標和文件不一致。實例：商人台本 Haggle → Insist 之後存，讀進第二版，「No.」之後跑進「買劍」那條分支的尾巴，多出台詞「Here you go, friend.」和玩家沒選的指令 `play_sound(3)`。讀回**同一個**台本沒有這個問題。
+- **D1 跳過的選項的 tag 給了下一個選項**：一次性選項（`*`）已經選過、或條件為假時，`runner_impl.cpp:1554-1573` 在 `assign_tags` 之前就 `break`。已經算好的 tag 沒有被收走，於是跟到下一個選項上。line ID 的約定會因此拿錯。上游：[https://github.com/JBenda/inkcpp/issues/179](https://github.com/JBenda/inkcpp/issues/179)。
+- **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。上游：PR [https://github.com/JBenda/inkcpp/pull/176](https://github.com/JBenda/inkcpp/pull/176)（外部貢獻者提的修正，**OPEN、未合併**，d38608d 不含；回報卡判斷再開 issue 會重複，所以沒有另開）。
+- **D2b 選完之後存的檔，讀回時 sequence 回到開頭**（回報卡發現，沒有錯誤）：選完之後沒有待選的選項，snapshot 被標成可遷移；讀回時 inkcpp 照這個旗標走遷移的路，**連讀回同一個台本也一樣**。遷移的路只用名字找回 container 的拜訪次數，sequence 的 container 沒有名字，次數歸零（`globals_impl.cpp:271-279`、`:300`；回報卡讀碼推斷，未確認）。影響 stopping `{a|b}`、cycle `{&a|b}`、once `{!a|b}` 與 shuffle once；`{~a|b}` 的 shuffle 每次都重抽（D5），所以看不出來，`merchant.ink` 的存讀測試因此逐字接上。實例（`sequence.ink`）：選完後存，原本接著是「second」「two」，讀回是「first」「one」。上游：[https://github.com/JBenda/inkcpp/issues/178](https://github.com/JBenda/inkcpp/issues/178)。
+- **D3 第一次 `Advance` 之前存的檔，讀回來已經結束**。上游：[https://github.com/JBenda/inkcpp/issues/180](https://github.com/JBenda/inkcpp/issues/180)。
+- **D4 tunnel 裡選完之後存的檔，inkcpp 說能遷移，搬到新版之後 tunnel 回到別的地方**（I4 設計審查發現）：`runner_impl::can_be_migrated`（`runner_impl.cpp:695-717`）不看堆疊上 tunnel 的返回點，`migrate_to`（`runner_impl.cpp:870-916`）也不清堆疊，`->->` 用舊版台本的位移返回。`snapshot.h` 自己寫的是 tunnel 用著時不能遷移，旗標和文件不一致。實例：商人台本 Haggle → Insist 之後存，讀進第二版，「No.」之後跑進「買劍」那條分支的尾巴，多出台詞「Here you go, friend.」和玩家沒選的指令 `play_sound(3)`。讀回**同一個**台本沒有這個問題。上游：[https://github.com/JBenda/inkcpp/issues/181](https://github.com/JBenda/inkcpp/issues/181)。
+- **D5 shuffle 在同一輪裡可能重複同一個元素**（回報卡發現）：`Command::SEQUENCE`（`runner_impl.cpp:1686-1699`）丟掉編譯器給的 shuffle 編號，每次都用亂數挑（那裡的註解自己寫了還沒照 C# 版做）。ink 的 shuffle 每輪每個元素各出現一次；這裡可能重複，`{shuffle once: …}` 就會有元素永遠不出現。實例（`shuffle.ink`，台本自己 `SEED_RANDOM(21)`）：兩個元素拜訪兩次都是「y」，inklecate 是「y」再「x」。上游：[https://github.com/JBenda/inkcpp/issues/182](https://github.com/JBenda/inkcpp/issues/182)。
 
-**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。讀回同一個台本會逐字接上，tunnel 裡也一樣；讀進新版台本能遷移，但 tunnel 裡存的會遇到 D4（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」、D4 的測試）。使用者的決定（宣告 11.1 U5）：存檔時機照 inkcpp 作者在 #146 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存。這是**遊戲的規則**，adapter 不擋：在選項處存仍然回位元組，`Save` 把 `restorable` 標成 false（第 9 節，宣告 11.3 U7 (a)），`Restore` 讀它時回錯誤。D2、D4 由另一張卡回報 upstream，不打補丁。
+**能存的時間點**（這一版 inkcpp）：**沒有一個點對所有台本都對**。
+
+- 等選擇時存：台本有 sequence 就讀不回（D2）。
+- 選完之後、下一次 `Advance` 之前存：讀得回，但 stopping、cycle、once 的 sequence 回到開頭（D2b）。台本沒有這些 sequence 時逐字接上，tunnel 裡也一樣（測試「a save taken after a choice…」「…inside a tunnel…」）。讀進新版台本能遷移，但 tunnel 裡存的會遇到 D4。
+- 第一次 `Advance` 之前存：讀回已經結束（D3）。
+
+使用者原本的決定（宣告 11.1 U5 (3)）：存檔時機照 inkcpp 作者在 [#146](https://github.com/JBenda/inkcpp/issues/146) 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存，是**遊戲的規則**。D2b 讓這條對 sequence 不成立，**已交使用者重新決定**（主會話 2026-11-27 轉達，結果未出）。不管怎麼定，adapter 都不擋：哪裡存都回位元組，`Save` 照第 9 節標旗標，`Restore` 讀不回時回錯誤。所有缺陷都不打補丁。
 
 ## 9. `Save` 說的事（U7 (a)）
 
@@ -135,12 +143,13 @@ plugins/ink/
 
 | 存的時間點 | `restorable` | `migratable` |
 |---|---|---|
-| 選完之後、下一次 `Advance` 之前 | true | true |
+| 選完之後、下一次 `Advance` 之前 | true（台本有 stopping、cycle、once 的 sequence 時讀回內容不對：D2b） | true |
 | tunnel 裡選完之後 | true | true（D4：搬過去後 tunnel 回到別處） |
 | 等選擇，台本有 sequence（D2；tunnel 裡也一樣） | false | false |
 | 等選擇，台本沒有 sequence（`once.ink`） | true | false |
 | 第一次 `Advance` 之前（D3） | false | false |
 
+- **D2b 時 `restorable` 是 true，但讀回的內容不對**：試讀成功、`can_continue` 也相同，`Save` 看不出 sequence 回到開頭（D2b 的測試釘住這一點）。要看出來，得逐一比對拜訪次數，可是 inkcpp 不公開它們。另一個辦法是在 `Save` 裡讓試讀的對話往下跑、和原本的對話比文字，但只能比到下一個選項，更後面才用到的 sequence 看不到；而且每次存檔都要多跑一段台本（inkcpp 沒有步數上限，見「範囲の限界」）。所以現在沒有做，等使用者重新決定存檔時機（上一節）時一起看。
 - 只比 `can_continue`，不比選項的個數：這一版 inkcpp 沒有「讀回成功、往不往下跑相同、選項個數不同」的情形，比了也測不到（突變存活），所以拿掉。
 - 不支援的參數（U7 (d)）照程式核對過：list 參數丟例外，`Advance` 回 `ScriptFault`，不會被默默忽略（測試 `[ink-list-argument]`、突變 `ink-list-argument-accepted`）。無號數走同一條路，但 ink 的台本寫不出無號數，沒有測試。
 
@@ -152,7 +161,7 @@ plugins/ink/
 - **INK-4 thread 的契約**：同一個 `Story`、它的複本、從它開始或讀回的所有 `Dialogue` 是一家，同一時間只給一條 thread 用；交給別的 thread 時兩邊之間要有同步。各自讀進來的 `Story` 是不同的家。理由：inkcpp 的參照計數不是 atomic（`story_ptr.h:25`），沒有 `thread_local`，也沒有可寫的全域狀態。放進 World 時當一般 Resource（使用者 U4），不用 `threadBound`。守衛：`[ink-threads-apart]`、`[ink-threads-in-turn]`；同時碰同一家的情形是未定義行為，測不出可靠的失敗，由契約與審查負責。
 - **INK-5 `"C"` locale**：process 的 `LC_NUMERIC` 必須是 `"C"`（inkcpp 用 `snprintf("%.7f")` 寫浮點）。adapter 不檢查。守衛：`[ink-locale]`。
 - **INK-6 不假設單機**：adapter 裡沒有本地玩家、UI、輸入、視窗、牆鐘；`Beat`、`Choice` 是一般資料，可以複製給 Client；選項編號當不可信的輸入檢查（`ChoiceOutOfRange`）。守衛：審查。
-- **INK-7 `Save` 說讀不讀得回來**：`Saved::restorable` 是 `Save` 當場用同一個台本試讀一次的結果：試讀失敗（D2）或讀回已結束（D3）是 false。`migratable` 只在 `restorable` 時才可能是 true，值是 inkcpp 給的（D4 時是錯的，第 8 節）。位元組照給，留不留由作者決定。守衛：測試 `[ink-save-restorable]`、`[ink-save-migratable]`、`[ink-save-bytes]`；突變 `ink-save-restorable-unchecked`、`ink-save-place-uncompared`、`ink-save-migratable-from-restorable`、`ink-save-migratable-from-inkcpp`。
+- **INK-7 `Save` 說讀不讀得回來**：`Saved::restorable` 是 `Save` 當場用同一個台本試讀一次的結果：試讀失敗（D2）或讀回已結束（D3）是 false；讀回成功但 sequence 回到開頭（D2b）時仍是 true（第 9 節）。`migratable` 只在 `restorable` 時才可能是 true，值是 inkcpp 給的（D4 時是錯的，第 8 節）。位元組照給，留不留由作者決定。守衛：測試 `[ink-save-restorable]`、`[ink-save-migratable]`、`[ink-save-bytes]`；突變 `ink-save-restorable-unchecked`、`ink-save-place-uncompared`、`ink-save-migratable-from-restorable`、`ink-save-migratable-from-inkcpp`。
 
 ## Replacement Criteria
 
