@@ -27,6 +27,7 @@
 - [big-map-declaration.zh-Hant.md](big-map-declaration.zh-Hant.md)：大地圖線的事前宣告（分層重劃、別家對照、地圖來源、量測、loading、分段）與 S1、S2 小宣告（`v8-arch-gyo2-big-map`）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
 - [sdl.zh-Hant.md](sdl.zh-Hant.md)：SDL 的 Plugin（`plugins/sdl*`）——列與依賴、目錄的形、只建被選的 Plugin（`GYO_PLUGINS`）、SDL 3.4.0 的取得與補丁、Design Invariants SDL-1、SDL-2（子批 P `v8-arch-gyo2-sdl-p` 開頁；W、A、R2a 各自補）。
+- [ink.zh-Hant.md](ink.zh-Hant.md)：ink 的 Plugin（`plugins/ink`，`library_only`）——inkcpp d38608d 的取得、台本的工具端（inklecate 1.1.1）、對話的介面（台詞、選項、指令、種子、存讀與遷移）、錯誤、存檔的位元組、inkcpp 的缺陷 D1～D3、Design Invariants INK-1～INK-6 與 Replacement Criteria（`v8-arch-gyo2-ink-spike`，最終文字在合併前核准）。
 - [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：System 契約的說明頁——怎麼寫一個 System、錯誤怎麼回報、要注意的地方、生成的元件與寫者。寫的是 `claude/gyo2-mechanism` 上能跑的程式。
 - [diagrams/mechanism-runtime.svg](diagrams/mechanism-runtime.svg)：圖一，一個 Product 的機制全貌（11 月 11 日的圖，只換名字）。
 - [diagrams/control-plane-revised.svg](diagrams/control-plane-revised.svg)：圖二，基礎的 System 契約（11 月 11 日的圖，換名字並調整）。
@@ -96,6 +97,7 @@
 - [kernel-mutation-prune-report.zh-Hant.md](kernel-mutation-prune-report.zh-Hant.md)：`v8-arch-gyo2-mutation-prune` 的盤點與退役表（Kernel 突變清單 777 個的分類、退役候選與緩的面、增長判準草案；使用者 2026-11-18 核定，777 → 714）。
 - [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、退 51 個；使用者 2026-11-19 核准，714 → 663）。
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
+- [ink-spike-declaration.zh-Hant.md](ink-spike-declaration.zh-Hant.md)：`v8-arch-gyo2-ink-spike` 的事前宣告（Ink＋inkcpp 的單機 spike；第 11 節使用者的決定、第 12 節實作時發現的事）。
 
 ## dev_log
 
@@ -154,6 +156,7 @@
 - [2026_11_25_gyo2_big_map_s1_s2.zh-Hant.md](../../../dev_logs/2026_11_25_gyo2_big_map_s1_s2.zh-Hant.md)：大地圖線 S1 `voxel_map` Module 與 S2 可見性（`visibility` Module、`Queue3d` 依相機清單剔除）。
 - [2026_11_23_gyo2_sdl_i_image.zh-Hant.md](../../../dev_logs/2026_11_23_gyo2_sdl_i_image.zh-Hant.md)：SDL 線子批 I（`v8-arch-gyo2-sdl-i`；image Module＋stb_image v2.34 adapter，下載經使用者同意；Object_Connect 的 11 張 PNG 在本機載過、和獨立解碼器的像素總和一致）。
 - [2026_11_24_gyo2_model.zh-Hant.md](../../../dev_logs/2026_11_24_gyo2_model.zh-Hant.md)：model Module（`v8-arch-gyo2-model`；ufbx v0.23.1 adapter，下載經使用者同意；PvP 的 4 個 FBX 在本機載過：骨架 77／65／53、片段 43＋5、retarget 43/43）。
+- [2026_11_27_gyo2_ink_spike.zh-Hant.md](../../../dev_logs/2026_11_27_gyo2_ink_spike.zh-Hant.md)：Ink spike 的 I1、I2（`v8-arch-gyo2-ink-spike`）。
 
 ## 沒有搬過來的
 

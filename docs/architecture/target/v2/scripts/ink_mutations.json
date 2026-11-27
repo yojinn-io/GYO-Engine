@@ -1,0 +1,164 @@
+{
+ "version": 1,
+ "description": "Declared mutants of the ink Plugin (docs/architecture/target/v2/ink-spike-declaration.zh-Hant.md; docs/architecture/target/v2/ink.zh-Hant.md). A mutant is killed only when gyo_ink_tests fails with the expected message. Run with tests/common/mutation/run_mutations.py --build-dir <a build with the ink Plugin> --catalog docs/architecture/target/v2/scripts/ink_mutations.json.",
+ "mutants": [
+  {
+   "id": "ink-advance-uncaught",
+   "what": "Advance no longer catches inkcpp's exception: a story fault leaves the adapter as an exception",
+   "guards": [
+    "ink-spike-declaration 7.2"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        state.stopped = true;\n        state.outputs.clear();\n        return Base::Err(MakeError(DialogueErrorCode::ScriptFault, \"the story failed while running\"",
+   "replace": "        throw;\n        return Base::Err(MakeError(DialogueErrorCode::ScriptFault, \"the story failed while running\"",
+   "target": "gyo_ink_tests",
+   "expect": "THREW exception"
+  },
+  {
+   "id": "ink-stopped-not-kept",
+   "what": "A ScriptFault does not stop the dialogue: the next Advance runs inkcpp's reset runner again",
+   "guards": [
+    "ink-spike-declaration 7.2"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        state.stopped = true;\n        state.outputs.clear();",
+   "replace": "        state.outputs.clear();",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-stopped\\]"
+  },
+  {
+   "id": "ink-choice-range-unchecked",
+   "what": "Choose passes an index past the choices to inkcpp",
+   "guards": [
+    "ink-spike-declaration 7.2"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    if (index >= count) {",
+   "replace": "    if (false) {",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-choice-range\\]"
+  },
+  {
+   "id": "ink-args-popped-order",
+   "what": "A command's arguments are kept in inkcpp's pop order (last first)",
+   "guards": [
+    "ink-spike-declaration 5.4"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "for (std::size_t i = count; i-- > 0;) command.args.push_back(ReadArgument(values[i]));",
+   "replace": "for (std::size_t i = 0; i < count; ++i) command.args.push_back(ReadArgument(values[i]));",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-commands\\]"
+  },
+  {
+   "id": "ink-lookahead-safe",
+   "what": "Commands are bound as lookahead safe: inkcpp may run them while it looks past a line's end",
+   "guards": [
+    "ink-spike-declaration 5.4"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "            false); // not lookahead safe",
+   "replace": "            true); // not lookahead safe",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-commands\\]"
+  },
+  {
+   "id": "ink-empty-line-kept",
+   "what": "The empty line inkcpp gives before a choice point is handed on",
+   "guards": [
+    "ink-spike-declaration 5.3"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "if (!line.text.empty() || !line.lineId.empty() || !line.speaker.empty() || !line.tags.empty()) {",
+   "replace": "if (true) {",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-lines\\]"
+  },
+  {
+   "id": "ink-list-argument-accepted",
+   "what": "A list argument is handed on as a default value instead of failing",
+   "guards": [
+    "ink-spike-declaration 5.4"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    throw ink::ink_exception(\"a command argument is a list, which commands do not take\");",
+   "replace": "    return std::int32_t{0};",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-list-argument\\]"
+  },
+  {
+   "id": "ink-save-version-unchecked",
+   "what": "Restore no longer checks the save's format version",
+   "guards": [
+    "ink-spike-declaration 7.2"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    if (version != kSaveVersion) {",
+   "replace": "    if (false) {",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-save-unreadable\\]"
+  },
+  {
+   "id": "ink-seed-unset",
+   "what": "Start no longer seeds the runner: inkcpp's clock seed is used",
+   "guards": [
+    "ink-spike-declaration 7.1"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        state->runner->set_rng_seed(state->options.seed); // the runner seeds itself from the clock\n",
+   "replace": "",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-seed\\]"
+  },
+  {
+   "id": "ink-restore-reseeded",
+   "what": "Restore seeds the restored runner from the options instead of keeping the saved random state",
+   "guards": [
+    "ink-spike-declaration 7.1"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);\n",
+   "replace": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);\n        state->runner->set_rng_seed(state->options.seed);\n",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-restore\\]"
+  },
+  {
+   "id": "ink-migrated-inverted",
+   "what": "Restored::migrated says the opposite",
+   "guards": [
+    "ink-spike-declaration 7.3"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    const bool migrated = savedHash != ink.hash();",
+   "replace": "    const bool migrated = savedHash == ink.hash();",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-restore-migrated\\]|\\[ink-migrate-flag\\]"
+  },
+  {
+   "id": "ink-not-migratable-unchecked",
+   "what": "Restore goes on with the empty globals inkcpp gives for a save it cannot migrate",
+   "guards": [
+    "ink-spike-declaration 6.1",
+    "ink-spike-declaration 7.3"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        if (!state->globals) {",
+   "replace": "        if (false) {",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-not-migratable\\]|SIGSEGV|SIGBUS|THREW"
+  },
+  {
+   "id": "ink-restore-commands-unbound",
+   "what": "Restore does not bind the commands again (inkcpp keeps no bindings in a save)",
+   "guards": [
+    "ink-spike-declaration 5.4",
+    "ink-spike-declaration 7.3"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);\n        BindCommands(*state);",
+   "replace": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-restore\\]"
+  }
+ ]
+}

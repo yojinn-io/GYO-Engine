@@ -1,0 +1,137 @@
+# ink 的 Plugin（`plugins/ink`）
+
+更新：2026-11-27（新頁，`v8-arch-gyo2-ink-spike`）。由來：[事前宣告](ink-spike-declaration.zh-Hant.md)（使用者 2026-11-27「全部照推薦」，HANDOFF `v8-arch-gyo2-ink-spike-u1-u4`；動工前核准「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）。**最終文字在合併前核准。**
+
+Owner：架構。
+
+## 一個例子
+
+商人的台本（`plugins/ink/tests/data/merchant.ink`）。作者的 System 每幀呼叫一次 `Advance`，拿到三句台詞和四個選項。玩家選「買劍」（`Choose(0)`）之後，下一次 `Advance` 依台本的執行順序交出：
+
+- 指令 `give_item("sword", 2)`；
+- 台詞「Here you go.」；
+- 指令 `play_sound(3)`；
+- 回到 hub 的台詞與選項。
+
+作者的 System 把 `give_item` 變成自己的 `Message`（另一個 System 算進背包），把 `play_sound` 變成自己的 `Event`（observer 聽到）。Plugin 不知道這些型別（`plugins/ink/tests/SceneTests.cpp`）。存檔時呼叫 `Save` 拿到位元組，由作者放進自己的存檔。讀回時：
+
+- 台本沒換，接著跑的輸出和沒存讀時逐字相同（包括亂數）；
+- 台本換成第二版，`migrated` 是 true：舊的全域變數保留值，新的從預設值開始。
+
+## 1. 列與選擇
+
+- `config/plugins.csv` 的 `ink` 列：`library_only=yes`，不放進 World。`Story`、`Dialogue` 是一般的值，作者放進自己的 Resource 或 Component，由自己的 System 推進。
+- 沒被選的時候不 configure，inkcpp 不下載、不建，和 SDL-2 的機制相同。被選的途徑是 `GYO_PLUGINS`（CI 用 `ALL`）。
+- **未解決**：`gyo_product_units(... PLUGINS ...)` 只收「放進 World 的 Plugin」（`build/cmake/GyoUnitRegistry.cmake` 的 `gyo_unit_selection`）。`library_only` 的 Plugin 只能當別的 Plugin 的依賴被帶進來（`sdl` 就是這樣）。所以產品現在**沒有辦法自己選 `ink`**。spike 的測試自己連 `GYO::Ink`。第一個要用 ink 的遊戲開卡時，要在下面兩條路之間選一條：(a) 讓產品也能選 `library_only` 的 Plugin；(b) 給 `ink` 一個放進 World 的單位。
+
+## 2. 目錄的形
+
+```
+plugins/ink/
+├── CMakeLists.txt                       inkcpp 的 FetchContent、gyo_inkcpp（與測試用的 gyo_inkcpp_compiler）、GYO::Ink
+├── include/plugins/ink/Dialogue.hpp     對外的型別（遊戲的詞，沒有 inkcpp）
+├── src/adapters/inkcpp/Dialogue.cpp     唯一 include inkcpp 的產品程式
+└── tests/
+    ├── adapters/inkcpp/CompileStory.*   測試用：.ink.json → 位元組（inkcpp 的編譯器，在記憶體裡）
+    ├── DialogueTests.cpp、SceneTests.cpp、Render.hpp
+    └── data/*.ink、*.ink.json、regenerate.py
+```
+
+## 3. inkcpp 的取得
+
+- `FetchContent`，`GIT_REPOSITORY https://github.com/JBenda/inkcpp.git`，`GIT_TAG d38608dffe50de8b6c954419647a5185044fbeee`（釘 commit），`GIT_SUBMODULES ""`，`SOURCE_SUBDIR gyo-no-upstream-cmake`。
+- 不用 upstream 的 CMake：它的頂層會 `add_compile_options`，又會複製檔案到 `${CMAKE_BINARY_DIR}/unreal`。source 清單照 `inkcpp/CMakeLists.txt:3-56` 自己列。
+- `gyo_inkcpp`（runtime＋`shared/`）保留例外與 STL 介面，只被 `GYO::Ink` PRIVATE 連結。
+- `gyo_inkcpp_compiler` 只在 `BUILD_TESTING` 時建，只給測試。
+- inkcpp 自己原始碼的警告關掉（`-w`／`/w`）：那不是 GYO 要修的。
+- 本機用 `-DFETCHCONTENT_SOURCE_DIR_INKCPP=~/Code/GitHome/inkcpp`（同一個 commit），不下載。
+- 升版：改 `GIT_TAG`，source 清單照新版的 `inkcpp/CMakeLists.txt` 重對。第 8 節的缺陷測試會在修好的那一版失敗，那時把它們改成正面的測試。
+
+## 4. 台本：`.ink` → `.ink.json` → 位元組
+
+- inkcpp 的編譯器只讀 ink.json，**不能取代 inklecate**（宣告第 4 節）。
+- 流程：
+  1. 寫手寫 `.ink`。
+  2. 用 inklecate 1.1.1 產 `.ink.json`：`INKLECATE=<路徑> python3 plugins/ink/tests/data/regenerate.py`。腳本會去掉 inklecate 寫的 BOM。
+  3. `.ink` 和 `.ink.json` 兩個都提交。
+  4. 測試在記憶體裡用 inkcpp 的編譯器轉成位元組。CI 不需要 inklecate，也不需要 .NET。
+- inklecate 1.1.1 的 mac 版（`inklecate_mac.zip`，29,173,014 bytes，SHA256 和 inkcpp 的 `CMakeLists.txt` 記的一致）是 self-contained 的 x86_64 Mach-O，**不需要另外裝 .NET**（這台 Mac 沒有 `dotnet`，照樣能跑）。放在主 checkout 的 `build/tools/inklecate-1.1.1/`，git 不追蹤。linux 版、windows 版沒有下載、沒有試。
+- `.ink` 和 `.ink.json` 是否一致，CI 檢查不到。產生方式只有 `regenerate.py` 一種，兩個檔在同一個變更裡一起改。
+- 正式的管線（工具烘焙位元組、asset loader 讀）等遊戲要用時再開卡。
+
+## 5. 介面
+
+型別在 `Dialogue.hpp`。
+
+- `LoadStory(bytes)` → `Story`。不可變，複製的都共用同一份。
+- `Dialogue::Start(story, options)` → `Dialogue`。move-only，會讓它的 Story 一直活著。
+- `Advance()`：一直跑到出現選項或結束，交出 `Beat`，內容是：
+  - `outputs`：台詞與指令，照台本的執行順序；
+  - `choices`：選項；
+  - `ended`：是否結束。
+
+  台本在等選擇時再呼叫，`outputs` 是空的、`choices` 不變。inkcpp 在選項前會多給一個空行；沒有文字也沒有 tag 的行不交出去。
+- `Choose(i)`：`i` 是上一個 `Beat` 的第幾個選項。
+- tag：`<lineIdTag>:<id>`（預設 `line`）放進 `lineId`，`<speakerTag>:<id>`（預設 `speaker`）放進 `speaker`，其餘照順序放進 `tags`。沒有 line ID 不算錯誤，`lineId` 是空字串；「每行都有 ID」是寫作的約定，由測試檢查台本。
+  - **選項的 tag 要寫在 `[...]` 裡面**（`* [Buy a sword #line:hub_buy]`）。寫在 `]` 之後，照 ink 的語法是選了之後那段輸出的 tag。
+- 指令：`options.commands` 裡的每個 EXTERNAL 都用 inkcpp 的陣列呼叫綁定，參數個數不限，`lookaheadSafe=false`（只在台本走到時執行一次）。參數照台本寫的順序（inkcpp 從堆疊彈出，`values[0]` 是最後一個，adapter 會反過來）。字串參數當場複製。參數可以是 bool、int、float、string，list 是 `ScriptFault`。指令沒有回傳值。
+- `Save()` → 位元組；`Restore(story, bytes, options)` → `Restored{dialogue, migrated}`。`Restore` 不用 `options.seed`，亂數狀態來自存檔。指令在 `Restore` 時重新綁定：inkcpp 的存檔裡沒有綁定。
+
+## 6. 錯誤（`DialogueErrorCode`）
+
+| 種類 | 什麼時候 | 之後的狀態 |
+|---|---|---|
+| `NotAStory` | `LoadStory` 的位元組不是 inkcpp 的台本（magic、byte order、版本不符、被截斷） | 沒有 `Story` |
+| `ScriptFault` | 執行時 inkcpp 丟例外：EXTERNAL 沒綁又沒有 fallback、list 參數、壞掉的指令 | inkcpp 把 runner 整個 reset（`runner_impl.cpp:1736-1741`），這段對話停了 |
+| `Stopped` | 對話因 `ScriptFault` 停了之後，又呼叫 `Advance`、`Choose`、`Save` | 不變 |
+| `ChoiceOutOfRange` | `Choose(i)` 的 `i` 超出範圍（detail 是 `index i, n choices`） | 不變，可以再選 |
+| `SnapshotUnreadable` | `Restore` 的位元組不是存檔：太短、格式版本不符、inkcpp 讀不出來（含第 8 節的 D2） | 沒有 `Dialogue` |
+| `SnapshotNotMigratable` | 存檔來自另一版台本，而且存的當下不能遷移（例：在 tunnel 裡等選擇） | 沒有 `Dialogue` |
+
+- 每個進入點都接 inkcpp 的例外（STL 版的 `ink::ink_exception` 就是 `std::runtime_error`），把訊息複製進 `detail`。`std::bad_alloc` 不接。
+- 怎麼處理（重開、讀舊檔、記日誌）是作者的。
+
+## 7. 存檔的位元組
+
+- 開頭 8 bytes：格式版本（`u32`，little endian，現在是 1）和台本的 hash（`u32`，little endian）。hash 用來判斷台本換過沒有（`migrated`）。
+- 後面是 inkcpp 的 snapshot，格式是 inkcpp 內部的：
+  - 用本機的位元組順序和 `size_t`。三個 L1 平台都是 64 位元、little endian，所以能互讀。這一點沒有測試。
+  - snapshot 自己帶版本號（`snapshot_impl.h` 的 `header.version`）。升 inkcpp 之後版本號不同的舊檔，`Restore` 回 `SnapshotUnreadable`；版本號相同但內部格式變了的情形，inkcpp 不檢查。
+- inkcpp 讀台本或 snapshot 時，先讀固定長度的 header，之後才檢查長度。所以 adapter 會先把太短的位元組複製進至少 256 bytes 的緩衝區（其餘填 0，沒有 header 會接受全 0）。台本 header 的大小由 `static_assert` 確認。snapshot 的 header 是 inkcpp 私有的，大小只寫在註解。
+- 內容損壞但 header 正確的 snapshot，inkcpp 不完全檢查；那是未定義行為，不在契約內。
+
+## 8. inkcpp d38608d 的缺陷（沒有打補丁）
+
+三個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住。inkcpp 修好時，那個測試會失敗。
+
+- **D1 跳過的選項的 tag 給了下一個選項**：一次性選項（`*`）已經選過、或條件為假時，`runner_impl.cpp:1554-1573` 在 `assign_tags` 之前就 `break`。已經算好的 tag 沒有被收走，於是跟到下一個選項上。line ID 的約定會因此拿錯。
+- **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。
+- **D3 第一次 `Advance` 之前存的檔，讀回來已經結束**。
+
+**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。tunnel 裡也可以，讀回同一個台本會逐字接上，讀進新版台本也能遷移（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」）。在選項處存要等 D2 有結論。要打補丁、回報 upstream、還是限制存檔點，交使用者決定（宣告第 12 節）。
+
+## Design Invariants
+
+- **INK-1 inkcpp 只在 adapter 目錄**：inkcpp 的標頭只被 `plugins/ink/src/adapters/inkcpp/` 與 `plugins/ink/tests/adapters/inkcpp/` 底下的檔案 include。`Dialogue.hpp` 沒有 inkcpp 的型別，`gyo_inkcpp` 是 PRIVATE 連結。守衛：審查（沒有原始碼掃描）。
+- **INK-2 錯誤是 `Result`，只說發生了什麼**：每個進入點都接 inkcpp 的例外，翻成第 6 節的種類，process 不會因為台本而結束。守衛：測試（7.2 的各案）、突變 `ink-advance-uncaught`、`ink-stopped-not-kept`、`ink-choice-range-unchecked`、`ink-list-argument-accepted`、`ink-save-version-unchecked`、`ink-not-migratable-unchecked`。
+- **INK-3 狀態由外面控制**：亂數的種子由 `DialogueOptions::seed` 給（預設是固定值，不是時鐘）；`Restore` 用存檔裡的亂數狀態；存讀是位元組，交給作者。守衛：`[ink-seed]`（釘住的文字，三平台一樣）、`[ink-restore]`；突變 `ink-seed-unset`、`ink-restore-reseeded`、`ink-migrated-inverted`、`ink-restore-commands-unbound`。
+- **INK-4 thread 的契約**：同一個 `Story`、它的複本、從它開始或讀回的所有 `Dialogue` 是一家，同一時間只給一條 thread 用；交給別的 thread 時兩邊之間要有同步。各自讀進來的 `Story` 是不同的家。理由：inkcpp 的參照計數不是 atomic（`story_ptr.h:25`），沒有 `thread_local`，也沒有可寫的全域狀態。放進 World 時當一般 Resource（使用者 U4），不用 `threadBound`。守衛：`[ink-threads-apart]`、`[ink-threads-in-turn]`；同時碰同一家的情形是未定義行為，測不出可靠的失敗，由契約與審查負責。
+- **INK-5 `"C"` locale**：process 的 `LC_NUMERIC` 必須是 `"C"`（inkcpp 用 `snprintf("%.7f")` 寫浮點）。adapter 不檢查。守衛：`[ink-locale]`。
+- **INK-6 不假設單機**：adapter 裡沒有本地玩家、UI、輸入、視窗、牆鐘；`Beat`、`Choice` 是一般資料，可以複製給 Client；選項編號當不可信的輸入檢查（`ChoiceOutOfRange`）。守衛：審查。
+
+## Replacement Criteria
+
+- **RC-INK1**：第 8 節的 D2 讓需要的存檔點存不了（例：遊戲要在選項處存檔）→ 在「給 inkcpp 打補丁」「回報 upstream 等修」「換 runtime」之間選。
+- **RC-INK2**：第二個遊戲要用台本，或遊戲需要「放進 World 的對話單位」→ 重看第 1 節的「未解決」與宣告的 Q5（多後端）。
+- **RC-INK3**：遊戲需要有回傳值的外部函式、或要讀寫 ink 變數 → 在「query 回呼」和「遊戲寫 ink 變數」之間選（宣告第 5.4 節）。
+- **RC-INK4**：第二種語言 → 字串表（研究 Q4，line ID 的約定已定）。
+
+## 範囲の限界
+
+- 本機只在 Intel Mac 跑過（一般建置，以及 ASan＋UBSan 的 Debug 建置）。Windows、Linux 的編譯與測試只靠 L1。
+- ASan：23 案沒有記憶體錯誤（macOS 上沒有開 leak 檢查）。UBSan 報了 6 種，全部在 inkcpp 裡（adapter 沒有）：讀位元組碼時位址沒有對齊（`runner_impl.cpp:179`、`story_impl.cpp:263`），以及在 null 指標上加位移（`array.h:277`、`runner_impl.h:397`、`snapshot_interface.h:33`、`list_table.cpp:956`）。在 x86-64 與 arm64 上照樣能跑；沒有打補丁。
+- 存檔在三平台之間能不能互讀，沒有測試（第 7 節）。
+- 「位元組太短時讀出界」這件事，只有 ASan 抓得到，一般建置的突變殺不掉，所以沒有放突變。
+- `ink_assert` 帶格式參數時 `malloc` 的訊息不會釋放（`shared/public/system.h:258-261`）：每次 `ScriptFault` 漏一小段。沒有打補丁。
+- `.ink` 與 `.ink.json` 的一致性 CI 不檢查（第 4 節）。
+- SDL-2 那種「拿掉 Plugin 之後重建」的 CI 步驟，只對 `sdl` 這一家做，`ink` 沒有做。

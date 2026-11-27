@@ -1,7 +1,7 @@
 # 事前宣告：Ink spike（`v8-arch-gyo2-ink-spike`）
 
-更新：2026-11-27（修訂 1：補第 11 節「使用者的決定」）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
-**狀態：事前宣告；第 10 節的決定點已由使用者決定（第 11 節）。開始實作等主會話另外通知。**
+更新：2026-11-27（修訂 2：使用者「開始」、補第 12 節「實作時發現的事」；修訂 1：補第 11 節「使用者的決定」）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
+**狀態：動工前核准（使用者「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）；I1、I2 已實作，第 12 節有要交使用者決定的事。**
 
 **核心一句**（每一項都拿來對照）：**這一批驗的是「inkcpp 能不能照 gyo2 的根接進來」：外部組件的型別只在 adapter 裡，對外用遊戲的詞；錯誤用 `Result` 告訴外面發生了什麼，不替外面決定；狀態（亂數、存讀、thread）由外面控制。台本怎麼寫、指令代表什麼、存檔怎麼放，是作者的。**
 
@@ -332,3 +332,35 @@ v8-arch-gyo2-ink-spike
 - **U4**：「同一個 Story 不能同時給兩處用」，當一般 Resource 處理，不用 `threadBound`（第 7.4 節）。
 - **卡片判、使用者沒有推翻的**：Plugin 名 `ink`、`library_only`（5.5）；只做沒有回傳值的指令（5.4）；沒有 line ID 不算錯誤（6.2）；locale 寫成契約（7.5）；`Restore` 用快照的亂數狀態（7.1）。
 - 開始實作（I1）等主會話另外通知；合併等使用者說「合併」。
+
+## 12. 實作時發現的事（I1、I2，2026-11-27）
+
+細節與程式位置在 owner 頁 [ink.zh-Hant.md](ink.zh-Hant.md)。
+
+### 12.1 照宣告做到的
+
+- 7.1～7.5 都有外部可驗的測試（`ink.dialogue`，23 案）。
+- 場景照 U1 的 C 做（`SceneTests.cpp`）：Product＋一個 World，作者的 System 把 `give_item` 變成 `Message`，把 `play_sound` 變成 `Event`。
+- 突變 13 個，13/13 killed（`docs/architecture/target/v2/scripts/ink_mutations.json`）。
+- inklecate：
+  - 下載了 `inklecate_mac.zip`，29,173,014 bytes，SHA256 與宣告一致。
+  - 它是 self-contained 的 x86_64 程式，**不需要 .NET**。
+  - 沒有其他下載：本機用已有的 inkcpp clone，其他依賴用別的工作樹已經抓好、版本相同的來源。
+
+### 12.2 和宣告不同的地方（卡片判）
+
+- **存檔多了 8 bytes 的開頭**：格式版本和台本的 hash。
+  - 為什麼要 hash：inkcpp 的 snapshot 不對外露出 hash，`Restored::migrated` 只能自己記。
+  - 先寫了 4 bytes 的 magic，突變顯示它多餘（格式版本與 inkcpp 的 header 已經擋掉同樣的位元組），所以拿掉了。
+- **短位元組的緩衝**：inkcpp 讀台本或 snapshot 時，先讀固定長度的 header、之後才檢查長度。adapter 先複製進至少 256 bytes、其餘填 0 的緩衝區（owner 頁第 7 節）。
+- **inkcpp 的例外**：STL 版的 `ink::ink_exception` 就是 `std::runtime_error`，不是第 6.2 節以為的「自己的類別」。接法不變。
+- **空行**：inkcpp 在選項前多給一個沒有文字也沒有 tag 的行，adapter 不交出去。
+- **選項的 tag 寫在 `[...]` 裡面**：寫在 `]` 之後，照 ink 的語法是選了之後那段輸出的 tag。fixture 照這樣寫。
+
+### 12.3 要交使用者決定的事
+
+| # | 事 | 選項 | 卡片的建議 |
+|---|---|---|---|
+| U5 | **inkcpp 的存檔缺陷 D2**：在選項處存的檔，只要台本裡有任何 sequence（`{a\|b}`、`{&…}`、`{!…}`、`{~…}`），連讀回同一個台本都失敗（`globals_impl.cpp:294-297`）。能存的點是「選完之後、下一次 `Advance` 之前」。D1（跳過的選項的 tag 給了下一個選項）、D3（第一次 `Advance` 前存的檔讀回已結束）比較輕 | (a) 現在不處理，把能存的點寫進契約（現狀）；(b) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍）；(c) 先回報 upstream，等遊戲真的要在選項處存檔時再決定（RC-INK1） | (c)：spike 沒有遊戲在用；三個缺陷各有釘住現狀的測試，inkcpp 修好時測試會失敗、提醒我們改 |
+| U6 | **產品選不了 `library_only` 的 Plugin**：`gyo_product_units(... PLUGINS ...)` 只收放進 World 的 Plugin，`ink` 現在只能經 `GYO_PLUGINS` 選。spike 的測試自己連 `GYO::Ink` | (a) 等第一個用 ink 的遊戲開卡時再定；(b) 現在就讓產品能選 `library_only` 的 Plugin（改建置層，擴大範圍）；(c) 給 `ink` 一個放進 World 的單位（推翻 `library_only`） | (a) |
+
