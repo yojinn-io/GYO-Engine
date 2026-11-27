@@ -39,6 +39,13 @@ Owner：模式配置的任務卡。分支 `claude/gyo2-mode-config-declaration`�
 
 - 第一次 dispatch（run 45971988646，head `797471c1`）：windows-x64 過；linux-x64 有 1 項失敗：`object_fps_pvp.client.3` 的 `client: single player: the room, a game without a server...` 在 `[pvp-solo-playing]`（只等 60 幀讓地圖讀完）。本機重現不了（單跑、同時 12 份與 40 份都過）。判斷：拆成 4 段之後，CI 上 4 個 client 程序和其他測試並行、地圖檔第一次讀，資產執行緒慢於 60 幀。改成和 `Setup::Loaded` 一樣的等法（最多 2000 幀、每幀 1 ms），斷言不動。**沒有重現就改**，記為未確認的原因。
 
+## Linux（使用者「桌面登錄了，s5可以開始了」）
+
+- 先「linux啟動了」、再「先把linux reboot 一次」（桌面卡死）、最後重開好才開始；全部在重開後的新開機上跑。只寫 Linux 的 `~/Code/gyo2-mode-config`（repo 從 git bundle 來，不從 GitHub 拉）；S5 的舊資料夾只讀。
+- A/B：權威 digest 1257 行相同，報告的差異同 macOS。
+- S5 `load`：數字與讀法在宣告 11.4。和 17.8 的基準比 Match 慢 3.5～4.9%，但同日的改前也慢 3.3～3.6%；同日交錯四組，改後平均 +50 ms（+1.3%），原因未找到，交使用者（U4）。
+- 第 1 次作廢：`pkill -f` 比對到 `/usr/bin/time` 自己。腳本改成讓 Match 閒置 5 秒自己結束。
+
 ## 待補
 
-（Linux 的 A/B 與 S5、L1 的結果。）
+（L1 第二輪的結果。）

@@ -370,11 +370,25 @@ v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
 - 突變：新增 27 個（模式、組、digest 涵蓋、審查處置），find 改寫 5 個既有的，加上鄰近既有的 5 個，全部 killed（結果在 dev_log）。
 - 第 9 節的未確認「不存在的 Resource 不會被送出」：測試確認（`[pvp-set-off-sent]`）。
 
-### 11.4 還沒做的（第 4 步的 Linux 部分）
+### 11.4 Linux 主機（第 4 步；使用者「桌面登錄了，s5可以開始了」，重開後的新開機）
 
-- Linux 主機的 A/B 與 S5 `load`：等使用者開主機（已經主會話轉問）。
-- `BoxSet` digest：這條線沒有改讀圖與建牆的程式（`ArenaLoad`、`ArenaMap`、`LoadArena` 不在 diff 裡），Match 的 log 也不印 digest。改用 S5 `load` 時 Client 與 Match 沒有 `ContentMismatch`（Walls）來確認。
-- L1：手動 dispatch 的 run 在跑。
+Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；腳本 `build/evidence/gyo2-mode-config/linux.sh`，結果 `linux/summary.txt`。
+
+- **A/B**：權威 digest 1257 行逐位元組相同；報告的差異和 macOS 相同（只有 `MatchInfo` 的 Codec 版本與 protocol hash）。
+- **S5 `load`**（1 km 的 `s5_synth_2000`，真的 Match 與 Client，Client 用 SDL offscreen 連同一台的 Match）：
+
+| | 基準（17.8） | 改後 run2／run3 | 同日對照：改前（4 次） | 同日對照：改後（4 次） |
+|---|---|---|---|---|
+| Match 讀圖＋建牆 | 3,674～3,686 ms | 3,805／3,865 ms | 3,777～3,817 ms（平均 3,801） | 3,830～3,874 ms（平均 3,851） |
+| Match 峰值 RSS（`/usr/bin/time`） | 597～602 MB | 601／599 MB | 597～599 MB | 599～600 MB |
+| Client 讀圖 | 3,950～3,963 ms | 3,950／3,996 ms | 3,934～3,957 ms | 3,932～3,945 ms |
+
+- 讀法：
+  - 和 17.8 的基準比，Match 慢 3.5～4.9%；但**同一天的改前也慢了 3.3～3.6%**（3,777～3,817 ms），大部分是機器狀態（重開後），不是這條線。
+  - 同日、交錯跑的四組（改前、改後輪流）：改後每一組都比改前慢 32～66 ms，**平均約 +50 ms（+1.3%）**；峰值 RSS 多約 1.5 MB；Client 沒有差別。
+  - 原因沒有找到：計時從 Product 建好之後開始（不含讀模式檔），讀圖、建牆的程式（`ArenaLoad`、`ArenaMap`、`LoadArena`）不在 diff 裡；生成期間每幀多的只有 `ActiveMode` 一個 Resource 與空的組表。兩個執行檔的程式碼排列不同造成的可能性有，**未確認**。照宣告第 5 節「不比基準差」的字面，這 1.3% 是差了：交使用者決定（11.6 U4）。
+- 第 1 次 `load` 作廢（`linux/discarded/`）：收 Match 的 `pkill -f` 也比對到包著它的 `/usr/bin/time`，峰值 RSS 沒寫出來；改成讓 Match 在玩家離開 5 秒後自己結束。
+- `BoxSet` digest：沒有逐數比（Match 的 log 不印 digest；讀圖與建牆的程式不在 diff 裡）。每一次 `load` 都沒有 `ContentMismatch`（Walls），Client 與 Match 的牆一致。
 
 ### 11.5 審查的處置
 
@@ -408,3 +422,4 @@ v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
 | **U1** | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
 | **U2** | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
 | **U3** | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |
+| **U4** | S5：同日交錯量，改後的 Match 讀圖比改前慢約 50 ms（+1.3%，四組都慢 32～66 ms）；RSS 多約 1.5 MB；Client 不變；原因未找到（讀圖、建牆的程式沒改） | (a) 接受，回歸基準更新成今天的數字（改後 3,830～3,874 ms／599～600 MB），記為未確認的原因 (b) 先追原因再合併（在 Linux 上對兩版取 profile，估 1～2 小時） | 交你判斷。卡片的看法：慢的那段程式沒有改，像是排列的雜訊，但四組同方向、沒有證據，所以不替你選 |
