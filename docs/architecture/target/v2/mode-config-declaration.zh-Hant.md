@@ -420,9 +420,9 @@ Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；�
 | # | 問題 | 選項 | 推薦 |
 |---|---|---|---|
 | ~~**U1**~~（已定，11.7） | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
-| **U2** | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
-| **U3** | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |
-| **U4** | S5：同日交錯量，改後的 Match 讀圖比改前慢約 50 ms（+1.3%，四組都慢 32～66 ms）；RSS 多約 1.5 MB；Client 不變；原因未找到（讀圖、建牆的程式沒改） | (a) 接受，回歸基準更新成今天的數字（改後 3,830～3,874 ms／599～600 MB），記為未確認的原因 (b) 先追原因再合併（在 Linux 上對兩版取 profile，估 1～2 小時） | 交你判斷。卡片的看法：慢的那段程式沒有改，像是排列的雜訊，但四組同方向、沒有證據，所以不替你選 |
+| ~~**U2**~~（已定，11.7） | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
+| ~~**U3**~~（已定，11.7） | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |
+| ~~**U4**~~（已定，11.7） | S5：同日交錯量，改後的 Match 讀圖比改前慢約 50 ms（+1.3%，四組都慢 32～66 ms）；RSS 多約 1.5 MB；Client 不變；原因未找到（讀圖、建牆的程式沒改） | (a) 接受，回歸基準更新成今天的數字（改後 3,830～3,874 ms／599～600 MB），記為未確認的原因 (b) 先追原因再合併（在 Linux 上對兩版取 profile，估 1～2 小時） | 交你判斷。卡片的看法：慢的那段程式沒有改，像是排列的雜訊，但四組同方向、沒有證據，所以不替你選 |
 
 ### 11.7 使用者的決定（合併前）
 
@@ -436,3 +436,51 @@ Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；�
 - 不一致：`MismatchKind::Character`，原因「the character differs from the Match's (character digest: skeleton, clips, hit shapes)」；比對順序 Mode → Rules → Character → Arena → Walls。角色不同不重建（同一個 Client 沒有別的角色），帶原因回大廳。
 - 檢驗：本機 `object_fps_pvp.*` 15 項與 Go 全過；A/B（macOS）權威 digest 仍相同，報告差異是 `MatchInfo` v2 → v4；突變 27 個全部 killed。Linux 的 A/B 與 S5 沒有重跑（`MatchInfo` 多 8 bytes，讀圖與權威的程式不變）。
 - 測試：world `[pvp-character-mismatch]`、`[pvp-character-reason]`（Client 的角色不同被擋下、原因看得出來；一致時連上的情況由既有的各案涵蓋）；`world: the character digest follows...`（模型 id、骨架、clip、動畫規則、命中形狀各改一個值，digest 都變）；client `[pvp-character-left]`（回大廳、狀態列有原因）。
+
+**U2**（出處 HANDOFF `v8-arch-gyo2-mode-config-u2`）：選 **(b)**，Kernel 的 run condition 要能帶值。原話：「選（b），因為現在，我們要做的就是建立機制。如果機制不成熟，第二個遊戲以上，改起來就是同時要改幾個產品，給別人用。別人要不改遊戲，要不自己得做機制去繞，現在最便宜。」比過的是 (a) 遊戲層用 slot 表先頂（卡片原本的推薦）。主會話排法：在 #367 加「Kernel 步」（第 12 節），做完把遊戲層的 slot 表換成它。
+
+**U3**（出處 HANDOFF `v8-arch-gyo2-mode-config-u3`）：選 **(a)**，房間服務不檢查（模式, 地圖）的組合：大廳只列模式能玩的地圖，選錯時 Match 以 exit 2 拒絕，服務維持「只帶選擇」。比過的是 (b) 房間服務讀「模式 → arena」、建房時拒絕。原話：「這東西在在策劃階段就應該決定，而不是在執行期判斷。我會選（a），另外遊戲規則也不應該綁定地圖。地圖可以適應規則而不應該決定規則。」
+
+- **原則**：遊戲規則不綁定地圖；地圖去適應規則，不由地圖決定規則。
+- **後續批 `v8-arch-gyo2-arena-rules-split`**（#367 合併後、W1 之前；主會話排，**不在 #367 做**）：`ArenaContent`（arena 檔 version 4）裡的規則類欄位（`movementSpeed`、`jumpHeight`、`gravity`、`fallDamage`）與身體尺寸（`bodyHeight`、`radius`、`eyeHeight`）照原則拆出去；哪個欄位歸模式的規則表、角色資料或 arena，開批時照原則與別家的分類提出。
+- #367 新寫的程式不讀 arena 的規則類欄位（`LoadModes` 只對模式玩的 arena 呼叫既有的 `StanceFits`，那是 #367 之前就有的依賴，沒有加深）。
+
+**U4**（出處 HANDOFF `v8-arch-gyo2-mode-config-u4`）：選 **(b)**，先在 Linux 上對兩版追 Match 讀圖慢約 50 ms 的原因。原話：「選（b），Linux的量測成本最小，機器就放在哪裡。而且這個問題不卡進度，追出來可以修改，追不出來還能改回歸基準，沒有害處。」比過的是 (a) 接受、基準更新成今天的數字。做法：先確認差距能重現再找原因；時間盒約 3 小時；追出原因就修，追不出來就把基準更新成同日改後的數字並寫明原因未確認。`perf` 要 sudo 或改 `perf_event_paranoid` 時不自己改。結果寫在 11.8。
+
+## 12. Kernel 步：帶值的 run condition（U2；小宣告）
+
+**前提：這是 Engine 要解決的。** 條件的型別是 Kernel 的公開介面；作者在遊戲層繞，就得像 2.4 那樣寫 slot 模板表（每個產品各一份、上限是寫死的數字）。上段（Kernel 的公開介面）：Opus／high。
+
+### 12.1 成熟方案
+
+| 什麼 | 位置 | 怎麼做 |
+|---|---|---|
+| Bevy `resource_exists<T>` | `crates/bevy_ecs/src/schedule/condition.rs:688`（`bevy` 6a911653f） | `Option<Res<T>>`：有就 true |
+| Bevy `resource_equals<T>(value)` | `condition.rs:728` | 回傳 `move \|res: Res<T>\| *res == value` 的閉包：值在登記時捕獲；沒有 Resource 時 panic |
+| Bevy `resource_exists_and_equals<T>(value)` | `condition.rs:770` | 同上、`Option<Res<T>>`，沒有就 false |
+| Bevy 條件的形狀 | `run_if` 收任何 `IntoSystem<(), bool>` | 閉包可以捕獲任何東西（`FnMut`，可變） |
+| flecs 的 system `ctx` | `include/flecs/addons/system.h:170`；`ecs_iter_t::ctx`（`include/flecs.h:1223`）（`flecs` 09790b5f7） | 登記時給一份使用者資料，每次呼叫交給 callback |
+| Unity `RequireForUpdate<T>()` | `Unity.Entities/SystemState.cs:1115`（`com.unity.entities` 1.5.0） | 只有「存在」；值的比較寫在 System 裡（`ISystem` 是 struct，欄位就是狀態） |
+
+共同點：三家都讓「判斷用的值」跟著登記走（Bevy 捕獲、flecs `ctx`、Unity 的 System 欄位）。
+
+### 12.2 GYO 的介面（提案）
+
+- **`Condition<&Fn>(name, value)`**：`Fn` 的第一個參數是 `const V&`，就是登記時給的那個值（複製一份、之後不變）；其餘參數照現有條件的規則（唯讀、存取從簽名推，S-4、S-5）。可呼叫物本身仍是非成員函式、無捕獲。
+- **Kernel 給三個常用條件，照 Bevy 的名字與語意**：
+  - `ResourceExists<R>(name)`：有值就 true。
+  - `ResourceEquals<R>(name, value)`：`*res == value`；沒有 Resource 時是斷言，對應 Bevy 的 panic（`Res` 的取值本來就斷言）。
+  - `ResourceExistsAndEquals<R>(name, value)`：沒有就 false。
+  - `R` 要有 `operator==`。
+- **指紋**：值的雜湊進 consistency fingerprint（`V` 要有 `HashValue`）。兩端同名、不同值時指紋不同。Bevy 沒有指紋，這是 GYO 自己的部分：不收的話，名字相同、值不同的兩端會照樣連上、跑出不同的 System。
+- **內部**：`ConditionRef` 多持一份不可變的值（`std::shared_ptr<const void>`）與它的雜湊；求值函式多收那份值。rollback 用 `Evaluator()` 的指標認條件（`engine/modules/rollback/src/Registrations.cpp:194`）照舊可用：求值函式仍是每個 `Fn` 一個指標。
+- **遊戲層**：2.4 的 slot 模板表與 `kMaxGameplaySets` 拿掉；`GameplaySetOn` 改成 `Condition<&SetOn>("pvp.mode.<組>", slot)`，`ActiveMode::on` 改成不限數量。
+
+### 12.3 和 Bevy 的不同、要改的條文（停下回報的原因）
+
+- **偏離 Bevy 一處**：Bevy 的條件可以捕獲任何東西、而且可變（`FnMut`）；這裡只收**一個登記時給定、之後不變的值**。理由是保住 Kernel 的契約「捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道」（`docs/architecture/target/system-contract.zh-Hant.md:45`）：不變的值是登記的一部分（和 `StateMachine::InState<S, V>` 的模板參數同一個角色，差別是執行期才知道），不是狀態。
+- **要改的條文**（改前給使用者看）：
+  - `docs/architecture/target/kernel.zh-Hant.md:19`（併自 system-contract DI 1、DI 3）：「可呼叫物是非成員函式或無捕獲 lambda……有捕獲的 lambda……編譯失敗。」後面加一句：「run 條件可以帶一個登記時給定的值（`Condition<&Fn>(name, value)`：複製一份、唯讀，值的雜湊進 consistency fingerprint）；可呼叫物本身仍無捕獲。」
+  - `system-contract.zh-Hant.md:59` 的 API 表加 `Condition<&Fn>(name, value)` 與三個 Resource 條件。
+  - 有捕獲的 lambda 仍然編譯失敗（不改）。
+- **測試（外部可驗）**：`tests/common/kernel/` 加帶值條件的案：值相等、不相等、Resource 不存在（`ResourceExistsAndEquals` 是 false；`ResourceEquals` 是斷言）三種行為；同名不同值的兩個 World 指紋不同、同值相同；遊戲層 `[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。相關突變：值不進指紋、相等的比較反過來、不存在時回 true。
