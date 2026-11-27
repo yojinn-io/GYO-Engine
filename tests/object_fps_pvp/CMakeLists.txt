@@ -57,6 +57,22 @@ add_test(NAME object_fps_pvp.world COMMAND gyo_object_fps_pvp_world_tests "--tes
 set_tests_properties(object_fps_pvp.world PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 
+# The core PvP script (mode-config declaration, section 5): the game's three ends play a fixed sequence of inputs and
+# print every World's authority digest at every frame. The A/B of a change runs the build before it and the build
+# after it on one machine and compares the lines; here it runs with --check: it went through every path it is for.
+add_executable(gyo_object_fps_pvp_core_script script/CorePvpScript.cpp)
+target_link_libraries(gyo_object_fps_pvp_core_script PRIVATE ${object_fps_pvp_world})
+gyo_product_units(gyo_object_fps_pvp_core_script MODULES physics_3d)
+target_compile_definitions(gyo_object_fps_pvp_core_script PRIVATE PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp")
+if(MSVC)
+    target_compile_options(gyo_object_fps_pvp_core_script PRIVATE /W4 /permissive- /utf-8 /bigobj)
+    target_compile_definitions(gyo_object_fps_pvp_core_script PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_object_fps_pvp_core_script PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME object_fps_pvp.core_script COMMAND gyo_object_fps_pvp_core_script --check)
+set_tests_properties(object_fps_pvp.core_script PROPERTIES LABELS "cpu" TIMEOUT 120)
+
 # The Client without a window or a GPU: its Game World and its Render World (no sdl_gpu; the picture is read at the
 # Submit stage), a Match and a second Client over memory links, the content through the asset Module, the input
 # and window Messages written by a test System.
