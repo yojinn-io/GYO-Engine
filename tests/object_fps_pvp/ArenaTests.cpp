@@ -7,6 +7,7 @@
 #include "object_fps_pvp/sim/Arena.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -86,6 +87,31 @@ TEST_CASE("PvP map: every shipped arena's map reads, with pictures for its regio
                 CHECK(p.z <= picture.bounds.maximum.z);
             }
         }
+    }
+}
+
+TEST_CASE("PvP map: each region's picture made on its own is the one the whole map gives, in region order") {
+    std::string error;
+    const auto map = Shipped("kiriyu_town_graybox", error);
+    REQUIRE_MESSAGE(map.has_value(), error);
+    const auto whole = data::RegionPictures(*map);
+    std::vector<data::RegionPicture> alone;
+    for (std::size_t region = 0; region < map->regions.size(); ++region) {
+        if (auto picture = data::RegionPictureOf(*map, region)) alone.push_back(std::move(*picture));
+    }
+    REQUIRE(alone.size() == whole.size());
+    REQUIRE(whole.size() > 1);
+    for (std::size_t i = 0; i < whole.size(); ++i) {
+        CAPTURE(i);
+        const auto& a = alone[i].model->meshes.front();
+        const auto& b = whole[i].model->meshes.front();
+        const auto same = [](const auto& x, const auto& y) {
+            return x.size() == y.size() && std::memcmp(x.data(), y.data(), x.size() * sizeof(x[0])) == 0;
+        };
+        CHECK_MESSAGE((same(a.positions, b.positions) && same(a.normals, b.normals) && same(a.uvs, b.uvs) && same(a.indices, b.indices)),
+                      "[pvp-region-alone] the same bytes");
+        CHECK(alone[i].bounds.minimum.x == whole[i].bounds.minimum.x);
+        CHECK(alone[i].bounds.minimum.z == whole[i].bounds.minimum.z);
     }
 }
 

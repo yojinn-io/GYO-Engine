@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <variant>
 #include <vector>
@@ -100,11 +101,41 @@ struct ClearColor final {
     Color8 color{0, 0, 0, 255};
 };
 
-// The model a Mesh3d draws: a model asset (drawn once it is loaded), or a model the author holds (geometry the game
+// A model the author hands to the render World (Bevy's RenderAssetUsages::RENDER_WORLD with Mesh::take_gpu_data:
+// bevy_asset/src/render_asset.rs:32, bevy_render/src/render_asset.rs:348-358, bevy_mesh/src/mesh.rs:2722). Once the
+// render World has made the GPU mesh of every mesh without a skin, it takes their vertices and indices: the model
+// that stays has its nodes (where its meshes are placed), its skinned meshes whole (skinned on the CPU every frame)
+// and the other meshes empty. As in Bevy, what was taken cannot be drawn again: a GPU mesh let go (no Mesh3d drew the
+// model in a frame) is not made again. The author keeps only this object; Model() shows what is left.
+class HandedModel final {
+public:
+    explicit HandedModel(std::shared_ptr<const Model::ModelData> model) : model_(std::move(model)) {}
+
+    // The model now: whole until its vertices are taken, then what stays.
+    [[nodiscard]] std::shared_ptr<const Model::ModelData> Model() const {
+        const std::lock_guard lock(mutex_);
+        return model_;
+    }
+    [[nodiscard]] bool Taken() const {
+        const std::lock_guard lock(mutex_);
+        return taken_;
+    }
+    // mesh_render's, once the GPU meshes are made: the model without the vertices and indices of its meshes that have
+    // no skin. The whole model goes when nothing else holds it.
+    void TakeVertices();
+
+private:
+    mutable std::mutex mutex_;
+    std::shared_ptr<const Model::ModelData> model_;
+    bool taken_ = false;
+};
+
+// The model a Mesh3d draws: a model asset (drawn once it is loaded), a model the author holds (geometry the game
 // makes at run time, such as a map's region; as ImageRef's held image: a new ModelData is a new model, the old one's
-// GPU meshes are let go when no Mesh3d draws it any more). Bevy adds such a mesh to Assets<Mesh> (Assets::add); gyo2's
-// asset has no run-time add, so the held form follows ImageRef instead.
-using ModelRef = std::variant<Asset::Handle<Model::ModelData>, std::shared_ptr<const Model::ModelData>>;
+// GPU meshes are let go when no Mesh3d draws it any more), or one the author hands to the render World (HandedModel:
+// its vertices are then only on the GPU). Bevy adds such a mesh to Assets<Mesh> (Assets::add); gyo2's asset has no
+// run-time add, so the held forms follow ImageRef instead.
+using ModelRef = std::variant<Asset::Handle<Model::ModelData>, std::shared_ptr<const Model::ModelData>, std::shared_ptr<HandedModel>>;
 
 // One mesh of a model (an asset or a held one, ModelRef), drawn by 3D cameras (Bevy's Mesh3d with its MeshMaterial3d, bevy_mesh / bevy_pbr; render
 // batch r2b-3d). A mesh without a skin sits at its node (its rest pose, or the entity's SkinPose when it has one); a

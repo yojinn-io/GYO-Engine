@@ -587,6 +587,89 @@ TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without
     CHECK_MESSAGE(MeshAsks(1) == 1, "[mh-held-released] the backend is told its mesh is released");
 }
 
+TEST_CASE("render_extract: a handed model's vertices are taken once its GPU meshes are made, and it is still drawn") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "mesh_render"}));
+    K::World& game = GameOf(*p);
+    K::World& render = p->World("Render").GetWorld();
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    // Two meshes; the Mesh3d draws the first only.
+    GYO::Engine::Model::ModelData model = *HeldTriangle(1.0F);
+    model.meshes.push_back(model.meshes.front());
+    auto whole = std::make_shared<const GYO::Engine::Model::ModelData>(std::move(model));
+    const std::weak_ptr<const GYO::Engine::Model::ModelData> original = whole;
+    auto handed = std::make_shared<R::HandedModel>(std::move(whole));
+    R::Mesh3d mesh;
+    mesh.model = handed;
+    game.Insert(2, mesh);
+    Place(game, 2, 0.0F, 0.0F, 0.0F);
+
+    Frames(*p);
+    CHECK_MESSAGE(handed->Taken(), "[mh-handed-taken] its vertices are taken in the frame its GPU meshes are made");
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[mh-handed-all-meshes] every mesh without a skin is made, drawn or not");
+    CHECK_MESSAGE(MeshAsks(0) == 2, "[mh-handed-all-meshes] the backend is told to make both");
+    const auto left = handed->Model();
+    CHECK_MESSAGE((left->meshes.size() == 2 && left->meshes[0].positions.empty() && left->meshes[0].indices.empty() &&
+                   left->meshes[1].positions.empty() && left->nodes.size() == 1),
+                  "[mh-handed-left] what stays: the nodes, the meshes without their vertices and indices");
+    CHECK_MESSAGE(original.expired(), "[mh-handed-freed] the whole model is gone once nothing else holds it");
+    Frames(*p, 2);
+    CHECK_MESSAGE(Draws3d() == 1, "[mh-handed-drawn] it is still drawn, from its GPU mesh");
+    CHECK_MESSAGE(MeshAsks(0) == 0, "[mh-handed-once] no mesh is made again");
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[mh-handed-kept] the mesh no Mesh3d draws stays too");
+    // Taken off for a while (the author still holds the model): its GPU meshes stay, and it is drawn again.
+    game.Remove<R::Mesh3d>(2);
+    Frames(*p, 2);
+    CHECK_MESSAGE(render.Resource<R::RenderModelMeshes>()->Count() == 2, "[mh-handed-kept] held by the author, its meshes stay undrawn");
+    game.Insert(2, mesh);
+    Frames(*p);
+    CHECK_MESSAGE((Draws3d() == 1 && MeshAsks(0) == 0), "[mh-handed-back] put back, it is drawn again from the same GPU mesh");
+    // Nothing holds it any more: its meshes go (Bevy's last Handle).
+    game.Remove<R::Mesh3d>(2);
+    mesh.model = HeldTriangle(1.0F);
+    handed.reset();
+    Frames(*p);
+    CHECK_MESSAGE((render.Resource<R::RenderModelMeshes>()->Count() == 0 && MeshAsks(1) == 2), "[mh-handed-released] its GPU meshes go");
+
+    // With room for one mesh a frame (MeshRenderOptions::meshBytesPerFrame): the second mesh waits a frame, and the
+    // vertices are taken only once it is made.
+    O::WorldDescription limited = Render({"entity_ids", "render_world", "camera_render", "mesh_render"});
+    GYO::Engine::MeshRender::MeshRenderOptions options;
+    options.meshBytesPerFrame = 1;
+    limited.options.Set(options);
+    auto q = Make(std::move(limited));
+    K::World& game2 = GameOf(*q);
+    game2.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{1280, 720}, 1.0F});
+    game2.Insert(1, C::Camera{});
+    game2.Insert(1, C::Camera3d{});
+    game2.Insert(1, C::CameraTarget{});
+    game2.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game2.Insert(1, C::ComputedCamera{});
+    Place(game2, 1, 0.0F, 0.0F, -5.0F);
+    GYO::Engine::Model::ModelData two = *HeldTriangle(1.0F);
+    two.meshes.push_back(two.meshes.front());
+    auto slow = std::make_shared<R::HandedModel>(std::make_shared<const GYO::Engine::Model::ModelData>(std::move(two)));
+    R::Mesh3d drawn;
+    drawn.model = slow;
+    game2.Insert(2, drawn);
+    Place(game2, 2, 0.0F, 0.0F, 0.0F);
+    Frames(*q);
+    CHECK_MESSAGE((!slow->Taken() && q->World("Render").GetWorld().Resource<R::RenderModelMeshes>()->Count() == 1),
+                  "[mh-handed-all-meshes] one mesh made: the vertices stay until the other is");
+    const auto* status = std::as_const(q->Buffer()).Find<GYO::Engine::MeshRender::MeshRenderStatus>();
+    REQUIRE(status != nullptr);
+    CHECK_MESSAGE(status->MeshesWaiting() == 1, "[mh-status-waiting] the program is told one mesh waits");
+    Frames(*q);
+    CHECK_MESSAGE((slow->Taken() && q->World("Render").GetWorld().Resource<R::RenderModelMeshes>()->Count() == 2),
+                  "[mh-handed-all-meshes] both made: taken");
+    CHECK_MESSAGE(status->MeshesWaiting() == 0, "[mh-status-waiting] none waits any more");
+}
+
 TEST_CASE("render_extract: a scene of one model repeated is one instanced draw per model and image; culled copies are not instances") {
     // big-map declaration section 16, I1 to I3: crates (one model the game holds, one image), a few of them with
     // another image, one lamp of another model; crates behind the camera carry a box and the visibility Module culls

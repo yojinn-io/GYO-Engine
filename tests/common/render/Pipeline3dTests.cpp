@@ -288,6 +288,54 @@ TEST_CASE("pipeline3d: a model mesh is retained once; a new life lets the old go
     CHECK_MESSAGE(!cache.Use(R::ModelMeshKey{"m.empty", 1, 0}, empty, nullptr, meshes, count).has_value(), "[p3-mesh-empty] nothing to draw");
 }
 
+TEST_CASE("pipeline3d: the bytes of new meshes in a frame are a soft limit; the next frame makes the rest") {
+    Md::Mesh mesh;
+    mesh.positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    mesh.indices = {0, 1, 2};
+    const std::uint64_t bytes = 3 * sizeof(R::Vertex3D) + 3 * sizeof(std::uint32_t);
+    R::RenderMeshes meshes;
+    std::uint32_t count = 0;
+    // A limit below one mesh: the first is still made (the one that passes it), the second waits.
+    R::RenderModelMeshes limited(bytes - 1);
+    CHECK_MESSAGE(limited.Use(R::ModelMeshKey{"m.a", 1, 0}, mesh, nullptr, meshes, count).has_value(), "[p3-bytes-soft] the one that passes the limit is made");
+    CHECK(limited.BytesThisFrame() == bytes);
+    CHECK_MESSAGE(!limited.Use(R::ModelMeshKey{"m.b", 1, 0}, mesh, nullptr, meshes, count).has_value(), "[p3-bytes-wait] past the limit, a new mesh waits");
+    CHECK_MESSAGE(limited.Use(R::ModelMeshKey{"m.a", 1, 0}, mesh, nullptr, meshes, count).has_value(), "[p3-bytes-made-drawn] a made mesh is still drawn");
+    limited.EndFrame(meshes);
+    CHECK(limited.BytesThisFrame() == 0);
+    CHECK_MESSAGE(limited.Use(R::ModelMeshKey{"m.b", 1, 0}, mesh, nullptr, meshes, count).has_value(), "[p3-bytes-next] the next frame makes it");
+    // No limit: every mesh in one frame.
+    R::RenderModelMeshes open;
+    for (int i = 0; i < 4; ++i) {
+        CHECK_MESSAGE(open.Use(R::ModelMeshKey{"m.c", 1, nullptr, static_cast<std::uint32_t>(i)}, mesh, nullptr, meshes, count).has_value(), "[p3-bytes-none]");
+    }
+}
+
+TEST_CASE("pipeline3d: a handed model's vertices are taken from its meshes without a skin; a skinned mesh keeps them") {
+    Md::ModelData model;
+    model.nodes.resize(2);
+    Md::Mesh plain;
+    plain.name = "plain";
+    plain.node = 1;
+    plain.positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
+    plain.indices = {0, 1, 2};
+    Md::Mesh skinned = plain;
+    skinned.name = "skinned";
+    skinned.skin = 0;
+    model.meshes = {plain, skinned};
+    R::HandedModel handed(std::make_shared<const Md::ModelData>(std::move(model)));
+    CHECK_FALSE(handed.Taken());
+    CHECK(handed.Model()->meshes[0].positions.size() == 3);
+    handed.TakeVertices();
+    const auto left = handed.Model();
+    CHECK(handed.Taken());
+    CHECK_MESSAGE((left->meshes[0].positions.empty() && left->meshes[0].indices.empty() && left->meshes[0].node == 1 &&
+                   left->meshes[0].name == "plain"),
+                  "[p3-handed-plain] a mesh without a skin keeps its place, not its vertices");
+    CHECK_MESSAGE((left->meshes[1].positions.size() == 3 && left->meshes[1].indices.size() == 3), "[p3-handed-skinned] a skinned mesh keeps its vertices");
+    CHECK(left->nodes.size() == 2);
+}
+
 TEST_CASE("compose: cameras in order, each clear first: the first on a target clears it, a later one its viewport") {
     R::ExtractedCameras cameras;
     R::ExtractedCamera world = Camera3d(0, 0);

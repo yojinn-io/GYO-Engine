@@ -8,6 +8,8 @@
 //   gyo_object_fps_pvp --content DIR         reads the content from DIR (default: next to the executable)
 //   gyo_object_fps_pvp --verbose             logs who joins and leaves and every kill
 //   gyo_object_fps_pvp --capacity N          seats N players (default 4)
+//   gyo_object_fps_pvp --load-threads N      parses the map's region files on N threads (1 to 8; without it, or
+//                                            outside 1 to 8, the machine's hardware threads between 2 and 8)
 //
 // Started by the matches service (gateway declaration D5, D6):
 //   --match-id ID --admission-key-stdin      admits only a Client whose admission token this Match's key signed for
@@ -25,6 +27,7 @@
 
 #include "object_fps_pvp/data/Hex.hpp"
 #include "object_fps_pvp/match/AdmissionToken.hpp"
+#include "object_fps_pvp/match/LoadThreads.hpp"
 #include "object_fps_pvp/world/MatchSaves.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
@@ -50,6 +53,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -125,6 +129,7 @@ int main(int argc, char** argv) {
     std::uint32_t capacity = 4;
     std::optional<std::uint64_t> matchId;
     bool keyOnStdin = false;
+    std::optional<std::string_view> loadThreadsAsked;
     std::optional<std::int64_t> idleSeconds;
     std::vector<std::uint64_t> expectUsers;
     std::uint32_t startDeadline = PW::WorldOptions{}.startDeadlineSeconds;
@@ -160,6 +165,8 @@ int main(int argc, char** argv) {
                 return 2;
             }
             matchId = id;
+        } else if (argument == "--load-threads" && hasValue) {
+            loadThreadsAsked = argv[++index];
         } else if (argument == "--admission-key-stdin") {
             keyOnStdin = true;
         } else if (argument == "--saves" && hasValue) {
@@ -195,10 +202,19 @@ int main(int argc, char** argv) {
         } else {
             Log(GYO::Engine::Base::LogLevel::Error,
                 "unknown argument '" + std::string(argument) +
-                    "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --match-id ID, "
+                    "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --load-threads N, --match-id ID, "
                     "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N, --expect-users ID,..., --start-deadline-seconds N)");
             return 2;
         }
+    }
+    const auto loadThreads = object_fps_pvp::match::ChooseLoadThreads(loadThreadsAsked, std::thread::hardware_concurrency());
+    if (!loadThreads) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--load-threads takes a whole number");
+        return 2;
+    }
+    if (loadThreads->askedOutOfRange) {
+        Log(GYO::Engine::Base::LogLevel::Info, "--load-threads " + std::string(*loadThreadsAsked) + " is outside 1 to 8: the map loads on " +
+                                                   std::to_string(loadThreads->count) + " threads, the machine's choice");
     }
     if (keyOnStdin != matchId.has_value()) {
         Log(GYO::Engine::Base::LogLevel::Error, "--match-id and --admission-key-stdin go together");
@@ -249,7 +265,8 @@ int main(int argc, char** argv) {
 
     // The map is read while the World generates: the asset store reads its files on one thread, the walls are built on
     // another (Bevy keeps IoTaskPool and AsyncComputeTaskPool apart: bevy_tasks/src/usages.rs).
-    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = 1});
+    // The region files are parsed on loadThreads (each a job; big-map declaration 17.8); the walls are one build.
+    auto pool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match files", .threadCount = loadThreads->count});
     auto computePool = GYO::Engine::Threads::WorkerPool::Start({.name = "object_fps_pvp match compute", .threadCount = 1});
     if (!pool || !computePool) {
         Log(GYO::Engine::Base::LogLevel::Error, "no worker thread: " + GYO::Engine::Base::Describe(!pool ? pool.error() : computePool.error()));

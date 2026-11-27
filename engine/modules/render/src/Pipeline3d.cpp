@@ -60,20 +60,60 @@ ResolvedModel ResolveModel(const ModelRef& model, const WorldAsset::AssetView* v
         out.key.asset = handle->Id().Text();
         out.key.life = Asset::Detail::HandleAccess::Life(*handle);
         if (view != nullptr && !out.key.asset.empty()) out.data = view->Get(*handle);
-    } else {
-        out.holder = std::get<std::shared_ptr<const Model::ModelData>>(model);
-        out.data = out.holder.get();
+    } else if (const auto* held = std::get_if<std::shared_ptr<const Model::ModelData>>(&model)) {
+        out.current = *held;
+        out.holder = out.current;
+        out.data = out.current.get();
         out.key.held = out.data;
+    } else if (const auto& handed = std::get<std::shared_ptr<HandedModel>>(model)) {
+        out.current = handed->Model();
+        out.holder = handed;
+        out.handed = handed;
+        out.data = out.current.get();
+        out.key.held = handed.get();
     }
     return out;
 }
 
-std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Model::Mesh& mesh,
-                                             std::shared_ptr<const Model::ModelData> holder, RenderMeshes& meshes,
-                                             std::uint32_t& indexCount) {
+void HandedModel::TakeVertices() {
+    const std::lock_guard lock(mutex_);
+    if (taken_ || model_ == nullptr) return;
+    auto left = std::make_shared<Model::ModelData>();
+    left->nodes = model_->nodes;
+    left->skins = model_->skins;
+    left->clips = model_->clips;
+    left->materials = model_->materials;
+    left->meshes.reserve(model_->meshes.size());
+    for (const Model::Mesh& mesh : model_->meshes) {
+        if (mesh.skin != Model::kNoSkin) {
+            left->meshes.push_back(mesh);
+            continue;
+        }
+        Model::Mesh stays;
+        stays.name = mesh.name;
+        stays.node = mesh.node;
+        stays.material = mesh.material;
+        stays.skin = mesh.skin;
+        left->meshes.push_back(std::move(stays));
+    }
+    model_ = std::move(left);
+    taken_ = true;
+}
+
+bool HasGeometry(const Model::Mesh& mesh) noexcept {
+    return !mesh.positions.empty() && !mesh.indices.empty() && mesh.indices.size() % 3 == 0;
+}
+
+std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Model::Mesh& mesh, std::shared_ptr<const void> holder,
+                                             RenderMeshes& meshes, std::uint32_t& indexCount, const bool whileHeld) {
     auto found = entries_.find(key);
     if (found == entries_.end()) {
-        if (mesh.positions.empty() || mesh.indices.empty() || mesh.indices.size() % 3 != 0) return std::nullopt;
+        if (!HasGeometry(mesh)) return std::nullopt;
+        // This frame's bytes are spent: a later frame makes it.
+        if (bytesPerFrame_ && bytesThisFrame_ >= *bytesPerFrame_) {
+            ++waitingThisFrame_;
+            return std::nullopt;
+        }
         // A new life of the asset: the old life's meshes can never be drawn again (as RenderImages).
         for (auto it = entries_.begin(); key.held == nullptr && it != entries_.end();) {
             if (it->first.held == nullptr && it->first.asset == key.asset && it->first.life != key.life) {
@@ -84,7 +124,8 @@ std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Mode
             }
         }
         const MeshId id = meshes.Create(MeshVertices(mesh), mesh.indices);
-        found = entries_.emplace(key, Entry{id, static_cast<std::uint32_t>(mesh.indices.size()), std::move(holder), false}).first;
+        bytesThisFrame_ += mesh.positions.size() * sizeof(Vertex3D) + mesh.indices.size() * sizeof(std::uint32_t);
+        found = entries_.emplace(key, Entry{id, static_cast<std::uint32_t>(mesh.indices.size()), std::move(holder), false, whileHeld}).first;
     }
     found->second.used = true;
     indexCount = found->second.indexCount;
@@ -92,8 +133,18 @@ std::optional<MeshId> RenderModelMeshes::Use(const ModelMeshKey& key, const Mode
 }
 
 void RenderModelMeshes::EndFrame(RenderMeshes& meshes) {
+    bytesThisFrame_ = 0;
+    waiting_ = waitingThisFrame_;
+    waitingThisFrame_ = 0;
+    // How many of this cache's entries hold each handed holder: the holder is held elsewhere when it has more owners.
+    std::map<const void*, long> ours;
+    for (const auto& [key, entry] : entries_) {
+        if (entry.whileHeld) ++ours[entry.holder.get()];
+    }
     for (auto it = entries_.begin(); it != entries_.end();) {
-        if (it->first.held != nullptr && !it->second.used) {
+        const bool gone = it->second.whileHeld ? it->second.holder.use_count() <= ours[it->second.holder.get()]
+                                               : it->first.held != nullptr && !it->second.used;
+        if (gone) {
             meshes.Release(it->second.mesh);
             it = entries_.erase(it);
             continue;

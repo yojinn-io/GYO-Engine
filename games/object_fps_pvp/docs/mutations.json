@@ -3026,6 +3026,110 @@
    "guards": [
     "v8-product-pvp-playtest-fixes"
    ]
+  },
+  {
+   "id": "pvp-region-not-handed",
+   "what": "the regions' models stay with the Frame World (their vertices are kept on the CPU after the upload)",
+   "guards": [
+    "big-map declaration 17.3 point 3"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        mesh.model = std::make_shared<R::HandedModel>(std::move(region.model));\n",
+   "replace": "        mesh.model = std::move(region.model);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the arena is drawn as one Mesh3d per region*",
+   "expect": "pvp-region-meshes|pvp-region-handed|pvp-region-model"
+  },
+  {
+   "id": "pvp-regions-one-picture",
+   "what": "every region's job makes the first region's picture (the jobs are not each their own region)",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "arena.jobs, [faces, region] { return data::RegionPictureOf(*faces, region); }));\n",
+   "replace": "arena.jobs, [faces, region] { return data::RegionPictureOf(*faces, 0); }));\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a map's regions made on several threads*",
+   "expect": "pvp-regions-parallel"
+  },
+  {
+   "id": "pvp-loading-ignores-waiting",
+   "what": "the loading's warm-up ends while meshes still wait for their frame (the map pops in after the screen goes)",
+   "guards": [
+    "big-map declaration 17.5 L4"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        } else if (drawn->skipped != next.skippedAt || drawn->waiting != 0) {\n",
+   "replace": "        } else if (drawn->skipped != next.skippedAt) {\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: the loading screen waits while meshes wait*",
+   "expect": "pvp-loading-waits-meshes"
+  },
+  {
+   "id": "pvp-load-threads-machine-unbounded",
+   "what": "without --load-threads the Match takes every hardware thread (no 2 to 8)",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    return std::clamp<std::size_t>(hardware == 0 ? kLeastLoadThreads : hardware, kLeastLoadThreads, kMostLoadThreads);\n",
+   "replace": "    return hardware == 0 ? kLeastLoadThreads : hardware;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "without --load-threads"
+  },
+  {
+   "id": "pvp-load-threads-asked-ignored",
+   "what": "a --load-threads count in the range is ignored for the machine's",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    return LoadThreads{.count = static_cast<std::size_t>(value), .askedOutOfRange = false};\n",
+   "replace": "    return machine;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "used as given"
+  },
+  {
+   "id": "pvp-load-threads-clamped",
+   "what": "a --load-threads count outside the range is clamped to its nearest end instead of the machine's choice",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "        return LoadThreads{.count = machine.count, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "replace": "        return LoadThreads{.count = value < 1 ? std::size_t{1} : kMostLoadThreads, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "is not clamped"
+  },
+  {
+   "id": "pvp-load-threads-not-told",
+   "what": "a --load-threads count outside the range is replaced without saying so",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "        return LoadThreads{.count = machine.count, .askedOutOfRange = true};\n    }\n    return LoadThreads{",
+   "replace": "        return LoadThreads{.count = machine.count, .askedOutOfRange = false};\n    }\n    return LoadThreads{",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "is not clamped"
+  },
+  {
+   "id": "pvp-load-threads-empty-taken",
+   "what": "an empty --load-threads is read as the number 0 (out of the range: the machine decides) instead of refused",
+   "guards": [
+    "big-map declaration 17.8"
+   ],
+   "file": "games/object_fps_pvp/src/match/LoadThreads.cpp",
+   "find": "    if (asked->empty() || parsed.ptr != asked->data() + asked->size()) return std::nullopt;\n",
+   "replace": "    if (parsed.ptr != asked->data() + asked->size()) return std::nullopt;\n",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "load threads:*",
+   "expect": "not a whole number"
   }
  ]
 }

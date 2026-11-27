@@ -26,6 +26,7 @@
 #include "engine/input/InputModule.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "engine/render/Drawables.hpp"
+#include "engine/render/Pipeline3d.hpp"
 #include "engine/render/Presentation.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -40,6 +41,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <mutex>
+#include <optional>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -1064,10 +1066,17 @@ bool FramesUntil(Setup& setup, Done done, const int n = 600) {
 TEST_CASE("client: the loading screen waits for the Sim World's walls, not only for the Frame World's picture") {
     HeldJobs jobs;
     Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
-    // The Sim World reads the map first (it runs before the Frame World): its walls are the first job, the picture
-    // the second.
-    REQUIRE(FramesUntil(setup, [&] { return jobs.Waiting() == 2; }));
-    REQUIRE(jobs.RunAt(1));
+    // The two Worlds read the map from one asset store, each at its own apply point, so either may see it complete
+    // first (a region may finish loading between them). The Frame World asks for the picture in the frame its map
+    // turns Building: the picture is the job asked for after the walls when they were already there (the Sim World
+    // runs first in a frame), else the first.
+    std::optional<std::size_t> picture;
+    REQUIRE(FramesUntil(setup, [&] {
+        if (!picture && setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Building) picture = jobs.Waiting() - 1;
+        return jobs.Waiting() == 2;
+    }));
+    REQUIRE(picture);
+    REQUIRE(jobs.RunAt(*picture));
     REQUIRE(FramesUntil(setup, [&] { return setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Done; }));
     REQUIRE(setup.Client().Resource<PC::ClientView>()->mapLoad.stage == PW::MapStage::Building);
     for (int i = 0; i < 120; ++i) {
@@ -1121,21 +1130,23 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
     for (const K::EntityId id : setup.Client().Entities()) {
         const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
         if (mesh == nullptr) continue;
-        const auto* held = std::get_if<std::shared_ptr<const GYO::Engine::Model::ModelData>>(&mesh->model);
-        if (held == nullptr || *held == nullptr) continue;
+        // The region's model is handed to the render World: drawn once, its vertices are only on the GPU.
+        const auto* handed = std::get_if<std::shared_ptr<R::HandedModel>>(&mesh->model);
+        if (handed == nullptr || *handed == nullptr) continue;
         const auto* box = setup.Client().Get<R::Aabb>(id);
         REQUIRE(box != nullptr);
         for (const auto& region : pictures) {
             if (box->local.minimum.x != region.bounds.minimum.x || box->local.minimum.z != region.bounds.minimum.z) continue;
             ++regions;
             CHECK_MESSAGE(box->local.maximum.x == region.bounds.maximum.x, "[pvp-region-box] the region's box");
-            const auto& shown = (*held)->meshes.front().positions;
-            const auto& expected = region.model->meshes.front().positions;
-            const bool same = shown.size() == expected.size() &&
-                              std::equal(shown.begin(), shown.end(), expected.begin(), [](const Math::Vec3& a, const Math::Vec3& b) {
-                                  return a.x == b.x && a.y == b.y && a.z == b.z;
-                              });
-            CHECK_MESSAGE(same, "[pvp-region-model] the region's faces");
+            CHECK_MESSAGE(((*handed)->Taken() && (*handed)->Model()->meshes.front().positions.empty()),
+                          "[pvp-region-handed] the region's model is handed over and its vertices taken once drawn");
+            // What the render World drew for the entity: the region's own triangles.
+            std::uint32_t indices = 0;
+            for (const auto& item : setup.client->World("Render").GetWorld().Resource<R::Extracted3dItems>()->items) {
+                if (item.entity == id) indices = item.indexCount;
+            }
+            CHECK_MESSAGE(indices == region.model->meshes.front().indices.size(), "[pvp-region-model] the region's faces: " << indices);
         }
     }
     CHECK_MESSAGE(regions == pictures.size(), "[pvp-region-meshes] one Mesh3d per region of the map: " << regions);
@@ -1146,6 +1157,59 @@ TEST_CASE("client: the arena is drawn as one Mesh3d per region of its map, each 
         }
     }
     CHECK_MESSAGE(culledList, "[pvp-region-culled] the visibility Module checks the 3D camera");
+}
+
+// The loading's warm-up waits for the meshes mesh_render has not made yet (its bytes a frame), as for skipped draws.
+TEST_CASE("client: the loading screen waits while meshes wait for their frame") {
+    Setup setup;
+    std::uint64_t shown = 0;
+    // Meshes waiting all along, nothing skipped. Until the own player comes no frame is shown (so the warm-up's limit
+    // of frames, counted in frames shown, is not spent however slow the machine is); then frames are shown, and still
+    // it is not ready.
+    ++shown;
+    REQUIRE(FramesUntil(setup, [&] {
+        setup.Client().SetResource(PC::DrawnFrames{true, shown, 0, 3});
+        return PC::StatusOf(setup.Client()).playing;
+    }));
+    for (int i = 0; i < 30; ++i) {
+        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 3});
+        setup.Frame();
+        REQUIRE_MESSAGE(!PC::StatusOf(setup.Client()).ready, "[pvp-loading-waits-meshes] not ready while meshes wait (frame " << shown << ")");
+    }
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] {
+                        setup.Client().SetResource(PC::DrawnFrames{true, ++shown, 0, 0});
+                        return PC::StatusOf(setup.Client()).ready;
+                    }),
+                    "[pvp-loading-waits-meshes] ready once none waits");
+}
+
+// The regions' pictures made on several threads (one job per region): every region drawn, in region order.
+TEST_CASE("client: a map's regions made on several threads are all drawn, in region order") {
+    auto started = GYO::Engine::Threads::WorkerPool::Start({.name = "test pictures", .threadCount = 4});
+    REQUIRE(static_cast<bool>(started));
+    WA::WorkerPoolExecutor jobs(*started);
+    const auto* town = ShippedContent()->Find("kiriyu_town_graybox");
+    REQUIRE(town != nullptr);
+    const std::size_t index = static_cast<std::size_t>(town - ShippedContent()->arenas.data());
+    {
+        Setup setup(1, 4, index, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().map == town->id; }), "[pvp-arena-again]");
+        setup.Loaded();
+        const auto pictures = object_fps_pvp::data::RegionPictures(ShippedMapOf(*town));
+        REQUIRE(pictures.size() == 4);
+        std::vector<GYO::Engine::Math::Aabb> drawn;
+        for (const K::EntityId id : setup.Client().Entities()) {  // ascending: the order they were made in
+            const auto* mesh = setup.Client().Get<R::Mesh3d>(id);
+            const auto* box = setup.Client().Get<R::Aabb>(id);
+            if (mesh != nullptr && box != nullptr && std::holds_alternative<std::shared_ptr<R::HandedModel>>(mesh->model)) drawn.push_back(box->local);
+        }
+        REQUIRE_MESSAGE(drawn.size() == pictures.size(), "[pvp-regions-parallel] every region: " << drawn.size());
+        for (std::size_t i = 0; i < drawn.size(); ++i) {
+            CAPTURE(i);
+            CHECK_MESSAGE((drawn[i].minimum.x == pictures[i].bounds.minimum.x && drawn[i].minimum.z == pictures[i].bounds.minimum.z),
+                          "[pvp-regions-parallel] in region order");
+        }
+    }
 }
 
 TEST_CASE("client: the other player's stand-in goes when it leaves; closing tells the Match at once") {
