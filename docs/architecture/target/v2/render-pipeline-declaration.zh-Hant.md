@@ -1,7 +1,7 @@
 # 總宣告：渲染管線線（`v8-arch-gyo2-render-pipeline`）
 
-更新：2026-11-27（修訂 0）。Owner：渲染管線線的任務卡（GYO2 主會話開）。
-**狀態：總宣告，等使用者核准。** 這一階段只寫宣告與分批，不寫實作程式；各批開工前另寫小宣告（判定、測試、突變）。
+更新：2026-11-27（修訂 1：記入使用者的決定，第 12 節）。Owner：渲染管線線的任務卡（GYO2 主會話開）。
+**狀態：總宣告；第 11 節的決定點已由使用者決定（第 12 節），合併等使用者說「合併」。** 這一階段只寫宣告與分批，不寫實作程式；各批開工前另寫小宣告（判定、測試、突變）。
 
 **核心一句**（每一項都拿來對照）：**清單照原樣全做。Engine 只給「只有 Engine 做得到」的機制（畫到哪裡、pass 的先後、材質怎麼接 shader、光與影怎麼算）；PBR、tonemapping、後處理這些是 Engine 給的「預設規則」，作者可以換掉；遊戲自己的 shader、材質參數、哪個模式開哪些效果，是遊戲的資料。**
 
@@ -73,7 +73,7 @@
    └─ GPU 計時與除錯                              A3 render-gpu-debug（每個 pass 的 GPU 時間受 SDL_GPU 限制，第 4.7 節、Q1）
 ```
 
-「或」的兩題（材質模型、抗鋸齒）：抗鋸齒三個都做（MSAA、FXAA、TAA 是不同取捨，作者照相機選）；材質模型建議 PBR 當預設、Blinn-Phong 由作者用遊戲 shader 寫（Q3）。
+「或」的兩題（材質模型、抗鋸齒）：抗鋸齒三個都做（MSAA、FXAA、TAA 是不同取捨，作者照相機選）；材質模型 PBR 當預設、Blinn-Phong 由作者用遊戲 shader 寫（Q3，使用者已定，第 12 節）。
 
 ## 3. 別家對照
 
@@ -209,7 +209,7 @@ v8-arch-gyo2-render-pipeline
 |---|---|---|---|---|---|
 | A1 render-target | 上段（公開介面：`RenderCommands`、`CameraTarget` 的對應、`RenderTextures` 的格式；camera 推導值的條文） | Opus／high、Opus／high、Opus | — | cpu：target id 由資料側配、不重用（同 RD-3）；clip-from-world 三處取同一個值。gpu（Lavapipe）：畫進 8×8 target、再在 2D pass 取樣到主目標，逐像素比；sRGB 貼圖取樣出線性值；目標跟視窗大小變 | 12～18 h |
 | A2 render-phases | 上段（公開介面、pass 的資料形式） | Opus／high、Opus／high、Opus | A1 | cpu：同一台相機各 phase 的先後、陰影 view 在相機之前、`ComposeCameraPasses` 的順序（`render.extract` 現有案原樣通過）。gpu：兩個全畫面 pass 串接（反色→平移）的像素；只寫深度的 pass 之後取樣深度 | 14～20 h |
-| A3 render-gpu-debug | 下段（除錯資訊；不改資料形式）＊Q1 選 (b) 時改上段 | Opus／high、Opus／high、Opus | A2 | cpu：每個 pass 的名字與 CPU 時間出現在 `SDLGPUStatus`（或 trace），名字與 `RenderCommands` 的 pass 一一對應。gpu：整幀 GPU 時間 > 0。除錯標記本身在 CI 看不到（要 RenderDoc），只驗呼叫次數 | 6～10 h |
+| A3 render-gpu-debug | 下段（除錯資訊；不改資料形式） | Opus／high、Opus／high、Opus | A2 | cpu：每個 pass 的名字與 CPU 時間出現在 `SDLGPUStatus`（或 trace），名字與 `RenderCommands` 的 pass 一一對應。gpu：整幀 GPU 時間 > 0。除錯標記本身在 CI 看不到（要 RenderDoc），只驗呼叫次數 | 6～10 h |
 | A4 render-hdr-tonemap | 上段（公開介面：相機的元件；顏色路徑） | Opus／high、Opus／high、Opus | A2 | cpu：每條 tonemapping 曲線的純函式對照 Bevy 的式子（`bevy_core_pipeline/src/tonemapping.wesl`）。gpu：RGBA16F 寫 4.0 → 輸出 byte 和 CPU 參考值差 ≤ 1；不帶 `Hdr` 的相機像素和現在一樣（`sdl_gpu.pass3d` 原樣通過） | 12～16 h |
 | B1 render-material | 上段（公開介面、pipeline 的鍵、IN-1） | Opus／high、Opus／high、Opus | A1 | cpu：材質進 pipeline 的鍵與 instancing 的鍵；unlit 改成材質後 `render.pipeline3d` 全部原樣通過。gpu：兩個參數不同的材質畫出預期像素 | 16～24 h |
 | B2 render-game-shader | 上段（資料形式：shader 的描述與 ABI；建置的登記） | Opus／high、Opus／high、Opus | B1 | shader（Linux 主機建置）：測試用的遊戲 shader 編得過、描述與反射對不上時建置失敗。cpu：`ShaderData` 經 asset 載入。gpu：遊戲 shader 畫出預期像素。SDL-2 的拿掉 Plugin 檢查照樣通過 | 16～24 h |
@@ -247,7 +247,7 @@ v8-arch-gyo2-render-pipeline
 | 項目 | 建議 | 由哪一批定 | 根據 |
 |---|---|---|---|
 | 法線貼圖 `_N` | **要**。切線空間、**OpenGL 慣例（Y+，綠色朝上）**、8-bit PNG、linear；tangent 用 MikkTSpace（模型沒帶時由 loader 產生）。打包時壓成 BC5（兩個通道、Z 在 shader 重建） | B4（要不要、慣例、tangent），F1（壓縮格式） | glTF 與 Bevy 預設 Y+、DirectX 的圖要翻（`flip_normal_map_y`，`bevy_pbr/src/pbr_material.rs:427-431`）；Bevy 產 tangent 用 MikkTSpace（`bevy_mesh/src/mesh.rs:2195`、`mikktspace.rs:79`）；Godot 匯入時法線圖另走壓縮選項（`resource_importer_texture.cpp:276`） |
-| `_RMA` 合併貼圖 | **要**，但**通道照 glTF 的 ORM：R＝AO、G＝roughness、B＝metallic**，後綴建議改 `_ORM`（Q4） | B4 | Bevy：`occlusion_texture` 讀 R、`metallic_roughness_texture` 讀 G（roughness）與 B（metallic），文件說常見做法就是三個合一張（`pbr_material.rs:174,446-456`）；Godot `ORMMaterial3D`：`ROUGHNESS = orm_tex.g`、`METALLIC = orm_tex.b`、`AO = orm_tex.r`（`scene/resources/material.cpp:1724-1725,1942`）。「RMA」照字面是 R＝roughness，和兩家都相反，美術照名字排就會錯 |
+| `_RMA` 合併貼圖 | **要**，但**通道照 glTF 的 ORM：R＝AO、G＝roughness、B＝metallic**，後綴改 `_ORM`（Q4，使用者已定，第 12 節） | B4 | Bevy：`occlusion_texture` 讀 R、`metallic_roughness_texture` 讀 G（roughness）與 B（metallic），文件說常見做法就是三個合一張（`pbr_material.rs:174,446-456`）；Godot `ORMMaterial3D`：`ROUGHNESS = orm_tex.g`、`METALLIC = orm_tex.b`、`AO = orm_tex.r`（`scene/resources/material.cpp:1724-1725,1942`）。「RMA」照字面是 R＝roughness，和兩家都相反，美術照名字排就會錯 |
 | UV1（lightmap） | **現在不要求**。清單裡沒有烘焙光照；環境光由 `AmbientLight`＋IBL（C3）＋SSAO（C4）給。規格寫「不需要；有也不會壞（loader 忽略）」 | 不在這條線；RC-RP4（烘焙光照成為點名的 Feature 時，靜態場景物件要 UV1） | Bevy 的 `Lightmap` 用 `ATTRIBUTE_UV_1`（`bevy_pbr/src/lightmap/mod.rs:88`、`bevy_mesh/src/mesh.rs:394`）；Godot `LightmapGI` 用 UV2（`scene/3d/lightmap_gi.h:150`、`ARRAY_TEX_UV2` `rendering_server_enums.h:132`）。體素地圖的 AO 可由烘焙工具寫進頂點，不需要 UV1 |
 | 貼圖壓縮格式 | **PNG 交件**；打包時由工具轉成 **KTX2＋預先算好的 mip**：`_D`、`_E` → BC7（sRGB）、`_ORM` → BC7（linear）、`_N` → BC5；遊戲執行時不轉。沒經工具的 PNG 照樣能讀（開發用，執行時產 mip）。尺寸照現在的「2 的冪次」（BC 的 4×4 區塊與 mip 都要） | F1 | 三個桌面平台都走 BC（`SDL_gpu.h:777-782,830`；Apple Silicon 支援 BC〔知〕，F1 用 `SDL_GPUTextureSupportsFormat` 確認）；Bevy 的 `CompressedImageFormats::BC`、KTX2／DDS loader（`bevy_image/src/image.rs:2431`、`ktx2.rs`）；Godot 在匯入時轉 S3TC／BPTC（`resource_importer_texture.cpp:136`） |
 
@@ -274,7 +274,7 @@ v8-arch-gyo2-render-pipeline
 - **RC-RP2** 一個 view 的光源數超過上限、或光源表的成本成為主要部分 → clustered forward（Bevy、Godot 的做法）。
 - **RC-RP3** 粒子的 CPU 模擬或上傳成為幀時間的主要部分 → GPU compute 模擬（SDL_GPU 有 compute）。
 - **RC-RP4** 烘焙光照成為點名的 Feature → lightmap、UV1 列入美術規格。
-- **RC-RP5** SDL_GPU 加了 timestamp query → A3 改成每個 pass 的 GPU 時間（Q1 選 (a) 時）。
+- **RC-RP5** SDL_GPU 加了 timestamp query → A3 改成每個 pass 的 GPU 時間（Q1 已選 (a)）。
 - **RC-RP6** SDL_GPU 有 bindless 或要大量 decal → clustered decal。
 - 既有的 RC-RD 3（本線 A4 觸發，第 4.4 節）、RC-RD 5（D3 觸發）、RC-IN1（B1：自訂 shader 要每實體 uniform 時的 `NoAutomaticBatching`）在各批照原文解。
 
@@ -291,3 +291,16 @@ v8-arch-gyo2-render-pipeline
 4. **Q4 `_RMA` 的通道**：建議照 glTF／Bevy／Godot 的 ORM（R＝AO、G＝roughness、B＝metallic），後綴改 `_ORM`（第 7 節）。這是改你草稿裡的命名。
 
 **卡片判、可推翻的（和 Bevy 不同的地方，供知悉）**：光照不做 clustering（RC-RP2）；2D 照 bytes 混合、輸出不換 sRGB 格式（第 4.4 節）；shader 離線編、熱重載換編好的檔（第 4.6 節）；decal 只做 forward（RC-RP6）；粒子在渲染 World 用 CPU 模擬（RC-RP3）。順序和主會話建議的三處差別在第 5 節開頭。
+
+## 12. 使用者的決定（2026-11-27）
+
+**原話**：「全部照推薦，空殼刪掉」。使用者先說「全部展示出來我過一遍」，主會話把第 11 節各題的選項與推薦逐題列出後，使用者這樣回覆。**出處**：HANDOFF `v8-arch-gyo2-render-pipeline-q1-q4`（gyo2 `3825f51b`），經主會話轉交。
+
+| 題 | 決定 | 比過的選項 | 影響 |
+|---|---|---|---|
+| Q1 GPU 計時 | **(a)**：每個 pass 加除錯標記（外部擷取工具看每個 pass 的 GPU 時間）＋Engine 報每個 pass 的 CPU 時間與整幀的 GPU 時間（fence）；每個 pass 的 GPU 時間等 SDL 加 query（RC-RP5） | (b) adapter 寫三份原生 timestamp；(c) 每個 pass 各等一個 fence（串行化） | A3 維持下段、照第 5.1 節的驗收 |
+| Q2 render graph | **照現在的 Bevy**（render graph 已換成 schedule）：沒有 graph 物件、不自動重排或剔除 pass、不做資源 aliasing（RC-RP1） | Godot／URP 式的自動重排與 aliasing | 第 4.3 節照原文；RP-3 定為 DI 候選 |
+| Q3 材質模型 | **PBR（`StandardMaterial`）當預設**；Blinn-Phong 不內建，作者用 B2 寫遊戲 shader | Lambert／Blinn-Phong 內建 | B1、B4 照原文 |
+| Q4 合併貼圖的通道 | **ORM（R＝AO、G＝roughness、B＝metallic），後綴 `_ORM`** | 維持 `_RMA` 的通道順序 | B4 照原文；使用者的美術規格草稿那一列已由主會話改成 `_ORM` |
+
+**卡片判、使用者沒有推翻的**：光照不做 clustering（RC-RP2）；2D 照 bytes 混合（第 4.4 節）；shader 離線編、熱重載換編好的檔（第 4.6 節）；decal 只做 forward（RC-RP6）；粒子在渲染 World 用 CPU 模擬（RC-RP3）。這些照原文做，觸發各自的 RC 時再議。
