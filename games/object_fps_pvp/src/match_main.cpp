@@ -276,7 +276,7 @@ int main(int argc, char** argv) {
         }
         mode = *found;
     }
-    if (!shared->modes[mode].Plays(shared->arenas[arena].id)) {
+    if (!shared->Plays(mode, arena)) {
         Log(GYO::Engine::Base::LogLevel::Error, "mode '" + shared->modes[mode].id + "' does not play arena '" + shared->arenas[arena].id + "'");
         return 2;
     }

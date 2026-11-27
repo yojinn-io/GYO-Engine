@@ -9,6 +9,7 @@
 #include "engine/asset/AssetStore.hpp"
 #include "engine/authority/AuthorityStrategy.hpp"
 #include "engine/base/Assert.hpp"
+#include "engine/base/Fnv1a.hpp"
 #include "engine/authority/Registrations.hpp"
 #include "engine/authority/ServerAuthorityStrategy.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
@@ -819,29 +820,34 @@ K::SystemResult ControlOwnPlayer(K::Query<K::Read<N::Peer>, K::Without<N::PeerCo
     return {};
 }
 
-// Client: whether it plays the Match's mode and arena (MatchInfo), once the Match has said its walls.
-// Another mode or arena, or the same one with other rules or walls, is a content mismatch (ContentMismatch): a World
-// plays one mode and one arena, so the program builds another World or leaves (big-map declaration 15.3; mode-config
-// declaration 3.3).
-K::SystemResult FollowMatchArena(K::Res<MatchInfo> info, K::Res<GameRules> rules, K::Res<ActiveMode> mode, K::Res<MapLoad> load,
-                                 K::ResMut<ContentMismatch> mismatch) {
+// Client: whether it plays the Match's mode and arena with the same content (MatchInfo), once the Match has said its
+// walls. Another mode or arena, or the same one with other rules or walls, is a content mismatch (ContentMismatch): a
+// World plays one mode and one arena, so the program builds another World or leaves (big-map declaration 15.3;
+// mode-config declaration 3.3). The mode, the rules and another arena are known at once (this World need not read
+// its own map first); the same arena's walls are compared once this World has built its own.
+K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rules, K::Res<ActiveMode> mode, K::Res<MapLoad> load,
+                                   K::ResMut<ContentMismatch> mismatch) {
     const MatchInfo& match = *info;
-    if (match.arenaId.empty() || match.wallsDigest == 0 || !mismatch.Read().reason.empty()) return {};
+    if (match.arenaId.empty() || match.wallsDigest == 0 || mismatch.Read().kind != MismatchKind::None) return {};
     const GameRules& own = *rules;
-    // Another mode or arena, or other rules, are known at once (this World need not read its own map first); the same
-    // arena's walls are compared once this World has built its own.
+    MismatchKind kind = MismatchKind::None;
     std::string reason;
     if (match.modeId != mode->id) {
+        kind = MismatchKind::Mode;
         reason = "the Match plays mode '" + match.modeId + "', this game '" + mode->id + "'";
     } else if (match.rulesDigest != mode->rulesDigest) {
+        kind = MismatchKind::Rules;
         reason = "mode '" + match.modeId + "' differs from the Match's (rules digest)";
     } else if (match.arenaId != own.arena.id) {
+        kind = MismatchKind::Arena;
         reason = "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'";
     } else if (load->stage == MapStage::Done && match.wallsDigest != own.wallsDigest) {
+        kind = MismatchKind::Walls;
         reason = "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
     }
-    if (reason.empty()) return {};
+    if (kind == MismatchKind::None) return {};
     ContentMismatch& found = mismatch.Get();
+    found.kind = kind;
     found.matchArena = match.arenaId;
     found.matchMode = match.modeId;
     found.reason = std::move(reason);
@@ -1000,6 +1006,31 @@ const sim::ArenaContent* GameContent::Find(const std::string& id) const {
     return nullptr;
 }
 
+std::optional<std::size_t> GameContent::FindArena(const std::string_view id) const {
+    for (std::size_t i = 0; i < arenas.size(); ++i) {
+        if (arenas[i].id == id) return i;
+    }
+    return std::nullopt;
+}
+
+bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }
+
+std::uint64_t GameContent::MatchRulesDigest(const std::size_t mode, const std::size_t arena) const {
+    const ModeContent& played = modes[mode];
+    K::Hasher h;
+    HashValue(h, played.rulesDigest);
+    // The arena's blocks of the sets the mode turns on, by set name.
+    std::vector<std::pair<std::string, std::uint64_t>> blocks;
+    for (const auto& [slot, read] : arenaSets[arena]) {
+        if (played.on.test(slot)) blocks.emplace_back(sets[slot].name, read.digest);
+    }
+    if (blocks.empty()) return played.rulesDigest;
+    std::sort(blocks.begin(), blocks.end());
+    HashValue(h, blocks);
+    const auto bytes = h.Data();
+    return Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+}
+
 std::optional<std::size_t> GameContent::FindMode(const std::string_view id) const {
     for (std::size_t i = 0; i < modes.size(); ++i) {
         if (modes[i].id == id) return i;
@@ -1013,7 +1044,6 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     const std::string maps = root + "/maps/";
     GameContent content;
     content.sets = sets;
-    GYO_ASSERT(sets.size() <= kMaxGameplaySets);
     auto listText = ReadText(fs, maps + "arenas.json", error);
     if (!listText) return std::nullopt;
     auto list = sim::ParseArenaList(*listText, error);
@@ -1176,7 +1206,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         show.mounts.front().after = {"SeatPlayers"};
         r.AddSystem<&ShowPlayers>(std::move(show));
         r.AddSystem<&ControlOwnPlayer>(Frame("ControlOwnPlayer", update, N::OnClient()));
-        r.AddSystem<&FollowMatchArena>(Frame("FollowMatchArena", std::string(O::DefaultSchedules::preUpdate), N::OnClient()));
+        r.AddSystem<&FollowMatchContent>(Frame("FollowMatchContent", std::string(O::DefaultSchedules::preUpdate), N::OnClient()));
     } else {
         K::SystemOptions local;
         local.name = "SpawnLocalPlayer";
@@ -1222,16 +1252,15 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
         world.SetResource(LocalDeaths{});
-        world.SetResource(ActiveMode{mode.id, mode.rulesDigest, mode.on});
-        // What the sets the mode turns on read: the mode's settings, then the arena's blocks.
+        const std::uint64_t rulesDigest = options.content->MatchRulesDigest(options.mode, options.arena);
+        world.SetResource(ActiveMode{mode.id, rulesDigest, mode.on});
+        // What the sets the mode turns on read, at every end (the rules digest says both ends read the same): the
+        // mode's settings, then the arena's blocks.
         for (const auto& [slot, read] : mode.sets) {
             if (read.put) read.put(world);
         }
-        const std::vector<SetBlocks>& arenaSets = options.content->arenaSets;
-        if (options.arena < arenaSets.size()) {
-            for (const auto& [slot, read] : arenaSets[options.arena]) {
-                if (mode.on.test(slot) && read.put) read.put(world);
-            }
+        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {
+            if (mode.on.test(slot) && read.put) read.put(world);
         }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.
@@ -1246,7 +1275,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         MatchInfo info;
         if (end != WorldEnd::Client) {
             info.modeId = mode.id;
-            info.rulesDigest = mode.rulesDigest;
+            info.rulesDigest = rulesDigest;
         }
         if (end == WorldEnd::Match && options.expectUsers.empty()) info.phase = MatchPhase::Playing;
         world.SetResource(std::move(info));

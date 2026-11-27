@@ -13,9 +13,6 @@
 #include "engine/authority/Registrations.hpp"
 
 #include <algorithm>
-#include <filesystem>
-#include <fstream>
-#include <random>
 #include <sstream>
 
 using namespace object_fps_pvp::test;
@@ -24,10 +21,10 @@ namespace {
 
 namespace A = GYO::Engine::Authority;
 namespace Json = GYO::Engine::Json;
-namespace fs = std::filesystem;
 
-// The probe's decision component (on each player, put by the Match while the set runs), its replicated Resource (put
-// from the mode's settings), its arena data (put from the arena block), and how often its Systems ran (the test's).
+// The probe's decision component (on each player, put by the Match while the set runs), its settings (put from the
+// mode's block at every end: not replicated), its arena data (put from the arena block), a Resource only the Match
+// writes (replicated: a Client has it only from the Match), and how often its Systems ran (the test's).
 struct ProbeMark final {
     std::uint32_t steps = 0;
     friend bool operator==(const ProbeMark&, const ProbeMark&) = default;
@@ -37,6 +34,10 @@ struct ProbeState final {
     std::uint32_t start = 0;
 };
 void HashValue(K::Hasher& h, const ProbeState& v) { HashValue(h, v.start); }
+struct ProbeTally final {
+    std::uint32_t steps = 0;
+};
+void HashValue(K::Hasher& h, const ProbeTally& v) { HashValue(h, v.steps); }
 struct ProbeArena final {
     std::uint32_t marker = 0;
 };
@@ -48,8 +49,9 @@ struct ProbeRuns final {
 void HashValue(K::Hasher&, const ProbeRuns&) {}
 
 K::SystemResult ProbeStep(K::Query<K::Read<PW::Owner>, K::Without<ProbeMark>> fresh, K::Query<K::Write<ProbeMark>> marked,
-                          K::ResMut<ProbeRuns> runs, K::CommandsFor<K::Inserts<ProbeMark>, K::Removes<>> commands) {
+                          K::ResMut<ProbeRuns> runs, K::CommandsFor<K::Inserts<ProbeMark>, K::Removes<>> commands, K::Commands tally) {
     ++runs->fixed;
+    tally.SetResource(ProbeTally{static_cast<std::uint32_t>(runs->fixed)});
     for (const K::EntityId id : fresh.Entities()) commands.Insert(id, ProbeMark{});
     marked.ForEach([](K::EntityId, K::Mut<ProbeMark> mark) { ++mark->steps; });
     return {};
@@ -76,16 +78,17 @@ PW::GameplaySet ProbeSet() {
         K::Registrar& r = setup.Registrar();
         A::AuthorityEntry(setup).Component<ProbeMark>("ProbeMark");
         r.Resource<ProbeState>({.name = "ProbeState"});
+        r.Resource<ProbeTally>({.name = "ProbeTally"});
         r.Resource<ProbeArena>({.name = "ProbeArena"});
         r.Resource<ProbeRuns>({.name = "ProbeRuns"});
         if (setup.Options<N::NetWorldOptions>() != nullptr) {
             N::NetEntry net(setup);
             net.Replicate<ProbeMark>("ProbeMark", {[](N::NetWriter& w, const ProbeMark& v) { w.Value(v.steps); },
                                                    [](N::NetReader& rd, ProbeMark& v) { return rd.Value(v.steps); }, 1});
-            N::NetEntry::ResourceOptions<ProbeState> state;
-            state.codec = {[](N::NetWriter& w, const ProbeState& v) { w.Value(v.start); },
-                           [](N::NetReader& rd, ProbeState& v) { return rd.Value(v.start); }, 1};
-            net.ReplicateResource<ProbeState>("ProbeState", std::move(state));
+            N::NetEntry::ResourceOptions<ProbeTally> tally;
+            tally.codec = {[](N::NetWriter& w, const ProbeTally& v) { w.Value(v.steps); },
+                           [](N::NetReader& rd, ProbeTally& v) { return rd.Value(v.steps); }, 1};
+            net.ReplicateResource<ProbeTally>("ProbeTally", std::move(tally));
         }
         K::SystemOptions step;
         step.name = "ProbeStep";
@@ -123,30 +126,7 @@ PW::GameplaySet ProbeSet() {
     return set;
 }
 
-// A content root with the shipped movement rules and the mode files a test writes.
-struct ModeFolder {
-    fs::path root;
-    ModeFolder() {
-        std::random_device random;
-        root = fs::temp_directory_path() / ("gyo_pvp_sets_" + std::to_string(random()));
-        fs::create_directories(root / "modes");
-        fs::create_directories(root / "rules");
-        fs::copy_file(fs::path(PVP_CONTENT_ROOT) / "rules" / "movement_rules.json", root / "rules" / "movement_rules.json");
-    }
-    ~ModeFolder() {
-        std::error_code ignored;
-        fs::remove_all(root, ignored);
-    }
-    void Write(const std::string& path, const std::string& text) const {
-        std::ofstream out(root / path, std::ios::binary);
-        out << text;
-    }
-};
-
-std::string Mode(const std::string& id, const std::string& sets) {
-    return R"({"version": 1, "id": ")" + id + R"(", "name": "M", "rules": {"movement": "rules/movement_rules.json"}, "sets": )" + sets +
-           R"(, "arenas": []})";
-}
+std::string Mode(const std::string& id, const std::string& sets) { return ModeText(id, R"({"movement": "rules/movement_rules.json"})", sets); }
 
 // The shipped content with the probe set and two modes: core_pvp (as shipped: no set) and probe_on (the probe, start 5),
 // the first arena carrying a probe block (marker 9).
@@ -155,9 +135,7 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
         auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
         copy->sets = {ProbeSet()};
         ModeFolder folder;
-        folder.Write("modes/modes.json", R"({"version": 1, "modes": ["core.json", "probe.json"]})");
-        folder.Write("modes/core.json", Mode("core_pvp", "{}"));
-        folder.Write("modes/probe.json", Mode("probe_on", R"({"probe": {"start": 5}})"));
+        folder.Modes({{"core.json", Mode("core_pvp", "{}")}, {"probe.json", Mode("probe_on", R"({"probe": {"start": 5}})")}});
         std::string error;
         auto modes = PW::LoadModes(folder.root.string(), copy->arenas, copy->combat, *copy->character, copy->sets, error);
         REQUIRE_MESSAGE(modes.has_value(), error);
@@ -190,8 +168,7 @@ TEST_CASE("world: a mode's gameplay sets read with their settings; a set the gam
     std::vector<PW::GameplaySet> sets{ProbeSet()};
     const auto load = [&](const std::string& probe, std::string& error) {
         ModeFolder folder;
-        folder.Write("modes/modes.json", R"({"version": 1, "modes": ["a.json"]})");
-        folder.Write("modes/a.json", Mode("a", probe));
+        folder.Modes({{"a.json", Mode("a", probe)}});
         const auto& content = *ShippedContent();
         return PW::LoadModes(folder.root.string(), content.arenas, content.combat, *content.character, sets, error);
     };
@@ -238,7 +215,9 @@ TEST_CASE("world: a gameplay set the mode leaves off never runs, is on no entity
     CHECK_MESSAGE(!AnyHas(off.Match()), "[pvp-set-off-component] no entity has its component");
     CHECK(!AnyHas(off.Client(0)));
     CHECK_MESSAGE(off.Match().Resource<ProbeState>() == nullptr, "[pvp-set-off-resource] its settings are not put");
-    CHECK_MESSAGE(off.Client(0).Resource<ProbeState>() == nullptr, "[pvp-set-off-sent] a Resource that is not there is not sent");
+    CHECK(off.Client(0).Resource<ProbeState>() == nullptr);
+    CHECK(off.Match().Resource<ProbeTally>() == nullptr);
+    CHECK_MESSAGE(off.Client(0).Resource<ProbeTally>() == nullptr, "[pvp-set-off-sent] a Resource that is not there is not sent");
     CHECK(off.Match().Resource<ProbeArena>() == nullptr);
     CHECK(off.Client(0).Resource<PW::ContentMismatch>()->reason.empty());
     // Registered all the same: the protocol has it (both ends connected), so it is not the shipped protocol.
@@ -262,17 +241,22 @@ TEST_CASE("world: a gameplay set the mode turns on runs at its ends, the Client 
     const ProbeMark* sent = on.Client(0).Get<ProbeMark>(player);
     REQUIRE_MESSAGE(sent != nullptr, "[pvp-set-on-sent] the Client received the component");
     CHECK(sent->steps > 0);
-    REQUIRE(on.Match().Resource<ProbeState>() != nullptr);
-    CHECK_MESSAGE(on.Match().Resource<ProbeState>()->start == 5, "[pvp-set-on-settings] the mode's settings are put");
-    REQUIRE_MESSAGE(on.Client(0).Resource<ProbeState>() != nullptr, "[pvp-set-on-sent] the Client received the Resource");
-    CHECK(on.Client(0).Resource<ProbeState>()->start == 5);
+    // The settings, put at each end from its own mode file.
+    for (K::World* world : {&on.Match(), &on.Client(0)}) {
+        REQUIRE_MESSAGE(world->Resource<ProbeState>() != nullptr, "[pvp-set-on-settings] ProbeState: the mode's settings are put");
+        CHECK(world->Resource<ProbeState>()->start == 5);
+    }
+    // The Resource only the Match writes reaches the Client by replication (its own ProbeStep does not run).
+    REQUIRE(on.Match().Resource<ProbeTally>() != nullptr);
+    REQUIRE_MESSAGE(on.Client(0).Resource<ProbeTally>() != nullptr, "[pvp-set-on-sent] the Client received the Resource");
+    CHECK(on.Client(0).Resource<ProbeTally>()->steps > 0);
     REQUIRE(on.Match().Resource<ProbeArena>() != nullptr);
     CHECK_MESSAGE(on.Match().Resource<ProbeArena>()->marker == 9, "[pvp-set-on-arena] the arena's block is put");
     CHECK(on.Client(0).Resource<PW::ContentMismatch>()->reason.empty());
     CHECK(on.Match().Resource<PW::MatchInfo>()->modeId == "probe_on");
 }
 
-TEST_CASE("world: a gameplay set's Systems run after the core's: its registration comes after them") {
+TEST_CASE("world: a gameplay set is registered after the core: the core's decision types keep their authority numbers") {
     // The core's decision types keep their authority registration numbers: the dataset report lists them first, in the
     // core's order, then the set's.
     Session off(1, 4, 0, WithProbe(), {}, 60, std::nullopt, WithProbe());
@@ -293,4 +277,20 @@ TEST_CASE("world: a gameplay set's Systems run after the core's: its registratio
     REQUIRE(mine.size() == core.size() + 1);
     CHECK_MESSAGE(std::equal(core.begin(), core.end(), mine.begin()), "[pvp-set-after-core] the core's types keep their numbers");
     CHECK(mine.back().find("ProbeMark") != std::string::npos);
+}
+
+TEST_CASE("world: a Client whose arena carries another block for a set the mode turns on is a content mismatch (rules)") {
+    // The Match's first arena carries marker 9 for the probe; the Client's, marker 8. Same mode, same arena, same walls.
+    auto other = std::make_shared<PW::GameContent>(*WithProbe());
+    std::string error;
+    auto blocks = PW::ReadArenaSets(R"({"sets": {"probe": {"marker": 8}}})", other->sets, error);
+    REQUIRE_MESSAGE(blocks.has_value(), error);
+    other->arenaSets.front() = std::move(*blocks);
+    CHECK(other->MatchRulesDigest(1, 0) != WithProbe()->MatchRulesDigest(1, 0));
+    // The mode leaves the set off: the arena's block is not played, the digest is the mode's.
+    CHECK(other->MatchRulesDigest(0, 0) == WithProbe()->modes.front().rulesDigest);
+    Session session(1, 4, 0, other, {}, 60, std::nullopt, WithProbe(), 1);
+    session.Frames(90);
+    const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+    CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Rules, "[pvp-set-arena-digest] " << mismatch.reason);
 }

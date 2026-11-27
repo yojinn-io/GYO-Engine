@@ -110,10 +110,12 @@ struct ClientStart final {
 // The settings in force (a Resource of every Frame World, carried from scene to scene; ClientStart's first).
 inline void HashValue(GYO::Kernel::Hasher&, const ClientSettings&) {}
 
-// A mode a room can be made with: an installed mode (world::ModeContent), its id and the name the player reads.
+// A mode a room can be made with: an installed mode (world::ModeContent), its id, the name the player reads and the
+// installed arenas it plays (world::GameContent::Plays), by id.
 struct ModeChoice final {
     std::string id;
     std::string name;
+    std::vector<std::string> maps;
 };
 
 // The Gateway's scenes' words (GatewayScene.cpp): what the player reads for a call that went wrong (gateway: its

@@ -4,6 +4,7 @@
 
 #include "data/JsonFields.hpp"
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Fnv1a.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
@@ -84,7 +85,7 @@ std::optional<ModeFile> ParseMode(const std::string_view text, const std::vector
         if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported mode version");
         ModeFile mode;
         mode.id = data::String(data::Member(json, "id"), "id");
-        if (mode.id.empty()) throw std::runtime_error("id is empty");
+        if (mode.id.empty() || mode.id.size() > 64) throw std::runtime_error("id is 1 to 64 characters");
         mode.name = data::String(data::Member(json, "name"), "name");
         for (const auto rule : data::AsObject(data::Member(json, "rules"), "rules")) {
             std::string kind(rule.key);
@@ -182,6 +183,7 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
                 return fail("the movement rules do not fit the body of arena '" + arena.id + "'");
             }
         }
+        GYO_ASSERT(sets.size() <= kMaxGameplaySets);
         for (const auto& [slot, read] : file->sets) mode.on.set(slot);
         mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat, character);
         mode.sets = std::move(file->sets);
@@ -189,6 +191,51 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
     }
     return modes;
 }
+
+} // namespace object_fps_pvp::world
+
+namespace object_fps_pvp::sim {
+
+void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v) {
+    HashValue(h, v.crouchBodyHeight);
+    HashValue(h, v.crouchEyeHeight);
+    HashValue(h, v.crouchSpeedScale);
+    HashValue(h, v.sprintSpeedScale);
+    HashValue(h, v.holdJump);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v) {
+    HashValue(h, v.maximumHp);
+    HashValue(h, v.shotDamage);
+    HashValue(h, v.maximumShotDamage);
+    HashValue(h, v.headPermille);
+    HashValue(h, v.bodyPermille);
+    HashValue(h, v.legPermille);
+    HashValue(h, v.shotRange);
+    HashValue(h, v.magazineCapacity);
+    HashValue(h, v.cooldownSeconds);
+    HashValue(h, v.reloadSeconds);
+    HashValue(h, v.respawnSeconds);
+}
+
+} // namespace object_fps_pvp::sim
+
+namespace object_fps_pvp::character {
+
+void HashValue(GYO::Kernel::Hasher& h, const HitShapeDefinition& v) {
+    HashValue(h, v.part);
+    HashValue(h, v.ball);
+    HashValue(h, v.node);
+    HashValue(h, v.nodeTo);
+    HashValue(h, v.offset.x);
+    HashValue(h, v.offset.y);
+    HashValue(h, v.offset.z);
+    HashValue(h, v.radius);
+}
+
+} // namespace object_fps_pvp::character
+
+namespace object_fps_pvp::world {
 
 std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& table, const sim::StanceRules& stance,
                           const sim::CombatRules& combat, const character::CharacterRig& character) {
@@ -204,40 +251,15 @@ std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& 
     std::vector<std::string> arenas = mode.arenas;
     std::sort(arenas.begin(), arenas.end());
     HashValue(h, arenas);
-    // The rule tables, by kind (movement).
-    HashValue(h, stance.crouchBodyHeight);
-    HashValue(h, stance.crouchEyeHeight);
-    HashValue(h, stance.crouchSpeedScale);
-    HashValue(h, stance.sprintSpeedScale);
-    HashValue(h, stance.holdJump);
-    // The combat rules (the game's defaults until a rule table carries them).
-    HashValue(h, combat.maximumHp);
-    HashValue(h, combat.shotDamage);
-    HashValue(h, combat.maximumShotDamage);
-    HashValue(h, combat.headPermille);
-    HashValue(h, combat.bodyPermille);
-    HashValue(h, combat.legPermille);
-    HashValue(h, combat.shotRange);
-    HashValue(h, combat.magazineCapacity);
-    HashValue(h, combat.cooldownSeconds);
-    HashValue(h, combat.reloadSeconds);
-    HashValue(h, combat.respawnSeconds);
-    // The character's hit shapes (hitbox.json, as read onto the skeleton's nodes) and the body they are scaled to.
+    // The rule tables, by kind (movement); the combat rules (the game's defaults until a rule table carries them); the
+    // character's hit shapes (hitbox.json, as read onto the skeleton's nodes) and the body they are scaled to.
+    HashValue(h, stance);
+    HashValue(h, combat);
     HashValue(h, character.scale);
     HashValue(h, character.anchor.x);
     HashValue(h, character.anchor.y);
     HashValue(h, character.anchor.z);
-    HashValue(h, static_cast<std::uint64_t>(character.hitShapes.size()));
-    for (const character::HitShapeDefinition& shape : character.hitShapes) {
-        HashValue(h, shape.part);
-        HashValue(h, shape.ball);
-        HashValue(h, shape.node);
-        HashValue(h, shape.nodeTo);
-        HashValue(h, shape.offset.x);
-        HashValue(h, shape.offset.y);
-        HashValue(h, shape.offset.z);
-        HashValue(h, shape.radius);
-    }
+    HashValue(h, character.hitShapes);
     const auto bytes = h.Data();
     return GYO::Engine::Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }

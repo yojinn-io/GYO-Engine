@@ -1578,7 +1578,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],\n                                        .mode = room.mode ? room.mode->id : std::string()};\n",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],\n                                        .mode = room.mode.id};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -3203,8 +3203,8 @@
     "mode-config-declaration 3.3"
    ],
    "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "    HashValue(h, stance.crouchSpeedScale);",
-   "replace": "    (void)stance.crouchSpeedScale;",
+   "find": "    HashValue(h, v.crouchSpeedScale);",
+   "replace": "    (void)v.crouchSpeedScale;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the rules digest follows*",
    "expect": "the movement rules"
@@ -3257,8 +3257,8 @@
     "game-flow-declaration revision 8"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "                                        .mode = room.mode ? room.mode->id : std::string()};",
-   "replace": "                                        .mode = std::string()};",
+   "find": "                                        .mode = room.mode.id};",
+   "replace": "                                        .mode = {}};",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-mode-played"
@@ -3312,8 +3312,8 @@
     "mode-config-declaration 3.3"
    ],
    "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "    HashValue(h, combat.legPermille);",
-   "replace": "    (void)combat.legPermille;",
+   "find": "    HashValue(h, v.legPermille);",
+   "replace": "    (void)v.legPermille;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the rules digest follows*",
    "expect": "the combat rules"
@@ -3326,8 +3326,8 @@
     "limb-damage-research 1.4"
    ],
    "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "        HashValue(h, shape.radius);",
-   "replace": "        (void)shape.radius;",
+   "find": "    HashValue(h, v.radius);\n}\n\n} // namespace object_fps_pvp::character",
+   "replace": "    (void)v.radius;\n}\n\n} // namespace object_fps_pvp::character",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the rules digest follows*",
    "expect": "the hit shapes"
@@ -3365,8 +3365,8 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "                if (mode.on.test(slot) && read.put) read.put(world);",
-   "replace": "                if (read.put) read.put(world);",
+   "find": "            if (mode.on.test(slot) && read.put) read.put(world);",
+   "replace": "            if (read.put) read.put(world);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode leaves off*",
    "expect": "ProbeArena"
@@ -3404,11 +3404,63 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "            if (read.put) read.put(world);\n        }\n        const std::vector<SetBlocks>& arenaSets",
-   "replace": "            (void)read;\n        }\n        const std::vector<SetBlocks>& arenaSets",
+   "find": "            if (read.put) read.put(world);\n        }\n        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {",
+   "replace": "            (void)read;\n        }\n        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode turns on*",
    "expect": "ProbeState"
+  },
+  {
+   "id": "pvp-set-arena-undigested",
+   "what": "the arena's blocks of the sets the mode turns on are left out of the rules digest",
+   "guards": [
+    "mode-config-declaration 3.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (blocks.empty()) return played.rulesDigest;",
+   "replace": "    return played.rulesDigest;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client whose arena carries another block*",
+   "expect": "MatchRulesDigest"
+  },
+  {
+   "id": "pvp-mode-plays-any",
+   "what": "a mode plays every arena whatever it lists",
+   "guards": [
+    "mode-config-declaration 3.2 (design review S2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }",
+   "replace": "bool GameContent::Plays(const std::size_t, const std::size_t) const { return true; }",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: which arenas a mode plays*",
+   "expect": "pvp-mode-plays"
+  },
+  {
+   "id": "pvp-mode-id-unbounded",
+   "what": "a mode id longer than MatchInfo carries reads",
+   "guards": [
+    "mode-config-declaration 3.2 (pure code review 2)"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "        if (mode.id.empty() || mode.id.size() > 64) throw",
+   "replace": "        if (mode.id.empty()) throw",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode that names*",
+   "expect": "refused: id is 1 to 64"
+  },
+  {
+   "id": "pvp-mode-rules-rebuilt",
+   "what": "a Client whose mode has other rules builds the game again instead of leaving",
+   "guards": [
+    "mode-config-declaration 3.3 (design review S5)"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const bool another = sim->mismatchKind == PW::MismatchKind::Mode || sim->mismatchKind == PW::MismatchKind::Arena;",
+   "replace": "        const bool another = sim->mismatchKind != PW::MismatchKind::None;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a game whose Match plays another mode*",
+   "expect": "pvp-mode-rules-left"
   }
  ]
 }

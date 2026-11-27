@@ -83,7 +83,7 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
 
 1. **四家都把「哪個模式開什麼」放在遊戲的資料**；Engine 只給「依資料決定跑不跑／建不建」的機制。GYO 照做：模式檔在 `assets/object_fps_pvp/`，膠水在 `games/object_fps_pvp/`，Engine 不動。
 2. **有複製協議的框架（replicon、lightyear、Unity Netcode）都讓登記固定、用條件或資料決定跑不跑**；沒有協議的（flecs、單機 Bevy）才常用「依登記區分」。GYO 有 protocol hash 與 consistency fingerprint（第 2.2 節），所以照前者。
-3. **和 Bevy 的接合點**：玩法組的登記函式＝Bevy 的 `Fn(&mut App)` Plugin；條件＝`resource_equals`；帶條件的 set＝`configure_sets(...).run_if`。沒有偏離 Bevy，沒有衝突點；膠水只在遊戲層（第 2.4 節，約一個表格加一個條件模板）。
+3. **和 Bevy 的接合點**：玩法組的登記函式＝Bevy 的 `Fn(&mut App)` Plugin；條件＝`resource_equals`；帶條件的 set＝`configure_sets(...).run_if`。~~沒有偏離 Bevy，沒有衝突點~~（實作後的設計審查 S5 更正）**衝突點一個**：Bevy 的條件可以捕獲值（`resource_equals` 回傳捕獲 `value` 的閉包，`crates/bevy_ecs/src/schedule/condition.rs:728-733`），GYO Kernel 的條件不能捕獲（`Registry.hpp:53`）。膠水：遊戲層一張以 slot 當模板參數的條件表（約 20 行，上限 32 組，第 2.4 節）。Kernel 要不要支援捕獲是 Engine 機制，不在這條線做（第 11 節 U2）。
 
 ---
 
@@ -195,7 +195,8 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
   1. 模式本身（id、開的組與各組的設定、`arenas`）；
   2. `rules` 裡的每一張表（第一批：`StanceRules`）；
   3. 程式裡的 `CombatRules`（搬進資料之前也要比）；
-  4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）。
+  4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）；
+  5. （實作後補，設計審查 S1）這一場的 arena 檔裡、模式開著的組的區塊（門的位置、撤離點……）。所以比對值是「模式＋arena」的：`GameContent::MatchRulesDigest(mode, arena)`，模式沒開任何組的區塊時就是模式本身的 digest。
 - **Client 的判斷**（`FollowMatchArena` 改成也比模式）：`modeId` 不同、或 `rulesDigest` 不同 → `ContentMismatch`，`reason` 寫哪一項不同，並帶 `matchMode`。模式的比對不等地圖讀完（和「另一個 arena 當場就知道」同一個時機）。
 - **程式怎麼處理**（不是 Engine 的事，照現在 arena 的做法）：Client 有那個模式、而且只是模式不同 → 用 Match 的模式重建 World（`ClientWorld.cpp:1408-1423` 加上模式）；digest 不同（同名模式、內容不同）→ 不能玩，回大廳並顯示原因。
 
@@ -337,3 +338,73 @@ v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
 | 第 4 步在 Linux 主機重量 S5 | 5、7 |
 
 **還沒開始**：核准只針對這份宣告；要不要開始實作，等主會話另外通知。
+
+## 11. 實作結果與合併前核准（2026-11-27）
+
+照第 7 節實作（動工前核准：HANDOFF `v8-arch-gyo2-mode-config-start-impl`）。dev_log：`docs/dev_logs/2026_11_27_gyo2_mode_config.zh-Hant.md`。證據：主 checkout `build/evidence/gyo2-mode-config/`（`ab.py`、`ab/*/`、`linux.sh`、`design-review.md`、`pure-code-review.md`）。
+
+### 11.1 各步
+
+| 步 | commit | 內容 |
+|---|---|---|
+| 0 | `6be715a6` | 核心 PvP 腳本程式（ctest `object_fps_pvp.core_script`）與 A/B 腳本 |
+| 1＋3 | `b8082841` | 模式檔與讀取、`MatchInfo` 的 `modeId`／`rulesDigest`、Client 的比對與重建、Match `--mode`、M1 (a)。兩步改到同一批 Client 檔，合成一個 commit |
+| 2 | `ab6dede5` | 玩法組的表、條件、兩個 Kernel set、arena 檔的 `sets` |
+| 3 | `797471c1` | `object_fps_pvp.client` 拆成 `client.1`～`.4` |
+| 4 | （審查處置的 commit） | 下面 11.3 採用的各條 |
+
+### 11.2 和本宣告不同的地方
+
+- `GameplaySet` 多了 `readArena`（3.2 末段「arena 也能帶區塊」的落實）；`SetData`＝讀到的值的 digest＋放進 World 的函式（宣告沒寫到的細節）。`put` 在每一端都執行、由比對值保證兩端相同，所以組的設定不複製。
+- 比對值加上 arena 區塊（3.3 第 5 項）。
+- `ContentMismatch` 加 `kind`（Mode／Rules／Arena／Walls）：只說發生了什麼；Client 只在 Mode／Arena 時重建（審查前，同模式 digest 不同且 arena 也不同時會白白重建一次）。`FollowMatchArena` 改名 `FollowMatchContent`。
+- 「模式玩不玩這個 arena」只有一個出口 `GameContent::Plays`；大廳與單人只列選到的模式玩的 arena（`ModeChoice::maps`）。
+- 模式 id 限 1～64 字元（和 arena 同一條；`MatchInfo` 的 Codec 只收 64）。
+- 規則表的雜湊改成每個型別一個 `HashValue`（`StanceRules`、`CombatRules`、`HitShapeDefinition`；放在 `world/Modes.hpp`，因為 sim 與 character 函式庫不連 Kernel）。digest 的值不變（同樣的位元組）。
+- 第 5 節的「另比 `BoxSet` digest」：見 11.4。
+
+### 11.3 檢驗
+
+- 本機（macOS arm64）：`object_fps_pvp.*` 的 cpu 與 network 15 項全過（含真的 Client 經 Gateway 的 `gateway_client`）；Go `./services/...` 全過。
+- A/B（macOS）：第 1 步、第 2 步、審查處置後各一次：權威 digest 1257 行逐位元組相同；`--report` 的差異只有 `MatchInfo` 的 Codec 版本（2 → 3）與因此變的 protocol hash；決策資料集（指紋的文字）相同。
+- 突變：新增 27 個（模式、組、digest 涵蓋、審查處置），find 改寫 5 個既有的，加上鄰近既有的 5 個，全部 killed（結果在 dev_log）。
+- 第 9 節的未確認「不存在的 Resource 不會被送出」：測試確認（`[pvp-set-off-sent]`）。
+
+### 11.4 還沒做的（第 4 步的 Linux 部分）
+
+- Linux 主機的 A/B 與 S5 `load`：等使用者開主機（已經主會話轉問）。
+- `BoxSet` digest：這條線沒有改讀圖與建牆的程式（`ArenaLoad`、`ArenaMap`、`LoadArena` 不在 diff 裡），Match 的 log 也不印 digest。改用 S5 `load` 時 Client 與 Match 沒有 `ContentMismatch`（Walls）來確認。
+- L1：手動 dispatch 的 run 在跑。
+
+### 11.5 審查的處置
+
+設計審查（Opus／high）沒有 blocker；純淨 Code Review（Fable／high）的編號寫 P1～P14。
+
+| # | 內容 | 處置 |
+|---|---|---|
+| S1／P3 | arena 的組區塊沒進比對值 | 採用：`MatchRulesDigest`；測試 `[pvp-set-arena-digest]`、突變 |
+| S2／P1 | `Plays` 分散 | 採用：`GameContent::Plays` 一個出口；大廳與單人按模式過濾。房間服務要不要檢查組合：U3 |
+| S3 | 設定 Resource 兩個來源，複製的測試無效 | 採用：寫明 `put` 每端執行、設定不複製；probe 改成「設定每端放」＋「只有 Match 寫、靠複製到 Client 的 `ProbeTally`」 |
+| S4／P5 | digest 逐欄手寫；骨架與動畫不在 digest | 逐欄：採用（各型別一個 `HashValue`）。骨架與動畫：U1 |
+| S5／P4 | mismatch 只有文字；宣告 1.5 的衝突點 | 採用：`MismatchKind`；1.5 更正。Kernel 條件捕獲：U2 |
+| P2 | id 的形狀三處不一致 | 採用：模式 id 1～64（同 arena）。Go 的 pattern 不動（服務只帶選擇） |
+| P12 | 名字與閘門 | 改名採用；閘門（等 Match 說了牆才比）不改：Match 讀完地圖之前不讓任何玩家入座（`SeatPlayers`），Client 在那之前本來就玩不了；等它一次比完，判斷只有一處 |
+| N2 | 測試名說得比驗的多 | 採用：改名。「組排到核心之前」沒有突變（移動一段程式不是 find／replace），由 `[pvp-set-after-core]` 守 |
+| N6 | 超過 32 組的處理 | 採用：檢查移到 `LoadModes`（每個讀者都經過） |
+| N1 | client 測試按編號切 | 部分：註解寫明何時重切。`doctest_discover_tests` 不採：每案一個 process、每次都讀內容 |
+| P11／N3 | 測試的位置參數太多；`ModeFolder` 兩份 | `ModeFolder` 收成一份（`WorldTestSupport.hpp`）；位置參數改 options struct 不在這條線（`Setup` 的 10 個是既有的，另開小批較好） |
+| P6 | 組的機制沒有產品端使用者 | 不採：宣告第 2.4、6 節（已核准）要在 W1、門、G6、PV3 之前先有這個機制 |
+| P7 | slot、平行陣列 | 部分：拿掉 `arenaSets` 的防禦檢查（`LoadGameContent` 保證平行）。包成 `InstalledArena`、`on` 由 `sets` 算：不改（測試要能直接組內容） |
+| P8 | 32 個模板實例 | 不採：替代做法（每組一個 tag 型別）要每組各自寫條件；真正的解是 Kernel 條件能捕獲（U2） |
+| P9 | `ModeOf` 的靜默退回 | 不採：和 `ArenaOf` 一樣，Match 說它玩什麼、Client 跟（3.5） |
+| P10 | 小重複（`ReadText` 三份等） | 不採：各自在既有的檔案裡；收成一處時連同 `ReadText` 的其他使用者一起做 |
+| P13 | `modes.empty()` 的防禦 | 採用：拿掉（`ParseModeList` 保證至少一個） |
+| P14、N4、N5、N7 | 表的驗證；「set」兩義；同一事實多份；Go 少檢查 | 不採（記錄）：表是程式寫的（不加防誤用的守衛）；名字照宣告；Go 照讀地圖的先例 |
+
+### 11.6 要使用者決定的點
+
+| # | 問題 | 選項 | 推薦 |
+|---|---|---|---|
+| **U1** | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
+| **U2** | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
+| **U3** | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |

@@ -408,6 +408,7 @@ TEST_CASE("world: a Client plays the arena it was built with; the Match playing 
         Session session(1, 4, 1, ShippedContent(), {}, 60, 0);
         session.Frames(90);
         const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Arena, mismatch.reason);
         CHECK_MESSAGE(mismatch.reason.find("pvp_corners_v1") != std::string::npos, mismatch.reason);
         CHECK(mismatch.matchArena == "pvp_corners_v1");
         CHECK(session.Client(0).Resource<PW::GameRules>()->arena.id == "pvp_training_v1");
@@ -430,7 +431,7 @@ TEST_CASE("world: the Match says its mode and rules digest; a Client of another 
         Session session(1, 4, 0, other);
         session.Frames(90);
         const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
-        CHECK_MESSAGE(mismatch.reason.find("mode 'core_pvp'") != std::string::npos, mismatch.reason);
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Mode, "mode 'core_pvp': " << mismatch.reason);
         CHECK(mismatch.matchMode == "core_pvp");
         CHECK(mismatch.matchArena == "pvp_training_v1");
     }
@@ -440,7 +441,7 @@ TEST_CASE("world: the Match says its mode and rules digest; a Client of another 
         Session session(1, 4, 0, other);
         session.Frames(90);
         const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
-        CHECK_MESSAGE(mismatch.reason.find("rules digest") != std::string::npos, mismatch.reason);
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Rules, "rules digest: " << mismatch.reason);
         CHECK(mismatch.matchMode == "core_pvp");
     }
 }

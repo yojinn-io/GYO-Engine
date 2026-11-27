@@ -96,7 +96,8 @@ endif()
 # Four ctest entries that run in parallel, each a range of the "client:" cases in their order in the file (doctest's
 # --first/--last; the last range is open, so a case added at the end is run): the cases wait for the maps the asset
 # threads read (Setup::Loaded), and one process took up to 118 s on the macOS runner (2026-11-26, big map #364). The
-# ranges are cut by the cases' time (macOS, 2026-11-27: about 13 s, 14 s, 12 s and 8 s).
+# ranges are cut by the cases' time (macOS, 2026-11-27: about 13 s, 14 s, 12 s and 8 s); cut them again when one entry
+# takes about twice another (doctest --duration=true gives each case's time).
 set(object_fps_pvp_client_ranges "1:6" "7:14" "15:30" "31:")
 set(object_fps_pvp_client_part 0)
 foreach(range IN LISTS object_fps_pvp_client_ranges)

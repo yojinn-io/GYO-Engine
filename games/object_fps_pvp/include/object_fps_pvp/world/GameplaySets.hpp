@@ -34,8 +34,10 @@ namespace O = GYO::Engine::Orchestration;
 // At most this many gameplay sets (each set's run condition is a function of its slot).
 inline constexpr std::size_t kMaxGameplaySets = 32;
 
-// What a set read from a mode file or an arena file: the digest of the values it read (into the rules digest), and
-// what it puts into a World that plays it (its own Resource, before the first frame).
+// What a set read from a mode file or an arena file: the digest of the values it read (into the rules digest that both
+// ends compare, GameContent::MatchRulesDigest), and what it puts into a World that plays it (its own Resource, before
+// the first frame). put runs at every end, from the end's own files: the digest says both ends read the same, so a
+// set's settings are not replicated.
 struct SetData final {
     std::uint64_t digest = 0;
     std::function<void(K::World&)> put;

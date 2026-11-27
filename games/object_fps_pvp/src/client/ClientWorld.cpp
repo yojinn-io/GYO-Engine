@@ -1419,9 +1419,12 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::R
         notes->map = mapFailure;
         reason = "地図を読み込めません: " + mapFailure;
     } else if (!sim->mismatch.empty()) {
-        const bool another = sim->mismatchArena != rules->arena.id || sim->mismatchMode != from.modeId;
-        if (from.scene == Scene::MultiGame && from.connect && another && from.game && from.game->Find(sim->mismatchArena) != nullptr) {
-            if (const auto mode = from.game->FindMode(sim->mismatchMode); mode && from.game->modes[*mode].Plays(sim->mismatchArena)) {
+        // Another mode or arena (not the same one with other content): played again when this Client has the pair.
+        const bool another = sim->mismatchKind == PW::MismatchKind::Mode || sim->mismatchKind == PW::MismatchKind::Arena;
+        if (from.scene == Scene::MultiGame && from.connect && another && from.game) {
+            const auto arena = from.game->FindArena(sim->mismatchArena);
+            const auto mode = from.game->FindMode(sim->mismatchMode);
+            if (arena && mode && from.game->Plays(*mode, *arena)) {
                 request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = sim->mismatchArena,
                                             .mode = sim->mismatchMode};
                 return {};
@@ -1532,6 +1535,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
         view.mismatch = mismatch->reason;
         view.mismatchArena = mismatch->matchArena;
         view.mismatchMode = mismatch->matchMode;
+        view.mismatchKind = mismatch->kind;
     }
     if (const auto* map = Find<PW::MapLoad>(world)) view.mapLoad = *map;
     if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
@@ -2256,16 +2260,20 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
         GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
         const std::string& directory = start->dataDirectory;
-        // The maps and modes a room offers: the installed arenas, by id, and the installed modes.
-        std::vector<std::string> maps;
-        for (const sim::ArenaContent& arena : options.game->arenas) maps.push_back(arena.id);
+        // The modes a room offers (the installed modes), each with the installed arenas it plays, by id.
         std::vector<ModeChoice> modes;
-        for (const PW::ModeContent& mode : options.game->modes) modes.push_back({mode.id, mode.name});
-        GatewayContext gateway{directory, start->gateway, maps, modes};
+        for (std::size_t mode = 0; mode < options.game->modes.size(); ++mode) {
+            ModeChoice choice{options.game->modes[mode].id, options.game->modes[mode].name, {}};
+            for (std::size_t arena = 0; arena < options.game->arenas.size(); ++arena) {
+                if (options.game->Plays(mode, arena)) choice.maps.push_back(options.game->arenas[arena].id);
+            }
+            modes.push_back(std::move(choice));
+        }
+        GatewayContext gateway{directory, start->gateway, modes};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
         case Scene::Splash: BuildSplash(setup, start->splashSeconds); break;
-        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, maps, modes); break;
+        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, modes); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:

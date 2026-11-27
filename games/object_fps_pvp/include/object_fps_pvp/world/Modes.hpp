@@ -24,7 +24,17 @@
 
 namespace object_fps_pvp::character {
 struct CharacterRig;
-}
+struct HitShapeDefinition;
+// What the rules digest takes of a hit shape (the character's own data has no Kernel; its hash is here, with the
+// digest's other parts).
+void HashValue(GYO::Kernel::Hasher& h, const HitShapeDefinition& v);
+} // namespace object_fps_pvp::character
+
+namespace object_fps_pvp::sim {
+// The rule tables' values, field by field, for the rules digest (the sim library has no Kernel).
+void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v);
+void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v);
+} // namespace object_fps_pvp::sim
 
 namespace object_fps_pvp::world {
 
@@ -45,7 +55,7 @@ struct ModeFile final {
 [[nodiscard]] std::optional<std::vector<std::string>> ParseModeList(std::string_view text, std::string& error);
 
 // Reads a mode file; its sets with the table's readers (ReadSetBlocks). nullopt with error: a member missing or of the
-// wrong kind, not version 1, an empty id, a rule kind twice or a rule file that is not a relative path inside the
+// wrong kind, not version 1, an id not of 1 to 64 characters (as an arena's), a rule kind twice or a rule file that is not a relative path inside the
 // content root, an arena named twice, or what ReadSetBlocks says. Whether the rule kinds and the arenas are known is
 // LoadModes' to say.
 [[nodiscard]] std::optional<ModeFile> ParseMode(std::string_view text, const std::vector<GameplaySet>& sets, std::string& error);
