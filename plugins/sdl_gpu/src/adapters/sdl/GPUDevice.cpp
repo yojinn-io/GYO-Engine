@@ -119,6 +119,8 @@ struct GPUTarget {
     // Drawn on since it was made or made again (as RenderTextures's picture). Without one, its first pass clears it (to
     // transparent black when it has no clear; a Depth target to 1).
     bool picture = false;
+    // A pass of the frame being recorded drew on it: the receipt's, once the frame is handed to the GPU.
+    bool drawnThisFrame = false;
     // A Depth target (the device's depth format): drawn on by depth-only passes and as a 3D pass's depth.
     bool isDepth = false;
     // A colour target's own depth for its 3D passes (none for a Depth target).
@@ -601,7 +603,7 @@ struct GPUDevice::State {
     };
 
     // Applies the asks to the texture table (makes now, lets go after the copy pass; the pixels go in the copy pass).
-    void ApplyAsks(const std::span<const R::TextureOp> asks, Frame& frame, FrameTally& tally) {
+    void ApplyAsks(const std::span<const R::TextureOp> asks, Frame& frame, FrameTally& tally, R::RenderFrameReceipt& receipt) {
         const auto place = [&](const std::vector<std::uint8_t>& pixels) {
             frame.total = AlignUp(frame.total);
             const std::uint64_t offset = frame.total;
@@ -649,7 +651,11 @@ struct GPUDevice::State {
                 t.size = sized->size;
                 t.texture = MakeTexture(t.size.width, t.size.height, t.isDepth ? kDepthTargetUsage : kTargetUsage, t.format, tally.lastRefusal);
                 t.picture = false;
-                if (t.texture == nullptr) ++tally.refusedAsks;
+                if (t.texture == nullptr) {
+                    ++tally.refusedAsks;
+                } else {
+                    receipt.Applied(sized->id, t.size);
+                }
             } else if (const auto* target = std::get_if<R::TextureTargetCreate>(&ask)) {
                 // Its texture is made by its first TextureTargetSize.
                 GPUTarget made;
@@ -883,7 +889,22 @@ struct GPUDevice::State {
     static bool BeginWrite(GPUTarget& target) noexcept {
         const bool undefined = !target.picture;
         target.picture = true;
+        target.drawnThisFrame = true;
         return undefined;
+    }
+
+    // After the frame's command buffer: handed to the GPU (submitted), the targets its passes drew on go in the receipt
+    // (render-pipeline declaration 14.12); not handed (cancelled, refused), they have no picture here either.
+    void Settle(const bool submitted, R::RenderFrameReceipt& receipt) {
+        for (auto& [id, t] : targets) {
+            if (!t.drawnThisFrame) continue;
+            t.drawnThisFrame = false;
+            if (submitted) {
+                receipt.Drawn(R::TextureId{id});
+            } else {
+                t.picture = false;
+            }
+        }
     }
 
     // How a pass's colour starts on its target: cleared to its clear colour (or transparent black) when it gives one or
@@ -962,9 +983,10 @@ struct GPUDevice::State {
     // none in a skipped frame: the render targets are still drawn), the targets resolved, the copy pass, the passes.
     // false: the uploads failed (error says why); the main picture then gets one pass that clears it.
     bool DrawFrame(SDL_GPUCommandBuffer* cmd, const std::span<const R::TextureOp> asks, const std::span<const R::MeshOp> meshAsks,
-                   const R::RenderCommands& commands, const std::optional<Target>& main, FrameTally& tally, std::string& error) {
+                   const R::RenderCommands& commands, const std::optional<Target>& main, FrameTally& tally, std::string& error,
+                   R::RenderFrameReceipt& receipt) {
         Frame frame;
-        ApplyAsks(asks, frame, tally);
+        ApplyAsks(asks, frame, tally, receipt);
         ApplyMeshAsks(meshAsks, frame, tally);
         const std::vector<std::optional<Target>> resolved = ResolveTargets(commands, main, tally);
         if (!RecordUploads(cmd, frame, commands, resolved, tally, error)) {
@@ -1360,7 +1382,7 @@ GPUDevice::~GPUDevice() {
 }
 
 FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const std::span<const R::MeshOp> meshAsks,
-                               const R::RenderCommands& commands, FrameTally& tally) {
+                               const R::RenderCommands& commands, FrameTally& tally, R::RenderFrameReceipt& receipt) {
     RequireMainThread();
     GYO_ASSERT(state_->window != nullptr && "Submit needs the window (a device without one only Captures)");
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(state_->device);
@@ -1381,9 +1403,11 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
                              &state_->depth, nullptr};
     }
     std::string error;
-    const bool uploaded = state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error);
+    const bool uploaded = state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error, receipt);
     if (!uploaded) lastError_ = std::move(error);
-    if (!SDL_SubmitGPUCommandBuffer(cmd)) {
+    const bool submitted = SDL_SubmitGPUCommandBuffer(cmd);
+    state_->Settle(submitted, receipt);
+    if (!submitted) {
         lastError_ = SDLError("SDL_SubmitGPUCommandBuffer");
         return FrameOutcome::Failed;
     }
@@ -1394,7 +1418,7 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
 Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std::span<const R::TextureOp> asks,
                                                                     const std::span<const R::MeshOp> meshAsks,
                                                                     const R::RenderCommands& commands, const R::TargetSize size,
-                                                                    FrameTally& tally) {
+                                                                    FrameTally& tally, R::RenderFrameReceipt& receipt) {
     RequireMainThread();
     const auto Err = [](std::string text) { return Engine::Base::Err(CaptureFailure::Make(CaptureFailureCode::Refused, std::move(text))); };
     GYO_ASSERT(size.width > 0 && size.height > 0 && "a capture of zero size");
@@ -1424,8 +1448,9 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     // The picture stands for the main target this frame.
     std::string error;
     const State::Target main{target, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, size, &state_->depth, nullptr};
-    if (!state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error)) {
+    if (!state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error, receipt)) {
         SDL_CancelGPUCommandBuffer(cmd);
+        state_->Settle(false, receipt);
         cleanup();
         return Err(std::move(error));
     }
@@ -1442,6 +1467,7 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     SDL_DownloadFromGPUTexture(copy, &source, &destination);
     SDL_EndGPUCopyPass(copy);
     SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    state_->Settle(fence != nullptr, receipt);
     if (fence == nullptr) {
         cleanup();
         return Err(SDLError("SDL_SubmitGPUCommandBufferAndAcquireFence"));

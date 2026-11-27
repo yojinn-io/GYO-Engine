@@ -26,10 +26,12 @@ const RenderWorldOptions& OptionsOf(const RenderWorldOptions* given) {
 
 // After the frame was drawn (kCleanupStage): this frame's passes and texture asks are gone; the textures stay.
 SystemResult ClearRenderFrame(Kernel::ResMut<Render::RenderCommands> commands, Kernel::ResMut<Render::RenderTextures> textures,
-                              Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images) {
-    // What this frame drew and the sizes it applied (render-pipeline declaration 14.11), as the frame's data says: the
-    // backend's own account is not reported yet (SDL-5).
-    textures.Get().Apply(Render::AssumedReport(commands.Read(), textures.Read().Pending()));
+                              Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images,
+                              Kernel::ResMut<Render::RenderFrameReceipt> receipt) {
+    // What the backend got done this frame (its receipt, written in the Submit stage of this frame; render-pipeline
+    // declaration 14.12, SDL-5): the pictures and the sizes applied. Read, then cleared for the next frame.
+    textures.Get().Apply(receipt.Read());
+    receipt.Get().Clear();
     commands.Get().passes.clear();
     commands.Get().retained.clear();
     textures.Get().ClearPending();
@@ -52,6 +54,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::RenderCommands>({.name = "RenderCommands"});
     r.Resource<Render::RenderTextures>({.name = "RenderTextures"});
+    r.Resource<Render::RenderFrameReceipt>({.name = "RenderFrameReceipt"});
     r.Resource<Render::RenderMeshes>({.name = "RenderMeshes"});
     r.Resource<Render::RenderImages>({.name = "RenderImages"});
     r.Resource<Render::Presentation>({.name = "Presentation"});
@@ -75,6 +78,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::RenderCommands>(world);
         PutIfAbsent<Render::RenderTextures>(world);
+        PutIfAbsent<Render::RenderFrameReceipt>(world);
         PutIfAbsent<Render::RenderMeshes>(world);
         PutIfAbsent<Render::RenderImages>(world);
         PutIfAbsent<Render::Presentation>(world);

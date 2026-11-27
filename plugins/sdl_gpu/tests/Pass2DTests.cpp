@@ -85,6 +85,8 @@ R::Pass2D Cleared(const R::Color8 colour) {
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
+    // What the backend got done (render-pipeline declaration 14.12).
+    R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
         return R::Color8{image.pixels[i], image.pixels[i + 1], image.pixels[i + 2], image.pixels[i + 3]};
@@ -108,7 +110,7 @@ struct Picture {
 Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* textures = nullptr) {
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
-    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally, picture.receipt);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);
@@ -480,10 +482,11 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     REQUIRE(static_cast<bool>(made));
     G::GPUDevice& device = **made;
     G::FrameTally tally;
-    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally));
+    R::RenderFrameReceipt receipt;
+    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally, receipt));
     constexpr int kRuns = 20;
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally)));
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally, receipt)));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
@@ -516,7 +519,7 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
         REQUIRE(queued.has_value());
         R::RenderCommands piped;
         piped.passes.push_back(std::move(*queued));
-        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally)));
+        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally, receipt)));
     }
     const double pipeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pipeStart).count() / kRuns;
     MESSAGE("[gp-budget-pipeline] driver " << device.DriverName() << ": " << pipeMs
@@ -547,18 +550,19 @@ struct TargetCase {
     Picture Frame(const R::RenderCommands& commands, const R::TargetSize size = kSize) {
         textures.SetMainSize(size);
         Picture picture;
-        auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally);
+        auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally, picture.receipt);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
-        // As render_world's Cleanup: the frame's account applied, then the asks cleared.
-        textures.Apply(R::AssumedReport(commands, textures.Pending()));
+        // As render_world's Cleanup: the backend's receipt applied, then the asks cleared.
+        textures.Apply(picture.receipt);
         textures.ClearPending();
         return picture;
     }
     ~TargetCase() {
         for (auto it = live.rbegin(); it != live.rend(); ++it) textures.Release(*it);
         G::FrameTally tally;
-        static_cast<void>(Device().Capture(textures.Pending(), {}, R::RenderCommands{}, kSize, tally));
+        R::RenderFrameReceipt receipt;
+        static_cast<void>(Device().Capture(textures.Pending(), {}, R::RenderCommands{}, kSize, tally, receipt));
     }
 };
 

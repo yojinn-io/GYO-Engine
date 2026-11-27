@@ -40,6 +40,7 @@
 #include "engine/model/FbxLoader.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 
+#include "Receipts.hpp"
 #include "StoreSupport.hpp"
 #include "WorldAssetSupport.hpp"
 
@@ -69,8 +70,16 @@ struct Seen {
 };
 std::vector<Seen> seen;
 std::vector<std::string> trail;
+// The frames the stand-in backend does not get done (a failed upload or submission): its receipt stays empty.
+std::vector<std::size_t> failedFrames;
 
-K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
+// At Submit, as a backend: records what it sees and writes the receipt of a backend that got it all done (or, in a
+// failed frame, nothing).
+K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes,
+                       K::ResMut<R::RenderFrameReceipt> receipt) {
+    if (std::find(failedFrames.begin(), failedFrames.end(), seen.size()) == failedFrames.end()) {
+        receipt.Get() = GYO::Test::AllDone(*commands, textures->Pending());
+    }
     Seen s;
     s.all = commands->passes;
     s.retained = commands->retained;
@@ -160,6 +169,7 @@ std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GY
                                  O::WorldDescription game = Game()) {
     seen.clear();
     trail.clear();
+    failedFrames.clear();
     O::ProductDescription d;
     d.name = "draws";
     if (assets != nullptr) d.options.Set(*assets);
@@ -217,6 +227,7 @@ std::size_t Count(const std::vector<R::TextureOp>& asks, std::size_t index) {
 TEST_CASE("render_extract: render_world puts the extract schedule before Main only in a World with extractFrom") {
     seen.clear();
     trail.clear();
+    failedFrames.clear();
     O::ProductDescription d;
     d.name = "draws";
     d.worlds.push_back(Game());
@@ -428,6 +439,24 @@ TEST_CASE("render_extract: a camera that does not update leaves its target retai
     source.GetMut<C::Camera>(1)->active = false;
     Frames(*p);
     CHECK_MESSAGE((Retains(seen[6], screen) && PassesOn(seen[6].all, screen) == 0), "[re-update-inactive-retained] an inactive camera's target is retained");
+}
+
+TEST_CASE("render_extract: a frame the backend did not get done leaves no picture: the camera that does not update draws again") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    // The first frame draws on the target (it has no picture) but the backend does not get it done.
+    failedFrames = {0};
+    Frames(*p, 3);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && PassesOn(seen[1].all, screen) > 0 && !Retains(seen[1], screen)),
+                  "[re-receipt-failed-drawn-again] the failed frame left no picture: drawn again, not retained");
+    CHECK_MESSAGE((Retains(seen[2], screen) && PassesOn(seen[2].all, screen) == 0), "[re-receipt-retained-after] then retained");
 }
 
 TEST_CASE("render_extract: a target two cameras draw is drawn when one of them draws; retained when neither does") {

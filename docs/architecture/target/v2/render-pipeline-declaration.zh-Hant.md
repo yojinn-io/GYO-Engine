@@ -574,12 +574,27 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 2. **明示沿用是 `RenderCommands::retained`**（純淨 Medium 3）：不再是 `RenderPass` 的一種；`PassWrites`、`TargetOf`、後端的幾何與目標解析都沒有沿用的特例了。仍是 `RenderCommands` 裡寫明的一句（使用者要的「明示」）。`camera_render` 的沿用經 `ExtractedCameras::retained`、由合成放進去；作者自己的 System 直接放。
 3. **沿用一張沒有畫面的 target 不算寫過**（設計 S-2）：`FirstUnwrittenRead(commands, textures)` 只把有畫面的 retained 當作寫過。
 4. **B-1：深度 target 的大小只在資料側比**：`FirstDepthOfAnotherSize(commands, textures)`（資料側的大小，主目標用 `RenderTextures::MainSize`）由後端在畫之前斷言；GPU 上主目標是視窗的畫面，可能比資料側晚一幀，大小不同時後端**跳過那個 pass 的 draw、計數**，不斷言（Bevy 不會遇到：它的深度接在照抽出的大小建的中間圖上，`bevy_core_pipeline/src/core_3d/mod.rs:667,695,709`）。
-5. **大小的要求送到套用為止**（設計 S-3 的一半、純淨 Medium 6）：`RenderTextures` 記住後端套用過的大小（`RenderFrameReport::sized`，`Apply`），沒套用的每幀送一次（level-triggered，同 A1 的 `EnsureTargets` 能自己回復）。
-6. **「有畫面」跟著一份幀的紀錄**（設計 S-3、純淨 High 1）：`RenderTextures::Apply(RenderFrameReport{drawn, sized})` 是畫面與大小的唯一入口。**現在這份紀錄由資料側照這一幀的資料做**（`AssumedReport`：pass 畫的 target、這一幀的大小要求），因為後端寫回渲染 World 會改 SDL-5（`sdl_gpu` 只讀渲染 World），交使用者決定中；決定後由後端的實況換掉這一份，`Apply` 不變。到那時之前，後端畫不成的那一幀（上傳失敗、拿不到 command buffer）資料側仍當作畫過：不更新的相機的 target 內容未定，直到下一次改大小（RC-A2-7）。
+5. **大小的要求送到套用為止**（設計 S-3 的一半、純淨 Medium 6）：`RenderTextures` 記住後端套用過的大小（收據的大小，`Apply`；第 14.13 節），沒套用的每幀送一次（level-triggered，同 A1 的 `EnsureTargets` 能自己回復）。
+6. **「有畫面」跟著一份幀的紀錄**（設計 S-3、純淨 High 1）：`RenderTextures::Apply` 是畫面與大小的唯一入口。這一節寫成時紀錄由資料側照這一幀的資料做（`AssumedReport`），因為後端寫回渲染 World 會改 SDL-5；使用者選 (a) 之後換成後端的收據 `RenderFrameReceipt`（第 14.13 節），`AssumedReport` 拿掉。
 7. **RP-3 照第 4.3 節原文「後端斷言」**：判斷是 render 的純函式；後端（`sdl_gpu` 的 Plugin，`RenderContracts.hpp` 的 `RequireRenderContracts`）在畫之前斷言。純淨 Medium 5「改在 render 側檢查」不採用：使用者保留第 4.3 節的原文。
 8. **Once 的前提**（設計 S-4、純淨 Medium 4）：兩步做法（Last 記下、下一個 First 改成 Disabled）的前提是「渲染 World 對來源的每一輪恰好抽一次，抽在來源的 Last 與下一個 First 之間」——預設的 `RunFrame`（每個 World 依序跑一輪，`Product.cpp` 的 `RunFrameSteps`）成立，兩個 World 誰先跑都成立。來源被借出（`Lend`，O-13）時由持有者自己跑，來源的輪數和渲染 World 的抽取不一定一比一，Once 可能沒畫就變成 Disabled〔未確認：借出的 World 能不能被抽取〕（RC-A2-8）。比過的另一個做法「渲染 World 看模式的變化、不寫回作者的元件」沒選：要在渲染 World 存每台相機的跨幀狀態，那是 RD-6／render 頁第 7.3 節與 RC-RD 5 留給 D3 的事。**Godot 的對照更正**：`renderer_viewport.cpp:982-983` 把 `UPDATE_ONCE` 改成 `UPDATE_DISABLED` 的是**渲染伺服器那一份**狀態，場景端的 `SubViewport::update_mode` 不變（`scene/main/viewport.cpp:5739-5747`）；GYO 改的是作者的元件（來源 World 的 `TargetUpdate`），因為渲染側不能寫回（RP-2；Kernel 的 Extract 只有 `Read<T>`）。膠水：`SeenOnce`＋兩個 System。Godot 的預設是 `UPDATE_WHEN_VISIBLE`（`viewport.h:919`），GYO 預設 Always（同 Bevy）。
 
 **新 RC**：
-- **RC-A2-7**：SDL-5 的決定之後，後端回報這一幀實際畫的 target 與套用的大小（`RenderFrameReport`），換掉 `AssumedReport`。
+- **RC-A2-7**：〔已解，第 14.13 節〕SDL-5 的決定之後，後端回報這一幀實際畫的 target 與套用的大小，換掉 `AssumedReport`。
 - **RC-A2-8**：來源被借出、或來源與渲染 World 的輪數不一比一 → Once 改成渲染側看模式的變化（要渲染 World 存相機的跨幀狀態，和 RC-RD 5 一起解）。
+
+### 14.13 幀的收據 `RenderFrameReceipt`（SDL-5 (a)，2026-11-27）
+
+**使用者的決定**（HANDOFF `v8-arch-gyo2-sdl5-render-frame-receipt`，經主會話）：「其實（a）的解法不錯，那個 Resource 就是 cache 或者 buffer 一類的東西。」「那叫receipt 好了。」「叫 FrameReceiptBuffer 把，然後用註釋寫明功能。如何？」，最後「RenderFrameReceipt 好了，選 （a）」。比過的 (b)、(c) 沒選：收據是唯一的真相、修在根源；寫回只在渲染 World 之內，模擬 World 不動，K.3-6 不受影響。`FrameReceiptBuffer` 沒選：render 裡的 buffer 多指 GPU 的緩衝，同組的名字是「Render＋它是什麼」（`RenderCommands`、`RenderTextures`）。
+
+1. **SDL-5 改了**（sdl 頁）：後端可以寫 render 定義的一個 Resource，只記「這一幀實際做成的事」。`GPUSubmit` 多一個 `ResMut<RenderFrameReceipt>`，其餘照舊只讀。
+2. **收據的功能**（`RenderTextures.hpp` 的註解寫同一句）：後端每幀寫、資料側讀完就清的緩衝，記這一幀實際畫了的 render target 與實際套用的大小，一個 target 一筆（同一個 target 畫兩次記一次；同一幀改兩次大小記後一個）。
+3. **同一幀讀**：後端在 Submit 寫，`render_world` 的 Cleanup（同一輪、Submit 之後）`Apply` 再清空。這對正確性有關係：下一幀的抽取（`ExtractCameras` 看 `HasPicture`）要看到這一幀的結果；若到下一幀才讀，下一幀的判斷會用上上一幀的畫面。
+4. **後端什麼時候記**（`GPUDevice.cpp`）：建好 target 的貼圖時記大小（SDL 拒絕的不記：資料側下一幀再要求，直到套用；後端每次都再試、每次都計 `refusedAsks`）；pass 畫過的 target 在 command buffer 交給 GPU 之後才記（交不出去時後端自己那份「有畫面」也拿掉，兩份一致）。上傳失敗的那一幀不錄任何 pass（既有的做法），所以沒有畫過的；拿不到 command buffer 時什麼都沒套用、什麼都不記。
+5. **從外面驗證**：「SDL 拒絕大小」在 GPU 上照真的做（`sdl_gpu.phases`：比裝置最大的 2D 貼圖還寬的 target，65536×1；收據沒有它的大小、沒有畫面、每幀再要求、下一幀沿用它是 RP-3 的錯）。「上傳失敗」與「交 command buffer 中途失敗」不從外面引發：上傳只在一幀超過 4 GiB、或 SDL 映射不了傳輸緩衝時失敗，交出只在驅動拒絕時失敗，不加 Plugin 的測試專用鉤子就做不到（AGENTS 第 3 節不加守衛；只為測試開的入口也是產品的一部分）；這兩種收據的資料側反應用 headless 的替身測（`[rd-receipt-failed-*]`、`[re-receipt-*]`），後端那一側只有審查。
+6. **沒有後端就沒有畫面**：只有 `render_world` 的產品（工具、headless 測試）沒人寫收據，target 永遠沒有畫面、大小每幀再要求；不更新的相機每幀都畫。這是「沒畫成就沒有畫面」本身，不是例外。headless 的測試用一個「全部做成」的替身寫收據（`tests/common/render/Receipts.hpp`）。
+7. **沒有需要例外的地方**。留著的已知缺口（14.11 之前就有，設計審查 Note-1）：拿不到 command buffer 的那一幀，這一幀的建立要求（`TextureCreate`、`TextureTargetCreate`）被 Cleanup 清掉，後端不知道那個 target；之後它的大小要求每幀被拒、計數。收據只管「做成的事」，沒有記「要求有沒有被收下」；要收下的要求也進收據是另一個改動，不在這一批（RC-A2-9）。
+
+**新 RC**：
+- **RC-A2-9**：拿不到 command buffer、或整幀沒套用要求的情形在實機出現 → 收據加上「收下的要求」，沒收下的建立要求留到下一幀（資料側的要求變成送到收下為止）。
 

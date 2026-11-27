@@ -150,15 +150,29 @@ struct TextureTargetSize final {
 
 using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, TextureTargetCreate, TextureTargetSize>;
 
-// What a frame did to the render targets (render-pipeline declaration 14.11): RenderTextures::Apply takes it after the
-// frame. render_world builds it from the frame's data (AssumedReport: what the passes drew, the sizes asked); the
-// backend's own account of what it drew replaces that once a backend may report it (SDL-5 keeps sdl_gpu read-only).
-struct RenderFrameReport final {
-    // The render targets a pass the backend recorded drew on (as colour or as depth).
-    std::vector<TextureId> drawn;
-    // The size asks it applied (the texture made at that size, or refused by the device: no texture until another).
-    std::vector<TextureTargetSize> sized;
+// The frame's receipt: a buffer the backend writes each frame and the data side reads and then clears, recording the
+// render targets actually drawn on and the sizes actually applied this frame; one entry per target. render_world's
+// Resource: the backend writes it in the Submit stage (the one thing it writes, SDL-5), render_world's Cleanup of the
+// same frame reads it into RenderTextures (Apply) and clears it (render-pipeline declaration 14.12). A frame the backend
+// did not draw (no backend, a failed upload or submission) leaves no target drawn; a size it did not apply (refused)
+// is not in it, and is asked for again the next frame.
+class RenderFrameReceipt final {
+public:
+    // A pass of this frame drew on the target (as colour or as depth) and the frame was handed to the GPU.
+    void Drawn(TextureId target);
+    // The target's texture is now this size (made at it); a later size of the same frame replaces it.
+    void Applied(TextureId target, TargetSize size);
+    [[nodiscard]] std::span<const TextureId> DrawnTargets() const noexcept { return drawn_; }
+    [[nodiscard]] std::span<const TextureTargetSize> AppliedSizes() const noexcept { return applied_; }
+    [[nodiscard]] bool Empty() const noexcept { return drawn_.empty() && applied_.empty(); }
+    void Clear() noexcept;
+
+private:
+    std::vector<TextureId> drawn_;
+    std::vector<TextureTargetSize> applied_;
 };
+
+inline void HashValue(Kernel::Hasher&, const RenderFrameReceipt&) {}
 
 // render_world's Resource. The asks of a frame stay until render_world clears them after the frame was drawn (its
 // Cleanup stage); a backend reads them in order before it draws. Ids are never given twice.
@@ -176,7 +190,7 @@ public:
     // the data side (render-pipeline declaration 14.11): fixed, the main target's (SetMainSize) or another target's,
     // each change asked of the backend as a TextureTargetSize. Its texture is kept from frame to frame (a pass with no
     // clear draws over it, as Bevy's LoadOp::Load); it has no picture when it is made and whenever its size changes,
-    // until the backend draws on it (RenderFrameReport, Apply): the first pass that draws on it then starts from
+    // until the backend draws on it (RenderFrameReceipt, Apply): the first pass that draws on it then starts from
     // transparent black (a Depth target: cleared to 1). A pass samples it only after a pass of the same frame drew on
     // it, or the frame retains it with its picture (RenderCommands.hpp, RP-3). A fixed size of zero width or height, or following an id that is not
     // a live target, is a Programmer Error.
@@ -185,10 +199,10 @@ public:
     // sets it in the extract; a render World without cameras sets it itself): targets that follow it take it.
     // nullopt: not known (they keep the size they have).
     void SetMainSize(std::optional<TargetSize> size);
-    // After a frame (render_world's Cleanup): what the backend did. A size it applied stops being asked for (one not
-    // applied, the frame not drawn, is asked for again each frame until it is); a target it drew on at the size asked
-    // has a picture until its size changes. The backend's report is the one account of what is on a target.
-    void Apply(const RenderFrameReport& report);
+    // After a frame (render_world's Cleanup): what the backend got done. A size it applied stops being asked for (one
+    // not applied is asked for again each frame until it is); a target it drew on at the size decided here has a
+    // picture until its size changes. The receipt is the one account of what is on a target.
+    void Apply(const RenderFrameReceipt& receipt);
 
     // The live target's size as decided here, or nullopt (not known yet: it follows a size not known; or not a live
     // target).

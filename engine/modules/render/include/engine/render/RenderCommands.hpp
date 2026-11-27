@@ -295,10 +295,6 @@ struct UnwrittenRead final {
 };
 [[nodiscard]] std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, const RenderTextures& textures);
 
-// A frame's report as its data says it (render_world's Cleanup until a backend reports its own): the render targets its
-// passes draw on, and the size asks of the frame as applied.
-[[nodiscard]] RenderFrameReport AssumedReport(const RenderCommands& commands, std::span<const TextureOp> asks);
-
 // The first Pass3D whose depth target's size, as the data side decides it (RenderTextures::SizeOf), is not its colour
 // target's (the main target's: RenderTextures::MainSize); nullopt when every one matches or a size is not known yet.
 // The backend asserts it before it draws (a Programmer Error); on the GPU, where the main target is the window's picture

@@ -37,8 +37,9 @@ K::SystemResult AtLast(K::Res<R::RenderCommands>) {
     trail.push_back("last");
     return {};
 }
-// Where a backend submits: what it sees.
-K::SystemResult AtSubmit(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures) {
+// Where a backend submits: what it sees; it writes the frame's receipt (here: a target it drew on).
+K::SystemResult AtSubmit(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::ResMut<R::RenderFrameReceipt> receipt) {
+    receipt.Get().Drawn(R::TextureId{99});
     trail.push_back("submit passes=" + std::to_string(commands->passes.size()) + " asks=" + std::to_string(textures->Pending().size()) +
                     " live=" + std::to_string(textures->LiveCount()));
     return {};
@@ -110,6 +111,7 @@ TEST_CASE("render_world: Submit runs after the last stage and sees the frame's p
     CHECK_MESSAGE(world.Resource<R::RenderCommands>()->passes.empty(), "[rw-cleanup-passes] the passes are gone after the frame");
     CHECK_MESSAGE(world.Resource<R::RenderTextures>()->Pending().empty(), "[rw-cleanup-asks] the asks are gone after the frame");
     CHECK_MESSAGE(world.Resource<R::RenderTextures>()->LiveCount() == 1, "[rw-cleanup-keeps-textures] the texture stays");
+    CHECK_MESSAGE(world.Resource<R::RenderFrameReceipt>()->Empty(), "[rw-cleanup-receipt] the receipt is read and cleared after the frame");
 
     trail.clear();
     Frame(*p);

@@ -34,8 +34,9 @@ public:
     // replacement failed keeps drawing with its own number, and nothing was forgotten (the new one never drew).
     // presentation: the World's (render_world's; nullptr when it has none: left as it is). Set only when it differs
     // from what was asked last (a refusal is not tried again until it changes: the swapchain waits for the GPU).
+    // receipt: render_world's, the one thing of the World this writes (SDL-5): what the frame got done.
     void Submit(const std::uint64_t world, const R::RenderCommands& commands, const R::RenderTextures& textures,
-                const R::RenderMeshes& meshes, const R::Presentation* presentation) {
+                const R::RenderMeshes& meshes, const R::Presentation* presentation, R::RenderFrameReceipt& receipt) {
         if (!device_) return;
         if (world != drawingWorld_) {
             device_->ForgetMeshes();
@@ -52,7 +53,7 @@ public:
         }
         RequireRenderContracts(commands, textures);
         FrameTally tally;
-        switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally)) {
+        switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally, receipt)) {
         case FrameOutcome::Shown: ++shown_; break;
         case FrameOutcome::Skipped: ++skipped_; break;
         case FrameOutcome::Failed:
@@ -108,11 +109,17 @@ struct SDLGPUHandle final {
 };
 inline void HashValue(Kernel::Hasher&, const SDLGPUHandle&) {}
 
-// render_world's Submit stage: the frame's presentation, asks and passes to the window (read only, SDL-5).
+// render_world's Submit stage: the frame's presentation, asks and passes to the window. Reads the render World, writes
+// only the frame's receipt (SDL-5).
 SystemResult GPUSubmit(Kernel::Res<SDLGPUHandle> handle, Kernel::Res<R::RenderCommands> commands, Kernel::Res<R::RenderTextures> textures,
-                       Kernel::Res<R::RenderMeshes> meshes, Kernel::Res<R::Presentation> presentation) {
-    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present() || !meshes.Present()) return {};
-    handle->service->Submit(handle->world, *commands, *textures, *meshes, presentation.Present() ? &*presentation : nullptr);
+                       Kernel::Res<R::RenderMeshes> meshes, Kernel::Res<R::Presentation> presentation,
+                       Kernel::ResMut<R::RenderFrameReceipt> receipt) {
+    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present() || !meshes.Present() ||
+        !receipt.Present()) {
+        return {};
+    }
+    handle->service->Submit(handle->world, *commands, *textures, *meshes, presentation.Present() ? &*presentation : nullptr,
+                            receipt.Get());
     return {};
 }
 

@@ -121,6 +121,8 @@ void Quad2D(R::Pass2D& pass, const Rect r, const R::Color8 colour) {
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
+    // What the backend got done (render-pipeline declaration 14.12).
+    R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
         return R::Color8{image.pixels[i], image.pixels[i + 1], image.pixels[i + 2], image.pixels[i + 3]};
@@ -145,7 +147,7 @@ Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* texture
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
     const std::span<const R::MeshOp> meshAsks = meshes != nullptr ? meshes->Pending() : std::span<const R::MeshOp>{};
-    auto captured = Device().Capture(asks, meshAsks, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, meshAsks, commands, kSize, picture.tally, picture.receipt);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);

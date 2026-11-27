@@ -93,6 +93,8 @@ R::PassFullscreen Fullscreen(const std::optional<R::TextureId> target, std::stri
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
+    // What the backend got done (render-pipeline declaration 14.12).
+    R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
         return R::Color8{image.pixels[i], image.pixels[i + 1], image.pixels[i + 2], image.pixels[i + 3]};
@@ -132,18 +134,19 @@ struct PhaseCase {
     R::TextureId Target(const R::RenderTargetDesc& desc) { return live.emplace_back(textures.CreateTarget(desc)); }
     Picture Frame(const R::RenderCommands& commands) {
         Picture picture;
-        auto captured = Device().Capture(textures.Pending(), {}, commands, kSize, picture.tally);
+        auto captured = Device().Capture(textures.Pending(), {}, commands, kSize, picture.tally, picture.receipt);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
-        // As render_world's Cleanup: the frame's account applied, then the asks cleared.
-        textures.Apply(R::AssumedReport(commands, textures.Pending()));
+        // As render_world's Cleanup: the backend's receipt applied, then the asks cleared.
+        textures.Apply(picture.receipt);
         textures.ClearPending();
         return picture;
     }
     ~PhaseCase() {
         for (auto it = live.rbegin(); it != live.rend(); ++it) textures.Release(*it);
         G::FrameTally tally;
-        static_cast<void>(Device().Capture(textures.Pending(), {}, R::RenderCommands{}, kSize, tally));
+        R::RenderFrameReceipt receipt;
+        static_cast<void>(Device().Capture(textures.Pending(), {}, R::RenderCommands{}, kSize, tally, receipt));
     }
 };
 
@@ -170,6 +173,11 @@ TEST_CASE("sdl_gpu phases: two full-screen passes in a chain: the first inverts 
     CHECK_MESSAGE(p.tally.skippedDraws == 0, "[gf-drawn] " << p.tally.lastRefusal);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kCyan), "[gf-chain] the inverted red, shifted right by 2 pixels, still at the top");
     CHECK_MESSAGE((p.All(4, 0, 8, 4, kYellow) && p.All(0, 4, 8, 8, kYellow)), "[gf-chain] the inverted blue around it");
+    // The backend's receipt (render-pipeline declaration 14.12): both targets made at their sizes and drawn on.
+    CHECK_MESSAGE((p.receipt.AppliedSizes().size() == 2 && p.receipt.DrawnTargets().size() == 2),
+                  "[gd-receipt] the receipt holds the two sizes applied and the two targets drawn on");
+    CHECK_MESSAGE((c.textures.HasPicture(source) && c.textures.HasPicture(inverted) && c.textures.Pending().empty()),
+                  "[gd-receipt-applied] so both have a picture, and no size is asked for again");
 
     // The next frame retains the inverted target (no pass draws on it): its last picture is sampled.
     R::RenderCommands next;
@@ -256,6 +264,36 @@ TEST_CASE("sdl_gpu phases: a 3D pass on the main target, its depth target follow
     CHECK_MESSAGE((p.tally.skippedDraws == 1 && p.All(0, 0, 8, 8, kBlue)), "[gd-depth-size-skipped] its draws skipped and counted, not a Programmer Error");
 }
 
+TEST_CASE("sdl_gpu phases: a render target larger than the device takes: refused, not in the receipt, asked for again, no picture") {
+    PhaseCase c;
+    // Wider than a device's largest 2D texture (Lavapipe's maxImageDimension2D is 16384): SDL refuses to make it.
+    const R::TextureId huge = c.Target(R::RenderTargetDesc{R::TargetSize{65536, 1}});
+    const auto sizeAsked = [&] {
+        for (const R::TextureOp& op : c.textures.Pending()) {
+            if (const auto* sized = std::get_if<R::TextureTargetSize>(&op); sized != nullptr && sized->id == huge) return true;
+        }
+        return false;
+    };
+    R::RenderCommands commands;
+    commands.passes.push_back(On(huge, kRed));
+    commands.passes.push_back(On(std::nullopt, kBlue));
+    const Picture p = c.Frame(commands);
+    CHECK_MESSAGE((p.tally.refusedAsks == 1 && p.tally.unmappedPasses == 1 && p.All(0, 0, 8, 8, kBlue)),
+                  "[gd-refused] the size refused, the pass on it not drawn, the rest drawn: " << p.tally.lastRefusal);
+    CHECK_MESSAGE((p.receipt.AppliedSizes().empty() && p.receipt.DrawnTargets().empty()), "[gd-refused-receipt] neither its size nor a drawing in the receipt");
+    CHECK_MESSAGE((!c.textures.HasPicture(huge) && sizeAsked()), "[gd-refused-asked-again] no picture; its size asked for again");
+    // The next frame retains it and samples it: sampling what was neither drawn nor retained with a picture (RP-3,
+    // the backend asserts it before it draws); a camera that does not update draws on it instead (the per-target rule).
+    R::RenderCommands next;
+    next.retained.push_back(huge);
+    R::Pass2D sampling = On(std::nullopt, kWhite);
+    Quad(sampling, Rect{0, 0, 8, 8}, kWhite, huge);
+    next.passes.push_back(std::move(sampling));
+    CHECK_MESSAGE((R::FirstUnwrittenRead(next, c.textures) == R::UnwrittenRead{0, huge}), "[gd-refused-retained-unwritten] retaining it is RP-3's error");
+    const Picture q = c.Frame(commands);
+    CHECK_MESSAGE((q.tally.refusedAsks == 1 && !c.textures.HasPicture(huge) && sizeAsked()), "[gd-refused-each-frame] tried again the next frame, refused again");
+}
+
 TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, then retained with its picture, passes the backend's checks") {
     // No GPU: the checks are the frame's data (RP-3; a 3D pass's depth target of its target's size).
     R::RenderTextures textures;
@@ -266,7 +304,11 @@ TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, 
     Quad(main, Rect{0, 0, 8, 8}, kWhite, target);
     drawn.passes.push_back(main);
     G::RequireRenderContracts(drawn, textures);
-    textures.Apply(R::AssumedReport(drawn, textures.Pending()));
+    // The backend's receipt of that frame: its size applied, drawn on.
+    R::RenderFrameReceipt receipt;
+    receipt.Applied(target, *textures.SizeOf(target));
+    receipt.Drawn(target);
+    textures.Apply(receipt);
     textures.ClearPending();
     R::RenderCommands retained;
     retained.retained.push_back(target);

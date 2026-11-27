@@ -106,17 +106,22 @@ std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, 
     return std::nullopt;
 }
 
-RenderFrameReport AssumedReport(const RenderCommands& commands, const std::span<const TextureOp> asks) {
-    RenderFrameReport report;
-    for (const RenderPass& pass : commands.passes) {
-        const PassWrites writes = WritesOf(pass);
-        if (writes.colour && writes.colourTarget) report.drawn.push_back(*writes.colourTarget);
-        if (writes.depthTarget) report.drawn.push_back(*writes.depthTarget);
+void RenderFrameReceipt::Drawn(const TextureId target) {
+    if (std::find(drawn_.begin(), drawn_.end(), target) == drawn_.end()) drawn_.push_back(target);
+}
+
+void RenderFrameReceipt::Applied(const TextureId target, const TargetSize size) {
+    const auto it = std::find_if(applied_.begin(), applied_.end(), [&](const TextureTargetSize& a) { return a.id == target; });
+    if (it != applied_.end()) {
+        it->size = size;
+    } else {
+        applied_.push_back(TextureTargetSize{target, size});
     }
-    for (const TextureOp& ask : asks) {
-        if (const auto* sized = std::get_if<TextureTargetSize>(&ask)) report.sized.push_back(*sized);
-    }
-    return report;
+}
+
+void RenderFrameReceipt::Clear() noexcept {
+    drawn_.clear();
+    applied_.clear();
 }
 
 std::optional<std::size_t> FirstDepthOfAnotherSize(const RenderCommands& commands, const RenderTextures& textures) {
@@ -239,12 +244,13 @@ void RenderTextures::ResolveSizes() {
     }
 }
 
-void RenderTextures::Apply(const RenderFrameReport& report) {
+void RenderTextures::Apply(const RenderFrameReceipt& receipt) {
+    const std::span<const TextureId> drawnTargets = receipt.DrawnTargets();
     for (TargetState& t : targets_) {
-        for (const TextureTargetSize& sized : report.sized) {
+        for (const TextureTargetSize& sized : receipt.AppliedSizes()) {
             if (sized.id.value == t.id) t.applied = sized.size;
         }
-        const bool drawn = std::find(report.drawn.begin(), report.drawn.end(), TextureId{t.id}) != report.drawn.end();
+        const bool drawn = std::find(drawnTargets.begin(), drawnTargets.end(), TextureId{t.id}) != drawnTargets.end();
         if (drawn && t.applied && t.applied == t.size) t.picture = true;
     }
 }

@@ -192,6 +192,25 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 - Linux 主機（`327a4be5`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 257/257；`sdl_gpu.phases`、`unwritten`、`contracts`、`targets`、`pass2d` 5/5；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 59/59 killed（上一節的 59 個，`gd-depth-pass-fresh-kept` 改名、`gt-unwritten-*` 移到 cpu，加 `gd-depth-size-asserted`、`gd-size-ask-ignored`、`gd-depth-pass-picture-not-given`）。
 - B-1 先失敗：見上表第一列（`b1b173a5`＋一案，SIGABRT）；修正後同一個情境是 `[gd-depth-size-skipped]`，通過。
 
+## 幀的收據 `RenderFrameReceipt`（同日，使用者選 SDL-5 (a)）
+
+- 使用者（經主會話，HANDOFF `v8-arch-gyo2-sdl5-render-frame-receipt`）：「其實（a）的解法不錯，那個 Resource 就是 cache 或者 buffer 一類的東西。」「那叫receipt 好了。」「叫 FrameReceiptBuffer 把，然後用註釋寫明功能。如何？」，最後「RenderFrameReceipt 好了，選 （a）」。比過的 (b)、(c) 與 `FrameReceiptBuffer` 沒選的理由在宣告第 14.13 節。
+- 做了什麼：
+  1. `render`：`RenderFrameReceipt`（取代 `RenderFrameReport`；`Drawn`、`Applied`，一個 target 一筆；`Clear`），`RenderTextures::Apply(receipt)`；`AssumedReport` 拿掉。
+  2. `render_world`：登記收據；Cleanup 讀進 `RenderTextures` 再清空（同一幀）。
+  3. `sdl_gpu`：`GPUSubmit` 多一個 `ResMut<RenderFrameReceipt>`（唯一寫的）；`GPUDevice::Submit`／`Capture` 多一個收據參數。adapter 建好 target 的貼圖時記大小；pass 畫過的 target 在交給 GPU 之後才記，交不出去時自己那份「有畫面」也拿掉（`Settle`）。
+  4. SDL-5 條文照使用者的決定改寫（sdl 頁），連同引用與出處。
+- 測試：
+  - `render.data`：收據一個 target 一筆、清空；「貼圖建了、這一幀沒交給 GPU」（收據只有大小）→ 沒有畫面，下一幀沿用它是 RP-3 的錯（`[rd-receipt-failed-*]`）；沒套用的大小每幀再要求、套用了才停（`[rd-size-asked-until-applied]`、`[rd-size-applied-undrawn]`）。
+  - `render.extract`：測試的「後端」（`Record`，寫「全部做成」的收據，`tests/common/render/Receipts.hpp`）某一幀沒做成 → Disabled 的相機下一幀再畫、之後才沿用（`[re-receipt-*]`）。
+  - `render.world`：收據讀完就清（`[rw-cleanup-receipt]`）。
+  - `sdl_gpu.phases`：真的後端的收據有兩個大小、兩個畫過的 target，資料側因此有畫面、不再要求（`[gd-receipt]`、`[gd-receipt-applied]`）。GPU 的測試全部改成用 `Capture` 寫的收據。
+  - `sdl_gpu.phases`（主會話轉來：要從外面驗證）：比裝置最大的 2D 貼圖還寬的 target（65536×1），SDL 真的拒絕；收據沒有它的大小與畫，資料側沒有畫面、每幀再要求，下一幀沿用它是 RP-3 的錯（`[gd-refused-*]`）。
+  - **沒有測到的**：後端在上傳失敗、交 command buffer 中途失敗時寫的收據——上傳只在一幀超過 4 GiB 或 SDL 映射不了傳輸緩衝時失敗、交出只在驅動拒絕時失敗，不加 Plugin 的測試專用鉤子就引發不了（不加：宣告第 14.13 節第 5 點）；資料側對這種收據的反應有測（上面兩項）。
+- 突變：`phase_mutations.json` 新增 7 個（`rw-receipt-not-cleared`、`rw-receipt-not-applied`、`rd-receipt-size-appended`、`rd-receipt-drawn-twice`、`gd-receipt-size-not-applied`、`gd-receipt-drawn-not-given`、`gd-receipt-refused-applied`），共 48 個；沒加的與理由在檔案的 `description`。
+- 寫的時候的一件事：測試的替身放在 `GYO::Tests::Render`，`naming.guard` 擋下（`GYO::Tests` 不是命名表的根），改成既有的 `GYO::Test`。
+- 沒有需要例外的地方；留著的已知缺口（拿不到 command buffer 的那一幀，建立要求被清掉）記成 RC-A2-9（宣告第 14.13 節）。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。

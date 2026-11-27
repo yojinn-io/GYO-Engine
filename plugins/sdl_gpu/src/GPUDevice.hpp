@@ -111,16 +111,19 @@ public:
     GPUDevice& operator=(const GPUDevice&) = delete;
 
     // Applies the asks in order (textures, then meshes), then draws the passes on their targets and shows the
-    // window's picture. Target 0 is the window; a render target has the size render's asks give it.
+    // window's picture. Target 0 is the window; a render target has the size render's asks give it. receipt: what got
+    // done (render-pipeline declaration 14.12): each target size applied, and, when the frame was handed to the GPU,
+    // each render target a pass drew on.
     FrameOutcome Submit(std::span<const Engine::Render::TextureOp> asks, std::span<const Engine::Render::MeshOp> meshAsks,
-                        const Engine::Render::RenderCommands& commands, FrameTally& tally);
+                        const Engine::Render::RenderCommands& commands, FrameTally& tally, Engine::Render::RenderFrameReceipt& receipt);
     // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture;
     // render targets keep the sizes render's asks give them) and reads it back, waiting for the GPU. A zero size is a
-    // Programmer Error.
+    // Programmer Error. receipt: as Submit's.
     [[nodiscard]] Engine::Base::Result<CapturedImage, CaptureFailure> Capture(std::span<const Engine::Render::TextureOp> asks,
                                                                            std::span<const Engine::Render::MeshOp> meshAsks,
                                                                            const Engine::Render::RenderCommands& commands,
-                                                                           Engine::Render::TargetSize size, FrameTally& tally);
+                                                                           Engine::Render::TargetSize size, FrameTally& tally,
+                                                                           Engine::Render::RenderFrameReceipt& receipt);
     // Sets the window's swapchain to the first present mode of mode's chain the window supports (ChoosePresentMode),
     // waiting for the GPU (SDL_SetGPUSwapchainParameters). false: SDL refused (the text in LastError()); the mode
     // stays. A device without a window has no swapchain: true, nothing set.
