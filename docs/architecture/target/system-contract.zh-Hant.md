@@ -57,6 +57,8 @@
 | 參數型別 | `Query<Read<T>, Write<T>, With<T>, Without<T>, Changed<T>, Added<T>>`、`Res<T>`、`ResMut<T>`、`EventReader<E>`、`EventWriter<E>`、`Commands`、`CommandsFor<Inserts<…>, Removes<…>>`、`Spawn<Bundle<…>>`、`SpawnWithId<Bundle<…>>`、`Despawn`、`Local<T>`、`CurrentTick`、`DiagnosticsWriter<T>`、`SetRead<SetTag>`、`ExclusiveWorld`、`Extract<Read<T>>`、`ExtractRes<R>` | spec B.4 第 4 點 |
 | `ParamTraits<P>`（`valid`、`readOnly`、`Contribution`） | 參數型別的特化；`Contribution` 是 `TypeList<Access::…>`，存取項在 `Access.hpp` | spec B.4 第 3 點；DI-KS 1 |
 | `Condition<&Fn>(name)`、`Condition<Lambda>(name)`（`ConditionRef`） | run 條件：回 `bool`、參數全唯讀 | spec E.4、S-5 |
+| `Condition<&Fn>(name, value)` | 帶值的 run 條件：`Fn` 的第一個參數是 `const V&`（登記時給的值，複製、唯讀），其餘同上；值的雜湊進指紋（`ConditionRef::Identity`） | target/kernel DI-KS 1（2026-11-27） |
+| `ResourceExists<R>(name)`、`ResourceEquals<R>(name, value)`、`ResourceExistsAndEquals<R>(name, value)`（`engine/kernel/Conditions.hpp`） | Resource 的 run 條件，名字與語意照 Bevy（`bevy_ecs/src/schedule/condition.rs:688、728、770`）；`ResourceEquals` 在 Resource 不存在時斷言（Bevy panic） | 同上 |
 | `Rejection`、`SystemRejectionOf<F>()`、`SystemRejectionOfFunction<Fn>()`、`ConditionRejectionOf…` | 簽名被拒的理由（測試讀它）；登記點以 `static_assert` 擋，訊息帶 `GYO_KERNEL_REJECT_…` 標記 | spec S-1～S-3、S-5、S-10、J-10、J-11、J-13 |
 | `AccessSet`、`AccessKey`、`AccessKind` | finish 後以 id 表示的推導存取（reads、writes、membershipReads、deferredWrites、setReads、extractReads 與旗標） | spec B.1 derived、S-4 |
 | `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前，每個 World 一份）：驗證開關、`breakOnKernelError`、hook 輪上限的預設 `hookRoundLimit`（spec F-12）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |

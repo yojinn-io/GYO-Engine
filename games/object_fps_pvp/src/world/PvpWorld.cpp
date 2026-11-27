@@ -1105,7 +1105,7 @@ std::uint64_t GameContent::MatchRulesDigest(const std::size_t mode, const std::s
     // The arena's blocks of the sets the mode turns on, by set name.
     std::vector<std::pair<std::string, std::uint64_t>> blocks;
     for (const auto& [slot, read] : arenaSets[arena]) {
-        if (played.on.test(slot)) blocks.emplace_back(sets[slot].name, read.digest);
+        if (played.on.Has(slot)) blocks.emplace_back(sets[slot].name, read.digest);
     }
     if (blocks.empty()) return played.rulesDigest;
     std::sort(blocks.begin(), blocks.end());
@@ -1345,7 +1345,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
             if (read.put) read.put(world);
         }
         for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {
-            if (mode.on.test(slot) && read.put) read.put(world);
+            if (mode.on.Has(slot) && read.put) read.put(world);
         }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.

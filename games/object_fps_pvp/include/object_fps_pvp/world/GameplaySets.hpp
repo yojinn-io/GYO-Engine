@@ -9,14 +9,15 @@
 // entity: nothing of it is replicated, nothing of it is in the authority digest.
 //
 // A set's registration is Bevy's Fn(&mut App) plugin (bevy_app/src/plugin.rs:96-99); the condition its Kernel sets
-// carry is Bevy's configure_sets(...).run_if (bevy_ecs/src/schedule/config.rs). The sets are registered after the
-// core's registrations, in the table's order, so the core's authority registration numbers and wire ids do not move.
+// carry is Bevy's configure_sets(...).run_if (bevy_ecs/src/schedule/config.rs), and the condition is the Kernel's
+// condition with a value (Kernel::Condition<&Fn>(name, slot), as Bevy's resource_equals carries its value; mode-config
+// declaration section 12). The sets are registered after the core's registrations, in the table's order, so the core's
+// authority registration numbers and wire ids do not move.
 
 #include "engine/json/Document.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
-#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -30,9 +31,6 @@ namespace object_fps_pvp::world {
 
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
-
-// At most this many gameplay sets (each set's run condition is a function of its slot).
-inline constexpr std::size_t kMaxGameplaySets = 32;
 
 // What a set read from a mode file or an arena file: the digest of the values it read (into the rules digest that both
 // ends compare, GameContent::MatchRulesDigest), and what it puts into a World that plays it (its own Resource, before
@@ -65,8 +63,12 @@ struct GameplaySet final {
 [[nodiscard]] std::string GameplaySetFixed(std::string_view set);
 [[nodiscard]] std::string GameplaySetFrame(std::string_view set);
 
-// Which sets this World's mode turns on, by slot (ActiveMode::on).
-using SetsOn = std::bitset<kMaxGameplaySets>;
+// Which sets a mode turns on, by slot (the set's index in the table).
+struct SetsOn final {
+    std::vector<std::size_t> slots;
+    [[nodiscard]] bool Has(std::size_t slot) const;
+    void Add(std::size_t slot);
+};
 
 // The mode this World plays (WorldOptions::mode): put before the first frame, never written after. Not decision data,
 // and not GameRules (LoadArena writes that while the World generates: a condition reading it would conflict with it).

@@ -175,13 +175,13 @@ TEST_CASE("world: a mode's gameplay sets read with their settings; a set the gam
     std::string error;
     const auto on = load(R"({"probe": {"start": 3}})", error);
     REQUIRE_MESSAGE(on.has_value(), error);
-    CHECK(on->front().on.test(0));
+    CHECK(on->front().on.Has(0));
     const auto other = load(R"({"probe": {"start": 4}})", error);
     REQUIRE_MESSAGE(other.has_value(), error);
     CHECK_MESSAGE(other->front().rulesDigest != on->front().rulesDigest, "the set's settings are in the rules digest");
     const auto off = load("{}", error);
     REQUIRE_MESSAGE(off.has_value(), error);
-    CHECK_FALSE(off->front().on.test(0));
+    CHECK_FALSE(off->front().on.Has(0));
     CHECK(off->front().rulesDigest != on->front().rulesDigest);
     CHECK_FALSE(load(R"({"doors": {}})", error).has_value());
     CHECK_MESSAGE(error.find("no gameplay set 'doors'") != std::string::npos, error);

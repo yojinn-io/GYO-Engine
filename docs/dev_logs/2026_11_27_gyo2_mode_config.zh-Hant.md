@@ -59,6 +59,8 @@ Owner：模式配置的任務卡。分支 `claude/gyo2-mode-config-declaration`�
 - 重現（六組同方向）→ 分段（主執行緒的每幀工作不變，差距在工作執行緒上、程式沒改的兩段）→ 讀圖與建牆的四個函式庫兩版機器碼相同、位址不同 → 因果實驗：改前塞 120 KB 不執行的填充就穩定慢約 25 ms。結論是程式碼擺放位置的效應；回歸基準更新成同日改後的數字（宣告 11.8、大地圖宣告 17.8）。
 - 途中兩件作廢：重現那一輪的 g 組和重建同時跑；等待迴圈的 `pgrep -f` 比對到自己而停不下來（改成直接跑）。
 
-## 待補
+## Kernel 步：帶值的 run condition（U2）
 
-（Kernel 步：等條文的回覆。）
+- 使用者先選 U2 (b)；卡片寫小宣告（宣告第 12 節）、照指示在改 Kernel 條文前停下回報；使用者「那這樣沒有問題，我同意你的看法。」後實作。
+- `Condition<&Fn>(name, value)`、`ResourceExists`／`ResourceEquals`／`ResourceExistsAndEquals`（照 Bevy `condition.rs:688、728、770`）、`ConditionRef::Identity`（值的雜湊進指紋；沒有值的條件指紋不變）。遊戲層的 slot 模板表拿掉。
+- 檢驗：kernel、authority、rollback、net、state_machine、orchestration、world_time、scenario、object_fps_pvp 的 ctest 共 136 項全過；compile-fail 樣本多兩個變體、照預期被拒。突變：Kernel `cv-` 6 個（值不進 identity、沒有值也加後綴、不存在時回 true、相等反過來、存在恆真、值沒傳進去）6/6 killed；遊戲層 27 個重跑 27/27 killed。A/B（macOS）權威 digest 仍逐位元組相同。

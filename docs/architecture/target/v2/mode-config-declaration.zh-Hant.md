@@ -83,7 +83,7 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
 
 1. **四家都把「哪個模式開什麼」放在遊戲的資料**；Engine 只給「依資料決定跑不跑／建不建」的機制。GYO 照做：模式檔在 `assets/object_fps_pvp/`，膠水在 `games/object_fps_pvp/`，Engine 不動。
 2. **有複製協議的框架（replicon、lightyear、Unity Netcode）都讓登記固定、用條件或資料決定跑不跑**；沒有協議的（flecs、單機 Bevy）才常用「依登記區分」。GYO 有 protocol hash 與 consistency fingerprint（第 2.2 節），所以照前者。
-3. **和 Bevy 的接合點**：玩法組的登記函式＝Bevy 的 `Fn(&mut App)` Plugin；條件＝`resource_equals`；帶條件的 set＝`configure_sets(...).run_if`。~~沒有偏離 Bevy，沒有衝突點~~（實作後的設計審查 S5 更正）**衝突點一個**：Bevy 的條件可以捕獲值（`resource_equals` 回傳捕獲 `value` 的閉包，`crates/bevy_ecs/src/schedule/condition.rs:728-733`），GYO Kernel 的條件不能捕獲（`Registry.hpp:53`）。膠水：遊戲層一張以 slot 當模板參數的條件表（約 20 行，上限 32 組，第 2.4 節）。Kernel 要不要支援捕獲是 Engine 機制，不在這條線做（第 11 節 U2）。
+3. **和 Bevy 的接合點**：玩法組的登記函式＝Bevy 的 `Fn(&mut App)` Plugin；條件＝`resource_equals`；帶條件的 set＝`configure_sets(...).run_if`。~~沒有偏離 Bevy，沒有衝突點~~（實作後的設計審查 S5 更正）**衝突點一個**：Bevy 的條件可以捕獲值（`resource_equals` 回傳捕獲 `value` 的閉包，`crates/bevy_ecs/src/schedule/condition.rs:728-733`），GYO Kernel 的條件不能捕獲（`Registry.hpp:53`）。膠水：遊戲層一張以 slot 當模板參數的條件表（約 20 行，上限 32 組，第 2.4 節）。Kernel 要不要支援捕獲是 Engine 機制，不在這條線做（第 11 節 U2）。→ 使用者選 U2 (b)，Kernel 步（第 12 節）加了帶值條件，這張表已拿掉，膠水剩一個兩行的條件函式。
 
 ---
 
@@ -127,7 +127,7 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
 
 - **玩法組（gameplay set）**：遊戲程式裡的一張固定表。每一列是名字（例 `doors`）、一個登記函式 `void(O::WorldSetup&)`（＝Bevy 的 `Fn(&mut App)` Plugin）、模式檔裡它那一塊設定的解析函式。名字照命名規範、只用 ASCII。
   - 不叫 Feature（GYO 文件裡 Feature 是行為需求的用語）、不叫 Plugin／Module（GYO 的 Plugin＝第三方、Module＝我們維護的 Engine 單位）。
-- **條件**：`template <std::size_t Slot> bool GameplaySetOn(K::Res<ActiveMode>)`，名字 `pvp.mode.<組名>`。條件不能捕獲（`Registry.hpp:53`），所以用表裡的固定位置當模板參數。
+- **條件**：~~`template <std::size_t Slot> bool GameplaySetOn(K::Res<ActiveMode>)`，名字 `pvp.mode.<組名>`。條件不能捕獲（`Registry.hpp:53`），所以用表裡的固定位置當模板參數。~~（第 12 節 Kernel 步之後）`K::Condition<&SetOn>("pvp.mode.<組名>", slot)`：Kernel 的帶值條件，slot 是值；上限與模板表拿掉。
 - **`ActiveMode`**：一個 Resource，`Prepare` 時放好、之後不寫；不是決策資料（不進權威 digest）。不併進 `GameRules`：`LoadArena` 在生成期間寫 `GameRules`（`PvpWorld.cpp:909-913`），條件讀它會給所有被條件管的 System 加上不必要的衝突。
 - **每個玩法組的 System**：在 Fixed 與 Frame 各進一個 set（`pvp.<組名>.fixed`、`pvp.<組名>.frame`），兩個 set 都帶同一個條件。
 - **登記順序**：玩法組的登記一律排在核心的登記之後，讓核心型別的 authority 登記序號與網路的 wire id 不動（權威 digest 用型別的 authority 登記序號，`engine/modules/authority/include/engine/authority/Consistency.hpp:7-13`）。
@@ -495,3 +495,20 @@ Linux，2026-11-27（U4 之後，約 1 小時）。證據：主 checkout `build/
   - `system-contract.zh-Hant.md:59` 的 API 表加 `Condition<&Fn>(name, value)` 與三個 Resource 條件。
   - 有捕獲的 lambda 仍然編譯失敗（不改）。
 - **測試（外部可驗）**：`tests/common/kernel/` 加帶值條件的案：值相等、不相等、Resource 不存在（`ResourceExistsAndEquals` 是 false；`ResourceEquals` 是斷言）三種行為；同名不同值的兩個 World 指紋不同、同值相同；遊戲層 `[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。相關突變：值不進指紋、相等的比較反過來、不存在時回 true。
+
+### 12.4 實作結果（2026-11-27；使用者「那這樣沒有問題，我同意你的看法。」，HANDOFF `v8-arch-gyo2-mode-config-kernel-step`）
+
+照 12.2、12.3 做，沒有再偏離。
+
+- **Kernel**：
+  - `ConditionRef` 多持一份不可變的值（`std::shared_ptr<const void>`）與它的雜湊；`Detail::ConditionFn` 多收那份值（沒有值時是 null）；`ConditionRef::Evaluate`、`Identity`。
+  - `Condition<&Fn>(name, value)`：`Fn` 的第一個參數必須是 `const V&`（不是的話 `Rejection::ConditionValue`，`GYO_KERNEL_REJECT_CONDITION_VALUE`），值的型別要和它相同、要有 `HashValue`（`static_assert`）。
+  - `engine/kernel/Conditions.hpp`：`ResourceExists`、`ResourceEquals`、`ResourceExistsAndEquals`。
+  - 指紋：Kernel 的 `RegistryFingerprint`（掛載點與 set 的條件）、`SetInfo::conditions`、權威的 consistency fingerprint 都改讀 `Identity()`。沒有值的條件，`Identity()` 就是名字，所以既有的指紋一個位元都不變（Kernel 的 golden 指紋測試照舊通過，A/B 的決策資料集也相同）。
+  - rollback 用 `Evaluator()` 的指標認「重跑時跳過」的條件（`Registrations.cpp:194`）：照舊。
+- **條文**：`docs/architecture/target/kernel.zh-Hant.md:19` 照 12.3 的原文加一句；`system-contract.zh-Hant.md` 的 API 表加兩列。
+- **遊戲層**：2.4 的 slot 模板表、`kMaxGameplaySets`、`std::bitset` 拿掉；`GameplaySetOn` 是 `K::Condition<&SetOn>("pvp.mode.<組>", slot)`；`SetsOn` 改成 slot 的清單（`Has`、`Add`），組數不再有上限。
+- **測試**：
+  - Kernel：`DI-KS 1:` 6 案（`ConditionValueTests.cpp`）：`ResourceExistsAndEquals` 的相等、不相等、不存在；`ResourceEquals` 的相等、不相等、不存在時斷言；`ResourceExists`；`Condition<&Fn>(name, value)` 收到登記時的值；同名不同值的指紋不同、同值相同、沒有值的條件 identity 就是名字；形狀不對的被拒。
+  - 編譯失敗樣本：`CONDITION_CAPTURE`（有捕獲的 lambda 當條件 → `GYO_KERNEL_REJECT_CAPTURE`）、`CONDITION_VALUE`（→ `GYO_KERNEL_REJECT_CONDITION_VALUE`）；控制組多登記一個帶值條件、照常編譯。
+  - 遊戲層：`[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。

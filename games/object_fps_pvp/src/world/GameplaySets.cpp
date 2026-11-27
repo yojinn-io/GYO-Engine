@@ -1,9 +1,6 @@
 #include "object_fps_pvp/world/GameplaySets.hpp"
 
-#include "engine/base/Assert.hpp"
-
 #include <algorithm>
-#include <array>
 #include <utility>
 
 namespace object_fps_pvp::world {
@@ -82,28 +79,21 @@ std::optional<SetBlocks> ReadArenaSets(const std::string_view arenaText, const s
     return ReadSetBlocks(*object, sets, true, error);
 }
 
+bool SetsOn::Has(const std::size_t slot) const { return std::find(slots.begin(), slots.end(), slot) != slots.end(); }
+
+void SetsOn::Add(const std::size_t slot) {
+    if (!Has(slot)) slots.push_back(slot);
+}
+
 namespace {
 
-// A condition cannot capture (Kernel::Condition): the slot is its template argument.
-template <std::size_t Slot>
-bool SetOn(K::Res<ActiveMode> mode) {
-    return mode->on.test(Slot);
-}
-
-using MakeCondition = K::ConditionRef (*)(std::string);
-
-template <std::size_t... Slots>
-constexpr std::array<MakeCondition, sizeof...(Slots)> Conditions(std::index_sequence<Slots...>) {
-    return {+[](std::string name) { return K::Condition<&SetOn<Slots>>(std::move(name)); }...};
-}
-
-constexpr auto kConditions = Conditions(std::make_index_sequence<kMaxGameplaySets>{});
+// The slot is the condition's value (Kernel::Condition<&Fn>(name, value)): the set the mode may turn on.
+bool SetOn(const std::size_t& slot, K::Res<ActiveMode> mode) { return mode->on.Has(slot); }
 
 } // namespace
 
 K::ConditionRef GameplaySetOn(const std::size_t slot, const std::string& name) {
-    GYO_ASSERT(slot < kMaxGameplaySets);
-    return kConditions[slot]("pvp.mode." + name);
+    return K::Condition<&SetOn>("pvp.mode." + name, slot);
 }
 
 } // namespace object_fps_pvp::world

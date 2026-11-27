@@ -3339,8 +3339,8 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/GameplaySets.cpp",
-   "find": "    return mode->on.test(Slot);",
-   "replace": "    return true;",
+   "find": "bool SetOn(const std::size_t& slot, K::Res<ActiveMode> mode) { return mode->on.Has(slot); }",
+   "replace": "bool SetOn(const std::size_t&, K::Res<ActiveMode>) { return true; }",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode leaves off*",
    "expect": "pvp-set-off"
@@ -3352,8 +3352,8 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/GameplaySets.cpp",
-   "find": "    return mode->on.test(Slot);",
-   "replace": "    return false;",
+   "find": "bool SetOn(const std::size_t& slot, K::Res<ActiveMode> mode) { return mode->on.Has(slot); }",
+   "replace": "bool SetOn(const std::size_t&, K::Res<ActiveMode>) { return false; }",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode turns on*",
    "expect": "pvp-set-on"
@@ -3365,7 +3365,7 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "            if (mode.on.test(slot) && read.put) read.put(world);",
+   "find": "            if (mode.on.Has(slot) && read.put) read.put(world);",
    "replace": "            if (read.put) read.put(world);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode leaves off*",

@@ -2,7 +2,6 @@
 
 #include "data/JsonFields.hpp"
 
-#include "engine/base/Assert.hpp"
 #include "engine/base/Fnv1a.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
@@ -181,8 +180,7 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
                 return fail("the movement rules do not fit the body of arena '" + arena.id + "'");
             }
         }
-        GYO_ASSERT(sets.size() <= kMaxGameplaySets);
-        for (const auto& [slot, read] : file->sets) mode.on.set(slot);
+        for (const auto& [slot, read] : file->sets) mode.on.Add(slot);
         mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat);
         mode.sets = std::move(file->sets);
         modes.push_back(std::move(mode));

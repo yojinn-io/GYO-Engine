@@ -2,6 +2,7 @@
 
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Declarations.hpp"
+#include "engine/kernel/Hash.hpp"
 #include "engine/kernel/KernelError.hpp"
 #include "engine/kernel/Plan.hpp"
 #include "engine/kernel/Relationship.hpp"
@@ -54,24 +55,46 @@ class Registry;
 // with read-only parameters (S-5). Its reads join the System's reads (S-4).
 // Made only by Condition<>: its access comes from the condition's signature,
 // never written by hand (DI-KS 1: no second, hand-written access declaration).
+//
+// A condition may carry one value given at its registration (Condition<&Fn>(name,
+// value); the user's decision U2, mode-config declaration section 12): Fn's first
+// parameter is const V&, the value, copied once and never written; the callable
+// itself still captures nothing (DI-KS 1). Bevy's resource_equals captures the
+// value it compares with (bevy_ecs/src/schedule/condition.rs:728); here only that
+// one fixed value, never state. The value's hash is part of the condition's
+// identity, so two Worlds whose conditions have one name and other values have
+// other fingerprints.
 class ConditionRef {
 public:
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
+    // What the fingerprints take: the name, and with a value "name=<its hash, 16 hex digits>".
+    [[nodiscard]] std::string Identity() const;
     [[nodiscard]] Detail::ResolveFn Resolver() const noexcept { return resolve_; }
     [[nodiscard]] Detail::ConditionFn Evaluator() const noexcept { return evaluate_; }
+    [[nodiscard]] bool Evaluate(Detail::SystemContext& call) const { return evaluate_(call, value_.get()); }
 
 private:
     template <auto Fn>
     friend ConditionRef Condition(std::string name);
     template <class F>
     friend ConditionRef Condition(std::string name);
-    ConditionRef(std::string name, Detail::ResolveFn resolve, Detail::ConditionFn evaluate)
-        : name_(std::move(name)), resolve_(resolve), evaluate_(evaluate) {}
+    template <auto Fn, class V>
+    friend ConditionRef Condition(std::string name, V value);
+    ConditionRef(std::string name, Detail::ResolveFn resolve, Detail::ConditionFn evaluate,
+                 std::shared_ptr<const void> value = nullptr, std::uint64_t valueHash = 0)
+        : name_(std::move(name)), resolve_(resolve), evaluate_(evaluate), value_(std::move(value)), valueHash_(valueHash) {}
 
     std::string name_;
     Detail::ResolveFn resolve_ = nullptr;
     Detail::ConditionFn evaluate_ = nullptr;
+    std::shared_ptr<const void> value_;
+    std::uint64_t valueHash_ = 0;
 };
+
+namespace Detail {
+// The hash of a condition's value (its HashValue through the Kernel's Hasher).
+[[nodiscard]] std::uint64_t ConditionValueHash(const Hasher& hasher);
+} // namespace Detail
 
 template <auto Fn>
 [[nodiscard]] ConditionRef Condition(std::string name) {
@@ -79,7 +102,7 @@ template <auto Fn>
     if constexpr (ConditionRejectionOfFunction<Fn>() == Rejection::None) {
         using Pointer = typename Detail::Signature<decltype(Fn)>::Pointer;
         return ConditionRef{std::move(name), Detail::ResolverOf<Pointer>::value,
-                            &Detail::InvokerOf<Pointer>::template CallFunction<Fn>};
+                            &Detail::InvokerOf<Pointer>::template CallCondition<Fn>};
     } else {
         return ConditionRef{std::move(name), nullptr, nullptr};
     }
@@ -91,7 +114,28 @@ template <class F>
     if constexpr (ConditionRejectionOf<F>() == Rejection::None) {
         using Pointer = typename Detail::Signature<decltype(&F::operator())>::Pointer;
         return ConditionRef{std::move(name), Detail::ResolverOf<Pointer>::value,
-                            &Detail::InvokerOf<Pointer>::template CallLambda<F>};
+                            &Detail::InvokerOf<Pointer>::template CallLambdaCondition<F>};
+    } else {
+        return ConditionRef{std::move(name), nullptr, nullptr};
+    }
+}
+
+// A condition with a value: Fn is bool(const V&, P...), called with the value given here (copied once).
+template <auto Fn, class V>
+[[nodiscard]] ConditionRef Condition(std::string name, V value) {
+    Detail::RequireAccepted<ValuedConditionRejectionOf<Fn>()>();
+    if constexpr (ValuedConditionRejectionOf<Fn>() == Rejection::None) {
+        using Valued = Detail::ValuedCondition<typename Detail::Signature<decltype(Fn)>::Pointer>;
+        using Value = typename Valued::Value;
+        static_assert(std::is_same_v<std::remove_cvref_t<V>, Value>,
+                      "Condition<&Fn>(name, value): the value is of Fn's first parameter's type");
+        static_assert(Hashable<Value>, "Condition<&Fn>(name, value): the value has a HashValue (it is in the fingerprints)");
+        auto held = std::make_shared<const Value>(std::move(value));
+        Hasher hasher;
+        HashValue(hasher, *held);
+        return ConditionRef{std::move(name), Detail::ResolverOf<typename Valued::Rest>::value,
+                            &Detail::InvokerOf<typename Valued::Rest>::template CallValuedCondition<Fn, Value>, std::move(held),
+                            Detail::ConditionValueHash(hasher)};
     } else {
         return ConditionRef{std::move(name), nullptr, nullptr};
     }
@@ -554,7 +598,7 @@ struct ScheduleInfo {
 };
 
 // One named System set (Registrar::Set): its options (before / after of the
-// set included) and the names of its run conditions.
+// set included) and its run conditions' identities (ConditionRef::Identity).
 struct SetInfo {
     SetOptions options;
     std::vector<std::string> conditions;

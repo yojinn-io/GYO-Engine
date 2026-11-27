@@ -8689,6 +8689,84 @@
       "target": "gyo_kernel_tests",
       "cases": "DI-KS 38: StagePlans keeps the round aside*",
       "expect": "a\\ staged\\ round\\ waits\\ for\\ CommitPlans\\ or\\ DiscardRegistrations"
+    },
+    {
+      "id": "cv-identity-no-value",
+      "what": "a condition's value is left out of its identity: one name, other values, one fingerprint",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    if (!value_) return name_;",
+      "replace": "    return name_;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-fingerprint-value\\]"
+    },
+    {
+      "id": "cv-identity-always-value",
+      "what": "a condition without a value gets a value's suffix: every fingerprint changes",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/src/Registry.cpp",
+      "find": "    if (!value_) return name_;",
+      "replace": "    if (false) return name_;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-identity-plain\\]"
+    },
+    {
+      "id": "cv-exists-and-equals-absent-true",
+      "what": "ResourceExistsAndEquals is true when the Resource is not there",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Conditions.hpp",
+      "find": "    return resource.Present() && *resource == value;",
+      "replace": "    return !resource.Present() || *resource == value;",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-exists-absent\\]"
+    },
+    {
+      "id": "cv-equals-inverted",
+      "what": "ResourceEquals runs on another value instead of an equal one",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Conditions.hpp",
+      "find": "    return *resource == value;\n}",
+      "replace": "    return !(*resource == value);\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-equals-equal\\]"
+    },
+    {
+      "id": "cv-exists-always",
+      "what": "ResourceExists is true when the Resource is not there",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/Conditions.hpp",
+      "find": "    return resource.Present();\n}",
+      "replace": "    return (void)resource, true;\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-not-there\\]"
+    },
+    {
+      "id": "cv-value-not-passed",
+      "what": "a condition with a value is called with a default value instead of the one given",
+      "guards": [
+        "kernel DI-KS 1 (condition with a value; mode-config declaration 12)"
+      ],
+      "file": "engine/ecs/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "        return Fn(*static_cast<const V*>(value), ParamTraits<P>::Fetch(call)...);",
+      "replace": "        return (void)value, Fn(V{}, ParamTraits<P>::Fetch(call)...);",
+      "target": "gyo_kernel_tests",
+      "cases": "DI-KS 1:*",
+      "expect": "\\[cv-value-passed\\]"
     }
   ]
 }
