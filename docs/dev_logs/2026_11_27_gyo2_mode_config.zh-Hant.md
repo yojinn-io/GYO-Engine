@@ -35,6 +35,10 @@ Owner：模式配置的任務卡。分支 `claude/gyo2-mode-config-declaration`�
 - 不採與部分採用的理由、要使用者決定的三點（U1 骨架與動畫進不進比對值、U2 Kernel 條件要不要能捕獲、U3 房間服務要不要查組合）：宣告 11.5、11.6。
 - 處置後：`object_fps_pvp.*` 15 項全過、Go 全過、A/B 仍逐位元組相同；突變再加 4 個，和模式有關的 30 個重跑。
 
+## L1
+
+- 第一次 dispatch（run 45971988646，head `797471c1`）：windows-x64 過；linux-x64 有 1 項失敗：`object_fps_pvp.client.3` 的 `client: single player: the room, a game without a server...` 在 `[pvp-solo-playing]`（只等 60 幀讓地圖讀完）。本機重現不了（單跑、同時 12 份與 40 份都過）。判斷：拆成 4 段之後，CI 上 4 個 client 程序和其他測試並行、地圖檔第一次讀，資產執行緒慢於 60 幀。改成和 `Setup::Loaded` 一樣的等法（最多 2000 幀、每幀 1 ms），斷言不動。**沒有重現就改**，記為未確認的原因。
+
 ## 待補
 
 （Linux 的 A/B 與 S5、L1 的結果。）

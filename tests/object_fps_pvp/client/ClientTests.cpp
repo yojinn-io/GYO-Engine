@@ -1570,9 +1570,12 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start]");
         CHECK_MESSAGE(HasResource<PW::GameRules>(setup.Solo()), "[pvp-solo-world] the Solo World plays");
         CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Sim()), "the Sim World does not");
-        for (int i = 0; i < 60 && !PC::StatusOf(setup.Client()).playing; ++i) {
+        // The map is read on the asset threads: wait as Setup::Loaded does (a few seconds at most), not a count of frames
+        // (L1 linux-x64 2026-11-27, with the client tests in four parallel entries: 60 frames were not enough).
+        for (int i = 0; i < 2000 && !PC::StatusOf(setup.Client()).playing; ++i) {
             setup.Frame();
             socketless = socketless && noSocket();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-solo-playing] the own player reached the Frame World");
         // The loading screen until the game is loaded and drawn; then the Local World starts.
