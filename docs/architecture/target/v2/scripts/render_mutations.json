@@ -178,9 +178,9 @@
    "guards": [
     "render RD-2"
    ],
-   "file": "engine/modules/render/include/engine/render/RenderTextures.hpp",
-   "find": "    void ClearPending() noexcept { pending_.clear(); }",
-   "replace": "    void ClearPending() noexcept {\n        pending_.clear();\n        live_.clear();\n    }",
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "void RenderTextures::ClearPending() {\n    pending_.clear();",
+   "replace": "void RenderTextures::ClearPending() {\n    pending_.clear();\n    live_.clear();",
    "target": "gyo_render_tests",
    "cases": "render: the asks*",
    "expect": "\\[rd\\-tex\\-clear\\-keeps\\-live\\]"
@@ -877,8 +877,8 @@
     "render section 7"
    ],
    "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-   "find": "    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order < b.order; });",
-   "replace": "    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order > b.order; });",
+   "find": "    std::stable_sort(drawing.begin(), drawing.end(), [](const auto& a, const auto& b) { return a.order < b.order; });",
+   "replace": "    std::stable_sort(drawing.begin(), drawing.end(), [](const auto& a, const auto& b) { return a.order > b.order; });",
    "target": "gyo_render_tests",
    "cases": "render_extract: a HUD camera*",
    "expect": "\\[re\\-camera\\-order\\]"
@@ -890,8 +890,8 @@
     "render section 7"
    ],
    "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-   "find": "        if (!camera.active) return;",
-   "replace": "        static_cast<void>(camera.active);",
+   "find": "        const bool drawable = camera.active && c != nullptr",
+   "replace": "        const bool drawable = c != nullptr",
    "target": "gyo_render_tests",
    "cases": "render_extract: no target size*",
    "expect": "\\[re\\-inactive\\]"

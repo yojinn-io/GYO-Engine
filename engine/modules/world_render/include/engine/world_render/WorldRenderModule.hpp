@@ -35,8 +35,8 @@ struct WorldRenderOptions final {
     std::string stage = std::string(Orchestration::DefaultSchedules::postUpdate);
     // Where NoteOnceUpdates runs (the end of the frame: the cameras the render World extracts as Once) and
     // SettleOnceUpdates (the start of the next frame: those are Disabled from then on).
-    std::string noteStage = std::string(Orchestration::DefaultSchedules::last);
-    std::string onceStage = std::string(Orchestration::DefaultSchedules::first);
+    std::string noteOnceStage = std::string(Orchestration::DefaultSchedules::last);
+    std::string settleOnceStage = std::string(Orchestration::DefaultSchedules::first);
 };
 
 class WorldRenderModule final : public Orchestration::Module {

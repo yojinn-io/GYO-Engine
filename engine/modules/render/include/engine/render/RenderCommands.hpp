@@ -11,8 +11,8 @@
 // The order of the list is the GPU's order (Design Invariant RP-3, render-pipeline declaration section 14): nothing
 // reorders, culls or aliases passes (Bevy's render graph is systems since #22144; no graph object). Each pass names
 // what it writes (WritesOf) and what it samples (ReadsOf). A pass samples a render target only after an earlier pass
-// of the same frame drew on it or reused it (PassReuse); one neither drawn on nor reused, then sampled, is a
-// Programmer Error the backend asserts (FirstUnwrittenRead).
+// of the same frame drew on it, or the frame retains it with its picture (RenderCommands::retained); one neither,
+// then sampled, is a Programmer Error the backend asserts (FirstUnwrittenRead).
 //
 // Coordinates of a 2D pass are view units with y down: the pass's view rectangle is stretched over the whole
 // target, its top-left corner on the target's top-left pixel. Texture coordinate (0, 0) is a texture's top-left
@@ -245,69 +245,65 @@ struct PassDepth final : MeshGeometry {
     std::vector<MeshDraw> draws;
 };
 
-// "This frame, target reuses the picture it has from the last frame" (render-pipeline declaration 14.11): nothing is
-// drawn, and for what later passes sample the target counts as written this frame (RP-3). camera_render puts one for a
-// camera whose TargetUpdate says not to draw this frame; an author's own System may put one for a target it draws
-// itself. Reusing a target that has no picture (RenderTextures::HasPicture: made, or its size changed, and not drawn on
-// since) samples nothing defined: the one who reuses checks it and draws instead.
-struct PassReuse final {
-    TextureId target;
-};
-
-using RenderPass = std::variant<Pass2D, Pass3D, PassFullscreen, PassDepth, PassReuse>;
+using RenderPass = std::variant<Pass2D, Pass3D, PassFullscreen, PassDepth>;
 
 // What a pass draws on. Its colour target when it draws colour (every pass but a depth-only one): colourTarget,
 // nullopt being the main target. Its depth target when it names one (Pass3D::depth, a depth-only pass's target).
-// A reuse pass draws nothing and reuses its target's picture: reused (colour false).
 struct PassWrites final {
     bool colour = true;
     std::optional<TextureId> colourTarget;
     std::optional<TextureId> depthTarget;
-    std::optional<TextureId> reused;
 
-    // Whether, this frame, the render target's picture is this pass's (drawn on as colour or as depth, or reused).
-    [[nodiscard]] bool Writes(const TextureId id) const noexcept {
-        return (colour && colourTarget == id) || depthTarget == id || reused == id;
-    }
-    // Whether the target's colour is this pass's (drawn or reused; nullopt: the main target, which is never reused).
-    [[nodiscard]] bool WritesColour(const std::optional<TextureId>& target) const noexcept {
-        return (colour && colourTarget == target) || (target && reused == target);
-    }
+    // Whether it draws on this render target (as colour or as depth).
+    [[nodiscard]] bool Writes(const TextureId id) const noexcept { return (colour && colourTarget == id) || depthTarget == id; }
+    // Whether it draws colour on this target (nullopt: the main one).
+    [[nodiscard]] bool WritesColour(const std::optional<TextureId>& target) const noexcept { return colour && colourTarget == target; }
 };
 [[nodiscard]] PassWrites WritesOf(const RenderPass& pass) noexcept;
 
-// The target the backend begins the pass on: its colour target (nullopt: the main target), a depth-only pass's
-// depth target, or a reuse pass's target (nothing is begun on it).
+// The target the backend begins the pass on: its colour target (nullopt: the main target), or a depth-only pass's
+// depth target.
 [[nodiscard]] std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept;
 
 // What a pass samples, in the order it names them: its draws' textures (the white texture left out) or a full-screen
 // pass's inputs. What it draws on (WritesOf) is not sampled: a backend skips a draw that names it.
 [[nodiscard]] std::vector<TextureId> ReadsOf(const RenderPass& pass);
 
+// This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
+struct RenderCommands final {
+    std::vector<RenderPass> passes;
+    // Render targets whose picture of the last frame stands for this frame's (render-pipeline declaration 14.11, "明示
+    // 沿用"): nothing draws on them, and for what the passes sample they count as written this frame (RP-3) when they
+    // have a picture (RenderTextures::HasPicture). camera_render retains a target none of whose cameras draws this
+    // frame; an author's System may retain a target it draws itself. Emptied with the passes.
+    std::vector<TextureId> retained;
+};
+
+// The render World is not decided state: nothing of it goes into a consistency fingerprint (as sdl_window's handle).
+inline void HashValue(Kernel::Hasher&, const RenderCommands&) {}
+
 // RP-3 (render-pipeline declaration 14.3 point 5 and 14.11): "讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言" —
-// the first pass that samples one of the render targets (targets: every render target's id) when no earlier pass of
-// these passes drew on it or reused it. What a pass samples of what it draws on itself is not counted (the backend
-// skips that draw). Data alone: what a backend could not draw (a target it has no texture for) does not change it.
+// the first pass that samples a render target of textures when no earlier pass of the frame drew on it and it is not
+// retained with a picture (a retained target with none, made or made again and not drawn on since, has nothing to
+// stand for this frame's). What a pass samples of what it draws on itself is not counted (the backend skips that
+// draw). Data alone; the backend asserts it before it draws (sdl_gpu's RequireRenderContracts).
 struct UnwrittenRead final {
     std::size_t pass = 0;
     TextureId target;
 
     friend bool operator==(const UnwrittenRead&, const UnwrittenRead&) = default;
 };
-[[nodiscard]] std::optional<UnwrittenRead> FirstUnwrittenRead(std::span<const RenderPass> passes, std::span<const TextureId> targets);
+[[nodiscard]] std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, const RenderTextures& textures);
 
+// A frame's report as its data says it (render_world's Cleanup until a backend reports its own): the render targets its
+// passes draw on, and the size asks of the frame as applied.
+[[nodiscard]] RenderFrameReport AssumedReport(const RenderCommands& commands, std::span<const TextureOp> asks);
 
-// This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
-struct RenderCommands final {
-    std::vector<RenderPass> passes;
-};
-
-// The render World is not decided state: nothing of it goes into a consistency fingerprint (as sdl_window's handle).
-inline void HashValue(Kernel::Hasher&, const RenderCommands&) {}
-
-// After a frame (render_world's Cleanup): the render targets its passes drew on have a picture (RenderTextures::MarkDrawn);
-// a reused one keeps what it had.
-void KeepPictures(const RenderCommands& commands, RenderTextures& textures);
+// The first Pass3D whose depth target's size, as the data side decides it (RenderTextures::SizeOf), is not its colour
+// target's (the main target's: RenderTextures::MainSize); nullopt when every one matches or a size is not known yet.
+// The backend asserts it before it draws (a Programmer Error); on the GPU, where the main target is the window's picture
+// and may differ from the data side's size for a frame, the backend skips such a pass's draws and counts them.
+[[nodiscard]] std::optional<std::size_t> FirstDepthOfAnotherSize(const RenderCommands& commands, const RenderTextures& textures);
 
 // Clip space of a view: clip = position * scale + offset (x right and y up, -1 to 1 over the target).
 struct ViewTransform final {

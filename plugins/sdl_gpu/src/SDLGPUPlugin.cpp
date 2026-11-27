@@ -15,6 +15,7 @@
 #include "plugins/sdl/NativeWindow.hpp"
 
 #include "GPUDevice.hpp"
+#include "RenderContracts.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -49,6 +50,7 @@ public:
                 lastFailure_ = device_->LastError();
             }
         }
+        RequireRenderContracts(commands, textures);
         FrameTally tally;
         switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally)) {
         case FrameOutcome::Shown: ++shown_; break;

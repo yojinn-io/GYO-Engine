@@ -2,7 +2,8 @@
 # Invariant SDL-2). None includes SDL3/: they drive the adapter through its interface (src/GPUDevice.hpp) and the
 # Plugin through a Product.
 #   sdl_gpu.startup, sdl_gpu.shaders, sdl_gpu.present (label cpu): the startup errors, the embedded shaders against
-#     render's ABI and the present mode's fallback chain; no GPU, every CI row.
+#     render's ABI and the present mode's fallback chain; no GPU, every CI row. sdl_gpu.contracts, sdl_gpu.unwritten
+#     (label cpu): the checks the backend makes on a frame's data before it draws (RP-3), no GPU.
 #   sdl_gpu.pass2d, sdl_gpu.pass3d, sdl_gpu.targets, sdl_gpu.phases, sdl_gpu.frames (label gpu): the 2D, 3D,
 #     full-screen and depth-only passes (and render targets) drawn on a GPU and read back,
 #     pixel by pixel, with SDL's GPU validation on; frames on a shown window (at least one must reach it), the present mode set from render's Presentation, World replacement. sdl_gpu.budget (label gpu) prints the frame
@@ -47,11 +48,16 @@ add_test(NAME sdl_gpu.frames COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu fram
 add_test(NAME sdl_gpu.targets COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu targets:*")
 # Full-screen and depth-only passes (render-pipeline declaration section 14).
 add_test(NAME sdl_gpu.phases COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu phases:*")
-# RP-3: sampling a render target no pass drew on is a Programmer Error the backend asserts. The case is skipped in any
-# other run (it ends the process); its own handler prints the tag and exits 0 when the assertion fails.
+# The checks the backend makes on a frame's data before it draws (RenderContracts.hpp; no GPU, label cpu): a frame
+# that keeps them passes.
+add_test(NAME sdl_gpu.contracts COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu contracts:*")
+# RP-3: sampling a render target neither drawn on nor retained with a picture this frame is a Programmer Error the
+# backend asserts before it draws (RenderContracts.hpp; no GPU, label cpu). The case is skipped in any other run (it
+# ends the process); its own handler prints the tag and exits 0 when the assertion fails.
 add_test(NAME sdl_gpu.unwritten COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu unwritten:*" --no-skip)
 # Prints the declared frame-time budget's measurement (render.zh-Hant.md section 2); judges nothing.
 add_test(NAME sdl_gpu.budget COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu budget:*" -s)
 set_tests_properties(sdl_gpu.pass2d sdl_gpu.pass3d sdl_gpu.frames sdl_gpu.targets sdl_gpu.phases sdl_gpu.budget PROPERTIES LABELS "gpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
-set_tests_properties(sdl_gpu.unwritten PROPERTIES LABELS "gpu" TIMEOUT 120 PASS_REGULAR_EXPRESSION "\\[gt-unwritten-asserted\\]")
+set_tests_properties(sdl_gpu.contracts PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+set_tests_properties(sdl_gpu.unwritten PROPERTIES LABELS "cpu" TIMEOUT 60 PASS_REGULAR_EXPRESSION "\\[gt-unwritten-asserted\\]")

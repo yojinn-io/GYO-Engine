@@ -152,6 +152,36 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 - 本機（macOS Intel，只跑 cpu）：全量建置成功；`ctest -L 'cpu|shader'` 254/255（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 82/82 killed（phase、target、render 的 `cp-`／`rd-`／`re-`、`vs-camera-list-not-extracted`）；runner 結束後確認每個突變的 find 原文都在（沒有殘留）。
 - Linux 主機（`b1b173a5`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 255/255；`sdl_gpu.phases`、`unwritten`、`targets`、`pass2d` 4/4；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 59/59 killed（D184 的 GPU 既有突變加 phase 的 GPU 突變，不含會開視窗的 3 個）。
 
+## RP-3 機制的設計審查與純淨 Code Review（同日）
+
+- 設計審查（Opus／high，`build/evidence/v8-arch-gyo2-render-a2/design-review-rp3.zh-Hant.md`）：Blocker 1、Should 4、Nit 5、Note 6。純淨 Code Review（Fable／high，只給範圍 `5f73da5e..8db63abf`，`pure-code-review-rp3.zh-Hant.md`）：高 2、中 4、低 4。兩份都不在 git。
+- 主會話的指示：(1) 後端回報這一幀實際畫了什麼（S-3、純淨 High 1 的根本解）要後端寫渲染 World，會改 SDL-5（`sdl_gpu` 只讀），交使用者決定 (a)/(b)/(c)；這一輪不接後端的寫入，資料側的 `RenderFrameReport`／`Apply` 留著。(2) 第 4.3 節「後端斷言」照字面：判斷是 render 的純函式、後端呼叫並斷言；不加 render 側的檢查 stage。(3) 其他照做。
+- 宣告第 14.12 節記下改了什麼與新 RC（RC-A2-7、RC-A2-8）。
+
+| 指摘 | 結果 | 怎麼做／理由 |
+|---|---|---|
+| 設計 B-1 跟主目標走的深度在視窗改大小時斷言 | 採用 | 先寫失敗的測試：Linux 主機上 `b1b173a5` 加一案（主目標的畫面 8×8、資料側 16×16），舊碼 `GYO_ASSERT failed: t.size == on.size && "a 3D pass's depth target has its target's size"`（`GPUDevice.cpp:1078`），SIGABRT。改成：深度的大小在資料側比（`FirstDepthOfAnotherSize`，後端斷言），GPU 上大小不同（主目標的畫面比資料側晚一幀）時跳過那些 draw、計入 `skippedDraws`（`[gd-depth-size-skipped]`） |
+| 設計 S-1／純淨 High 2 同一張 target 多台相機、「不畫」有多種狀態 | 採用 (i) | 每張 target 一個判斷（宣告第 14.12 節第 1 點）；inactive、無效的相機也算「不畫」。和 Godot 的衝突點與膠水寫在宣告 |
+| 設計 S-2 沿用一張沒有畫面的 target 不斷言 | 採用 | `FirstUnwrittenRead` 只把有畫面的 retained 當寫過；`sdl_gpu.unwritten` 改成這一種 |
+| 設計 S-3／純淨 High 1 「有畫面」不跟後端的實況 | 一半採用、一半等使用者 | `RenderTextures::Apply(RenderFrameReport)` 成為畫面與大小的唯一入口；紀錄現在由資料側做（`AssumedReport`），後端畫不成的那一幀仍當畫過（代價與 RC-A2-7 在宣告）。後端的實況等 SDL-5 的決定 |
+| 設計 S-4／純淨 Medium 4 Once 的前提、沒有握手 | 寫明，不改做法 | 前提寫進宣告；`Lend` 的情形〔未確認〕＋RC-A2-8。比過「渲染側看模式的變化」：要渲染 World 存每台相機的跨幀狀態，那是 render 頁第 7.3 節與 RC-RD 5 留給 D3 的事，這一批不開。Godot 的對照更正（改的是伺服器那一份，場景端的 `update_mode` 不變） |
+| 純淨 Medium 3 `PassReuse` 不是 pass | 採用 | `RenderCommands::retained`；`PassWrites` 回到三欄，後端沒有沿用的分支 |
+| 純淨 Medium 5 RP-3 不該由後端執行 | 不採用 | 使用者保留第 4.3 節原文「後端斷言」。判斷留在 render 的純函式；斷言從 adapter（`GPUDevice.cpp`）移到 Plugin 的 `RequireRenderContracts`（`RenderContracts.hpp`），headless 的資料測試直接呼叫它 |
+| 純淨 Medium 6 大小只送變更、沒有回饋 | 採用 | 記住套用過的大小，沒套用的每幀再要求（level-triggered，`[rd-size-asked-again]`） |
+| 純淨 Low 7 兩張表、follow 推導兩次 | 不改 | 兩張表各是一種東西（貼圖／target）；來源側的 `TargetSizeOf` 是相機要的投影大小，渲染側的是貼圖的大小，跟隨者的領頭被放掉時兩邊都退回「沒有大小」（`[rd-size-leader-released]`） |
+| 純淨 Low 8 `ApplyAsks` 的 `get_if` 鏈、未知 id 無聲 | 一半採用 | 未知 id 的 `TextureTargetSize` 計入 `refusedAsks`（同 `TextureUpdate`）。改成 visitor 不做：既有突變的 find 都在這幾行，改寫會讓它們全部要重寫，判斷上沒有好處 |
+| 純淨 Low 9 命名、written 不去重 | 採用命名 | `KeepPictures` 拿掉（`Apply`）；後端的 `fresh` 改叫 `picture`（和資料側同名同向）；`noteStage`／`onceStage` 改叫 `noteOnceStage`／`settleOnceStage`。written 不去重：一幀的 pass 數小，線性就好 |
+| 純淨 Low 10 測試 | 採用 | 「沒畫」改看 `Retains()`；`pending.size() == 6` 旁寫出六個是哪些；第 1、2 項的情況各加案（沿用沒有畫面的、inactive 的相機的 target 被取樣、多台相機共用一張） |
+| 設計 N-1 §14.5 的數量 | 採用 | 41 個與理由 |
+| 設計 N-2、N-3 缺突變 | 採用 | `rd-size-same-asked`、`gd-size-ask-ignored` |
+| 設計 N-4 `TargetOf` 變寬 | 隨 Medium 3 消失 | 沿用不再是 pass |
+| 設計 N-5 每個後端各自呼叫 | 記下 | 第二個後端時再看（同 Medium 5 的理由） |
+| 設計 Note-2 `HasPicture(optional)` | 採用 | 主目標一律 false |
+| 設計 Note-3 inactive 的相機 | 採用 | 隨 S-1：有畫面就沿用；camera 頁寫一句 |
+| 設計 Note-4 沒有相機的產品 | 採用 | render 頁第 3 節「自己呼叫 `SetMainSize`」 |
+
+- 等使用者（SDL-5）的測試：後端畫不成的那一幀之後沿用（要後端的實況）。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。

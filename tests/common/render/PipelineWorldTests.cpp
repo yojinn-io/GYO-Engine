@@ -61,6 +61,7 @@ namespace {
 // 2D passes (a camera's content, a later camera's viewport clear).
 struct Seen {
     std::vector<R::RenderPass> all;
+    std::vector<R::TextureId> retained;
     std::vector<R::Color8> clears;
     std::vector<R::Pass2D> passes;
     std::vector<R::TextureOp> asks;
@@ -72,6 +73,7 @@ std::vector<std::string> trail;
 K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
     Seen s;
     s.all = commands->passes;
+    s.retained = commands->retained;
     for (const R::RenderPass& pass : commands->passes) {
         const auto* p2 = std::get_if<R::Pass2D>(&pass);
         if (p2 == nullptr) continue;
@@ -383,17 +385,13 @@ TEST_CASE("render_extract: a camera on a source render target computes with its 
 
 namespace {
 
-std::size_t ReusesOf(const std::vector<R::RenderPass>& passes, const R::TextureId target) {
-    std::size_t n = 0;
-    for (const R::RenderPass& pass : passes) {
-        if (const auto* reuse = std::get_if<R::PassReuse>(&pass)) n += reuse->target == target ? 1 : 0;
-    }
-    return n;
+bool Retains(const Seen& frame, const R::TextureId target) {
+    return std::find(frame.retained.begin(), frame.retained.end(), target) != frame.retained.end();
 }
 
 } // namespace
 
-TEST_CASE("render_extract: a camera that does not update reuses its target's picture; a target without one is drawn") {
+TEST_CASE("render_extract: a camera that does not update leaves its target retained; a target without a picture is drawn") {
     auto p = Make();
     K::World& source = GameOf(*p);
     source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
@@ -407,25 +405,52 @@ TEST_CASE("render_extract: a camera that does not update reuses its target's pic
     Frames(*p);
     const std::vector<R::TextureId> made = TargetsMade(seen[0].asks);
     REQUIRE(made.size() == 1);
-    CHECK_MESSAGE((PassesOn(seen[0].all, made[0]) > 0 && ReusesOf(seen[0].all, made[0]) == 0),
-                  "[re-update-first-drawn] a target with no picture is drawn, Disabled or not");
+    const R::TextureId screen = made[0];
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && !Retains(seen[0], screen)), "[re-update-first-drawn] a target with no picture is drawn, Disabled or not");
     Frames(*p);
-    CHECK_MESSAGE((ReusesOf(seen[1].all, made[0]) == 1 && PassesOn(seen[1].all, made[0]) == 1),
-                  "[re-update-reused] then its camera does not draw: one reuse of its target, nothing drawn on it");
+    CHECK_MESSAGE((Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0), "[re-update-reused] then it is retained, nothing drawn on it");
     // The window grows: the monitor follows it, is made again and has no picture: drawn this frame (the forced draw).
     source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{1280, 720}, 1.0F});
     Frames(*p);
-    CHECK_MESSAGE((ReusesOf(seen[2].all, made[0]) == 0 && PassesOn(seen[2].all, made[0]) > 0),
-                  "[re-update-resized-drawn] made again at the new size: drawn, not reused");
+    CHECK_MESSAGE((!Retains(seen[2], screen) && PassesOn(seen[2].all, screen) > 0), "[re-update-resized-drawn] made again at the new size: drawn, not retained");
     Frames(*p);
-    CHECK_MESSAGE(ReusesOf(seen[3].all, made[0]) == 1, "[re-update-reused-again] and reused after that");
+    CHECK_MESSAGE(Retains(seen[3], screen), "[re-update-reused-again] and retained after that");
     // Once: drawn in the frame it is seen, Disabled from the next one.
     source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Once});
     Frames(*p);
-    CHECK_MESSAGE((ReusesOf(seen[4].all, made[0]) == 0 && PassesOn(seen[4].all, made[0]) > 0), "[re-update-once-drawn] Once draws");
+    CHECK_MESSAGE((!Retains(seen[4], screen) && PassesOn(seen[4].all, screen) > 0), "[re-update-once-drawn] Once draws");
     Frames(*p);
-    CHECK_MESSAGE(ReusesOf(seen[5].all, made[0]) == 1, "[re-update-once-then-disabled] then it is Disabled");
+    CHECK_MESSAGE(Retains(seen[5], screen), "[re-update-once-then-disabled] then it is Disabled");
     CHECK_MESSAGE(source.Get<R::TargetUpdate>(1)->mode == R::TargetUpdate::Mode::Disabled, "[wr-update-once-settled] world_render set it Disabled");
+    // An inactive camera does not draw either: its target, with its picture, is retained (as Bevy's is_active false
+    // leaves its image as it is).
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Always});
+    source.GetMut<C::Camera>(1)->active = false;
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[6], screen) && PassesOn(seen[6].all, screen) == 0), "[re-update-inactive-retained] an inactive camera's target is retained");
+}
+
+TEST_CASE("render_extract: a target two cameras draw is drawn when one of them draws; retained when neither does") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    // The background (Always) and the writing over it (Disabled) on one target.
+    for (const K::EntityId id : {K::EntityId{1}, K::EntityId{2}}) {
+        Camera2dAt(source, id, static_cast<std::int32_t>(id));
+        source.Insert(id, monitor);
+        source.Remove<C::Letterbox>(id);
+    }
+    source.Insert(2, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p, 2);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    // The first frame both draw (no picture yet); the second, the Always one draws, so the Disabled one draws too.
+    CHECK_MESSAGE((!Retains(seen[1], screen) && PassesOn(seen[0].all, screen) > 0 && PassesOn(seen[1].all, screen) == PassesOn(seen[0].all, screen)),
+                  "[re-update-shared-drawn] one camera draws the target: both draw, nothing retained");
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[2], screen) && PassesOn(seen[2].all, screen) == 0), "[re-update-shared-retained] neither draws: retained once");
+    CHECK_MESSAGE(std::count(seen[2].retained.begin(), seen[2].retained.end(), screen) == 1, "[re-update-shared-once] one retain for the target");
 }
 
 TEST_CASE("render_extract: a HUD camera on another layer draws after, without clearing; a gone entity is not drawn") {

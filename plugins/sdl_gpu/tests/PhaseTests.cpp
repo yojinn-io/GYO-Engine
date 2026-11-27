@@ -20,6 +20,7 @@
 #include "engine/render/RenderTextures.hpp"
 
 #include "GPUDevice.hpp"
+#include "RenderContracts.hpp"
 #include "TestShaders.hpp"
 
 // The whole file is in the Plugin's namespace (naming N17: a unit opens only its own root, aliases included).
@@ -134,6 +135,8 @@ struct PhaseCase {
         auto captured = Device().Capture(textures.Pending(), {}, commands, kSize, picture.tally);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
+        // As render_world's Cleanup: the frame's account applied, then the asks cleared.
+        textures.Apply(R::AssumedReport(commands, textures.Pending()));
         textures.ClearPending();
         return picture;
     }
@@ -168,10 +171,9 @@ TEST_CASE("sdl_gpu phases: two full-screen passes in a chain: the first inverts 
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kCyan), "[gf-chain] the inverted red, shifted right by 2 pixels, still at the top");
     CHECK_MESSAGE((p.All(4, 0, 8, 4, kYellow) && p.All(0, 4, 8, 8, kYellow)), "[gf-chain] the inverted blue around it");
 
-    // The next frame reuses the inverted target (no pass draws on it): its last picture is sampled (RP-3: written this
-    // frame or reused).
+    // The next frame retains the inverted target (no pass draws on it): its last picture is sampled.
     R::RenderCommands next;
-    next.passes.push_back(R::PassReuse{inverted});
+    next.retained.push_back(inverted);
     next.passes.push_back(Fullscreen(std::nullopt, "test_shift.frag", {inverted}, {0.0F, 0.0F, 0.0F, 0.0F}));
     const Picture q = c.Frame(next);
     CHECK_MESSAGE((q.All(0, 0, 2, 4, kCyan) && q.All(2, 0, 8, 4, kYellow) && q.All(0, 4, 8, 8, kYellow)),
@@ -180,7 +182,7 @@ TEST_CASE("sdl_gpu phases: two full-screen passes in a chain: the first inverts 
     // One full-screen pass reading what a 2D pass drew (the chain's two passes would turn a wrong uv round twice): the
     // source's red is at the top, so uv runs down the target as a 2D pass's does. The source is reused.
     R::RenderCommands once;
-    once.passes.push_back(R::PassReuse{source});
+    once.retained.push_back(source);
     once.passes.push_back(Fullscreen(std::nullopt, "test_invert.frag", {source}));
     const Picture r = c.Frame(once);
     CHECK_MESSAGE((r.All(0, 0, 2, 4, kCyan) && r.All(0, 4, 2, 8, kYellow)), "[gf-uv-down] uv (0, 0) is the target's top-left");
@@ -239,27 +241,59 @@ TEST_CASE("sdl_gpu phases: a depth-only pass writes a Depth target; a 3D pass te
     CHECK_MESSAGE(q.tally.skippedDraws == 1, "[gd-own-depth-skipped] the draw sampling its pass's depth target is skipped and counted");
 }
 
-TEST_CASE("sdl_gpu unwritten: sampling a render target neither drawn on nor reused this frame is a Programmer Error (RP-3)" * doctest::skip()) {
-    // The assertion fails inside the frame's recording: the handler tells it and ends the process (ctest
-    // sdl_gpu.unwritten passes on the tag).
+TEST_CASE("sdl_gpu phases: a 3D pass on the main target, its depth target following the main target at the data side's size, the picture another: draws skipped, counted") {
+    PhaseCase c;
+    // The data side's window is 16 x 16 a frame before the window's picture (8 x 8) is.
+    c.textures.SetMainSize(R::TargetSize{16, 16});
+    const R::TextureId depth = c.Target(R::RenderTargetDesc{R::FollowTarget{}, R::RenderTargetFormat::Depth});
+    R::RenderCommands commands;
+    commands.passes.push_back(On(std::nullopt, kBlue));
+    R::Pass3D scene;
+    scene.depth = depth;
+    ClipQuad(scene, -1.0F, 1.0F, 0.5F, kYellow);
+    commands.passes.push_back(std::move(scene));
+    const Picture p = c.Frame(commands);
+    CHECK_MESSAGE((p.tally.skippedDraws == 1 && p.All(0, 0, 8, 8, kBlue)), "[gd-depth-size-skipped] its draws skipped and counted, not a Programmer Error");
+}
+
+TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, then retained with its picture, passes the backend's checks") {
+    // No GPU: the checks are the frame's data (RP-3; a 3D pass's depth target of its target's size).
+    R::RenderTextures textures;
+    const R::TextureId target = textures.CreateTarget(Fixed());
+    R::RenderCommands drawn;
+    drawn.passes.push_back(On(target, kBlue));
+    R::Pass2D main = On(std::nullopt, kWhite);
+    Quad(main, Rect{0, 0, 8, 8}, kWhite, target);
+    drawn.passes.push_back(main);
+    G::RequireRenderContracts(drawn, textures);
+    textures.Apply(R::AssumedReport(drawn, textures.Pending()));
+    textures.ClearPending();
+    R::RenderCommands retained;
+    retained.retained.push_back(target);
+    retained.passes.push_back(std::move(main));
+    G::RequireRenderContracts(retained, textures);
+    CHECK_MESSAGE(textures.HasPicture(target), "[gt-contracts-kept] the target drawn on the frame before keeps its picture");
+}
+
+TEST_CASE("sdl_gpu unwritten: sampling a render target neither drawn on nor retained with a picture this frame is a Programmer Error (RP-3)" * doctest::skip()) {
+    // The assertion fails in what the backend checks before it draws: the handler tells it and ends the process (ctest
+    // sdl_gpu.unwritten passes on the tag). No GPU: the check is the frame's data.
     GYO::Engine::Base::SetAssertionHandler([](const GYO::Engine::Base::AssertionFailure& failure) {
         std::printf("[gt-unwritten-asserted] %s\n", failure.expression);
         std::fflush(stdout);
         std::_Exit(0);
     });
-    PhaseCase c;
-    const R::TextureId target = c.Target(Fixed());
-    // Drawn on in one frame, sampled in the next with no pass drawing on it and no reuse.
-    R::RenderCommands drawn;
-    drawn.passes.push_back(On(target, kBlue));
-    static_cast<void>(c.Frame(drawn));
+    R::RenderTextures textures;
+    const R::TextureId target = textures.CreateTarget(Fixed());
     R::RenderCommands commands;
     R::Pass2D main = On(std::nullopt, kWhite);
     Quad(main, Rect{0, 0, 8, 8}, kWhite, target);
     commands.passes.push_back(std::move(main));
-    static_cast<void>(c.Frame(commands));
+    // Retained, but it has no picture (made and never drawn on): nothing stands for this frame's.
+    commands.retained.push_back(target);
+    G::RequireRenderContracts(commands, textures);
     GYO::Engine::Base::SetAssertionHandler(nullptr);
-    FAIL("[gt-unwritten-not-asserted] the target neither drawn on nor reused was sampled without a Programmer Error");
+    FAIL("[gt-unwritten-not-asserted] the target neither drawn on nor retained with a picture was sampled without a Programmer Error");
 }
 
 } // namespace GYO::Plugins::SDLGPU

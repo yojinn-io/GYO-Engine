@@ -62,14 +62,15 @@ private:
 // when the cameras are extracted) and the passes of views that are no camera's; ComposePasses empties them.
 struct CameraPasses final {
     // Passes before every camera: the views that are no camera's (Bevy's RootNonCameraView: a point or spot light's
-    // shadow map), and the PassReuse of each camera that does not draw this frame (TargetUpdate).
+    // shadow map).
     std::vector<RenderPass> beforeCameras;
     std::vector<CameraPhases> byCamera;
 };
 
 inline void HashValue(Kernel::Hasher&, const CameraPasses&) {}
 
-// Appends the frame's passes to out: beforeCameras, then camera by camera in order. A camera's clear goes first (as
+// Appends the frame's passes to out (and the cameras' retained targets to out.retained): beforeCameras, then camera by
+// camera in order. A camera's clear goes first (as
 // Bevy: a window is cleared once a frame, each camera's picture put within its viewport): the first camera on a
 // target (no camera before it is on that target and no pass in out draws colour on it) clears the whole target with
 // its colour (a Pass2D with clear only: the letterbox bars); a later camera with a colour clears its own viewport (a

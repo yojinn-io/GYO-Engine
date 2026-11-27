@@ -473,8 +473,8 @@ phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（
 ### 14.5 測試與突變
 
 - 測試：`RenderTests.cpp`（`render.data`）二案；`Pipeline3dTests.cpp`（`render.pipeline3d`）一案；`PipelineWorldTests.cpp`（`render.extract`）一案；`SDLGPUTests.cpp`（`sdl_gpu.shaders`）一案；新 `plugins/sdl_gpu/tests/PhaseTests.cpp`：`sdl_gpu phases:` 三案（ctest `sdl_gpu.phases`，標籤 `gpu`）、`sdl_gpu unwritten:` 一案（ctest `sdl_gpu.unwritten`，標籤 `gpu`，`PASS_REGULAR_EXPRESSION` 看成功的標籤，失敗的標籤不同）。
-- 突變：`tests/common/render/phase_mutations.json`，23 個（P1～P9 各個獨立可錯的判斷；沒加的與理由在檔案的 `description`）。
-- 數量的說明（合併前核准用）：改的條文是 RD-4、RD-11、新 RD-12、RP-3，共 4 條，門檻 20；23 個超過的理由是 RD-12 綁了 phase 的先後、不屬於相機的 view、三個 Module 各自的 phase、兩種新 pass、讀的宣告這幾個獨立的決定（README 基準 3 不設上限，只要求每個都寫出別的抓不到的錯）。
+- 突變：`tests/common/render/phase_mutations.json`，現在 41 個（P1～P9、修訂 1、第 14.11／14.12 節 U1～U3 與 B-1 各個獨立可錯的判斷；沒加、退役的與理由在檔案的 `description`）。
+- 數量的說明（合併前核准用）：改的條文是 RD-4、RD-11、新 RD-12、RP-3，共 4 條，門檻 20；41 個超過的理由：最初的 23 個是 RD-12 綁了 phase 的先後、不屬於相機的 view、三個 Module 各自的 phase、兩種新 pass、讀的宣告這幾個獨立的決定（README 基準 3 不設上限，只要求每個都寫出別的抓不到的錯）。
 - 既有突變（D184）：find 落在本批改過的程式裡的全部重跑（`GPUDevice.cpp` 的 3D 錄製與 pipeline、目標的建立；`ComposePasses`；`Render.cpp` 的 `Create`／`CreateTarget`；`ExtractCameras`），失效的改寫、守同一個性質；被改過的測試殺的（`cp-*`、`gp-pipe-*`）也重跑。結果記在 dev_log。
 
 ### 14.6 RC
@@ -565,4 +565,21 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 **RC**：
 - **RC-A2-5**：視窗大小比 swapchain 晚一幀成為可見的問題 → 後端把這一幀的 swapchain 大小回報給資料側（下一幀生效），或 `window_camera` 改在取 swapchain 之後寫。
 - **RC-A2-6**：要「每 N 幀更新一次」這種模式 → `TargetUpdate` 加值（加法；作者現在用 Once 自己排）。
+
+### 14.12 第 14.11 節的修訂：設計審查與純淨 Code Review 之後（2026-11-27）
+
+審查兩份（`build/evidence/v8-arch-gyo2-render-a2/design-review-rp3.zh-Hant.md`、`pure-code-review-rp3.zh-Hant.md`，不在 git）。使用者的三點與那一句不變；改的是做法（逐項在 dev_log）：
+
+1. **沿用是 target 的事，模式是相機的**（設計 S-1 的 (i)、純淨 High 2）：每張 target 一個判斷——它的相機這一幀**都不畫**（Disabled 且 target 有畫面、inactive、投影或視點無效），而且它有畫面 → 這一幀沿用它；只要有一台要畫 → 它的相機全部照常畫（等待中的也畫）。沒有畫面又沒人畫 → 不沿用，取樣它照使用者那一句斷言。**和 Godot 的衝突點**：Godot 的模式屬於 viewport（＝target）、一個 viewport 一台相機（`scene/main/viewport.h:916-922`）；GYO 照使用者把模式放在相機上（Bevy 的多台相機共用一個目標），所以判斷放在 target。膠水：`camera_render` 的一個「每張 target 有沒有人畫」的表。
+2. **明示沿用是 `RenderCommands::retained`**（純淨 Medium 3）：不再是 `RenderPass` 的一種；`PassWrites`、`TargetOf`、後端的幾何與目標解析都沒有沿用的特例了。仍是 `RenderCommands` 裡寫明的一句（使用者要的「明示」）。`camera_render` 的沿用經 `ExtractedCameras::retained`、由合成放進去；作者自己的 System 直接放。
+3. **沿用一張沒有畫面的 target 不算寫過**（設計 S-2）：`FirstUnwrittenRead(commands, textures)` 只把有畫面的 retained 當作寫過。
+4. **B-1：深度 target 的大小只在資料側比**：`FirstDepthOfAnotherSize(commands, textures)`（資料側的大小，主目標用 `RenderTextures::MainSize`）由後端在畫之前斷言；GPU 上主目標是視窗的畫面，可能比資料側晚一幀，大小不同時後端**跳過那個 pass 的 draw、計數**，不斷言（Bevy 不會遇到：它的深度接在照抽出的大小建的中間圖上，`bevy_core_pipeline/src/core_3d/mod.rs:667,695,709`）。
+5. **大小的要求送到套用為止**（設計 S-3 的一半、純淨 Medium 6）：`RenderTextures` 記住後端套用過的大小（`RenderFrameReport::sized`，`Apply`），沒套用的每幀送一次（level-triggered，同 A1 的 `EnsureTargets` 能自己回復）。
+6. **「有畫面」跟著一份幀的紀錄**（設計 S-3、純淨 High 1）：`RenderTextures::Apply(RenderFrameReport{drawn, sized})` 是畫面與大小的唯一入口。**現在這份紀錄由資料側照這一幀的資料做**（`AssumedReport`：pass 畫的 target、這一幀的大小要求），因為後端寫回渲染 World 會改 SDL-5（`sdl_gpu` 只讀渲染 World），交使用者決定中；決定後由後端的實況換掉這一份，`Apply` 不變。到那時之前，後端畫不成的那一幀（上傳失敗、拿不到 command buffer）資料側仍當作畫過：不更新的相機的 target 內容未定，直到下一次改大小（RC-A2-7）。
+7. **RP-3 照第 4.3 節原文「後端斷言」**：判斷是 render 的純函式；後端（`sdl_gpu` 的 Plugin，`RenderContracts.hpp` 的 `RequireRenderContracts`）在畫之前斷言。純淨 Medium 5「改在 render 側檢查」不採用：使用者保留第 4.3 節的原文。
+8. **Once 的前提**（設計 S-4、純淨 Medium 4）：兩步做法（Last 記下、下一個 First 改成 Disabled）的前提是「渲染 World 對來源的每一輪恰好抽一次，抽在來源的 Last 與下一個 First 之間」——預設的 `RunFrame`（每個 World 依序跑一輪，`Product.cpp` 的 `RunFrameSteps`）成立，兩個 World 誰先跑都成立。來源被借出（`Lend`，O-13）時由持有者自己跑，來源的輪數和渲染 World 的抽取不一定一比一，Once 可能沒畫就變成 Disabled〔未確認：借出的 World 能不能被抽取〕（RC-A2-8）。比過的另一個做法「渲染 World 看模式的變化、不寫回作者的元件」沒選：要在渲染 World 存每台相機的跨幀狀態，那是 RD-6／render 頁第 7.3 節與 RC-RD 5 留給 D3 的事。**Godot 的對照更正**：`renderer_viewport.cpp:982-983` 把 `UPDATE_ONCE` 改成 `UPDATE_DISABLED` 的是**渲染伺服器那一份**狀態，場景端的 `SubViewport::update_mode` 不變（`scene/main/viewport.cpp:5739-5747`）；GYO 改的是作者的元件（來源 World 的 `TargetUpdate`），因為渲染側不能寫回（RP-2；Kernel 的 Extract 只有 `Read<T>`）。膠水：`SeenOnce`＋兩個 System。Godot 的預設是 `UPDATE_WHEN_VISIBLE`（`viewport.h:919`），GYO 預設 Always（同 Bevy）。
+
+**新 RC**：
+- **RC-A2-7**：SDL-5 的決定之後，後端回報這一幀實際畫的 target 與套用的大小（`RenderFrameReport`），換掉 `AssumedReport`。
+- **RC-A2-8**：來源被借出、或來源與渲染 World 的輪數不一比一 → Once 改成渲染側看模式的變化（要渲染 World 存相機的跨幀狀態，和 RC-RD 5 一起解）。
 

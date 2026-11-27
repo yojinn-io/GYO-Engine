@@ -111,14 +111,14 @@ void WorldRenderModule::Build(Orchestration::WorldSetup& setup) {
     once.name = "SettleOnceUpdates";
     Kernel::Mount onceMount;
     onceMount.schedule = options.schedule;
-    onceMount.stage = options.onceStage;
+    onceMount.stage = options.settleOnceStage;
     once.mounts.push_back(std::move(onceMount));
     r.AddSystem<&SettleOnceUpdates>(std::move(once));
     Kernel::SystemOptions note;
     note.name = "NoteOnceUpdates";
     Kernel::Mount noteMount;
     noteMount.schedule = options.schedule;
-    noteMount.stage = options.noteStage;
+    noteMount.stage = options.noteOnceStage;
     note.mounts.push_back(std::move(noteMount));
     r.AddSystem<&NoteOnceUpdates>(std::move(note));
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {

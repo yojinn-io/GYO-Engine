@@ -95,11 +95,13 @@ struct ClearColorConfig final {
     Color8 color{0, 0, 0, 255};
 };
 
-// When a camera on a render target draws (render-pipeline declaration 14.11; Godot's SubViewport render_target_update_mode,
-// scene/main/viewport.h:917-921, servers/rendering/renderer_viewport.cpp:831-860). No component: Always. On a frame it
-// does not draw, camera_render puts a PassReuse for its target (its last picture stands for this frame's); when the
-// target has no picture (made, or its size changed, and not drawn on since) it draws anyway. A camera on the main target
-// always draws (the window's picture is not kept from frame to frame).
+// When a camera on a render target draws (render-pipeline declaration 14.11; after Godot's SubViewport
+// render_target_update_mode, scene/main/viewport.h:917-921, which is the viewport's: here it is the camera's and the
+// decision is the target's). No component: Always. A Disabled camera waits while its target has a picture; a target
+// none of whose cameras draws this frame (waiting, inactive, not valid) and that has a picture is retained
+// (RenderCommands::retained: its last picture stands for this frame's); if any camera draws it, its waiting cameras
+// draw too. A target with no picture (made, or its size changed, and not drawn on since) is drawn by its cameras. A
+// camera on the main target always draws (the window's picture is not kept from frame to frame).
 struct TargetUpdate final {
     enum class Mode : std::uint8_t {
         // Every frame (Godot's UPDATE_ALWAYS).

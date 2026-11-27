@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
@@ -26,9 +27,11 @@ const RenderWorldOptions& OptionsOf(const RenderWorldOptions* given) {
 // After the frame was drawn (kCleanupStage): this frame's passes and texture asks are gone; the textures stay.
 SystemResult ClearRenderFrame(Kernel::ResMut<Render::RenderCommands> commands, Kernel::ResMut<Render::RenderTextures> textures,
                               Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images) {
-    // What this frame's passes drew on has a picture from now on (render-pipeline declaration 14.11).
-    Render::KeepPictures(commands.Get(), textures.Get());
+    // What this frame drew and the sizes it applied (render-pipeline declaration 14.11), as the frame's data says: the
+    // backend's own account is not reported yet (SDL-5).
+    textures.Get().Apply(Render::AssumedReport(commands.Read(), textures.Read().Pending()));
     commands.Get().passes.clear();
+    commands.Get().retained.clear();
     textures.Get().ClearPending();
     meshes.Get().ClearPending();
     // After the asks were cleared: the textures of held images no drawable showed this frame go with the next frame's

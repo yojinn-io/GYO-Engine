@@ -150,6 +150,16 @@ struct TextureTargetSize final {
 
 using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, TextureTargetCreate, TextureTargetSize>;
 
+// What a frame did to the render targets (render-pipeline declaration 14.11): RenderTextures::Apply takes it after the
+// frame. render_world builds it from the frame's data (AssumedReport: what the passes drew, the sizes asked); the
+// backend's own account of what it drew replaces that once a backend may report it (SDL-5 keeps sdl_gpu read-only).
+struct RenderFrameReport final {
+    // The render targets a pass the backend recorded drew on (as colour or as depth).
+    std::vector<TextureId> drawn;
+    // The size asks it applied (the texture made at that size, or refused by the device: no texture until another).
+    std::vector<TextureTargetSize> sized;
+};
+
 // render_world's Resource. The asks of a frame stay until render_world clears them after the frame was drawn (its
 // Cleanup stage); a backend reads them in order before it draws. Ids are never given twice.
 class RenderTextures final {
@@ -166,22 +176,30 @@ public:
     // the data side (render-pipeline declaration 14.11): fixed, the main target's (SetMainSize) or another target's,
     // each change asked of the backend as a TextureTargetSize. Its texture is kept from frame to frame (a pass with no
     // clear draws over it, as Bevy's LoadOp::Load); it has no picture when it is made and whenever its size changes,
-    // until a frame's RenderCommands draw on it (KeepPictures): the first pass that draws on it then starts from
+    // until the backend draws on it (RenderFrameReport, Apply): the first pass that draws on it then starts from
     // transparent black (a Depth target: cleared to 1). A pass samples it only after a pass of the same frame drew on
-    // it or reused it (RenderCommands.hpp, RP-3). A fixed size of zero width or height, or following an id that is not
+    // it, or the frame retains it with its picture (RenderCommands.hpp, RP-3). A fixed size of zero width or height, or following an id that is not
     // a live target, is a Programmer Error.
     TextureId CreateTarget(RenderTargetDesc desc);
     // The main target's size this frame (the window's, as the source World's cameras computed with it; camera_render
-    // sets it in the extract): targets that follow it take it. nullopt: not known (they keep the size they have).
+    // sets it in the extract; a render World without cameras sets it itself): targets that follow it take it.
+    // nullopt: not known (they keep the size they have).
     void SetMainSize(std::optional<TargetSize> size);
-    // A frame's RenderCommands drew on the target: it has a picture until its size changes. A texture that is not a
-    // live target is not counted.
-    void MarkDrawn(TextureId id) noexcept;
+    // After a frame (render_world's Cleanup): what the backend did. A size it applied stops being asked for (one not
+    // applied, the frame not drawn, is asked for again each frame until it is); a target it drew on at the size asked
+    // has a picture until its size changes. The backend's report is the one account of what is on a target.
+    void Apply(const RenderFrameReport& report);
 
-    // The live target's size, or nullopt (not known yet: it follows a size not known; or not a live target).
+    // The live target's size as decided here, or nullopt (not known yet: it follows a size not known; or not a live
+    // target).
     [[nodiscard]] std::optional<TargetSize> SizeOf(TextureId id) const noexcept;
-    // Whether the live target has a picture: a frame drew on it since it was made or its size last changed.
+    // The main target's size as last set.
+    [[nodiscard]] std::optional<TargetSize> MainSize() const noexcept { return main_; }
+    // Whether the live target has a picture: the backend drew on it at its size since it was made or its size last
+    // changed.
     [[nodiscard]] bool HasPicture(TextureId id) const noexcept;
+    // The same for a pass target: the main target (nullopt) keeps no picture from frame to frame.
+    [[nodiscard]] bool HasPicture(const std::optional<TextureId>& target) const noexcept { return target && HasPicture(*target); }
 
     // The live texture's description, or nullptr (also for a target).
     [[nodiscard]] const TextureDesc* Find(TextureId id) const noexcept;
@@ -191,18 +209,21 @@ public:
     [[nodiscard]] std::size_t LiveCount() const noexcept { return live_.size(); }
     // This frame's asks, in the order they were made.
     [[nodiscard]] std::span<const TextureOp> Pending() const noexcept { return pending_; }
-    // render_world, after each frame was drawn (Cleanup).
-    void ClearPending() noexcept { pending_.clear(); }
+    // render_world, after each frame was drawn (Cleanup); the sizes not applied yet are asked for again.
+    void ClearPending();
 
 private:
-    // Each target's size as asked of the backend and its picture, in id order.
+    // Each target's size as decided here, the size the backend last applied, whether this frame's asks hold its size,
+    // and its picture; in id order.
     struct TargetState {
         std::uint32_t id = 0;
         std::optional<TargetSize> size;
+        std::optional<TargetSize> applied;
+        bool asked = false;
         bool picture = false;
     };
-    // Gives every target the size its description says now (in id order: a followed target before its follower), and
-    // asks the backend for each change.
+    // Gives every target the size its description says now (in id order: a followed target before its follower); a
+    // change loses the picture. A size the backend has not applied is asked for, once a frame.
     void ResolveSizes();
 
     std::uint32_t next_ = 1;

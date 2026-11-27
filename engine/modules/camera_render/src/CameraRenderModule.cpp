@@ -59,13 +59,21 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
                             Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::Res<Render::TargetTextures> mapped,
                             Kernel::Res<Render::RenderTextures> textures, Kernel::ResMut<Render::ExtractedCameras> out,
                             Kernel::ResMut<Render::CameraPasses> passes) {
-    std::vector<Render::ExtractedCamera> list;
+    // Each camera that draws, and whether it waits (Disabled, its target with a picture: it draws only when another
+    // camera draws its target); each render target a camera names, and whether one of them draws on it this frame
+    // (render-pipeline declaration 14.11: the decision is the target's).
+    std::vector<std::pair<Render::ExtractedCamera, bool>> list;
+    std::vector<std::pair<Render::TextureId, bool>> named;
+    const auto name = [&](const Render::TextureId texture, const bool drawing) {
+        const auto it = std::find_if(named.begin(), named.end(), [&](const auto& n) { return n.first == texture; });
+        if (it == named.end()) {
+            named.emplace_back(texture, drawing);
+        } else {
+            it->second = it->second || drawing;
+        }
+    };
     const Render::Color8 defaultClear = clearColor.Present() ? clearColor->color : Render::ClearColor{}.color;
     cameras.ForEach([&](const Kernel::EntityId id, const Camera::Camera& camera) {
-        if (!camera.active) return;
-        const Camera::ComputedCamera* c = computed.Get(id);
-        const Camera::CameraView* v = views.Get(id);
-        if (c == nullptr || !c->valid || v == nullptr || !v->valid) return;
         // The pass target its CameraTarget maps to; a target the source has none for (let go after the camera was
         // computed) is nothing to draw on.
         const Camera::CameraTarget* target = targets.Get(id);
@@ -75,13 +83,16 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
             if (made == nullptr) return;
             passTarget = *made;
         }
-        // A camera whose TargetUpdate says not to draw this frame, on a target with a picture: its last picture
-        // stands for this frame's (a target with none is drawn: the camera draws as one updating every frame).
+        // Not drawing this frame: inactive, its projection or view not valid.
+        const Camera::ComputedCamera* c = computed.Get(id);
+        const Camera::CameraView* v = views.Get(id);
+        const bool drawable = camera.active && c != nullptr && c->valid && v != nullptr && v->valid;
+        // Waiting: its TargetUpdate says not to draw this frame and its target has a picture to stand for this frame's
+        // (one with none is drawn: the camera draws as one updating every frame; the main target keeps none).
         const Render::TargetUpdate* update = updates.Get(id);
-        if (update != nullptr && update->mode == Render::TargetUpdate::Mode::Disabled && passTarget && textures->HasPicture(*passTarget)) {
-            passes.Get().beforeCameras.push_back(Render::PassReuse{*passTarget});
-            return;
-        }
+        const bool waits = update != nullptr && update->mode == Render::TargetUpdate::Mode::Disabled && textures->HasPicture(passTarget);
+        if (passTarget) name(*passTarget, drawable && !waits);
+        if (!drawable) return;
         Render::ExtractedCamera e;
         e.entity = id;
         e.order = camera.order;
@@ -102,12 +113,24 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
         const Render::Camera3dDepth* depth = depths.Get(id);
         e.clearDepth = depth != nullptr ? depth->clear : true;
         if (const Render::CulledEntities* list = culled.Get(id)) e.culled = list->entities;
-        list.push_back(std::move(e));
+        list.emplace_back(std::move(e), waits);
     });
+    // A target none of whose cameras draws this frame keeps the picture it has: retained (one with none is not: a pass
+    // sampling it is RP-3's error). Its waiting cameras are not extracted; on a target another camera draws, they draw.
+    std::vector<Render::ExtractedCamera> drawing;
+    for (auto& [e, waits] : list) {
+        const auto on = std::find_if(named.begin(), named.end(), [&](const auto& n) { return e.target && n.first == *e.target; });
+        if (!waits || (on != named.end() && on->second)) drawing.push_back(std::move(e));
+    }
+    std::vector<Render::TextureId> retained;
+    for (const auto& [texture, drawn] : named) {
+        if (!drawn && textures->HasPicture(texture)) retained.push_back(texture);
+    }
+    out.Get().retained = std::move(retained);
     // Entities come in ascending order; a stable sort by order keeps the entity order among equal orders.
-    std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order < b.order; });
-    passes.Get().byCamera.assign(list.size(), {});
-    out.Get().cameras = std::move(list);
+    std::stable_sort(drawing.begin(), drawing.end(), [](const auto& a, const auto& b) { return a.order < b.order; });
+    passes.Get().byCamera.assign(drawing.size(), {});
+    out.Get().cameras = std::move(drawing);
     return {};
 }
 

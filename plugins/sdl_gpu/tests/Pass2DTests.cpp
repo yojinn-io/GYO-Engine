@@ -550,6 +550,8 @@ struct TargetCase {
         auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
+        // As render_world's Cleanup: the frame's account applied, then the asks cleared.
+        textures.Apply(R::AssumedReport(commands, textures.Pending()));
         textures.ClearPending();
         return picture;
     }

@@ -433,8 +433,8 @@
     "render RD-11"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "        if (!wanted || t.size == wanted) continue;",
-   "replace": "        if (!wanted || t.size) continue;",
+   "find": "        if (wanted && t.size != wanted) {",
+   "replace": "        if (wanted && !t.size) {",
    "target": "gyo_render_tests",
    "cases": "render: target sizes are decided*",
    "expect": "\\[rd\\-size\\-changed\\]"

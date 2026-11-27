@@ -63,18 +63,16 @@ void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
 
 PassWrites WritesOf(const RenderPass& pass) noexcept {
     return std::visit(Overloaded{
-                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt, std::nullopt}; },
-                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth, std::nullopt}; },
-                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt, std::nullopt}; },
-                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target, std::nullopt}; },
-                          [](const PassReuse& p) { return PassWrites{false, std::nullopt, std::nullopt, p.target}; },
+                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth}; },
+                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target}; },
                       },
                       pass);
 }
 
 std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
     const PassWrites writes = WritesOf(pass);
-    if (writes.reused) return writes.reused;
     return writes.colour ? writes.colourTarget : writes.depthTarget;
 }
 
@@ -84,37 +82,52 @@ std::vector<TextureId> ReadsOf(const RenderPass& pass) {
                    [&](const Pass2D& p) { AppendTextures(p.draws, reads); },
                    [&](const Pass3D& p) { AppendTextures(p.draws, reads); },
                    [&](const PassFullscreen& p) { reads = p.inputs; },
-                   // A depth-only pass's draws have no texture; a reuse pass draws nothing.
+                   // A depth-only pass's draws have no texture.
                    [](const PassDepth&) {},
-                   [](const PassReuse&) {},
                },
                pass);
     return reads;
 }
 
-std::optional<UnwrittenRead> FirstUnwrittenRead(const std::span<const RenderPass> passes, const std::span<const TextureId> targets) {
+std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, const RenderTextures& textures) {
     std::vector<TextureId> written;
-    for (std::size_t i = 0; i < passes.size(); ++i) {
-        const PassWrites writes = WritesOf(passes[i]);
-        for (const TextureId read : ReadsOf(passes[i])) {
-            if (writes.Writes(read)) continue;
-            const bool target = std::find(targets.begin(), targets.end(), read) != targets.end();
-            if (target && std::find(written.begin(), written.end(), read) == written.end()) return UnwrittenRead{i, read};
+    for (const TextureId id : commands.retained) {
+        if (textures.HasPicture(id)) written.push_back(id);
+    }
+    for (std::size_t i = 0; i < commands.passes.size(); ++i) {
+        const PassWrites writes = WritesOf(commands.passes[i]);
+        for (const TextureId read : ReadsOf(commands.passes[i])) {
+            if (writes.Writes(read) || textures.FindTarget(read) == nullptr) continue;
+            if (std::find(written.begin(), written.end(), read) == written.end()) return UnwrittenRead{i, read};
         }
-        for (const TextureId id : targets) {
-            if (writes.Writes(id)) written.push_back(id);
-        }
+        if (writes.colour && writes.colourTarget) written.push_back(*writes.colourTarget);
+        if (writes.depthTarget) written.push_back(*writes.depthTarget);
     }
     return std::nullopt;
 }
 
-void KeepPictures(const RenderCommands& commands, RenderTextures& textures) {
+RenderFrameReport AssumedReport(const RenderCommands& commands, const std::span<const TextureOp> asks) {
+    RenderFrameReport report;
     for (const RenderPass& pass : commands.passes) {
         const PassWrites writes = WritesOf(pass);
-        if (writes.colour && writes.colourTarget) textures.MarkDrawn(*writes.colourTarget);
-        if (writes.depthTarget) textures.MarkDrawn(*writes.depthTarget);
-        // A reuse makes no picture: the target keeps what it has.
+        if (writes.colour && writes.colourTarget) report.drawn.push_back(*writes.colourTarget);
+        if (writes.depthTarget) report.drawn.push_back(*writes.depthTarget);
     }
+    for (const TextureOp& ask : asks) {
+        if (const auto* sized = std::get_if<TextureTargetSize>(&ask)) report.sized.push_back(*sized);
+    }
+    return report;
+}
+
+std::optional<std::size_t> FirstDepthOfAnotherSize(const RenderCommands& commands, const RenderTextures& textures) {
+    for (std::size_t i = 0; i < commands.passes.size(); ++i) {
+        const auto* pass = std::get_if<Pass3D>(&commands.passes[i]);
+        if (pass == nullptr || !pass->depth) continue;
+        const std::optional<TargetSize> depth = textures.SizeOf(*pass->depth);
+        const std::optional<TargetSize> colour = pass->target ? textures.SizeOf(*pass->target) : textures.MainSize();
+        if (depth && colour && depth != colour) return i;
+    }
+    return std::nullopt;
 }
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
@@ -194,7 +207,7 @@ TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);
     pending_.emplace_back(TextureTargetCreate{id, desc});
-    targets_.push_back(TargetState{id.value, std::nullopt, false});
+    targets_.push_back(TargetState{id.value, std::nullopt, std::nullopt, false, false});
     ResolveSizes();
     return id;
 }
@@ -215,17 +228,31 @@ void RenderTextures::ResolveSizes() {
         } else {
             wanted = main_;
         }
-        if (!wanted || t.size == wanted) continue;
-        t.size = wanted;
-        t.picture = false;
-        pending_.emplace_back(TextureTargetSize{TextureId{t.id}, *wanted});
+        if (wanted && t.size != wanted) {
+            t.size = wanted;
+            t.picture = false;
+            t.asked = false;
+        }
+        if (!t.size || t.applied == t.size || t.asked) continue;
+        t.asked = true;
+        pending_.emplace_back(TextureTargetSize{TextureId{t.id}, *t.size});
     }
 }
 
-void RenderTextures::MarkDrawn(const TextureId id) noexcept {
+void RenderTextures::Apply(const RenderFrameReport& report) {
     for (TargetState& t : targets_) {
-        if (t.id == id.value) t.picture = true;
+        for (const TextureTargetSize& sized : report.sized) {
+            if (sized.id.value == t.id) t.applied = sized.size;
+        }
+        const bool drawn = std::find(report.drawn.begin(), report.drawn.end(), TextureId{t.id}) != report.drawn.end();
+        if (drawn && t.applied && t.applied == t.size) t.picture = true;
     }
+}
+
+void RenderTextures::ClearPending() {
+    pending_.clear();
+    for (TargetState& t : targets_) t.asked = false;
+    ResolveSizes();
 }
 
 std::optional<TargetSize> RenderTextures::SizeOf(const TextureId id) const noexcept {

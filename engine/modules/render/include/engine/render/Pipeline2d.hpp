@@ -56,6 +56,9 @@ struct ExtractedCamera final {
 // source entity (Bevy sorts by order and target, bevy_render/src/camera.rs:836; the entity makes ties certain).
 struct ExtractedCameras final {
     std::vector<ExtractedCamera> cameras;
+    // The render targets none of whose cameras draws this frame, with a picture: ComposePasses retains them
+    // (RenderCommands::retained; render-pipeline declaration 14.11).
+    std::vector<TextureId> retained;
 };
 
 // One 2D thing to draw this frame (a sprite or a shape), in triangles of its own vertices in local units.

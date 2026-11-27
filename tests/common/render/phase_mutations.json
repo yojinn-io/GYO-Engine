@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of camera phases, views of no camera, full-screen and depth-only passes, pass reads and the RP-3 assertion (render-pipeline declaration section 14, v8-arch-gyo2-render-a2; 判定 P1 to P9; render RD-4, RD-11, RD-12; RP-3). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gf-, gd- and gt- mutants need a GPU (label gpu); gt-unwritten-not-asserted runs the skipped death case with --no-skip. Not added (with the reason): ui_render's pass in Overlay (no Engine module queues a PostProcess pass yet, so Overlay and PostProcess draw alike until A4's tonemapping; the phases' order is cp-phase-order-reversed); a full-screen pass's colour replaced, not blended (every test shader writes alpha 1, which blends the same); the depth format picked for drawing and sampling (every driver tried takes D32_FLOAT for both); a 3D pass's depth target of another size and a pass on a target of the wrong kind (Programmer Errors asserted, not tested: no guard against misuse, AGENTS section 3); the shader tool's --function (the tool is a separate host build; a table defined as EmbeddedShaders would not link with the Plugin's, so the test executable's link guards it). After the reviews (2026-11-27): retired rd-reads-depth-only-draws (a depth-only pass's MeshDraw has no texture), rd-depth-target-refused, rd-depth-linear-allowed and rd-depth-pixels-allowed (RenderTargetFormat and TextureFormat are two types: a Depth texture of pixels and an sRGB target cannot be written, and a Depth target takes no filter rule; design review S-2); added cp-written-not-first, rd-writes-3d-depth-dropped, gd-own-depth-sampled and the three rd-unwritten- of FirstUnwrittenRead. Not added: the depth-only pipeline key without blend (MeshDraw has no blend, so no change of one draw can split it; no count of pipelines is visible), a Depth target sampled by the nearest texel whatever its filter (the tests sample at texel centres, where linear and nearest agree). With 14.11 (target sizes on the data side, TargetUpdate, PassReuse): rd-unwritten-drawn-ignored retired (FirstUnwrittenRead is data alone, no drawn flags); added rd-reuse-not-written, rd-size-picture-kept, rd-picture-not-marked, rd-picture-by-reuse, re-update-disabled-ignored, re-update-picture-ignored, re-update-once-reused, re-main-size-not-set, wr-once-never-settled, wr-once-settled-unseen. Not added: a reuse recorded as nothing on the GPU (a pass that loaded the target would leave it as it is; [gf-reused-sampled] guards the picture), a size ask's texture made with no picture (new textures are zero on the drivers tried).",
+  "description": "Declared mutants of camera phases, views of no camera, full-screen and depth-only passes, pass reads and the RP-3 assertion (render-pipeline declaration section 14, v8-arch-gyo2-render-a2; 判定 P1 to P9; render RD-4, RD-11, RD-12; RP-3). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gf-, gd- and gt- mutants need a GPU (label gpu); gt-unwritten-not-asserted runs the skipped death case with --no-skip. Not added (with the reason): ui_render's pass in Overlay (no Engine module queues a PostProcess pass yet, so Overlay and PostProcess draw alike until A4's tonemapping; the phases' order is cp-phase-order-reversed); a full-screen pass's colour replaced, not blended (every test shader writes alpha 1, which blends the same); the depth format picked for drawing and sampling (every driver tried takes D32_FLOAT for both); a pass on a target of the wrong kind (a Programmer Error asserted, not tested: no guard against misuse, AGENTS section 3); the shader tool's --function (the tool is a separate host build; a table defined as EmbeddedShaders would not link with the Plugin's, so the test executable's link guards it). After the reviews (2026-11-27): retired rd-reads-depth-only-draws (a depth-only pass's MeshDraw has no texture), rd-depth-target-refused, rd-depth-linear-allowed and rd-depth-pixels-allowed (RenderTargetFormat and TextureFormat are two types: a Depth texture of pixels and an sRGB target cannot be written, and a Depth target takes no filter rule; design review S-2); added cp-written-not-first, rd-writes-3d-depth-dropped, gd-own-depth-sampled and the three rd-unwritten- of FirstUnwrittenRead. Not added: the depth-only pipeline key without blend (MeshDraw has no blend, so no change of one draw can split it; no count of pipelines is visible), a Depth target sampled by the nearest texel whatever its filter (the tests sample at texel centres, where linear and nearest agree). With 14.11 (target sizes on the data side, TargetUpdate, PassReuse): rd-unwritten-drawn-ignored retired (FirstUnwrittenRead is data alone, no drawn flags); added rd-reuse-not-written, rd-size-picture-kept, rd-picture-not-marked, rd-picture-by-reuse, re-update-disabled-ignored, re-update-picture-ignored, re-update-once-reused, re-main-size-not-set, wr-once-never-settled, wr-once-settled-unseen. Not added: a reuse recorded as nothing on the GPU (a pass that loaded the target would leave it as it is; [gf-reused-sampled] guards the picture), a size ask's texture made with no picture (new textures are zero on the drivers tried). After the reviews of 14.11 (14.12): the retain is RenderCommands::retained, not a pass (the rd-reuse-/rd-picture- ids kept); a 3D pass's depth target of another size is checked on the data side and skipped on the GPU (B-1); added rd-size-same-asked, rd-size-not-asked-again, rd-depth-size-unchecked, gd-size-ask-ignored, gd-depth-size-asserted, re-update-shared-waits, re-update-inactive-not-named; gt-unwritten-not-asserted and gt-unwritten-always moved to RenderContracts.hpp (the Plugin's check), the latter on the CPU case sdl_gpu contracts; gd-depth-pass-fresh-kept renamed gd-depth-pass-picture-not-given with the backend's flag. Not added: a frame the backend could not draw still taken as drawn (the data side's report stands until SDL-5 is decided, RC-A2-7).",
   "mutants": [
     {
       "id": "cp-phase-order-reversed",
@@ -200,7 +200,7 @@
       "expect": "\\[gd\\-tested\\]"
     },
     {
-      "id": "gd-depth-pass-fresh-kept",
+      "id": "gd-depth-pass-picture-not-given",
       "what": "P8: a depth-only pass leaves its target without a picture (the 3D pass after it clears it)",
       "guards": [
         "render-pipeline-declaration 判定 P8",
@@ -208,7 +208,7 @@
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
       "find": "        const bool undefined = BeginWrite(*on.target);\n",
-      "replace": "        const bool undefined = on.target->fresh;\n",
+      "replace": "        const bool undefined = !on.target->picture;\n",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu phases: a depth-only*",
       "expect": "\\[gd\\-tested\\]"
@@ -243,14 +243,14 @@
     },
     {
       "id": "gt-unwritten-not-asserted",
-      "what": "P9 (RP-3): sampling a render target neither drawn on nor reused this frame is not asserted",
+      "what": "P9 (RP-3): the backend does not assert a render target sampled neither drawn on nor retained with a picture this frame",
       "guards": [
         "render-pipeline-declaration 判定 P9",
         "render-pipeline-declaration RP-3"
       ],
-      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        GYO_ASSERT(!unwritten && \"a pass samples a render target no earlier pass of the frame drew on or reused (RP-3)\");\n",
-      "replace": "        static_cast<void>(unwritten);\n",
+      "file": "plugins/sdl_gpu/src/RenderContracts.hpp",
+      "find": "    GYO_ASSERT(!Engine::Render::FirstUnwrittenRead(commands, textures) &&\n               \"a pass samples a render target neither drawn on this frame nor retained with a picture (RP-3)\");\n",
+      "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "command": [
         "{exe:gyo_sdl_gpu_tests}",
@@ -261,16 +261,16 @@
     },
     {
       "id": "gt-unwritten-always",
-      "what": "P9 (RP-3): sampling any render target asserted (a target drawn on, in this frame or an earlier one, is sampled)",
+      "what": "P9 (RP-3): the backend asserts every frame (a frame whose sampled targets are drawn this frame or retained with a picture would end)",
       "guards": [
         "render-pipeline-declaration 判定 P9",
         "render-pipeline-declaration RP-3"
       ],
-      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "GYO_ASSERT(!unwritten && ",
-      "replace": "GYO_ASSERT(false && ",
+      "file": "plugins/sdl_gpu/src/RenderContracts.hpp",
+      "find": "    GYO_ASSERT(!Engine::Render::FirstUnwrittenRead(commands, textures) &&",
+      "replace": "    GYO_ASSERT(false &&",
       "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu phases: two full-screen*",
+      "cases": "sdl_gpu contracts:*",
       "expect": "GYO_ASSERT failed: .*RP-3"
     },
     {
@@ -295,8 +295,8 @@
         "render RD-12"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "[](const Pass3D& p) { return PassWrites{true, p.target, p.depth, std::nullopt}; },",
-      "replace": "[](const Pass3D& p) { return PassWrites{true, p.target, std::nullopt, std::nullopt}; },",
+      "find": "[](const Pass3D& p) { return PassWrites{true, p.target, p.depth}; },",
+      "replace": "[](const Pass3D& p) { return PassWrites{true, p.target, std::nullopt}; },",
       "target": "gyo_render_tests",
       "cases": "render: what each kind*",
       "expect": "\\[rd\\-pass\\-writes\\-3d\\]"
@@ -323,8 +323,8 @@
         "render-pipeline-declaration RP-3"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "            if (writes.Writes(id)) written.push_back(id);\n",
-      "replace": "",
+      "find": "        if (writes.colour && writes.colourTarget) written.push_back(*writes.colourTarget);\n        if (writes.depthTarget) written.push_back(*writes.depthTarget);\n    }\n    return std::nullopt;",
+      "replace": "    }\n    return std::nullopt;",
       "target": "gyo_render_tests",
       "cases": "render: RP-3 as data*",
       "expect": "\\[rd\\-unwritten\\-drawn\\-before\\]"
@@ -337,25 +337,25 @@
         "render-pipeline-declaration RP-3"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "            if (writes.Writes(read)) continue;\n",
-      "replace": "",
+      "find": "            if (writes.Writes(read) || textures.FindTarget(read) == nullptr) continue;",
+      "replace": "            if (textures.FindTarget(read) == nullptr) continue;",
       "target": "gyo_render_tests",
       "cases": "render: RP-3 as data*",
       "expect": "\\[rd\\-unwritten\\-own\\]"
     },
     {
       "id": "rd-reuse-not-written",
-      "what": "U3: a reuse does not count as writing its target",
+      "what": "U3: a target retained with its picture does not count as written",
       "guards": [
         "render-pipeline-declaration 判定 U3",
         "render-pipeline-declaration RP-3"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "[](const PassReuse& p) { return PassWrites{false, std::nullopt, std::nullopt, p.target}; },",
-      "replace": "[](const PassReuse&) { return PassWrites{false, std::nullopt, std::nullopt, std::nullopt}; },",
+      "find": "    for (const TextureId id : commands.retained) {\n        if (textures.HasPicture(id)) written.push_back(id);\n    }\n",
+      "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: RP-3 as data*",
-      "expect": "\\[rd\\-unwritten\\-reused\\]"
+      "expect": "\\[rd\\-unwritten\\-retained\\]"
     },
     {
       "id": "rd-size-picture-kept",
@@ -379,7 +379,7 @@
         "render RD-11"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "        if (writes.colour && writes.colourTarget) textures.MarkDrawn(*writes.colourTarget);\n",
+      "find": "        if (drawn && t.applied && t.applied == t.size) t.picture = true;\n",
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: target sizes are decided*",
@@ -387,17 +387,17 @@
     },
     {
       "id": "rd-picture-by-reuse",
-      "what": "U1: a reuse gives its target a picture (a target with none would be reused for ever)",
+      "what": "S-2: a target retained with no picture counts as written (nothing stands for this frame's)",
       "guards": [
         "render-pipeline-declaration 判定 U1",
         "render RD-11"
       ],
       "file": "engine/modules/render/src/Render.cpp",
-      "find": "        // A reuse makes no picture: the target keeps what it has.\n",
-      "replace": "        if (writes.reused) textures.MarkDrawn(*writes.reused);\n",
+      "find": "        if (textures.HasPicture(id)) written.push_back(id);",
+      "replace": "        written.push_back(id);",
       "target": "gyo_render_tests",
-      "cases": "render: target sizes are decided*",
-      "expect": "\\[rd\\-picture\\-not\\-by\\-reuse\\]"
+      "cases": "render: RP-3 as data*",
+      "expect": "\\[rd\\-unwritten\\-retained\\-fresh\\]"
     },
     {
       "id": "re-update-disabled-ignored",
@@ -415,14 +415,14 @@
     },
     {
       "id": "re-update-picture-ignored",
-      "what": "U2: a camera that does not update reuses a target with no picture (no forced draw when it is made or made again)",
+      "what": "U2: a camera that does not update waits on a target with no picture (no forced draw when it is made or made again)",
       "guards": [
         "render-pipeline-declaration 判定 U2",
         "render RD-12"
       ],
       "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-      "find": " && passTarget && textures->HasPicture(*passTarget)) {",
-      "replace": " && passTarget) {",
+      "find": "update->mode == Render::TargetUpdate::Mode::Disabled && textures->HasPicture(passTarget);",
+      "replace": "update->mode == Render::TargetUpdate::Mode::Disabled;",
       "target": "gyo_render_tests",
       "cases": "render_extract: a camera that does not update*",
       "expect": "\\[re\\-update\\-first\\-drawn\\]"
@@ -443,7 +443,7 @@
     },
     {
       "id": "re-main-size-not-set",
-      "what": "U1: camera_render does not give the main target's size (targets that follow it are never sized again)",
+      "what": "U1: camera_render does not give the main target's size (a target that follows it is never sized, so never has a picture: drawn every frame, never retained)",
       "guards": [
         "render-pipeline-declaration 判定 U1",
         "render RD-11"
@@ -453,7 +453,7 @@
       "replace": "    static_cast<void>(main);\n",
       "target": "gyo_render_tests",
       "cases": "render_extract: a camera that does not update*",
-      "expect": "\\[re\\-update\\-resized\\-drawn\\]"
+      "expect": "\\[re\\-update\\-reused\\]"
     },
     {
       "id": "wr-once-never-settled",
@@ -482,6 +482,104 @@
       "target": "gyo_render_tests",
       "cases": "render_extract: a camera that does not update*",
       "expect": "\\[re\\-update\\-once\\-drawn\\]"
+    },
+    {
+      "id": "rd-size-same-asked",
+      "what": "N-2: the same size asked for again each time sizes are resolved (made again each frame, the picture lost)",
+      "guards": [
+        "render-pipeline-declaration 判定 U1",
+        "render RD-11"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "        if (!t.size || t.applied == t.size || t.asked) continue;",
+      "replace": "        if (!t.size || t.asked) continue;",
+      "target": "gyo_render_tests",
+      "cases": "render: target sizes are decided*",
+      "expect": "\\[rd\\-size\\-applied\\]"
+    },
+    {
+      "id": "rd-size-not-asked-again",
+      "what": "S-3: a size not applied is not asked for again (the backend keeps the old size)",
+      "guards": [
+        "render-pipeline-declaration 判定 U1",
+        "render RD-11"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "    for (TargetState& t : targets_) t.asked = false;\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "render: target sizes are decided*",
+      "expect": "\\[rd\\-size\\-asked\\-again\\]"
+    },
+    {
+      "id": "gd-size-ask-ignored",
+      "what": "N-3: the backend does not make a target again at a new size",
+      "guards": [
+        "render-pipeline-declaration 判定 U1",
+        "render RD-11"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "                ReleaseTarget(t);\n                t.size = sized->size;",
+      "replace": "                if (t.texture != nullptr) continue;\n                ReleaseTarget(t);\n                t.size = sized->size;",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu targets: a target follows*",
+      "expect": "\\[gt\\-target\\-follows\\]\\ at\\ 16"
+    },
+    {
+      "id": "gd-depth-size-asserted",
+      "what": "B-1: a 3D pass on the main target whose depth target is the data side's size, not the picture's, is drawn with the other size (or ends)",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-12"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            if (t.size != on.size) {",
+      "replace": "            if (false) {",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a 3D pass on the main target*",
+      "expect": "\\[gd\\-depth\\-size\\-skipped\\]"
+    },
+    {
+      "id": "rd-depth-size-unchecked",
+      "what": "B-1: a depth target of another size than its colour target on the data side is not found",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "        if (depth && colour && depth != colour) return i;",
+      "replace": "        static_cast<void>(depth);",
+      "target": "gyo_render_tests",
+      "cases": "render: a 3D pass's depth*",
+      "expect": "\\[rd\\-depth\\-size\\]"
+    },
+    {
+      "id": "re-update-shared-waits",
+      "what": "S-1: a waiting camera on a target another camera draws does not draw",
+      "guards": [
+        "render-pipeline-declaration 判定 U2",
+        "render RD-12"
+      ],
+      "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+      "find": "        if (!waits || (on != named.end() && on->second)) drawing.push_back(std::move(e));",
+      "replace": "        if (!waits) drawing.push_back(std::move(e));",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: a target two cameras*",
+      "expect": "\\[re\\-update\\-shared\\-drawn\\]"
+    },
+    {
+      "id": "re-update-inactive-not-named",
+      "what": "High 2: an inactive camera's target is not retained (its picture, sampled, asserts)",
+      "guards": [
+        "render-pipeline-declaration 判定 U2",
+        "render RD-12"
+      ],
+      "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+      "find": "        if (passTarget) name(*passTarget, drawable && !waits);",
+      "replace": "        if (passTarget && drawable) name(*passTarget, !waits);",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: a camera that does not update*",
+      "expect": "\\[re\\-update\\-inactive\\-retained\\]"
     }
   ]
 }

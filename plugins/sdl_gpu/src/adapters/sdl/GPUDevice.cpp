@@ -116,9 +116,9 @@ struct GPUTarget {
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
     // The texture's size (or the size SDL refused: no texture until the next size ask).
     R::TargetSize size{};
-    // Made or made again and not drawn on since: it has no picture. Its first pass clears it (to transparent black
-    // when it has no clear; a Depth target to 1).
-    bool fresh = true;
+    // Drawn on since it was made or made again (as RenderTextures's picture). Without one, its first pass clears it (to
+    // transparent black when it has no clear; a Depth target to 1).
+    bool picture = false;
     // A Depth target (the device's depth format): drawn on by depth-only passes and as a 3D pass's depth.
     bool isDepth = false;
     // A colour target's own depth for its 3D passes (none for a Depth target).
@@ -199,9 +199,8 @@ PassGeometry GeometryOf(const R::RenderPass& pass) {
                           },
                           [](const R::Pass3D& p) { return BytesOf(p); },
                           [](const R::PassDepth& p) { return BytesOf(p); },
-                          // One triangle of no vertex input; a reuse draws nothing.
+                          // One triangle of no vertex input.
                           [](const R::PassFullscreen&) { return PassGeometry{}; },
-                          [](const R::PassReuse&) { return PassGeometry{}; },
                       },
                       pass);
 }
@@ -641,12 +640,15 @@ struct GPUDevice::State {
             } else if (const auto* sized = std::get_if<R::TextureTargetSize>(&ask)) {
                 // Made (again) at its size, with no picture; SDL's refusal leaves it without a texture until its next size.
                 const auto it = targets.find(sized->id.value);
-                if (it == targets.end()) continue;
+                if (it == targets.end()) {
+                    ++tally.refusedAsks;
+                    continue;
+                }
                 GPUTarget& t = it->second;
                 ReleaseTarget(t);
                 t.size = sized->size;
                 t.texture = MakeTexture(t.size.width, t.size.height, t.isDepth ? kDepthTargetUsage : kTargetUsage, t.format, tally.lastRefusal);
-                t.fresh = true;
+                t.picture = false;
                 if (t.texture == nullptr) ++tally.refusedAsks;
             } else if (const auto* target = std::get_if<R::TextureTargetCreate>(&ask)) {
                 // Its texture is made by its first TextureTargetSize.
@@ -879,8 +881,8 @@ struct GPUDevice::State {
     // on since), so the pass clears it instead of keeping it (colour: its clear or transparent black; depth: 1). From
     // then on it has a picture. The one place where a target gets one.
     static bool BeginWrite(GPUTarget& target) noexcept {
-        const bool undefined = target.fresh;
-        target.fresh = false;
+        const bool undefined = !target.picture;
+        target.picture = true;
         return undefined;
     }
 
@@ -924,8 +926,6 @@ struct GPUDevice::State {
                 GYO_ASSERT(onDepth != colour && "a depth-only pass on a Depth target, a pass that draws colour on a colour target");
             };
             std::visit(Overloaded{
-                           // Its picture of the last frame stands for this frame's: nothing to record.
-                           [](const R::PassReuse&) {},
                            [&](const R::PassDepth& pass) {
                                requireColour(false);
                                RecordPassDepth(cmd, on, writes, pass, vertexBase, indexBase, instanceBase, tally);
@@ -967,7 +967,6 @@ struct GPUDevice::State {
         ApplyAsks(asks, frame, tally);
         ApplyMeshAsks(meshAsks, frame, tally);
         const std::vector<std::optional<Target>> resolved = ResolveTargets(commands, main, tally);
-        RequirePictures(commands);
         if (!RecordUploads(cmd, frame, commands, resolved, tally, error)) {
             RecordPasses(cmd, R::RenderCommands{}, {}, main, tally);
             return false;
@@ -982,16 +981,6 @@ struct GPUDevice::State {
     // at once.
     static bool SamplesOwnTarget(const R::PassWrites& writes, const R::TextureId texture) noexcept { return writes.Writes(texture); }
 
-    // RP-3 (render-pipeline declaration 14.11): before anything of the frame is recorded, every render target a pass
-    // samples was drawn on or reused by an earlier pass of the frame (render's FirstUnwrittenRead; data alone).
-    void RequirePictures(const R::RenderCommands& commands) const {
-        if (targets.empty()) return;
-        std::vector<R::TextureId> ids;
-        ids.reserve(targets.size());
-        for (const auto& [id, t] : targets) ids.push_back(R::TextureId{id});
-        const std::optional<R::UnwrittenRead> unwritten = R::FirstUnwrittenRead(commands.passes, ids);
-        GYO_ASSERT(!unwritten && "a pass samples a render target no earlier pass of the frame drew on or reused (RP-3)");
-    }
 
     // Records one Pass2D on its target (colour: how it starts). vertexBase, indexBase: where its vertices and indices
     // are in the frame's buffers.
@@ -1075,7 +1064,14 @@ struct GPUDevice::State {
             }
             GPUTarget& t = it->second;
             GYO_ASSERT(t.isDepth && "a 3D pass's depth is a Depth target");
-            GYO_ASSERT(t.size == on.size && "a 3D pass's depth target has its target's size");
+            if (t.size != on.size) {
+                // On the data side the two are one size (the backend's caller asserts it, FirstDepthOfAnotherSize);
+                // here the main target is the window's picture, whose size may differ from the data side's for a
+                // frame (a window being dragged): the draws are skipped and counted, the colour as the rule says.
+                tally.skippedDraws += pass.draws.size();
+                SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr));
+                return;
+            }
             depth = t.texture;
             undefined = BeginWrite(t);
         } else if (EnsureDepth(*on.depth, on.size, tally.lastRefusal)) {

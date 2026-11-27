@@ -10,6 +10,7 @@
 namespace GYO::Engine::Render {
 
 void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out) {
+    out.retained.insert(out.retained.end(), cameras.retained.begin(), cameras.retained.end());
     for (RenderPass& pass : passes.beforeCameras) out.passes.push_back(std::move(pass));
     passes.beforeCameras.clear();
     // The targets of the cameras before this one (a camera that drew nothing still had its turn on its target).
