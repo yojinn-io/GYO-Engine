@@ -405,7 +405,7 @@ v8-arch-gyo2-interact-door（一個 PR，開向 gyo2；#367 合併後才動工�
 |---|---|---|---|
 | **P1** | 放好的實體用什麼當網路身分（4、5.3） | (a) **`EntityId` 本身**：scene 的 `id` 照固定公式換成編號，兩端同號（GYO 的 NT-9 本來就兩端同號）(b) 照 replicon `Signature`／lightyear `PreSpawned`：兩端各算一個 hash，Client 用對照表接上 | **(a)**：別家用 hash 是因為兩端的實體編號不同；GYO 沒有這個問題，(b) 會多一張對照表與 hash 碰撞的處理。代價：scene 物件要有穩定的 `id`（工具負責不重用）、要一段固定的編號範圍 |
 | **P2** | 放好的實體 Peer 看不見時（4.2） | (a) **卸下**：拿掉複製來的 component，實體留著 (b) 照一般實體刪掉 (c) 什麼都不做（留著最後的值） | **(a)**：放好的實體是兩端 scene 的，刪了 Client 放不回來；(c) 會讓看不見的東西留著舊值，和「看不見＝沒有它的資料」矛盾。別家怎麼處理沒查到（未確認） |
-| **D2**（**待定**，使用者還在了解） | 交互的按鍵怎麼上 wire（主會話原本的建議是 `PlayerInput` 多一個位元） | (a) `PlayerInput` 加 `interact`（Codec 2 → 3，不多送訊息）(b) 另一個輸入型別 `InteractInput`，在 `interaction` 組裡登記、只在組開著時放到玩家身上 | 維持 **(b)**：(a) 讓 `PlayerInput` 的 hash 多一個欄位，核心 PvP 的權威 digest 每一步都變，「逐位元一致」做不到；(b) 照 #367 的 (R1)，也是 Unity、lightyear 的做法。代價：sandbox 每 Client 每幀多一則約 60 bytes 的輸入訊息 |
+| **D2**（**待定**，使用者還在了解） | 交互的按鍵怎麼上 wire（主會話原本的建議是 `PlayerInput` 多一個位元） | (a) `PlayerInput` 加 `interact`（Codec 2 → 3，不多送訊息）(b) 另一個輸入型別 `InteractInput`，在 `interaction` 組裡登記、只在組開著時放到玩家身上 | **調查中**（主會話轉交，HANDOFF `v8-arch-gyo2-interact-d2-direction`）：結果見附錄 [`interact-d2-investigation.zh-Hant.md`](interact-d2-investigation.zh-Hant.md)，調查的推薦改成 (a)。使用者核准之前，本宣告的其他各節仍照 (b) 寫；核准後照附錄第 6 節末段改寫。原本推薦 (b) 的理由「核心 PvP 的 digest 會變」已由附錄第 3 節（#374 7.3 (a) 的比法）推翻 |
 
 不是使用者的決定，但要別人做的：
 
