@@ -41,6 +41,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <mutex>
+#include <optional>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -1065,10 +1066,17 @@ bool FramesUntil(Setup& setup, Done done, const int n = 600) {
 TEST_CASE("client: the loading screen waits for the Sim World's walls, not only for the Frame World's picture") {
     HeldJobs jobs;
     Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, &jobs);
-    // The Sim World reads the map first (it runs before the Frame World): its walls are the first job, the picture
-    // the second.
-    REQUIRE(FramesUntil(setup, [&] { return jobs.Waiting() == 2; }));
-    REQUIRE(jobs.RunAt(1));
+    // The two Worlds read the map from one asset store, each at its own apply point, so either may see it complete
+    // first (a region may finish loading between them). The Frame World asks for the picture in the frame its map
+    // turns Building: the picture is the job asked for after the walls when they were already there (the Sim World
+    // runs first in a frame), else the first.
+    std::optional<std::size_t> picture;
+    REQUIRE(FramesUntil(setup, [&] {
+        if (!picture && setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Building) picture = jobs.Waiting() - 1;
+        return jobs.Waiting() == 2;
+    }));
+    REQUIRE(picture);
+    REQUIRE(jobs.RunAt(*picture));
     REQUIRE(FramesUntil(setup, [&] { return setup.Client().Resource<PW::MapLoad>()->stage == PW::MapStage::Done; }));
     REQUIRE(setup.Client().Resource<PC::ClientView>()->mapLoad.stage == PW::MapStage::Building);
     for (int i = 0; i < 120; ++i) {
