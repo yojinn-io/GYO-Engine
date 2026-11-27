@@ -1874,6 +1874,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         rules.stance = options.game->modes[mode].stance;
         rules.combat = options.game->combat;
         rules.character = options.game->character;
+        rules.characterDigest = options.game->characterDigest;
         world.SetResource(std::move(rules));
         world.SetResource(PW::LocalUser{user});
         world.SetResource(PW::MapLoad{});

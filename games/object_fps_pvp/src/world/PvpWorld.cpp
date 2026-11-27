@@ -246,19 +246,20 @@ N::Codec<MatchInfo> MatchInfoCodec() {
                 w.Value(v.wallsDigest);
                 WriteId(w, v.modeId);
                 w.Value(v.rulesDigest);
+                w.Value(v.characterDigest);
                 w.Value(static_cast<std::uint8_t>(v.phase));
                 w.Value(v.startTick);
             },
             [](N::NetReader& r, MatchInfo& v) {
                 std::uint8_t phase = 0;
                 if (!ReadId(r, v.arenaId) || !r.Value(v.wallsDigest) || !ReadId(r, v.modeId) || !r.Value(v.rulesDigest) ||
-                    !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
+                    !r.Value(v.characterDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
                     return false;
                 }
                 v.phase = static_cast<MatchPhase>(phase);
                 return true;
             },
-            3};
+            4};
 }
 
 // ---- The body's shape and the queries against the walls
@@ -838,6 +839,9 @@ K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rul
     } else if (match.rulesDigest != mode->rulesDigest) {
         kind = MismatchKind::Rules;
         reason = "mode '" + match.modeId + "' differs from the Match's (rules digest)";
+    } else if (match.characterDigest != own.characterDigest) {
+        kind = MismatchKind::Character;
+        reason = "the character differs from the Match's (character digest: skeleton, clips, hit shapes)";
     } else if (match.arenaId != own.arena.id) {
         kind = MismatchKind::Arena;
         reason = "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'";
@@ -999,6 +1003,85 @@ bool Blocked(const P::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b) {
     return hit.has_value() && hit->t < length - kApart;
 }
 
+namespace {
+
+void HashVec3(K::Hasher& h, const Math::Vec3& v) {
+    HashValue(h, v.x);
+    HashValue(h, v.y);
+    HashValue(h, v.z);
+}
+
+void HashQuaternion(K::Hasher& h, const Math::Quaternion& q) {
+    HashValue(h, q.x);
+    HashValue(h, q.y);
+    HashValue(h, q.z);
+    HashValue(h, q.w);
+}
+
+template <class T, class Each>
+void HashKeys(K::Hasher& h, const GYO::Engine::Model::Keys<T>& keys, Each each) {
+    HashValue(h, keys.times);
+    HashValue(h, static_cast<std::uint64_t>(keys.values.size()));
+    for (const T& value : keys.values) each(h, value);
+}
+
+} // namespace
+
+std::uint64_t CharacterDigest(const character::CharacterRig& character) {
+    namespace Model = GYO::Engine::Model;
+    K::Hasher h;
+    HashValue(h, std::string("gyo.object_fps_pvp.character/1"));
+    HashValue(h, character.bodyAssetId);
+    // The skeleton: each node's name, parent and rest pose.
+    const std::vector<Model::Node> none;
+    const std::vector<Model::Node>& nodes = character.body ? character.body->nodes : none;
+    HashValue(h, static_cast<std::uint64_t>(nodes.size()));
+    for (const Model::Node& node : nodes) {
+        HashValue(h, node.name);
+        HashValue(h, node.parent);
+        HashVec3(h, node.rest.translation);
+        HashQuaternion(h, node.rest.rotation);
+        HashVec3(h, node.rest.scale);
+    }
+    // The clips as retargeted onto it: every key of every track.
+    HashValue(h, static_cast<std::uint64_t>(character.clips.size()));
+    for (const Model::AnimationClip& clip : character.clips) {
+        HashValue(h, clip.name);
+        HashValue(h, clip.duration);
+        HashValue(h, clip.nodeCount);
+        HashValue(h, static_cast<std::uint64_t>(clip.tracks.size()));
+        for (const Model::Track& track : clip.tracks) {
+            HashValue(h, track.node);
+            HashKeys(h, track.translation, HashVec3);
+            HashKeys(h, track.rotation, HashQuaternion);
+            HashKeys(h, track.scale, HashVec3);
+        }
+    }
+    HashValue(h, character.upperMask);
+    const sim::AnimationRules& rules = character.rules;
+    for (const double value : {rules.referenceSpeed, rules.walkNativeSpeed, rules.jogNativeSpeed, rules.walkCycleDistance, rules.jogCycleDistance,
+                               rules.transitionSeconds, rules.maxFrameDeltaSeconds, rules.shotSeconds, rules.jumpStartSeconds,
+                               rules.jumpLandSeconds, rules.hitSeconds}) {
+        HashValue(h, value);
+    }
+    HashValue(h, rules.aimUpRadians);
+    HashValue(h, rules.aimDownRadians);
+    // Model to world, and the hit shapes on the bones.
+    HashValue(h, character.scale);
+    HashVec3(h, character.anchor);
+    HashValue(h, static_cast<std::uint64_t>(character.hitShapes.size()));
+    for (const character::HitShapeDefinition& shape : character.hitShapes) {
+        HashValue(h, shape.part);
+        HashValue(h, shape.ball);
+        HashValue(h, shape.node);
+        HashValue(h, shape.nodeTo);
+        HashVec3(h, shape.offset);
+        HashValue(h, shape.radius);
+    }
+    const auto bytes = h.Data();
+    return Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+}
+
 const sim::ArenaContent* GameContent::Find(const std::string& id) const {
     for (const sim::ArenaContent& arena : arenas) {
         if (arena.id == id) return &arena;
@@ -1077,7 +1160,8 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
     auto rig = character::LoadCharacterRig(root, content.arenas.front().bodyHeight, error);
     if (!rig) return std::nullopt;
     content.character = std::make_shared<const character::CharacterRig>(std::move(*rig));
-    auto modes = LoadModes(root, content.arenas, content.combat, *content.character, content.sets, error);
+    content.characterDigest = CharacterDigest(*content.character);
+    auto modes = LoadModes(root, content.arenas, content.combat, content.sets, error);
     if (!modes) return std::nullopt;
     content.modes = std::move(*modes);
     return content;
@@ -1243,6 +1327,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         rules.stance = mode.stance;
         rules.combat = options.content->combat;
         rules.character = options.content->character;
+        rules.characterDigest = options.content->characterDigest;
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
@@ -1276,6 +1361,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         if (end != WorldEnd::Client) {
             info.modeId = mode.id;
             info.rulesDigest = rulesDigest;
+            info.characterDigest = options.content->characterDigest;
         }
         if (end == WorldEnd::Match && options.expectUsers.empty()) info.phase = MatchPhase::Playing;
         world.SetResource(std::move(info));

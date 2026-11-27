@@ -1119,7 +1119,7 @@ TEST_CASE("client: a game whose Match plays another arena is built again on it")
 
 // The Match plays another mode than the one the Client starts with (it has both): a World plays one mode, so the game is
 // built again on the Match's (mode-config declaration 3.3); a mode of the same id with other rules cannot be played.
-TEST_CASE("client: a game whose Match plays another mode is built again on it; the same mode with other rules is left") {
+TEST_CASE("client: a game whose Match plays another mode is built again on it; the same mode with other rules, or another character, is left") {
     {
         auto two = std::make_shared<PW::GameContent>(*ShippedContent());
         PW::ModeContent second = two->modes.front();
@@ -1143,6 +1143,15 @@ TEST_CASE("client: a game whose Match plays another mode is built again on it; t
         REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
                         "[pvp-mode-rules-left] a mode with other rules is not played");
         CHECK_MESSAGE(setup.Scene().status.find("rules digest") != std::string::npos, setup.Scene().status);
+    }
+    {
+        // Another character (the user's decision U1): not played again, back with the reason.
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->characterDigest ^= 1;
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, other, 0, ShippedContent());
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
+                        "[pvp-character-left] a game of another character is not played");
+        CHECK_MESSAGE(setup.Scene().status.find("character digest") != std::string::npos, setup.Scene().status);
     }
 }
 

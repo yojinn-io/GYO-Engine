@@ -415,7 +415,7 @@ TEST_CASE("world: a Client plays the arena it was built with; the Match playing 
     }
 }
 
-TEST_CASE("world: the Match says its mode and rules digest; a Client of another mode, or of the same mode with other rules, is a content mismatch") {
+TEST_CASE("world: the Match says its mode and rules digest; a Client of another mode, of the same mode with other rules, or of another character, is a content mismatch") {
     {
         Session session(1, 4);
         session.Frames(90);
@@ -443,6 +443,17 @@ TEST_CASE("world: the Match says its mode and rules digest; a Client of another 
         const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
         CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Rules, "rules digest: " << mismatch.reason);
         CHECK(mismatch.matchMode == "core_pvp");
+    }
+    {
+        // The user's decision U1 (mode-config declaration 11.7): another character (skeleton, clips, hit shapes).
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->characterDigest ^= 1;
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        CHECK(session.Match().Resource<PW::MatchInfo>()->characterDigest == ShippedContent()->characterDigest);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Character, "[pvp-character-mismatch] " << mismatch.reason);
+        CHECK_MESSAGE(mismatch.reason.find("character digest") != std::string::npos, "[pvp-character-reason] " << mismatch.reason);
     }
 }
 

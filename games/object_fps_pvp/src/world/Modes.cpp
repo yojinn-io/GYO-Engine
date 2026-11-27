@@ -1,7 +1,5 @@
 #include "object_fps_pvp/world/Modes.hpp"
 
-#include "object_fps_pvp/character/CharacterRig.hpp"
-
 #include "data/JsonFields.hpp"
 
 #include "engine/base/Assert.hpp"
@@ -129,8 +127,8 @@ std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, c
 } // namespace
 
 std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
-                                                  const sim::CombatRules& combat, const character::CharacterRig& character,
-                                                  const std::vector<GameplaySet>& sets, std::string& error) {
+                                                  const sim::CombatRules& combat, const std::vector<GameplaySet>& sets,
+                                                  std::string& error) {
     error.clear();
     GYO::Engine::IO::FS::NativeFileSystem fs;
     const std::string folder = root + "/modes/";
@@ -185,7 +183,7 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
         }
         GYO_ASSERT(sets.size() <= kMaxGameplaySets);
         for (const auto& [slot, read] : file->sets) mode.on.set(slot);
-        mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat, character);
+        mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat);
         mode.sets = std::move(file->sets);
         modes.push_back(std::move(mode));
     }
@@ -220,25 +218,11 @@ void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v) {
 
 } // namespace object_fps_pvp::sim
 
-namespace object_fps_pvp::character {
-
-void HashValue(GYO::Kernel::Hasher& h, const HitShapeDefinition& v) {
-    HashValue(h, v.part);
-    HashValue(h, v.ball);
-    HashValue(h, v.node);
-    HashValue(h, v.nodeTo);
-    HashValue(h, v.offset.x);
-    HashValue(h, v.offset.y);
-    HashValue(h, v.offset.z);
-    HashValue(h, v.radius);
-}
-
-} // namespace object_fps_pvp::character
 
 namespace object_fps_pvp::world {
 
 std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& table, const sim::StanceRules& stance,
-                          const sim::CombatRules& combat, const character::CharacterRig& character) {
+                          const sim::CombatRules& combat) {
     K::Hasher h;
     // The mode: what decides the match (its display name does not).
     HashValue(h, std::string("gyo.object_fps_pvp.rules/1"));
@@ -251,15 +235,9 @@ std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& 
     std::vector<std::string> arenas = mode.arenas;
     std::sort(arenas.begin(), arenas.end());
     HashValue(h, arenas);
-    // The rule tables, by kind (movement); the combat rules (the game's defaults until a rule table carries them); the
-    // character's hit shapes (hitbox.json, as read onto the skeleton's nodes) and the body they are scaled to.
+    // The rule tables, by kind (movement), and the combat rules (the game's defaults until a rule table carries them).
     HashValue(h, stance);
     HashValue(h, combat);
-    HashValue(h, character.scale);
-    HashValue(h, character.anchor.x);
-    HashValue(h, character.anchor.y);
-    HashValue(h, character.anchor.z);
-    HashValue(h, character.hitShapes);
     const auto bytes = h.Data();
     return GYO::Engine::Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
 }

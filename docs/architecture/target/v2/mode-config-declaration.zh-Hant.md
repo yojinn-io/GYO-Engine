@@ -195,7 +195,7 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
   1. 模式本身（id、開的組與各組的設定、`arenas`）；
   2. `rules` 裡的每一張表（第一批：`StanceRules`）；
   3. 程式裡的 `CombatRules`（搬進資料之前也要比）；
-  4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）；
+  4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）；（11.7 U1 之後）角色移到自己的 `characterDigest`，連同骨架與動畫，見 11.7；
   5. （實作後補，設計審查 S1）這一場的 arena 檔裡、模式開著的組的區塊（門的位置、撤離點……）。所以比對值是「模式＋arena」的：`GameContent::MatchRulesDigest(mode, arena)`，模式沒開任何組的區塊時就是模式本身的 digest。
 - **Client 的判斷**（`FollowMatchArena` 改成也比模式）：`modeId` 不同、或 `rulesDigest` 不同 → `ContentMismatch`，`reason` 寫哪一項不同，並帶 `matchMode`。模式的比對不等地圖讀完（和「另一個 arena 當場就知道」同一個時機）。
 - **程式怎麼處理**（不是 Engine 的事，照現在 arena 的做法）：Client 有那個模式、而且只是模式不同 → 用 Match 的模式重建 World（`ClientWorld.cpp:1408-1423` 加上模式）；digest 不同（同名模式、內容不同）→ 不能玩，回大廳並顯示原因。
@@ -419,7 +419,20 @@ Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；�
 
 | # | 問題 | 選項 | 推薦 |
 |---|---|---|---|
-| **U1** | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
+| ~~**U1**~~（已定，11.7） | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
 | **U2** | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
 | **U3** | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |
 | **U4** | S5：同日交錯量，改後的 Match 讀圖比改前慢約 50 ms（+1.3%，四組都慢 32～66 ms）；RSS 多約 1.5 MB；Client 不變；原因未找到（讀圖、建牆的程式沒改） | (a) 接受，回歸基準更新成今天的數字（改後 3,830～3,874 ms／599～600 MB），記為未確認的原因 (b) 先追原因再合併（在 Linux 上對兩版取 profile，估 1～2 小時） | 交你判斷。卡片的看法：慢的那段程式沒有改，像是排列的雜訊，但四組同方向、沒有證據，所以不替你選 |
+
+### 11.7 使用者的決定（合併前）
+
+**U1**（2026-11-27，主會話轉交；出處 HANDOFF `v8-arch-gyo2-mode-config-u1`）：選 **(b)**，現在就把角色的骨架與動畫收進內容比對。原話：「收了吧，首先現在還沒有一個正式的遊戲版本，還在開發期。把機制建立起來比重新下載客戶端要好很多。」比過的是 (a) 先不收（卡片原本的推薦）。理由：還沒有正式版本，Client 與 Match 從同一個 commit 建，綁版本的成本現在幾乎是零；先把機制建好，不一致時明確擋下、說出發生了什麼。
+
+做法（卡片照現有慣例判）：
+
+- `MatchInfo` 加 `characterDigest`（Codec 3 → 4），和 `wallsDigest` 同一種：讀內容時算一次（`GameContent::characterDigest`，`CharacterDigest`），Match 在 `Prepare` 放進 `MatchInfo`，Client 的 `GameRules` 帶自己的；連線時多比 8 bytes。
+- 範圍：身體模型的 catalog id、骨架（每個節點的名字、父節點、靜止姿勢）、重定向到它上面的 clip（每條 track 的每個 key）、上半身的節點、動畫規則、scale 與 anchor、骨頭上的命中形狀。網格的頂點與材質不收（畫面，不是玩法）。值經 Kernel 的 Hasher，不 hash 檔案位元組。
+- 命中形狀、scale、anchor 從 `rulesDigest` 移到這裡（審查 P5：hitbox 不同時不再被說成「模式不同」）；`LoadModes`、`RulesDigest` 不再收角色。
+- 不一致：`MismatchKind::Character`，原因「the character differs from the Match's (character digest: skeleton, clips, hit shapes)」；比對順序 Mode → Rules → Character → Arena → Walls。角色不同不重建（同一個 Client 沒有別的角色），帶原因回大廳。
+- 檢驗：本機 `object_fps_pvp.*` 15 項與 Go 全過；A/B（macOS）權威 digest 仍相同，報告差異是 `MatchInfo` v2 → v4；突變 27 個全部 killed。Linux 的 A/B 與 S5 沒有重跑（`MatchInfo` 多 8 bytes，讀圖與權威的程式不變）。
+- 測試：world `[pvp-character-mismatch]`、`[pvp-character-reason]`（Client 的角色不同被擋下、原因看得出來；一致時連上的情況由既有的各案涵蓋）；`world: the character digest follows...`（模型 id、骨架、clip、動畫規則、命中形狀各改一個值，digest 都變）；client `[pvp-character-left]`（回大廳、狀態列有原因）。

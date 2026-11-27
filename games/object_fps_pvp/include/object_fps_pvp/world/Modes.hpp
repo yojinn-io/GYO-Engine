@@ -22,14 +22,6 @@
 #include <utility>
 #include <vector>
 
-namespace object_fps_pvp::character {
-struct CharacterRig;
-struct HitShapeDefinition;
-// What the rules digest takes of a hit shape (the character's own data has no Kernel; its hash is here, with the
-// digest's other parts).
-void HashValue(GYO::Kernel::Hasher& h, const HitShapeDefinition& v);
-} // namespace object_fps_pvp::character
-
 namespace object_fps_pvp::sim {
 // The rule tables' values, field by field, for the rules digest (the sim library has no Kernel).
 void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v);
@@ -55,9 +47,9 @@ struct ModeFile final {
 [[nodiscard]] std::optional<std::vector<std::string>> ParseModeList(std::string_view text, std::string& error);
 
 // Reads a mode file; its sets with the table's readers (ReadSetBlocks). nullopt with error: a member missing or of the
-// wrong kind, not version 1, an id not of 1 to 64 characters (as an arena's), a rule kind twice or a rule file that is not a relative path inside the
-// content root, an arena named twice, or what ReadSetBlocks says. Whether the rule kinds and the arenas are known is
-// LoadModes' to say.
+// wrong kind, not version 1, an id not of 1 to 64 characters (as an arena's), a rule kind twice or a rule file that is
+// not a relative path inside the content root, an arena named twice, or what ReadSetBlocks says. Whether the rule kinds
+// and the arenas are known is LoadModes' to say.
 [[nodiscard]] std::optional<ModeFile> ParseMode(std::string_view text, const std::vector<GameplaySet>& sets, std::string& error);
 
 // One installed mode, read.
@@ -71,7 +63,8 @@ struct ModeContent final {
     SetsOn on;
     SetBlocks sets;
     // What a Client compares with the Match's (MatchInfo::rulesDigest): the mode (its id, sets and arenas) and the
-    // rules a match of it plays with (its rule tables, the combat rules and the character's hit shapes), as values.
+    // rules a match of it plays with (its rule tables and the combat rules), as values. The character is compared on
+    // its own (GameContent::characterDigest).
     std::uint64_t rulesDigest = 0;
 
     [[nodiscard]] bool Plays(std::string_view arenaId) const;
@@ -82,13 +75,13 @@ struct ModeContent final {
 // modes with one id, a rule kind the game does not know, no movement rules, a set the table does not have (or its
 // settings do not read), an arena that is not installed, or one whose body the movement rules do not fit.
 [[nodiscard]] std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
-                                                                const sim::CombatRules& combat, const character::CharacterRig& character,
-                                                                const std::vector<GameplaySet>& sets, std::string& error);
+                                                                const sim::CombatRules& combat, const std::vector<GameplaySet>& sets,
+                                                                std::string& error);
 
 // The rules digest of a mode (ModeContent::rulesDigest): the parsed values through the Kernel's Hasher, never the
 // files' bytes (a line ending, a space or the order of an object's members does not change it).
 // The sets are hashed by name (from the table) with the digest of what each read.
 [[nodiscard]] std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& sets, const sim::StanceRules& stance,
-                                        const sim::CombatRules& combat, const character::CharacterRig& character);
+                                        const sim::CombatRules& combat);
 
 } // namespace object_fps_pvp::world

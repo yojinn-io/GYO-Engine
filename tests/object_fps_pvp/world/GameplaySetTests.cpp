@@ -137,7 +137,7 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
         ModeFolder folder;
         folder.Modes({{"core.json", Mode("core_pvp", "{}")}, {"probe.json", Mode("probe_on", R"({"probe": {"start": 5}})")}});
         std::string error;
-        auto modes = PW::LoadModes(folder.root.string(), copy->arenas, copy->combat, *copy->character, copy->sets, error);
+        auto modes = PW::LoadModes(folder.root.string(), copy->arenas, copy->combat, copy->sets, error);
         REQUIRE_MESSAGE(modes.has_value(), error);
         copy->modes = std::move(*modes);
         auto blocks = PW::ReadArenaSets(R"({"sets": {"probe": {"marker": 9}}})", copy->sets, error);
@@ -170,7 +170,7 @@ TEST_CASE("world: a mode's gameplay sets read with their settings; a set the gam
         ModeFolder folder;
         folder.Modes({{"a.json", Mode("a", probe)}});
         const auto& content = *ShippedContent();
-        return PW::LoadModes(folder.root.string(), content.arenas, content.combat, *content.character, sets, error);
+        return PW::LoadModes(folder.root.string(), content.arenas, content.combat, sets, error);
     };
     std::string error;
     const auto on = load(R"({"probe": {"start": 3}})", error);

@@ -72,6 +72,8 @@ struct GameContent final {
     std::vector<ModeContent> modes;
     std::vector<GameplaySet> sets;
     std::vector<SetBlocks> arenaSets;
+    // CharacterDigest of the character, read once (MatchInfo::characterDigest).
+    std::uint64_t characterDigest = 0;
     sim::CombatRules combat;
     std::shared_ptr<const character::CharacterRig> character;
 
@@ -92,8 +94,9 @@ struct GameContent final {
 [[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
 
 // What differs from the Match's (FollowMatchContent compares in this order): another mode, the same mode with other
-// rules (the rules digest), another arena, the same arena with other walls (the walls digest).
-enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Arena, Walls };
+// rules (the rules digest), another character (the character digest), another arena, the same arena with other walls
+// (the walls digest).
+enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, Walls };
 
 // Why this Client cannot play the Match's match (kind None: it can). Set by FollowMatchContent; it only says what
 // differs, the program decides (it may build its game again on matchMode and matchArena when it has them -- kind Mode
@@ -107,6 +110,13 @@ struct ContentMismatch final {
     std::string matchMode;
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
+
+// The character's digest (the user's decision U1, mode-config declaration 11.7): what the Match judges the shots on
+// and a Client predicts and draws with -- the body model's catalog id, its skeleton (each node's name, parent and rest
+// pose), the clips as retargeted onto it (every key), the upper body's nodes, the animation rules, the scale and anchor
+// to the world, and the hit shapes on the bones (hitbox.json). The meshes' vertices and the materials are left out (the
+// picture, not the play). The values through the Kernel's Hasher, never the files' bytes.
+[[nodiscard]] std::uint64_t CharacterDigest(const character::CharacterRig& character);
 
 // Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
 // nullopt with error naming the file and what was wrong: a file that does not read or parse, an arena whose stance

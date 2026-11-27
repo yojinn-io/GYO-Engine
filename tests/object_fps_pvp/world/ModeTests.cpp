@@ -15,7 +15,7 @@ namespace {
 
 std::optional<std::vector<PW::ModeContent>> Load(const ModeFolder& folder, std::string& error) {
     const auto& content = *ShippedContent();
-    return PW::LoadModes(folder.root.string(), content.arenas, content.combat, *content.character, PW::GameSets(), error);
+    return PW::LoadModes(folder.root.string(), content.arenas, content.combat, PW::GameSets(), error);
 }
 
 std::string Mode(const std::string& id, const std::string& rules = R"({"movement": "rules/movement_rules.json"})",
@@ -60,32 +60,61 @@ TEST_CASE("world: a mode file reads; a second mode with other rules has another 
     CHECK(modes->at(2).rulesDigest != modes->at(0).rulesDigest);
 }
 
-TEST_CASE("world: the rules digest follows each rule value: the movement rules, the combat rules and the hit shapes") {
+TEST_CASE("world: the rules digest follows each rule value: the movement rules and the combat rules") {
     // One mode id, read with one rule value changed at a time: each gives another digest.
     const auto& content = *ShippedContent();
-    const auto digestOf = [&](const std::string& movement, const sim::CombatRules& combat, const object_fps_pvp::character::CharacterRig& rig) {
+    const auto digestOf = [&](const std::string& movement, const sim::CombatRules& combat) {
         ModeFolder folder;
         folder.Write("rules/movement.json", movement);
         folder.Modes({{"a.json", Mode("same", R"({"movement": "rules/movement.json"})")}});
         std::string error;
-        const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, rig, PW::GameSets(), error);
+        const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, PW::GameSets(), error);
         REQUIRE_MESSAGE(modes.has_value(), error);
         return modes->front().rulesDigest;
     };
     const std::string shipped = R"({"version": 2, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.5,)"
                                 R"( "sprint_speed_scale": 1.0, "hold_jump": true})";
-    const std::uint64_t base = digestOf(shipped, content.combat, *content.character);
-    CHECK(digestOf(shipped, content.combat, *content.character) == base);
+    const std::uint64_t base = digestOf(shipped, content.combat);
+    CHECK(digestOf(shipped, content.combat) == base);
     std::string slower = shipped;
     slower.replace(slower.find("0.5"), 3, "0.4");
-    CHECK_MESSAGE(digestOf(slower, content.combat, *content.character) != base, "rulesDigest: the movement rules");
+    CHECK_MESSAGE(digestOf(slower, content.combat) != base, "rulesDigest: the movement rules");
     sim::CombatRules combat = content.combat;
     combat.legPermille += 1;
-    CHECK_MESSAGE(digestOf(shipped, combat, *content.character) != base, "rulesDigest: the combat rules");
-    object_fps_pvp::character::CharacterRig rig = *content.character;
-    REQUIRE_FALSE(rig.hitShapes.empty());
-    rig.hitShapes.back().radius += 0.01F;
-    CHECK_MESSAGE(digestOf(shipped, content.combat, rig) != base, "rulesDigest: the hit shapes");
+    CHECK_MESSAGE(digestOf(shipped, combat) != base, "rulesDigest: the combat rules");
+}
+
+TEST_CASE("world: the character digest follows the body model's id, the skeleton, the clips, the animation rules and the hit shapes") {
+    // The user's decision U1 (mode-config declaration 11.7). One value changed at a time: each gives another digest.
+    const auto& shipped = *ShippedContent()->character;
+    const std::uint64_t base = PW::CharacterDigest(shipped);
+    CHECK(base == ShippedContent()->characterDigest);
+    CHECK(PW::CharacterDigest(shipped) == base);
+    const auto changed = [&](const auto& change) {
+        object_fps_pvp::character::CharacterRig rig = shipped;
+        change(rig);
+        return PW::CharacterDigest(rig);
+    };
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodyAssetId += "_other"; }) != base, "characterDigest: the body model's id");
+    CHECK_MESSAGE(changed([](auto& rig) {
+                      auto body = std::make_shared<GYO::Engine::Model::ModelData>(*rig.body);
+                      body->nodes.back().rest.translation.y += 0.01F;
+                      rig.body = body;
+                  }) != base,
+                  "characterDigest: the skeleton");
+    CHECK_MESSAGE(changed([](auto& rig) {
+                      for (auto& clip : rig.clips) {
+                          for (auto& track : clip.tracks) {
+                              if (!track.rotation.values.empty()) {
+                                  track.rotation.values.front().x += 0.01F;
+                                  return;
+                              }
+                          }
+                      }
+                  }) != base,
+                  "characterDigest: the clips");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.rules.walkCycleDistance += 0.1; }) != base, "characterDigest: the animation rules");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.hitShapes.back().radius += 0.01F; }) != base, "characterDigest: the hit shapes");
 }
 
 TEST_CASE("world: a mode that names an unknown rule kind, set or arena, no movement rules, or another mode's id does not load") {

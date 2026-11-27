@@ -3319,18 +3319,18 @@
    "expect": "the combat rules"
   },
   {
-   "id": "pvp-rules-digest-no-hit-shapes",
-   "what": "the rules digest leaves the hit shapes out",
+   "id": "pvp-character-digest-no-hit-shapes",
+   "what": "the character digest leaves the hit shapes out",
    "guards": [
-    "mode-config-declaration 3.3",
+    "mode-config-declaration 11.7 (U1)",
     "limb-damage-research 1.4"
    ],
-   "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "    HashValue(h, v.radius);\n}\n\n} // namespace object_fps_pvp::character",
-   "replace": "    (void)v.radius;\n}\n\n} // namespace object_fps_pvp::character",
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        HashValue(h, shape.radius);",
+   "replace": "        (void)shape.radius;",
    "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: the rules digest follows*",
-   "expect": "the hit shapes"
+   "cases": "world: the character digest follows*",
+   "expect": "characterDigest: the hit shapes"
   },
   {
    "id": "pvp-set-always-on",
@@ -3461,6 +3461,84 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a game whose Match plays another mode*",
    "expect": "pvp-mode-rules-left"
+  },
+  {
+   "id": "pvp-character-mismatch-unseen",
+   "what": "a Client of another character than the Match's is not told",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    } else if (match.characterDigest != own.characterDigest) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match says its mode*",
+   "expect": "pvp-character-mismatch"
+  },
+  {
+   "id": "pvp-character-not-sent",
+   "what": "the Match does not say its character's digest",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            info.characterDigest = options.content->characterDigest;",
+   "replace": "            (void)options.content;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match says its mode*",
+   "expect": "characterDigest"
+  },
+  {
+   "id": "pvp-character-digest-no-body-id",
+   "what": "the character digest leaves the body model's id out",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    HashValue(h, character.bodyAssetId);",
+   "replace": "    (void)character.bodyAssetId;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character digest follows*",
+   "expect": "characterDigest: the body model's id"
+  },
+  {
+   "id": "pvp-character-digest-no-rest",
+   "what": "the character digest leaves the skeleton's rest pose out",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        HashVec3(h, node.rest.translation);",
+   "replace": "        (void)node.rest.translation;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character digest follows*",
+   "expect": "characterDigest: the skeleton"
+  },
+  {
+   "id": "pvp-character-digest-no-clip-keys",
+   "what": "the character digest leaves the clips' rotation keys out",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            HashKeys(h, track.rotation, HashQuaternion);",
+   "replace": "            (void)track.rotation;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character digest follows*",
+   "expect": "characterDigest: the clips"
+  },
+  {
+   "id": "pvp-character-digest-no-rules",
+   "what": "the character digest leaves the animation rules out",
+   "guards": [
+    "mode-config-declaration 11.7 (U1)"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        HashValue(h, value);\n    }\n    HashValue(h, rules.aimUpRadians);",
+   "replace": "        (void)value;\n    }\n    HashValue(h, rules.aimUpRadians);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character digest follows*",
+   "expect": "characterDigest: the animation rules"
   }
  ]
 }
