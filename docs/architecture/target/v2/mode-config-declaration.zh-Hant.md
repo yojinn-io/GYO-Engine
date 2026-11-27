@@ -1,6 +1,6 @@
 # 模式配置：研究與事前宣告（`v8-arch-gyo2-mode-config`）
 
-任務卡，2026-11-27。這一階段只做研究與事前宣告，交使用者核准；核准前不寫實作程式。作者 Opus 5.5／high。
+任務卡，2026-11-27。這一階段只做研究與事前宣告，交使用者核准；核准前不寫實作程式。作者 Opus 5.5／high。使用者的決定記在第 10 節（主會話轉交）。
 
 出處：HANDOFF `v8-arch-gyo2-object-pvp-route-a`、`v8-arch-gyo2-mode-config-start`、`v8-arch-gyo2-limb-damage-decisions`、`v8-arch-gyo2-tarkov-is-reference`；研究 #365（`limb-damage-research.zh-Hant.md` 第 1.4 節、第 9 節）；批次表〈每批的設計審查〉〈後續小事〉。
 
@@ -316,3 +316,24 @@ v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
 - Unity Netcode 範例用 `EnableXxx` singleton＋`RequireForUpdate` 開關玩法：範例 repo 不在本機，憑記憶。
 - 不存在的 Resource 不會被 `ReplicateResource` 送出：從程式推，第 2 步用測試確認。
 - A/B 只在 macOS 與 Linux；Windows 只有 L1 的既有測試。
+
+## 10. 使用者的決定（2026-11-27）
+
+主會話轉交。使用者先說「全部展示出來我過一遍」；主會話逐題列出選項與推薦後，使用者的原話：「全部照推薦，空殼刪掉」。出處：HANDOFF `v8-arch-gyo2-mode-config-m1`（gyo2 3825f51b）。
+
+| # | 決定 | 比過的選項 | 理由（本文） |
+|---|---|---|---|
+| M1 | (a) 房間的模式清單改讀已安裝的模式檔（和地圖讀 `arenas.json` 同一種）；現在只有「核心 PvP」，`coop`／`survival` 拿掉，等它們有自己的模式檔再出現；單機用模式清單的第一個。game-flow 宣告的兩處（大廳的模式切換、單機固定「生存」）跟著改 | (b) 先建內容和核心 PvP 相同的 `coop.json`／`survival.json`；(c) 房間的「模式」和模式配置並存 | 8 |
+
+卡片自己判的項目，使用者沒有推翻，照本文進行：
+
+| 項目 | 本文 |
+|---|---|
+| 登記方式 (R1)：玩法組固定登記，由模式條件決定跑不跑 | 2.3 |
+| 模式放另一個檔 (D2) | 3.1 |
+| `CombatRules` 這一批不搬進資料，留給 W1／G6 | 3.2 |
+| digest 算解析後的值，不算檔案位元組 | 3.3 |
+| 第 3 步順便把 `object_fps_pvp.client` 測試拆開 | 7 |
+| 第 4 步在 Linux 主機重量 S5 | 5、7 |
+
+**還沒開始**：核准只針對這份宣告；要不要開始實作，等主會話另外通知。
