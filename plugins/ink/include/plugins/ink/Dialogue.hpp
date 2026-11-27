@@ -180,7 +180,9 @@ struct Saved {
     // Restorable, and inkcpp says it can move the save to another version of
     // the story (not while waiting for a choice, not in a thread, at a place it
     // can name). Moving can still fail (the save's place is gone from that
-    // version) or land elsewhere (a save inside a tunnel: the owner page, D4).
+    // version). For a save taken inside a tunnel it cannot be trusted: inkcpp
+    // says true, and the tunnel returns elsewhere in the next version (the
+    // owner page, D4; JBenda/inkcpp#181).
     bool migratable = false;
 };
 

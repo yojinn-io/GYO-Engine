@@ -107,3 +107,9 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 - `restorable` 對 D2b：**true**（試讀成功、`can_continue` 相同，`Save` 看不出 sequence 回到開頭），D2b 的測試把這一點也釘住。要看出來得比對 inkcpp 不公開的拜訪次數，或每次存檔多跑一段台本，都沒有做，等存檔時機的重新決定一起看（owner 頁第 9 節）。
 - 之前 `merchant.ink` 的存讀測試能逐字接上，是因為它只有 `{~…}` 的 shuffle：shuffle 每次重抽（D5），拜訪次數歸零看不出來。
 - 驗證：`ink.dialogue` 29 案通過。突變沒有跑：這一批沒有改 adapter 的程式，只加了測試與註解。
+
+## U8 的決定
+
+- 宣告 11.4（HANDOFF `v8-arch-gyo2-ink-spike-u8`）：「先維持現狀吧，等需要用到的時候。」不 patch、不讀 inkcpp 內部的 stack，D4 由 I4 的測試固定。
+- 附帶的事已做：`Saved::migratable` 的註解與 owner 頁第 9 節、INK-7 寫明「在 tunnel 中存檔時，`migratable` 不可信」，附 #181。只改了註解與文件，沒有跑突變，也沒有另外 dispatch L1（程式與測試和 `3cd56913` 相同）。
+- U5 (3) 的存檔時機還在重議（#178）。

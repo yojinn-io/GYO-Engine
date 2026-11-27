@@ -136,7 +136,7 @@ plugins/ink/
   - 理由：D2 取決於台本裡有沒有 sequence、D3 取決於有沒有 `Advance` 過，只看位置猜不準；讓 inkcpp 自己讀一次最準。代價是每次 `Save` 多建一份 globals 與 runner。
 - `migratable`：`restorable`，而且 inkcpp 的 `snapshot::can_be_migrated()` 是 true。inkcpp 判 false 的條件（`runner_impl.cpp:695-717`）：在等選擇、剛進 knot（`_entered_knot`）、位置沒有名字、在 thread 裡，以及輸出、堆疊等元件在 lookahead 的保存狀態。
   - inkcpp 說能搬，搬的時候仍可能失敗：存檔所在的 knot 或選項在新版不見了（`SnapshotNotMigratable`，第 6 節）。
-  - 也可能 `Restore` 成功、卻搬到別的地方：tunnel 裡存的（D4，第 8 節）。adapter 照 inkcpp 給的值交出，沒有自己再判：要知道是不是在 tunnel 裡，得讀 inkcpp 私有的 `runner_impl` 堆疊，會打破 adapter 只用 inkcpp 公開介面的界線。
+  - **在 tunnel 中存檔時，`migratable` 不可信**：inkcpp 說能搬，`Restore` 也成功，卻搬到別的地方（D4，第 8 節；上游 [JBenda/inkcpp#181](https://github.com/JBenda/inkcpp/issues/181)）。使用者決定維持現狀（宣告 11.4 U8）：adapter 照 inkcpp 給的值交出，沒有自己再判：要知道是不是在 tunnel 裡，得讀 inkcpp 私有的 `runner_impl` 堆疊，會打破 adapter 只用 inkcpp 公開介面的界線。
   - `Save` 不知道下一版台本長什麼樣，所以不保證。
 
 這一版 inkcpp 實際的結果（測試「Save says whether Restore on the same story gives the dialogue back…」逐點用 `Restore` 核對）：
@@ -161,7 +161,7 @@ plugins/ink/
 - **INK-4 thread 的契約**：同一個 `Story`、它的複本、從它開始或讀回的所有 `Dialogue` 是一家，同一時間只給一條 thread 用；交給別的 thread 時兩邊之間要有同步。各自讀進來的 `Story` 是不同的家。理由：inkcpp 的參照計數不是 atomic（`story_ptr.h:25`），沒有 `thread_local`，也沒有可寫的全域狀態。放進 World 時當一般 Resource（使用者 U4），不用 `threadBound`。守衛：`[ink-threads-apart]`、`[ink-threads-in-turn]`；同時碰同一家的情形是未定義行為，測不出可靠的失敗，由契約與審查負責。
 - **INK-5 `"C"` locale**：process 的 `LC_NUMERIC` 必須是 `"C"`（inkcpp 用 `snprintf("%.7f")` 寫浮點）。adapter 不檢查。守衛：`[ink-locale]`。
 - **INK-6 不假設單機**：adapter 裡沒有本地玩家、UI、輸入、視窗、牆鐘；`Beat`、`Choice` 是一般資料，可以複製給 Client；選項編號當不可信的輸入檢查（`ChoiceOutOfRange`）。守衛：審查。
-- **INK-7 `Save` 說讀不讀得回來**：`Saved::restorable` 是 `Save` 當場用同一個台本試讀一次的結果：試讀失敗（D2）或讀回已結束（D3）是 false；讀回成功但 sequence 回到開頭（D2b）時仍是 true（第 9 節）。`migratable` 只在 `restorable` 時才可能是 true，值是 inkcpp 給的（D4 時是錯的，第 8 節）。位元組照給，留不留由作者決定。守衛：測試 `[ink-save-restorable]`、`[ink-save-migratable]`、`[ink-save-bytes]`；突變 `ink-save-restorable-unchecked`、`ink-save-place-uncompared`、`ink-save-migratable-from-restorable`、`ink-save-migratable-from-inkcpp`。
+- **INK-7 `Save` 說讀不讀得回來**：`Saved::restorable` 是 `Save` 當場用同一個台本試讀一次的結果：試讀失敗（D2）或讀回已結束（D3）是 false；讀回成功但 sequence 回到開頭（D2b）時仍是 true（第 9 節）。`migratable` 只在 `restorable` 時才可能是 true，值是 inkcpp 給的；在 tunnel 中存檔時不可信（D4，[#181](https://github.com/JBenda/inkcpp/issues/181)）。位元組照給，留不留由作者決定。守衛：測試 `[ink-save-restorable]`、`[ink-save-migratable]`、`[ink-save-bytes]`；突變 `ink-save-restorable-unchecked`、`ink-save-place-uncompared`、`ink-save-migratable-from-restorable`、`ink-save-migratable-from-inkcpp`。
 
 ## Replacement Criteria
 

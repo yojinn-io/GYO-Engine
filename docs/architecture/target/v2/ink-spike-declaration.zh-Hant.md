@@ -371,6 +371,16 @@ v8-arch-gyo2-ink-spike
   - **(d) 的附帶條件**：定案之前，現在的行為至少要報錯（回 `Result`），不能默默忽略。理由同樣是「告訴外面發生了什麼」。
   - 照程式核對（I4）：list 參數在 `ReadArgument` 丟例外，`Advance` 回 `ScriptFault`，不是忽略，不用改。外部可驗的測試已經有（`[ink-list-argument]`，突變 `ink-list-argument-accepted`）。無號數走同一條路，ink 的台本寫不出來，沒有測試。
 
+### 11.4 U8：inkcpp 的缺陷 D4（2026-11-27）
+
+出處：HANDOFF `v8-arch-gyo2-ink-spike-u8`，由主會話轉交。
+
+- **原話**：「先維持現狀吧，等需要用到的時候。我再來看如何處理，其實現在我還沒了解過ink的機制。」
+- **選 (a)，維持現狀**：不 patch inkcpp，也不讀它內部的 stack；D4 的現行為用 I4 加的測試固定住。
+- 比過的選項：(b) adapter 自己判斷在不在 tunnel；(c) patch inkcpp（12.6）。
+- 理由：目前用不到；照存檔時機可以避開；使用者還沒了解 ink 的機制，先不做細部決定。
+- **附帶**：`Saved::migratable` 的註解與 owner 頁第 9 節寫明「在 tunnel 中存檔時，`migratable` 不可信」，D4 附上游 issue [JBenda/inkcpp#181](https://github.com/JBenda/inkcpp/issues/181)。
+
 ## 12. 實作時發現的事（I1、I2，2026-11-27）
 
 細節與程式位置在 owner 頁 [ink.zh-Hant.md](ink.zh-Hant.md)。
@@ -430,4 +440,4 @@ v8-arch-gyo2-ink-spike
 
 | # | 事 | 選項 | 卡片的建議 |
 |---|---|---|---|
-| U8 | **inkcpp 的缺陷 D4**：tunnel 裡選完之後存的檔，`can_be_migrated()` 是 true，`Restore` 讀進新版也成功，但之後 tunnel 回到別的地方，多出台詞和玩家沒選的指令（owner 頁第 8 節；`runner_impl.cpp:695-717`、`870-916`）。讀回同一個台本沒事。`Saved::migratable` 現在照 inkcpp 給，所以這時是錯的 | (a) 照 U5 的先例：不打補丁，寫明 D4、測試釘住現狀，和 D2 一起交回報卡回報 upstream（現狀）；(b) adapter 自己判斷「在 tunnel 裡就不能遷移」：要讀 inkcpp 私有的 `runner_impl` 堆疊，打破 adapter 只用公開介面的界線；(c) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍） | (a)：spike 沒有遊戲會在 tunnel 裡存檔又更新台本；照 U5 (3) 的存檔時機，遊戲也能避開 tunnel（在 hub 存）。(b) 的代價是綁住 inkcpp 的私有結構，升版就可能壞 |
+| U8 | **inkcpp 的缺陷 D4**：tunnel 裡選完之後存的檔，`can_be_migrated()` 是 true，`Restore` 讀進新版也成功，但之後 tunnel 回到別的地方，多出台詞和玩家沒選的指令（owner 頁第 8 節；`runner_impl.cpp:695-717`、`870-916`）。讀回同一個台本沒事。`Saved::migratable` 現在照 inkcpp 給，所以這時是錯的 | (a) 照 U5 的先例：不打補丁，寫明 D4、測試釘住現狀，和 D2 一起交回報卡回報 upstream（現狀）；(b) adapter 自己判斷「在 tunnel 裡就不能遷移」：要讀 inkcpp 私有的 `runner_impl` 堆疊，打破 adapter 只用公開介面的界線；(c) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍） | (a)：spike 沒有遊戲會在 tunnel 裡存檔又更新台本；照 U5 (3) 的存檔時機，遊戲也能避開 tunnel（在 hub 存）。(b) 的代價是綁住 inkcpp 的私有結構，升版就可能壞 <br>**已決定（11.4）**：(a) 維持現狀 |
