@@ -53,6 +53,12 @@ Owner：模式配置的任務卡。分支 `claude/gyo2-mode-config-declaration`�
 - 測試：world 2 個檢查＋1 案、client 1 個區塊。突變：`pvp-character-*` 7 個（原 `pvp-rules-digest-no-hit-shapes` 改指向角色 digest），連同模式、digest、組的共 27 個重跑，全部 killed。
 - 本機：`object_fps_pvp.*` 15 項、Go 全過；A/B 權威 digest 仍逐位元組相同，報告的差異是 `MatchInfo` v2 → v4 與 protocol hash。Linux 的 A/B 與 S5 沒有重跑（`MatchInfo` 多一欄，讀圖與權威的程式不變）。
 
+## U4：Match 讀圖慢約 50 ms 的原因（使用者「選（b）…」）
+
+- `perf` 被 `perf_event_paranoid=4` 擋，沒改設定；改用程式內分段計時（暫時補丁，量完還原）。
+- 重現（六組同方向）→ 分段（主執行緒的每幀工作不變，差距在工作執行緒上、程式沒改的兩段）→ 讀圖與建牆的四個函式庫兩版機器碼相同、位址不同 → 因果實驗：改前塞 120 KB 不執行的填充就穩定慢約 25 ms。結論是程式碼擺放位置的效應；回歸基準更新成同日改後的數字（宣告 11.8、大地圖宣告 17.8）。
+- 途中兩件作廢：重現那一輪的 g 組和重建同時跑；等待迴圈的 `pgrep -f` 比對到自己而停不下來（改成直接跑）。
+
 ## 待補
 
-（L1 第二輪的結果。）
+（Kernel 步：等條文的回覆。）
