@@ -59,12 +59,15 @@ target_include_directories(${object_fps_pvp_character} PRIVATE "${CMAKE_CURRENT_
 gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     PUBLIC_LIBRARIES ${object_fps_pvp_character} GYO::Kernel GYO::Orchestration GYO::WorldTime GYO::Rollback
         GYO::Authority GYO::EntityIds GYO::Net GYO::Transform GYO::Physics3d GYO::VoxelMap GYO::Asset GYO::WorldAsset
-    PRIVATE_LIBRARIES GYO::IO GYO::Http
+    PRIVATE_LIBRARIES GYO::IO GYO::Http GYO::Json
     SOURCES
     src/data/ArenaMap.cpp
     src/world/ArenaLoad.cpp
     src/world/MatchSaves.cpp
+    src/world/Modes.cpp
     src/world/PvpWorld.cpp)
+# The mode files are read with the game's JSON helpers (src/data/JsonFields.hpp, in the logic library).
+target_include_directories(${object_fps_pvp_world} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     PUBLIC_LIBRARIES ${object_fps_pvp_world} GYO::Asset GYO::Audio GYO::Camera GYO::Image GYO::Input GYO::Model GYO::Render

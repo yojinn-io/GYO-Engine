@@ -1578,7 +1578,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};\n",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],\n                                        .mode = room.mode ? room.mode->id : std::string()};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -2020,8 +2020,8 @@
     "game-flow-declaration 3.4 (the room's map)"
    ],
    "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
-   "find": "                                        .room = room.id,\n                                        .map = room.room->map};",
-   "replace": "                                        .room = room.id};",
+   "find": "                                        .room = room.id,\n                                        .map = room.room->map,",
+   "replace": "                                        .room = room.id,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-map"
@@ -2033,8 +2033,8 @@
     "game-flow-declaration 3.4 (the room's map)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": ".arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options),\n",
-   "replace": ".arena = options.arena, .localUser = LocalUserOf(scene, options),\n",
+   "find": ".arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),\n                               .localUser = LocalUserOf(scene, options),",
+   "replace": ".arena = options.arena, .mode = ModeOf(scene, options),\n                               .localUser = LocalUserOf(scene, options),",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-map-sim"
@@ -2059,8 +2059,8 @@
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};",
-   "replace": "request->next = SceneChange{.scene = Scene::SoloGame};",
+   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],",
+   "replace": "request->next = SceneChange{.scene = Scene::SoloGame,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-map"
@@ -2085,8 +2085,8 @@
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": ".status = \"中止しました\", .map = origin->map};",
-   "replace": ".status = \"中止しました\"};",
+   "find": ".status = \"\u4e2d\u6b62\u3057\u307e\u3057\u305f\", .map = origin->map};",
+   "replace": ".status = \"\u4e2d\u6b62\u3057\u307e\u3057\u305f\"};",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-map-kept"
@@ -2098,7 +2098,7 @@
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
    "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
-   "find": "        bindings.Set(\"map\", \"マップ: \" + state.room->map);\n",
+   "find": "        bindings.Set(\"map\", \"\u30de\u30c3\u30d7: \" + state.room->map);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
@@ -2261,19 +2261,6 @@
    "expect": "pvp-solo-walks"
   },
   {
-   "id": "pvp-solo-mode-not-survival",
-   "what": "the single player's room shows another mode than survival",
-   "guards": [
-    "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
-   ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "constexpr std::string_view kSoloMode = \"survival\";",
-   "replace": "constexpr std::string_view kSoloMode = \"coop\";",
-   "target": "gyo_object_fps_pvp_client_tests",
-   "cases": "client: single player: the room is the multiplayer's*",
-   "expect": "pvp-solo-survival"
-  },
-  {
    "id": "pvp-gw-calls-not-kept",
    "what": "an answered exchange is not kept for the log",
    "guards": [
@@ -2384,8 +2371,8 @@
     "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
    ],
    "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
-   "find": "\"開始（部屋主のみ）\"",
-   "replace": "\"開始\"",
+   "find": "\"\u958b\u59cb\uff08\u90e8\u5c4b\u4e3b\u306e\u307f\uff09\"",
+   "replace": "\"\u958b\u59cb\"",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: a listed room is joined*",
    "expect": "pvp-room-start-owner"
@@ -2449,8 +2436,8 @@
     "big-map declaration 15.3, 15.6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = sim->mismatchArena};\n            return {};\n",
-   "replace": "",
+   "find": ".room = from.room, .map = sim->mismatchArena,",
+   "replace": ".room = from.room,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a game whose Match plays another arena*",
    "expect": "pvp-arena-again"
@@ -3130,6 +3117,220 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "load threads:*",
    "expect": "not a whole number"
+  },
+  {
+   "id": "pvp-mode-mismatch-unseen",
+   "what": "a Client of another mode than the Match's is not told",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    if (match.modeId != mode->id) {",
+   "replace": "    if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match says its mode*",
+   "expect": "mode 'core_pvp'"
+  },
+  {
+   "id": "pvp-rules-digest-unseen",
+   "what": "a Client of the same mode with other rules is not told",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    } else if (match.rulesDigest != mode->rulesDigest) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match says its mode*",
+   "expect": "rules digest"
+  },
+  {
+   "id": "pvp-mode-info-not-sent",
+   "what": "the Match does not say its mode in MatchInfo",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            info.modeId = mode.id;",
+   "replace": "            (void)mode.id;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the Match says its mode*",
+   "expect": "modeId"
+  },
+  {
+   "id": "pvp-mode-unknown-rule-kind",
+   "what": "a mode naming a rule kind the game does not know reads",
+   "guards": [
+    "mode-config-declaration 3.2"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "            if (kind != \"movement\") return fail(",
+   "replace": "            if (false) return fail(",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode that names*",
+   "expect": "refused: no rule kind 'weapons'"
+  },
+  {
+   "id": "pvp-mode-unknown-arena",
+   "what": "a mode naming an arena that is not installed reads",
+   "guards": [
+    "mode-config-declaration 3.2"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "                return fail(\"no installed arena has the id '\" + id + \"'\");",
+   "replace": "                (void)id;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode that names*",
+   "expect": "refused: no installed arena"
+  },
+  {
+   "id": "pvp-rules-digest-no-id",
+   "what": "the rules digest leaves the mode's id out: two modes of the same rules look alike",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "    HashValue(h, mode.id);",
+   "replace": "    (void)mode.id;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode file reads*",
+   "expect": "rulesDigest"
+  },
+  {
+   "id": "pvp-rules-digest-no-stance",
+   "what": "the rules digest leaves the movement rules out",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "    HashValue(h, stance.crouchSpeedScale);",
+   "replace": "    (void)stance.crouchSpeedScale;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "the movement rules"
+  },
+  {
+   "id": "pvp-mode-not-followed",
+   "what": "a Client whose Match plays another installed mode is not built again on it",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                                            .mode = sim->mismatchMode};",
+   "replace": "                                            .mode = {}};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a game whose Match plays another mode*",
+   "expect": "pvp-mode-again"
+  },
+  {
+   "id": "pvp-room-mode-by-id",
+   "what": "a room's mode is shown by its id, not the installed mode's name",
+   "guards": [
+    "mode-config-declaration M1",
+    "game-flow-declaration revision 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/GatewayScene.cpp",
+   "find": "        if (choice.id == mode) return choice.name;",
+   "replace": "        if (choice.id == mode) return choice.id;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-room-mode"
+  },
+  {
+   "id": "pvp-room-mode-not-played",
+   "what": "a started room's game does not play the room's mode",
+   "guards": [
+    "mode-config-declaration M1"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "                                        .mode = room.room->mode};",
+   "replace": "                                        .mode = {}};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: gateway: the lobby lists*",
+   "expect": "pvp-gw-mode"
+  },
+  {
+   "id": "pvp-solo-mode-not-first",
+   "what": "the single player's game does not play the first installed mode",
+   "guards": [
+    "mode-config-declaration M1",
+    "game-flow-declaration revision 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "find": "                                        .mode = room.mode ? room.mode->id : std::string()};",
+   "replace": "                                        .mode = std::string()};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: single player: the room is the multiplayer's*",
+   "expect": "pvp-solo-mode-played"
+  },
+  {
+   "id": "pvp-gw-rooms-any-mode",
+   "what": "the room service takes a mode the Match does not have",
+   "guards": [
+    "mode-config-declaration M1"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "(len(s.config.Modes) > 0 && !slices.Contains(s.config.Modes, request.Mode))",
+   "replace": "false",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "-run",
+    "TestTheGatewayRefusesWithoutAValidSession",
+    "./services/stack/"
+   ],
+   "expect": "unknown_mode"
+  },
+  {
+   "id": "pvp-gw-match-no-mode",
+   "what": "the matches service starts a Match without the room's mode",
+   "guards": [
+    "mode-config-declaration 3.5"
+   ],
+   "file": "games/object_fps_pvp/services/matches/local.go",
+   "find": "\t\targuments = append(arguments, \"--mode\", spec.Mode)",
+   "replace": "\t\t_ = spec.Mode",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "-run",
+    "TestLocalStartsAMatchProcessAndFreesItsPort",
+    "./services/matches/"
+   ],
+   "expect": "fake match: arguments"
+  },
+  {
+   "id": "pvp-rules-digest-no-combat",
+   "what": "the rules digest leaves the combat rules out",
+   "guards": [
+    "mode-config-declaration 3.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "    HashValue(h, combat.legPermille);",
+   "replace": "    (void)combat.legPermille;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "the combat rules"
+  },
+  {
+   "id": "pvp-rules-digest-no-hit-shapes",
+   "what": "the rules digest leaves the hit shapes out",
+   "guards": [
+    "mode-config-declaration 3.3",
+    "limb-damage-research 1.4"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "        HashValue(h, shape.radius);",
+   "replace": "        (void)shape.radius;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "the hit shapes"
   }
  ]
 }

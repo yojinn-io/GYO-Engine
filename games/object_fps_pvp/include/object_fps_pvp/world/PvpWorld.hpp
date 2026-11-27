@@ -34,6 +34,7 @@
 #include "object_fps_pvp/character/CharacterRig.hpp"
 #include "object_fps_pvp/world/ArenaLoad.hpp"
 #include "object_fps_pvp/world/Components.hpp"
+#include "object_fps_pvp/world/Modes.hpp"
 
 #include "engine/asset/AssetExecutor.hpp"
 
@@ -51,6 +52,7 @@
 #include <optional>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace object_fps_pvp::world {
@@ -58,29 +60,33 @@ namespace object_fps_pvp::world {
 namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 
-// What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), the
-// stance rules (rules/movement_rules.json), the combat rules (the game's defaults) and the character (its skeleton,
-// clips and hit shapes; the arenas share one body height). An arena's map is not here: the World that plays the arena
-// reads it (LoadArena, big-map declaration 15.6).
+// What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), every
+// installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables), the combat rules (the game's
+// defaults) and the character (its skeleton, clips and hit shapes; the arenas share one body height). An arena's map
+// is not here: the World that plays the arena reads it (LoadArena, big-map declaration 15.6).
 struct GameContent final {
     std::vector<sim::ArenaContent> arenas;
-    sim::StanceRules stance;
+    std::vector<ModeContent> modes;
     sim::CombatRules combat;
     std::shared_ptr<const character::CharacterRig> character;
 
     [[nodiscard]] const sim::ArenaContent* Find(const std::string& id) const;
+    // The index of the installed mode with this id.
+    [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
 // (the Client hears a cue behind the map at a lower gain; present/SoundCues.hpp HeardGains).
 [[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
 
-// Why this Client cannot play the Match's arena (empty: it can). Set by FollowMatchArena; the program decides (it may
-// build its game again on matchArena, when it has that arena, or leave).
+// Why this Client cannot play the Match's match (empty: it can): another mode or arena, or the same one with other
+// content (rules digest, walls digest). Set by FollowMatchArena; the program decides (it may build its game again on
+// matchMode and matchArena, when it has them, or leave).
 struct ContentMismatch final {
     std::string reason;
-    // The arena the Match plays.
+    // The arena and the mode the Match plays.
     std::string matchArena;
+    std::string matchMode;
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
 
@@ -151,6 +157,8 @@ struct WorldOptions final {
     std::shared_ptr<const GameContent> content;
     // The arena the World plays (an index into content->arenas): its map is read while the World generates.
     std::size_t arena = 0;
+    // The mode it plays (an index into content->modes): its rule tables.
+    std::size_t mode = 0;
     // A Client: its user id (NetProductOptions::userId). The Match: 0.
     std::uint64_t localUser = 0;
     // The Match: its seats (Seats); a Client: none.
@@ -168,6 +176,14 @@ struct WorldOptions final {
 
 // Which end a World is.
 enum class WorldEnd : std::uint8_t { Match, Client, Local };
+
+// The mode this World plays (WorldOptions::mode): put before the first frame, never written after. Not decision data,
+// and not GameRules (LoadArena writes that while the World generates).
+struct ActiveMode final {
+    std::string id;
+    std::uint64_t rulesDigest = 0;
+};
+void HashValue(K::Hasher&, const ActiveMode&);
 
 // Local: where its player first stands (WorldOptions::spawn).
 struct LocalSpawn final {

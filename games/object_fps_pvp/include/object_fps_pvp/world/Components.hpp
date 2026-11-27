@@ -144,10 +144,12 @@ void HashValue(K::Hasher&, const GameRules&);
 enum class MatchPhase : std::uint8_t { Waiting = 0, Playing = 1 };
 
 // The Match tells every Client which arena it plays and the digest of its walls (replicated; port declaration PV14),
-// and whether the match has started.
+// which mode and the digest of its rules (mode-config declaration 3.3), and whether the match has started.
 struct MatchInfo final {
     std::string arenaId;
     std::uint64_t wallsDigest = 0;
+    std::string modeId;
+    std::uint64_t rulesDigest = 0;
     MatchPhase phase = MatchPhase::Waiting;
     // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
     std::uint64_t startTick = 0;

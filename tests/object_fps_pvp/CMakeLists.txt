@@ -39,7 +39,7 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 # the net Module's memory links (no socket), one fixed step a frame.
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
 add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp
-    world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp)
+    world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp world/ModeTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 # SavesTests answers as the save service through the test library gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE gyo_test_loopback_listener)
@@ -117,6 +117,11 @@ set_tests_properties(object_fps_pvp.match PROPERTIES LABELS "network" TIMEOUT 60
 add_test(NAME object_fps_pvp.match_load_threads COMMAND ${object_fps_pvp_match} --port 0 --ticks 1 --load-threads 100)
 set_tests_properties(object_fps_pvp.match_load_threads PROPERTIES LABELS "network" TIMEOUT 60
     PASS_REGULAR_EXPRESSION "--load-threads 100 is outside 1 to 8: the map loads on [2-8] threads")
+
+# --mode names a mode that is not installed (mode-config declaration 3.5): the Match does not start, and says so.
+add_test(NAME object_fps_pvp.match_mode_unknown COMMAND ${object_fps_pvp_match} --port 0 --ticks 1 --mode no_such_mode)
+set_tests_properties(object_fps_pvp.match_mode_unknown PROPERTIES LABELS "cpu" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "no installed mode has the id 'no_such_mode'")
 
 # The Match executable as the matches service starts it (gateway declaration, segment 2): its key on the standard
 # input, listening on its port; a bad key refuses to start. Go on the host; label network (a real UDP port).

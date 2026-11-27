@@ -126,6 +126,8 @@ struct ClientOptions final {
     // Where the map's walls and pictures are made (the Product's worker; it outlives the Product). None: in the
     // System, on the World's thread.
     GYO::Engine::Asset::AssetExecutor* jobs = nullptr;
+    // The mode a game scene plays when its change names none this Client has (an index into game->modes).
+    std::size_t mode = 0;
 };
 
 // The Product's part (its configure): the ClientExchange and the SceneDirector (from the product option ClientStart;
@@ -161,6 +163,7 @@ struct ClientView final {
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
     std::string mismatch;                           // world::ContentMismatch::reason
     std::string mismatchArena;                      // world::ContentMismatch::matchArena
+    std::string mismatchMode;                       // world::ContentMismatch::matchMode
     world::MapLoad mapLoad;                         // how far the Sim (or Solo) World has come with its map
     std::uint64_t deaths = 0;                       // a Local World's: its player's deaths so far (world::LocalDeaths)
     bool started = false;                           // the match has started (world::MatchInfo::phase)

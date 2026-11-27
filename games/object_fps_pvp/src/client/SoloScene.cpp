@@ -1,6 +1,6 @@
 // The single player's room (Scene::SoloRoom; the multiplayer's room document, assets/object_fps_pvp/ui/pvp_room.json,
 // canvas "solo_room"; game-flow declaration 3.3) and its save: the room as the multiplayer's, with its own buttons (the
-// game starts at once: no one else to be ready), the map chosen here, the mode survival; the record read before a game,
+// game starts at once: no one else to be ready), the map chosen here, the first installed mode; the record read before a game,
 // written when the player evacuates.
 //
 //   Main/Update  SoloRoomActions  pvp.map (the next installed arena), pvp.start -> the game (SoloGame, on that map);
@@ -27,13 +27,12 @@ namespace Ui = GYO::Engine::Ui;
 namespace {
 
 constexpr std::string_view kRoomInvitation = "マップを選んで「開始」を押してください";
-// The single player's mode: survival only.
-constexpr std::string_view kSoloMode = "survival";
-
-// The room's own state: the maps it offers (the installed arenas, by id) and the one chosen.
+// The room's own state: the maps it offers (the installed arenas, by id) and the one chosen, and the mode it plays (the
+// first installed mode: the single player does not choose it).
 struct SoloRoomState final {
     std::vector<std::string> maps;
     std::size_t map = 0;
+    std::optional<ModeChoice> mode;
 };
 void HashValue(K::Hasher&, const SoloRoomState&) {}
 
@@ -47,7 +46,8 @@ K::SystemResult SoloRoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMu
             if (!room.maps.empty()) room.map = (room.map + 1) % room.maps.size();
             if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("map", MapText(room));
         } else if (action->action == "pvp.start") {
-            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map]};
+            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],
+                                        .mode = room.mode ? room.mode->id : std::string()};
         } else if (action->action == "pvp.back") {
             request->next = SceneChange{.scene = Scene::Menu};
         }
@@ -111,11 +111,12 @@ std::string RecordText(const Base::Result<std::optional<match::PlayerSave>, Solo
 
 } // namespace
 
-void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps) {
+void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps,
+                   const std::vector<ModeChoice>& modes) {
     K::Registrar& r = setup.Registrar();
     r.Resource<SoloRoomState>({.name = "object_fps_pvp.SoloRoomState"});
     r.AddSystem<&SoloRoomActions>(InSceneUpdate("object_fps_pvp.SoloRoomActions"));
-    SoloRoomState state{maps, 0};
+    SoloRoomState state{maps, 0, modes.empty() ? std::nullopt : std::optional<ModeChoice>(modes.front())};
     // Back from a game: the map it was played on.
     for (std::size_t i = 0; i < maps.size(); ++i) {
         if (maps[i] == change.map) state.map = i;
@@ -128,7 +129,7 @@ void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::s
         self.fields["line"] = std::string("自分");
         members.items.push_back(std::move(self));
         bindings.Set("members", std::move(members));
-        bindings.Set("mode", "モード: " + ModeText(kSoloMode) + "（固定）");
+        bindings.Set("mode", "モード: " + (state.mode ? state.mode->name : std::string("—")) + "（固定）");
         bindings.Set("map", MapText(state));
         bindings.Set("record", RecordText(ReadSoloSave(path)));
         bindings.Set("status", status.empty() ? std::string(kRoomInvitation) : status);

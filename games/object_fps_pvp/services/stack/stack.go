@@ -28,6 +28,7 @@ type Config struct {
 	Provider matches.Provider
 	Capacity int
 	Maps     []string
+	Modes    []string
 	Now      func() time.Time
 }
 
@@ -79,7 +80,7 @@ func Start(config Config) (*Stack, error) {
 		return fail(err)
 	}
 	roomService, err := rooms.New(rooms.Config{Matches: api.NewClient(s.MatchesURL), Capacity: config.Capacity,
-		Maps: config.Maps, Now: config.Now})
+		Maps: config.Maps, Modes: config.Modes, Now: config.Now})
 	if err != nil {
 		return fail(err)
 	}

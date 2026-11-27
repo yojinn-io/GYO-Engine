@@ -466,6 +466,37 @@ TEST_CASE("world: a Client plays the arena it was built with; the Match playing 
     }
 }
 
+TEST_CASE("world: the Match says its mode and rules digest; a Client of another mode, or of the same mode with other rules, is a content mismatch") {
+    {
+        Session session(1, 4);
+        session.Frames(90);
+        const PW::MatchInfo& info = *session.Match().Resource<PW::MatchInfo>();
+        CHECK(info.modeId == "core_pvp");
+        CHECK(info.rulesDigest == ShippedContent()->modes.front().rulesDigest);
+        CHECK(session.Client(0).Resource<PW::MatchInfo>()->modeId == "core_pvp");
+        CHECK(session.Client(0).Resource<PW::ContentMismatch>()->reason.empty());
+    }
+    {
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->modes.front().id = "other";
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.reason.find("mode 'core_pvp'") != std::string::npos, mismatch.reason);
+        CHECK(mismatch.matchMode == "core_pvp");
+        CHECK(mismatch.matchArena == "pvp_training_v1");
+    }
+    {
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->modes.front().rulesDigest ^= 1;
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.reason.find("rules digest") != std::string::npos, mismatch.reason);
+        CHECK(mismatch.matchMode == "core_pvp");
+    }
+}
+
 TEST_CASE("world: with the bones' hit shapes a head shot, a body shot and a leg shot each deal their part's damage") {
     LoneMatch match;
     REQUIRE(ShippedContent()->character != nullptr);

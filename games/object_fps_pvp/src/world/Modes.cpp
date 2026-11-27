@@ -1,0 +1,244 @@
+#include "object_fps_pvp/world/Modes.hpp"
+
+#include "object_fps_pvp/character/CharacterRig.hpp"
+
+#include "data/JsonFields.hpp"
+
+#include "engine/base/Fnv1a.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/helpers/ReadAllText.hpp"
+#include "engine/kernel/Hash.hpp"
+
+#include <algorithm>
+#include <stdexcept>
+
+namespace object_fps_pvp::world {
+
+namespace Json = GYO::Engine::Json;
+namespace K = GYO::Kernel;
+
+namespace {
+
+std::string PlainName(const Json::Value& value, const std::string_view what) {
+    std::string name = data::String(value, what);
+    if (name.empty() || name == "." || name == ".." || name.find_first_of("/\\:") != std::string::npos) {
+        throw std::runtime_error(std::string{what} + " is not a plain file name: " + name);
+    }
+    return name;
+}
+
+// A file under the content root: a relative path of plain names separated by '/'.
+std::string ContentPath(const Json::Value& value, const std::string_view what) {
+    std::string path = data::String(value, what);
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t end = path.find('/', start);
+        const std::string_view part = std::string_view(path).substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (part.empty() || part == "." || part == ".." || part.find_first_of("\\:") != std::string_view::npos) {
+            throw std::runtime_error(std::string{what} + " is not a path inside the content: " + path);
+        }
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return path;
+}
+
+std::vector<std::string> Names(const Json::Value& value, const std::string_view what) {
+    const auto array = value.AsArray();
+    if (!array) throw std::runtime_error(std::string{what} + " is not an array");
+    std::vector<std::string> names;
+    for (const auto item : array.value()) {
+        std::string name = data::String(item, what);
+        if (name.empty()) throw std::runtime_error(std::string{what} + " names an empty id");
+        if (std::find(names.begin(), names.end(), name) != names.end()) throw std::runtime_error(std::string{what} + " names '" + name + "' twice");
+        names.push_back(std::move(name));
+    }
+    return names;
+}
+
+} // namespace
+
+std::optional<std::vector<std::string>> ParseModeList(const std::string_view text, std::string& error) {
+    error.clear();
+    try {
+        const auto document = data::ParseDocument(text);
+        const auto json = data::AsObject(document.Root(), "the mode list");
+        if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported version");
+        const auto modes = data::Member(json, "modes").AsArray();
+        if (!modes) throw std::runtime_error("modes is not an array");
+        std::vector<std::string> names;
+        for (const auto item : modes.value()) names.push_back(PlainName(item, "a mode file"));
+        if (names.empty()) throw std::runtime_error("the list names no mode");
+        return names;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return std::nullopt;
+    }
+}
+
+std::optional<ModeFile> ParseMode(const std::string_view text, std::string& error) {
+    error.clear();
+    try {
+        const auto document = data::ParseDocument(text);
+        const auto json = data::AsObject(document.Root(), "the mode");
+        if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported mode version");
+        ModeFile mode;
+        mode.id = data::String(data::Member(json, "id"), "id");
+        if (mode.id.empty()) throw std::runtime_error("id is empty");
+        mode.name = data::String(data::Member(json, "name"), "name");
+        for (const auto rule : data::AsObject(data::Member(json, "rules"), "rules")) {
+            std::string kind(rule.key);
+            if (std::any_of(mode.rules.begin(), mode.rules.end(), [&](const auto& named) { return named.first == kind; })) {
+                throw std::runtime_error("rules names the kind '" + kind + "' twice");
+            }
+            mode.rules.emplace_back(std::move(kind), ContentPath(rule.value, "a rule file"));
+        }
+        for (const auto set : data::AsObject(data::Member(json, "sets"), "sets")) {
+            std::string name(set.key);
+            (void)data::AsObject(set.value, "a set's settings");
+            if (std::find(mode.sets.begin(), mode.sets.end(), name) != mode.sets.end()) throw std::runtime_error("sets names '" + name + "' twice");
+            mode.sets.push_back(std::move(name));
+        }
+        mode.arenas = Names(data::Member(json, "arenas"), "arenas");
+        return mode;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return std::nullopt;
+    }
+}
+
+bool ModeContent::Plays(const std::string_view arenaId) const {
+    return arenas.empty() || std::find(arenas.begin(), arenas.end(), arenaId) != arenas.end();
+}
+
+namespace {
+
+std::optional<std::string> ReadText(GYO::Engine::IO::FS::NativeFileSystem& fs, const std::string& path, std::string& error) {
+    auto uri = GYO::Engine::IO::FS::NativeFileUri(path);
+    if (!uri) {
+        error = path + ": " + GYO::Engine::Base::Describe(uri.error());
+        return std::nullopt;
+    }
+    auto text = GYO::Engine::IO::Helpers::ReadAllTextUtf8(fs, *uri);
+    if (!text) {
+        error = path + ": " + GYO::Engine::Base::Describe(text.error());
+        return std::nullopt;
+    }
+    return std::move(*text);
+}
+
+} // namespace
+
+std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
+                                                  const sim::CombatRules& combat, const character::CharacterRig& character,
+                                                  std::string& error) {
+    error.clear();
+    GYO::Engine::IO::FS::NativeFileSystem fs;
+    const std::string folder = root + "/modes/";
+    auto listText = ReadText(fs, folder + "modes.json", error);
+    if (!listText) return std::nullopt;
+    auto list = ParseModeList(*listText, error);
+    if (!list) {
+        error = folder + "modes.json: " + error;
+        return std::nullopt;
+    }
+    std::vector<ModeContent> modes;
+    for (const std::string& name : *list) {
+        const std::string path = folder + name;
+        const auto fail = [&](std::string why) {
+            error = path + ": " + std::move(why);
+            return std::nullopt;
+        };
+        auto text = ReadText(fs, path, error);
+        if (!text) return std::nullopt;
+        auto file = ParseMode(*text, error);
+        if (!file) return fail(error);
+        if (std::any_of(modes.begin(), modes.end(), [&](const ModeContent& mode) { return mode.id == file->id; })) {
+            return fail("another installed mode has the id '" + file->id + "'");
+        }
+        ModeContent mode;
+        mode.id = file->id;
+        mode.name = file->name;
+        mode.arenas = file->arenas;
+        bool movement = false;
+        for (const auto& [kind, rulePath] : file->rules) {
+            if (kind != "movement") return fail("the game knows no rule kind '" + kind + "'");
+            auto ruleText = ReadText(fs, root + "/" + rulePath, error);
+            if (!ruleText) return std::nullopt;
+            auto stance = sim::ParseStanceRules(*ruleText, error);
+            if (!stance) {
+                error = root + "/" + rulePath + ": " + error;
+                return std::nullopt;
+            }
+            mode.stance = *stance;
+            movement = true;
+        }
+        if (!movement) return fail("rules names no movement rules");
+        if (!file->sets.empty()) return fail("the game has no gameplay set '" + file->sets.front() + "'");
+        for (const std::string& id : mode.arenas) {
+            if (std::none_of(arenas.begin(), arenas.end(), [&](const sim::ArenaContent& arena) { return arena.id == id; })) {
+                return fail("no installed arena has the id '" + id + "'");
+            }
+        }
+        for (const sim::ArenaContent& arena : arenas) {
+            if (mode.Plays(arena.id) && !sim::StanceFits(arena, mode.stance)) {
+                return fail("the movement rules do not fit the body of arena '" + arena.id + "'");
+            }
+        }
+        mode.rulesDigest = RulesDigest(*file, mode.stance, combat, character);
+        modes.push_back(std::move(mode));
+    }
+    return modes;
+}
+
+std::uint64_t RulesDigest(const ModeFile& mode, const sim::StanceRules& stance, const sim::CombatRules& combat,
+                          const character::CharacterRig& character) {
+    K::Hasher h;
+    // The mode: what decides the match (its display name does not).
+    HashValue(h, std::string("gyo.object_fps_pvp.rules/1"));
+    HashValue(h, mode.id);
+    std::vector<std::string> sets = mode.sets;
+    std::sort(sets.begin(), sets.end());
+    HashValue(h, sets);
+    std::vector<std::string> arenas = mode.arenas;
+    std::sort(arenas.begin(), arenas.end());
+    HashValue(h, arenas);
+    // The rule tables, by kind (movement).
+    HashValue(h, stance.crouchBodyHeight);
+    HashValue(h, stance.crouchEyeHeight);
+    HashValue(h, stance.crouchSpeedScale);
+    HashValue(h, stance.sprintSpeedScale);
+    HashValue(h, stance.holdJump);
+    // The combat rules (the game's defaults until a rule table carries them).
+    HashValue(h, combat.maximumHp);
+    HashValue(h, combat.shotDamage);
+    HashValue(h, combat.maximumShotDamage);
+    HashValue(h, combat.headPermille);
+    HashValue(h, combat.bodyPermille);
+    HashValue(h, combat.legPermille);
+    HashValue(h, combat.shotRange);
+    HashValue(h, combat.magazineCapacity);
+    HashValue(h, combat.cooldownSeconds);
+    HashValue(h, combat.reloadSeconds);
+    HashValue(h, combat.respawnSeconds);
+    // The character's hit shapes (hitbox.json, as read onto the skeleton's nodes) and the body they are scaled to.
+    HashValue(h, character.scale);
+    HashValue(h, character.anchor.x);
+    HashValue(h, character.anchor.y);
+    HashValue(h, character.anchor.z);
+    HashValue(h, static_cast<std::uint64_t>(character.hitShapes.size()));
+    for (const character::HitShapeDefinition& shape : character.hitShapes) {
+        HashValue(h, shape.part);
+        HashValue(h, shape.ball);
+        HashValue(h, shape.node);
+        HashValue(h, shape.nodeTo);
+        HashValue(h, shape.offset.x);
+        HashValue(h, shape.offset.y);
+        HashValue(h, shape.offset.z);
+        HashValue(h, shape.radius);
+    }
+    const auto bytes = h.Data();
+    return GYO::Engine::Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+}
+
+} // namespace object_fps_pvp::world

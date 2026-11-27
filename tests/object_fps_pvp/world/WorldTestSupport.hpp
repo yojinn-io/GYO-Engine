@@ -168,7 +168,7 @@ std::string Reported(const Built& built) {
 inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                               std::shared_ptr<PW::Seats> seats, std::function<N::NetTime()> clock,
                                               const std::size_t arena = 0, std::vector<std::uint64_t> expectUsers = {},
-                                              const std::uint32_t startDeadlineSeconds = 60) {
+                                              const std::uint32_t startDeadlineSeconds = 60, const std::size_t mode = 0) {
     O::ProductDescription description;
     description.name = "pvp-match";
     N::NetProductOptions net;
@@ -179,7 +179,7 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
     net.admission = PW::SeatAdmission(seats);
     description.options.Set(net);
     ReadShippedMaps(description);
-    description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .seats = seats,
+    description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .mode = mode, .seats = seats,
                                                          .expectUsers = std::move(expectUsers),
                                                          .startDeadlineSeconds = startDeadlineSeconds})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
@@ -191,7 +191,7 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
 
 inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                                const std::uint64_t userId, std::function<N::NetTime()> clock,
-                                               const std::size_t arena = 0) {
+                                               const std::size_t arena = 0, const std::size_t mode = 0) {
     O::ProductDescription description;
     description.name = "pvp-client";
     N::NetProductOptions net;
@@ -200,7 +200,7 @@ inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameCon
     net.clock = std::move(clock);
     description.options.Set(net);
     ReadShippedMaps(description);
-    O::WorldDescription world = Stepped(PW::ClientWorld({.content = std::move(content), .arena = arena, .localUser = userId}));
+    O::WorldDescription world = Stepped(PW::ClientWorld({.content = std::move(content), .arena = arena, .mode = mode, .localUser = userId}));
     // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
     world.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(target);
