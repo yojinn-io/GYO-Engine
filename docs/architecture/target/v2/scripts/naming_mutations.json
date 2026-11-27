@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the naming guard (rebuild-naming N17, naming DI 1). The guard is tests/common/naming/naming_guard.py (ctest naming.guard, naming.guard_selftest); its text reading is tests/common/support/source_text.py. ids nm- were added by v8-arch-gyo2-namespace-root; ks-n1-*, ks-real-old-namespace, or-guard-* and wt-guard-real-* were moved here from the kernel, orchestration and world_time lists by v8-arch-gyo2-naming-cleanup, ids kept (the guard used to sit with the kernel tests). A self-test mutant is killed only when the named test case fails; a real-tree mutant when the guard prints the named finding. The adversarial check and the design review (another model, read-only) are recorded in the dev_logs.",
+ "description": "Declared mutants of the naming guard (rebuild-naming N17, naming DI 1). The guard is tests/common/naming/naming_guard.py (ctest naming.guard, naming.guard_selftest); its text reading is tests/common/support/source_text.py. ids nm- were added by v8-arch-gyo2-namespace-root; ks-n1-*, ks-real-old-namespace, or-guard-* and wt-guard-real-* were moved here from the kernel, orchestration and world_time lists by v8-arch-gyo2-naming-cleanup, ids kept (the guard used to sit with the kernel tests). A self-test mutant is killed only when the named test case fails; a real-tree mutant when the guard prints the named finding. The adversarial check and the design review (another model, read-only) are recorded in the dev_logs. Retired in v8-arch-gyo2-build-cleanup (decision B2, v8-arch-gyo2-build-cleanup-b1-b2): bcl-naming-skips-build-acceptance, whose only kill was the self-test that compared SCAN_ROOTS with the list of roots; that self-test was dropped as close to guarding misuse.",
  "mutants": [
   {
    "id": "nm-acronyms-off",
@@ -686,26 +686,6 @@
     "test_naming_guard.py",
     "-v"
    ]
-  },
-  {
-   "id": "bcl-naming-skips-build-acceptance",
-   "what": "The naming guard drops build/acceptance/ from the roots it reads (the list of the repository's own code roots, v8-arch-gyo2-build-cleanup; batch plan row on SCAN_ROOTS without build/acceptance)",
-   "file": "tests/common/naming/naming_guard.py",
-   "find": "SCAN_ROOTS = source_roots()",
-   "replace": "SCAN_ROOTS = tuple(root for root in source_roots() if root != \"build/acceptance\")",
-   "command": [
-    "{python}",
-    "-B",
-    "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests/common/naming",
-    "-p",
-    "test_naming_guard.py",
-    "-v"
-   ],
-   "expect": "FAIL: test_n1_scan_roots_are_the_source_roots"
   }
  ]
 }

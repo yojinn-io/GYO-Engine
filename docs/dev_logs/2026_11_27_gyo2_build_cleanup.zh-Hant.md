@@ -44,7 +44,7 @@ Owner：建置層（GYO2 主會話轉來，任務卡）。作者 Opus 5.5／high
 ## 突變
 
 - find 不見的 9 個改成「讀者從共用清單拿掉一個根」，殺它的測試不變：`os-g11-roots-skip-products`、`sdlp-roots-skip-plugins`（os 守衛）、`pu-x8-code-page-walk-skips-tests`、`gdir-code-page-walk-skips-games`、`sdlp-code-page-walk-skips-plugins`（walk）、`gdir-code-page-check-skips-games`、`sdlp-code-page-check-skips-plugins`（檢查）、`sdlp-definition-roots-skip-plugins`（建置定義）、`nm-scan-roots-examples`（naming）。
-- 新增 7 個：`bcl-source-roots-drop-examples`、`bcl-source-roots-drop-build-acceptance`（清單本身；後者只有釘死能抓）、`bcl-code-page-walk-skips-examples`、`bcl-code-page-check-skips-examples`、`bcl-definition-roots-skip-examples`、`bcl-os-guard-skips-examples`、`bcl-naming-skips-build-acceptance`。
+- 新增 7 個（之後 B2 退役其中 1 個、B1 再加 3 個，見設計審查一節）：`bcl-source-roots-drop-examples`、`bcl-source-roots-drop-build-acceptance`（清單本身；後者只有釘死能抓）、`bcl-code-page-walk-skips-examples`、`bcl-code-page-check-skips-examples`、`bcl-definition-roots-skip-examples`、`bcl-os-guard-skips-examples`、`bcl-naming-skips-build-acceptance`。
 - 宣告寫的「`test_workflow_gates` 的 owner」突變沒做：能改的只有測試本身或 `PRODUCT_KINDS`，後者拿掉一個種類只會讓測試看的 owner 變少、照樣通過，不是這個測試守的性質。更正宣告。
 - 退役 1 個：`gdir-mirror-drops-build-cmake`。
 - 跑的範圍（D184）：檔案在改動範圍的、殺它的測試被改到的（os、naming、`ProcessCodePageTests`、workflow gates、product registry、game copy、`ProjectComposition`、assembly）。只改名的測試檔（release、archive、package checks、release retry）的 expect 都不含改到的名字，不跑。全部清單的 find 都恰好命中一次（靜態掃描）。
@@ -65,9 +65,15 @@ Owner：建置層（GYO2 主會話轉來，任務卡）。作者 Opus 5.5／high
 
 沒有 blocker。照改的：`gyo_game_directory` 改回傳相對路徑（省掉 `RELATIVE_PATH`）；`naming_mutations.json` 的舊測試名、os.md 記錄目錄的列舉補 `examples`、`GyoSourceRoots.txt` 檔頭不再逐一列讀者（會過時）；本 dev_log 補結果。
 
-交使用者判斷（未改）：
-1. `GyoBuild.cmake` 加了新的頂層目錄卻忘了加進清單時，所有讀者都會安靜地略過（`plugins/`、`examples/` 都發生過）。可選：`ProcessCodePageCheck` 回報「`SOURCE_DIR` 在 repo 內、但不在任何根、不在 `third_party/`、不在建置目錄」的目錄（Cargo 對 workspace 內既不在 `members` 也不在 `exclude` 的套件會拒絕；審查者憑記憶，未對照原始碼）。這是 DI 11「自己的原始碼」的檢查，不是擋誤用；要不要加由使用者定。
-2. `test_roots_name_no_product`、`test_n1_scan_roots_are_the_source_roots` 只比對「守衛的根＝清單」，殺的是「讀者自己加過濾」這種突變，接近擋誤用；真正的價值在逐根的行為測試。留或拿掉由使用者定。
+交使用者判斷的兩題，使用者 2026-11-27 定了（主會話轉來，「全部照推薦，空殼刪掉」；HANDOFF `v8-arch-gyo2-build-cleanup-b1-b2`）：
+
+- **B1 加「漏列」檢查**：`ProcessCodePageCheck.cmake` 回報 repo 內、不在任何根、也不在 `third_party/` 或建置目錄的目錄（補齊 DI 11「自己的原始碼」的涵蓋，不是擋誤用）。repo 根本身（相對路徑空）、repo 外（`../`）、別的磁碟（絕對路徑）不算。
+  - 合成樹：原來代表第三方程式的 `vendor/lib` 移到 `third_party/lib`（它本來就是在示範「第三方」）；新增 `unlisted`（`services/sample`，被拒）與 `inside_build`（建置目錄在 repo 內、依存放在 `_deps/dep-src`，不被拒）。
+  - Red：用 f6ffe9fa 的 `ProcessCodePageCheck.cmake` 跑新的測試，`unlisted: configuration unexpectedly succeeded`（主 checkout `build/evidence/gyo2-build-cleanup/b1/red-old-check.log`）；改後通過。實樹 configure 沒有誤報。
+  - 新突變 3 個：`bcl-check-misses-unlisted`、`bcl-check-unlisted-third-party`、`bcl-check-unlisted-build-tree`。從檢查或清單拿掉一個根的 5 個突變（`gdir-code-page-check-skips-games`、`sdlp-code-page-check-skips-plugins`、`bcl-code-page-check-skips-examples`、`bcl-source-roots-drop-examples`，與上面的 third_party）現在先被「不在任何根」擋下，expect 改成這句。
+  - B1、B2 後重跑 os、naming、`ProcessCodePageTests` 的突變：os-subsystem 33/33、os 守衛 26/26、naming 24/24 killed。
+- **B2 不留**「守衛的根＝清單」的自測：拿掉 `test_n1_scan_roots_are_the_source_roots`；`test_roots_name_no_product` 改成只釘 `RUNTIME_ROOTS`（`test_runtime_roots_name_no_product`）。唯一靠前者才殺得掉的 `bcl-naming-skips-build-acceptance` 退役（`naming_mutations.json` 的說明寫了理由）。
+- **空殼**：依存原始碼借自 `gyo2-pvp-playtest-fixes-462a3d` 的建置目錄；那個工作樹在我執行前已不在 git 的工作樹清單，`sdlp-every-plugin-added` 的重跑在同一路徑留下只有測試輸出的目錄。我刪除時被權限擋下；使用者說「空殼刪掉」，主會話已刪。之後依存原始碼改成複製到本卡自己的建置目錄。
 
 ## 後續（本批不改）
 

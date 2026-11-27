@@ -368,12 +368,17 @@ code page walks it follows each directory once along its ancestry. The third
 (`tests/common/os/ProcessCodePageCheck.cmake`) checks Invariant 11: every executable target under the scanned roots
 carries the `GYO_PROCESS_CODE_PAGE` mark the build layer sets, or an exemption with its reason, which is listed. It
 is written apart from the walk that applies the manifest, walks from the top directory by source path as well as
-from the recorded directories, and runs on every platform, so a target the walk misses fails anywhere.
+from the recorded directories, and runs on every platform, so a target the walk misses fails anywhere. It also
+refuses a directory inside the repository that is under no root of `build/cmake/GyoSourceRoots.txt`, nor under
+third_party/ or the build tree (where FetchContent populates): such a directory is the repository's own code that
+the list does not name yet, and would get neither the manifest nor the check (plugins/ and examples/ were missed that
+way; `v8-arch-gyo2-build-cleanup-b1-b2`).
 `cmake.ProcessCodePage` runs the build layer and the check on a synthetic tree: a plain build, a standalone tool
-wrapper, a directory the build layer did not record (refused) and an exemption (listed). The walk, the check and the
+wrapper, a directory the build layer did not record (refused), a directory under no root (refused), a dependency
+populated in a build tree inside the repository (not refused) and an exemption (listed). The walk, the check and the
 OS definition check read the same roots (`build/cmake/GyoSourceRoots.txt`); the walk and the check stay apart in
 everything else. `cmake.ProcessCodePage` pins that list, so a root removed from it fails there instead of silently
-narrowing every reader; the source guards' self-tests check that each guard scans exactly that list.
+narrowing every reader.
 
 `OSHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/core/os public
 headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
@@ -486,8 +491,10 @@ Known blind spots, left to review:
     Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6, pu-x5, gdir-code-page-walk-skips-games and
     gdir-code-page-check-skips-games (the games/ root, `v8-arch-gyo2-build-games-dir`), sdlp-code-page-walk-skips-plugins
     and sdlp-code-page-check-skips-plugins (the plugins/ root, `v8-arch-gyo2-sdl-p`), bcl-code-page-walk-skips-examples,
-    bcl-code-page-check-skips-examples and the two that drop a root from `build/cmake/GyoSourceRoots.txt`,
-    bcl-source-roots-drop-examples and bcl-source-roots-drop-build-acceptance (`v8-arch-gyo2-build-cleanup`).
+    bcl-code-page-check-skips-examples, the two that drop a root from `build/cmake/GyoSourceRoots.txt`,
+    bcl-source-roots-drop-examples and bcl-source-roots-drop-build-acceptance, and the three of the directory under no
+    root, bcl-check-misses-unlisted, bcl-check-unlisted-third-party and bcl-check-unlisted-build-tree
+    (`v8-arch-gyo2-build-cleanup`).
 
 ### Replacement Criteria
 

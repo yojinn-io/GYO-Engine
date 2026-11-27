@@ -9,7 +9,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import os_boundary_guard as guard  # noqa: E402
-from source_roots import source_roots  # noqa: E402
 
 
 class GuardTree(unittest.TestCase):
@@ -230,11 +229,9 @@ class Rules(GuardTree):
         self.write("engine/render/shaders/pipeline/src/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.assertReported("engine/render/shaders/pipeline/src/main.cpp:1: R4 std::ifstream")
 
-    def test_roots_name_no_product(self):
-        # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9). The
-        # scanned roots are the repository's own code roots, every one of them: the list itself is pinned by
-        # cmake.ProcessCodePage, so a guard that drops a root from it fails here.
-        self.assertEqual(guard.ROOTS, source_roots())
+    def test_runtime_roots_name_no_product(self):
+        # Removing or adding a product must leave the runtime roots unchanged (AGENTS.md sections 7 and 9). The
+        # scanned roots are build/cmake/GyoSourceRoots.txt, pinned by cmake.ProcessCodePage.
         self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "plugins", "games", "tools"))
 
     def test_os_knowledge_in_examples_is_reported(self):

@@ -23,7 +23,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/GyoUnitRegistry.cmake")
 # directories added below are recorded; the manifest is applied once every
 # target exists, and tests/common/os checks it afterwards. Every directory added
 # below for the repository's own code lies under a root of GyoSourceRoots.txt
-# (third_party/ is not ours); a new top-level directory goes there first.
+# (third_party/ is not ours); a new top-level directory goes there first, or
+# the code page check refuses it.
 include("${CMAKE_CURRENT_LIST_DIR}/GyoCodePage.cmake")
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_apply_process_code_page)
 gyo_configure_games()
