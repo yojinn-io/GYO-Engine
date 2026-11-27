@@ -344,6 +344,17 @@ v8-arch-gyo2-ink-spike
 - 這條規則要不要在 adapter 的文件或介面上露出來（例如 `Save` 回報「現在存的檔讀不回來」），和 U7 (a) 有關，**等 U7 定了再做**。
 - 不打補丁（12.3 的 (b) 沒有選）。
 
+### 11.2 U6：產品選不了 `library_only` 的 Plugin（2026-11-27）
+
+出處：HANDOFF `v8-arch-gyo2-ink-spike-u6-unit-research`，由主會話轉交。
+
+- **原話**：「1、2都有，這樣，先擱置這個問題，開一張研究卡。看下應該如何設計。」
+- **擱置，見研究卡 `v8-arch-gyo2-unit-composition-research`**：unit 的選擇、建置、連結與註冊該怎麼設計，由研究卡研究。
+- 使用者覺得怪的兩點：
+  1. `gyo_product_units` 的同一個動作有兩種意思，差別藏在 `config/plugins.csv` 的 `library_only` 欄位。
+  2. World 的組成綁在建置層產生的表上。
+- 對這張卡的影響：`ink` 照現在的 `GYO_PLUGINS` 路徑建，spike 不改。研究卡來問 ink 接進來的細節時配合。
+
 ## 12. 實作時發現的事（I1、I2，2026-11-27）
 
 細節與程式位置在 owner 頁 [ink.zh-Hant.md](ink.zh-Hant.md)。
@@ -373,7 +384,7 @@ v8-arch-gyo2-ink-spike
 | # | 事 | 選項 | 卡片的建議 |
 |---|---|---|---|
 | U5 | **inkcpp 的存檔缺陷 D2**：在選項處存的檔，只要台本裡有任何 sequence（`{a\|b}`、`{&…}`、`{!…}`、`{~…}`），連讀回同一個台本都失敗（`globals_impl.cpp:294-297`）。能存的點是「選完之後、下一次 `Advance` 之前」。D1（跳過的選項的 tag 給了下一個選項）、D3（第一次 `Advance` 前存的檔讀回已結束）比較輕 | (a) 現在不處理，把能存的點寫進契約（現狀）；(b) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍）；(c) 先回報 upstream，等遊戲真的要在選項處存檔時再決定（RC-INK1） | (c)：spike 沒有遊戲在用；三個缺陷各有釘住現狀的測試，inkcpp 修好時測試會失敗、提醒我們改 <br>**已決定（11.1）**：回報上游（另一張卡）＋存檔時機是遊戲的規則 |
-| U6 | **產品選不了 `library_only` 的 Plugin**：`gyo_product_units(... PLUGINS ...)` 只收放進 World 的 Plugin，`ink` 現在只能經 `GYO_PLUGINS` 選。spike 的測試自己連 `GYO::Ink` | (a) 等第一個用 ink 的遊戲開卡時再定；(b) 現在就讓產品能選 `library_only` 的 Plugin（改建置層，擴大範圍）；(c) 給 `ink` 一個放進 World 的單位（推翻 `library_only`） | (a) |
+| U6 | **產品選不了 `library_only` 的 Plugin**：`gyo_product_units(... PLUGINS ...)` 只收放進 World 的 Plugin，`ink` 現在只能經 `GYO_PLUGINS` 選。spike 的測試自己連 `GYO::Ink` | (a) 等第一個用 ink 的遊戲開卡時再定；(b) 現在就讓產品能選 `library_only` 的 Plugin（改建置層，擴大範圍）；(c) 給 `ink` 一個放進 World 的單位（推翻 `library_only`） | (a)<br>**擱置（11.2）**：研究卡 `v8-arch-gyo2-unit-composition-research` |
 
 ### 12.4 I3：審查與修正
 
