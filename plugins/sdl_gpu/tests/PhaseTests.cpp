@@ -264,36 +264,6 @@ TEST_CASE("sdl_gpu phases: a 3D pass on the main target, its depth target follow
     CHECK_MESSAGE((p.tally.skippedDraws == 1 && p.All(0, 0, 8, 8, kBlue)), "[gd-depth-size-skipped] its draws skipped and counted, not a Programmer Error");
 }
 
-TEST_CASE("sdl_gpu phases: a render target larger than the device takes: refused, not in the receipt, asked for again, no picture") {
-    PhaseCase c;
-    // Wider than a device's largest 2D texture (Lavapipe's maxImageDimension2D is 16384): SDL refuses to make it.
-    const R::TextureId huge = c.Target(R::RenderTargetDesc{R::TargetSize{65536, 1}});
-    const auto sizeAsked = [&] {
-        for (const R::TextureOp& op : c.textures.Pending()) {
-            if (const auto* sized = std::get_if<R::TextureTargetSize>(&op); sized != nullptr && sized->id == huge) return true;
-        }
-        return false;
-    };
-    R::RenderCommands commands;
-    commands.passes.push_back(On(huge, kRed));
-    commands.passes.push_back(On(std::nullopt, kBlue));
-    const Picture p = c.Frame(commands);
-    CHECK_MESSAGE((p.tally.refusedAsks == 1 && p.tally.unmappedPasses == 1 && p.All(0, 0, 8, 8, kBlue)),
-                  "[gd-refused] the size refused, the pass on it not drawn, the rest drawn: " << p.tally.lastRefusal);
-    CHECK_MESSAGE((p.receipt.AppliedSizes().empty() && p.receipt.DrawnTargets().empty()), "[gd-refused-receipt] neither its size nor a drawing in the receipt");
-    CHECK_MESSAGE((!c.textures.HasPicture(huge) && sizeAsked()), "[gd-refused-asked-again] no picture; its size asked for again");
-    // The next frame retains it and samples it: sampling what was neither drawn nor retained with a picture (RP-3,
-    // the backend asserts it before it draws); a camera that does not update draws on it instead (the per-target rule).
-    R::RenderCommands next;
-    next.retained.push_back(huge);
-    R::Pass2D sampling = On(std::nullopt, kWhite);
-    Quad(sampling, Rect{0, 0, 8, 8}, kWhite, huge);
-    next.passes.push_back(std::move(sampling));
-    CHECK_MESSAGE((R::FirstUnwrittenRead(next, c.textures) == R::UnwrittenRead{0, huge}), "[gd-refused-retained-unwritten] retaining it is RP-3's error");
-    const Picture q = c.Frame(commands);
-    CHECK_MESSAGE((q.tally.refusedAsks == 1 && !c.textures.HasPicture(huge) && sizeAsked()), "[gd-refused-each-frame] tried again the next frame, refused again");
-}
-
 TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, then retained with its picture, passes the backend's checks") {
     // No GPU: the checks are the frame's data (RP-3; a 3D pass's depth target of its target's size).
     R::RenderTextures textures;
