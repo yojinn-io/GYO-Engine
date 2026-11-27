@@ -50,7 +50,7 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
   - `gf-uv-flipped` 存活的原因：串接的兩個全畫面 pass 用同一個頂點 shader，uv 錯了會被翻兩次、互相抵消。`sdl_gpu.phases` 第一案加一個「只有一個全畫面 pass、讀 2D pass 畫的 target」的檢查（`[gf-uv-down]`），突變的 expect 改指它。**改了之後還沒在 GPU 上跑**（等許可）。
   - `gd-pass3d-depth-ignored` 的 wrong_failure：測試失敗、輸出沒有對上 `[gd-tested]`；runner 不留輸出，原因未確認，要再跑一次看輸出（等許可）。
   - `gd-depth-target-colour-usage`：Metal 上會走到 SDL 的斷言（下一節），expect 改成「`[gd-made]` 或 SDL 的訊息」。
-  - 數量：改的條文 4 條（RD-4、RD-11、新 RD-12、RP-3）×5＝20 < 23；理由在宣告第 14.5 節。
+  - 數量：改的條文 4 條（RD-4、RD-11、新 RD-12、RP-3）×5＝20 < 23；理由在宣告第 14.5 節。之後的結果見「Linux 主機」一節。
 - 既有突變（D184）：find 落在改過的程式裡、或被改過的測試殺的，共 66 個（scratchpad 的清單，不進 git）。
   - find 失效的 4 個改寫、守同一個性質（3D 的錄製搬進 `RecordMeshes`）：`g3-depth-not-cleared`、`g3-depth-always-cleared`（`pass.clearDepth` → `clearDepth`）、`g3-texture-ignored`、`g3-texture-missing-not-counted`（貼圖的綁定移進 `if (textured)`）。
   - `cp-clear-after` 的 replace 用了舊的 `byCamera[i].push_back`（build_failed）：改成放進相機的最後一個 phase，守同一個性質（清除在相機的 pass 之後），重跑 killed。
@@ -66,8 +66,23 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 - 修正（和 A2 同一個 commit：改到的檔案有一半和 A2 相同）：`gyo_sdl_unattended_assertions`（`SDL_SetAssertionHandler`：印出、abort），連進 4 個測試執行檔；跑產品執行檔的 5 個 ctest 帶 `SDL_ASSERT=abort`。第一版想在 `tests/common/support` 用環境變數設 hint，`os.boundary_guard` 擋了平台巨集（R2 `_WIN32`），改成在 Plugin 的測試 adapter 目錄用 SDL 自己的 API。
 - 檢查：每個執行檔一案 `[sdl-assert-unattended]`（cpu，四個都過）；`sdl.unattended_assertion`（cpu）強制一次 SDL 斷言，行程以 abort 結束並印出 handler 的字（`Subprocess aborted`，過）；突變 `sdl-unattended-handler-not-installed` killed（第一次 wrong_failure：CMake 把長訊息折行，expect 改成開頭不折的標籤 `[sdl-assert-no-handler-text]`）。
 
+## Linux 主機（Vulkan）上的 GPU 驗證（同日，使用者「測試可以放Linux嗎？」，經主會話）
+
+- 使用者決定剩下的 GPU 項目不在這台 Mac 跑，改在 Linux 主機（192.168.3.20，Ubuntu 24.04）。在自己的目錄 `~/Workspace/render-card-a2/` 從 GitHub clone `claude/gyo2-render-a` 的 `334ecc08`；preset `test`＋`gcc-14`／`g++-14`（同 L1 的 Linux 列），建置自己抓依賴、shader 工具照正常的主機建置從原始碼建（DXC 等），全量建置成功。沒有改那台機器的設定、沒有用 sudo。
+- **裝置的選法**：同 L1（`cross-platform.yml:171-177`）：Vulkan loader 只給一個 ICD——`VK_DRIVER_FILES`／`VK_ICD_FILENAMES`＝`/usr/share/vulkan/icd.d/lvp_icd.json`（或 `radeon_icd.json`）；`SDL_VIDEODRIVER=x11`、`xvfb-run`（不開看得到的視窗）。`vulkaninfo --summary` 在同一個環境下確認：`llvmpipe (LLVM 20.1.2, 256 bits)`／`AMD Radeon Graphics (RADV REMBRANDT)`。
+- **測試**（不開視窗的：`sdl_gpu.phases`、`sdl_gpu.unwritten`、`sdl_gpu.targets`、`sdl_gpu.pass2d`，與 `sdl_gpu pass3d:` 去掉會開視窗的 `GPUSubmit` 一案）：
+  - **Lavapipe**：ctest 4/4、pass3d 11 案 11 過。
+  - **RADV**：在 Xvfb 下建不了裝置（`SDL_CreateGPUDevice: No supported SDL_GPU backend found!`；Vulkan 的訊息「No DRI3 support detected - required for presentation」：SDL 的 Vulkan 後端要能呈現，Xvfb 沒有 DRI3）。用桌面的真實 display 會碰到使用者的工作階段，沒有做。所以 RADV 沒跑成；突變全部用 Lavapipe（同 L1）。這次失敗也確認了新的 handler：每個案以 abort 結束、沒有對話框。
+  - cpu：`ctest -L 'cpu|shader'` 255/255（Linux 沒有本機的借用依賴問題，`cmake.PluginSelection` 也過）；主機建置的 `sdl_gpu.shader_tool.*`（label `shader`）3/3。
+- **突變（Lavapipe）**：
+  - 新的 GPU 5 個：`gf-uv-flipped`（加了 `[gf-uv-down]` 之後）killed、`gd-pass3d-depth-ignored`（expect 改成 `[gd-sampled-scene]` 之後）killed、`gt-unwritten-not-asserted` killed、`gt-unwritten-always` killed；`gd-depth-target-as-colour` 第一次 wrong_failure：那個 target 向 SDL 要「沒有格式」，SDL 的除錯檢查斷言（`SDL_gpu.c:927`「Invalid texture format enum」），unattended handler 結束行程（Mac 上這裡也會開對話框）。expect 加上這句，重跑 killed。
+  - `gd-pass3d-depth-ignored` 的原因：突變讓場景用目標自己的深度，那張深度沒被寫過又被載入（`clearDepth == false`），Metal 上讀成 0、場景整個不畫，所以左半照樣是藍的、`[gd-tested]` 成立，失敗的是 `[gd-tested-in-front]` 與 `[gd-sampled-scene]`。不管那張深度裡是什麼，深度 target 中間一塊都停在 1（場景沒寫進去），所以 expect 改指 `[gd-sampled-scene]`。
+  - D184 的 GPU 49 個（不含會開視窗的 3 個，它們的程式 A2 沒改）：47 killed；`gt-target-not-mapped`、`gt-target-drawn-on-main`（A1 的）wrong_failure：A2 之後，那個 target 沒被畫過就被取樣，RP-3 的斷言先結束了那一案。expect 加上 `(RP-3)`（守同一個性質：那個 pass 沒畫進 target），重跑 killed。
+  - 合計：新的 23 個全部 killed（cpu 13、Metal 5、Lavapipe 5）；D184 既有的 cpu 14＋GPU 49 全部 killed；`sdl-unattended-handler-not-installed` killed。
+- **已知缺口：Metal 上的行為現在沒有驗證**。這批 GPU 驗證跑在 Linux／Vulkan，不是 Metal：`[gf-uv-down]` 與改過 expect 的突變沒在 Metal 跑；Metal 特有的行為——`SDL_GPUTextureSupportsFormat` 不拒「深度格式＋顏色用途」（`SDL_gpu_metal.m:4176-4180`）、沒寫過又被載入的深度讀成 0——只有這次在 Mac 上看到的紀錄，沒有在 Mac 上重跑確認。macOS 的 L1 是 macos-arm64，只建置、不跑 GPU。
+
 ## 沒做／沒跑
 
-- 本機 GPU：`[gf-uv-down]` 加了之後的 `sdl_gpu.phases`、`sdl_gpu.unwritten` 的重跑；GPU 的新突變的剩下 3 個與存活／wrong_failure 的 2 個；D184 的 GPU 既有突變 52 個——都等許可。
-- Linux（Vulkan／Lavapipe）、Windows（D3D12）上的 `sdl_gpu.phases`、`sdl_gpu.unwritten`——交給 L1（A2 還沒推）。重 GPU 量測沒做。
+- Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
+- Windows（D3D12）上的 `sdl_gpu.phases`、`sdl_gpu.unwritten`——交給 L1（Windows 只建置，GPU 案要有 GPU 的機器）。重 GPU 量測沒做。
 - RC-A2-1～4（第 14.6 節）；A3、A4、B1、B2、C1。

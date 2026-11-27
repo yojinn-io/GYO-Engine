@@ -229,7 +229,7 @@
     },
     {
       "id": "gd-pass3d-depth-ignored",
-      "what": "P8: a 3D pass's depth target ignored (its target's own depth used)",
+      "what": "P8: a 3D pass's depth target ignored (its target's own depth used) (the depth target keeps 1 where the scene would have written 0.5, whatever the target's own depth holds: that depth, loaded unwritten, read 0 on Metal and hid the whole scene, so [gd-tested] held: wrong_failure 2026-11-27)",
       "guards": [
         "render-pipeline-declaration 判定 P8",
         "render RD-12"
@@ -239,7 +239,7 @@
       "replace": "        if (false) {",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu phases: a depth-only*",
-      "expect": "\\[gd\\-tested\\]"
+      "expect": "\\[gd\\-sampled\\-scene\\]"
     },
     {
       "id": "gd-pass3d-depth-cleared",
@@ -285,7 +285,7 @@
     },
     {
       "id": "gd-depth-target-as-colour",
-      "what": "P8: a Depth target taken as a colour target",
+      "what": "P8: a Depth target taken as a colour target (the target then asks SDL for no format: SDL's debug check asserts, SDL_gpu.c:927, and the unattended handler ends the run; Lavapipe 2026-11-27)",
       "guards": [
         "render-pipeline-declaration 判定 P8",
         "render RD-11"
@@ -295,7 +295,7 @@
       "replace": "                made.isDepth = false;",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu phases: a depth-only*",
-      "expect": "a depth-only pass's target is a Depth target"
+      "expect": "a\\ depth\\-only\\ pass's\\ target\\ is\\ a\\ Depth\\ target|Invalid\\ texture\\ format\\ enum|\\[gd\\-made\\]"
     },
     {
       "id": "gt-unwritten-not-asserted",

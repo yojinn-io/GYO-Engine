@@ -371,7 +371,7 @@
   },
   {
    "id": "gt-target-not-mapped",
-   "what": "T5: the backend resolves no render target (only the main one)",
+   "what": "T5: the backend resolves no render target (only the main one) (since A2 the later pass samples the target no pass drew on, and the RP-3 assertion ends the case first: Lavapipe 2026-11-27)",
    "guards": [
     "render-pipeline-declaration 判定 T5",
     "render RD-11"
@@ -381,11 +381,11 @@
    "replace": "            static_cast<void>(t);\n            ++tally.unmappedPasses;\n            resolved.emplace_back();",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",
-   "expect": "\\[gt\\-target\\-mapped\\]"
+   "expect": "\\[gt\\-target\\-mapped\\]|\\(RP\\-3\\)"
   },
   {
    "id": "gt-target-drawn-on-main",
-   "what": "T5: a pass on a target is drawn on the main target",
+   "what": "T5: a pass on a target is drawn on the main target (since A2 the target is never drawn on and its sampling is the RP-3 assertion: Lavapipe 2026-11-27)",
    "guards": [
     "render-pipeline-declaration 判定 T5",
     "render RD-11"
@@ -395,7 +395,7 @@
    "replace": "            static_cast<void>(t);\n            resolved.push_back(main);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",
-   "expect": "\\[gt\\-target\\-sampled\\]"
+   "expect": "\\[gt\\-target\\-sampled\\]|\\(RP\\-3\\)"
   },
   {
    "id": "gt-target-not-kept",
