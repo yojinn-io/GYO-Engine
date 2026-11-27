@@ -86,6 +86,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | `bs-` 開頭的突變搬到 Base 的清單 | 突變清點卡（#247） | 下一次動 Base 的批 |
 | `object_fps_pvp.client` 測試越來越慢：gyo2 本身 macOS 117.6 s、Windows 105 s（Linux 38 s），#364 把時限 120 s 放寬到 300 s；根本做法是把 client 測試拆成幾個 ctest 項目平行跑，不再一直調時限 | 大地圖 #364（2026-11-26） | 下一次動 object_fps_pvp 測試的批 |
 | 模式資料開關：各系統（武器、背包、怪物 AI…）由 arena／模式資料決定開不開，現行規則留成「核心 PvP」模式；先查 Lyra 的 Experience／GameFeature 與 Bevy 的 Plugin 組合方式 | 路線 (A)（`v8-arch-gyo2-object-pvp-route-a`，2026-11-27） | 在 W1、門、手臂 hitbox 等新系統之前 |
+| 肢體傷害 (3)：`HitPart::Arm`（Shot／Hit Codec 升版本號）、`LimbHealth` component＋`Replicate`、Match 端跑 IK 讓手臂形狀跟姿勢；前置是 E2（model 的 two-bone IK）與模式資料開關 | `v8-arch-gyo2-limb-damage`（2026-11-27） | E2 與模式資料開關之後、W3 前後（交換內容在同一段一起改） |
 | 突變數量的增長判準交風紀委員 | 突變清點卡（#247） | 風紀委員待辦 |
 | 每步除了相關突變，再跑一次只數 find 次數的靜態掃描（第 4 批漏 8 個 stale） | 第 4 批後續卡（#265） | 風紀委員待辦 |
 | 第 5 批開頭的守衛：Kernel「拿掉的名字不回來」、權威 Module 的 `gyo_expect_links`（不必再加 DEFER 突變） | 第 4 批宣告 9.5、#265 | 第 5 批開頭 |
