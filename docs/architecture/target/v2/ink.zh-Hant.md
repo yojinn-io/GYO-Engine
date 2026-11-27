@@ -118,7 +118,7 @@ plugins/ink/
 - 選完之後、下一次 `Advance` 之前存：讀得回，但 stopping、cycle、once 的 sequence 回到開頭（D2b）。台本沒有這些 sequence 時逐字接上，tunnel 裡也一樣（測試「a save taken after a choice…」「…inside a tunnel…」）。讀進新版台本能遷移，但 tunnel 裡存的會遇到 D4。
 - 第一次 `Advance` 之前存：讀回已經結束（D3）。
 
-使用者原本的決定（宣告 11.1 U5 (3)）：存檔時機照 inkcpp 作者在 [#146](https://github.com/JBenda/inkcpp/issues/146) 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存，是**遊戲的規則**。D2b 讓這條對 sequence 不成立，**已交使用者重新決定**（主會話 2026-11-27 轉達，結果未出）。不管怎麼定，adapter 都不擋：哪裡存都回位元組，`Save` 照第 9 節標旗標，`Restore` 讀不回時回錯誤。所有缺陷都不打補丁。
+使用者原本的決定（宣告 11.1 U5 (3)）：存檔時機照 inkcpp 作者在 [#146](https://github.com/JBenda/inkcpp/issues/146) 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存，是**遊戲的規則**。D2b 讓這條對匿名 sequence 不成立。補測結論：只能在選完選項後或 END 後存，有名字的 visit count 與 VAR 保留、匿名 sequence 歸零。**重議暫停**，等使用者了解 ink 後再看（宣告 11.1）。不管怎麼定，adapter 都不擋：哪裡存都回位元組，`Save` 照第 9 節標旗標，`Restore` 讀不回時回錯誤。所有缺陷都不打補丁。
 
 ## 9. `Save` 說的事（U7 (a)）
 
@@ -149,7 +149,7 @@ plugins/ink/
 | 等選擇，台本沒有 sequence（`once.ink`） | true | false |
 | 第一次 `Advance` 之前（D3） | false | false |
 
-- **D2b 時 `restorable` 是 true，但讀回的內容不對**：試讀成功、`can_continue` 也相同，`Save` 看不出 sequence 回到開頭（D2b 的測試釘住這一點）。要看出來，得逐一比對拜訪次數，可是 inkcpp 不公開它們。另一個辦法是在 `Save` 裡讓試讀的對話往下跑、和原本的對話比文字，但只能比到下一個選項，更後面才用到的 sequence 看不到；而且每次存檔都要多跑一段台本（inkcpp 沒有步數上限，見「範囲の限界」）。所以現在沒有做，等使用者重新決定存檔時機（上一節）時一起看。
+- **D2b 時 `restorable` 是 true，但讀回的內容不對**：試讀成功、`can_continue` 也相同，`Save` 看不出 sequence 回到開頭（D2b 的測試釘住這一點）。要看出來，得逐一比對拜訪次數，可是 inkcpp 不公開它們。另一個辦法是在 `Save` 裡讓試讀的對話往下跑、和原本的對話比文字，但只能比到下一個選項，更後面才用到的 sequence 看不到；而且每次存檔都要多跑一段台本（inkcpp 沒有步數上限，見「範囲の限界」）。所以現在沒有做；存檔時機的重議暫停（第 8 節），到時一起看。
 - 只比 `can_continue`，不比選項的個數：這一版 inkcpp 沒有「讀回成功、往不往下跑相同、選項個數不同」的情形，比了也測不到（突變存活），所以拿掉。
 - 不支援的參數（U7 (d)）照程式核對過：list 參數丟例外，`Advance` 回 `ScriptFault`，不會被默默忽略（測試 `[ink-list-argument]`、突變 `ink-list-argument-accepted`）。無號數走同一條路，但 ink 的台本寫不出無號數，沒有測試。
 

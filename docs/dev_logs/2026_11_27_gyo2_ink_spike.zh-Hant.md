@@ -112,4 +112,4 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 
 - 宣告 11.4（HANDOFF `v8-arch-gyo2-ink-spike-u8`）：「先維持現狀吧，等需要用到的時候。」不 patch、不讀 inkcpp 內部的 stack，D4 由 I4 的測試固定。
 - 附帶的事已做：`Saved::migratable` 的註解與 owner 頁第 9 節、INK-7 寫明「在 tunnel 中存檔時，`migratable` 不可信」，附 #181。只改了註解與文件，沒有跑突變，也沒有另外 dispatch L1（程式與測試和 `3cd56913` 相同）。
-- U5 (3) 的存檔時機還在重議（#178）。
+- U5 (3) 的存檔時機：重議暫停（HANDOFF `v8-arch-gyo2-ink-paused`，使用者「我後續再看看如何處理 ink」）。宣告 11.1 加註補測結論（只能在選完選項後或 END 後存，有名字的 visit count 與 VAR 保留、匿名 sequence 歸零）。#366 以 U5～U8 收尾，不再加新範圍。

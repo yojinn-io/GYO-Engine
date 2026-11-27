@@ -342,7 +342,8 @@ v8-arch-gyo2-ink-spike
   - **(2) 回報上游**（12.3 的 (c)）：由主會話另開的回報卡處理，這張卡不發 issue。回報卡要最小重現的台本、或釘住現行為的測試（`plugins/ink/tests/DialogueTests.cpp` 裡名字以「inkcpp defect, not patched」開頭的三個測試，D2 是第 394 行那個；台本在 `plugins/ink/tests/data/`）時，這張卡配合提供。
   - **(3) 存檔時機**：照 inkcpp 作者在 #146 的建議，在「選完選項之後、要下一次 `Advance` 之前」存檔，**選項畫面不存**。**這是遊戲的規則，不是 Engine 的**：adapter 不擋、不改，在選項處存仍然照現狀回位元組，`Restore` 讀不回來時照第 6 節回 `SnapshotUnreadable`／`SnapshotNotMigratable`。
 - 這條規則要不要在 adapter 的文件或介面上露出來（例如 `Save` 回報「現在存的檔讀不回來」），和 U7 (a) 有關，**等 U7 定了再做**。
-- **2026-11-27 補記**：上游回報卡發現 D2b（[JBenda/inkcpp#178](https://github.com/JBenda/inkcpp/issues/178)）：選完之後存的檔，讀回時 sequence 回到開頭，連同一個台本也一樣。(3) 對 sequence 不成立，**存檔時機已交使用者重新決定**（主會話轉達），結果出來再補在這裡。
+- **2026-11-27 補記**：上游回報卡發現 D2b（[JBenda/inkcpp#178](https://github.com/JBenda/inkcpp/issues/178)）：選完之後存的檔，讀回時 sequence 回到開頭，連同一個台本也一樣。(3) 對 sequence 不成立，存檔時機曾交使用者重新決定。
+- **重議暫停**（HANDOFF `v8-arch-gyo2-ink-paused`）：#178 使 (3) 對匿名 sequence 不成立；補測結論是只能在選完選項後或 END 後存，有名字的 visit count 與 VAR 保留、匿名 sequence 歸零（證據：主 checkout 的 `build/evidence/gyo2-inkcpp-upstream/hub-save/`）；重議暫停，等使用者了解 ink 後再看。使用者原話：「不用，我後續再看看如何處理 ink，這得我去先了解一下 ink的用法和機制。」#366 以已定的 U5～U8 收尾，不再加新範圍。
 - 不打補丁（12.3 的 (b) 沒有選）。
 
 ### 11.2 U6：產品選不了 `library_only` 的 Plugin（2026-11-27）
