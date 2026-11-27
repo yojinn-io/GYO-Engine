@@ -31,7 +31,7 @@ Owner：建置層（GYO2 主會話轉來，任務卡）。作者 Opus 5.5／high
 
 ### 4. 遊戲目錄規則、KIND、只寫不讀（109 行）
 
-- `games/<名>` 收成 `gyo_game_source_dir(root name output)`（`GyoGameRegistry.cmake`，`-P` 也能用）：`gyo_validate_game_sources`、`GyoGames.cmake` 的 `project.json`、`GyoBuild.cmake` 的第一個迴圈都用它；建置目錄從相對路徑推。第二個迴圈的 `GYO_GAME_SOURCE_DIR`、`GYO_GAME_BINARY_DIR` 沒人讀，拿掉。
+- `games/<名>` 收成 `gyo_game_directory(name output)`（`GyoGameRegistry.cmake`，`-P` 也能用；回傳相對路徑，原始碼與建置目錄各自加前綴）：`gyo_validate_game_sources`、`GyoGames.cmake` 的 `project.json`、`GyoBuild.cmake` 的第一個迴圈都用它。第二個迴圈的 `GYO_GAME_SOURCE_DIR`、`GYO_GAME_BINARY_DIR` 沒人讀，拿掉。
 - KIND：`assemble_runtime.py` 的 `--kind`／`kind` 只檢查、不使用（呼叫者 `GyoContent.cmake` 三處都傳 `game`），拿掉。剩下寫的一方（`GyoRuntimeDeployment.cmake`，作者 API 的輸入）與讀 manifest 的一方（`package_contract.py`）；兩種語言、資料格式的兩端，不共用。
 - 只寫不讀：`GYO_GAME_ASSET_ROOT`、`GYO_GAME_MAIN_TARGET`、`GYO_GAME_CONTENT_STAGE_TARGET`、CI 輸出 `has_games` 拿掉（`has_games` 的兩行斷言一起拿掉）。`GYO_GAME_GENERATED_INCLUDE_DIR` 有讀者（`ProjectCompositionTests.cmake:65`），留著。
 
@@ -47,10 +47,32 @@ Owner：建置層（GYO2 主會話轉來，任務卡）。作者 Opus 5.5／high
 - 新增 7 個：`bcl-source-roots-drop-examples`、`bcl-source-roots-drop-build-acceptance`（清單本身；後者只有釘死能抓）、`bcl-code-page-walk-skips-examples`、`bcl-code-page-check-skips-examples`、`bcl-definition-roots-skip-examples`、`bcl-os-guard-skips-examples`、`bcl-naming-skips-build-acceptance`。
 - 宣告寫的「`test_workflow_gates` 的 owner」突變沒做：能改的只有測試本身或 `PRODUCT_KINDS`，後者拿掉一個種類只會讓測試看的 owner 變少、照樣通過，不是這個測試守的性質。更正宣告。
 - 退役 1 個：`gdir-mirror-drops-build-cmake`。
-- 跑的範圍（D184）：檔案在改動範圍的、殺它的測試被改到的（os、naming、`ProcessCodePageTests`、workflow gates、product registry、game copy、`ProjectComposition`、assembly）。只改名的測試檔（release、archive、package checks、release retry）的 expect 都不含改到的名字，不跑。結果見下。
-
-（結果）
+- 跑的範圍（D184）：檔案在改動範圍的、殺它的測試被改到的（os、naming、`ProcessCodePageTests`、workflow gates、product registry、game copy、`ProjectComposition`、assembly）。只改名的測試檔（release、archive、package checks、release retry）的 expect 都不含改到的名字，不跑。全部清單的 find 都恰好命中一次（靜態掃描）。
+- 本機（Intel Mac，主 checkout `build/evidence/gyo2-build-cleanup/mutations/`）：os-subsystem 30/30、os 守衛 26/26、naming 25/25、`pu-x8`（要建置）1/1、r0b3 16/18；設計審查後的修正再跑 GyoBuild／GyoGames 上的 4 個與清單的 2 個，6/6。
+- r0b3 沒殺的兩個在基準 00738c36 也一樣（既有）：`ci-shader-target-without-hash` survived、`ci-plan-no-notice` stale（find 已不在 workflow）。
+- `sdlp-every-plugin-added`：wrong_failure。突變有被抓到（「Plugins added with none selected: [ "sdl", "sdl_window", "sdl_audio", "sdl_gpu" ]」），但 expect 只寫 `[ "sdl" ]`，之後加了三個 Plugin（既有，和本批無關）。
 
 ## 驗證
 
-（結果）
+- Python：`tests/common/os` 49、`tests/common/naming` 54、`tests/common/ci` 274、`tests/common/assembly` 14，全部 OK；實樹 os 守衛、naming 守衛 clean。
+- CMake 合成樹（Ninja）：ProjectComposition、GameRegistry、ToolRegistry、ProductPackaging、GoService、ProcessCodePage 通過。ProjectComposition 用預設產生器跑 8 次：8/8 通過（改前 4/8 失敗）。
+- 實樹 `cmake --preset test` configure 通過（code page 與建置定義檢查都在 configure 時跑，含 `examples/`）。
+- 複製整合（`game_copy_integration.py`，本機）通過：configure、build、install、兩個遊戲啟動；副本裡有 `build/cmake/GyoSourceRoots.txt`。
+- L1：見 PR #368。
+- 沒跑：本機全量建置與 ctest（交 L1 三平台）；`cmake.PluginSelection` 在本機的基準就失敗（父建置的依存原始碼借自別的 worktree，`_deps/*-src` 不在；00738c36 一樣），交 L1。
+
+## 設計審查（Opus／high，唯讀；主 checkout `build/evidence/gyo2-build-cleanup/design-review.md`）
+
+沒有 blocker。照改的：`gyo_game_directory` 改回傳相對路徑（省掉 `RELATIVE_PATH`）；`naming_mutations.json` 的舊測試名、os.md 記錄目錄的列舉補 `examples`、`GyoSourceRoots.txt` 檔頭不再逐一列讀者（會過時）；本 dev_log 補結果。
+
+交使用者判斷（未改）：
+1. `GyoBuild.cmake` 加了新的頂層目錄卻忘了加進清單時，所有讀者都會安靜地略過（`plugins/`、`examples/` 都發生過）。可選：`ProcessCodePageCheck` 回報「`SOURCE_DIR` 在 repo 內、但不在任何根、不在 `third_party/`、不在建置目錄」的目錄（Cargo 對 workspace 內既不在 `members` 也不在 `exclude` 的套件會拒絕；審查者憑記憶，未對照原始碼）。這是 DI 11「自己的原始碼」的檢查，不是擋誤用；要不要加由使用者定。
+2. `test_roots_name_no_product`、`test_n1_scan_roots_are_the_source_roots` 只比對「守衛的根＝清單」，殺的是「讀者自己加過濾」這種突變，接近擋誤用；真正的價值在逐根的行為測試。留或拿掉由使用者定。
+
+## 後續（本批不改）
+
+- `PRODUCT_KINDS` 放在 Plugin 移除腳本（`plugin_removal.py:39`），`kernel_guard.py:105` 的 `REGISTRIES` 另有一份；可收到 `product_registry.py`。
+- `tools/<名>` 仍手寫 3 處（`GyoBuild.cmake`、`GyoTools.cmake:25`、`GyoToolRegistry.cmake:250`），和遊戲的 `gyo_game_directory` 不對稱。
+- `sdlp-every-plugin-added` 的 expect 過時（上面）；`ci-shader-target-without-hash` survived、`ci-plan-no-notice` stale（既有）。
+- `GameRegistryTests.cmake` 以 `-P` 從 repo 根跑時把 `game-registry-tests/` 留在目前目錄（不吃 `WORK_ROOT`）。
+- `bcl-source-roots-drop-build-acceptance` 只有釘死能殺（合成樹沒有 `build/acceptance/<x>`）。

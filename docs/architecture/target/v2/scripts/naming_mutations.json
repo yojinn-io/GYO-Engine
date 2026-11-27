@@ -347,7 +347,7 @@
   },
   {
    "id": "nm-scan-roots-examples",
-   "what": "examples/ is not scanned (the list, one mutant; each item pinned by test_n1_scan_roots_are_pinned) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
+   "what": "examples/ is not scanned (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt, pinned by cmake.ProcessCodePage; the mutant drops examples/ where this guard reads the list)",
    "guards": [
     "rebuild-naming N17",
     "naming DI 1"

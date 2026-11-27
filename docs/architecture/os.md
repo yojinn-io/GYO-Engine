@@ -177,7 +177,7 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     the module is included, in the scope that enabled the compilers.
   - The build layer (`build/cmake/GyoCodePage.cmake`, included by `GyoBuild.cmake`) chooses the executables. It
     records each directory it adds (engine, every selected Plugin, every game and tool, their tests and acceptance
-    programs, tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source
+    programs, tests/common, examples) by its binary directory, since a standalone tool wrapper reuses the tool's source
     directory, and once every target exists applies the manifest to every executable target there and below whose
     source directory is under a root of `build/cmake/GyoSourceRoots.txt` (engine, plugins, games, tools, examples,
     build/acceptance and tests: the repository's own code, one list that the checks and guards below read too,
