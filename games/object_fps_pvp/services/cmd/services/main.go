@@ -85,6 +85,7 @@ func run(name string, arguments []string) error {
 	data := set.String("data", "", "the data directory (identity.json, saves/)")
 	capacity := set.Int("capacity", 4, "the players a room and its Match hold")
 	maps := set.String("maps", "", "the maps rooms may choose, comma-separated (empty: the content's arenas, or any without --content)")
+	modes := set.String("modes", "", "the modes rooms may choose, comma-separated (empty: the content's modes, or any without --content)")
 	var match matchFlags
 	switch name {
 	case "all":
@@ -99,8 +100,12 @@ func run(name string, arguments []string) error {
 		if err != nil {
 			return err
 		}
+		allowedModes, err := modesOf(*modes, match.content)
+		if err != nil {
+			return err
+		}
 		running, err := stack.Start(stack.Config{Gateway: *gatewayAddress, Data: *data, Provider: provider,
-			Capacity: *capacity, Maps: allowed})
+			Capacity: *capacity, Maps: allowed, Modes: allowedModes})
 		if err != nil {
 			return err
 		}
@@ -135,13 +140,17 @@ func run(name string, arguments []string) error {
 		return serve(*listen, service.Handler())
 	case "rooms":
 		matchesURL := set.String("matches", "", "the matches service's URL")
-		content := set.String("content", "", "the Match's content directory, for the maps rooms may choose")
+		content := set.String("content", "", "the Match's content directory, for the maps and modes rooms may choose")
 		_ = set.Parse(arguments)
 		allowed, err := mapsOf(*maps, *content)
 		if err != nil {
 			return err
 		}
-		service, err := rooms.New(rooms.Config{Matches: api.NewClient(*matchesURL), Capacity: *capacity, Maps: allowed})
+		allowedModes, err := modesOf(*modes, *content)
+		if err != nil {
+			return err
+		}
+		service, err := rooms.New(rooms.Config{Matches: api.NewClient(*matchesURL), Capacity: *capacity, Maps: allowed, Modes: allowedModes})
 		if err != nil {
 			return err
 		}
@@ -209,6 +218,47 @@ func installedMaps(content string) ([]string, error) {
 		ids = append(ids, arena.ID)
 	}
 	return ids, nil
+}
+
+// installedModes reads the mode ids the Match can play from its content
+// (modes/modes.json lists the mode files; each has its id), in order.
+func installedModes(content string) ([]string, error) {
+	var index struct {
+		Modes []string `json:"modes"`
+	}
+	body, err := os.ReadFile(filepath.Join(content, "modes", "modes.json"))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(body, &index); err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, file := range index.Modes {
+		var mode struct {
+			ID string `json:"id"`
+		}
+		body, err := os.ReadFile(filepath.Join(content, "modes", file))
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(body, &mode); err != nil {
+			return nil, err
+		}
+		if mode.ID == "" {
+			return nil, fmt.Errorf("the mode %s has no id", file)
+		}
+		ids = append(ids, mode.ID)
+	}
+	return ids, nil
+}
+
+// modesOf is --modes, or with none the content's modes when --content is given.
+func modesOf(list, content string) ([]string, error) {
+	if list != "" || content == "" {
+		return split(list), nil
+	}
+	return installedModes(content)
 }
 
 // mapsOf is --maps, or with none the content's arenas when --content is given.

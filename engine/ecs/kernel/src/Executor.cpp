@@ -363,7 +363,7 @@ Engine::Base::Result<void, KernelError> WorldExecutor::RunPlan(std::string_view 
                     ++slot;
                     if (!runs) return;
                     call.reader.slot = slot;
-                    if (!condition.Evaluator()(call)) runs = false;
+                    if (!condition.Evaluate(call)) runs = false;
                 };
                 for (const ConditionRef& condition : mount.conditions) evaluate(condition);
                 for (const std::string& setName : mount.sets) {

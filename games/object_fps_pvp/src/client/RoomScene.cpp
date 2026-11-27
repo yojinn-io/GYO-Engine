@@ -40,6 +40,7 @@ struct RoomState final {
     std::optional<std::int64_t> polled;
     bool leaving = false;
     std::string gateway;
+    std::vector<ModeChoice> modes;  // the installed modes (the room's mode is shown by its name)
     // The status line: the newest word -- on the player's last action (a refusal stays to be read: a read that goes
     // well does not clear it), or on a read that went wrong (it takes the line, and goes with the next good read);
     // with neither, the invitation.
@@ -63,7 +64,7 @@ bool OwnerOf(const RoomState& state, const std::uint64_t self) { return !state.r
 void ShowRoom(const RoomState& state, const std::uint64_t self, Ui::UiBindings& bindings) {
     Ui::UiList members;
     if (state.room) {
-        bindings.Set("mode", "モード: " + ModeText(state.room->mode));
+        bindings.Set("mode", "モード: " + ModeText(state.modes, state.room->mode));
         bindings.Set("map", "マップ: " + state.room->map);
         for (const RoomMember& member : state.room->members) {
             Ui::UiListItem item;
@@ -162,7 +163,8 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
             request->next = SceneChange{.scene = Scene::MultiGame,
                                         .connect = N::NetConnectTarget{*server, connect.userId, *token},
                                         .room = room.id,
-                                        .map = room.room->map};
+                                        .map = room.room->map,
+                                        .mode = room.room->mode};
             return {};
         }
         room.problem = "Gateway の接続先を読めません: " + connect.server;
@@ -183,6 +185,7 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
         RoomState state;
         state.id = change.room;
         state.gateway = context.gateway.ToString();
+        state.modes = context.modes;
         if (!change.status.empty()) state.said = change.status;
         Ui::UiBindings bindings;
         // (the mode and the map come with the first read of the room)

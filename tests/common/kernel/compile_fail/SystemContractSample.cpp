@@ -16,6 +16,11 @@
 // core shapes, so removing a static_assert is caught at the registration point):
 //   GYO_KERNEL_SAMPLE_SELF_CONFLICT     J-11: one column written twice -> GYO_KERNEL_REJECT_SELF_CONFLICT
 //   GYO_KERNEL_SAMPLE_CONDITION_WRITE   J-13: a run condition that writes -> GYO_KERNEL_REJECT_CONDITION_WRITE
+// Added by v8-arch-gyo2-mode-config (Kernel step, DI-KS 1: a condition may carry one value, the callable still
+// captures nothing; the control also registers Condition<&Fn>(name, value)):
+//   GYO_KERNEL_SAMPLE_CONDITION_CAPTURE a run condition that is a lambda with a capture -> GYO_KERNEL_REJECT_CAPTURE
+//   GYO_KERNEL_SAMPLE_CONDITION_VALUE   Condition<&Fn>(name, value) with Fn not taking const V& first
+//                                       -> GYO_KERNEL_REJECT_CONDITION_VALUE
 //   GYO_KERNEL_SAMPLE_MEMBER            J-10: a member function -> GYO_KERNEL_REJECT_MEMBER_FUNCTION
 //   GYO_KERNEL_SAMPLE_HOOK_PARAMETER    a hook with a World& parameter -> GYO_KERNEL_REJECT_PARAMETER
 // Added by world-exec (spec J-4, "a handle kept in Local or a static does not compile"):
@@ -51,6 +56,8 @@ SystemResult TakesWorld(World&) { return {}; }
 void ReturnsVoid(Query<Read<SamplePos>>) {}
 SystemResult WritesTwice(Query<Write<SamplePos>>, Query<Write<SamplePos>>) { return {}; }
 bool ConditionWrites(Query<Write<SamplePos>>) { return true; }
+bool ConditionReads(Query<Read<SamplePos>>) { return true; }
+bool ConditionWithValue(const int& threshold, Query<Read<SamplePos>>) { return threshold > 0; }
 struct SampleMessage {
     int n;
 };
@@ -77,6 +84,8 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     (void)&ReturnsVoid;
     (void)&WritesTwice;
     (void)&ConditionWrites;
+    (void)&ConditionReads;
+    (void)&ConditionWithValue;
     (void)&HookReadsMessages;
     (void)&ObserverReads;
     (void)&ObserverExclusive;
@@ -86,6 +95,7 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.AddSystem<decltype(system)>({.name = "Lambda"});
     registrar.AddSystem<&ReadSample>({.name = "Function"});
     registrar.Observer<SampleOpened, &ObserverReads>({.name = "Observer"});
+    (void)Condition<&ConditionWithValue>("WithValue", 3);
 #elif defined(GYO_KERNEL_SAMPLE_CAPTURE)
     const auto system = [value](Query<Read<SamplePos>>) -> SystemResult { return value > 0 ? SystemResult{} : SystemResult{}; };
     registrar.AddSystem<decltype(system)>({.name = "Capturing"});
@@ -97,6 +107,11 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.AddSystem<&WritesTwice>({.name = "WritesTwice"});
 #elif defined(GYO_KERNEL_SAMPLE_CONDITION_WRITE)
     (void)Condition<&ConditionWrites>("ConditionWrites");
+#elif defined(GYO_KERNEL_SAMPLE_CONDITION_CAPTURE)
+    const auto capturing = [value](Query<Read<SamplePos>>) { return value > 0; };
+    (void)Condition<decltype(capturing)>("Capturing");
+#elif defined(GYO_KERNEL_SAMPLE_CONDITION_VALUE)
+    (void)Condition<&ConditionReads>("NoValueParameter", 3);
 #elif defined(GYO_KERNEL_SAMPLE_MEMBER)
     registrar.AddSystem<&Holder::Member>({.name = "Member"});
 #elif defined(GYO_KERNEL_SAMPLE_HOOK_PARAMETER)

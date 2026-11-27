@@ -1,0 +1,539 @@
+# 模式配置：研究與事前宣告（`v8-arch-gyo2-mode-config`）
+
+任務卡，2026-11-27。這一階段只做研究與事前宣告，交使用者核准；核准前不寫實作程式。作者 Opus 5.5／high。使用者的決定記在第 10 節（主會話轉交）。
+
+出處：HANDOFF `v8-arch-gyo2-object-pvp-route-a`、`v8-arch-gyo2-mode-config-start`、`v8-arch-gyo2-limb-damage-decisions`、`v8-arch-gyo2-tarkov-is-reference`；研究 #365（`limb-damage-research.zh-Hant.md` 第 1.4 節、第 9 節）；批次表〈每批的設計審查〉〈後續小事〉。
+
+---
+
+## 0. 前提與結論先講
+
+### 0.1 已定的前提（這份宣告不推翻）
+
+| 前提 | 出處 |
+|---|---|
+| 路線 (A)：新功能都加在 Object_PvP，由 arena／模式資料決定開哪些；現行規則留成「核心 PvP」模式，當回歸基準 | `v8-arch-gyo2-object-pvp-route-a` |
+| 最終產品是有怪物的撤離射擊，塔科夫只是參考之一 | `v8-arch-gyo2-tarkov-is-reference` |
+| 模式配置的內容：同一個執行檔，用資料決定這一場掛哪些系統、用哪張規則表；沒列的系統不跑、不同步；模式 id＋規則 digest 進內容比對 | `v8-arch-gyo2-mode-config-start` |
+| 部位全部資料化 (1c)、欄位模型 (H3)、擋／不擋欄位 (d)；PV3 在 G6 之後，回溯開關與上限由模式資料帶 | `v8-arch-gyo2-limb-damage-decisions` |
+| #365 第 1.4 節的四點需求（本宣告第 3.4 節逐條對上） | `limb-damage-research.zh-Hant.md:116-125` |
+| Engine 只給機制；Kernel 的職責是 ECS；Product 的詞不進 Engine；ECS 相關以 Bevy 為主參考 | AGENTS §1、批次表〈每批的設計審查〉第 5 項 |
+
+### 0.2 結論（一段話）
+
+**Engine 不新增機制。** 要的東西 Engine 都有：Kernel 的 run condition 與帶條件的 System set（Bevy 的 `run_if`、`configure_sets(...).run_if`），編排層的 `WorldDescription::build`／`units`（Bevy 的 Plugin 與 PluginGroup），網路的「兩端同樣登記、用條件決定跑不跑」（`OnServer`／`OnClient` 已經是這個做法）。模式配置是**遊戲層的資料與一小段膠水**：
+
+1. `assets/object_fps_pvp/modes/` 放模式檔（另一個檔，不併進 arena）；模式檔列出「開哪些玩法組」與「用哪些規則表」。
+2. 遊戲的每個玩法組（武器切換、門、肢體傷害的後果、延遲補償……）**在所有模式下都登記**（component、`Replicate`、authority、System），每個 System 進一個帶條件的 Kernel set，條件讀「這一場的模式」。沒開的玩法組：System 不跑、它的 component 不放到任何實體上，所以不同步、不進權威 digest。
+3. 模式 id＋規則 digest 放進 `MatchInfo`，和 `wallsDigest` 同一種比法；不一致就是 `ContentMismatch`，走 arena 不一致的同一條路（Client 換一個 World 重來）。
+4. 核心 PvP 模式＝現在的規則。證明沒變：同一台機器上，改前與改後的程式跑同一段腳本，每一步的權威 digest 逐位元相同；S5 的載入量測在基準範圍內。
+
+---
+
+## 1. 成熟方案（Engine 的機制 vs 遊戲的資料）
+
+查證等級：**源碼**（本機 `~/Code/GitHome`，附檔名與行號）、**官方文件**、**△ 二手資料**、**未確認**（憑記憶、沒查到出處）。
+
+### 1.1 Bevy（主參考，源碼 `bevy` 6a911653f）
+
+| 什麼 | 位置 | 機制或資料 |
+|---|---|---|
+| `Plugin`：`build(&self, app)`，另有 `ready`／`finish`／`is_unique` | `crates/bevy_app/src/plugin.rs:57-89` | 機制 |
+| 任何 `Fn(&mut App)` 都是 Plugin：遊戲的功能單位可以只是一個函式 | `plugin.rs:96-99` | 機制 |
+| `PluginGroup`：一組 Plugin，可 `set`／`add_before`／`enable`／`disable` | `crates/bevy_app/src/plugin_group.rs:253,362,437,537,551` | 機制（哪幾個開關是遊戲的選擇） |
+| run condition：`resource_exists`、`resource_equals`、`resource_exists_and_equals`、`not` | `crates/bevy_ecs/src/schedule/condition.rs:688,728,770,1258` | 機制 |
+| 把條件掛在 set 上：`configure_sets(...).run_if(...)`；`add_systems` | `crates/bevy_app/src/app.rs:321,402`；`crates/bevy_ecs/src/schedule/config.rs:542,670` | 機制 |
+| State：`in_state`、`OnEnter`、`DespawnOnExit` | `crates/bevy_state/src/condition.rs:103`、`state/transitions.rs:19`、`state_scoped.rs:145` | 機制（狀態的種類是遊戲的） |
+
+Bevy 自己沒有「模式」：哪個模式開什麼，是遊戲用上面的機制寫的。兩種寫法都常見：(i) 依模式決定 `add_plugins` 哪些（登記本身就不同）；(ii) 全部 `add_plugins`，用 `run_if(resource_equals(...))` 或 `in_state(...)` 決定跑不跑。
+
+**Bevy 生態在有網路時選 (ii)**，因為兩端的登記必須相同：
+
+- bevy_replicon：component、event、message 的**登記順序兩端必須相同**，建議「把登記都放在共用的 crate」（`bevy_replicon/src/lib.rs:545-546`）；不同就是 protocol mismatch（`src/client.rs:246-253`）。
+- lightyear：「只有 P2P 的 Client 會跑」的協議，仍放在共用的 Plugin 裡登記，因為 id 依登記順序配，一般的 Client 與伺服器也要佔住同樣的 id（`crates/core/lightyear/src/shared.rs:26-30`）。**跑不跑和登不登記分開**，正是這裡要的。
+
+### 1.2 Unity Entities／Netcode for Entities（源碼 `com.unity.entities` 1.5.0、`com.unity.netcode`）
+
+| 什麼 | 位置 | 機制或資料 |
+|---|---|---|
+| `RequireForUpdate<T>()`：某個 component（常是一個 singleton）不存在時，這個 System 不更新 | `Unity.Entities/SystemState.cs:1115-1120`（說明 1100-1112） | 機制 |
+| `[WorldSystemFilter]`、`[DisableAutoCreation]`、`WorldSystemFilterFlags`：哪些 System 在哪種 World（伺服器、Client、單機）被**建立** | `Unity.Entities/WorldSystemFiltering.cs:37,47,125`；`DefaultWorldInitialization.cs:375` | 機制（用程式的 attribute 分 World 種類，不是分模式） |
+| 協議版本＝RPC 的集合版本＋ghost component 的集合版本（整個 build 裡所有登記的型別，不分場景） | `com.unity.netcode/Runtime/Connection/NetworkProtocolVersion.cs:65-80` | 機制 |
+
+Unity 的分法：**World 的種類**（伺服器／Client）用 attribute 決定建立哪些 System；**這一場玩什麼**由場景資料（subscene 烘出的 singleton）加 `RequireForUpdate` 決定跑不跑；協議涵蓋所有型別、不隨場景變。官方 Netcode 範例用「場景裡放一個 `EnableXxx` singleton，System 在 `OnCreate` 裡 `RequireForUpdate<EnableXxx>()`」來開關範例的玩法——**未確認**（範例 repo 不在本機，憑記憶）。
+
+### 1.3 flecs（源碼 `flecs` 09790b5f7，對照）
+
+- module 是一個匯入函式：`ecs_import`／`ECS_MODULE`／`ECS_IMPORT`（`include/flecs/addons/module.h:46-49,114,125`）。每個 World 自己決定匯入哪些 module（＝依登記區分，(i) 的做法）。
+- System 是實體，`ecs_enable(world, system, false)` 加上 `EcsDisabled` 就不再被排到（`include/flecs.h:2950-2966`），可以用資料在執行期關掉。
+- flecs 本身沒有複製協議，所以 (i) 沒有「兩端登記不同就連不上」的代價。這一點和 GYO 不同，只當對照。
+
+### 1.4 Unreal Lyra（本機沒有源碼）
+
+| 什麼 | 層 | 查證 |
+|---|---|---|
+| Game Features 外掛系統（`UGameFeaturesSubsystem`、`UGameFeatureAction`，外掛在執行期被註冊、載入、啟用） | **Engine 的機制**（GameFeatures plugin） | 官方 API 頁只有類別清單：<https://dev.epicgames.com/documentation/unreal-engine/API/Plugins/GameFeatures> |
+| `ULyraExperienceDefinition`：`UPrimaryDataAsset`，欄位有要啟用的 Game Features（`GameFeaturesToEnable`）、預設的 pawn 資料、要執行的 action 與 action set | **Lyra 範例遊戲的程式與資料** | △ <https://x157.github.io/UE5/LyraStarterGame/Experience>、△ <https://velog.io/@imeamangryang/Unreal-Engine-Data-Driven-Architecture> |
+| 流程：決定 Experience → 非同步載入資產 → 啟用 Game Feature 外掛 → 執行 action | Lyra | △（同上 velog） |
+| Experience 由伺服器決定、複製給 Client，Client 收到後載入同一組 | Lyra | **未確認**（憑記憶） |
+
+Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制，Experience（哪個模式開什麼）是遊戲的資料資產。** GYO 只有一個執行檔、程式全部連結在內，不需要「執行期載入一包程式」；要借的只有「Experience＝模式資料資產」這個概念。
+
+### 1.5 共同點與 GYO 的取捨
+
+1. **四家都把「哪個模式開什麼」放在遊戲的資料**；Engine 只給「依資料決定跑不跑／建不建」的機制。GYO 照做：模式檔在 `assets/object_fps_pvp/`，膠水在 `games/object_fps_pvp/`，Engine 不動。
+2. **有複製協議的框架（replicon、lightyear、Unity Netcode）都讓登記固定、用條件或資料決定跑不跑**；沒有協議的（flecs、單機 Bevy）才常用「依登記區分」。GYO 有 protocol hash 與 consistency fingerprint（第 2.2 節），所以照前者。
+3. **和 Bevy 的接合點**：玩法組的登記函式＝Bevy 的 `Fn(&mut App)` Plugin；條件＝`resource_equals`；帶條件的 set＝`configure_sets(...).run_if`。~~沒有偏離 Bevy，沒有衝突點~~（實作後的設計審查 S5 更正）**衝突點一個**：Bevy 的條件可以捕獲值（`resource_equals` 回傳捕獲 `value` 的閉包，`crates/bevy_ecs/src/schedule/condition.rs:728-733`），GYO Kernel 的條件不能捕獲（`Registry.hpp:53`）。膠水：遊戲層一張以 slot 當模板參數的條件表（約 20 行，上限 32 組，第 2.4 節）。Kernel 要不要支援捕獲是 Engine 機制，不在這條線做（第 11 節 U2）。→ 使用者選 U2 (b)，Kernel 步（第 12 節）加了帶值條件，這張表已拿掉，膠水剩一個兩行的條件函式。
+
+---
+
+## 2. 第 1 題：Engine 要不要新增機制
+
+**前提：這是作者能處理的。** 「哪個模式開什麼、用哪張表」是遊戲規則；Engine 只要提供「依資料決定跑不跑」與「兩端登記一致」的機制，而這兩個都已經有了。
+
+### 2.1 現有的機制夠不夠
+
+| 需要 | 現有的機制 | 夠不夠 |
+|---|---|---|
+| System 依資料跑或不跑 | Kernel 的 run condition：函式或不帶捕獲的 lambda，回傳 bool、參數唯讀，讀的東西併進 System 的讀（`engine/ecs/kernel/include/engine/kernel/Registry.hpp:53-97`）；`Mount::conditions`（`Registry.hpp:103-111`） | 夠 |
+| 一組 System 共用一個條件 | `Registrar::Set(SetOptions, conditions)`（`Registry.hpp:250`；`SetOptions` 是名字、schedule、先後，`Declarations.hpp:64-69`）；`Mount::sets` | 夠。set 屬於一個 schedule，跨 Fixed 與 Frame 的玩法組要兩個 set，共用一個條件 |
+| 同一個 World 描述在不同模式下帶不同的東西 | `WorldDescription::build`（遊戲自己的登記，`engine/orchestration/include/engine/orchestration/Product.hpp:34-44`）、`OptionBag options` | 夠。模式是 `WorldOptions` 的一部分，`BuildWorld` 讀它 |
+| Engine 的 Module 依 World 選 | `WorldDescription::units`（`Product.hpp:39-40`）＝PluginGroup 的 enable／disable | 夠（這次用不到：模式不決定 Engine Module） |
+| 兩端登記一樣、只在一端跑 | `OnServer()`／`OnClient()`：「兩端登記同一個 System、帶條件，consistency fingerprint 就相同」（`engine/modules/net/include/engine/net/Replication.hpp:633-636`） | 夠，而且是**先例**：模式條件照同一個做法 |
+| 內容不一致時告訴外面 | 遊戲的 `ContentMismatch` 與 `FollowMatchArena`（`games/object_fps_pvp/src/world/PvpWorld.cpp:810-825`） | 夠（遊戲層，加比模式） |
+
+### 2.2 為什麼「依模式登記」在 GYO 會卡住
+
+握手時比兩樣東西，兩樣都由登記組成：
+
+- **protocol hash**：登記的名字、順序、Codec 版本（`Replication.hpp:13-14`；組法 `engine/modules/net/src/Replication.cpp:23-27`）。
+- **consistency fingerprint**：寫決策資料的 System 的名字、存取、掛點、**run condition 與所屬的 set**（`engine/modules/authority/src/ServerAuthorityStrategy.cpp:313-345`；收集 `engine/modules/authority/src/Consistency.cpp:105-121`）。不同就 `FingerprintMismatch`（`engine/modules/net/src/Handshake.cpp:45-51`）。
+
+如果依模式登記，**模式不同的兩端在握手就被拒**，Client 拿不到 `MatchInfo`，也就不知道 Match 玩的是哪個模式。現在 arena 不一致是連上之後從 `MatchInfo` 得知、換一個 World 重來（`PvpWorld.cpp:810-825`、`games/object_fps_pvp/src/client/ClientWorld.cpp:1408-1423`）；依模式登記會讓模式走另一條、更差的路（只拿到一行協議不符）。
+
+固定登記之後，模式不在協議裡：兩端都能連上，模式在 `MatchInfo` 裡比（第 3.3 節）。
+
+### 2.3 選項
+
+| | 做法 | 好處 | 代價 |
+|---|---|---|---|
+| (R1) | **全部玩法組固定登記**（component、`Replicate`、authority、System），System 進帶模式條件的 set；component 只在開啟時放到實體上 | 協議與指紋不隨模式變；模式不一致走 arena 的同一條路；照 replicon／lightyear／Unity Netcode | 每加一個玩法組，**所有模式**（含核心 PvP）的 protocol hash 與指紋都會變（兩端仍一致）；關著的 System 每步算一次條件 |
+| (R2) | **依模式登記**（只登記開的玩法組） | 核心 PvP 的登記永遠＝今天；Plan 裡沒有關著的 System | 模式不同在握手被拒、拿不到模式；Client 連線前一定要先知道模式（直連 `--connect` 時要自己帶）；#365 L1 的「登記固定」不成立 |
+| (R3) | 協議（`Replicate`、authority）固定、System 依模式登記 | 協議不變 | 指紋收 System，仍在握手被拒；兩邊的缺點都有 |
+
+**判定：(R1)。** 理由：第 2.2 節；#365 第 1.4 節第 3 點已定「登記固定、掛不掛由模式定」，這裡把它落到 System 上；(R1) 是 Bevy 生態有網路時的做法（1.1）。(R1) 的代價「加玩法組就換協議」是正常的升版：舊 Client 本來就該連不上新 Match。
+
+### 2.4 遊戲層的膠水（不在 Engine）
+
+- **玩法組（gameplay set）**：遊戲程式裡的一張固定表。每一列是名字（例 `doors`）、一個登記函式 `void(O::WorldSetup&)`（＝Bevy 的 `Fn(&mut App)` Plugin）、模式檔裡它那一塊設定的解析函式。名字照命名規範、只用 ASCII。
+  - 不叫 Feature（GYO 文件裡 Feature 是行為需求的用語）、不叫 Plugin／Module（GYO 的 Plugin＝第三方、Module＝我們維護的 Engine 單位）。
+- **條件**：~~`template <std::size_t Slot> bool GameplaySetOn(K::Res<ActiveMode>)`，名字 `pvp.mode.<組名>`。條件不能捕獲（`Registry.hpp:53`），所以用表裡的固定位置當模板參數。~~（第 12 節 Kernel 步之後）`K::Condition<&SetOn>("pvp.mode.<組名>", slot)`：Kernel 的帶值條件，slot 是值；上限與模板表拿掉。
+- **`ActiveMode`**：一個 Resource，`Prepare` 時放好、之後不寫；不是決策資料（不進權威 digest）。不併進 `GameRules`：`LoadArena` 在生成期間寫 `GameRules`（`PvpWorld.cpp:909-913`），條件讀它會給所有被條件管的 System 加上不必要的衝突。
+- **每個玩法組的 System**：在 Fixed 與 Frame 各進一個 set（`pvp.<組名>.fixed`、`pvp.<組名>.frame`），兩個 set 都帶同一個條件。
+- **登記順序**：玩法組的登記一律排在核心的登記之後，讓核心型別的 authority 登記序號與網路的 wire id 不動（權威 digest 用型別的 authority 登記序號，`engine/modules/authority/include/engine/authority/Consistency.hpp:7-13`）。
+
+### 2.5 Engine 這邊有沒有缺口
+
+- 沒有一定要補的。Bevy 內建 `resource_equals` 這類常用條件（`condition.rs:728`），GYO 的 Kernel 沒有；遊戲自己寫一個條件模板只要幾行。**不在這條線補**：只有一個使用者，照 AGENTS §1 不抽；第二個產品也寫同樣的東西時再議。
+- `state_machine` 的 `InState`（`engine/modules/state_machine/include/engine/state_machine/Conditions.hpp:27`）不拿來當模式：模式在一個 World 的一生裡不變（和 arena 一樣，換模式＝換 World），不需要狀態轉移。
+
+---
+
+## 3. 第 2 題：模式資料的形狀
+
+**前提：這是作者能處理的。** 檔案的位置與欄位是遊戲的資料契約；Engine 只讀 JSON（JSON Module）、算 hash（Kernel 的 Hasher）。
+
+### 3.1 放在哪裡：另一個檔
+
+| | 做法 | 判定 |
+|---|---|---|
+| (D1) | arena 檔加 `mode` 欄 | 不採：同一張地圖要能玩不同模式（核心 PvP 與撤離都在同一張圖上），arena 與模式是兩個獨立的選擇 |
+| (D2) | **`modes/modes.json` 列模式檔，每個模式一個檔** | **採用**：和 `maps/arenas.json` 同一種寫法；Lyra 的 Experience 也是獨立於地圖的資料資產 |
+| (D3) | 模式寫在 `arenas.json` 的每一列 | 不採：同 (D1) |
+
+### 3.2 欄位
+
+`assets/object_fps_pvp/modes/modes.json`（照 `maps/arenas.json`；第一個是預設）：
+
+```json
+{ "version": 1, "modes": ["core_pvp.json"] }
+```
+
+`assets/object_fps_pvp/modes/core_pvp.json`：
+
+```json
+{
+  "version": 1,
+  "id": "core_pvp",
+  "name": "核心 PvP",
+  "rules": {
+    "movement": "rules/movement_rules.json"
+  },
+  "sets": {},
+  "arenas": []
+}
+```
+
+| 欄位 | 意思 | 錯誤 |
+|---|---|---|
+| `id` | 模式的 id，進 `MatchInfo`；在 `modes.json` 裡唯一 | 重複：讀取失敗 |
+| `name` | 顯示的名字（大廳、房間） | — |
+| `rules` | 規則表的種類 → 檔案（相對 content 根）。種類由遊戲程式認得：第一批只有 `movement`；之後 W1 加 `weapons`、G6 加 `damage` | 不認得的種類、檔案讀不到或解析失敗：讀取失敗 |
+| `sets` | 開啟的玩法組 → 它那一塊設定（物件；沒有設定就是 `{}`）。**列在這裡＝開，沒列＝關** | 遊戲不認得的組名、設定解析失敗：讀取失敗 |
+| `arenas` | 這個模式能玩的 arena id；空＝全部 | 列了沒安裝的 arena：讀取失敗；Match 的 `--arena` 不在清單裡：用法錯誤 |
+
+**arena 檔也可以帶玩法組的一塊資料**（門的位置、撤離點、怪物的出生區）：arena 檔加選填的 `sets` 物件，組名 → 那個組自己解析的資料。模式沒開那個組時，資料照樣解析、不用。這樣同一張圖能在不同模式下玩。
+
+**為什麼 `CombatRules` 這一批不搬進資料**：現在它是程式裡的預設值（`games/object_fps_pvp/include/object_fps_pvp/sim/CombatRules.hpp:20-32`）。W1 會把武器那幾個欄位（傷害、彈匣、冷卻、換彈、射程）搬到武器定義，G6 會把部位倍率搬到傷害表（(H3)）；這一批先搬，兩批又要再拆一次。所以這一批只讓 `movement`（本來就是檔案）走模式的 `rules`，證明「模式選規則表」的路；`CombatRules` 的值照樣進規則 digest（3.3），兩端不同照樣擋得住。
+
+### 3.3 模式 id＋規則 digest 進內容比對
+
+照 `wallsDigest` 的做法（`games/object_fps_pvp/include/object_fps_pvp/world/Components.hpp:131-155`、`PvpWorld.cpp:810-825`）：
+
+- `MatchInfo` 加 `modeId`（字串）與 `rulesDigest`（u64）；`MatchInfoCodec` 版本號升一號。Match 在 `Prepare` 就放好（不必等地圖）；Client 照樣從 Match 收。
+- **規則 digest 的內容**：解析後的值，用 Kernel 的 Hasher 逐型別算（和 `World::Summary` 同一種，`engine/ecs/kernel/include/engine/kernel/World.hpp:361-368`），**不 hash 檔案的原始位元組**——換行（CRLF／LF）、空白、欄位順序不同不該算不一致。涵蓋：
+  1. 模式本身（id、開的組與各組的設定、`arenas`）；
+  2. `rules` 裡的每一張表（第一批：`StanceRules`）；
+  3. 程式裡的 `CombatRules`（搬進資料之前也要比）；
+  4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）；（11.7 U1 之後）角色移到自己的 `characterDigest`，連同骨架與動畫，見 11.7；
+  5. （實作後補，設計審查 S1）這一場的 arena 檔裡、模式開著的組的區塊（門的位置、撤離點……）。~~所以比對值是「模式＋arena」的：`GameContent::MatchRulesDigest(mode, arena)`。~~（第 2 輪設計審查 S1：換 arena 會被判成規則不同）另一欄 `MatchInfo::arenaDigest`（`GameContent::ArenaDigest(mode, arena)`），在 arena id 之後比；`rulesDigest` 只放模式本身。
+- **Client 的判斷**（`FollowMatchArena` 改成也比模式）：`modeId` 不同、或 `rulesDigest` 不同 → `ContentMismatch`，`reason` 寫哪一項不同，並帶 `matchMode`。模式的比對不等地圖讀完（和「另一個 arena 當場就知道」同一個時機）。
+- **程式怎麼處理**（不是 Engine 的事，照現在 arena 的做法）：Client 有那個模式、而且只是模式不同 → 用 Match 的模式重建 World（`ClientWorld.cpp:1408-1423` 加上模式）；digest 不同（同名模式、內容不同）→ 不能玩，回大廳並顯示原因。
+
+### 3.4 #365 第 1.4 節的四點
+
+| # | #365 的需求（`limb-damage-research.zh-Hant.md:118-123`） | 本宣告 |
+|---|---|---|
+| 1 | 模式要有身分、兩端一致：模式 id＋規則 digest 進 `MatchInfo`，和 `wallsDigest` 同一種；`hitbox.json` 也要進 digest | 3.3：`modeId`、`rulesDigest`；digest 涵蓋 `hitbox.json` 解析後的值；不一致是 `ContentMismatch` |
+| 2 | 模式帶一張傷害規則表；現在 `CombatRules` 的數字就是核心模式的表 | 3.2：`rules` 是「種類 → 檔案」，G6 加 `damage` 這一種；在那之前 `CombatRules` 的值進 digest。核心 PvP 的傷害表＝現在的數字，由 G6 搬並用第 5 節的 A/B 證明 |
+| 3 | 模式決定掛哪些 component；登記固定（protocol hash） | 2.3 (R1)、第 4 節：component、`Replicate`、authority、System 都固定登記；「掛」＝放不放到實體上、System 跑不跑 |
+| 4 | 核心 PvP 的規則表＝現在的數字，S5 的結果要一致 | 第 5 節 |
+
+### 3.5 誰決定這一場的模式
+
+照 arena 的現況：
+
+- **Match**：命令列 `--mode ID`（照 `--arena`，`games/object_fps_pvp/src/match_main.cpp:150-151,256-263`）；沒有就用 `modes.json` 的第一個。matches 服務起 Match 時帶 `--mode`（現在只帶 `--arena`，`games/object_fps_pvp/services/matches/local.go:57-62`）。
+- **Client**：`SceneChange` 加 `mode`（照 `map`，`games/object_fps_pvp/include/object_fps_pvp/client/Scenes.hpp:53-55`）；沒有或沒安裝就用自己的預設，由 Match 的 `MatchInfo` 糾正（3.3）。
+- **Local（單機）**：單機房間選的模式，經 `SceneChange` 帶進 `LocalWorld`。
+
+**現存的 `coop`／`survival`**：房間服務寫死 `Modes = {"coop", "survival"}`，註解說「背後的規則是之後的功能，服務只帶這個選擇」（`games/object_fps_pvp/services/rooms/rooms.go:33-35,236-237`）；大廳切換（`games/object_fps_pvp/src/client/LobbyScene.cpp:31`）、顯示名「協力」「生存」（`GatewayScene.cpp:43-44`）、單機固定「生存」（`SoloScene.cpp:3`）。這是 game-flow 宣告（`games/object_fps_pvp/docs/game-flow-declaration.zh-Hant.md:36,110,225`）留的位置。模式配置做完之後，「模式」要有真的模式檔，這兩個佔位要怎麼處理是**決策點 M1**（第 8 節）。
+
+---
+
+## 4. 第 3 題：網路——登記固定、掛不掛由模式決定
+
+**前提：這是作者能處理的。** 協議的組法是 Engine 的（不改）；遊戲照它的規則登記。
+
+1. **所有玩法組的 `Replicate`、`ReplicateResource`、`Input`、`ServerMessage` 與 authority 登記，在每個模式、每一端都做**，順序固定：核心的在前（照現在 `PvpWorld.cpp:1091-1134`），玩法組照表的順序在後。protocol hash 只由程式決定，不由模式決定。
+2. **「不同步」靠「沒有值」**：component 只在開啟的玩法組裡被放到實體上（生成實體、插入都在那個組的 System 裡），關著的組沒有任何格子，複製就沒有東西送；權威 digest 只加總有值的格子，也不變。
+   - 玩法組的 Resource 若要複製（`ReplicateResource`），只在組開啟時 `SetResource`。不存在的 Resource 會不會被送：從 `Replication.cpp:299-305`（`encode` 回傳能不能送）推是不送，**未確認**，第 2 步用測試確認。
+3. **System**：每個 System 帶組的條件；只在一端跑的照舊再加 `OnServer`／`OnClient`。條件和 set 都進指紋（`ServerAuthorityStrategy.cpp:333-345`），所有模式相同。
+4. **Codec 版本號**：玩法組改 wire 時照舊升自己的 Codec 版本（例：G6 的 `HitRecord::part` 改成傳模式表的索引）。
+5. **Kernel 的排程**：Serial 執行器用 Kahn，ready 的 System 取登記序號最小的；沒有先後的衝突對，從序號小的連到大的（`engine/ecs/kernel/src/Scheduler.cpp:10-24`）。所以後登記、沒有寫 `before` 的玩法組 System，不會插到核心 System 的前面；**寫了 `before` 指向核心 System 的，可能改變核心 System 之間的先後**——由第 5 節的 A/B 檢出，不另加守衛。
+
+---
+
+## 5. 第 4 題：怎麼證明核心 PvP 沒變
+
+**前提：這是作者能處理的**（遊戲的回歸測試）。
+
+| 項目 | 方法 | 判定 | 在哪裡跑 |
+|---|---|---|---|
+| **權威 digest** | **A/B**：一支「核心 PvP 腳本」程式（固定的輸入序列：走、跳、蹲、開槍、換彈、命中三種部位、擊殺、重生、墜落；Local World 與 Match＋2 Client 的記憶體連線各一份），每一步印 `Authority::Digest`（決策資料：`PlayerBody`、`PlayerCombat`、`ShotRecord`、`HitRecord`、`PlayerInput`）與 Client 端收到的值。用**改前的 `gyo2`（這條線分出的那一點）與改後**各建一次，在同一台機器上跑，輸出逐位元組比 | 完全相同 | macOS（本機）與 Linux 主機；腳本與輸出放主 checkout `build/evidence/gyo2-mode-config/` |
+| 協議與指紋 | 同一支程式另印 protocol hash 的文字與 `DatasetReport` | 第 1 步：指紋的文字相同；protocol hash 只差 `MatchInfo` 的 Codec 版本。第 2 步（只加測試用的玩法組時）：見下 | 同上 |
+| 既有測試 | `object_fps_pvp.*` 全部（`tests/object_fps_pvp/world/WorldTests.cpp` 已逐值驗傷害、冷卻、重生、墜落等），**不改期望值** | 全部通過 | 本機＋L1 三平台 |
+| 新的測試 | 模式讀取（預設模式、錯誤的組名與種類、重複 id、`arenas` 限制）；`MatchInfo` 的模式不一致與 digest 不一致都是 `ContentMismatch`；**關著的玩法組不跑、不同步**（測試用的組：關著時 System 一次都沒跑、沒有實體有它的 component、每一步的權威 digest 和「沒有這個組」的 World 相同；開著時會跑、Client 收得到） | 通過 | 本機＋L1 |
+| **S5** | 用既有的 `s5_linux.sh load`（主 checkout `build/evidence/gyo2-big-map/s5/`）在 Linux 主機重量 Match 讀圖＋建牆、峰值 RSS、Client 讀圖；另比 `BoxSet` digest | digest 相同；時間與記憶體不比基準差：Match 3,674～3,686 ms、峰值 RSS 597～602 MB、Client 3,950～3,963 ms（`big-map-declaration.zh-Hant.md:244,763-765`）。**時間是量測、不能逐位元**；判讀照 S5 的做法（各兩次取較差的） | Linux 主機，整條線最後一次（第 7 節第 4 步）。量之前在報告寫預計時間、負荷與中止方式 |
+
+說明：
+
+- **為什麼用 A/B、不存一份 golden 進 repo**：權威 digest 裡有浮點（位置、速度），跨平台、跨編譯器版本不保證逐位元相同（PvP 本來就不要求，`games/object_fps_pvp/docs/port-declaration.zh-Hant.md:44-49`）。存在 repo 裡的 golden 會因為換編譯器就紅；同一台機器上改前改後比，才是在比「這次的改動」。
+- **Windows 不做 A/B**（建兩次太重），只跑 L1；寫明是未跑。
+- **之後的批**（W1、G6、PV3）用同一支腳本當它們的驗收：「核心 PvP 模式下 A/B 相同」。
+
+---
+
+## 6. 第 5 題：之後的 W1、門、肢體傷害（G6）、PV3 怎麼掛上來
+
+**前提：都是作者能處理的**（遊戲層）。這一節只舉例，不是那些批的設計。
+
+兩種掛法：**玩法組**決定「哪些 System 跑、哪些 component 出現」；**規則表**決定「共用的 System 用哪組數字」。
+
+| 批 | 怎麼掛 | 核心 PvP 模式 |
+|---|---|---|
+| **W1 武器資料化** | 規則表：模式的 `rules` 加 `weapons`（武器定義檔的清單，例 `weapons/nailer_v2/weapon.json`）；`CombatRules` 裡武器的欄位搬進武器定義，`UseWeapons`／`JudgeShots` 讀它 | `weapons` 只列 nailer_v2，數值＝現在的 `CombatRules`；A/B 相同。W3 的背包切換另成一個玩法組 `loadout_switch`（武器實體、切換的 component 固定登記；核心 PvP 不開＝只有一把、不出現切換的 component） |
+| **門** | 玩法組 `doors`：`DoorState` 固定登記（authority＋`Replicate`）；System：從 arena 檔的 `sets.doors` 生成門、Match 收「按了」自打射線（`v8-arch-gyo2-interaction-dialogue-decisions` Q1）、改 `DoorState` | 不開：沒有門的實體、沒有 `DoorState` 的格子；arena 檔可以照樣帶門的資料 |
+| **肢體傷害 G6** | 規則表 `damage`：(H3) 的欄位、(d) 的擋／不擋、形狀標籤 → 規則部位（(1c)），進 `rulesDigest`；`LimbHealth` 固定登記，只在表有部位血池時放到玩家身上；後果 (Z1)～(Z3) 是玩法組 `limb_consequences`；`HitRecord::part` 改成傳表的索引（Codec 升版本） | 傷害表＝頭 2000‰、軀幹 1000‰、腿 750‰、沒有部位血池；不放 `LimbHealth`、不開後果；A/B 相同是 G6 的驗收 |
+| **PV3 延遲補償** | 玩法組 `lag_compensation`，設定 `{"max_rewind_ms": …}`（L2'）：Match 端記錄判定形狀的歷史（`OnServer`＋組的條件；歷史的 component 兩端都登記）；`JudgeShots` 有這組的設定時照 Client 看到的時間回溯，沒有時用當步的姿勢（今天的做法） | 不開：`JudgeShots` 走今天的路；A/B 相同 |
+
+---
+
+## 7. 第 6 題：批次怎麼切
+
+**一條線、一個 draft PR**（PR 盡量少開；文件同步併進同一個 PR）。每一步開頭先跑 A/B（第 0 步之後）與相關測試。
+
+```
+v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
+├─ 第 0 步｜Opus/high｜下段｜核心 PvP 腳本程式＋A/B 腳本；改前的輸出先存
+├─ 第 1 步｜Opus/high｜上段｜模式檔、讀取、ActiveMode、MatchInfo 的 modeId＋rulesDigest、ContentMismatch、--mode、SceneChange::mode
+├─ 第 2 步｜Opus/high｜上段｜玩法組的表與條件、arena 的 sets 區塊、「關著不跑不同步」的測試
+├─ 第 3 步｜Opus/high｜下段｜房間／matches 服務與大廳、單機的模式（照 M1）；client 測試拆成幾個 ctest 項
+└─ 第 4 步｜Opus/medium｜下段｜A/B（macOS、Linux）、S5 重量、設計審查、純淨 Code Review、dev_log
+```
+
+| 步 | 內容 | 上段／下段（根據） | 實作者 | 審查者 | 檢驗者 |
+|---|---|---|---|---|---|
+| 0 | `tests/object_fps_pvp/` 下加核心 PvP 腳本程式（印每步的 digest、協議文字、`DatasetReport`）；A/B 腳本放主 checkout `build/evidence/gyo2-mode-config/`；先用改前的程式跑一次存下 | 下段（測試工具，不動行為與資料契約） | Opus／high（要先懂權威與網路的測試支援） | 併入第 4 步的設計審查 | Opus／high（navigator：上段計畫的輸入不用小模型） |
+| 1 | 第 3 節：`modes/` 兩個檔、讀取與錯誤、`ActiveMode`、`MatchInfo` 加兩欄（Codec 升版本）、規則 digest、`FollowMatchArena` 比模式、Match `--mode`、`SceneChange::mode`、Client 的重建路徑、Local | **上段**：資料契約（新的內容檔）、wire（`MatchInfo` 的 Codec）、交換給 Client 的判斷 | Opus／high | Opus／high（第 4 步一起） | Opus／high |
+| 2 | 第 2.4、4 節：玩法組的表、條件模板、兩個 set、arena 檔的 `sets`；測試用的玩法組只在測試裡登記 | **上段**：登記與協議的規則（protocol hash、指紋） | Opus／high | Opus／high | Opus／high |
+| 3 | 房間服務的模式清單照 M1（照 `installedMaps` 讀 `maps/arenas.json` 的做法讀 `modes/modes.json`，`games/object_fps_pvp/services/cmd/services/main.go:181-187`）；matches 帶 `--mode`；大廳與單機房間顯示模式檔的 `name`。另收批次表〈後續小事〉指給「下一次動 object_fps_pvp 測試的批」的一件：`object_fps_pvp.client` 拆成幾個 ctest 項目平行跑 | 下段（服務的值的來源、UI 顯示；不動協議） | Opus／high（Go＋C++ 多檔） | Opus／high | Opus／high |
+| 4 | A/B 在 macOS 與 Linux；S5 的 `load` 在 Linux；每批的設計審查（Opus／high，唯讀，報告放 `build/evidence/gyo2-mode-config/`）；純淨 Code Review（Fable／high，只給 git 範圍）；相關突變（D184：新的、find 在改動範圍的）；dev_log | 下段（執行與紀錄）；但檢驗的是上段的成果，檢驗者不用小模型 | Opus／medium | — | Opus／medium |
+
+- 模型都不超過主會話（Opus）；Fable 只在純淨 Code Review（navigator 規則，不另問）。
+- **突變**（只列預定的方向，實際在各步定）：模式不一致沒被偵測、digest 不一致沒被偵測、不認得的組名被接受、條件恆真、關著的組仍放 component、玩法組排到核心登記之前。
+- **時間**：第 0～3 步各約半天到一天；第 4 步的 S5 約 20 分鐘（S5 的 `load` 模式各兩次）。超過估計 1.5 倍就停下回報。
+
+---
+
+## 8. 要使用者決定的點
+
+| # | 問題 | 選項 | 推薦 |
+|---|---|---|---|
+| **M1** | 房間的 `coop`／`survival` 佔位（game-flow 宣告留的）怎麼處理 | (a) **房間的模式清單改讀已安裝的模式檔**（和地圖讀 `arenas.json` 同一種）；現在只有「核心 PvP」；`coop`／`survival` 拿掉，等它們有自己的模式檔再出現；單機用模式清單的第一個 (b) 先建 `coop.json`、`survival.json` 兩個模式檔，內容暫時和核心 PvP 相同 (c) 房間的「模式」和模式配置分開，兩個概念並存 | **(a)**：(b) 的兩個檔現在沒有自己的規則，會是三份一樣的內容、日後分歧；(c) 讓「模式」一詞有兩個意思。(a) 會改 game-flow 宣告的兩處（大廳的模式切換、單機固定「生存」），所以要你決定 |
+
+卡片自己判的（不是決策點，列出來讓你知道；要改就說）：
+
+- 登記方式 (R1)（2.3）：#365 第 1.4 節第 3 點已定方向，這裡落到 System 上。
+- 模式放另一個檔 (D2)（3.1）。
+- `CombatRules` 這一批不搬進資料，留給 W1／G6（3.2 末段）。
+- digest 算解析後的值、不算檔案位元組（3.3）。
+- 第 3 步順便把 `object_fps_pvp.client` 測試拆開（批次表〈後續小事〉指定給下一次動 object_fps_pvp 測試的批）。
+- S5 在第 4 步要在 Linux 主機重量一次（需要主機開著）。
+
+## 9. 沒查到、未確認的
+
+- Lyra 的 Experience 欄位、載入流程是二手資料（△）；Experience 由伺服器決定再複製給 Client 是憑記憶。
+- Unity Netcode 範例用 `EnableXxx` singleton＋`RequireForUpdate` 開關玩法：範例 repo 不在本機，憑記憶。
+- 不存在的 Resource 不會被 `ReplicateResource` 送出：從程式推，第 2 步用測試確認。
+- A/B 只在 macOS 與 Linux；Windows 只有 L1 的既有測試。
+
+## 10. 使用者的決定（2026-11-27）
+
+主會話轉交。使用者先說「全部展示出來我過一遍」；主會話逐題列出選項與推薦後，使用者的原話：「全部照推薦，空殼刪掉」。出處：HANDOFF `v8-arch-gyo2-mode-config-m1`（gyo2 3825f51b）。
+
+| # | 決定 | 比過的選項 | 理由（本文） |
+|---|---|---|---|
+| M1 | (a) 房間的模式清單改讀已安裝的模式檔（和地圖讀 `arenas.json` 同一種）；現在只有「核心 PvP」，`coop`／`survival` 拿掉，等它們有自己的模式檔再出現；單機用模式清單的第一個。game-flow 宣告的兩處（大廳的模式切換、單機固定「生存」）跟著改 | (b) 先建內容和核心 PvP 相同的 `coop.json`／`survival.json`；(c) 房間的「模式」和模式配置並存 | 8 |
+
+卡片自己判的項目，使用者沒有推翻，照本文進行：
+
+| 項目 | 本文 |
+|---|---|
+| 登記方式 (R1)：玩法組固定登記，由模式條件決定跑不跑 | 2.3 |
+| 模式放另一個檔 (D2) | 3.1 |
+| `CombatRules` 這一批不搬進資料，留給 W1／G6 | 3.2 |
+| digest 算解析後的值，不算檔案位元組 | 3.3 |
+| 第 3 步順便把 `object_fps_pvp.client` 測試拆開 | 7 |
+| 第 4 步在 Linux 主機重量 S5 | 5、7 |
+
+**還沒開始**：核准只針對這份宣告；要不要開始實作，等主會話另外通知。
+
+## 11. 實作結果與合併前核准（2026-11-27）
+
+照第 7 節實作（動工前核准：HANDOFF `v8-arch-gyo2-mode-config-start-impl`）。dev_log：`docs/dev_logs/2026_11_27_gyo2_mode_config.zh-Hant.md`。證據：主 checkout `build/evidence/gyo2-mode-config/`（`ab.py`、`ab/*/`、`linux.sh`、`design-review.md`、`pure-code-review.md`）。
+
+### 11.1 各步
+
+| 步 | commit | 內容 |
+|---|---|---|
+| 0 | `6be715a6` | 核心 PvP 腳本程式（ctest `object_fps_pvp.core_script`）與 A/B 腳本 |
+| 1＋3 | `b8082841` | 模式檔與讀取、`MatchInfo` 的 `modeId`／`rulesDigest`、Client 的比對與重建、Match `--mode`、M1 (a)。兩步改到同一批 Client 檔，合成一個 commit |
+| 2 | `ab6dede5` | 玩法組的表、條件、兩個 Kernel set、arena 檔的 `sets` |
+| 3 | `797471c1` | `object_fps_pvp.client` 拆成 `client.1`～`.4` |
+| 4 | （審查處置的 commit） | 下面 11.3 採用的各條 |
+
+### 11.2 和本宣告不同的地方
+
+- `GameplaySet` 多了 `readArena`（3.2 末段「arena 也能帶區塊」的落實）；`SetData`＝讀到的值的 digest＋放進 World 的函式（宣告沒寫到的細節）。`put` 在每一端都執行、由比對值保證兩端相同，所以組的設定不複製。
+- 比對值加上 arena 區塊（3.3 第 5 項），另開一欄 `arenaDigest`（`MatchInfo` Codec 5），不併進 `rulesDigest`。
+- `ContentMismatch` 加 `kind`（Mode／Rules／Arena／Walls）：只說發生了什麼；Client 只在 Mode／Arena 時重建（審查前，同模式 digest 不同且 arena 也不同時會白白重建一次）。`FollowMatchArena` 改名 `FollowMatchContent`。
+- 「模式玩不玩這個 arena」只有一個出口 `GameContent::Plays`；大廳與單人只列選到的模式玩的 arena（`ModeChoice::maps`）。
+- 模式 id 限 1～64 字元（和 arena 同一條；`MatchInfo` 的 Codec 只收 64）。
+- 規則表的雜湊改成每個型別一個 `HashValue`（`StanceRules`、`CombatRules`、`AnimationRules`、`HitShapeDefinition`；放在 `world/ContentHash.hpp`，因為 sim 與 character 函式庫不連 Kernel），`CharacterDigest` 與 `Digest64` 也在那裡。digest 的值不變（同樣的位元組）。
+- 第 5 節的「另比 `BoxSet` digest」：見 11.4。
+
+### 11.3 檢驗
+
+- 本機（macOS arm64）：`object_fps_pvp.*` 的 cpu 與 network 15 項全過（含真的 Client 經 Gateway 的 `gateway_client`）；Go `./services/...` 全過。
+- A/B（macOS）：第 1 步、第 2 步、審查處置後各一次：權威 digest 1257 行逐位元組相同；`--report` 的差異只有 `MatchInfo` 的 Codec 版本（2 → 3）與因此變的 protocol hash；決策資料集（指紋的文字）相同。
+- 突變：新增 27 個（模式、組、digest 涵蓋、審查處置），find 改寫 5 個既有的，加上鄰近既有的 5 個，全部 killed（結果在 dev_log）。
+- 第 9 節的未確認「不存在的 Resource 不會被送出」：測試確認（`[pvp-set-off-sent]`）。
+
+### 11.4 Linux 主機（第 4 步；使用者「桌面登錄了，s5可以開始了」，重開後的新開機）
+
+Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；腳本 `build/evidence/gyo2-mode-config/linux.sh`，結果 `linux/summary.txt`。
+
+- **A/B**：權威 digest 1257 行逐位元組相同；報告的差異和 macOS 相同（只有 `MatchInfo` 的 Codec 版本與 protocol hash）。
+- **S5 `load`**（1 km 的 `s5_synth_2000`，真的 Match 與 Client，Client 用 SDL offscreen 連同一台的 Match）：
+
+| | 基準（17.8） | 改後 run2／run3 | 同日對照：改前（4 次） | 同日對照：改後（4 次） |
+|---|---|---|---|---|
+| Match 讀圖＋建牆 | 3,674～3,686 ms | 3,805／3,865 ms | 3,777～3,817 ms（平均 3,801） | 3,830～3,874 ms（平均 3,851） |
+| Match 峰值 RSS（`/usr/bin/time`） | 597～602 MB | 601／599 MB | 597～599 MB | 599～600 MB |
+| Client 讀圖 | 3,950～3,963 ms | 3,950／3,996 ms | 3,934～3,957 ms | 3,932～3,945 ms |
+
+- 讀法：
+  - 和 17.8 的基準比，Match 慢 3.5～4.9%；但**同一天的改前也慢了 3.3～3.6%**（3,777～3,817 ms），大部分是機器狀態（重開後），不是這條線。
+  - 同日、交錯跑的四組（改前、改後輪流）：改後每一組都比改前慢 32～66 ms，**平均約 +50 ms（+1.3%）**；峰值 RSS 多約 1.5 MB；Client 沒有差別。
+  - 原因沒有找到：計時從 Product 建好之後開始（不含讀模式檔），讀圖、建牆的程式（`ArenaLoad`、`ArenaMap`、`LoadArena`）不在 diff 裡；生成期間每幀多的只有 `ActiveMode` 一個 Resource 與空的組表。兩個執行檔的程式碼排列不同造成的可能性有，**未確認**。照宣告第 5 節「不比基準差」的字面，這 1.3% 是差了：交使用者決定（11.6 U4）。
+- 第 1 次 `load` 作廢（`linux/discarded/`）：收 Match 的 `pkill -f` 也比對到包著它的 `/usr/bin/time`，峰值 RSS 沒寫出來；改成讓 Match 在玩家離開 5 秒後自己結束。
+- `BoxSet` digest：沒有逐數比（Match 的 log 不印 digest；讀圖與建牆的程式不在 diff 裡）。每一次 `load` 都沒有 `ContentMismatch`（Walls），Client 與 Match 的牆一致。
+
+### 11.5 審查的處置
+
+設計審查（Opus／high）沒有 blocker；純淨 Code Review（Fable／high）的編號寫 P1～P14。
+
+| # | 內容 | 處置 |
+|---|---|---|
+| S1／P3 | arena 的組區塊沒進比對值 | 採用：`MatchRulesDigest`；測試 `[pvp-set-arena-digest]`、突變 |
+| S2／P1 | `Plays` 分散 | 採用：`GameContent::Plays` 一個出口；大廳與單人按模式過濾。房間服務要不要檢查組合：U3 |
+| S3 | 設定 Resource 兩個來源，複製的測試無效 | 採用：寫明 `put` 每端執行、設定不複製；probe 改成「設定每端放」＋「只有 Match 寫、靠複製到 Client 的 `ProbeTally`」 |
+| S4／P5 | digest 逐欄手寫；骨架與動畫不在 digest | 逐欄：採用（各型別一個 `HashValue`）。骨架與動畫：U1 |
+| S5／P4 | mismatch 只有文字；宣告 1.5 的衝突點 | 採用：`MismatchKind`；1.5 更正。Kernel 條件捕獲：U2 |
+| P2 | id 的形狀三處不一致 | 採用：模式 id 1～64（同 arena）。Go 的 pattern 不動（服務只帶選擇） |
+| P12 | 名字與閘門 | 改名採用；閘門（等 Match 說了牆才比）不改：Match 讀完地圖之前不讓任何玩家入座（`SeatPlayers`），Client 在那之前本來就玩不了；等它一次比完，判斷只有一處 |
+| N2 | 測試名說得比驗的多 | 採用：改名。「組排到核心之前」沒有突變（移動一段程式不是 find／replace），由 `[pvp-set-after-core]` 守 |
+| N6 | 超過 32 組的處理 | 採用：檢查移到 `LoadModes`（每個讀者都經過） |
+| N1 | client 測試按編號切 | 部分：註解寫明何時重切。`doctest_discover_tests` 不採：每案一個 process、每次都讀內容 |
+| P11／N3 | 測試的位置參數太多；`ModeFolder` 兩份 | `ModeFolder` 收成一份（`WorldTestSupport.hpp`）；位置參數改 options struct 不在這條線（`Setup` 的 10 個是既有的，另開小批較好） |
+| P6 | 組的機制沒有產品端使用者 | 不採：宣告第 2.4、6 節（已核准）要在 W1、門、G6、PV3 之前先有這個機制 |
+| P7 | slot、平行陣列 | 部分：拿掉 `arenaSets` 的防禦檢查（`LoadGameContent` 保證平行）。包成 `InstalledArena`、`on` 由 `sets` 算：不改（測試要能直接組內容） |
+| P8 | 32 個模板實例 | 不採：替代做法（每組一個 tag 型別）要每組各自寫條件；真正的解是 Kernel 條件能捕獲（U2） |
+| P9 | `ModeOf` 的靜默退回 | 不採：和 `ArenaOf` 一樣，Match 說它玩什麼、Client 跟（3.5） |
+| P10 | 小重複（`ReadText` 三份等） | 不採：各自在既有的檔案裡；收成一處時連同 `ReadText` 的其他使用者一起做 |
+| P13 | `modes.empty()` 的防禦 | 採用：拿掉（`ParseModeList` 保證至少一個） |
+| P14、N4、N5、N7 | 表的驗證；「set」兩義；同一事實多份；Go 少檢查 | 不採（記錄）：表是程式寫的（不加防誤用的守衛）；名字照宣告；Go 照讀地圖的先例 |
+
+### 11.6 要使用者決定的點
+
+| # | 問題 | 選項 | 推薦 |
+|---|---|---|---|
+| ~~**U1**~~（已定，11.7） | 比對值要不要收進角色的骨架與動畫（命中判定用到的 `body`、`clips`、`rules`） | (a) 不收：命中只在 Match 判，Client 的骨架只拿來畫；之後 E2（Match 跑 IK）或 G6 的部位判定要 Client 也用時再收 (b) 現在收 `bodyAssetId` 與 clip 的內容 digest | **(a)**：兩端不同只影響畫面，不影響判定；(b) 每次調動畫都會讓舊 Client 連不上 |
+| ~~**U2**~~（已定，11.7） | Kernel 的 run condition 要不要能捕獲值（Bevy 的 `resource_equals`） | (a) 不在這條線做；遊戲層的 slot 表（約 20 行）先用，第二個產品也要時再議 (b) 開 Kernel 的批 | **(a)**：只有一個使用者（AGENTS §1、宣告 2.5） |
+| ~~**U3**~~（已定，11.7） | 房間服務要不要檢查（模式, 地圖）的組合 | (a) 不查：大廳只列模式玩的地圖；選錯時 Match 以 exit 2 拒絕 (b) 房間服務讀「模式 → arena」並拒絕 | **(a)**：服務「只帶選擇」的原則（`gateway-declaration` L6）不變；出現有限制 arena 的模式時再看 |
+| ~~**U4**~~（已定，11.7） | S5：同日交錯量，改後的 Match 讀圖比改前慢約 50 ms（+1.3%，四組都慢 32～66 ms）；RSS 多約 1.5 MB；Client 不變；原因未找到（讀圖、建牆的程式沒改） | (a) 接受，回歸基準更新成今天的數字（改後 3,830～3,874 ms／599～600 MB），記為未確認的原因 (b) 先追原因再合併（在 Linux 上對兩版取 profile，估 1～2 小時） | 交你判斷。卡片的看法：慢的那段程式沒有改，像是排列的雜訊，但四組同方向、沒有證據，所以不替你選 |
+
+### 11.7 使用者的決定（合併前）
+
+**U1**（2026-11-27，主會話轉交；出處 HANDOFF `v8-arch-gyo2-mode-config-u1`）：選 **(b)**，現在就把角色的骨架與動畫收進內容比對。原話：「收了吧，首先現在還沒有一個正式的遊戲版本，還在開發期。把機制建立起來比重新下載客戶端要好很多。」比過的是 (a) 先不收（卡片原本的推薦）。理由：還沒有正式版本，Client 與 Match 從同一個 commit 建，綁版本的成本現在幾乎是零；先把機制建好，不一致時明確擋下、說出發生了什麼。
+
+做法（卡片照現有慣例判）：
+
+- `MatchInfo` 加 `characterDigest`（Codec 3 → 4），和 `wallsDigest` 同一種：讀內容時算一次（`GameContent::characterDigest`，`CharacterDigest`），Match 在 `Prepare` 放進 `MatchInfo`，Client 的 `GameRules` 帶自己的；連線時多比 8 bytes。
+- 範圍：身體模型的 catalog id、骨架（每個節點的名字、父節點、靜止姿勢）、重定向到它上面的 clip（每條 track 的每個 key）、上半身的節點、動畫規則、scale 與 anchor、骨頭上的命中形狀。網格的頂點與材質不收（畫面，不是玩法）。值經 Kernel 的 Hasher，不 hash 檔案位元組。
+- 命中形狀、scale、anchor 從 `rulesDigest` 移到這裡（審查 P5：hitbox 不同時不再被說成「模式不同」）；`LoadModes`、`RulesDigest` 不再收角色。
+- 不一致：`MismatchKind::Character`，原因「the character differs from the Match's (character digest: skeleton, clips, hit shapes)」；比對順序 Mode → Rules → Character → Arena → ArenaData → Walls（第 2 輪審查後加 ArenaData）。角色不同不重建（同一個 Client 沒有別的角色），帶原因回大廳。
+- 檢驗：本機 `object_fps_pvp.*` 15 項與 Go 全過；A/B（macOS）權威 digest 仍相同，報告差異是 `MatchInfo` v2 → v4；突變 27 個全部 killed。Linux 的 A/B 與 S5 沒有重跑（`MatchInfo` 多 8 bytes，讀圖與權威的程式不變）。
+- 測試：world `[pvp-character-mismatch]`、`[pvp-character-reason]`（Client 的角色不同被擋下、原因看得出來；一致時連上的情況由既有的各案涵蓋）；`world: the character digest follows...`（模型 id、骨架、clip、動畫規則、命中形狀各改一個值，digest 都變）；client `[pvp-character-left]`（回大廳、狀態列有原因）。
+
+**U2**（出處 HANDOFF `v8-arch-gyo2-mode-config-u2`）：選 **(b)**，Kernel 的 run condition 要能帶值。原話：「選（b），因為現在，我們要做的就是建立機制。如果機制不成熟，第二個遊戲以上，改起來就是同時要改幾個產品，給別人用。別人要不改遊戲，要不自己得做機制去繞，現在最便宜。」比過的是 (a) 遊戲層用 slot 表先頂（卡片原本的推薦）。主會話排法：在 #367 加「Kernel 步」（第 12 節），做完把遊戲層的 slot 表換成它。
+
+**U3**（出處 HANDOFF `v8-arch-gyo2-mode-config-u3`）：選 **(a)**，房間服務不檢查（模式, 地圖）的組合：大廳只列模式能玩的地圖，選錯時 Match 以 exit 2 拒絕，服務維持「只帶選擇」。比過的是 (b) 房間服務讀「模式 → arena」、建房時拒絕。原話：「這東西在在策劃階段就應該決定，而不是在執行期判斷。我會選（a），另外遊戲規則也不應該綁定地圖。地圖可以適應規則而不應該決定規則。」
+
+- **原則**：遊戲規則不綁定地圖；地圖去適應規則，不由地圖決定規則。
+- **後續批 `v8-arch-gyo2-arena-rules-split`**（#367 合併後、W1 之前；主會話排，**不在 #367 做**）：`ArenaContent`（arena 檔 version 4）裡的規則類欄位（`movementSpeed`、`jumpHeight`、`gravity`、`fallDamage`）與身體尺寸（`bodyHeight`、`radius`、`eyeHeight`）照原則拆出去；哪個欄位歸模式的規則表、角色資料或 arena，開批時照原則與別家的分類提出。
+- #367 新寫的程式不讀 arena 的規則類欄位（`LoadModes` 只對模式玩的 arena 呼叫既有的 `StanceFits`，那是 #367 之前就有的依賴，沒有加深）。
+
+**U4**（出處 HANDOFF `v8-arch-gyo2-mode-config-u4`）：選 **(b)**，先在 Linux 上對兩版追 Match 讀圖慢約 50 ms 的原因。原話：「選（b），Linux的量測成本最小，機器就放在哪裡。而且這個問題不卡進度，追出來可以修改，追不出來還能改回歸基準，沒有害處。」比過的是 (a) 接受、基準更新成今天的數字。做法：先確認差距能重現再找原因；時間盒約 3 小時；追出原因就修，追不出來就把基準更新成同日改後的數字並寫明原因未確認。`perf` 要 sudo 或改 `perf_event_paranoid` 時不自己改。結果寫在 11.8。
+
+### 11.8 U4 的結果：Match 讀圖慢約 50 ms 的原因
+
+Linux，2026-11-27（U4 之後，約 1 小時）。證據：主 checkout `build/evidence/gyo2-mode-config/linux/summary.txt` 末段（`u4-*`、`ph-*`、`pad-*`）、`u4_instrument.py`（分段計時的暫時補丁）、`u4_padding.cpp`（填充）。暫時的改動只在 Linux 的兩棵樹上、量完已還原，沒有 commit。
+
+1. **重現**：再交錯兩組，改後仍慢（+112、+73 ms）。和之前四組合計，六組都同方向。
+2. **分段**（`perf` 被 `perf_event_paranoid=4` 擋，沒改設定；改用程式內計時，兩版各三次）：讀 region（工作執行緒）改前 941～950、改後 950～987 ms；建牆（工作執行緒上的 `BoxSet::Build`）改前 2,836～2,852、改後 2,855～2,863 ms；主執行緒的 `RunFrame` 合計改前 165～168、改後 167～172 ms。這條線新加的每幀工作不花時間；差距散在兩個工作執行緒的階段，而那兩段的程式這條線沒碰。
+3. **機器碼**：讀圖與建牆用到的 `physics_3d`、`voxel_map`、`asset`、`json` 四個函式庫，兩版的反組譯逐位元組相同；連結進執行檔後的位址不同（改後的 `.text` 大約 118 KB，是這條線新增的程式碼；例：`BoxSet::Build` 在 `0x1e4fc0` 與 `0x202140`；`VoxelRegionLoader::Load` 的入口改前在 64 位元組邊界後 48、改後在邊界上）。
+4. **因果實驗**：在改前的 Match 執行檔裡塞 120 KB 不會執行的填充（只把後面的程式碼往後推，邏輯完全不變），三種執行檔交錯各三次：改前 3,773～3,797 ms（平均 3,784）、**改前＋填充 3,809～3,810 ms（平均 3,809）**、改後 3,777～3,822 ms（平均 3,793）。只動擺放位置，改前就穩定慢約 25 ms；這一輪改後和改前幾乎一樣。
+
+**結論**：慢的那一截是程式碼擺放位置的效應（同樣的機器碼放在不同的位址），不是這條線多做了事；程式裡沒有可修的原因。照 U4 的做法更新回歸基準（同日、改後、沒有計時補丁的 10 次）：**Match 讀圖＋建牆 3,805～3,885 ms、峰值 RSS 598～601 MB、Client 讀圖 3,920～3,996 ms**。以後比 S5 時，同一台機器上同日跑改前與改後交錯比，差距在 ±70 ms（約 2%）內算作擺放的雜訊。
+
+## 12. Kernel 步：帶值的 run condition（U2；小宣告）
+
+**前提：這是 Engine 要解決的。** 條件的型別是 Kernel 的公開介面；作者在遊戲層繞，就得像 2.4 那樣寫 slot 模板表（每個產品各一份、上限是寫死的數字）。上段（Kernel 的公開介面）：Opus／high。
+
+### 12.1 成熟方案
+
+| 什麼 | 位置 | 怎麼做 |
+|---|---|---|
+| Bevy `resource_exists<T>` | `crates/bevy_ecs/src/schedule/condition.rs:688`（`bevy` 6a911653f） | `Option<Res<T>>`：有就 true |
+| Bevy `resource_equals<T>(value)` | `condition.rs:728` | 回傳 `move \|res: Res<T>\| *res == value` 的閉包：值在登記時捕獲；沒有 Resource 時 panic |
+| Bevy `resource_exists_and_equals<T>(value)` | `condition.rs:770` | 同上、`Option<Res<T>>`，沒有就 false |
+| Bevy 條件的形狀 | `run_if` 收任何 `IntoSystem<(), bool>` | 閉包可以捕獲任何東西（`FnMut`，可變） |
+| flecs 的 system `ctx` | `include/flecs/addons/system.h:170`；`ecs_iter_t::ctx`（`include/flecs.h:1223`）（`flecs` 09790b5f7） | 登記時給一份使用者資料，每次呼叫交給 callback |
+| Unity `RequireForUpdate<T>()` | `Unity.Entities/SystemState.cs:1115`（`com.unity.entities` 1.5.0） | 只有「存在」；值的比較寫在 System 裡（`ISystem` 是 struct，欄位就是狀態） |
+
+共同點：三家都讓「判斷用的值」跟著登記走（Bevy 捕獲、flecs `ctx`、Unity 的 System 欄位）。
+
+### 12.2 GYO 的介面（提案）
+
+- **`Condition<&Fn>(name, value)`**：`Fn` 的第一個參數是 `const V&`，就是登記時給的那個值（複製一份、之後不變）；其餘參數照現有條件的規則（唯讀、存取從簽名推，S-4、S-5）。可呼叫物本身仍是非成員函式、無捕獲。
+- **Kernel 給三個常用條件，照 Bevy 的名字與語意**：
+  - `ResourceExists<R>(name)`：有值就 true。
+  - `ResourceEquals<R>(name, value)`：`*res == value`；沒有 Resource 時是斷言（`Res` 的取值本來就斷言）。Bevy 在那時是參數驗證失敗、交給 error handler（預設 panic，可換；條件當 false：`crates/bevy_ecs/src/system/system_param.rs:904`、`schedule/executor/single_threaded.rs:246-262`）。GYO 的條件回 `bool`、Kernel 沒有 error handler（DI-KS 2），所以用斷言（第 2 輪設計審查 N1）。
+  - `ResourceExistsAndEquals<R>(name, value)`：沒有就 false。
+  - `R` 要有 `operator==`。
+- **指紋**：值的雜湊進 consistency fingerprint（`V` 要有 `HashValue`）。兩端同名、不同值時指紋不同。Bevy 沒有指紋，這是 GYO 自己的部分：不收的話，名字相同、值不同的兩端會照樣連上、跑出不同的 System。
+- **內部**：`ConditionRef` 多持一份不可變的值（`std::shared_ptr<const void>`）與它的雜湊；求值函式多收那份值。rollback 用 `Evaluator()` 的指標認條件（`engine/modules/rollback/src/Registrations.cpp:194`）照舊可用：求值函式仍是每個 `Fn` 一個指標。
+- **遊戲層**：2.4 的 slot 模板表與 `kMaxGameplaySets` 拿掉；`GameplaySetOn` 改成 `Condition<&SetOn>("pvp.mode.<組>", slot)`，`ActiveMode::on` 改成不限數量。
+
+### 12.3 和 Bevy 的不同、要改的條文（停下回報的原因）
+
+- **偏離 Bevy 一處**（另有兩個既有的差異：條件的名字由呼叫者給；`ResourceEquals` 在 Resource 不存在時見 12.2）：Bevy 的條件可以捕獲任何東西、而且可變（`FnMut`）；這裡只收**一個登記時給定、之後不變的值**。理由是保住 Kernel 的契約「捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道」（`docs/architecture/target/system-contract.zh-Hant.md:45`）：不變的值是登記的一部分（和 `StateMachine::InState<S, V>` 的模板參數同一個角色，差別是執行期才知道），不是狀態。
+- **要改的條文**（改前給使用者看）：
+  - `docs/architecture/target/kernel.zh-Hant.md:19`（併自 system-contract DI 1、DI 3）：「可呼叫物是非成員函式或無捕獲 lambda……有捕獲的 lambda……編譯失敗。」後面加一句：「run 條件可以帶一個登記時給定的值（`Condition<&Fn>(name, value)`：複製一份、唯讀，值的雜湊進 consistency fingerprint）；可呼叫物本身仍無捕獲。」
+  - `system-contract.zh-Hant.md:59` 的 API 表加 `Condition<&Fn>(name, value)` 與三個 Resource 條件。
+  - 有捕獲的 lambda 仍然編譯失敗（不改）。
+- **測試（外部可驗）**：`tests/common/kernel/` 加帶值條件的案：值相等、不相等、Resource 不存在（`ResourceExistsAndEquals` 是 false；`ResourceEquals` 是斷言）三種行為；同名不同值的兩個 World 指紋不同、同值相同；遊戲層 `[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。相關突變：值不進指紋、相等的比較反過來、不存在時回 true。
+
+### 12.4 實作結果（2026-11-27；使用者「那這樣沒有問題，我同意你的看法。」，HANDOFF `v8-arch-gyo2-mode-config-kernel-step`）
+
+照 12.2、12.3 做，沒有再偏離。
+
+- **Kernel**：
+  - `ConditionRef` 多持一份不可變的值（`std::shared_ptr<const void>`）與它的雜湊；`Detail::ConditionFn` 多收那份值（沒有值時是 null）；`ConditionRef::Evaluate`、`Identity`。
+  - `Condition<&Fn>(name, value)`：`Fn` 的第一個參數必須是 `const V&`（不是的話 `Rejection::ConditionValue`，`GYO_KERNEL_REJECT_CONDITION_VALUE`），值的型別要和它相同、要有 `HashValue`（`static_assert`）。
+  - `engine/kernel/Conditions.hpp`：`ResourceExists`、`ResourceEquals`、`ResourceExistsAndEquals`。
+  - 指紋：Kernel 的 `RegistryFingerprint`（掛載點與 set 的條件）、`SetInfo::conditions`、權威的 consistency fingerprint 都改讀 `Identity()`。沒有值的條件，`Identity()` 就是名字，所以既有的指紋一個位元都不變（Kernel 的 golden 指紋測試照舊通過，A/B 的決策資料集也相同）。
+  - rollback 用 `Evaluator()` 的指標認「重跑時跳過」的條件（`Registrations.cpp:194`）：照舊。
+- **條文**：`docs/architecture/target/kernel.zh-Hant.md:19` 照 12.3 的原文加一句；`system-contract.zh-Hant.md` 的 API 表加兩列。
+- **遊戲層**：2.4 的 slot 模板表、`kMaxGameplaySets`、`std::bitset` 拿掉；`GameplaySetOn` 是 `K::Condition<&SetOn>("pvp.mode.<組>", slot)`；`SetsOn` 改成 slot 的清單（`Has`、`Add`），組數不再有上限。
+- **測試**：
+  - Kernel：`DI-KS 1:` 6 案（`ConditionValueTests.cpp`）：`ResourceExistsAndEquals` 的相等、不相等、不存在；`ResourceEquals` 的相等、不相等、不存在時斷言；`ResourceExists`；`Condition<&Fn>(name, value)` 收到登記時的值；同名不同值的指紋不同、同值相同、沒有值的條件 identity 就是名字；形狀不對的被拒。
+  - 編譯失敗樣本：`CONDITION_CAPTURE`（有捕獲的 lambda 當條件 → `GYO_KERNEL_REJECT_CAPTURE`）、`CONDITION_VALUE`（→ `GYO_KERNEL_REJECT_CONDITION_VALUE`）；控制組多登記一個帶值條件、照常編譯。
+  - 遊戲層：`[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。
+
+### 12.5 第 2 輪審查的處置（範圍 `797471c1..517d52a8`，含 `engine/`）
+
+設計審查（Opus／high）：blocker 0、should 3、nit 7。純淨 Code Review（Fable／high）：17 條（編號 Q1～Q17）。報告：主 checkout `build/evidence/gyo2-mode-config/design-review-2.md`、`pure-code-review-2.md`。
+
+| # | 內容 | 處置 |
+|---|---|---|
+| S1／Q1、Q2 | `rulesDigest` 含 arena 的組區塊、又排在 Arena 之前：換 arena 被判成規則不同；同名欄位兩種意義 | 採用 (a)：`rulesDigest` 只放模式；arena 區塊另開 `MatchInfo::arenaDigest`（`GameContent::ArenaDigest`，永遠同一條公式；Codec 5），比對順序 Mode → Rules → Character → Arena → **ArenaData** → Walls。測試 `[pvp-set-other-arena]`（不同 arena、只有 Match 的帶區塊 → Arena）、`[pvp-set-arena-digest]`（同 arena 不同區塊 → ArenaData） |
+| S2／Q7、Q17 | `CharacterDigest` 逐欄手寫、放在 world 的大檔；`Modes.hpp` 重開 `sim` 宣告 `HashValue` | 採用：`world/ContentHash.hpp/.cpp`：`StanceRules`、`CombatRules`、`AnimationRules`、`HitShapeDefinition` 各一個 `HashValue`，骨架節點與 clip 是具名函式，`CharacterDigest` 搬過來；digest 的值不變 |
+| S3 | consistency fingerprint 沒有測試 | 採用：`ConsistencyTests.cpp` 加一案（掛載點、set 各一），突變 `cv-authority-mount-name-only`、`cv-set-info-name-only` |
+| Q8 | mismatch 兩個真相來源；英文 reason 接到日文 UI；`ClientView` 攤平四欄 | 採用：`ClientView::mismatch` 是 `world::ContentMismatch`；有沒有一律看 `kind`；玩家看到的文字由 Client 依種類產生（`MismatchText`），`reason` 留給 log 與 `FrameNotes` |
+| Q9、N6 | 死碼；單人房間的地圖清單存兩份 | 採用：拿掉 `LeaveOnEnd` 的 `Res<GameRules>`、`GameOrigin::modeId`、大廳與單人走不到的 `maps.empty()` 分支；`SoloRoomState` 只留 `mode` |
+| Q10 | arena 的查找三種寫法 | 部分：`ArenaOf`、`match_main` 改用 `FindArena`；`Find`（回 arena 內容）測試還在用，留著。強型別 index、把 arena 與區塊包成一個：不改 |
+| Q11 | `GameRules` 的組裝兩處重複 | 採用：`GameRulesOf(content, mode, arena)` |
+| Q14 | 長度上限 64 寫死三處 | 採用：`sim::kMaxContentIdBytes` |
+| Q6、N3 | Hasher → 64 位元 digest 四份 | 部分：遊戲的三份收成 `world::Digest64`；Kernel 自己的一份留在 `Detail`（Kernel 的 `Hash.hpp` 寫明「雜湊函式由呼叫的一方定」，不另開公開 API） |
+| N1 | `ResourceEquals` 不存在時「對應 Bevy 的 panic」不準 | 採用：照實寫（Bevy 交 error handler、預設 panic；GYO 的條件回 `bool`、Kernel 沒有 error handler），12.2、system-contract 同改 |
+| N2／Q5 | `Evaluator()` 的意思變了 | 部分：註解寫明只用來認函式、執行走 `Evaluate`；不拿掉（rollback 在用） |
+| N4／Q16 | 測試名說得比驗的多；`Mode()` 純轉呼叫 | 採用：改名、拿掉沒驗的那段；`ModeTests` 直接用 `ModeText` |
+| N7 | system-contract §3 沒指向例外 | 採用：加一句連到 DI-KS 1 |
+| Q13 | 帶值條件 API 細節 | 部分：`ResourceEquals`／`ResourceExistsAndEquals` 加 `std::equality_comparable`。值型別要和參數完全相同：不改（改成 `type_identity` 會讓形狀不對時變成「找不到函式」，失去 `GYO_KERNEL_REJECT_CONDITION_VALUE` 的標記）；lambda 的帶值版本：沒有使用者，不加 |
+| Q3 | 值的身分用「名字=16 位 hex」字串 | 不採：要撞上得有一個沒帶值、名字剛好是「x=<16 位 hex>」的條件；改成位元組會改變 Kernel 指紋的格式（每個既有的指紋都變）。記為已知限界 |
+| Q4 | 空的 `HashValue` 讓不同值同一個身分 | 不採（記錄）：值的雜湊是作者給的；寫成空的就是作者選擇不區分。`Registry.hpp` 的註解寫明 |
+| Q12、Q15、N5 | `SetsOn` 手刻；條件名與值都帶組；遊戲層只有一個組 | 不採：組只有幾個，線性找就夠；slot 進身分讓兩端組表順序不同時指紋不同（設計審查認為正確）；傳值由 Kernel 的 `[cv-value-passed]` 驗 |
+| Q16（其他） | 等待迴圈重寫了 `FramesUntil`；位置參數太多 | 不採：`FramesUntil` 只等 1.2 秒，CI 不夠（L1 失敗的那一案）；位置參數是既有的形狀，改成 options struct 另開小批 |

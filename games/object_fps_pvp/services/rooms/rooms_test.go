@@ -44,7 +44,7 @@ func TestAStartRetriesAnUnansweredAllocationWithTheSameKey(t *testing.T) {
 		_ = json.Unmarshal(recorder.Body.Bytes(), &out)
 		return out
 	}
-	room := send(http.MethodPost, "/internal/v1/rooms", `{"mode":"coop","map":"pvp_training_v1"}`)
+	room := send(http.MethodPost, "/internal/v1/rooms", `{"mode":"core_pvp","map":"pvp_training_v1"}`)
 	path := "/internal/v1/rooms/" + jsonID(room)
 	send(http.MethodPost, path+"/ready", `{"ready":true}`)
 	started := send(http.MethodPost, path+"/start", "")

@@ -4,8 +4,8 @@
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
-
 #include "engine/base/Assert.hpp"
+#include "engine/base/Fnv1a.hpp"
 #include "engine/kernel/Relationship.hpp"
 
 #include <algorithm>
@@ -16,6 +16,20 @@
 #include <utility>
 
 namespace GYO::Kernel {
+
+std::string ConditionRef::Identity() const {
+    if (!value_) return name_;
+    static constexpr char kDigits[] = "0123456789abcdef";
+    std::string identity = name_ + "=";
+    for (int shift = 60; shift >= 0; shift -= 4) identity += kDigits[(valueHash_ >> shift) & 0xFU];
+    return identity;
+}
+
+std::uint64_t Detail::ConditionValueHash(const Hasher& hasher) {
+    const auto bytes = hasher.Data();
+    return Engine::Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+}
+
 
 // ---- Error code names
 
@@ -1138,7 +1152,7 @@ void FillSystemInfos(RegistryData& data) {
     data.setInfos.clear();
     for (const SetRecord& set : data.sets) {
         std::vector<std::string> conditions;
-        for (const ConditionRef& condition : set.conditions) conditions.push_back(condition.Name());
+        for (const ConditionRef& condition : set.conditions) conditions.push_back(condition.Identity());
         data.setInfos.push_back(SetInfo{set.options, std::move(conditions), data.OwnerName(set.owner)});
     }
 }

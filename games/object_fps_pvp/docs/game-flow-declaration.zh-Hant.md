@@ -100,14 +100,14 @@ struct SDLWindowBetweenFrames final {
 - `BuildWorld`：`Local` 不經 `NetEntry`、不登記 `SeatPlayers`／`ControlOwnPlayer`／`FollowMatchArena`；「Match only」的 Fixed System（`JudgeShots`、`RespawnPlayers`）在 Local 不加 `OnServer` 條件（本來就是權威）。新的 `SpawnLocalPlayer`（準備函式）：本機玩家在**隨機**出生點（`std::random_device` 選 index；單人的亂數不是判定資料，不需要決定性）；`LocalInput`（`FixedUpdate/First`）：交換來的操作寫進玩家的 `PlayerInput`。
 - 交換：`Solo` 用和 `Sim` 一樣的 `ClientExchange`（畫面的那一半不分單人多人）。
 - 撤離：遊戲中 Esc 開暫停的 canvas（繼續、撤離）。撤離＝`SceneRequest{Menu}`＋這一局的結算（離開過的局數＋1、這局的死亡數）寫本機存檔 `<使用者資料目錄>/<profile>/solo-save.json`，格式照 `match/PlayerSave.hpp`（同一份存檔格式，同一個 parse／serialize）。單人房間顯示讀到的存檔（「讀檔」）。
-- 單人房間：~~商人、任務只放兩塊「準備中」的面板；按「開始」進 `SoloGame`，地圖用 content 的第一個（之後由任務決定）。~~（修訂 6）和多人的房間同一個畫面（`pvp_room.json`，canvas `solo_room`：同樣的面板、成員、商人與任務的「準備中」、模式與地圖兩列），差別只在按鈕：多人是「準備」「開始」「退出」，單人是「開始」「マップ」「戻る」。模式固定「生存」（只顯示）；地圖在已安裝的 arena 之間切換，「開始」→ `SceneChange{SoloGame, map}`（大廳建房時選的地圖同樣經 `SceneChange::map` 進遊戲，3.4）；loading 的「中止」回單人房間時帶回那張圖。
+- 單人房間：~~商人、任務只放兩塊「準備中」的面板；按「開始」進 `SoloGame`，地圖用 content 的第一個（之後由任務決定）。~~（修訂 6）和多人的房間同一個畫面（`pvp_room.json`，canvas `solo_room`：同樣的面板、成員、商人與任務的「準備中」、模式與地圖兩列），差別只在按鈕：多人是「準備」「開始」「退出」，單人是「開始」「マップ」「戻る」。~~模式固定「生存」（只顯示）~~（修訂 8）模式用已安裝模式清單（`modes/modes.json`）的第一個（只顯示它的名字）；地圖在已安裝的 arena 之間切換，「開始」→ `SceneChange{SoloGame, map, mode}`（大廳建房時選的地圖同樣經 `SceneChange::map` 進遊戲，3.4）；loading 的「中止」回單人房間時帶回那張圖。
 
 ### 3.4 多人：Client 接 Gateway
 
 - `client::GatewayClient`（純函式＋小狀態，邏輯庫）：每個請求的 `HttpRequest`（路徑、Bearer、`Idempotency-Key`、JSON body）與回應的解析（`Room`、`RoomSummary`、`Connect`、`Session`、錯誤碼），照交接說明第 2 節。冪等鍵：每個操作一把（亂數 hex），重試同一把。
 - 呼叫：Frame World 的 Resource 持有進行中的 `Http::HttpCall`，System 每幀 `Poll`（交接說明第 3 節）。逾時由 Client 決定：5 秒丟掉、顯示錯誤（Gateway 的錯誤碼原樣顯示成玩家的話，不替使用者做處理）。
 - session：第一次用的時候 `POST /v1/session`；token 與到期放 `SceneDirector`（跨場景）；401 的三種碼重拿一次。裝置 id：`<使用者資料目錄>/<profile>/device-id`，第一次用高熵亂數（32 bytes hex）產生（交接說明 L7）；`--profile NAME` 讓同一台 Mac 開兩個 Client。
-- 大廳（`Lobby`）：每秒 `GET /v1/rooms`；列表（`fixed_step_list`，最多 8 列，點一列＝加入）；建房（模式 coop／survival 切換、地圖在 content 的 arena 之間切換）；顯示戰績（`GET /v1/saves/me`：局數、死亡）；回主菜單。
+- 大廳（`Lobby`）：每秒 `GET /v1/rooms`；列表（`fixed_step_list`，最多 8 列，點一列＝加入）；建房（~~模式 coop／survival 切換~~（修訂 8）模式在 content 已安裝的模式之間切換、顯示模式檔的名字，地圖在 content 的 arena 之間切換）；顯示戰績（`GET /v1/saves/me`：局數、死亡）；回主菜單。
 - 房間（`Room`）：每 0.75 秒 `GET /v1/rooms/{id}`；成員與準備；準備切換；房主的「開始」；離開（`POST leave`，回大廳）。`state == "started"` 且有自己的 `connect` → `SceneRequest{MultiGame, connect}`（同一份 GET 的 connect，2 分鐘內）。409／503 的錯誤碼顯示在狀態列。
 - 遊戲（`MultiGame`）：`SceneChange::connect` 放 `NetConnectTarget{server, userId, DecodeHex(token)}`，`Sim` 的 `build` 讀 `SceneDirector` 的它、在準備函式放入。斷線（Refused、逾時、`ClosedByRemote`）→ 回大廳並顯示理由，**不自動重連**（交接說明第 4 節）。撤離＝`NetService::Close`＋Flush（現在 `RunClient` 關窗時做的）→ 回大廳，大廳過幾秒再讀一次存檔（Match 收到離開才寫）。
 - `--connect A.B.C.D:P` 留著（測試與手動）：直接進 `MultiGame`，沒有 token（沒有金鑰的 Match 收）。直接輸入位址的舊大廳（#330，`LobbyWorld`、`lobby/AddressText`）由 Gateway 大廳取代、刪掉（第 3 段）；第 1 段先把它當成一個場景接上，保持每段都能玩。
@@ -229,3 +229,5 @@ struct SDLWindowBetweenFrames final {
 - 修訂 7（`v8-product-pvp-playtest-fixes`，LAN 實機場次的回饋 6「啟動時沒有標識」；使用者的決定「先用文字」）：
   - 3.1：新增場景 `Splash`：程式不帶 `--connect` 時的第一個場景（`ClientStart::first` 的預設仍是 `Menu`，測試照舊從主菜單開始）。Frame World 只放 `ui/pvp_splash.json` 的 `splash` canvas（黑底、文字「GYO」與「ENGINE」）；文件排好之後 `ClientStart::splashSeconds`（預設 2 秒）到了、或按任何鍵與滑鼠鍵，就 `SceneRequest{Menu}`。秒數從**排好**算起，載入慢不會把標識吃掉。換成圖檔只改那份文件（`text` 換 `image`），不改程式。
   - 3.7：跳轉照「場景之間」那一層（換 World），沒有另一套導航；啟動畫面只出現在程式的第一個場景，回主菜單（撤退、離開大廳）不會再看到。
+- 修訂 8（模式配置 `v8-arch-gyo2-mode-config` 的 M1，使用者的決定「全部照推薦，空殼刪掉」，HANDOFF `v8-arch-gyo2-mode-config-m1`）：
+  - 3.3／3.4：房間的「模式」改成模式配置的模式（`assets/object_fps_pvp/modes/`，[模式配置宣告](../../../docs/architecture/target/v2/mode-config-declaration.zh-Hant.md)第 3 節）。`coop`／`survival` 兩個佔位拿掉，等它們有自己的模式檔再出現；現在只有「核心 PvP」（`core_pvp`）。大廳建房在已安裝的模式之間切換（顯示模式檔的 `name`），單人用清單的第一個；房間服務的模式清單照地圖的做法讀 Match 的 content（`--content`，或 `--modes`），matches 起 Match 時帶 `--mode`；房間開始時經 `SceneChange::mode` 進遊戲。
