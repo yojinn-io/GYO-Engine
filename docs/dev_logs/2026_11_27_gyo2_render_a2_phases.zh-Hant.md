@@ -126,6 +126,13 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 | L7 `GPUDevice.cpp` 太大、第三份 pipeline cache | 不改 | 拆檔與共用 cache 不在 A2；A3／B1 動到 pipeline 的鍵時一起看 |
 | L8 `--function` 的 namespace、關鍵字 | 不改 | 只有測試用它；關鍵字當函式名會編譯失敗，不會靜靜錯 |
 
+### 修正後的驗證
+
+- 本機（macOS Intel，只跑 cpu）：全量建置成功；`ctest -L 'cpu|shader'` 254/255（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 62/62 killed（phase、target、render 的 `cp-*`／`rd-*`）。
+- Linux 主機（`502342bb`，Lavapipe、xvfb、不開視窗；設定同上一節）：`sdl_gpu.phases`、`unwritten`、`targets`、`pass2d` 4/4，pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 61/61 killed（D184 的 49 個＋phase 的 12 個，含改寫的 `gt-unwritten-*`）；`ctest -L 'cpu|shader'` 255/255。
+  - 第一次跑 cpu 時 `sdl.build` 失敗：我的腳本把 `SDL_VIDEODRIVER=x11` 匯出給整個執行（GPU 用的），環境變數蓋過那一案自己設的 `dummy` hint（`SDL_SetHint` 回 false）。不帶它重跑 255/255；L1 的 cpu 那一步本來就不帶。和程式無關。
+- RP-3 的「明示重用」（使用者的決定，HANDOFF `v8-arch-gyo2-render-a2-target-reuse`）：評估後停下、交主會話——強制重畫要資料側在合成前知道 target 這一幀被重建，現在跟別人大小走的 target 是後端在 `Submit` 時才定大小（`GPUDevice.cpp` 的 `EnsureTargets`），要改成資料側定大小才做得到。第 14.8 節、RP-3 條文與 `gt-unwritten-*` 的語意等核准後一起改。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
