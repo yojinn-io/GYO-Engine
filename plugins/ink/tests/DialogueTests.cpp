@@ -104,7 +104,8 @@ const std::string kBuyThenLeaveSeed0 = kHubSeed0 +
     "merchant: Welcome to my stall. [hub_welcome]\n"
     "merchant: Fine weather today. [hub_weather]\n"
     "merchant: Today's lucky number is 52. [hub_lucky]\n"
-    "* Haggle [hub_buy] #line:hub_haggle\n" // the inkcpp defect below
+    "* Buy a sword [hub_buy]\n"
+    "* Haggle [hub_haggle]\n"
     "* Weigh the coins [hub_weigh]\n"
     "* Leave [hub_leave]\n"
     "--\n"
@@ -133,7 +134,7 @@ TEST_CASE("Advance while the story waits for a choice gives no outputs and the s
 TEST_CASE("commands come in the order the story ran them, with their arguments in the story's order") {
     const I::Story story = Load("merchant.ink.json");
     I::Dialogue dialogue = Start(story, MerchantOptions(0));
-    CHECK_MESSAGE(Play(dialogue, {0, 2}) == kBuyThenLeaveSeed0, "[ink-commands]");
+    CHECK_MESSAGE(Play(dialogue, {0, 3}) == kBuyThenLeaveSeed0, "[ink-commands]");
 }
 
 TEST_CASE("the end: ended, no choices; Advance after it gives nothing more") {
@@ -149,7 +150,7 @@ TEST_CASE("every line and choice of the merchant story carries a line id (the wr
     // Buy, weigh, haggle and insist, leave: every branch of merchant.ink.
     I::Dialogue dialogue = Start(story, MerchantOptions(0));
     std::vector<I::Beat> beats{Advance(dialogue)};
-    for (const std::size_t pick : {0U, 1U, 0U, 0U, 2U}) {
+    for (const std::size_t pick : {0U, 2U, 1U, 0U, 3U}) {
         Choose(dialogue, pick);
         beats.push_back(Advance(dialogue));
     }
@@ -179,15 +180,15 @@ TEST_CASE("a line without a line id is no error: its lineId is empty") {
 // assigned, so they go to the next choice. Not patched (the spike does not
 // patch inkcpp); this case shows it, and fails when an inkcpp update fixes it.
 TEST_CASE("inkcpp defect, not patched: the tags of a skipped once-only choice go to the next choice") {
-    const I::Story story = Load("merchant.ink.json");
-    I::Dialogue dialogue = Start(story, MerchantOptions(0));
+    const I::Story story = Load("once.ink.json");
+    I::Dialogue dialogue = Start(story, I::DialogueOptions{});
     Advance(dialogue);
-    Choose(dialogue, 0); // buy: the once-only choice is taken
+    Choose(dialogue, 0); // the once-only choice is taken
     const I::Beat back = Advance(dialogue);
-    REQUIRE(back.choices.size() == 3);
-    CHECK(back.choices[0].text == "Haggle");
-    CHECK(back.choices[0].lineId == "hub_buy");
-    CHECK(back.choices[0].tags == std::vector<std::string>{"line:hub_haggle"});
+    REQUIRE(back.choices.size() == 2);
+    CHECK(back.choices[0].text == "Again");
+    CHECK(back.choices[0].lineId == "once_once");
+    CHECK(back.choices[0].tags == std::vector<std::string>{"line:once_again"});
 }
 
 // ---- Errors as Results (acceptance 7.2)
@@ -197,7 +198,9 @@ TEST_CASE("bytes that are not a compiled story: NotAStory") {
     const std::vector<std::byte> text{std::byte{'n'}, std::byte{'o'}, std::byte{'t'}, std::byte{' '},
                                       std::byte{'a'}, std::byte{' '}, std::byte{'s'}, std::byte{'t'}};
     const std::vector<std::byte> cut(compiled.begin(), compiled.begin() + static_cast<std::ptrdiff_t>(compiled.size() / 2));
-    for (const std::vector<std::byte>& bytes : {std::vector<std::byte>{}, text, cut}) {
+    // Shorter than inkcpp's header, with the right magic and version at the start.
+    const std::vector<std::byte> headOnly(compiled.begin(), compiled.begin() + 16);
+    for (const std::vector<std::byte>& bytes : {std::vector<std::byte>{}, text, cut, headOnly}) {
         auto story = I::LoadStory(bytes);
         REQUIRE_MESSAGE(!story, "[ink-not-a-story] " << bytes.size() << " bytes loaded");
         CHECK_MESSAGE(story.error().code == I::DialogueErrorCode::NotAStory, "[ink-not-a-story]");
@@ -289,8 +292,8 @@ TEST_CASE("the same seed gives the same dialogue; another seed another one; neit
     const I::Story story = Load("merchant.ink.json");
     I::Dialogue first = Start(story, MerchantOptions(0));
     I::Dialogue second = Start(story, MerchantOptions(0));
-    const std::string a = Play(first, {0, 2});
-    CHECK_MESSAGE(a == Play(second, {0, 2}), "[ink-seed]");
+    const std::string a = Play(first, {0, 3});
+    CHECK_MESSAGE(a == Play(second, {0, 3}), "[ink-seed]");
     CHECK_MESSAGE(a == kBuyThenLeaveSeed0, "[ink-seed] the pinned text of seed 0, the same on every platform");
     I::Dialogue other = Start(story, MerchantOptions(1));
     CHECK_MESSAGE(Render(Advance(other)) ==
@@ -312,14 +315,13 @@ TEST_CASE("a save taken after a choice restores the same dialogue: the same text
     Advance(straight);
     Choose(straight, 0);
     const std::vector<std::byte> saved = Save(straight);
-    const std::string expected = Play(straight, {2});
+    const std::string expected = Play(straight, {3});
 
     // Another seed in the options: the random state comes from the save.
     auto restored = I::Dialogue::Restore(story, saved, MerchantOptions(99));
     REQUIRE_MESSAGE(restored, "[ink-restore] " << Why(restored));
     CHECK_MESSAGE(!restored->migrated, "[ink-restore-migrated]");
-    // The once-only "Buy a sword" stays gone: its visit is in the save.
-    CHECK_MESSAGE(Play(restored->dialogue, {2}) == expected, "[ink-restore]");
+    CHECK_MESSAGE(Play(restored->dialogue, {3}) == expected, "[ink-restore]");
 }
 
 TEST_CASE("a save restored into the story's next version: migrated, old globals kept, new ones at their defaults") {
@@ -329,7 +331,7 @@ TEST_CASE("a save restored into the story's next version: migrated, old globals 
     Advance(dialogue);
     Choose(dialogue, 0); // buy: gold 10 -> 5
     Advance(dialogue);
-    Choose(dialogue, 1); // weigh the coins
+    Choose(dialogue, 2); // weigh the coins
     const std::vector<std::byte> saved = Save(dialogue);
 
     auto restored = I::Dialogue::Restore(next, saved, MerchantOptions(0));
@@ -342,7 +344,8 @@ TEST_CASE("a save restored into the story's next version: migrated, old globals 
                       "merchant: You carry 5 gold, reputation 3. [hub_purse]\n"
                       "merchant: Cold wind tonight. [hub_weather]\n"
                       "merchant: Today's lucky number is 37. [hub_lucky]\n"
-                      "* Haggle [hub_buy] #line:hub_haggle\n"
+                      "* Buy a sword [hub_buy]\n"
+                      "* Haggle [hub_haggle]\n"
                       "* Weigh the coins [hub_weigh]\n"
                       "* Leave [hub_leave]\n",
                   "[ink-migrate]");
@@ -361,6 +364,26 @@ TEST_CASE("a save taken inside a tunnel, waiting for a choice, does not move to 
     CHECK_MESSAGE(restored.error().code == I::DialogueErrorCode::SnapshotNotMigratable, "[ink-not-migratable]");
 }
 
+TEST_CASE("a save restored into a version without the place it was taken in: SnapshotNotMigratable") {
+    const I::Story story = Load("merchant.ink.json");
+    I::Dialogue dialogue = Start(story, MerchantOptions(0));
+    Advance(dialogue);
+    Choose(dialogue, 2); // weigh the coins: a save point inkcpp can migrate
+    const std::vector<std::byte> saved = Save(dialogue);
+    // v3 renames the knot hub; v4 keeps hub but drops the weigh choice the save is in.
+    for (const char* name : {"merchant_v3.ink.json", "merchant_v4.ink.json"}) {
+        const I::Story next = Load(name);
+        for (const std::vector<std::string>& commands : {std::vector<std::string>{}, MerchantOptions(0).commands}) {
+            I::DialogueOptions options;
+            options.commands = commands;
+            auto restored = I::Dialogue::Restore(next, saved, options);
+            REQUIRE_MESSAGE(!restored, "[ink-place-gone] " << std::string(name) << " restored with " << commands.size() << " commands");
+            CHECK_MESSAGE(restored.error().code == I::DialogueErrorCode::SnapshotNotMigratable,
+                          "[ink-place-gone] " << std::string(name) << ": " << ::GYO::Engine::Base::Describe(restored.error()));
+        }
+    }
+}
+
 // inkcpp d38608d defects in its snapshots, not patched (the spike does not
 // patch inkcpp). Each case shows one and fails when an inkcpp update fixes it.
 
@@ -376,7 +399,6 @@ TEST_CASE("inkcpp defect, not patched: a save taken at a choice cannot be restor
     auto restored = I::Dialogue::Restore(story, saved, MerchantOptions(0));
     REQUIRE(!restored);
     CHECK(restored.error().code == I::DialogueErrorCode::SnapshotUnreadable);
-    CHECK(restored.error().detail == "Invalid container id reference.");
 }
 
 TEST_CASE("inkcpp defect, not patched: a save taken before the first Advance restores a dialogue that has ended") {
@@ -442,12 +464,12 @@ TEST_CASE("two stories loaded apart run at the same time on two threads, each as
 TEST_CASE("one story's dialogues used by two threads in turn, with a join between turns, run as on one thread") {
     const I::Story story = Load("merchant.ink.json");
     I::Dialogue straight = Start(story, MerchantOptions(5));
-    const std::string expected = Play(straight, {0, 1, 2});
+    const std::string expected = Play(straight, {0, 1, 0});
 
     I::Dialogue dialogue = Start(story, MerchantOptions(5));
     std::string out;
     std::string error;
-    const std::vector<std::size_t> picks{0, 1, 2};
+    const std::vector<std::size_t> picks{0, 1, 0};
     for (std::size_t turn = 0; turn <= picks.size(); ++turn) {
         // A new thread each turn, joined before the next: one thread at a time.
         std::thread worker([&] {

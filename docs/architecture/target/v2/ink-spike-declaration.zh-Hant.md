@@ -1,7 +1,7 @@
 # 事前宣告：Ink spike（`v8-arch-gyo2-ink-spike`）
 
-更新：2026-11-27（修訂 2：使用者「開始」、補第 12 節「實作時發現的事」；修訂 1：補第 11 節「使用者的決定」）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
-**狀態：動工前核准（使用者「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）；I1、I2 已實作，第 12 節有要交使用者決定的事。**
+更新：2026-11-27（修訂 3：I3 的審查與修正，第 12.4、12.5 節；修訂 2：使用者「開始」、補第 12 節「實作時發現的事」；修訂 1：補第 11 節「使用者的決定」）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
+**狀態：動工前核准（使用者「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）；I1、I2 已實作，I3 的審查與修正已做；第 12.3、12.5 節有要交使用者決定的事。**
 
 **核心一句**（每一項都拿來對照）：**這一批驗的是「inkcpp 能不能照 gyo2 的根接進來」：外部組件的型別只在 adapter 裡，對外用遊戲的詞；錯誤用 `Result` 告訴外面發生了什麼，不替外面決定；狀態（亂數、存讀、thread）由外面控制。台本怎麼寫、指令代表什麼、存檔怎麼放，是作者的。**
 
@@ -339,9 +339,9 @@ v8-arch-gyo2-ink-spike
 
 ### 12.1 照宣告做到的
 
-- 7.1～7.5 都有外部可驗的測試（`ink.dialogue`，23 案）。
+- 7.1～7.5 都有外部可驗的測試（`ink.dialogue`，I2 結束時 23 案，I3 後 24 案）。
 - 場景照 U1 的 C 做（`SceneTests.cpp`）：Product＋一個 World，作者的 System 把 `give_item` 變成 `Message`，把 `play_sound` 變成 `Event`。
-- 突變 13 個，13/13 killed（`docs/architecture/target/v2/scripts/ink_mutations.json`）。
+- 突變 I2 結束時 13 個、13/13 killed（I3 後 15 個，見 12.4）（`docs/architecture/target/v2/scripts/ink_mutations.json`）。
 - inklecate：
   - 下載了 `inklecate_mac.zip`，29,173,014 bytes，SHA256 與宣告一致。
   - 它是 self-contained 的 x86_64 程式，**不需要 .NET**。
@@ -363,4 +363,28 @@ v8-arch-gyo2-ink-spike
 |---|---|---|---|
 | U5 | **inkcpp 的存檔缺陷 D2**：在選項處存的檔，只要台本裡有任何 sequence（`{a\|b}`、`{&…}`、`{!…}`、`{~…}`），連讀回同一個台本都失敗（`globals_impl.cpp:294-297`）。能存的點是「選完之後、下一次 `Advance` 之前」。D1（跳過的選項的 tag 給了下一個選項）、D3（第一次 `Advance` 前存的檔讀回已結束）比較輕 | (a) 現在不處理，把能存的點寫進契約（現狀）；(b) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍）；(c) 先回報 upstream，等遊戲真的要在選項處存檔時再決定（RC-INK1） | (c)：spike 沒有遊戲在用；三個缺陷各有釘住現狀的測試，inkcpp 修好時測試會失敗、提醒我們改 |
 | U6 | **產品選不了 `library_only` 的 Plugin**：`gyo_product_units(... PLUGINS ...)` 只收放進 World 的 Plugin，`ink` 現在只能經 `GYO_PLUGINS` 選。spike 的測試自己連 `GYO::Ink` | (a) 等第一個用 ink 的遊戲開卡時再定；(b) 現在就讓產品能選 `library_only` 的 Plugin（改建置層，擴大範圍）；(c) 給 `ink` 一個放進 World 的單位（推翻 `library_only`） | (a) |
+
+### 12.4 I3：審查與修正
+
+- 設計審查（Opus／high）和純淨 Code Review（Fable／high）都只讀 `origin/gyo2...11ef39c4`。重點與處置：主 checkout `build/evidence/v8-arch-gyo2-ink-spike/reviews-11ef39c4.md`。
+- **兩份都指出的 blocker**：讀進新版台本時，inkcpp 在存檔所在的位置不見了時回空的 runner（`story_impl.cpp:262-269`），adapter 沒有檢查。依序處理：
+  1. 用第四版台本 `merchant_v4.ink`（hub 留著，拿掉存檔所在的選項）重現：0 個指令時，`Restore` 回成功。
+  2. 寫成失敗的測試。
+  3. 修正：加空 runner 的檢查。
+  4. 第三版 `merchant_v3.ink`（hub 改名）走的是 inkcpp 丟例外的路，原本回 `SnapshotUnreadable`。改成：台本換過時，讀不了一律 `SnapshotNotMigratable`。detail 只寫 inkcpp 給了什麼。
+- 其他修正：
+  - D1 只釘在一處：主台本的「買劍」改成 `+`，新的 `once.ink` 專門給 D1。
+  - 補零改成長度檢查（台本 `sizeof(ink::internal::header)`，snapshot 5 個 `size_t`），加 16 bytes 的截斷台本測試。
+  - hash 在 `LoadStory` 時算一次。
+  - D2 的測試只比 code。
+  - `ScriptFault` 的「之後的狀態」照進入點寫。
+- 突變：15 個（加了 `ink-empty-runner-unchecked`、`ink-migration-failure-unreadable`），最後的原始碼上 15/15 killed。
+
+### 12.5 審查帶出的設計問題（交使用者，合併前核准時一起看）
+
+| # | 事 | 卡片的建議 |
+|---|---|---|
+| U7 | **介面的幾個取捨**（兩份審查共同或各自提出），都是公開介面的形狀：(a) `Save` 要不要告訴作者「這份存檔讀不讀得回來、能不能遷移」（inkcpp 的 Unreal 整合有 `Migratable`；現在作者要等到 `Restore` 才知道，D2、D3 讓這件事變重要）；(b) `seed` 只對 `Start` 有用，要不要拆出 `DialogueOptions`；(c) tag：現在固定拆兩個鍵（`line`、`speaker`），要不要改成「所有 `鍵:值` 的 tag 都拆成鍵值對」；(d) 不支援的參數（list）現在是 `ScriptFault`、整段對話停掉，要不要改成交出一個「不支援」的值 | (a) 現在加：只是多給資訊，不替作者決定存不存；(b)(c)(d) 等第一個遊戲用時再定（spike 沒有使用者，形狀還看不出來） |
+
+另外寫進 owner 頁的偏離與觸發條件（不需要現在決定）：每個 `Dialogue` 有自己的 globals（RC-INK2）、`Advance` 一次跑到選項（RC-INK3）、資料契約綁在 inkcpp 的二進位格式（RC-INK5）、沒有選項的無窮迴圈會卡住 `Advance`（範囲の限界）。
 

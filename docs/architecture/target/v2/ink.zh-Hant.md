@@ -1,6 +1,6 @@
 # ink 的 Plugin（`plugins/ink`）
 
-更新：2026-11-27（新頁，`v8-arch-gyo2-ink-spike`）。由來：[事前宣告](ink-spike-declaration.zh-Hant.md)（使用者 2026-11-27「全部照推薦」，HANDOFF `v8-arch-gyo2-ink-spike-u1-u4`；動工前核准「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）。**最終文字在合併前核准。**
+更新：2026-11-27（I3 審查後：第 6、7 節的讀檔失敗與長度檢查、D1 只釘一處、RC 與範囲の限界補充；新頁，`v8-arch-gyo2-ink-spike`）。由來：[事前宣告](ink-spike-declaration.zh-Hant.md)（使用者 2026-11-27「全部照推薦」，HANDOFF `v8-arch-gyo2-ink-spike-u1-u4`；動工前核准「開始」，HANDOFF `v8-arch-gyo2-ink-spike-start-impl`）。**最終文字在合併前核准。**
 
 Owner：架構。
 
@@ -82,11 +82,11 @@ plugins/ink/
 | 種類 | 什麼時候 | 之後的狀態 |
 |---|---|---|
 | `NotAStory` | `LoadStory` 的位元組不是 inkcpp 的台本（magic、byte order、版本不符、被截斷） | 沒有 `Story` |
-| `ScriptFault` | 執行時 inkcpp 丟例外：EXTERNAL 沒綁又沒有 fallback、list 參數、壞掉的指令 | inkcpp 把 runner 整個 reset（`runner_impl.cpp:1736-1741`），這段對話停了 |
+| `ScriptFault` | inkcpp 丟例外：EXTERNAL 沒綁又沒有 fallback、list（或無號數）參數、壞掉的指令 | 看進入點：`Advance`／`Choose` 的話 inkcpp 把 runner 整個 reset（`runner_impl.cpp:1736-1741`），這段對話停了；`Start` 的話沒有對話；`Save` 的話對話不變 |
 | `Stopped` | 對話因 `ScriptFault` 停了之後，又呼叫 `Advance`、`Choose`、`Save` | 不變 |
 | `ChoiceOutOfRange` | `Choose(i)` 的 `i` 超出範圍（detail 是 `index i, n choices`） | 不變，可以再選 |
-| `SnapshotUnreadable` | `Restore` 的位元組不是存檔：太短、格式版本不符、inkcpp 讀不出來（含第 8 節的 D2） | 沒有 `Dialogue` |
-| `SnapshotNotMigratable` | 存檔來自另一版台本，而且存的當下不能遷移（例：在 tunnel 裡等選擇） | 沒有 `Dialogue` |
+| `SnapshotUnreadable` | 台本沒換，`Restore` 的位元組卻讀不回來：太短、格式版本不符、inkcpp 讀不出來（含第 8 節 D2 那種「合法但這版 inkcpp 讀不回來」的存檔） | 沒有 `Dialogue` |
+| `SnapshotNotMigratable` | 台本換過，inkcpp 沒辦法把存檔搬過去：存的當下不能遷移（例：在 tunnel 裡等選擇）、存檔所在的 knot 或位置在新版不見了（inkcpp 在前者丟例外，在後者回空的 runner，`story_impl.cpp:262-269`） | 沒有 `Dialogue` |
 
 - 每個進入點都接 inkcpp 的例外（STL 版的 `ink::ink_exception` 就是 `std::runtime_error`），把訊息複製進 `detail`。`std::bad_alloc` 不接。
 - 怎麼處理（重開、讀舊檔、記日誌）是作者的。
@@ -97,12 +97,13 @@ plugins/ink/
 - 後面是 inkcpp 的 snapshot，格式是 inkcpp 內部的：
   - 用本機的位元組順序和 `size_t`。三個 L1 平台都是 64 位元、little endian，所以能互讀。這一點沒有測試。
   - snapshot 自己帶版本號（`snapshot_impl.h` 的 `header.version`）。升 inkcpp 之後版本號不同的舊檔，`Restore` 回 `SnapshotUnreadable`；版本號相同但內部格式變了的情形，inkcpp 不檢查。
-- inkcpp 讀台本或 snapshot 時，先讀固定長度的 header，之後才檢查長度。所以 adapter 會先把太短的位元組複製進至少 256 bytes 的緩衝區（其餘填 0，沒有 header 會接受全 0）。台本 header 的大小由 `static_assert` 確認。snapshot 的 header 是 inkcpp 私有的，大小只寫在註解。
-- 內容損壞但 header 正確的 snapshot，inkcpp 不完全檢查；那是未定義行為，不在契約內。
+- inkcpp 讀台本或 snapshot 時，先讀固定長度的 header，之後才檢查長度。所以 adapter 先檢查長度：台本至少 `sizeof(ink::internal::header)`（inkcpp 的 `shared/private/header.h`）；snapshot 至少 5 個 `size_t`（inkcpp 私有的 `snapshot_impl.h` 的 header 是兩個 `size_t`、一個 hash、一個 bool、一個 `size_t`，這是它的上限，只寫在註解）。比這短的直接回 `NotAStory`／`SnapshotUnreadable`。
+- 存檔綁定平台的佈局（位元組順序、`size_t`）：開頭的 8 bytes 是明確的 little endian，後面的 snapshot 不是。
+- 內容損壞但 header 正確的 snapshot，inkcpp 不完全檢查（例：`string_table` 讀到 0 才停）；那是未定義行為，不在契約內。封套沒有加 checksum：存檔放在哪、要不要驗證是作者的。
 
 ## 8. inkcpp d38608d 的缺陷（沒有打補丁）
 
-三個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住。inkcpp 修好時，那個測試會失敗。
+三個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住（D1 用自己的台本 `once.ink`，主台本 `merchant.ink` 不碰它）。inkcpp 修好時，只有那個測試會失敗。
 
 - **D1 跳過的選項的 tag 給了下一個選項**：一次性選項（`*`）已經選過、或條件為假時，`runner_impl.cpp:1554-1573` 在 `assign_tags` 之前就 `break`。已經算好的 tag 沒有被收走，於是跟到下一個選項上。line ID 的約定會因此拿錯。
 - **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。
@@ -113,7 +114,7 @@ plugins/ink/
 ## Design Invariants
 
 - **INK-1 inkcpp 只在 adapter 目錄**：inkcpp 的標頭只被 `plugins/ink/src/adapters/inkcpp/` 與 `plugins/ink/tests/adapters/inkcpp/` 底下的檔案 include。`Dialogue.hpp` 沒有 inkcpp 的型別，`gyo_inkcpp` 是 PRIVATE 連結。守衛：審查（沒有原始碼掃描）。
-- **INK-2 錯誤是 `Result`，只說發生了什麼**：每個進入點都接 inkcpp 的例外，翻成第 6 節的種類，process 不會因為台本而結束。守衛：測試（7.2 的各案）、突變 `ink-advance-uncaught`、`ink-stopped-not-kept`、`ink-choice-range-unchecked`、`ink-list-argument-accepted`、`ink-save-version-unchecked`、`ink-not-migratable-unchecked`。
+- **INK-2 錯誤是 `Result`，只說發生了什麼**：每個進入點都接 inkcpp 的例外，翻成第 6 節的種類，process 不會因為台本而結束。守衛：測試（7.2 的各案）、突變 `ink-advance-uncaught`、`ink-stopped-not-kept`、`ink-choice-range-unchecked`、`ink-list-argument-accepted`、`ink-save-version-unchecked`、`ink-not-migratable-unchecked`、`ink-empty-runner-unchecked`、`ink-migration-failure-unreadable`。
 - **INK-3 狀態由外面控制**：亂數的種子由 `DialogueOptions::seed` 給（預設是固定值，不是時鐘）；`Restore` 用存檔裡的亂數狀態；存讀是位元組，交給作者。守衛：`[ink-seed]`（釘住的文字，三平台一樣）、`[ink-restore]`；突變 `ink-seed-unset`、`ink-restore-reseeded`、`ink-migrated-inverted`、`ink-restore-commands-unbound`。
 - **INK-4 thread 的契約**：同一個 `Story`、它的複本、從它開始或讀回的所有 `Dialogue` 是一家，同一時間只給一條 thread 用；交給別的 thread 時兩邊之間要有同步。各自讀進來的 `Story` 是不同的家。理由：inkcpp 的參照計數不是 atomic（`story_ptr.h:25`），沒有 `thread_local`，也沒有可寫的全域狀態。放進 World 時當一般 Resource（使用者 U4），不用 `threadBound`。守衛：`[ink-threads-apart]`、`[ink-threads-in-turn]`；同時碰同一家的情形是未定義行為，測不出可靠的失敗，由契約與審查負責。
 - **INK-5 `"C"` locale**：process 的 `LC_NUMERIC` 必須是 `"C"`（inkcpp 用 `snprintf("%.7f")` 寫浮點）。adapter 不檢查。守衛：`[ink-locale]`。
@@ -122,16 +123,18 @@ plugins/ink/
 ## Replacement Criteria
 
 - **RC-INK1**：第 8 節的 D2 讓需要的存檔點存不了（例：遊戲要在選項處存檔）→ 在「給 inkcpp 打補丁」「回報 upstream 等修」「換 runtime」之間選。
-- **RC-INK2**：第二個遊戲要用台本，或遊戲需要「放進 World 的對話單位」→ 重看第 1 節的「未解決」與宣告的 Q5（多後端）。
-- **RC-INK3**：遊戲需要有回傳值的外部函式、或要讀寫 ink 變數 → 在「query 回呼」和「遊戲寫 ink 變數」之間選（宣告第 5.4 節）。
+- **RC-INK2**：第二個遊戲要用台本、遊戲需要「放進 World 的對話單位」、或幾段對話要共用台本變數（例：多個 NPC 記得同一件事；現在每個 `Dialogue` 有自己的 globals、自己的存檔，inkcpp 的 Unreal 整合是一個 runtime 共用 globals）→ 重看第 1 節的「未解決」與宣告的 Q5（多後端）。
+- **RC-INK3**：遊戲需要有回傳值的外部函式、或要讀寫 ink 變數 → 在「query 回呼」和「遊戲寫 ink 變數」之間選（宣告第 5.4 節）。這時也要重看 `Advance`「一次跑到選項」的粒度：同一次 `Advance` 裡，指令之後的 query 會讀到指令變成的 `Message` 還沒被處理時的狀態（Unreal 有 `Yield`／`Resume`）。
+- **RC-INK5**：換 runtime → 資產的格式也跟著換（`LoadStory` 讀的是 inkcpp 的二進位格式，資料契約綁在它上面；ink.json 是 ink 官方的中間格式，不綁）。
 - **RC-INK4**：第二種語言 → 字串表（研究 Q4，line ID 的約定已定）。
 
 ## 範囲の限界
 
 - 本機只在 Intel Mac 跑過（一般建置，以及 ASan＋UBSan 的 Debug 建置）。Windows、Linux 的編譯與測試只靠 L1。
-- ASan：23 案沒有記憶體錯誤（macOS 上沒有開 leak 檢查）。UBSan 報了 6 種，全部在 inkcpp 裡（adapter 沒有）：讀位元組碼時位址沒有對齊（`runner_impl.cpp:179`、`story_impl.cpp:263`），以及在 null 指標上加位移（`array.h:277`、`runner_impl.h:397`、`snapshot_interface.h:33`、`list_table.cpp:956`）。在 x86-64 與 arm64 上照樣能跑；沒有打補丁。
+- ASan：24 案沒有記憶體錯誤（I3 修正後重跑）（macOS 上沒有開 leak 檢查）。UBSan 報了 6 種，全部在 inkcpp 裡（adapter 沒有）：讀位元組碼時位址沒有對齊（`runner_impl.cpp:179`、`story_impl.cpp:263`），以及在 null 指標上加位移（`array.h:277`、`runner_impl.h:397`、`snapshot_interface.h:33`、`list_table.cpp:956`）。在 x86-64 與 arm64 上照樣能跑；沒有打補丁。
 - 存檔在三平台之間能不能互讀，沒有測試（第 7 節）。
-- 「位元組太短時讀出界」這件事，只有 ASan 抓得到，一般建置的突變殺不掉，所以沒有放突變。
 - `ink_assert` 帶格式參數時 `malloc` 的訊息不會釋放（`shared/public/system.h:258-261`）：每次 `ScriptFault` 漏一小段。沒有打補丁。
 - `.ink` 與 `.ink.json` 的一致性 CI 不檢查（第 4 節）。
+- 沒有選項的無窮迴圈台本會讓 `Advance` 一直跑（inkcpp 沒有步數上限），在權威端就是卡住模擬執行緒。沒有加守衛：那是台本的錯，由寫作的工具或審查看。
+- 長度檢查拿掉時（太短的位元組交給 inkcpp），結果是讀出界的未定義行為，一般建置的突變殺不穩，所以沒有放突變；`[ink-not-a-story]` 的 16 bytes 案與 `[ink-save-unreadable]` 的 8 bytes 案在有檢查時會過。
 - SDL-2 那種「拿掉 Plugin 之後重建」的 CI 步驟，只對 `sdl` 這一家做，`ink` 沒有做。

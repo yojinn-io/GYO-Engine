@@ -4,7 +4,6 @@
 
 #include "plugins/ink/Dialogue.hpp"
 
-#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 #include <string_view>
@@ -22,15 +21,17 @@ namespace GYO::Plugins::Ink {
 
 namespace Base = Engine::Base;
 
-// inkcpp reads the fixed header at the start of a story or a snapshot before
-// it checks the length it was given, so short bytes are copied into a buffer of
-// at least this size, the rest zero (which no header accepts). The snapshot's
-// header is five words; the story's is checked below.
-constexpr std::size_t kHeaderRead = 256;
-static_assert(sizeof(ink::internal::header) <= kHeaderRead);
+// inkcpp reads the fixed header at the start of a story or a snapshot before it
+// checks the length it was given, so bytes shorter than the header are refused
+// here. The story's header is inkcpp's shared one; the snapshot's
+// (snapshot_impl.h) is private to inkcpp: two size_t, a hash, a bool and a
+// size_t, at most five words.
+constexpr std::size_t kStoryHeader = sizeof(ink::internal::header);
+constexpr std::size_t kSnapshotHeader = 5 * sizeof(std::size_t);
 
 struct Story::Data {
     std::unique_ptr<ink::runtime::story> story;
+    std::uint32_t hash = 0; // inkcpp hashes the whole file on each call: once, here
 };
 
 struct Dialogue::State {
@@ -61,13 +62,6 @@ std::uint32_t GetU32(const std::span<const std::byte> in) {
 
 DialogueError MakeError(const DialogueErrorCode code, std::string message, std::string detail = {}) {
     return DialogueError::Make(code, std::move(message), std::move(detail));
-}
-
-std::unique_ptr<unsigned char[]> PaddedCopy(const std::span<const std::byte> bytes) {
-    const std::size_t size = std::max(bytes.size(), kHeaderRead);
-    auto copy = std::make_unique<unsigned char[]>(size); // zeroed
-    if (!bytes.empty()) std::memcpy(copy.get(), bytes.data(), bytes.size());
-    return copy;
 }
 
 // A tag "<prefix>:<value>" gives value to slot when the slot is still empty.
@@ -117,7 +111,7 @@ Value ReadArgument(const ink::runtime::value& value) {
     case Type::List:   break;
     }
     // Thrown inside the story's step, which resets the runner and rethrows: a ScriptFault.
-    throw ink::ink_exception("a command argument is a list, which commands do not take");
+    throw ink::ink_exception("a command argument is a list or an unsigned number, which commands do not take");
 }
 
 // Binds every command of the options to append a Command to the state's outputs.
@@ -146,11 +140,17 @@ DialogueError Stopped() {
 Story::Story(std::shared_ptr<Data> data) noexcept : data_(std::move(data)) {}
 
 Base::Result<Story, DialogueError> LoadStory(const std::span<const std::byte> compiled) {
-    std::unique_ptr<unsigned char[]> bytes = PaddedCopy(compiled);
+    if (compiled.size() < kStoryHeader) {
+        return Base::Err(MakeError(DialogueErrorCode::NotAStory, "the bytes are too short for a compiled story",
+                                   std::to_string(compiled.size()) + " bytes"));
+    }
+    auto bytes = std::make_unique<unsigned char[]>(compiled.size());
+    std::memcpy(bytes.get(), compiled.data(), compiled.size());
     try {
         auto data = std::make_shared<Story::Data>();
         data->story.reset(ink::runtime::story::from_binary(bytes.get(), compiled.size(), true));
         bytes.release(); // the story frees it
+        data->hash = data->story->hash();
         return Story(std::move(data));
     } catch (const ink::ink_exception& e) {
         // Thrown from the story's constructor: the story does not exist and the bytes are still ours.
@@ -191,25 +191,33 @@ Base::Result<Restored, DialogueError> Dialogue::Restore(const Story& story, cons
     const std::uint32_t savedHash = GetU32(saved.subspan(4, 4));
     const std::span<const std::byte> snapshotBytes = saved.subspan(kSaveHeader);
 
+    if (snapshotBytes.size() < kSnapshotHeader) {
+        return Base::Err(MakeError(DialogueErrorCode::SnapshotUnreadable, "the bytes are too short for a save"));
+    }
+
     auto state = std::make_unique<State>();
     state->story = story.data_;
     state->options = std::move(options);
     ink::runtime::story& ink = *state->story->story;
-    const bool migrated = savedHash != ink.hash();
-    const std::unique_ptr<unsigned char[]> bytes = PaddedCopy(snapshotBytes);
+    const bool migrated = savedHash != state->story->hash;
+    // Another version of the story: what inkcpp cannot load is a save it cannot move there.
+    auto failed = [migrated](std::string detail) {
+        return migrated ? MakeError(DialogueErrorCode::SnapshotNotMigratable,
+                                    "the save cannot move to this version of the story", std::move(detail))
+                        : MakeError(DialogueErrorCode::SnapshotUnreadable, "the save could not be read",
+                                    std::move(detail));
+    };
     try {
-        const std::unique_ptr<ink::runtime::snapshot> snapshot(
-            ink::runtime::snapshot::from_binary(bytes.get(), snapshotBytes.size(), false));
+        // Not owned: inkcpp reads the bytes only while the dialogue is rebuilt.
+        const std::unique_ptr<ink::runtime::snapshot> snapshot(ink::runtime::snapshot::from_binary(
+            reinterpret_cast<const unsigned char*>(snapshotBytes.data()), snapshotBytes.size(), false));
         state->globals = ink.new_globals_from_snapshot(*snapshot);
-        if (!state->globals) {
-            return Base::Err(MakeError(DialogueErrorCode::SnapshotNotMigratable,
-                                       "the save cannot move to this version of the story",
-                                       "it was taken inside a tunnel or a thread"));
-        }
+        if (!state->globals) return Base::Err(failed("inkcpp gave no globals for the save"));
         state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);
+        if (!state->runner) return Base::Err(failed("inkcpp found no place in the story to continue the save from"));
         BindCommands(*state);
     } catch (const ink::ink_exception& e) {
-        return Base::Err(MakeError(DialogueErrorCode::SnapshotUnreadable, "the save could not be read", e.what()));
+        return Base::Err(failed(e.what()));
     }
     return Restored{Dialogue(std::move(state)), migrated};
 }
@@ -262,7 +270,7 @@ Base::Result<std::vector<std::byte>, DialogueError> Dialogue::Save() const {
         std::vector<std::byte> bytes;
         bytes.reserve(kSaveHeader + snapshot->get_data_len());
         PutU32(bytes, kSaveVersion);
-        PutU32(bytes, state.story->story->hash());
+        PutU32(bytes, state.story->hash);
         const auto* data = reinterpret_cast<const std::byte*>(snapshot->get_data());
         bytes.insert(bytes.end(), data, data + snapshot->get_data_len());
         return bytes;

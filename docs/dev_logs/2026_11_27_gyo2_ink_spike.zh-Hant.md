@@ -50,6 +50,29 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 - 突變：`ink_mutations.json` 13 個，最後的原始碼上全部重跑 13/13 killed。
 - 沒跑：Windows、Linux（交給 L1）；inklecate 的 linux、windows 版。
 
+## I3 審查與收口
+
+- 審查（只讀 `origin/gyo2...11ef39c4`）：
+  - 設計審查：general-purpose，Opus／high，給宣告、owner 頁、批次表的審查項目與 git 範圍。
+  - 純淨 Code Review：pure-code-reviewer，Fable／high，只給範圍。
+  - 重點與處置記在主 checkout 的 `build/evidence/v8-arch-gyo2-ink-spike/reviews-11ef39c4.md`。
+- **B1（兩份都指出）**：讀進新版台本時，inkcpp 可能回空的 runner。
+  1. 重現：第四版台本 `merchant_v4.ink`（拿掉存檔所在的選項）在 0 個指令時讓 `Restore` 回成功；第三版 `merchant_v3.ink`（hub 改名）則是 inkcpp 丟例外，回的是 `SnapshotUnreadable`。
+  2. 寫成失敗的測試 `[ink-place-gone]`。
+  3. 修正：加空 runner 的檢查；台本換過時，讀不了一律 `SnapshotNotMigratable`。
+- 其他修正：
+  - D1 只釘在 `once.ink`：主台本的「買劍」改成 `+`，golden 重新釘。
+  - 補零改成長度檢查，加 16 bytes 的截斷台本案。
+  - hash 只在 `LoadStory` 時算一次。
+  - D2 的測試只比 code。
+  - `ScriptFault` 的「之後的狀態」照進入點寫。
+  - `Render.hpp` 補 include。
+- 交使用者：宣告 12.5 的 U7（`Save` 要不要給「能不能讀回／遷移」的資訊、seed 的位置、tag 的拆法、不支援的參數）。偏離與觸發條件寫進 owner 頁的 RC-INK2、RC-INK3、RC-INK5 與「範囲の限界」。
+- 驗證（最後的原始碼）：
+  - `ink.dialogue` 24 案通過；`orchestration.guard`、`os.boundary_guard`、`naming.guard` 通過。
+  - ASan＋UBSan 24 案通過，沒有記憶體錯誤，UBSan 和之前同樣 6 處，都在 inkcpp 裡。
+  - 突變 15/15 killed。
+
 ## 交使用者決定的事
 
-宣告 12.3：U5（D2：不處理、打補丁、或先回報 upstream；卡片建議先回報、等遊戲要在選項處存檔時再決定）、U6（產品怎麼選 `library_only` 的 Plugin；卡片建議等第一個用 ink 的遊戲開卡時再定）。
+宣告 12.3：U5（D2：不處理、打補丁、或先回報 upstream；卡片建議先回報、等遊戲要在選項處存檔時再決定）、U6（產品怎麼選 `library_only` 的 Plugin；卡片建議等第一個用 ink 的遊戲開卡時再定）；12.5：U7。

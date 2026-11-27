@@ -159,7 +159,7 @@ O::ProductDescription Scene(std::vector<std::size_t> picks) {
 }
 
 TEST_CASE("the scene: the author's System runs the dialogue; its commands become the author's Message and Event") {
-    auto built = O::Product::Build(Scene({0, 2}), O::RegisteredUnits{}); // buy the sword, then leave
+    auto built = O::Product::Build(Scene({0, 3}), O::RegisteredUnits{}); // buy the sword, then leave
     REQUIRE_MESSAGE(built, (built ? std::string() : built.error().message + "\n" + built.error().detail));
     O::Product& product = **built;
     for (int frame = 0; frame < 10; ++frame) {

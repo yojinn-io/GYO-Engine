@@ -7,8 +7,10 @@
 //   * Buy a sword [hub_buy]                           a choice
 //   (end)                                             the story ended
 
+#include <cstdint>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include "plugins/ink/Dialogue.hpp"
 

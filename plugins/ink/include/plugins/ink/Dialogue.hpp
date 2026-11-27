@@ -33,19 +33,21 @@ enum class DialogueErrorCode : std::uint16_t {
     // LoadStory: the bytes are not a compiled story this runtime reads (another
     // format, another byte order, another compiler version, cut short).
     NotAStory = 1,
-    // The story failed while running: a command it calls that is not in
+    // inkcpp failed: a command the story calls that is not in
     // DialogueOptions::commands and has no fallback, a command argument that is
-    // a list, a broken instruction. The dialogue has stopped.
+    // a list, a broken instruction. From Advance or Choose the dialogue has
+    // stopped; from Start there is no dialogue; from Save it is unchanged.
     ScriptFault = 2,
     // A call on a dialogue that stopped on a ScriptFault.
     Stopped = 3,
     // Choose(index) with an index past the choices; the dialogue is unchanged.
     ChoiceOutOfRange = 4,
-    // Restore: the bytes are not a save of a dialogue (another format, cut short,
-    // another snapshot version).
+    // Restore, the same story: the bytes are not a save inkcpp restores (another
+    // format, cut short, another snapshot version, or a save taken where this
+    // inkcpp cannot restore one; docs/architecture/target/v2/ink.zh-Hant.md).
     SnapshotUnreadable = 5,
-    // Restore: the save comes from another version of the story and was taken at
-    // a point a save cannot move from (inside a tunnel or a thread).
+    // Restore, another version of the story: inkcpp could not move the save
+    // there (taken inside a tunnel or a thread, or its place in the story gone).
     SnapshotNotMigratable = 6,
 };
 

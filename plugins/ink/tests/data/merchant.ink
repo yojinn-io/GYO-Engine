@@ -10,7 +10,7 @@ EXTERNAL play_sound(id)
 Welcome to my stall. #speaker:merchant #line:hub_welcome
 {~Fine weather today.|Cold wind tonight.|The road is quiet.} #speaker:merchant #line:hub_weather
 Today's lucky number is {RANDOM(1, 100)}. #speaker:merchant #line:hub_lucky
-* [Buy a sword #line:hub_buy]
++ [Buy a sword #line:hub_buy]
     ~ gold = gold - 5
     ~ give_item("sword", 2)
     Here you go. #speaker:merchant #line:hub_sold
