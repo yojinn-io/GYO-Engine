@@ -20,6 +20,7 @@
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/Pipeline3d.hpp"
@@ -564,6 +565,55 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
                   "[re-3d-alpha-no-depth-write] a blended mesh writes no depth unless asked");
     const auto* overlay = std::get_if<R::Pass2D>(&all[2]);
     CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
+}
+
+namespace {
+
+// Queues a full-screen pass into the first camera's PostProcess phase and a depth-only pass as a view of no camera,
+// ordered before the pipelines' Systems: what comes out is in the phases' order, not the Systems'.
+K::SystemResult QueueEarly(K::ResMut<R::CameraPasses> passes) {
+    R::CameraPasses& slots = passes.Get();
+    if (slots.byCamera.empty()) return {};
+    R::PassFullscreen post;
+    post.shader = "post";
+    slots.byCamera[0][R::CameraPhase::PostProcess].push_back(std::move(post));
+    R::PassDepth shadow;
+    shadow.target = R::TextureId{99};
+    slots.nonCameraViews.push_back(std::move(shadow));
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("render_extract: a pass queued before the pipelines' Systems is composed by its phase; a view of no camera first") {
+    O::WorldDescription render = Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"});
+    render.build = [](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage));
+        K::SystemOptions early = In("TestQueueEarly", "Main", O::DefaultSchedules::update);
+        early.mounts[0].before = {"Queue3dPasses", "Queue2dPasses"};
+        s.Registrar().AddSystem<&QueueEarly>(std::move(early));
+    };
+    auto p = Make(std::move(render));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{64, 32}, 1.0F});
+    // One camera with both markers: mesh_render's and sprite_render's passes (Queue2dPasses registered first).
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::Camera2d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    Frames(*p);
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    REQUIRE_MESSAGE(all.size() == 5, "[re-phase-all] the view of no camera, the clear, the 3D and 2D passes, the post-processing");
+    CHECK_MESSAGE(std::holds_alternative<R::PassDepth>(all[0]), "[re-phase-non-camera-first] the view of no camera first");
+    CHECK_MESSAGE((std::holds_alternative<R::Pass2D>(all[1]) && std::get<R::Pass2D>(all[1]).clear.has_value()), "[re-phase-clear] the camera's clear");
+    CHECK_MESSAGE(std::holds_alternative<R::Pass3D>(all[2]), "[re-phase-scene] its Opaque phase: mesh_render's pass");
+    CHECK_MESSAGE((std::holds_alternative<R::Pass2D>(all[3]) && !std::get<R::Pass2D>(all[3]).clear.has_value()),
+                  "[re-phase-2d-after-3d] its Transparent phase: sprite_render's pass, though its System ran first");
+    CHECK_MESSAGE(std::holds_alternative<R::PassFullscreen>(all[4]), "[re-phase-post-after] its PostProcess phase after, though queued first");
 }
 
 TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of the camera's frustum is not drawn") {

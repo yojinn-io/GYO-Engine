@@ -1,8 +1,8 @@
 #pragma once
 
-// The C++ side of the 2D pass's shader ABI (docs/architecture/target/v2/render.zh-Hant.md, section 4; Design
-// Invariant RD-4). The HLSL side is shaders/Pass2D.hlsli; a backend binds what is written here. Both sides change
-// together.
+// The C++ side of the passes' shader ABI (docs/architecture/target/v2/render.zh-Hant.md, section 4; Design Invariant
+// RD-4). The HLSL side is shaders/Pass2D.hlsli, Mesh3D.hlsli and Fullscreen.hlsli; a backend binds what is written
+// here. Both sides change together.
 
 #include <cstddef>
 #include <cstdint>
@@ -93,5 +93,29 @@ inline constexpr std::uint32_t kMesh3DVertexUniformBuffers = 1;
 inline constexpr std::uint32_t kMesh3DVertexSamplers = 0;
 inline constexpr std::uint32_t kMesh3DFragmentUniformBuffers = 0;
 inline constexpr std::uint32_t kMesh3DFragmentSamplers = 1;
+
+// ---- The depth-only pass (render-pipeline declaration section 14): the 3D pass's vertex input and uniform, no colour.
+inline constexpr std::string_view kDepthVertexSource = "depth.vert.hlsl";
+inline constexpr std::string_view kDepthFragmentSource = "depth.frag.hlsl";
+// Vertex input: the 3D pass's position (slot kMesh3DVertexSlot, location kMesh3DPositionLocation) and instance world
+// (slot kMesh3DInstanceSlot, locations kMesh3DWorldLocation on); uv and colour are not bound. Vertex uniform slot 0:
+// the pass's clipFromWorld as Mesh3DViewUniform.
+inline constexpr std::uint32_t kDepthVertexUniformBuffers = 1;
+inline constexpr std::uint32_t kDepthVertexSamplers = 0;
+inline constexpr std::uint32_t kDepthFragmentUniformBuffers = 0;
+inline constexpr std::uint32_t kDepthFragmentSamplers = 0;
+
+// ---- The full-screen pass (render-pipeline declaration section 14): one triangle, its vertices 0, 1, 2 (no vertex
+// input, no vertex uniform). Its fragment shader (PassFullscreen::shader) samples the pass's inputs at sampler slots
+// kFullscreenFirstInputSlot, ... in order and reads its parameters, when it has some, at fragment uniform slot
+// kFullscreenParametersSlot (the cbuffer at b0, space3).
+inline constexpr std::string_view kFullscreenVertexSource = "fullscreen.vert.hlsl";
+inline constexpr std::uint32_t kFullscreenVertices = 3;
+inline constexpr std::uint32_t kFullscreenVertexUniformBuffers = 0;
+inline constexpr std::uint32_t kFullscreenVertexSamplers = 0;
+inline constexpr std::uint32_t kFullscreenFirstInputSlot = 0;
+inline constexpr std::uint32_t kFullscreenParametersSlot = 0;
+// A full-screen fragment shader declares at most one uniform buffer (its parameters).
+inline constexpr std::uint32_t kFullscreenFragmentUniformBuffersAtMost = 1;
 
 } // namespace GYO::Engine::Render::ShaderAbi

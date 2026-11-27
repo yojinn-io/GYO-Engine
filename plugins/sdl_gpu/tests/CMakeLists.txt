@@ -3,12 +3,29 @@
 # Plugin through a Product.
 #   sdl_gpu.startup, sdl_gpu.shaders, sdl_gpu.present (label cpu): the startup errors, the embedded shaders against
 #     render's ABI and the present mode's fallback chain; no GPU, every CI row.
-#   sdl_gpu.pass2d, sdl_gpu.pass3d, sdl_gpu.targets, sdl_gpu.frames (label gpu): the 2D and 3D passes (and render
-#     targets) drawn on a GPU and read back,
+#   sdl_gpu.pass2d, sdl_gpu.pass3d, sdl_gpu.targets, sdl_gpu.phases, sdl_gpu.frames (label gpu): the 2D, 3D,
+#     full-screen and depth-only passes (and render targets) drawn on a GPU and read back,
 #     pixel by pixel, with SDL's GPU validation on; frames on a shown window (at least one must reach it), the present mode set from render's Presentation, World replacement. sdl_gpu.budget (label gpu) prints the frame
 #     time of a frame of a common 2D game. L1 runs them on Linux on Lavapipe under Xvfb; elsewhere they run on a machine with a GPU.
-add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp)
+#
+# The tests' own full-screen shaders (shaders/, render-pipeline declaration section 14) are compiled by the same tool
+# into a table of their own (TestShaders(), TestShaders.hpp) that the tests hand to GPUDevice::Create: nothing of them
+# is in the Plugin.
+set(gyo_test_shaders "${CMAKE_CURRENT_BINARY_DIR}/generated/TestShaders.cpp")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(GLOB gyo_test_shader_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl")
+add_custom_command(OUTPUT "${gyo_test_shaders}"
+    COMMAND "${gyo_shader_tool}" --output "${gyo_test_shaders}" --include "${gyo_render_shader_dir}" --function TestShaders
+            --formats "${gyo_shader_format_list}" ${gyo_metal_args} --work "${CMAKE_CURRENT_BINARY_DIR}/shaders"
+            --shader test_invert.frag fragment "${CMAKE_CURRENT_SOURCE_DIR}/shaders/test_invert.frag.hlsl"
+            --shader test_shift.frag fragment "${CMAKE_CURRENT_SOURCE_DIR}/shaders/test_shift.frag.hlsl"
+    DEPENDS ${gyo_test_shader_sources} ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
+    COMMENT "Compiling sdl_gpu's test shaders (${gyo_shader_format_list})"
+    VERBATIM)
+add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp PhaseTests.cpp "${gyo_test_shaders}")
 target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+# A failed SDL assertion ends the run, no dialog (plugins/sdl/tests/adapters/sdl/UnattendedAssertions.hpp).
+target_link_libraries(gyo_sdl_gpu_tests PRIVATE gyo_sdl_unattended_assertions)
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE GYO::SDLGPU GYO::SDLWindow GYO::RenderWorld GYO::Render GYO::Input GYO::Window
                       GYO::Camera GYO::Transform
                       doctest::doctest)
@@ -28,7 +45,13 @@ add_test(NAME sdl_gpu.pass3d COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu pass
 add_test(NAME sdl_gpu.frames COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu frames:*")
 # Render targets and texture formats (render-pipeline declaration section 13).
 add_test(NAME sdl_gpu.targets COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu targets:*")
+# Full-screen and depth-only passes (render-pipeline declaration section 14).
+add_test(NAME sdl_gpu.phases COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu phases:*")
+# RP-3: sampling a render target no pass drew on is a Programmer Error the backend asserts. The case is skipped in any
+# other run (it ends the process); its own handler prints the tag and exits 0 when the assertion fails.
+add_test(NAME sdl_gpu.unwritten COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu unwritten:*" --no-skip)
 # Prints the declared frame-time budget's measurement (render.zh-Hant.md section 2); judges nothing.
 add_test(NAME sdl_gpu.budget COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu budget:*" -s)
-set_tests_properties(sdl_gpu.pass2d sdl_gpu.pass3d sdl_gpu.frames sdl_gpu.targets sdl_gpu.budget PROPERTIES LABELS "gpu" TIMEOUT 120
+set_tests_properties(sdl_gpu.pass2d sdl_gpu.pass3d sdl_gpu.frames sdl_gpu.targets sdl_gpu.phases sdl_gpu.budget PROPERTIES LABELS "gpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+set_tests_properties(sdl_gpu.unwritten PROPERTIES LABELS "gpu" TIMEOUT 120 PASS_REGULAR_EXPRESSION "\\[gt-unwritten-asserted\\]")

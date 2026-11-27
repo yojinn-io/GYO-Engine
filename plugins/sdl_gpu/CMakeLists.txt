@@ -73,13 +73,14 @@ if(gyo_shader_formats STREQUAL "AUTO")
         message(FATAL_ERROR "No AUTO shader formats for ${CMAKE_SYSTEM_NAME}")
     endif()
 endif()
+# The Metal tools' arguments; each call of the tool gives its own --work directory (tests/ compiles its own shaders).
 set(gyo_metal_args)
 if("metallib" IN_LIST gyo_shader_formats)
     if(NOT CMAKE_HOST_APPLE)
         message(FATAL_ERROR "Metal libraries need a macOS host and Apple's Metal tools")
     endif()
     find_program(GYO_XCRUN_EXECUTABLE xcrun REQUIRED)
-    list(APPEND gyo_metal_args --xcrun "${GYO_XCRUN_EXECUTABLE}" --work "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+    list(APPEND gyo_metal_args --xcrun "${GYO_XCRUN_EXECUTABLE}")
     # Without a deployment target the library is for the SDK's own macOS version.
     if(CMAKE_OSX_DEPLOYMENT_TARGET)
         list(APPEND gyo_metal_args --deployment-target "${CMAKE_OSX_DEPLOYMENT_TARGET}")
@@ -93,11 +94,14 @@ set(gyo_embedded_shaders "${CMAKE_CURRENT_BINARY_DIR}/generated/EmbeddedShaders.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(OUTPUT "${gyo_embedded_shaders}"
     COMMAND "${gyo_shader_tool}" --output "${gyo_embedded_shaders}" --include "${gyo_render_shader_dir}"
-            --formats "${gyo_shader_format_list}" ${gyo_metal_args}
+            --formats "${gyo_shader_format_list}" ${gyo_metal_args} --work "${CMAKE_CURRENT_BINARY_DIR}/shaders"
             --shader pass2d.vert vertex "${gyo_render_shader_dir}/pass2d.vert.hlsl"
             --shader pass2d.frag fragment "${gyo_render_shader_dir}/pass2d.frag.hlsl"
             --shader mesh3d.vert vertex "${gyo_render_shader_dir}/mesh3d.vert.hlsl"
             --shader mesh3d.frag fragment "${gyo_render_shader_dir}/mesh3d.frag.hlsl"
+            --shader depth.vert vertex "${gyo_render_shader_dir}/depth.vert.hlsl"
+            --shader depth.frag fragment "${gyo_render_shader_dir}/depth.frag.hlsl"
+            --shader fullscreen.vert vertex "${gyo_render_shader_dir}/fullscreen.vert.hlsl"
     DEPENDS ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
     COMMENT "Compiling render's shaders for sdl_gpu (${gyo_shader_format_list})"
     VERBATIM)

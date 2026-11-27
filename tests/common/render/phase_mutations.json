@@ -1,0 +1,333 @@
+{
+  "version": 1,
+  "description": "Declared mutants of camera phases, views of no camera, full-screen and depth-only passes, pass reads and the RP-3 assertion (render-pipeline declaration section 14, v8-arch-gyo2-render-a2; 判定 P1 to P9; render RD-4, RD-11, RD-12; RP-3). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gf-, gd- and gt- mutants need a GPU (label gpu); gt-unwritten-not-asserted runs the skipped death case with --no-skip. Not added (with the reason): ui_render's pass in Overlay (no Engine module queues a PostProcess pass yet, so Overlay and PostProcess draw alike until A4's tonemapping; the phases' order is cp-phase-order-reversed); a full-screen pass's colour replaced, not blended (every test shader writes alpha 1, which blends the same); the depth format picked for drawing and sampling (every driver tried takes D32_FLOAT for both); a 3D pass's depth target of another size and a pass on a target of the wrong kind (Programmer Errors asserted, not tested: no guard against misuse, AGENTS section 3); the shader tool's --function (the tool is a separate host build; a table defined as EmbeddedShaders would not link with the Plugin's, so the test executable's link guards it).",
+  "mutants": [
+    {
+      "id": "cp-phase-order-reversed",
+      "what": "P1: a camera's phases composed in reverse order",
+      "guards": [
+        "render-pipeline-declaration 判定 P1",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/include/engine/render/Compose.hpp",
+      "find": "{ return static_cast<std::size_t>(phase) - 1; }",
+      "replace": "{ return kCameraPhaseCount - static_cast<std::size_t>(phase); }",
+      "target": "gyo_render_tests",
+      "cases": "compose: the views that are no camera's*",
+      "expect": "\\[cp\\-phase\\-order\\]"
+    },
+    {
+      "id": "cp-non-camera-dropped",
+      "what": "P2: the views that are no camera's are not composed",
+      "guards": [
+        "render-pipeline-declaration 判定 P2",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/src/Pipeline3d.cpp",
+      "find": "    for (RenderPass& pass : passes.nonCameraViews) out.passes.push_back(std::move(pass));\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "compose: the views that are no camera's*",
+      "expect": "\\[cp\\-phase\\-all\\]"
+    },
+    {
+      "id": "cp-non-camera-not-emptied",
+      "what": "P2: the views that are no camera's stay in CameraPasses after they are composed",
+      "guards": [
+        "render-pipeline-declaration 判定 P2",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/src/Pipeline3d.cpp",
+      "find": "    passes.nonCameraViews.clear();\n    std::vector<std::optional<TextureId>> drawn;",
+      "replace": "    std::vector<std::optional<TextureId>> drawn;",
+      "target": "gyo_render_tests",
+      "cases": "compose: the views that are no camera's*",
+      "expect": "\\[cp\\-phase\\-emptied\\]"
+    },
+    {
+      "id": "re-phase-mesh-post",
+      "what": "P3: mesh_render's pass put in PostProcess, not Opaque (after a pass queued there earlier)",
+      "guards": [
+        "render-pipeline-declaration 判定 P3",
+        "render RD-12"
+      ],
+      "file": "engine/modules/mesh_render/src/MeshRenderModule.cpp",
+      "find": "[Render::CameraPhase::Opaque]",
+      "replace": "[Render::CameraPhase::PostProcess]",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: a pass queued before*",
+      "expect": "\\[re\\-phase\\-scene\\]"
+    },
+    {
+      "id": "re-phase-sprite-opaque",
+      "what": "P3: sprite_render's pass put in Opaque, not Transparent (before the 3D pass, its System running first); whichever of the two Systems runs first, one of the two checks fails",
+      "guards": [
+        "render-pipeline-declaration 判定 P3",
+        "render RD-12"
+      ],
+      "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+      "find": "[Render::CameraPhase::Transparent]",
+      "replace": "[Render::CameraPhase::Opaque]",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: a pass queued before*",
+      "expect": "\\[re\\-phase\\-scene\\]|\\[re\\-phase\\-2d\\-after\\-3d\\]"
+    },
+    {
+      "id": "re-phase-sprite-post",
+      "what": "P3: sprite_render's pass put in PostProcess, not Transparent",
+      "guards": [
+        "render-pipeline-declaration 判定 P3",
+        "render RD-12"
+      ],
+      "file": "engine/modules/sprite_render/src/SpriteRenderModule.cpp",
+      "find": "[Render::CameraPhase::Transparent]",
+      "replace": "[Render::CameraPhase::PostProcess]",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: a pass queued before*",
+      "expect": "\\[re\\-phase\\-2d\\-after\\-3d\\]"
+    },
+    {
+      "id": "rd-reads-white",
+      "what": "P4: the white texture counted as a read",
+      "guards": [
+        "render-pipeline-declaration 判定 P4",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "        if (draw.texture != TextureId{}) out.push_back(draw.texture);",
+      "replace": "        out.push_back(draw.texture);",
+      "target": "gyo_render_tests",
+      "cases": "render: what each kind*",
+      "expect": "\\[rd\\-pass\\-reads\\-draws\\]"
+    },
+    {
+      "id": "rd-reads-inputs-dropped",
+      "what": "P4: a full-screen pass's inputs are not its reads (RP-3 would not see them)",
+      "guards": [
+        "render-pipeline-declaration 判定 P4",
+        "render RD-12",
+        "render-pipeline-declaration RP-3"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "        reads = fullscreen->inputs;\n",
+      "replace": "        static_cast<void>(fullscreen);\n",
+      "target": "gyo_render_tests",
+      "cases": "render: what each kind*",
+      "expect": "\\[rd\\-pass\\-reads\\-inputs\\]"
+    },
+    {
+      "id": "rd-reads-depth-only-draws",
+      "what": "P4: a depth-only pass's draws' textures counted as reads",
+      "guards": [
+        "render-pipeline-declaration 判定 P4",
+        "render RD-12"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "    // A depth-only pass samples nothing: its draws' textures are not used.\n    return reads;",
+      "replace": "    if (const auto* d = std::get_if<PassDepth>(&pass)) AppendTextures(d->draws, reads);\n    return reads;",
+      "target": "gyo_render_tests",
+      "cases": "render: what each kind*",
+      "expect": "\\[rd\\-pass\\-reads\\-depth\\-only\\]"
+    },
+    {
+      "id": "rd-depth-target-refused",
+      "what": "P5: a Depth target refused",
+      "guards": [
+        "render-pipeline-declaration 判定 P5",
+        "render RD-11"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "(desc.format == TextureFormat::Rgba8Unorm || desc.format == TextureFormat::Depth)",
+      "replace": "desc.format == TextureFormat::Rgba8Unorm",
+      "target": "gyo_render_tests",
+      "cases": "render: a Depth target*",
+      "expect": "a target format other than Rgba8Unorm or Depth"
+    },
+    {
+      "id": "rd-depth-linear-allowed",
+      "what": "P5: a Depth target sampled Linear taken",
+      "guards": [
+        "render-pipeline-declaration 判定 P5",
+        "render RD-11"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "    GYO_ASSERT((desc.format != TextureFormat::Depth || desc.filter == TextureFilter::Nearest) && \"a Depth target not sampled Nearest\");\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "render: a Depth target*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ textures\\.CreateTarget\\(R::RenderTargetDesc\\{R::TargetSize\\{8,\\ 8\\},\\ R::TextureFormat::Depth,\\ R::TextureFilter::Linear\\}\\)"
+    },
+    {
+      "id": "rd-depth-pixels-allowed",
+      "what": "P5: a texture of pixels with the format Depth taken",
+      "guards": [
+        "render-pipeline-declaration 判定 P5",
+        "render RD-11"
+      ],
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "    GYO_ASSERT(desc.format != TextureFormat::Depth && \"a texture of pixels with the format Depth (a render target's only)\");\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "render: a Depth target*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ textures\\.Create\\(R::TextureDesc\\{1,\\ 1,\\ R::TextureFilter::Nearest,\\ R::TextureFormat::Depth\\}"
+    },
+    {
+      "id": "sg-phase-depth-uniforms",
+      "what": "P6: the depth-only vertex stage's ABI says no uniform",
+      "guards": [
+        "render-pipeline-declaration 判定 P6",
+        "render RD-4"
+      ],
+      "file": "engine/modules/render/include/engine/render/ShaderAbi.hpp",
+      "find": "inline constexpr std::uint32_t kDepthVertexUniformBuffers = 1;",
+      "replace": "inline constexpr std::uint32_t kDepthVertexUniformBuffers = 0;",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu shaders: the depth-only*",
+      "expect": "\\[sg\\-phase\\-depth\\-vertex\\]"
+    },
+    {
+      "id": "gf-parameters-not-pushed",
+      "what": "P7: a full-screen pass's parameters are not pushed",
+      "guards": [
+        "render-pipeline-declaration 判定 P7",
+        "render RD-12"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            SDL_PushGPUFragmentUniformData(cmd, Abi::kFullscreenParametersSlot, pass.parameters.data(),\n                                           static_cast<std::uint32_t>(pass.parameters.size()));\n",
+      "replace": "            static_cast<void>(pass.parameters);\n",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: two full-screen*",
+      "expect": "\\[gf\\-chain\\]"
+    },
+    {
+      "id": "gf-uv-flipped",
+      "what": "P7: the full-screen triangle's uv runs up (the input upside down) (one pass: the chain's two would turn it round twice; survived against [gf-chain] alone, 2026-11-27)",
+      "guards": [
+        "render-pipeline-declaration 判定 P7",
+        "render RD-4"
+      ],
+      "file": "engine/modules/render/shaders/fullscreen.vert.hlsl",
+      "find": "uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f)",
+      "replace": "uv * float2(2.0f, 2.0f) + float2(-1.0f, -1.0f)",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: two full-screen*",
+      "expect": "\\[gf\\-uv\\-down\\]"
+    },
+    {
+      "id": "gf-unknown-not-counted",
+      "what": "P7: a full-screen pass with no shader the device carries is not counted",
+      "guards": [
+        "render-pipeline-declaration 判定 P7",
+        "render RD-12"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            ++tally.skippedDraws;\n            if (!why.empty()) tally.lastRefusal = std::move(why);",
+      "replace": "            if (!why.empty()) tally.lastRefusal = std::move(why);",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a full-screen pass whose*",
+      "expect": "\\[gf\\-unknown\\-counted\\]"
+    },
+    {
+      "id": "gd-pass3d-depth-ignored",
+      "what": "P8: a 3D pass's depth target ignored (its target's own depth used)",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-12"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "        if (pass.depth) {",
+      "replace": "        if (false) {",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a depth-only*",
+      "expect": "\\[gd\\-tested\\]"
+    },
+    {
+      "id": "gd-pass3d-depth-cleared",
+      "what": "P8: a 3D pass clears a depth target with a picture although it keeps the depth",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-12"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            undefined = t.fresh;\n",
+      "replace": "            undefined = true;\n",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a depth-only*",
+      "expect": "\\[gd\\-tested\\]"
+    },
+    {
+      "id": "gd-depth-pass-fresh-kept",
+      "what": "P8: a depth-only pass leaves its target without a picture (the 3D pass after it clears it)",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render-pipeline-declaration RP-3"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "        const bool undefined = on.target->fresh;\n        on.target->fresh = false;\n",
+      "replace": "        const bool undefined = on.target->fresh;\n",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a depth-only*",
+      "expect": "\\[gd\\-tested\\]"
+    },
+    {
+      "id": "gd-depth-target-colour-usage",
+      "what": "P8: a Depth target made with a colour target's usage (refused) (Vulkan's SDL_GPUTextureSupportsFormat refuses it: the case's [gd-made]; Metal's takes it and SDL's validation asserts, SDL_gpu.c:1274: with SDL_ASSERT=abort the run ends with that message)",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-11"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "t.isDepth ? kDepthTargetUsage : kTargetUsage",
+      "replace": "kTargetUsage",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a depth-only*",
+      "expect": "\\[gd\\-made\\]|For\\ depth\\ textures:\\ usage\\ cannot\\ contain"
+    },
+    {
+      "id": "gd-depth-target-as-colour",
+      "what": "P8: a Depth target taken as a colour target",
+      "guards": [
+        "render-pipeline-declaration 判定 P8",
+        "render RD-11"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "                made.isDepth = target->desc.format == R::TextureFormat::Depth;",
+      "replace": "                made.isDepth = false;",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: a depth-only*",
+      "expect": "a depth-only pass's target is a Depth target"
+    },
+    {
+      "id": "gt-unwritten-not-asserted",
+      "what": "P9 (RP-3): sampling a render target no pass drew on is not asserted",
+      "guards": [
+        "render-pipeline-declaration 判定 P9",
+        "render-pipeline-declaration RP-3"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            GYO_ASSERT(!it->second.fresh && \"a pass samples a render target no pass drew on since it was made or made again (RP-3)\");\n",
+      "replace": "",
+      "target": "gyo_sdl_gpu_tests",
+      "command": [
+        "{exe:gyo_sdl_gpu_tests}",
+        "-tc=sdl_gpu unwritten:*",
+        "--no-skip"
+      ],
+      "expect": "\\[gt\\-unwritten\\-not\\-asserted\\]"
+    },
+    {
+      "id": "gt-unwritten-always",
+      "what": "P9 (RP-3): sampling any render target asserted (a target drawn on, in this frame or an earlier one, is sampled)",
+      "guards": [
+        "render-pipeline-declaration 判定 P9",
+        "render-pipeline-declaration RP-3"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "GYO_ASSERT(!it->second.fresh && ",
+      "replace": "GYO_ASSERT(false && ",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu phases: two full-screen*",
+      "expect": "GYO_ASSERT failed: .*RP-3"
+    }
+  ]
+}

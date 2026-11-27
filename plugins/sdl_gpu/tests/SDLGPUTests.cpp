@@ -105,6 +105,28 @@ TEST_CASE("sdl_gpu shaders: the 3D pass's shaders use what render's ABI says, in
     }
 }
 
+TEST_CASE("sdl_gpu shaders: the depth-only and full-screen passes' built-in shaders use what render's ABI says") {
+    const G::EmbeddedShader* depthVertex = G::FindEmbeddedShader("depth.vert");
+    const G::EmbeddedShader* depthFragment = G::FindEmbeddedShader("depth.frag");
+    const G::EmbeddedShader* fullscreen = G::FindEmbeddedShader("fullscreen.vert");
+    REQUIRE_MESSAGE((depthVertex != nullptr && depthFragment != nullptr && fullscreen != nullptr), "[sg-phase-embedded] they are embedded");
+    CHECK_MESSAGE((depthVertex->stage == G::ShaderStage::Vertex && depthFragment->stage == G::ShaderStage::Fragment &&
+                   fullscreen->stage == G::ShaderStage::Vertex),
+                  "[sg-phase-stages] each shader's stage");
+    CHECK_MESSAGE((depthVertex->resources.uniformBuffers == Abi::kDepthVertexUniformBuffers && depthVertex->resources.samplers == Abi::kDepthVertexSamplers),
+                  "[sg-phase-depth-vertex] the depth-only vertex stage takes the 3D pass's view uniform, no sampler");
+    CHECK_MESSAGE((depthFragment->resources.uniformBuffers == Abi::kDepthFragmentUniformBuffers &&
+                   depthFragment->resources.samplers == Abi::kDepthFragmentSamplers),
+                  "[sg-phase-depth-fragment] the depth-only fragment stage uses nothing");
+    CHECK_MESSAGE((fullscreen->resources.uniformBuffers == Abi::kFullscreenVertexUniformBuffers &&
+                   fullscreen->resources.samplers == Abi::kFullscreenVertexSamplers),
+                  "[sg-phase-fullscreen-vertex] the full-screen vertex stage uses nothing");
+    for (const G::EmbeddedShader* shader : {depthVertex, depthFragment, fullscreen}) {
+        CHECK_MESSAGE((shader->resources.storageTextures == 0 && shader->resources.storageBuffers == 0), "[sg-phase-no-storage]");
+        CHECK_MESSAGE(!shader->compiled.empty(), "[sg-phase-compiled] at least one format is embedded");
+    }
+}
+
 TEST_CASE("sdl_gpu present: render's PresentMode falls back along Bevy's chain to what the window supports") {
     using PM = GYO::Engine::Render::PresentMode;
     using SM = G::SwapchainPresentMode;

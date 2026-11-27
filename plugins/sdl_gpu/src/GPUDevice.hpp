@@ -20,6 +20,8 @@
 #include "plugins/sdl/NativeWindow.hpp"
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
+#include "EmbeddedShaders.hpp"
+
 namespace GYO::Plugins::SDLGPU {
 
 // Why the device could not be made (SDL's text in message). A Failure (E2, naming N25): nothing was made; Configure
@@ -85,7 +87,8 @@ struct FrameTally final {
     // draws naming it are skipped.
     std::uint64_t refusedMeshAsks = 0;
     // Draws skipped: their texture or mesh has no GPU object, their pipeline could not be made, or (3D) the pass's
-    // depth texture could not be made.
+    // depth texture could not be made; a full-screen pass (one draw) whose shader the device does not carry or whose
+    // input has no GPU texture; a draw sampling its own pass's target.
     std::uint64_t skippedDraws = 0;
     // Passes whose target has no picture here: neither 0 (the window, or Capture's picture) nor a render target of the
     // asks, or a render target SDL refused.
@@ -98,11 +101,12 @@ class GPUDevice final {
 public:
     // Starts SDL's video (with GYO's hints, as sdl_window does), makes the GPU device for the formats the shaders were
     // compiled to, claims the window when one is given (nullptr: a device without a window, which draws only to
-    // Capture), makes the 2D and 3D passes' shaders, samplers and white texture and picks the 3D pass's depth format
-    // (pipelines are made when first drawn with). debug: SDL's GPU validation (the tests; SDL warns and goes on where
-    // the driver has none).
-    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(SDL::NativeWindow* window,
-                                                                                                bool debug = false);
+    // Capture), makes the passes' shaders, samplers and white texture and picks the depth format of 3D passes and Depth
+    // targets (pipelines are made when first drawn with). debug: SDL's GPU validation (the tests; SDL warns and goes on
+    // where the driver has none). more: shaders full-screen passes may name besides the embedded ones (a table the
+    // shader tool generated with --function, which outlives the device: the tests' own; the Plugin gives none).
+    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(
+        SDL::NativeWindow* window, bool debug = false, std::span<const EmbeddedShader> more = {});
     ~GPUDevice();
     GPUDevice(const GPUDevice&) = delete;
     GPUDevice& operator=(const GPUDevice&) = delete;

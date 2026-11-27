@@ -13,9 +13,11 @@
 // camera's target is the pass target its CameraTarget maps to (the main target stays the main target); a camera whose
 // CameraTarget has no render target (let go after the camera was computed) is not extracted: nothing to draw on.
 //
-// The pipelines (sprite_render, mesh_render) put each camera's passes in its slot of render's CameraPasses (emptied
-// by ExtractCameras); ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after
-// the pipelines' Update), writes them to RenderCommands camera by camera, each camera's clear first (Compose.hpp).
+// The pipelines (sprite_render, mesh_render, ui_render) put each camera's passes in a phase of its slot of render's
+// CameraPasses, and the passes of views that are no camera's in its nonCameraViews (emptied by ExtractCameras);
+// ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after the pipelines'
+// Update), writes them to RenderCommands: the views that are no camera's, then camera by camera, each camera's clear
+// first, then its phases in order (Compose.hpp).
 //
 // A row of its own, not in render_world (SDL declaration section 10.1, R2b): a render World that draws no camera
 // (KeepTool's ImGui) does not need the source to register the cameras' types. The source World needs transform,

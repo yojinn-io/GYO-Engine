@@ -353,8 +353,8 @@ TEST_CASE("compose: cameras in order, each clear first: the first on a target cl
     cameras.cameras = {world, hud, split, other};
     R::CameraPasses passes;
     passes.byCamera.resize(4);
-    passes.byCamera[0].push_back(R::Pass3D{});
-    passes.byCamera[1].push_back(R::Pass2D{});
+    passes.byCamera[0][R::CameraPhase::Opaque].push_back(R::Pass3D{});
+    passes.byCamera[1][R::CameraPhase::Transparent].push_back(R::Pass2D{});
     R::RenderCommands out;
     R::ComposePasses(cameras, passes, out);
     REQUIRE(out.passes.size() == 5);
@@ -371,7 +371,52 @@ TEST_CASE("compose: cameras in order, each clear first: the first on a target cl
     const auto* otherClear = std::get_if<R::Pass2D>(&out.passes[4]);
     CHECK_MESSAGE((otherClear != nullptr && otherClear->clear == R::Color8{7, 7, 7, 255} && otherClear->target == R::TextureId{5}),
                   "[cp-per-target] the first camera on another target clears that target");
-    CHECK_MESSAGE((passes.byCamera[0].empty() && passes.byCamera[1].empty()), "[cp-emptied] the slots are emptied");
+    CHECK_MESSAGE((passes.byCamera[0][R::CameraPhase::Opaque].empty() && passes.byCamera[1][R::CameraPhase::Transparent].empty()),
+                  "[cp-emptied] the slots are emptied");
+}
+
+TEST_CASE("compose: the views that are no camera's first; each camera's clear, then its phases in order") {
+    R::ExtractedCameras cameras;
+    R::ExtractedCamera world = Camera3d(std::nullopt, 0);
+    world.clear = R::Color8{1, 2, 3, 255};
+    R::ExtractedCamera hud = Camera3d(std::nullopt, 1);
+    hud.clear = std::nullopt;
+    cameras.cameras = {world, hud};
+    R::CameraPasses passes;
+    passes.byCamera.resize(2);
+    // Put in the reverse of the order they are drawn in, as Systems in any order would: the order is the phases'.
+    const auto tagged = [](const std::uint32_t id) {
+        R::PassFullscreen pass;
+        pass.inputs = {R::TextureId{id}};
+        return pass;
+    };
+    passes.byCamera[1][R::CameraPhase::Overlay].push_back(tagged(9));
+    passes.byCamera[0][R::CameraPhase::Overlay].push_back(tagged(6));
+    passes.byCamera[0][R::CameraPhase::PostProcess].push_back(tagged(5));
+    passes.byCamera[0][R::CameraPhase::Transparent].push_back(tagged(4));
+    passes.byCamera[0][R::CameraPhase::Opaque].push_back(tagged(3));
+    passes.byCamera[0][R::CameraPhase::Opaque].push_back(tagged(7));
+    passes.byCamera[0][R::CameraPhase::Prepass].push_back(tagged(2));
+    R::PassDepth shadow;
+    shadow.target = R::TextureId{8};
+    passes.nonCameraViews.push_back(shadow);
+    R::RenderCommands out;
+    R::ComposePasses(cameras, passes, out);
+    std::vector<std::uint32_t> order;
+    for (const R::RenderPass& pass : out.passes) {
+        if (const auto* f = std::get_if<R::PassFullscreen>(&pass)) order.push_back(f->inputs[0].value);
+        if (const auto* d = std::get_if<R::PassDepth>(&pass)) order.push_back(100 + d->target.value);
+        if (const auto* c = std::get_if<R::Pass2D>(&pass)) order.push_back(c->clear ? 1 : 0);
+    }
+    REQUIRE_MESSAGE(out.passes.size() == 9, "[cp-phase-all] every pass, the view of no camera's among them");
+    CHECK_MESSAGE(order[0] == 108, "[cp-non-camera-first] a view that is no camera's comes before every camera");
+    CHECK_MESSAGE(order[1] == 1, "[cp-non-camera-own-target] the shadow map is its own target: the first camera on the main one clears it all");
+    CHECK_MESSAGE((order[2] == 2 && order[3] == 3 && order[4] == 7 && order[5] == 4 && order[6] == 5 && order[7] == 6),
+                  "[cp-phase-order] Prepass, Opaque (in its order), Transparent, PostProcess, Overlay");
+    CHECK_MESSAGE(order[8] == 9, "[cp-phase-camera-order] then the next camera's");
+    CHECK_MESSAGE((passes.nonCameraViews.empty() && passes.byCamera[0][R::CameraPhase::Opaque].empty() &&
+                   passes.byCamera[0][R::CameraPhase::Overlay].empty()),
+                  "[cp-phase-emptied] every list is emptied");
 }
 
 TEST_CASE("pipeline3d: a mesh without a skin sits at its node; a skinned one at the entity alone") {

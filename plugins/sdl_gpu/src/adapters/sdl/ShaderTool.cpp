@@ -2,11 +2,12 @@
 // built by plugins/sdl_gpu/shader_tool/ and run at build time. It compiles HLSL files to the asked formats through
 // SDL_shadercross (DXC for HLSL to SPIR-V and SPIR-V to DXIL, SPIRV-Cross for SPIR-V to Metal source, Apple's metal
 // and metallib for the Metal library), reads what each shader uses from its SPIR-V and writes one C++ source that
-// defines EmbeddedShaders() (../../EmbeddedShaders.hpp). Files and processes go through SDL (os guard R4: no fstream,
-// no file-system calls of std::filesystem in runtime code).
+// defines EmbeddedShaders() (../../EmbeddedShaders.hpp), or the function --function names (a table of shaders kept apart
+// from the embedded ones: the tests' own). Files and processes go through SDL (os guard R4: no fstream, no file-system
+// calls of std::filesystem in runtime code).
 //
 //   gyo_sdl_gpu_shader_tool --output <file.cpp> --include <dir> --formats spirv,dxil,metallib
-//                           [--work <dir>] [--xcrun <path>] [--deployment-target <version>]
+//                           [--work <dir>] [--xcrun <path>] [--deployment-target <version>] [--function <name>]
 //                           --shader <name> <vertex|fragment> <file.hlsl> [--shader ...]
 //
 // It exits 0 and writes the output, or prints what failed and exits 1 (the output is left as it was).
@@ -14,6 +15,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_shadercross/SDL_shadercross.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -109,6 +112,8 @@ struct Options {
     std::string work;
     std::string xcrun = "xcrun";
     std::string deploymentTarget;
+    // The function the source defines, declared like EmbeddedShaders() (same signature, same namespace).
+    std::string function = "EmbeddedShaders";
     std::vector<std::string> formats;
     std::vector<Shader> shaders;
 };
@@ -143,6 +148,8 @@ Options Parse(const int argc, char** argv) {
             options.xcrun = value(i);
         } else if (argument == "--deployment-target") {
             options.deploymentTarget = value(i);
+        } else if (argument == "--function") {
+            options.function = value(i);
         } else if (argument == "--formats") {
             options.formats = Split(value(i), ',');
         } else if (argument == "--shader") {
@@ -169,6 +176,10 @@ Options Parse(const int argc, char** argv) {
         if (format != "spirv" && format != "dxil" && format != "metallib") Fail("unknown format " + format);
         if (format == "metallib" && options.work.empty()) Fail("metallib needs --work");
     }
+    const bool identifier = !options.function.empty() && (std::isalpha(static_cast<unsigned char>(options.function[0])) != 0 || options.function[0] == '_') &&
+                            std::all_of(options.function.begin(), options.function.end(),
+                                        [](const char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; });
+    if (!identifier) Fail("--function needs a C++ identifier, not " + options.function);
     return options;
 }
 
@@ -273,10 +284,10 @@ const char* FormatName(const std::string& format) {
     return "ShaderFormat::Metallib";
 }
 
-std::string Source(const std::vector<Result>& results) {
+std::string Source(const std::vector<Result>& results, const std::string& function) {
     std::string out;
     out += "// Generated at build time by sdl_gpu's shader tool (plugins/sdl_gpu/src/adapters/sdl/ShaderTool.cpp) from\n";
-    out += "// render's HLSL. Do not edit; do not commit.\n";
+    out += "// HLSL. Do not edit; do not commit.\n";
     out += "#include \"EmbeddedShaders.hpp\"\n\nnamespace GYO::Plugins::SDLGPU {\n\nnamespace {\n\n";
     for (const Result& result : results) {
         const std::string id = Identifier(result.shader->name);
@@ -304,7 +315,7 @@ std::string Source(const std::vector<Result>& results) {
                ", {" + std::to_string(r.num_samplers) + ", " + std::to_string(r.num_storage_textures) + ", " +
                std::to_string(r.num_storage_buffers) + ", " + std::to_string(r.num_uniform_buffers) + "}, k_" + id + "_compiled},\n";
     }
-    out += "};\n\n} // namespace\n\nstd::span<const EmbeddedShader> EmbeddedShaders() noexcept { return kShaders; }\n\n";
+    out += "};\n\n} // namespace\n\nstd::span<const EmbeddedShader> " + function + "() noexcept { return kShaders; }\n\n";
     out += "} // namespace GYO::Plugins::SDLGPU\n";
     return out;
 }
@@ -318,7 +329,7 @@ int main(int argc, char** argv) {
         std::vector<Result> results;
         for (const Shader& shader : options.shaders) results.push_back(CompileShader(shader, options));
         SDL_ShaderCross_Quit();
-        Publish(options.output, Source(results));
+        Publish(options.output, Source(results, options.function));
         return 0;
     } catch (const std::exception& error) {
         std::fprintf(stderr, "gyo_sdl_gpu_shader_tool: %s\n", error.what());

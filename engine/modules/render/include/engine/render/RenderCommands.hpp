@@ -3,9 +3,17 @@
 // What a renderer is asked to draw this frame, as data (docs/architecture/target/v2/render.zh-Hant.md, section 2;
 // SDL declaration section 3.3, P27; Design Invariant RD-1). No SDL, no GPU object, no backend type: a backend (today
 // sdl_gpu's GPUSubmit) reads it and draws it; a test reads it and compares it. The frame is a list of passes drawn in
-// their order, each a 2D pass (textures, blending, clipping) or a 3D pass (meshes, instances, depth), each on one
-// target: the main target, or a render target RenderTextures handed out (render-pipeline declaration section 13),
-// which a later pass's draws may sample.
+// their order, each a 2D pass (textures, blending, clipping), a 3D pass (meshes, instances, depth), a full-screen pass
+// (one fragment shader over the target, reading other targets) or a depth-only pass (meshes into a depth target), each
+// on one target: the main target, or a render target RenderTextures handed out (render-pipeline declaration sections 13
+// and 14), which a later pass may sample.
+//
+// The order of the list is the GPU's order (Design Invariant RP-3, render-pipeline declaration section 14): nothing
+// reorders, culls or aliases passes (Bevy's render graph is systems since #22144; no graph object). Each pass names
+// what it writes (TargetOf; a 3D pass's depth target) and what it samples (ReadsOf). A pass may sample a render target
+// only once some pass drew on it since it was made or made again at a new size (earlier in this frame, or in an
+// earlier frame: a target keeps its picture); sampling one with no picture yet is a Programmer Error the backend
+// asserts.
 //
 // Coordinates of a 2D pass are view units with y down: the pass's view rectangle is stretched over the whole
 // target, its top-left corner on the target's top-left pixel. Texture coordinate (0, 0) is a texture's top-left
@@ -18,6 +26,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -175,12 +184,16 @@ struct Draw3D final {
 struct Pass3D final {
     // As Pass2D's.
     std::optional<TextureId> target;
+    // The depth it tests and writes: a render target of format Depth the size of target (a depth-only pass of the
+    // prepass wrote it, Bevy's DepthPrepass); nullopt: the target's own depth, which no other pass names (Bevy's
+    // ViewDepthTexture).
+    std::optional<TextureId> depth;
     // As Pass2D's: the pixels of the target the pass draws on; nullopt: the whole target.
     std::optional<PixelRect> viewport;
     // World to clip space (math.md: depth 0 at near, 1 at far; y up).
     Math::Matrix4 clipFromWorld{};
     // false: the depth the passes before it left (Bevy's Camera3dDepthLoadOp::Load); a depth no pass wrote this frame
-    // is undefined, as in Bevy.
+    // is undefined, as in Bevy (a depth target no pass drew on since it was made starts cleared).
     bool clearDepth = true;
     // Geometry made for this frame only (a mesh skinned on the CPU, a shape that changes), named by draws with mesh {}.
     std::vector<Vertex3D> vertices;
@@ -190,12 +203,51 @@ struct Pass3D final {
     std::vector<Draw3D> draws;
 };
 
-using RenderPass = std::variant<Pass2D, Pass3D>;
+// A full-screen pass (render-pipeline declaration section 14; Bevy's FullscreenShader with a FullscreenMaterial,
+// bevy_core_pipeline/src/fullscreen_material.rs): one triangle over the viewport, each pixel the fragment shader's
+// colour from its inputs and parameters, replacing what is there (no blending). Post-processing and tonemapping are
+// such passes. Its colour starts as the target is (as Pass3D's).
+struct PassFullscreen final {
+    // As Pass2D's. A pass that samples its own target draws nothing (counted by the backend).
+    std::optional<TextureId> target;
+    // As Pass2D's: the pixels the triangle covers; nullopt: the whole target.
+    std::optional<PixelRect> viewport;
+    // The fragment shader, by the name the backend carries it under (an HLSL file's name without ".hlsl"; render's
+    // ShaderAbi.hpp names the built-in ones). Its stage takes FullscreenVarying (shaders/Fullscreen.hlsli). A shader
+    // the backend does not carry draws nothing (counted). The material mechanism (B1) replaces the name with an id.
+    std::string shader;
+    // What the shader samples: its textures and samplers 0, 1, ... in this order (render targets, pictures). As many
+    // as the shader declares.
+    std::vector<TextureId> inputs;
+    // The shader's fragment uniform at slot 0, as its bytes (float4 lanes); empty when the shader declares none.
+    std::vector<std::uint8_t> parameters;
+};
 
-// The target a pass draws on.
-[[nodiscard]] inline std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
-    return std::visit([](const auto& p) { return p.target; }, pass);
-}
+// A depth-only pass (render-pipeline declaration section 14; Bevy's prepass and shadow passes): meshes drawn into a
+// depth target and no colour, as a Pass3D draws them (its draws' depth and cull; their texture and blend are not
+// used). A later pass tests against it (Pass3D::depth) or samples it.
+struct PassDepth final {
+    // The depth target it writes: a render target of format Depth.
+    TextureId target;
+    // As Pass3D's.
+    std::optional<PixelRect> viewport;
+    Math::Matrix4 clipFromWorld{};
+    // false: the depth the target has (a target no pass drew on since it was made starts cleared).
+    bool clearDepth = true;
+    std::vector<Vertex3D> vertices;
+    std::vector<std::uint32_t> indices;
+    std::vector<Instance3D> instances;
+    std::vector<Draw3D> draws;
+};
+
+using RenderPass = std::variant<Pass2D, Pass3D, PassFullscreen, PassDepth>;
+
+// The target a pass draws on: its colour target (nullopt: the main target), or a depth-only pass's depth target.
+[[nodiscard]] std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept;
+
+// What a pass samples, in the order it names them: its draws' textures (the white texture left out) or a full-screen
+// pass's inputs. A pass's depth target (Pass3D::depth) is drawn on, not sampled.
+[[nodiscard]] std::vector<TextureId> ReadsOf(const RenderPass& pass);
 
 // This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
 struct RenderCommands final {
@@ -218,8 +270,10 @@ struct ViewTransform final {
 // The pixels a pass draws on: its viewport cut to the target, or the whole target. Empty (zero width or height)
 // when the viewport lies outside the target.
 [[nodiscard]] PixelRect ViewportOf(const Pass2D& pass, TargetSize target);
-// The same for a 3D pass.
+// The same for a 3D pass, a full-screen pass and a depth-only pass.
 [[nodiscard]] PixelRect ViewportOf(const Pass3D& pass, TargetSize target);
+[[nodiscard]] PixelRect ViewportOf(const PassFullscreen& pass, TargetSize target);
+[[nodiscard]] PixelRect ViewportOf(const PassDepth& pass, TargetSize target);
 
 // The view of a pass on a target of this size: its own view, or the pixels of its viewport (ViewportOf).
 [[nodiscard]] Math::Rect ViewOf(const Pass2D& pass, TargetSize target);

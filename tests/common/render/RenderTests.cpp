@@ -234,6 +234,42 @@ TEST_CASE("render: wrong target asks are Programmer Errors") {
     GYO_CHECK_ASSERTS(targets.Release(C::CameraTarget{1}));
 }
 
+TEST_CASE("render: a Depth target: made like any target, sampled Nearest; never a texture of pixels") {
+    R::RenderTextures textures;
+    const R::TextureId depth = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Depth, R::TextureFilter::Nearest});
+    REQUIRE(textures.FindTarget(depth) != nullptr);
+    CHECK_MESSAGE(textures.FindTarget(depth)->format == R::TextureFormat::Depth, "[rd-depth-target] a target may be Depth");
+    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Depth, R::TextureFilter::Linear}));
+    GYO_CHECK_ASSERTS(textures.Create(R::TextureDesc{1, 1, R::TextureFilter::Nearest, R::TextureFormat::Depth}, Pixels(1, 1)));
+}
+
+TEST_CASE("render: what each kind of pass draws on and samples") {
+    R::Pass2D flat;
+    flat.target = R::TextureId{3};
+    for (const std::uint32_t texture : {5U, 0U, 6U}) {
+        flat.draws.emplace_back();
+        flat.draws.back().texture = R::TextureId{texture};
+    }
+    R::Pass3D scene;
+    scene.depth = R::TextureId{4};
+    scene.draws.push_back(R::Draw3D{});
+    scene.draws.back().texture = R::TextureId{7};
+    R::PassFullscreen post;
+    post.target = R::TextureId{8};
+    post.inputs = {R::TextureId{9}, R::TextureId{2}};
+    R::PassDepth shadow;
+    shadow.target = R::TextureId{10};
+    shadow.draws.push_back(R::Draw3D{});
+    shadow.draws.back().texture = R::TextureId{11};
+    CHECK_MESSAGE((R::TargetOf(flat) == R::TextureId{3} && R::TargetOf(scene) == std::nullopt && R::TargetOf(post) == R::TextureId{8} &&
+                   R::TargetOf(shadow) == R::TextureId{10}),
+                  "[rd-pass-target] the target each draws on (a depth-only pass's is its depth target)");
+    CHECK_MESSAGE((R::ReadsOf(flat) == std::vector<R::TextureId>{R::TextureId{5}, R::TextureId{6}}), "[rd-pass-reads-draws] its draws' textures, the white one left out");
+    CHECK_MESSAGE((R::ReadsOf(scene) == std::vector<R::TextureId>{R::TextureId{7}}), "[rd-pass-reads-depth-not-read] a 3D pass's depth target is not a read");
+    CHECK_MESSAGE((R::ReadsOf(post) == std::vector<R::TextureId>{R::TextureId{9}, R::TextureId{2}}), "[rd-pass-reads-inputs] a full-screen pass's inputs in order");
+    CHECK_MESSAGE(R::ReadsOf(shadow).empty(), "[rd-pass-reads-depth-only] a depth-only pass samples nothing");
+}
+
 TEST_CASE("render: the source's targets: ids from 1 for cameras, never given twice; the sizes a camera computes with") {
     namespace C = GYO::Engine::Camera;
     R::RenderTargets targets;

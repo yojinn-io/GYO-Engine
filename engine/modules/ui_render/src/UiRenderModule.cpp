@@ -121,7 +121,7 @@ SystemResult QueueUiPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel
     Render::CameraPasses& slots = passes.Get();
     for (std::size_t i = 0; i < cameras->cameras.size() && i < slots.byCamera.size(); ++i) {
         std::optional<Render::Pass2D> pass = QueueUi(cameras->cameras[i], roots->roots, *atlas);
-        if (pass) slots.byCamera[i].push_back(std::move(*pass));
+        if (pass) slots.byCamera[i][Render::CameraPhase::Overlay].push_back(std::move(*pass));
     }
     return {};
 }

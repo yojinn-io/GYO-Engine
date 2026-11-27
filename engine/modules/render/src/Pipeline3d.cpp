@@ -303,6 +303,8 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
 }
 
 void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out) {
+    for (RenderPass& pass : passes.nonCameraViews) out.passes.push_back(std::move(pass));
+    passes.nonCameraViews.clear();
     std::vector<std::optional<TextureId>> drawn;
     for (const RenderPass& pass : out.passes) drawn.push_back(TargetOf(pass));
     for (std::size_t i = 0; i < cameras.cameras.size(); ++i) {
@@ -328,8 +330,10 @@ void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, Render
             out.passes.push_back(std::move(clear));
         }
         if (i < passes.byCamera.size()) {
-            for (RenderPass& pass : passes.byCamera[i]) out.passes.push_back(std::move(pass));
-            passes.byCamera[i].clear();
+            for (std::vector<RenderPass>& phase : passes.byCamera[i].lists) {
+                for (RenderPass& pass : phase) out.passes.push_back(std::move(pass));
+                phase.clear();
+            }
         }
     }
 }

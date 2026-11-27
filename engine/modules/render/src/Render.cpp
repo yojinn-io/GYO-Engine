@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstdint>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include "engine/base/Assert.hpp"
 #include "engine/render/RenderCommands.hpp"
@@ -38,6 +40,39 @@ PixelRect CutViewport(const Pass& pass, const TargetSize target) {
 PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) { return CutViewport(pass, target); }
 
 PixelRect ViewportOf(const Pass3D& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+PixelRect ViewportOf(const PassFullscreen& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+PixelRect ViewportOf(const PassDepth& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
+    // A depth-only pass's target is a TextureId: always a render target, never the main one.
+    return std::visit([](const auto& p) -> std::optional<TextureId> { return p.target; }, pass);
+}
+
+namespace {
+
+template <class Draws>
+void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
+    for (const auto& draw : draws) {
+        if (draw.texture != TextureId{}) out.push_back(draw.texture);
+    }
+}
+
+} // namespace
+
+std::vector<TextureId> ReadsOf(const RenderPass& pass) {
+    std::vector<TextureId> reads;
+    if (const auto* p2 = std::get_if<Pass2D>(&pass)) {
+        AppendTextures(p2->draws, reads);
+    } else if (const auto* p3 = std::get_if<Pass3D>(&pass)) {
+        AppendTextures(p3->draws, reads);
+    } else if (const auto* fullscreen = std::get_if<PassFullscreen>(&pass)) {
+        reads = fullscreen->inputs;
+    }
+    // A depth-only pass samples nothing: its draws' textures are not used.
+    return reads;
+}
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
     if (pass.view) return *pass.view;
@@ -81,6 +116,7 @@ PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, const Math::Rect v
 TextureId RenderTextures::Create(const TextureDesc desc, std::vector<std::uint8_t> pixels) {
     GYO_ASSERT(desc.width > 0 && desc.height > 0 && "a texture of zero size");
     GYO_ASSERT(pixels.size() == static_cast<std::size_t>(desc.width) * desc.height * 4 && "texture pixels of another size");
+    GYO_ASSERT(desc.format != TextureFormat::Depth && "a texture of pixels with the format Depth (a render target's only)");
     GYO_ASSERT(next_ != 0 && "every texture id has been given");
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);
@@ -111,7 +147,9 @@ TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
     } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc.size).target) {
         GYO_ASSERT(FindTarget(*followed) != nullptr && "a target following an id that is not a live target");
     }
-    GYO_ASSERT(desc.format == TextureFormat::Rgba8Unorm && "a target format other than Rgba8Unorm");
+    GYO_ASSERT((desc.format == TextureFormat::Rgba8Unorm || desc.format == TextureFormat::Depth) &&
+               "a target format other than Rgba8Unorm or Depth");
+    GYO_ASSERT((desc.format != TextureFormat::Depth || desc.filter == TextureFilter::Nearest) && "a Depth target not sampled Nearest");
     GYO_ASSERT(next_ != 0 && "every texture id has been given");
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);

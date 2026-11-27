@@ -41,9 +41,8 @@ enum class TextureFilter : std::uint8_t {
     Nearest,
 };
 
-// How a texture's texels are stored and read (Bevy's TextureFormat, of which these two are the ones in use; a format
-// comes with the batch that needs it: Rgba16Float with HDR (A4), a depth format with depth-only passes (A2), the
-// compressed ones with F1).
+// How a texture's texels are stored and read (Bevy's TextureFormat, of which these are the ones in use; a format comes
+// with the batch that needs it: Rgba16Float with HDR (A4), the compressed ones with F1).
 enum class TextureFormat : std::uint8_t {
     // R, G, B, A, 8 bits each, sampled as stored: the 2D pass's pictures (it blends bytes, RP-4), data pictures (the
     // normal map _N, _ORM), every render target (its bytes are blended as they are).
@@ -53,6 +52,12 @@ enum class TextureFormat : std::uint8_t {
     // bevy_image/src/image_loader.rs:148,176). Not a render target's format yet: what a clear colour and blending mean
     // on one comes with the linear path (A4).
     Rgba8UnormSrgb,
+    // Depth, 0 near to 1 far (render-pipeline declaration section 14): a render target's only, drawn on by depth-only
+    // passes and 3D passes (Pass3D::depth) and sampled (as a texture whose first channel is the depth) with the Nearest
+    // filter. The backend picks the stored format, at least 16 bits (Bevy's is Depth32Float, CORE_3D_DEPTH_FORMAT,
+    // bevy_core_pipeline/src/core_3d/mod.rs:5; SDL_GPU guarantees only D16 for both drawing and sampling,
+    // SDL_gpu.h:703,747).
+    Depth,
 };
 
 struct TextureDesc final {
@@ -61,7 +66,8 @@ struct TextureDesc final {
     TextureFilter filter = TextureFilter::Linear;
     // Rgba8Unorm by default: the bytes are sampled as stored, as every texture was before formats (the 2D pass and the
     // unlit 3D pass blend bytes). A picture one draw needs decoded and another as stored is two textures: SDL_GPU 3.4
-    // makes each texture with one format and has no view of another format (render-pipeline declaration 13.1).
+    // makes each texture with one format and has no view of another format (render-pipeline declaration 13.1). The
+    // pixels are 4 bytes R, G, B, A: Rgba8Unorm or Rgba8UnormSrgb (Depth is a render target's only).
     TextureFormat format = TextureFormat::Rgba8Unorm;
 
     friend bool operator==(const TextureDesc&, const TextureDesc&) = default;
@@ -89,9 +95,10 @@ struct FollowTarget final {
 struct RenderTargetDesc final {
     // Its size: fixed, or another target's.
     std::variant<TargetSize, FollowTarget> size = FollowTarget{};
-    // Rgba8Unorm alone for now (TextureFormat).
+    // Rgba8Unorm, or Depth (TextureFormat).
     TextureFormat format = TextureFormat::Rgba8Unorm;
-    // How a draw that samples it reads between its pixels.
+    // How a draw that samples it reads between its pixels; Nearest for a Depth target (a driver need not filter
+    // depth; Bevy binds its depth textures with non-filtering samplers).
     TextureFilter filter = TextureFilter::Linear;
 
     friend bool operator==(const RenderTargetDesc&, const RenderTargetDesc&) = default;
@@ -136,7 +143,8 @@ using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, Tex
 // Cleanup stage); a backend reads them in order before it draws. Ids are never given twice.
 class RenderTextures final {
 public:
-    // A new texture with these pixels. A zero width or height, or pixels of another size, is a Programmer Error.
+    // A new texture with these pixels. A zero width or height, pixels of another size, or the format Depth, is a
+    // Programmer Error.
     TextureId Create(TextureDesc desc, std::vector<std::uint8_t> pixels);
     // Replaces a region of a texture. An id that is not live (never made, or let go), a region not inside the
     // texture or of zero size, or pixels of another size, is a Programmer Error.
@@ -145,9 +153,11 @@ public:
     // Programmer Error. A target that follows it has no picture from then on.
     void Release(TextureId id);
     // A new render target: passes name it as their target, draws sample it by the id. Its picture is kept from frame
-    // to frame (a pass with no clear draws over it, as Bevy's LoadOp::Load); it is transparent black when it is made
-    // and when the backend makes it again at a new size. A fixed size of zero width or height, a format other than
-    // Rgba8Unorm, or following an id that is not a live target, is a Programmer Error.
+    // to frame (a pass with no clear draws over it, as Bevy's LoadOp::Load); it has none when it is made and when the
+    // backend makes it again at a new size: the first pass that draws on it then starts from transparent black (a
+    // Depth target: cleared to 1), and sampling it before that is a Programmer Error (RenderCommands.hpp, RP-3). A
+    // fixed size of zero width or height, a format other than Rgba8Unorm or Depth, a Depth target not sampled Nearest,
+    // or following an id that is not a live target, is a Programmer Error.
     TextureId CreateTarget(RenderTargetDesc desc);
 
     // The live texture's description, or nullptr (also for a target).

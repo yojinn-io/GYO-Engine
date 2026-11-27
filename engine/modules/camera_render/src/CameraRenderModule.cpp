@@ -88,6 +88,7 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     // Entities come in ascending order; a stable sort by order keeps the entity order among equal orders.
     std::stable_sort(list.begin(), list.end(), [](const auto& a, const auto& b) { return a.order < b.order; });
     passes.Get().byCamera.assign(list.size(), {});
+    passes.Get().nonCameraViews.clear();
     out.Get().cameras = std::move(list);
     return {};
 }

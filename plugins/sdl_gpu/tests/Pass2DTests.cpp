@@ -318,7 +318,7 @@ TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end t
     cameras.cameras.push_back(camera);
     R::CameraPasses slots;
     slots.byCamera.resize(1);
-    slots.byCamera[0].push_back(std::move(*pass));
+    slots.byCamera[0][R::CameraPhase::Transparent].push_back(std::move(*pass));
     R::RenderCommands commands;
     R::ComposePasses(cameras, slots, commands);
     const Picture p = Draw(commands);

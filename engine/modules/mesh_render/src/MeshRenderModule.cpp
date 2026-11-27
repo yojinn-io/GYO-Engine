@@ -128,7 +128,7 @@ SystemResult Queue3dPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel
     Render::CameraPasses& slots = passes.Get();
     for (std::size_t i = 0; i < cameras->cameras.size() && i < slots.byCamera.size(); ++i) {
         std::optional<Render::Pass3D> pass = Render::Queue3d(cameras->cameras[i], items->items);
-        if (pass) slots.byCamera[i].push_back(std::move(*pass));
+        if (pass) slots.byCamera[i][Render::CameraPhase::Opaque].push_back(std::move(*pass));
     }
     return {};
 }

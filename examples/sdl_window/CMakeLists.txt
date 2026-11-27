@@ -7,4 +7,6 @@ if(BUILD_TESTING)
     # after 30 frames and the runner ends with Success.
     add_test(NAME sdl_window.example COMMAND gyo_example_sdl_window --frames 30)
     set_tests_properties(sdl_window.example PROPERTIES LABELS "cpu" TIMEOUT 60 ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+    # An SDL assertion ends the run instead of showing SDL's dialog (tests/common/support/SdlAssertTestSupport.hpp).
+    set_property(TEST sdl_window.example APPEND PROPERTY ENVIRONMENT "SDL_ASSERT=abort")
 endif()

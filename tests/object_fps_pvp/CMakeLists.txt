@@ -90,6 +90,8 @@ add_test(NAME object_fps_pvp.main COMMAND ${object_fps_pvp_main} --frames 30)
 set_tests_properties(object_fps_pvp.main PROPERTIES LABELS "gpu" TIMEOUT 120)
 add_test(NAME object_fps_pvp.main_connect COMMAND ${object_fps_pvp_main} --frames 30 --connect 127.0.0.1:40000)
 set_tests_properties(object_fps_pvp.main_connect PROPERTIES LABELS "gpu" TIMEOUT 120)
+# An SDL assertion ends the run instead of showing SDL's dialog (tests/common/support/SdlAssertTestSupport.hpp).
+set_property(TEST object_fps_pvp.main object_fps_pvp.main_connect APPEND PROPERTY ENVIRONMENT "SDL_ASSERT=abort")
 
 # The Match program: it reads the staged content, listens on a UDP port and
 # stops itself after 64 steps (one second). Label network: it opens a socket.

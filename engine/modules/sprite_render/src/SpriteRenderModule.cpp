@@ -89,7 +89,7 @@ SystemResult Queue2dPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel
     Render::CameraPasses& slots = passes.Get();
     for (std::size_t i = 0; i < cameras->cameras.size() && i < slots.byCamera.size(); ++i) {
         std::optional<Render::Pass2D> pass = Render::Queue2d(cameras->cameras[i], items->items);
-        if (pass) slots.byCamera[i].push_back(std::move(*pass));
+        if (pass) slots.byCamera[i][Render::CameraPhase::Transparent].push_back(std::move(*pass));
     }
     return {};
 }

@@ -1,7 +1,7 @@
 // sdl_gpu's adapter (Design Invariant SDL-1: with ShaderTool.cpp, the only place of sdl_gpu that includes SDL3/). It
 // implements GPUDevice (../../GPUDevice.hpp): the device, the window's swapchain, the textures (render targets among
 // them) and meshes keyed by render's ids, the passes' pipelines and the frame (uploads in one copy pass, then one
-// render pass per Pass2D or Pass3D, in their order, each on its target). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
+// render pass per pass of RenderCommands, in their order, each on its target). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
 // (imgui_impl_sdlgpu3.cpp): one transfer buffer cycled each frame, vertex, index and instance buffers grown to the
 // frame's need, the scissor per draw; the 3D pass's depth texture as SDL's examples make one (a depth target cleared by its pass's
 // load op, made again when the target's size changes).
@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -72,6 +74,8 @@ SDL_GPUTextureFormat SDLTextureFormat(const R::TextureFormat format) noexcept {
     switch (format) {
     case R::TextureFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     case R::TextureFormat::Rgba8UnormSrgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    // The device's depth format (State::depthFormat), picked when it is made.
+    case R::TextureFormat::Depth: return SDL_GPU_TEXTUREFORMAT_INVALID;
     }
     return SDL_GPU_TEXTUREFORMAT_INVALID;
 }
@@ -100,8 +104,12 @@ struct GPUTarget {
     // The texture's size, or the size SDL last refused (no texture): not asked for again, or counted again, until the
     // wanted size changes.
     R::TargetSize size{};
-    // Made or made again and not drawn on since: its first pass clears it (to transparent black when it has no clear).
+    // Made or made again and not drawn on since: it has no picture. Its first pass clears it (to transparent black
+    // when it has no clear; a Depth target to 1); a pass sampling it before is a Programmer Error (RP-3).
     bool fresh = true;
+    // A Depth target (the device's depth format): drawn on by depth-only passes and as a 3D pass's depth.
+    bool isDepth = false;
+    // A colour target's own depth for its 3D passes (none for a Depth target).
     Depth depth;
 };
 
@@ -118,12 +126,21 @@ struct Pipeline {
 };
 
 // A 3D pipeline and its key. depthWrite is false whenever depthTest is (a draw that does not test writes no depth).
+// depthOnly: a depth-only pass's (no colour target: format is none, blend not used).
 struct Pipeline3D {
+    bool depthOnly = false;
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
     R::BlendMode blend = R::BlendMode::Opaque;
     bool depthTest = true;
     bool depthWrite = true;
     R::CullMode cull = R::CullMode::None;
+    SDL_GPUGraphicsPipeline* pipeline = nullptr;
+};
+
+// A full-screen pass's pipeline and its key: its fragment shader and the target's format.
+struct PipelineFullscreen {
+    const EmbeddedShader* shader = nullptr;
+    SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 };
 
@@ -134,11 +151,13 @@ struct GPUMesh {
     std::uint32_t indexCount = 0;
 };
 
-// The depth formats a 3D pass may use, the first the device supports as a depth target taken (SDL guarantees D16).
+// The depth formats of 3D passes and Depth targets, the first the device supports as a depth target that is also sampled
+// taken (SDL guarantees D16 for both, SDL_gpu.h:703,747; Bevy's is Depth32Float).
 constexpr SDL_GPUTextureFormat kDepthFormats[] = {SDL_GPU_TEXTUREFORMAT_D32_FLOAT, SDL_GPU_TEXTUREFORMAT_D24_UNORM,
                                                   SDL_GPU_TEXTUREFORMAT_D16_UNORM};
 
-// The bytes of a pass's own vertices and indices (Pass2D or Pass3D), and of its instances (Pass3D; none for Pass2D).
+// The bytes of a pass's own vertices and indices (Pass2D, Pass3D, PassDepth), and of its instances (Pass3D, PassDepth);
+// a full-screen pass has none.
 struct PassGeometry {
     const std::uint8_t* vertices = nullptr;
     std::uint64_t vertexBytes = 0;
@@ -149,17 +168,21 @@ struct PassGeometry {
 };
 
 PassGeometry GeometryOf(const R::RenderPass& pass) {
-    PassGeometry g = std::visit(
+    return std::visit(
         [](const auto& p) {
-            return PassGeometry{reinterpret_cast<const std::uint8_t*>(p.vertices.data()), p.vertices.size() * sizeof(p.vertices[0]),
-                                reinterpret_cast<const std::uint8_t*>(p.indices.data()), p.indices.size() * sizeof(std::uint32_t)};
+            using Pass = std::decay_t<decltype(p)>;
+            PassGeometry g;
+            if constexpr (!std::is_same_v<Pass, R::PassFullscreen>) {
+                g = PassGeometry{reinterpret_cast<const std::uint8_t*>(p.vertices.data()), p.vertices.size() * sizeof(p.vertices[0]),
+                                 reinterpret_cast<const std::uint8_t*>(p.indices.data()), p.indices.size() * sizeof(std::uint32_t)};
+            }
+            if constexpr (std::is_same_v<Pass, R::Pass3D> || std::is_same_v<Pass, R::PassDepth>) {
+                g.instances = reinterpret_cast<const std::uint8_t*>(p.instances.data());
+                g.instanceBytes = p.instances.size() * sizeof(R::Instance3D);
+            }
+            return g;
         },
         pass);
-    if (const auto* pass3d = std::get_if<R::Pass3D>(&pass)) {
-        g.instances = reinterpret_cast<const std::uint8_t*>(pass3d->instances.data());
-        g.instanceBytes = pass3d->instances.size() * sizeof(R::Instance3D);
-    }
-    return g;
 }
 
 // One chunk of the frame's uploads, at its offset in the transfer buffer.
@@ -168,6 +191,40 @@ struct Upload {
     const std::uint8_t* bytes = nullptr;
     std::uint64_t size = 0;
 };
+
+SDL_GPUShader* MakeShader(SDL_GPUDevice* device, const EmbeddedShader& shader, std::string& error) {
+    const SDL_GPUShaderFormat available = SDL_GetGPUShaderFormats(device);
+    for (const CompiledShader& compiled : shader.compiled) {
+        if ((available & SDLFormat(compiled.format)) == 0) continue;
+        const std::string entry(compiled.entryPoint);
+        SDL_GPUShaderCreateInfo info{};
+        info.code = compiled.code.data();
+        info.code_size = compiled.code.size();
+        info.entrypoint = entry.c_str();
+        info.format = SDLFormat(compiled.format);
+        info.stage = shader.stage == ShaderStage::Vertex ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
+        info.num_samplers = shader.resources.samplers;
+        info.num_storage_textures = shader.resources.storageTextures;
+        info.num_storage_buffers = shader.resources.storageBuffers;
+        info.num_uniform_buffers = shader.resources.uniformBuffers;
+        SDL_GPUShader* made = SDL_CreateGPUShader(device, &info);
+        if (made == nullptr) error = SDLError("SDL_CreateGPUShader");
+        return made;
+    }
+    error = std::string("no compiled form of ") + std::string(shader.name) + " for this device's driver";
+    return nullptr;
+}
+
+SDL_GPUSampler* MakeSampler(SDL_GPUDevice* device, const SDL_GPUFilter filter) {
+    SDL_GPUSamplerCreateInfo info{};
+    info.min_filter = filter;
+    info.mag_filter = filter;
+    info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    return SDL_CreateGPUSampler(device, &info);
+}
 
 } // namespace
 
@@ -182,6 +239,15 @@ struct GPUDevice::State {
     SDL_GPUShader* fragment = nullptr;
     SDL_GPUShader* meshVertex = nullptr;
     SDL_GPUShader* meshFragment = nullptr;
+    SDL_GPUShader* depthVertex = nullptr;
+    SDL_GPUShader* depthFragment = nullptr;
+    SDL_GPUShader* fullscreenVertex = nullptr;
+    // The shaders full-screen passes may name besides the embedded ones (GPUDevice::Create's more; a generated table
+    // that outlives the device).
+    std::span<const EmbeddedShader> more;
+    // Full-screen passes' fragment shaders, made the first time a pass names them.
+    std::unordered_map<const EmbeddedShader*, SDL_GPUShader*> fragments;
+    std::vector<PipelineFullscreen> pipelinesFullscreen;
     SDL_GPUSampler* linear = nullptr;
     SDL_GPUSampler* nearest = nullptr;
     GPUTexture white;
@@ -210,6 +276,8 @@ struct GPUDevice::State {
             if (white.texture != nullptr) SDL_ReleaseGPUTexture(device, white.texture);
             for (Pipeline& p : pipelines) SDL_ReleaseGPUGraphicsPipeline(device, p.pipeline);
             for (Pipeline3D& p : pipelines3d) SDL_ReleaseGPUGraphicsPipeline(device, p.pipeline);
+            for (PipelineFullscreen& p : pipelinesFullscreen) SDL_ReleaseGPUGraphicsPipeline(device, p.pipeline);
+            for (auto& [shader, made] : fragments) SDL_ReleaseGPUShader(device, made);
             ReleaseMeshes();
             if (depth.texture != nullptr) SDL_ReleaseGPUTexture(device, depth.texture);
             if (linear != nullptr) SDL_ReleaseGPUSampler(device, linear);
@@ -218,6 +286,9 @@ struct GPUDevice::State {
             if (fragment != nullptr) SDL_ReleaseGPUShader(device, fragment);
             if (meshVertex != nullptr) SDL_ReleaseGPUShader(device, meshVertex);
             if (meshFragment != nullptr) SDL_ReleaseGPUShader(device, meshFragment);
+            for (SDL_GPUShader* shader : {depthVertex, depthFragment, fullscreenVertex}) {
+                if (shader != nullptr) SDL_ReleaseGPUShader(device, shader);
+            }
             if (transfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, transfer);
             if (vertices != nullptr) SDL_ReleaseGPUBuffer(device, vertices);
             if (indices != nullptr) SDL_ReleaseGPUBuffer(device, indices);
@@ -311,10 +382,11 @@ struct GPUDevice::State {
     // The 3D pipeline of a target format and a draw's blend, depth and cull, made the first time it is asked for;
     // nullptr when SDL refuses. Depth: LESS_OR_EQUAL when the draw tests, ALWAYS and no write when it does not. Cull
     // Back leaves out the triangles that are clockwise on the screen (counter-clockwise is the front, as Bevy's).
-    SDL_GPUGraphicsPipeline* Pipeline3DFor(const SDL_GPUTextureFormat format, const R::Draw3D& draw, std::string& error) {
+    // depthOnly: a depth-only pass's (its shaders, no colour target; pass format none).
+    SDL_GPUGraphicsPipeline* Pipeline3DFor(const SDL_GPUTextureFormat format, const R::Draw3D& draw, const bool depthOnly, std::string& error) {
         const bool writes = draw.depthTest && draw.depthWrite;
         for (const Pipeline3D& p : pipelines3d) {
-            if (p.format == format && p.blend == draw.blend && p.depthTest == draw.depthTest && p.depthWrite == writes &&
+            if (p.depthOnly == depthOnly && p.format == format && p.blend == draw.blend && p.depthTest == draw.depthTest && p.depthWrite == writes &&
                 p.cull == draw.cull) {
                 return p.pipeline;
             }
@@ -339,8 +411,9 @@ struct GPUDevice::State {
         attributes[2 + Abi::kMesh3DWorldColumns] = {Abi::kMesh3DColorLocation, Abi::kMesh3DInstanceSlot,
                                                  SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kMesh3DColorOffset};
         SDL_GPUGraphicsPipelineCreateInfo info{};
-        info.vertex_shader = meshVertex;
-        info.fragment_shader = meshFragment;
+        // A depth-only pass's vertex stage reads the position and the world alone; the other inputs stay bound.
+        info.vertex_shader = depthOnly ? depthVertex : meshVertex;
+        info.fragment_shader = depthOnly ? depthFragment : meshFragment;
         info.vertex_input_state.vertex_buffer_descriptions = buffers;
         info.vertex_input_state.num_vertex_buffers = 2;
         info.vertex_input_state.vertex_attributes = attributes;
@@ -353,8 +426,8 @@ struct GPUDevice::State {
         info.depth_stencil_state.compare_op = draw.depthTest ? SDL_GPU_COMPAREOP_LESS_OR_EQUAL : SDL_GPU_COMPAREOP_ALWAYS;
         info.depth_stencil_state.enable_depth_write = writes;
         info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        info.target_info.color_target_descriptions = &target;
-        info.target_info.num_color_targets = 1;
+        info.target_info.color_target_descriptions = depthOnly ? nullptr : &target;
+        info.target_info.num_color_targets = depthOnly ? 0 : 1;
         info.target_info.depth_stencil_format = depthFormat;
         info.target_info.has_depth_stencil_target = true;
         SDL_GPUGraphicsPipeline* made = SDL_CreateGPUGraphicsPipeline(device, &info);
@@ -362,8 +435,49 @@ struct GPUDevice::State {
             error = SDLError("SDL_CreateGPUGraphicsPipeline");
             return nullptr;
         }
-        pipelines3d.push_back(Pipeline3D{format, draw.blend, draw.depthTest, writes, draw.cull, made});
+        pipelines3d.push_back(Pipeline3D{depthOnly, format, draw.blend, draw.depthTest, writes, draw.cull, made});
         return made;
+    }
+
+    // The shader a full-screen pass names: an embedded one, or one of more; nullptr when the device carries none of
+    // that name.
+    const EmbeddedShader* FindShader(const std::string& name) const {
+        if (const EmbeddedShader* embedded = FindEmbeddedShader(name)) return embedded;
+        for (const EmbeddedShader& shader : more) {
+            if (shader.name == name) return &shader;
+        }
+        return nullptr;
+    }
+
+    // The full-screen pipeline of a fragment shader and a target format, made the first time it is asked for (the
+    // shader too); nullptr when SDL refuses. One triangle of no vertex input, no depth, the colour replaced.
+    SDL_GPUGraphicsPipeline* PipelineFullscreenFor(const EmbeddedShader& shader, const SDL_GPUTextureFormat format, std::string& error) {
+        for (const PipelineFullscreen& p : pipelinesFullscreen) {
+            if (p.shader == &shader && p.format == format) return p.pipeline;
+        }
+        auto made = fragments.find(&shader);
+        if (made == fragments.end()) {
+            SDL_GPUShader* fragment = MakeShader(device, shader, error);
+            if (fragment == nullptr) return nullptr;
+            made = fragments.emplace(&shader, fragment).first;
+        }
+        const SDL_GPUColorTargetDescription target = ColorTarget(format, R::BlendMode::Opaque);
+        SDL_GPUGraphicsPipelineCreateInfo info{};
+        info.vertex_shader = fullscreenVertex;
+        info.fragment_shader = made->second;
+        info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+        info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+        info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+        info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        info.target_info.color_target_descriptions = &target;
+        info.target_info.num_color_targets = 1;
+        SDL_GPUGraphicsPipeline* pipeline = SDL_CreateGPUGraphicsPipeline(device, &info);
+        if (pipeline == nullptr) {
+            error = SDLError("SDL_CreateGPUGraphicsPipeline");
+            return nullptr;
+        }
+        pipelinesFullscreen.push_back(PipelineFullscreen{&shader, format, pipeline});
+        return pipeline;
     }
 
     // The depth texture of a colour target of this size (made again when the size changes). false: SDL refused it.
@@ -432,8 +546,9 @@ struct GPUDevice::State {
         return made;
     }
 
-    // The usage of a render target: drawn on, then sampled.
+    // The usage of a render target: drawn on, then sampled (a Depth target drawn on as depth).
     static constexpr SDL_GPUTextureUsageFlags kTargetUsage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    static constexpr SDL_GPUTextureUsageFlags kDepthTargetUsage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
 
     // The targets at the sizes their descriptions give this frame, made (again) where the size changed: a fixed size,
     // the main target's (main; none when there is no main picture this frame: such a target is left as it is), or the
@@ -458,7 +573,7 @@ struct GPUDevice::State {
             if (!wanted || t.size == *wanted) continue;
             ReleaseTarget(t);
             t.size = *wanted;
-            t.texture = MakeTexture(wanted->width, wanted->height, kTargetUsage, t.format, tally.lastRefusal);
+            t.texture = MakeTexture(wanted->width, wanted->height, t.isDepth ? kDepthTargetUsage : kTargetUsage, t.format, tally.lastRefusal);
             t.fresh = true;
             if (t.texture == nullptr) ++tally.refusedAsks;
         }
@@ -536,7 +651,8 @@ struct GPUDevice::State {
                 // Its texture is made by EnsureTargets, once this frame's sizes are known.
                 GPUTarget made;
                 made.filter = target->desc.filter;
-                made.format = SDLTextureFormat(target->desc.format);
+                made.isDepth = target->desc.format == R::TextureFormat::Depth;
+                made.format = made.isDepth ? depthFormat : SDLTextureFormat(target->desc.format);
                 made.wanted = target->desc.size;
                 targets[target->id.value] = made;
             }
@@ -782,8 +898,9 @@ struct GPUDevice::State {
         return colour;
     }
 
-    // Records one render pass per Pass2D or Pass3D that has a target this frame (resolved, ResolveTargets), in their
-    // order. The main target (main; none in a skipped frame) with no pass gets one pass that clears it.
+    // Records one render pass per pass that has a target this frame (resolved, ResolveTargets), in their order (RP-3:
+    // the GPU's order is RenderCommands'; SDL_GPU keeps what one pass writes and a later one reads in that order). The
+    // main target (main; none in a skipped frame) with no pass gets one pass that clears it.
     void RecordPasses(SDL_GPUCommandBuffer* cmd, const R::RenderCommands& commands, const std::vector<std::optional<Target>>& resolved,
                       const std::optional<Target>& main, FrameTally& tally) {
         bool mainBegun = false;
@@ -794,10 +911,21 @@ struct GPUDevice::State {
             if (!resolved[p]) continue;
             const R::RenderPass& item = commands.passes[p];
             const Target& on = *resolved[p];
-            if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
+            RequirePictures(on, item);
+            const bool onDepth = on.target != nullptr && on.target->isDepth;
+            if (const auto* passDepth = std::get_if<R::PassDepth>(&item)) {
+                GYO_ASSERT(onDepth && "a depth-only pass's target is a Depth target");
+                RecordPassDepth(cmd, on, *passDepth, vertexBase, indexBase, instanceBase, tally);
+            } else if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
+                GYO_ASSERT(!onDepth && "a 3D pass's target is a colour target (its depth is Pass3D::depth)");
                 const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
                 RecordPass3D(cmd, on, colour, *pass3d, vertexBase, indexBase, instanceBase, tally);
+            } else if (const auto* fullscreen = std::get_if<R::PassFullscreen>(&item)) {
+                GYO_ASSERT(!onDepth && "a full-screen pass's target is a colour target");
+                const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
+                RecordPassFullscreen(cmd, on, colour, *fullscreen, tally);
             } else {
+                GYO_ASSERT(!onDepth && "a 2D pass's target is a colour target");
                 const R::Pass2D& pass2d = std::get<R::Pass2D>(item);
                 const SDL_GPUColorTargetInfo colour = StartColour(on, pass2d.clear, mainBegun);
                 RecordPass2D(cmd, on, colour, pass2d, vertexBase, indexBase, tally);
@@ -834,6 +962,17 @@ struct GPUDevice::State {
     // A draw that samples the target its pass draws on reads and writes one texture at once (undefined on the GPU):
     // skipped and counted.
     static bool SamplesOwnTarget(const Target& on, const R::TextureId texture) noexcept { return on.id && *on.id == texture; }
+
+    // RP-3 (render-pipeline declaration section 14): what a pass samples (ReadsOf) of the render targets has a
+    // picture: some pass drew on it since it was made or made again at a new size (earlier this frame, or in an
+    // earlier frame). One with no GPU texture, or the pass's own target, is skipped and counted where it is drawn.
+    void RequirePictures(const Target& on, const R::RenderPass& pass) const {
+        for (const R::TextureId id : R::ReadsOf(pass)) {
+            const auto it = targets.find(id.value);
+            if (it == targets.end() || it->second.texture == nullptr || SamplesOwnTarget(on, id)) continue;
+            GYO_ASSERT(!it->second.fresh && "a pass samples a render target no pass drew on since it was made or made again (RP-3)");
+        }
+    }
 
     // Records one Pass2D on its target (colour: how it starts). vertexBase, indexBase: where its vertices and indices
     // are in the frame's buffers.
@@ -897,31 +1036,70 @@ struct GPUDevice::State {
         SDL_EndGPURenderPass(render);
     }
 
-    // Records one Pass3D on its target: its depth (the target's own) cleared to 1 unless the pass keeps it, its colour
-    // kept as the target is (colour: cleared to transparent black when it is the target's first pass of the frame, as
-    // a Pass2D without a clear). vertexBase, indexBase, instanceBase: where the pass's own vertices and indices and its
-    // instances are in the frame's buffers.
+    // Records one Pass3D on its target: its depth (Pass3D::depth, or the target's own) cleared to 1 unless the pass
+    // keeps it (or a Depth target has no picture yet), its colour kept as the target is (colour: cleared to
+    // transparent black when it is the target's first pass of the frame, as a Pass2D without a clear). vertexBase,
+    // indexBase, instanceBase: where the pass's own vertices and indices and its instances are in the frame's buffers.
     void RecordPass3D(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour, const R::Pass3D& pass,
                       const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
-        const SDL_GPUTextureFormat format = on.format;
-        const R::TargetSize size = on.size;
-        if (!EnsureDepth(*on.depth, size, tally.lastRefusal)) {
+        SDL_GPUTexture* depth = nullptr;
+        bool undefined = false;
+        if (pass.depth) {
+            const auto it = targets.find(pass.depth->value);
+            if (it == targets.end() || it->second.texture == nullptr) {
+                // No depth to draw with (let go, never made, refused): as below.
+                tally.skippedDraws += pass.draws.size();
+                SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr));
+                return;
+            }
+            GPUTarget& t = it->second;
+            GYO_ASSERT(t.isDepth && "a 3D pass's depth is a Depth target");
+            GYO_ASSERT(t.size == on.size && "a 3D pass's depth target has its target's size");
+            depth = t.texture;
+            undefined = t.fresh;
+            t.fresh = false;
+        } else if (EnsureDepth(*on.depth, on.size, tally.lastRefusal)) {
+            depth = on.depth->texture;
+        } else {
             // No depth to draw with: the pass's draws are skipped; the colour is still what the rule above says.
             tally.skippedDraws += pass.draws.size();
             SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr));
             return;
         }
+        RecordMeshes(cmd, on, &colour, depth, pass.clearDepth || undefined, pass, vertexBase, indexBase, instanceBase, tally);
+    }
+
+    // Records one PassDepth on its Depth target (on): cleared to 1 unless the pass keeps it (or it has no picture
+    // yet), no colour.
+    void RecordPassDepth(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassDepth& pass, const std::uint32_t vertexBase,
+                         const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
+        const bool undefined = on.target->fresh;
+        on.target->fresh = false;
+        RecordMeshes(cmd, on, nullptr, on.texture, pass.clearDepth || undefined, pass, vertexBase, indexBase, instanceBase, tally);
+    }
+
+    // Records the draws of a Pass3D (colour: how its colour target starts) or a PassDepth (colour: none; the draws'
+    // textures not bound) with depth as the depth target, cleared to 1 when clearDepth, else as it is (and stored, so
+    // a later pass may keep it or sample it).
+    template <class Pass>
+    void RecordMeshes(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo* colour, SDL_GPUTexture* depth,
+                      const bool clearDepth, const Pass& pass, const std::uint32_t vertexBase, const std::uint32_t indexBase,
+                      const std::uint32_t instanceBase, FrameTally& tally) {
+        const bool textured = colour != nullptr;
+        // A depth-only pipeline has no colour format.
+        const SDL_GPUTextureFormat format = textured ? on.format : SDL_GPU_TEXTUREFORMAT_INVALID;
+        const R::TargetSize size = on.size;
         SDL_GPUDepthStencilTargetInfo depthTarget{};
-        depthTarget.texture = on.depth->texture;
+        depthTarget.texture = depth;
         depthTarget.clear_depth = 1.0F;
-        // Cleared unless the pass keeps the depth of the passes before it (Pass3D::clearDepth; SDL cycles a target
-        // only when it is cleared). Stored, so a later pass may keep it.
-        depthTarget.load_op = pass.clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
+        // Cleared unless the pass keeps the depth of the passes before it (SDL cycles a target only when it is
+        // cleared). Stored, so a later pass may keep it.
+        depthTarget.load_op = clearDepth ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
         depthTarget.store_op = SDL_GPU_STOREOP_STORE;
         depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
         depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
-        depthTarget.cycle = pass.clearDepth;
-        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, &colour, 1, &depthTarget);
+        depthTarget.cycle = clearDepth;
+        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, colour, textured ? 1 : 0, &depthTarget);
         const R::PixelRect area = R::ViewportOf(pass, size);
         const bool drawable = area.width != 0 && area.height != 0;
         // Clip space lands on the viewport; clipping keeps every triangle inside it (no scissor needed).
@@ -971,12 +1149,16 @@ struct GPUDevice::State {
                 vb = SDL_GPUBufferBinding{it->second.vertices, 0};
                 ib = SDL_GPUBufferBinding{it->second.indices, 0};
             }
-            const std::optional<Sampled> tex = SampledOf(draw.texture);
-            if (!tex || SamplesOwnTarget(on, draw.texture)) {
-                ++tally.skippedDraws;
-                continue;
+            std::optional<SDL_GPUTextureSamplerBinding> binding;
+            if (textured) {
+                const std::optional<Sampled> tex = SampledOf(draw.texture);
+                if (!tex || SamplesOwnTarget(on, draw.texture)) {
+                    ++tally.skippedDraws;
+                    continue;
+                }
+                binding = SDL_GPUTextureSamplerBinding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
             }
-            SDL_GPUGraphicsPipeline* pipeline = Pipeline3DFor(format, draw, tally.lastRefusal);
+            SDL_GPUGraphicsPipeline* pipeline = Pipeline3DFor(format, draw, !textured, tally.lastRefusal);
             if (pipeline == nullptr) {
                 ++tally.skippedDraws;
                 continue;
@@ -991,57 +1173,66 @@ struct GPUDevice::State {
                 SDL_BindGPUIndexBuffer(render, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
                 boundVertices = vb.buffer;
             }
-            const SDL_GPUTextureSamplerBinding binding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
-            if (binding.texture != boundTexture.texture || binding.sampler != boundTexture.sampler) {
-                SDL_BindGPUFragmentSamplers(render, Abi::kMesh3DTextureSlot, &binding, 1);
-                boundTexture = binding;
+            if (binding && (binding->texture != boundTexture.texture || binding->sampler != boundTexture.sampler)) {
+                SDL_BindGPUFragmentSamplers(render, Abi::kMesh3DTextureSlot, &*binding, 1);
+                boundTexture = *binding;
             }
             const auto firstVertex = static_cast<std::int32_t>(draw.vertexOffset);
             SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, draw.instanceCount, draw.indexOffset, firstVertex, draw.instanceOffset);
         }
         SDL_EndGPURenderPass(render);
     }
+
+    // Records one PassFullscreen on its target (colour: how it starts): one triangle over its viewport with its
+    // fragment shader, its inputs bound in order and its parameters pushed. Nothing is drawn, and the pass is counted
+    // as a skipped draw, when the device carries no shader of its name, an input has no GPU texture or is the pass's own
+    // target, or SDL refuses the pipeline.
+    void RecordPassFullscreen(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour,
+                              const R::PassFullscreen& pass, FrameTally& tally) {
+        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr);
+        const R::PixelRect area = R::ViewportOf(pass, on.size);
+        const EmbeddedShader* shader = FindShader(pass.shader);
+        const auto skip = [&](std::string why) {
+            ++tally.skippedDraws;
+            if (!why.empty()) tally.lastRefusal = std::move(why);
+            SDL_EndGPURenderPass(render);
+        };
+        if (area.width == 0 || area.height == 0) {
+            SDL_EndGPURenderPass(render);
+            return;
+        }
+        if (shader == nullptr) return skip("no shader named " + pass.shader + " for a full-screen pass");
+        GYO_ASSERT(shader->stage == ShaderStage::Fragment && "a full-screen pass's shader is a fragment shader");
+        GYO_ASSERT(pass.inputs.size() == shader->resources.samplers && "a full-screen pass has as many inputs as its shader samples");
+        GYO_ASSERT(pass.parameters.empty() == (shader->resources.uniformBuffers == 0) &&
+                   shader->resources.uniformBuffers <= Abi::kFullscreenFragmentUniformBuffersAtMost &&
+                   "a full-screen pass has parameters when (and only when) its shader declares them");
+        std::vector<SDL_GPUTextureSamplerBinding> bindings;
+        for (const R::TextureId input : pass.inputs) {
+            const std::optional<Sampled> in = SampledOf(input);
+            if (!in || SamplesOwnTarget(on, input)) return skip({});
+            bindings.push_back(SDL_GPUTextureSamplerBinding{in->texture, in->filter == R::TextureFilter::Nearest ? nearest : linear});
+        }
+        SDL_GPUGraphicsPipeline* pipeline = PipelineFullscreenFor(*shader, on.format, tally.lastRefusal);
+        if (pipeline == nullptr) return skip({});
+        const SDL_GPUViewport viewport{static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.width),
+                                       static_cast<float>(area.height), 0.0F, 1.0F};
+        SDL_SetGPUViewport(render, &viewport);
+        SDL_BindGPUGraphicsPipeline(render, pipeline);
+        if (!bindings.empty()) {
+            SDL_BindGPUFragmentSamplers(render, Abi::kFullscreenFirstInputSlot, bindings.data(), static_cast<std::uint32_t>(bindings.size()));
+        }
+        if (!pass.parameters.empty()) {
+            SDL_PushGPUFragmentUniformData(cmd, Abi::kFullscreenParametersSlot, pass.parameters.data(),
+                                           static_cast<std::uint32_t>(pass.parameters.size()));
+        }
+        SDL_DrawGPUPrimitives(render, Abi::kFullscreenVertices, 1, 0, 0);
+        SDL_EndGPURenderPass(render);
+    }
 };
 
-namespace {
-
-SDL_GPUShader* MakeShader(SDL_GPUDevice* device, const EmbeddedShader& shader, std::string& error) {
-    const SDL_GPUShaderFormat available = SDL_GetGPUShaderFormats(device);
-    for (const CompiledShader& compiled : shader.compiled) {
-        if ((available & SDLFormat(compiled.format)) == 0) continue;
-        const std::string entry(compiled.entryPoint);
-        SDL_GPUShaderCreateInfo info{};
-        info.code = compiled.code.data();
-        info.code_size = compiled.code.size();
-        info.entrypoint = entry.c_str();
-        info.format = SDLFormat(compiled.format);
-        info.stage = shader.stage == ShaderStage::Vertex ? SDL_GPU_SHADERSTAGE_VERTEX : SDL_GPU_SHADERSTAGE_FRAGMENT;
-        info.num_samplers = shader.resources.samplers;
-        info.num_storage_textures = shader.resources.storageTextures;
-        info.num_storage_buffers = shader.resources.storageBuffers;
-        info.num_uniform_buffers = shader.resources.uniformBuffers;
-        SDL_GPUShader* made = SDL_CreateGPUShader(device, &info);
-        if (made == nullptr) error = SDLError("SDL_CreateGPUShader");
-        return made;
-    }
-    error = std::string("no compiled form of ") + std::string(shader.name) + " for this device's driver";
-    return nullptr;
-}
-
-SDL_GPUSampler* MakeSampler(SDL_GPUDevice* device, const SDL_GPUFilter filter) {
-    SDL_GPUSamplerCreateInfo info{};
-    info.min_filter = filter;
-    info.mag_filter = filter;
-    info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    return SDL_CreateGPUSampler(device, &info);
-}
-
-} // namespace
-
-Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Create(SDL::NativeWindow* window, const bool debug) {
+Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Create(SDL::NativeWindow* window, const bool debug,
+                                                                                const std::span<const EmbeddedShader> more) {
     RequireMainThread();
     using Engine::Base::Err;
     auto state = std::make_unique<State>();
@@ -1056,10 +1247,17 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
     const EmbeddedShader* fragment = FindEmbeddedShader("pass2d.frag");
     const EmbeddedShader* meshVertex = FindEmbeddedShader("mesh3d.vert");
     const EmbeddedShader* meshFragment = FindEmbeddedShader("mesh3d.frag");
-    GYO_ASSERT(vertex != nullptr && fragment != nullptr && meshVertex != nullptr && meshFragment != nullptr &&
-               "the passes' shaders are compiled into sdl_gpu");
-    state->device = SDL_CreateGPUDevice(FormatsOf(*vertex) & FormatsOf(*fragment) & FormatsOf(*meshVertex) & FormatsOf(*meshFragment),
-                                        debug, nullptr);
+    const EmbeddedShader* depthVertex = FindEmbeddedShader("depth.vert");
+    const EmbeddedShader* depthFragment = FindEmbeddedShader("depth.frag");
+    const EmbeddedShader* fullscreenVertex = FindEmbeddedShader("fullscreen.vert");
+    const EmbeddedShader* const builtIn[] = {vertex, fragment, meshVertex, meshFragment, depthVertex, depthFragment, fullscreenVertex};
+    SDL_GPUShaderFormat formats = ~SDL_GPUShaderFormat{0};
+    for (const EmbeddedShader* shader : builtIn) {
+        GYO_ASSERT(shader != nullptr && "the passes' shaders are compiled into sdl_gpu");
+        formats &= FormatsOf(*shader);
+    }
+    state->more = more;
+    state->device = SDL_CreateGPUDevice(formats, debug, nullptr);
     if (state->device == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::DeviceFailed, SDLError("SDL_CreateGPUDevice")));
     state->driver = SDL_GetGPUDeviceDriver(state->device);
     if (window != nullptr) {
@@ -1074,15 +1272,19 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
     if (state->vertex != nullptr) state->fragment = MakeShader(state->device, *fragment, error);
     if (state->fragment != nullptr) state->meshVertex = MakeShader(state->device, *meshVertex, error);
     if (state->meshVertex != nullptr) state->meshFragment = MakeShader(state->device, *meshFragment, error);
-    if (state->meshFragment == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, std::move(error)));
+    if (state->meshFragment != nullptr) state->depthVertex = MakeShader(state->device, *depthVertex, error);
+    if (state->depthVertex != nullptr) state->depthFragment = MakeShader(state->device, *depthFragment, error);
+    if (state->depthFragment != nullptr) state->fullscreenVertex = MakeShader(state->device, *fullscreenVertex, error);
+    if (state->fullscreenVertex == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, std::move(error)));
     for (const SDL_GPUTextureFormat format : kDepthFormats) {
-        if (SDL_GPUTextureSupportsFormat(state->device, format, SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET)) {
+        if (SDL_GPUTextureSupportsFormat(state->device, format, SDL_GPU_TEXTURETYPE_2D, State::kDepthTargetUsage)) {
             state->depthFormat = format;
             break;
         }
     }
     if (state->depthFormat == SDL_GPU_TEXTUREFORMAT_INVALID) {
-        return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, "the device supports none of D32_FLOAT, D24_UNORM, D16_UNORM as a depth target"));
+        return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed,
+                                       "the device supports none of D32_FLOAT, D24_UNORM, D16_UNORM as a sampled depth target"));
     }
     state->linear = MakeSampler(state->device, SDL_GPU_FILTER_LINEAR);
     state->nearest = MakeSampler(state->device, SDL_GPU_FILTER_NEAREST);

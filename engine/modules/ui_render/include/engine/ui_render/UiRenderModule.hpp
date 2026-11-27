@@ -10,8 +10,9 @@
 //   The render World only reads the source (UI-7, DI-KS 13).
 // - QueueUiPasses, in UiRenderOptions::schedule / stage (Main / PostUpdate, before camera_render's
 //   ComposeCameraPasses): for each extracted camera, the roots drawn over it by (order, entity) as one Pass2D on the
-//   camera's viewport (view: its own pixels), at the end of the camera's slot of CameraPasses, so the UI lies over
-//   what the camera's 2D and 3D passes drew (Bevy's TransparentUi phase after the main pass).
+//   camera's viewport (view: its own pixels), in the Overlay phase of the camera's slot of CameraPasses, so the UI
+//   lies over what the camera's 2D, 3D and full-screen passes drew (Bevy's ui_pass after PostProcess,
+//   bevy_ui_render/src/lib.rs:302).
 //
 // Colours: ui's linear colours are encoded to sRGB bytes (the 2D pass blends stored bytes, render.zh-Hant.md section 2).
 

@@ -14,7 +14,8 @@
 //   MeshRenderOptions::meshBytesPerFrame limits the bytes of new meshes a frame makes (RenderModelMeshes); how many
 //   wait goes to the Product's MeshRenderStatus.
 // - Queue3dPasses, in MeshRenderOptions::schedule / stage (Main / Update): puts each extracted 3D camera's Queue3d
-//   pass in its slot of CameraPasses; camera_render composes them.
+//   pass in the Opaque phase of its slot of CameraPasses (its blended draws after its opaque ones, in the one pass);
+//   camera_render composes them.
 //
 // The source World needs transform, camera, world_render and world_asset (else R-E4).
 
