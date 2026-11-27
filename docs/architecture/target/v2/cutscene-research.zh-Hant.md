@@ -1,6 +1,6 @@
 # 過場動畫（即時渲染）：成熟方案比較（`v8-arch-gyo2-cutscene-research`）
 
-更新：2026-11-27（新頁）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究，不實作。第 8 節的決策點等使用者決定；這份文件不改任何已定的決定。**
+更新：2026-11-28（狀態改成暫緩）；2026-11-27（新頁）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：研究中，決策點暫緩：很多前提還沒定（HANDOFF `v8-arch-gyo2-skill-cutscene-research-held`）。不實作；這份文件不改任何已定的決定。**
 
 查的版本：`gyo2` 85df84da。Godot（`94fc09c`）、Bevy（`6a911653f`）用 `~/Code/GitHome` 的本地源碼（路徑從各 repo 的根算起）。Unity Timeline、Unreal Sequencer、Bevy 生態的第三方 crate 不在本機（本機的 `com.unity.entities`／`com.unity.netcode` 裡搜不到 `PlayableDirector`），只讀官方網頁與 README（附 URL），沒有下載或 clone。
 
