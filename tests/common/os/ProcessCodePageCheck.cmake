@@ -1,5 +1,5 @@
 # Design Invariant 11 (docs/architecture/os.md): every executable target under
-# engine, plugins, games, tools, build/acceptance and tests carries the UTF-8 code page
+# the roots of build/cmake/GyoSourceRoots.txt carries the UTF-8 code page
 # manifest that the build layer applies (build/cmake/GyoCodePage.cmake), or an
 # exemption with its reason. The build layer marks the targets on every
 # platform, so a target the walk misses fails the configuration on any OS.
@@ -7,8 +7,9 @@
 # also starts from the top directory by source path, so a directory the build
 # layer forgot to record is seen. Exemptions are listed, not refused.
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../build/cmake/GyoSourceRoots.cmake")
 
-function(_gyo_os_check_code_pages directory)
+function(_gyo_os_check_code_pages directory pattern)
     set(ancestors ${ARGN})
     if(directory IN_LIST ancestors)
         return()
@@ -16,7 +17,7 @@ function(_gyo_os_check_code_pages directory)
     list(APPEND ancestors "${directory}")
     get_property(source DIRECTORY "${directory}" PROPERTY SOURCE_DIR)
     file(RELATIVE_PATH relative "${GYO_REPOSITORY_ROOT}" "${source}")
-    if(relative MATCHES "^(engine|plugins|games|tools|build/acceptance|tests)(/|$)")
+    if(relative MATCHES "${pattern}")
         get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
         foreach(target IN LISTS targets)
             get_target_property(type ${target} TYPE)
@@ -34,14 +35,17 @@ function(_gyo_os_check_code_pages directory)
     endif()
     get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
     foreach(child IN LISTS children)
-        _gyo_os_check_code_pages("${child}" ${ancestors})
+        _gyo_os_check_code_pages("${child}" "${pattern}" ${ancestors})
     endforeach()
 endfunction()
 
 function(gyo_expect_process_code_pages)
+    gyo_source_roots(roots)
+    list(JOIN roots "|" alternatives)
+    set(pattern "^(${alternatives})(/|$)")
     get_property(recorded GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)
     foreach(directory IN ITEMS "${CMAKE_SOURCE_DIR}" ${recorded})
-        _gyo_os_check_code_pages("${directory}")
+        _gyo_os_check_code_pages("${directory}" "${pattern}")
     endforeach()
     get_property(exempt GLOBAL PROPERTY GYO_OS_CODE_PAGE_EXEMPT)
     list(REMOVE_DUPLICATES exempt)

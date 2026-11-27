@@ -21,7 +21,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/GyoUnitRegistry.cmake")
 # Design Invariant 11 of docs/architecture/os.md: every Windows executable of
 # the repository's own sources declares UTF-8 as its ANSI code page. The
 # directories added below are recorded; the manifest is applied once every
-# target exists, and tests/common/os checks it afterwards.
+# target exists, and tests/common/os checks it afterwards. Every directory added
+# below for the repository's own code lies under a root of GyoSourceRoots.txt
+# (third_party/ is not ours); a new top-level directory goes there first.
 include("${CMAKE_CURRENT_LIST_DIR}/GyoCodePage.cmake")
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_apply_process_code_page)
 gyo_configure_games()
@@ -60,12 +62,14 @@ gyo_load_unit_registers(GYO_UNITS "${GYO_REPOSITORY_ROOT}/config/modules.csv"
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
 foreach(GYO_CURRENT_GAME IN LISTS GYO_ACTIVE_GAMES)
-    set(GYO_GAME_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/games/${GYO_CURRENT_GAME}")
-    set(GYO_GAME_BINARY_DIR "${PROJECT_BINARY_DIR}/games/${GYO_CURRENT_GAME}")
-    add_subdirectory("${GYO_GAME_SOURCE_DIR}" "${GYO_GAME_BINARY_DIR}")
-    gyo_record_code_page_directory("${GYO_GAME_BINARY_DIR}")
+    gyo_game_source_dir("${GYO_REPOSITORY_ROOT}" "${GYO_CURRENT_GAME}" _gyo_game_source)
+    file(RELATIVE_PATH _gyo_game_relative "${GYO_REPOSITORY_ROOT}" "${_gyo_game_source}")
+    add_subdirectory("${_gyo_game_source}" "${PROJECT_BINARY_DIR}/${_gyo_game_relative}")
+    gyo_record_code_page_directory("${PROJECT_BINARY_DIR}/${_gyo_game_relative}")
 endforeach()
 unset(GYO_CURRENT_GAME)
+unset(_gyo_game_source)
+unset(_gyo_game_relative)
 foreach(GYO_CURRENT_TOOL IN LISTS GYO_ACTIVE_TOOLS)
     get_property(GYO_TOOL_VARIANT GLOBAL PROPERTY GYO_TOOL_${GYO_CURRENT_TOOL}_VARIANT)
     add_subdirectory("${GYO_REPOSITORY_ROOT}/tools/${GYO_CURRENT_TOOL}" "tools/${GYO_CURRENT_TOOL}")
@@ -82,8 +86,6 @@ if(GYO_BUILD_EXAMPLES)
     gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/examples")
 endif()
 foreach(GYO_CURRENT_GAME IN LISTS GYO_ACTIVE_GAMES)
-    set(GYO_GAME_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/games/${GYO_CURRENT_GAME}")
-    set(GYO_GAME_BINARY_DIR "${PROJECT_BINARY_DIR}/games/${GYO_CURRENT_GAME}")
     if(BUILD_TESTING AND EXISTS "${GYO_REPOSITORY_ROOT}/tests/${GYO_CURRENT_GAME}/CMakeLists.txt")
         add_subdirectory("${GYO_REPOSITORY_ROOT}/tests/${GYO_CURRENT_GAME}" "tests/${GYO_CURRENT_GAME}")
         gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/tests/${GYO_CURRENT_GAME}")

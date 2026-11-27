@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOWS = ROOT / ".github" / "workflows"
 sys.path.insert(0, str(ROOT / "build/ci/common"))
 from go_checks import SERVICE_RECORD_NAME  # noqa: E402
+from plugin_removal import PRODUCT_KINDS  # noqa: E402
 from release_channels import TRIAL_LABEL  # noqa: E402
 
 SNAPSHOT_CONDITION = ("github.event_name == 'push' && github.ref == format('refs/heads/{0}', "
@@ -1205,14 +1206,15 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         # Product selection belongs to registry data; naming an owner in common
         # CI definitions or helpers would make removing that owner edit CI.
         # Registered games and tools require their directories, so directories
-        # also cover disabled owners that the registry export leaves out.
-        owners = {entry.name for folder in ("games", "tools", "services") if (ROOT / folder).is_dir()
+        # also cover disabled owners that the registry export leaves out. The
+        # owner directories are the product kinds' (plugin_removal.PRODUCT_KINDS).
+        folders = tuple(folder for folder, _ in PRODUCT_KINDS)
+        owners = {entry.name for folder in folders if (ROOT / folder).is_dir()
                   for entry in (ROOT / folder).iterdir() if entry.is_dir() and not entry.name.startswith((".", "_"))}
         if not owners:
             # Not a pass: with no owner the list of names to look for is empty. The check resumes as soon as an
-            # owner directory exists under games/, tools/ or services/.
-            self.skipTest("no product, tool or service owner directory under games/, tools/ or services/: "
-                          "no owner name to look for")
+            # owner directory exists under one of the folders.
+            self.skipTest(f"no product or tool owner directory under {', '.join(folders)}: no owner name to look for")
         sources = [*sorted(WORKFLOWS.glob("*.yml")), NATIVE_SETUP, *sorted((ROOT / "build/ci/common").glob("*.py"))]
         common = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in sources}
         for owner in sorted(owners):
@@ -1221,7 +1223,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
             # CI prose (quick, core, engine) does not collide: an owner path, a
             # quoted literal, an assignment or comparison value, or a product,
             # app, tool or game key.
-            usage = re.compile(rf"(?:games|tools|services)/{name}(?![A-Za-z0-9_])"
+            usage = re.compile(rf"(?:{'|'.join(map(re.escape, folders))})/{name}(?![A-Za-z0-9_])"
                                rf"|(['\"]){name}\1"
                                rf"|(?<![=!<>])=\s?{name}(?![A-Za-z0-9_./-])"
                                rf"|\b(?:products?|apps?|tools?|games?)\s*:\s*\[?\s*{name}(?![A-Za-z0-9_])")

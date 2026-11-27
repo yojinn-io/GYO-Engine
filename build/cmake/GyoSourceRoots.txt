@@ -1,0 +1,16 @@
+# The top-level directories that hold the repository's own code, one per line.
+# The build layer applies the UTF-8 code page manifest under them
+# (GyoCodePage.cmake), and the guards scan them: the code page and OS
+# definition checks and the OS boundary guard (tests/common/os), the naming
+# guard (tests/common/naming). No product or Plugin is named, so adding or
+# removing one changes nothing here. Every directory GyoBuild.cmake adds
+# for the repository's own code lies under one of them (third_party/ is not
+# ours). tests/common/cmake/ProcessCodePageTests.cmake pins this
+# list, so a root removed here fails there instead of shrinking every guard.
+engine
+plugins
+games
+tools
+examples
+build/acceptance
+tests

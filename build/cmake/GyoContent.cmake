@@ -39,17 +39,16 @@ function(gyo_attach_content target product)
     set_property(GLOBAL PROPERTY GYO_CONTENT_PYTHON "${Python3_EXECUTABLE}")
     set(assembler "${GYO_REPOSITORY_ROOT}/build/assemble_runtime.py")
     add_custom_target(gyo_${product}--content
-        COMMAND "${Python3_EXECUTABLE}" "${assembler}" --kind game --product "${product}"
+        COMMAND "${Python3_EXECUTABLE}" "${assembler}" --product "${product}"
             --stage "${GYO_OUTPUT_ROOT}/${product}" ${content_args}
         DEPENDS ${dependencies}
         COMMENT "Assembling ${product} runtime content" VERBATIM)
     add_dependencies(${target} gyo_${product}--content)
-    set_property(TARGET ${target} PROPERTY GYO_GAME_CONTENT_STAGE_TARGET gyo_${product}--content)
     set(arguments "")
     foreach(argument IN LISTS content_args)
         string(APPEND arguments " [==[${argument}]==]")
     endforeach()
-    install(CODE "execute_process(COMMAND [==[${Python3_EXECUTABLE}]==] [==[${assembler}]==] --kind game --product [==[${product}]==] --stage \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\" ${arguments} COMMAND_ERROR_IS_FATAL ANY)" COMPONENT "${product}")
+    install(CODE "execute_process(COMMAND [==[${Python3_EXECUTABLE}]==] [==[${assembler}]==] --product [==[${product}]==] --stage \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\" ${arguments} COMMAND_ERROR_IS_FATAL ANY)" COMPONENT "${product}")
 endfunction()
 
 # Separate test and design programs consume the same assembled content rules.
@@ -63,7 +62,7 @@ function(gyo_stage_game_content target product stage)
     endif()
     add_custom_target(${target}--content
         COMMAND "${python}" "${GYO_REPOSITORY_ROOT}/build/assemble_runtime.py"
-            --kind game --product "${product}" --stage "${stage}" ${content_args}
+            --product "${product}" --stage "${stage}" ${content_args}
         DEPENDS ${dependencies} VERBATIM)
     add_dependencies(${target} ${target}--content)
 endfunction()

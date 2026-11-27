@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import naming_guard as guard  # noqa: E402
+from source_roots import source_roots  # noqa: E402
 
 CLEAN_HEADER = """#pragma once
 #include <vector>
@@ -331,8 +332,10 @@ class GuardTree(unittest.TestCase):
                     self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside its unit")
                 shutil.rmtree(self.root / f"{root}/sample")
 
-    def test_n1_scan_roots_are_pinned(self):
-        self.assertEqual(guard.SCAN_ROOTS, ("engine", "games", "tools", "plugins", "tests", "examples"))
+    def test_n1_scan_roots_are_the_source_roots(self):
+        # Every root of the repository's own code is scanned; the list itself is pinned by cmake.ProcessCodePage,
+        # so a guard that drops a root from it fails here.
+        self.assertEqual(guard.SCAN_ROOTS, source_roots())
 
     def test_n1_every_source_type_is_scanned(self):
         # A fixed list, not guard.SUFFIXES: shrinking the guard's set must fail here.

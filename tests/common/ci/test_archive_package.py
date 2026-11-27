@@ -32,12 +32,12 @@ class ArchiveMetadataTests(unittest.TestCase):
 
     def test_complete_evidence_preserves_physical_gpu_boundary(self):
         result = self.metadata()
-        self.assertEqual(result["product"], "sample_app")
+        self.assertEqual(result["product"], "sample_game")
         self.assertIn("manual", result["gpu_acceptance"])
 
     def test_identity_and_changed_manifest_are_rejected(self):
         for key, value in (("source_revision", "b" * 40), ("platform", "windows-x64"),
-                           ("product", "other_app"), ("manifest_sha256", "0" * 64)):
+                           ("product", "other_game"), ("manifest_sha256", "0" * 64)):
             report = evidence(self.contract)
             report[key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -71,15 +71,15 @@ class ArchiveMetadataTests(unittest.TestCase):
             path = stage / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        foreign = stage / manifest_path("other_app")
+        foreign = stage / manifest_path("other_game")
         foreign.parent.mkdir(parents=True)
-        foreign.write_text(json.dumps(manifest(product="other_app")), encoding="utf-8")
-        output = root / "gyo-sample_app-windows-x64.tar.gz"
+        foreign.write_text(json.dumps(manifest(product="other_game")), encoding="utf-8")
+        output = root / "gyo-sample_game-windows-x64.tar.gz"
         result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/archive_package.py"),
             "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--platform", "windows-x64",
             "--output", str(output)], capture_output=True, text=True, timeout=30)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("another product installation: other_app", result.stderr)
+        self.assertIn("another product installation: other_game", result.stderr)
         self.assertFalse(output.exists())
         self.assertFalse((stage / "build_metadata.json").exists())
 

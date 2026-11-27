@@ -95,19 +95,19 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | kernel_guard K6 的標頭分支（守的是寫法）值不值得留 | #265 設計審查 | 下一次設計審查一起看 |
 | world_logging 給一個接 `WorldSetup` 的登記函式（登記呼叫 `TakeKernelDiagnostics` 的交換函式「出」），加走真的 `TakeKernelDiagnostics` 的測試；**同時把 O-3 與 O-12 對診斷紀錄的例子改成一致**（Design Invariant 條文，改前給使用者看） | 交換點實作 PR #270 的設計審查；2026-11-23 代碼審計後使用者選 (a) 留交換函式、接上（`v8-arch-gyo2-forwarding-audit-exchange-keep`） | **2026-11-23 完成**（任務卡，`v8-arch-gyo2-kernel-diagnostics-exchange`：`WorldLogging::ForwardKernelDiagnostics`、兩個測試、O-3／O-11／O-12／LG-1；[宣告](kernel-diagnostics-exchange-declaration.zh-Hant.md)、dev_log `2026_11_23_gyo2_kernel_diagnostics_exchange`） |
 | `LogWorldLabel<D>`：System 拿不到 World 名，每個描述器各抄一份 Resource（`LogWorldLabel.hpp:10-21`、`Forward.hpp:147-155`）；Bevy 的 `WorldId` 是 SystemParam（`bevy_ecs/src/world/identifier.rs:65`）。只有 Kernel 能補 | 2026-11-23 代碼審計（Fable 檢查 N2） | 另開小批，不併進 KR（KR 卡建議、主會話判，2026-11-23） |
-| 「原始碼在哪些頂層目錄」手寫在 6 處（`GyoBuild.cmake` 的 `add_subdirectory`、`GyoCodePage.cmake:27`、`os_boundary_guard.py:31-32`、`tests/common/os/CMakeLists.txt:158`、`naming_guard.py:63`、`test_workflow_gates.py:1162`），AGENTS §9「同一事實一處」；收成一處時要保留「各守衛把清單釘死」 | apps→games 宣告 §6 第 1 項 | apps→games 合併後另開一批 |
+| 「原始碼在哪些頂層目錄」手寫在 6 處（`GyoBuild.cmake` 的 `add_subdirectory`、`GyoCodePage.cmake:27`、`os_boundary_guard.py:31-32`、`tests/common/os/CMakeLists.txt:158`、`naming_guard.py:63`、`test_workflow_gates.py:1162`），AGENTS §9「同一事實一處」；收成一處時要保留「各守衛把清單釘死」 | apps→games 宣告 §6 第 1 項 | **已完成**（`v8-arch-gyo2-build-cleanup`，PR #368）：清單收在 `build/cmake/GyoSourceRoots.txt`（多了 `examples`），code page、它的獨立檢查、建置定義檢查、os 守衛、naming 守衛都讀它；釘死收成一處（`ProcessCodePageTests.cmake` 比對清單內容），各守衛的自測確認「掃的就是這份」；`GyoBuild.cmake` 的 `add_subdirectory` 是組裝、不是清單，註解指向清單；`test_workflow_gates.py` 的是 owner 目錄（另一件事），改讀 `plugin_removal.PRODUCT_KINDS`、拿掉不存在的 `services` |
 | `plugins/` 不在 code page 的根（`GyoCodePage.cmake:27`），也不在 os 守衛的根 | apps→games 宣告 §6 第 2 項 | 已轉 SDL 宣告卡：第一個 Plugin 進來前補 |
-| `examples/` 有執行檔，卻不在 DI 11（`ProcessCodePageCheck`）的 manifest 根裡（現存缺口） | apps→games 宣告修訂 1 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
+| `examples/` 有執行檔，卻不在 DI 11（`ProcessCodePageCheck`）的 manifest 根裡（現存缺口） | apps→games 宣告修訂 1 | **已完成**（`v8-arch-gyo2-build-cleanup`，PR #368）：清單加 `examples`，`cmake.ProcessCodePage` 的合成樹加 `examples/sample`（套用、未記錄被拒、建置定義被拒） |
 | asset 在建置側的鏡像（`content_contract.py`）和 C++ 契約不一致（例：`shader_bundles` 一邊必填、一邊可省） | apps→games 宣告修訂 1 | owner asset；搬產品、打包回來前對齊 |
-| os.md :318-319 寫「每個存在的根至少要有一個原始碼」，`os_boundary_guard` 對空的產品根是跳過，兩者不一致 | apps→games 宣告修訂 2 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
+| os.md :318-319 寫「每個存在的根至少要有一個原始碼」，`os_boundary_guard` 對空的產品根是跳過，兩者不一致 | apps→games 宣告修訂 2 | **已完成**：SDL-P（c2185934）已把 os.md 改成「engine、tests 至少一個原始碼，其他根沒有就略過並回報」，和守衛一致；（`v8-arch-gyo2-build-cleanup`，PR #368）核對後只改狀態 |
 | `examples/orchestration/product_main.cpp` 不示範取壞掉 World 的診斷紀錄；world_logging 做成登記單位 | 診斷紀錄接線卡 #292 | 有產品需要時 |
 | O-13 的字面沒有涵蓋同一條執行緒上的第二個 World（例：同執行緒的兩個 World 都要輸入） | SDL 宣告修訂 19 第 16 節第 3 件 | SDL 子批 W 的宣告一起提條文 |
 | `CaseTiming.cpp` 的 listener 與沒有呼叫者的 `Note()`：照 #289 自己寫的條件拿掉 | os 退避卡 PR #293 | 下一次動 os 測試的批 |
 | 「loses no signal」的掃描：遺失只落在 `round % 64` 的頭 0～3 格，縮小掃描範圍檢出力可能提高好幾倍（宣告 Q3） | os 退避卡 PR #293 | 要研究時另開一批（使用者未定） |
 | os Invariant 8 寫「cleared under its mutex」，但把後備實作的 `pending = false` 移到鎖外任何案例都抓不到（只剩 data race） | os 退避卡的驗證者 | 交設計審查，不加突變（`no-guards-against-misuse`） |
 | os.md DI 2 字面仍寫「the host shader tool」豁免，gyo2 的程式已拿掉（`test_os_boundary_guard.py` 的 `test_render_shader_tool_is_runtime_code_for_r4`） | SDL 宣告修訂 20 第 14 節 | **R2a #315 一起改**（主會話 2026-11-24 判：shader 工具在 `plugins/sdl_gpu` 照 R4，例外已無對象） |
-| 建置層內「遊戲目錄」的規則手寫 4 處；KIND 集合有 3 個讀者；4 個只寫不讀的值 | apps→games #294 設計審查 | 和「頂層目錄手寫 6 處收成一處」那批一起 |
-| `MirrorTests` 的瘦身；`ProjectComposition` 測試對產生器敏感；測試資料仍叫 `sample_app` | apps→games #294 | 下一次動建置層測試的批 |
+| 建置層內「遊戲目錄」的規則手寫 4 處；KIND 集合有 3 個讀者；4 個只寫不讀的值 | apps→games #294 設計審查 | **已完成**（`v8-arch-gyo2-build-cleanup`，PR #368）：`games/<名>` 收成 `gyo_game_source_dir`（`GyoGameRegistry.cmake`）；`assemble_runtime.py` 的 `--kind` 只檢查不用、拿掉，KIND 剩寫的一方（`GyoRuntimeDeployment.cmake`）與讀 manifest 的一方（`package_contract.py`）；只寫不讀的四個值拿掉（`GyoBuild.cmake` 第二個迴圈的 `GYO_GAME_SOURCE_DIR`／`GYO_GAME_BINARY_DIR` 也是） |
+| `MirrorTests` 的瘦身；`ProjectComposition` 測試對產生器敏感；測試資料仍叫 `sample_app` | apps→games #294 | **已完成**（`v8-arch-gyo2-build-cleanup`，PR #368）：`MirrorTests` 只留 Red 回歸與「不帶產品登記、產品、tests、CI」，突變 `gdir-mirror-drops-build-cmake` 退役；`ProjectComposition` 的兩個 `#error` 建置改 `--clean-first`（預設產生器重現 4/8 失敗→修後 8/8 通過）；`sample_app`／`other_app` 改 `sample_game`／`other_game` |
 | README 三語版、`docs/architecture.md`、`docs/creating_games.md`（#294 由 `creating_apps.md` 改名）大多是 master 的舊內容 | apps→games #294 | 圖書管理員 |
 | `RejectedSpawn` 的當場回傳值把 hook 輪也算進去（既有；KR 已把 `ChildOf` 的當場回傳值改成只看這一筆） | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
 | Kernel 的 `Detail::Relationships` 和 `Derive` 的旗標重疊 | KR #295 dev_log「審查之後」 | 下一次動 Kernel 的批 |
@@ -138,7 +138,7 @@ Owner：架構（GYO2 主會話）。使用者 2026-11-17：「你把過時的�
 | CI 在「另一棵原始碼樹」上建置時，Windows（sccache＋MSVC）疑似把 checkout 的 object 給副本用（`std::source_location` 是原路徑，`authority.authority_sources` 失敗；本機無 MSVC 未證實）：之後這類建置不該和 checkout 共用編譯快取；工作流程政策規定 launcher 只由 native-setup 設 | P #300 第三輪 CI | 下一次動 CI 的批 |
 | `AssetLoaderRegistry`、`AssetStoreDiagnostics`（共用處的兩個視圖）在正式程式裡沒有讀者，只有測試讀；「asset 不依賴 threads」（`asset.zh-Hant.md:129`）讓 `WorkerPoolExecutor` 只轉手，判保留（測試的完成順序接點） | 2026-11-23 代碼審計 | 產品第一個用到 asset 時再看 |
 | 守衛的讀法再收斂：entity_store_guard、os_boundary_guard 各自還有一份 `strip_comments_and_strings`；「切段找 `..`」的同一段寫法有 5 份 | #269 | 下一次碰守衛的批 |
-| naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | 同上 |
+| naming_guard 的 `SCAN_ROOTS` 沒涵蓋 `build/acceptance` | #269 | **已完成**（`v8-arch-gyo2-build-cleanup`，PR #368）：`SCAN_ROOTS` 改讀共用清單 |
 | 三份突變清單的路徑還指向 master（big-map engine_format 67 個、audio 12 個、time-threads-trace 6 個）；authority_scan 的路徑寫法待確認。2026-11-22 交換點卡的靜態掃描：所有清單裡 find 指向 gyo2 已刪檔案的共 103 條（master 時代舊計畫的清單） | #269、#270 | **已完成**（`v8-arch-gyo2-mech-cleanup`）：engine_format 整份刪除（68 退役）、time-threads-trace 的 `tt2-*` 6 退役（`TraceSink` 不在 gyo2；傳輸決定搬到 logging LG-6，逐條比對後 `tt2-flush-no-wait` 改寫成 logging 清單的 `lg-file-flush-no-wait`，另 2 條列下一列）；audio 已被 audio 重審、#288 跟上；authority_scan 的 `file` 以清單所在目錄為基準，18/18 killed。掃描後全部清單的 `find` 都恰好命中一次 |
 | logging LG-6 的兩個決定沒有突變守：「推進空佇列才喚醒寫者」（`JsonLinesFileSink.cpp` 的 `if (wake) writer->Notify();`；現有案例都 Hold 住 output，突變只會 timeout）、「Close 寫完停止後取到的那一批、再寫結尾行」（沒有決定性的案例）。都要先動測試再加突變 | 機械清理卡（`v8-arch-gyo2-mech-cleanup`）退役 `tt2-no-wake`、`tt2-final-batch-unwritten` 時的比對 | 下一次動 logging 的批 |
 | 實樹陽性對照重疊：`wt-guard-real` 與 `nm-real-acronym` | #269 | 下一次碰 naming 的批 |

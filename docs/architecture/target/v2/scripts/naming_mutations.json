@@ -347,14 +347,14 @@
   },
   {
    "id": "nm-scan-roots-examples",
-   "what": "examples/ is not scanned (the list, one mutant; each item pinned by test_n1_scan_roots_are_pinned)",
+   "what": "examples/ is not scanned (the list, one mutant; each item pinned by test_n1_scan_roots_are_pinned) (v8-arch-gyo2-build-cleanup: the roots come from build/cmake/GyoSourceRoots.txt; the mutant drops one where this reader reads it)",
    "guards": [
     "rebuild-naming N17",
     "naming DI 1"
    ],
    "file": "tests/common/naming/naming_guard.py",
-   "find": "SCAN_ROOTS = (\"engine\", \"games\", \"tools\", \"plugins\", \"tests\", \"examples\")",
-   "replace": "SCAN_ROOTS = (\"engine\", \"games\", \"tools\", \"plugins\", \"tests\")",
+   "find": "SCAN_ROOTS = source_roots()",
+   "replace": "SCAN_ROOTS = tuple(root for root in source_roots() if root != \"examples\")",
    "expect": "FAIL: test_n1_test_root_outside_tests_is_reported",
    "command": [
     "{python}",
@@ -686,6 +686,26 @@
     "test_naming_guard.py",
     "-v"
    ]
+  },
+  {
+   "id": "bcl-naming-skips-build-acceptance",
+   "what": "The naming guard drops build/acceptance/ from the roots it reads (the list of the repository's own code roots, v8-arch-gyo2-build-cleanup; batch plan row on SCAN_ROOTS without build/acceptance)",
+   "file": "tests/common/naming/naming_guard.py",
+   "find": "SCAN_ROOTS = source_roots()",
+   "replace": "SCAN_ROOTS = tuple(root for root in source_roots() if root != \"build/acceptance\")",
+   "command": [
+    "{python}",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests/common/naming",
+    "-p",
+    "test_naming_guard.py",
+    "-v"
+   ],
+   "expect": "FAIL: test_n1_scan_roots_are_the_source_roots"
   }
  ]
 }

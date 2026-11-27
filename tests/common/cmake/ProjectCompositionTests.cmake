@@ -132,10 +132,13 @@ foreach(game first second)
     endif()
 endforeach()
 
-# A compilation error in any selected game fails the complete graph.
+# A compilation error in any selected game fails the complete graph. The build
+# starts clean: whether an incremental build sees a source rewritten within the
+# same second depends on the generator's timestamp resolution (GNU Make 3.81
+# compares whole seconds), which is not what this case is about.
 file(READ "${source}/games/second/main.cpp" original_main)
 file(WRITE "${source}/games/second/main.cpp" "#error selected game compilation failure\n")
-run(FALSE "selected game compilation failure" "${CMAKE_COMMAND}" --build "${binary}" --config Debug)
+run(FALSE "selected game compilation failure" "${CMAKE_COMMAND}" --build "${binary}" --config Debug --clean-first)
 file(WRITE "${source}/games/second/main.cpp" "${original_main}")
 
 # CSV edits regenerate selection without directory discovery or stale targets.
@@ -194,8 +197,9 @@ string(JSON checks LENGTH "${manifest}" checks)
 if(NOT kind STREQUAL toolchain OR NOT count EQUAL 2 OR NOT tool STREQUAL packer OR NOT checks EQUAL 2)
     message(FATAL_ERROR "No-game multi-tool build did not produce independent contracts: ${manifest}")
 endif()
+# Clean, as for the game above.
 file(WRITE "${source}/tools/packer/main.cpp" "#error selected tool compilation failure\n")
-run(FALSE "selected tool compilation failure" "${CMAKE_COMMAND}" --build "${binary}" --config Debug)
+run(FALSE "selected tool compilation failure" "${CMAKE_COMMAND}" --build "${binary}" --config Debug --clean-first)
 file(WRITE "${source}/tools/packer/main.cpp" "int main() { return 0; }\n")
 run(FALSE "Duplicate tool role" "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -DTEST_DUPLICATE_ROLE=ON)
 run(FALSE "did not register" "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -DTEST_DUPLICATE_ROLE=OFF -DTEST_UNREGISTERED_TOOL=ON)

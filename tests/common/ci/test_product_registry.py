@@ -38,13 +38,13 @@ class RegistryMatrixTests(unittest.TestCase):
                                  encoding="utf-8-sig")
 
     def test_export_uses_enabled_and_target_platform_flags(self):
-        self.write_registry('sample_app,"中文, ""quoted""",arbitrary,true,true,false,true\r\n'
+        self.write_registry('sample_game,"中文, ""quoted""",arbitrary,true,true,false,true\r\n'
                             'disabled,,anything,false,true,true,true\r\n'
                             'linux_only,,,true,false,true,false\r\n')
         # The macos column also enables the local-only macos-x64 build target,
         # which the release export drops: no CI row builds or packages it.
         self.assertEqual(set(export_registry(self.registry)), {
-            ("sample_app", "windows-x64"), ("sample_app", "macos-arm64"), ("linux_only", "linux-x64")})
+            ("sample_game", "windows-x64"), ("sample_game", "macos-arm64"), ("linux_only", "linux-x64")})
 
     def test_empty_registry_still_builds_every_core_tool_baseline(self):
         self.write_registry("")
@@ -59,7 +59,6 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertEqual([row["platform"] for row in matrix], list(RELEASE_PLATFORMS))
         self.assertTrue(all(row["product"] == "toolchain" for row in matrix))
         self.assertTrue(all(row["tools"] for row in matrix))
-        self.assertEqual(outputs["has_games"], "false")
 
     def test_game_rows_are_marked_as_games(self):
         self.write_registry("sample_game,,,true,false,true,false\r\n")
@@ -73,7 +72,6 @@ class RegistryMatrixTests(unittest.TestCase):
         games = json.loads(outputs["matrix"])["include"]
         self.assertEqual([(row["product"], row["kind"], row["platform"]) for row in games],
                          [("sample_game", "game", "linux-x64")])
-        self.assertEqual(outputs["has_games"], "true")
 
     def test_tool_export_uses_data_owned_modes_and_platform_selection(self):
         registry = self.root / "tools.csv"

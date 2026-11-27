@@ -259,7 +259,7 @@ class ReleaseRetryTests(unittest.TestCase):
 
     def test_draft_cli_recovers_a_timeout_and_writes_github_outputs(self):
         api = FakeApi()
-        tag = "sample_app-v1.2.3"
+        tag = "sample_game-v1.2.3"
         api.release["tag_name"] = tag
         request = api.request
         failed = False
@@ -278,7 +278,7 @@ class ReleaseRetryTests(unittest.TestCase):
             output = Path(temporary) / "github-output.txt"
             package_directory = Path(temporary) / "packages"
             service_directory = Path(temporary) / "services"
-            argv = ["release_pipeline.py", "draft", "--train", "sample_app", "--tag", tag, "--commit", COMMIT,
+            argv = ["release_pipeline.py", "draft", "--train", "sample_game", "--tag", tag, "--commit", COMMIT,
                     "--prerelease", "false", "--package-directory", str(package_directory),
                     "--service-directory", str(service_directory), "--output", str(output)]
             with patch.object(sys, "argv", argv), \
@@ -294,7 +294,7 @@ class ReleaseRetryTests(unittest.TestCase):
                 main()
             load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS,
                                          expected_tool_owners={"windows-x64": {"alpha"}}, profile="release")
-            services.assert_called_once_with(service_directory, COMMIT, "sample_app", tuple(RELEASE_PLATFORMS))
+            services.assert_called_once_with(service_directory, COMMIT, "sample_game", tuple(RELEASE_PLATFORMS))
             recovery.assert_called_once_with(api, tag, COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS,
                                              expected_services=set(), notes=ANY)
             self.assertEqual(output.read_text(encoding="utf-8").splitlines(), [
