@@ -186,7 +186,7 @@ TEST_CASE("render: wrong texture asks are Programmer Errors") {
 TEST_CASE("render: targets take their ids from the textures' counter, never given twice; Find and FindTarget keep them apart") {
     R::RenderTextures textures;
     const R::TextureId picture = textures.Create(R::TextureDesc{1, 1}, Pixels(1, 1));
-    const R::RenderTargetDesc fixed{R::TargetSize{8, 8}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest};
+    const R::RenderTargetDesc fixed{R::TargetSize{8, 8}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest};
     const R::TextureId target = textures.CreateTarget(fixed);
     CHECK_MESSAGE(target.value == 2, "[rd-target-id-shared] a target's id comes after the texture's, from the same counter");
     textures.Release(target);
@@ -224,7 +224,6 @@ TEST_CASE("render: wrong target asks are Programmer Errors") {
     namespace C = GYO::Engine::Camera;
     R::RenderTextures textures;
     GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{0, 8}}));
-    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Rgba8UnormSrgb}));
     GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{R::TextureId{9}}}));
     const R::TextureId target = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}});
     GYO_CHECK_ASSERTS(textures.Update(target, R::TextureRegion{0, 0, 1, 1}, Pixels(1, 1)));
@@ -234,13 +233,11 @@ TEST_CASE("render: wrong target asks are Programmer Errors") {
     GYO_CHECK_ASSERTS(targets.Release(C::CameraTarget{1}));
 }
 
-TEST_CASE("render: a Depth target: made like any target, sampled Nearest; never a texture of pixels") {
+TEST_CASE("render: a Depth target is made like any target") {
     R::RenderTextures textures;
-    const R::TextureId depth = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Depth, R::TextureFilter::Nearest});
+    const R::TextureId depth = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::RenderTargetFormat::Depth});
     REQUIRE(textures.FindTarget(depth) != nullptr);
-    CHECK_MESSAGE(textures.FindTarget(depth)->format == R::TextureFormat::Depth, "[rd-depth-target] a target may be Depth");
-    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Depth, R::TextureFilter::Linear}));
-    GYO_CHECK_ASSERTS(textures.Create(R::TextureDesc{1, 1, R::TextureFilter::Nearest, R::TextureFormat::Depth}, Pixels(1, 1)));
+    CHECK_MESSAGE(textures.FindTarget(depth)->format == R::RenderTargetFormat::Depth, "[rd-depth-target] a target may be Depth");
 }
 
 TEST_CASE("render: what each kind of pass draws on and samples") {
@@ -259,8 +256,7 @@ TEST_CASE("render: what each kind of pass draws on and samples") {
     post.inputs = {R::TextureId{9}, R::TextureId{2}};
     R::PassDepth shadow;
     shadow.target = R::TextureId{10};
-    shadow.draws.push_back(R::Draw3D{});
-    shadow.draws.back().texture = R::TextureId{11};
+    shadow.draws.push_back(R::MeshDraw{});
     CHECK_MESSAGE((R::TargetOf(flat) == R::TextureId{3} && R::TargetOf(scene) == std::nullopt && R::TargetOf(post) == R::TextureId{8} &&
                    R::TargetOf(shadow) == R::TextureId{10}),
                   "[rd-pass-target] the target each draws on (a depth-only pass's is its depth target)");
@@ -268,6 +264,33 @@ TEST_CASE("render: what each kind of pass draws on and samples") {
     CHECK_MESSAGE((R::ReadsOf(scene) == std::vector<R::TextureId>{R::TextureId{7}}), "[rd-pass-reads-depth-not-read] a 3D pass's depth target is not a read");
     CHECK_MESSAGE((R::ReadsOf(post) == std::vector<R::TextureId>{R::TextureId{9}, R::TextureId{2}}), "[rd-pass-reads-inputs] a full-screen pass's inputs in order");
     CHECK_MESSAGE(R::ReadsOf(shadow).empty(), "[rd-pass-reads-depth-only] a depth-only pass samples nothing");
+    const R::PassWrites sceneWrites = R::WritesOf(scene);
+    const R::PassWrites shadowWrites = R::WritesOf(shadow);
+    CHECK_MESSAGE((sceneWrites.WritesColour(std::nullopt) && sceneWrites.Writes(R::TextureId{4}) && !sceneWrites.Writes(R::TextureId{7})),
+                  "[rd-pass-writes-3d] a 3D pass draws colour on its target and depth on its depth target");
+    CHECK_MESSAGE((!shadowWrites.colour && !shadowWrites.WritesColour(std::nullopt) && shadowWrites.Writes(R::TextureId{10})),
+                  "[rd-pass-writes-depth-only] a depth-only pass draws no colour, only its depth target");
+}
+
+TEST_CASE("render: RP-3 as data: the first pass sampling a target with no picture before this frame drew on it") {
+    const auto sampling = [](const std::optional<R::TextureId> target, const std::uint32_t texture) {
+        R::Pass2D pass;
+        pass.target = target;
+        pass.draws.emplace_back();
+        pass.draws.back().texture = R::TextureId{texture};
+        return R::RenderPass{pass};
+    };
+    const std::vector<R::TextureId> fresh{R::TextureId{3}};
+    const std::vector<R::RenderPass> unwritten{sampling(std::nullopt, 3)};
+    CHECK_MESSAGE((R::FirstUnwrittenRead(unwritten, {}, fresh) == R::UnwrittenRead{0, R::TextureId{3}}), "[rd-unwritten-found] sampled with no picture");
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(unwritten, {}, {}).has_value(), "[rd-unwritten-has-picture] a target with a picture is not counted");
+    const std::vector<R::RenderPass> drawnFirst{sampling(R::TextureId{3}, 0), sampling(std::nullopt, 3)};
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(drawnFirst, {}, fresh).has_value(), "[rd-unwritten-drawn-before] a pass drew on it earlier this frame");
+    const bool drawnFlags[] = {false, true};
+    CHECK_MESSAGE((R::FirstUnwrittenRead(drawnFirst, drawnFlags, fresh) == R::UnwrittenRead{1, R::TextureId{3}}),
+                  "[rd-unwritten-not-drawn] a pass the backend does not draw draws nothing on it");
+    const std::vector<R::RenderPass> own{sampling(R::TextureId{3}, 3)};
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(own, {}, fresh).has_value(), "[rd-unwritten-own] sampling what a pass draws on is not counted");
 }
 
 TEST_CASE("render: the source's targets: ids from 1 for cameras, never given twice; the sizes a camera computes with") {

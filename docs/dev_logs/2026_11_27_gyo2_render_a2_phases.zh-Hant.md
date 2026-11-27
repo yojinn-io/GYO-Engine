@@ -83,6 +83,49 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 
 - **和 L1 比**（run 45993881896，head `334ecc08`）：linux-x64 的 CPU 255/255、主機建置的 shader 3/3、core 236/236，和 Linux 主機一致；macos-arm64 成功（只建置）。linux-x64 的「Run Linux GPU tests」失敗，但**沒跑到任何 GPU 測試**：開頭的 `xvfb-run … vulkaninfo --summary` 連不上 Xvfb（`vulkan-info.log`：「XCB failed to connect to the X server due to error:1」、`AppCreateXcbSurface failed to establish connection`），`set -euo pipefail` 讓這一步在 `ctest -L gpu` 之前結束（沒有 `gpu-tests.log`）。和 A2 的程式無關；A2 的 GPU 案在 L1 上還沒跑過，要重跑那一列。windows-x64 寫這段時還在跑。
 
+## 設計審查與修正（同日）
+
+兩份審查，報告在主 checkout 的 `build/evidence/v8-arch-gyo2-render-a2/`（不在 git）：
+- 每批的設計審查（Opus／high）：Blocker 0、Should 2、Nit 5、Note 6。
+- 純淨 Code Review（Fable／high，只看程式）：高 3、中 6、低 8。
+
+修正是另一個 commit（不 amend）。小宣告加第 14.10 節（修訂 1）。**RP-3 的行為不改**：取樣一張建立／重建後還沒畫過的 target 時 (A) 斷言（現在）、(B) 取樣到透明黑／1、不斷言（兩份審查的建議，同 Bevy／wgpu）、(C) 照字面「這一幀沒寫過」就斷言——主會話已交使用者，等回覆；第 14.8 節與 `gt-unwritten-*` 照舊。這次只把檢查改成一處、改起來小（下面 M5）。
+
+### 設計審查
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| S-1 RP-3 要交 (A)／(B)／(C) | 交使用者（主會話） | 推翻總宣告第 4.3 節原文的選項只有使用者能定；程式先改成決定後只動一處 |
+| S-2 `rd-depth-linear-allowed`、`rd-depth-pixels-allowed` 和「誤用不測」矛盾 | 兩個都退役 | M3 之後兩個斷言守的組合寫不出來（型別分開、Depth 不看 filter），沒有東西可守 |
+| N-1 CMake 註解指向不存在的檔 | 採用 | 改指 `SDL_ASSERT=abort`、宣告第 14.9 節 |
+| N-2 `kCameraPhaseCount` 手動同步 | 採用 | 由最後一個值推出（M2） |
+| N-3 `Fullscreen.hlsli` 的 uv 說明 | 採用 | 寫成 viewport 的四角（沒有 viewport 時是整個目標） |
+| N-4 `Depth` 要 `Nearest` | 採用 | Depth 不看 `filter`，後端一律最近的 texel（AGENTS §1.10） |
+| N-5 `nonCameraViews` 寫成「光的陰影」 | 採用 | 改成點光、聚光；方向光的 cascade 跟著相機（`light.rs:2235,2328`） |
+| No-1～No-6 | 記錄 | 接受；No-2（`PassDepth` 重複）由純淨 H3 解，No-5（每幀配 vector）只在有沒有畫面的 target 時才走 |
+
+### 純淨 Code Review
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| H1 resize 就能觸發斷言 | 交使用者（同 S-1） | 是 RP-3 的 (A)／(B) 之選 |
+| H2 全畫面 pass 沒有正式的 shader、名字是字串、`more` 是測試接縫 | 部分 | 形狀照設計審查 (b) 留到 B1 的 `ShaderId`（RC-A2-3），A4 帶第一個內建；修便宜的：`more` 算進格式交集、重名是 Programmer Error（L5）、`parameters` 要 16 bytes 的倍數（L4）、宣告寫明「A4 之前沒有產品可用的全畫面 shader」。拒絕：現在做 shader 登記（那是 B1 的設計）、經 Plugin 選項給 `more`（產品沒有要給的 shader，會變成只為測試開的公開介面） |
+| H3 `PassDepth` 複製 `Pass3D` | 採用 | `MeshGeometry`（兩者共用）＋`MeshDraw`（`Draw3D : MeshDraw`）：`PassDepth` 沒有用不到的欄位；後端 `RecordMeshes` 收 `MeshGeometry` 與 `span<const Draw>`（只有 draw 的型別是模板參數：`Draw3D` 綁貼圖，`MeshDraw` 不綁）；「只寫深度」只剩一個說法：沒有顏色輸出（`std::optional<MeshColour>`） |
+| M1 寫沒有完整建模 | 採用 | `WritesOf`（顏色＋深度）；`ComposePasses` 的 bug 先寫成失敗的測試（`[cp-written-not-first]`，修正前失敗、修正後通過）再修；`Pass3D` 取樣自己的深度 target 跳過（`[gd-own-depth-skipped]`）；fresh 收成 `BeginWrite` 一個函式 |
+| M2 `CameraPhase` | 部分 | 從 0 起、由最後一個值推出數目、列表私有＋`InOrder()`；五個名字與封閉的 enum 不改（設計審查 (c)、No-6：phase 內用 System 排序） |
+| M3 一個 enum 兩個子集、Depth 的 filter | 採用 | `TextureFormat` 與 `RenderTargetFormat` 分開；`SDLTextureFormat(Depth)` 的 INVALID 哨兵沒了。A1 的「sRGB target 是 Programmer Error」那一行測試拿掉：那個值寫不出來了（不是為了讓測試過） |
+| M4 分派不窮舉 | 採用 | `WritesOf`、`ReadsOf`、`GeometryOf`、`RecordPasses` 都用 overloaded visitor |
+| M5 RP-3 夾在錄製中間 | 採用 | `render` 的純函式 `FirstUnwrittenRead`，CPU 測試四案；後端在錄之前呼叫一次（`Submit` 要先拿 swapchain 才知道重建與否，所以在取 command buffer 之後、錄之前）；依據仍是「pass 有提到」（寫明的契約） |
+| M6 depth-only pipeline 的鍵含 blend | 採用（沒有失敗的測試） | `MeshDraw` 沒有 blend，鍵是（顏色輸出、depthTest、depthWrite、cull）；看不到 pipeline 的數目、外面量不到，所以不先寫測試 |
+| L1 `Create` 的 if 階梯與字面值 | 採用 | 一張（原始檔名 → 成員）的表；名字由 `ShaderAbi::ShaderName(k*Source)` 推出 |
+| L2 私有深度也要求可取樣 | 不改 | 一種深度格式讓 pipeline 只有一種深度格式；試過的驅動都拿 D32F 兩用；量到精度問題再分（設計 No-4） |
+| L3 名字、兩個清空的主人、`ComposePasses` 的位置 | 採用（平行迴圈不改） | `beforeCameras`；只有 `ComposePasses` 清；搬到 `Compose.cpp`。三個管線的平行索引迴圈各一行，不值得一個抽象 |
+| L4 `parameters` 不查大小 | 採用 | 16 bytes 的倍數（Programmer Error）；shader 的 uniform 大小反射裡沒有，只能查到這裡 |
+| L5 `FindShader` 重名 | 採用 | 建裝置時斷言 |
+| L6 測試 fixture 重複、四個 `TestMain` | 不改 | `Pass2DTests`／`Pass3DTests` 的 helper 各不同，搬動是改既有測試、沒有判斷上的好處；`PhaseTests` 的裝置要帶 `more`。四個「handler 已裝好」是每個執行檔的連結檢查（設計 No-3） |
+| L7 `GPUDevice.cpp` 太大、第三份 pipeline cache | 不改 | 拆檔與共用 cache 不在 A2；A3／B1 動到 pipeline 的鍵時一起看 |
+| L8 `--function` 的 namespace、關鍵字 | 不改 | 只有測試用它；關鍵字當函式名會編譯失敗，不會靜靜錯 |
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。

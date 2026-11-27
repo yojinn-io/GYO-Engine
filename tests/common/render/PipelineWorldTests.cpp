@@ -579,7 +579,7 @@ K::SystemResult QueueEarly(K::ResMut<R::CameraPasses> passes) {
     slots.byCamera[0][R::CameraPhase::PostProcess].push_back(std::move(post));
     R::PassDepth shadow;
     shadow.target = R::TextureId{99};
-    slots.nonCameraViews.push_back(std::move(shadow));
+    slots.beforeCameras.push_back(std::move(shadow));
     return {};
 }
 

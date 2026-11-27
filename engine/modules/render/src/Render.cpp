@@ -39,18 +39,18 @@ PixelRect CutViewport(const Pass& pass, const TargetSize target) {
 
 PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) { return CutViewport(pass, target); }
 
-PixelRect ViewportOf(const Pass3D& pass, const TargetSize target) { return CutViewport(pass, target); }
+PixelRect ViewportOf(const MeshGeometry& pass, const TargetSize target) { return CutViewport(pass, target); }
 
 PixelRect ViewportOf(const PassFullscreen& pass, const TargetSize target) { return CutViewport(pass, target); }
 
-PixelRect ViewportOf(const PassDepth& pass, const TargetSize target) { return CutViewport(pass, target); }
-
-std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
-    // A depth-only pass's target is a TextureId: always a render target, never the main one.
-    return std::visit([](const auto& p) -> std::optional<TextureId> { return p.target; }, pass);
-}
-
 namespace {
+
+template <class... F>
+struct Overloaded : F... {
+    using F::operator()...;
+};
+template <class... F>
+Overloaded(F...) -> Overloaded<F...>;
 
 template <class Draws>
 void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
@@ -61,17 +61,48 @@ void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
 
 } // namespace
 
+PassWrites WritesOf(const RenderPass& pass) noexcept {
+    return std::visit(Overloaded{
+                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth}; },
+                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target}; },
+                      },
+                      pass);
+}
+
+std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
+    const PassWrites writes = WritesOf(pass);
+    return writes.colour ? writes.colourTarget : writes.depthTarget;
+}
+
 std::vector<TextureId> ReadsOf(const RenderPass& pass) {
     std::vector<TextureId> reads;
-    if (const auto* p2 = std::get_if<Pass2D>(&pass)) {
-        AppendTextures(p2->draws, reads);
-    } else if (const auto* p3 = std::get_if<Pass3D>(&pass)) {
-        AppendTextures(p3->draws, reads);
-    } else if (const auto* fullscreen = std::get_if<PassFullscreen>(&pass)) {
-        reads = fullscreen->inputs;
-    }
-    // A depth-only pass samples nothing: its draws' textures are not used.
+    std::visit(Overloaded{
+                   [&](const Pass2D& p) { AppendTextures(p.draws, reads); },
+                   [&](const Pass3D& p) { AppendTextures(p.draws, reads); },
+                   [&](const PassFullscreen& p) { reads = p.inputs; },
+                   // A depth-only pass's draws have no texture.
+                   [](const PassDepth&) {},
+               },
+               pass);
     return reads;
+}
+
+std::optional<UnwrittenRead> FirstUnwrittenRead(const std::span<const RenderPass> passes, const std::span<const bool> drawn,
+                                                const std::span<const TextureId> noPicture) {
+    GYO_ASSERT((drawn.empty() || drawn.size() == passes.size()) && "a drawn flag for each pass");
+    std::vector<TextureId> without(noPicture.begin(), noPicture.end());
+    for (std::size_t i = 0; i < passes.size(); ++i) {
+        if (!drawn.empty() && !drawn[i]) continue;
+        const PassWrites writes = WritesOf(passes[i]);
+        for (const TextureId read : ReadsOf(passes[i])) {
+            if (writes.Writes(read)) continue;
+            if (std::find(without.begin(), without.end(), read) != without.end()) return UnwrittenRead{i, read};
+        }
+        std::erase_if(without, [&](const TextureId id) { return writes.Writes(id); });
+    }
+    return std::nullopt;
 }
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
@@ -116,7 +147,6 @@ PixelRect ClipToPixels(const std::optional<Math::Rect>& clip, const Math::Rect v
 TextureId RenderTextures::Create(const TextureDesc desc, std::vector<std::uint8_t> pixels) {
     GYO_ASSERT(desc.width > 0 && desc.height > 0 && "a texture of zero size");
     GYO_ASSERT(pixels.size() == static_cast<std::size_t>(desc.width) * desc.height * 4 && "texture pixels of another size");
-    GYO_ASSERT(desc.format != TextureFormat::Depth && "a texture of pixels with the format Depth (a render target's only)");
     GYO_ASSERT(next_ != 0 && "every texture id has been given");
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);
@@ -147,9 +177,6 @@ TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
     } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc.size).target) {
         GYO_ASSERT(FindTarget(*followed) != nullptr && "a target following an id that is not a live target");
     }
-    GYO_ASSERT((desc.format == TextureFormat::Rgba8Unorm || desc.format == TextureFormat::Depth) &&
-               "a target format other than Rgba8Unorm or Depth");
-    GYO_ASSERT((desc.format != TextureFormat::Depth || desc.filter == TextureFilter::Nearest) && "a Depth target not sampled Nearest");
     GYO_ASSERT(next_ != 0 && "every texture id has been given");
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);

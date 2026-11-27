@@ -14,7 +14,7 @@
 // CameraTarget has no render target (let go after the camera was computed) is not extracted: nothing to draw on.
 //
 // The pipelines (sprite_render, mesh_render, ui_render) put each camera's passes in a phase of its slot of render's
-// CameraPasses, and the passes of views that are no camera's in its nonCameraViews (emptied by ExtractCameras);
+// CameraPasses (its slots made by ExtractCameras), and the passes of views that are no camera's in its beforeCameras;
 // ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after the pipelines'
 // Update), writes them to RenderCommands: the views that are no camera's, then camera by camera, each camera's clear
 // first, then its phases in order (Compose.hpp).

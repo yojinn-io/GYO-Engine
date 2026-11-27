@@ -12,6 +12,12 @@
 
 namespace GYO::Engine::Render::ShaderAbi {
 
+// The name a backend carries a shader under: its source's file name without ".hlsl" (sdl_gpu's shader tool, --shader).
+[[nodiscard]] constexpr std::string_view ShaderName(const std::string_view source) noexcept {
+    constexpr std::string_view kSuffix = ".hlsl";
+    return source.ends_with(kSuffix) ? source.substr(0, source.size() - kSuffix.size()) : source;
+}
+
 // The shaders' sources, under render's shaders/ directory; entry point "main" in both.
 inline constexpr std::string_view kPass2DVertexSource = "pass2d.vert.hlsl";
 inline constexpr std::string_view kPass2DFragmentSource = "pass2d.frag.hlsl";

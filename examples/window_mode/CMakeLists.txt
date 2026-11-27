@@ -7,6 +7,6 @@ if(BUILD_TESTING)
     # at least one frame is shown, no frame, request or present mode fails.
     add_test(NAME window_mode.example COMMAND gyo_example_window_mode --frames 340)
     set_tests_properties(window_mode.example PROPERTIES LABELS "gpu" TIMEOUT 120)
-    # An SDL assertion ends the run instead of showing SDL's dialog (tests/common/support/SdlAssertTestSupport.hpp).
+    # An SDL assertion ends the run instead of showing SDL's dialog (SDL_ASSERT=abort; render-pipeline declaration 14.9).
     set_property(TEST window_mode.example APPEND PROPERTY ENVIRONMENT "SDL_ASSERT=abort")
 endif()

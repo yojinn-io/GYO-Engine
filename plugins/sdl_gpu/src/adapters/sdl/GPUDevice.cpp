@@ -74,11 +74,25 @@ SDL_GPUTextureFormat SDLTextureFormat(const R::TextureFormat format) noexcept {
     switch (format) {
     case R::TextureFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     case R::TextureFormat::Rgba8UnormSrgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
-    // The device's depth format (State::depthFormat), picked when it is made.
-    case R::TextureFormat::Depth: return SDL_GPU_TEXTUREFORMAT_INVALID;
     }
     return SDL_GPU_TEXTUREFORMAT_INVALID;
 }
+
+// SDL's format of a render target's format: a Depth target's is the device's depth format.
+SDL_GPUTextureFormat SDLTargetFormat(const R::RenderTargetFormat format, const SDL_GPUTextureFormat depthFormat) noexcept {
+    switch (format) {
+    case R::RenderTargetFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    case R::RenderTargetFormat::Depth: return depthFormat;
+    }
+    return SDL_GPU_TEXTUREFORMAT_INVALID;
+}
+
+template <class... F>
+struct Overloaded : F... {
+    using F::operator()...;
+};
+template <class... F>
+Overloaded(F...) -> Overloaded<F...>;
 
 // A 3D pass's depth texture for one colour target, made again when the target's size changes.
 struct Depth {
@@ -125,12 +139,18 @@ struct Pipeline {
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 };
 
-// A 3D pipeline and its key. depthWrite is false whenever depthTest is (a draw that does not test writes no depth).
-// depthOnly: a depth-only pass's (no colour target: format is none, blend not used).
-struct Pipeline3D {
-    bool depthOnly = false;
+// The colour a mesh pipeline puts on its target: the target's format and the draw's blend. A depth-only pass has none.
+struct MeshColour {
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
     R::BlendMode blend = R::BlendMode::Opaque;
+
+    friend bool operator==(const MeshColour&, const MeshColour&) = default;
+};
+
+// A mesh pipeline (a 3D pass's, or a depth-only pass's: no colour) and its key. depthWrite is false whenever depthTest
+// is (a draw that does not test writes no depth).
+struct Pipeline3D {
+    std::optional<MeshColour> colour;
     bool depthTest = true;
     bool depthWrite = true;
     R::CullMode cull = R::CullMode::None;
@@ -167,22 +187,24 @@ struct PassGeometry {
     std::uint64_t instanceBytes = 0;
 };
 
+PassGeometry BytesOf(const R::MeshGeometry& g) {
+    return PassGeometry{reinterpret_cast<const std::uint8_t*>(g.vertices.data()), g.vertices.size() * sizeof(R::Vertex3D),
+                        reinterpret_cast<const std::uint8_t*>(g.indices.data()), g.indices.size() * sizeof(std::uint32_t),
+                        reinterpret_cast<const std::uint8_t*>(g.instances.data()), g.instances.size() * sizeof(R::Instance3D)};
+}
+
 PassGeometry GeometryOf(const R::RenderPass& pass) {
-    return std::visit(
-        [](const auto& p) {
-            using Pass = std::decay_t<decltype(p)>;
-            PassGeometry g;
-            if constexpr (!std::is_same_v<Pass, R::PassFullscreen>) {
-                g = PassGeometry{reinterpret_cast<const std::uint8_t*>(p.vertices.data()), p.vertices.size() * sizeof(p.vertices[0]),
-                                 reinterpret_cast<const std::uint8_t*>(p.indices.data()), p.indices.size() * sizeof(std::uint32_t)};
-            }
-            if constexpr (std::is_same_v<Pass, R::Pass3D> || std::is_same_v<Pass, R::PassDepth>) {
-                g.instances = reinterpret_cast<const std::uint8_t*>(p.instances.data());
-                g.instanceBytes = p.instances.size() * sizeof(R::Instance3D);
-            }
-            return g;
-        },
-        pass);
+    return std::visit(Overloaded{
+                          [](const R::Pass2D& p) {
+                              return PassGeometry{reinterpret_cast<const std::uint8_t*>(p.vertices.data()), p.vertices.size() * sizeof(R::Vertex2D),
+                                                  reinterpret_cast<const std::uint8_t*>(p.indices.data()), p.indices.size() * sizeof(std::uint32_t)};
+                          },
+                          [](const R::Pass3D& p) { return BytesOf(p); },
+                          [](const R::PassDepth& p) { return BytesOf(p); },
+                          // One triangle of no vertex input.
+                          [](const R::PassFullscreen&) { return PassGeometry{}; },
+                      },
+                      pass);
 }
 
 // One chunk of the frame's uploads, at its offset in the transfer buffer.
@@ -313,7 +335,8 @@ struct GPUDevice::State {
         if (id.value == 0) return Sampled{white.texture, R::TextureFilter::Linear};
         if (const auto it = textures.find(id.value); it != textures.end()) return Sampled{it->second.texture, it->second.filter};
         if (const auto it = targets.find(id.value); it != targets.end() && it->second.texture != nullptr) {
-            return Sampled{it->second.texture, it->second.filter};
+            // A Depth target between its texels: the nearest (RenderTargetFormat::Depth).
+            return Sampled{it->second.texture, it->second.isDepth ? R::TextureFilter::Nearest : it->second.filter};
         }
         return std::nullopt;
     }
@@ -382,16 +405,14 @@ struct GPUDevice::State {
     // The 3D pipeline of a target format and a draw's blend, depth and cull, made the first time it is asked for;
     // nullptr when SDL refuses. Depth: LESS_OR_EQUAL when the draw tests, ALWAYS and no write when it does not. Cull
     // Back leaves out the triangles that are clockwise on the screen (counter-clockwise is the front, as Bevy's).
-    // depthOnly: a depth-only pass's (its shaders, no colour target; pass format none).
-    SDL_GPUGraphicsPipeline* Pipeline3DFor(const SDL_GPUTextureFormat format, const R::Draw3D& draw, const bool depthOnly, std::string& error) {
+    // colour: none for a depth-only pass's (its shaders, no colour target).
+    SDL_GPUGraphicsPipeline* Pipeline3DFor(const std::optional<MeshColour>& colour, const R::MeshDraw& draw, std::string& error) {
         const bool writes = draw.depthTest && draw.depthWrite;
         for (const Pipeline3D& p : pipelines3d) {
-            if (p.depthOnly == depthOnly && p.format == format && p.blend == draw.blend && p.depthTest == draw.depthTest && p.depthWrite == writes &&
-                p.cull == draw.cull) {
-                return p.pipeline;
-            }
+            if (p.colour == colour && p.depthTest == draw.depthTest && p.depthWrite == writes && p.cull == draw.cull) return p.pipeline;
         }
-        const SDL_GPUColorTargetDescription target = ColorTarget(format, draw.blend);
+        const bool depthOnly = !colour;
+        const SDL_GPUColorTargetDescription target = depthOnly ? SDL_GPUColorTargetDescription{} : ColorTarget(colour->format, colour->blend);
         // Slot 0 per vertex, slot 1 per instance (ShaderAbi.hpp).
         SDL_GPUVertexBufferDescription buffers[2]{};
         buffers[0].slot = Abi::kMesh3DVertexSlot;
@@ -435,7 +456,7 @@ struct GPUDevice::State {
             error = SDLError("SDL_CreateGPUGraphicsPipeline");
             return nullptr;
         }
-        pipelines3d.push_back(Pipeline3D{depthOnly, format, draw.blend, draw.depthTest, writes, draw.cull, made});
+        pipelines3d.push_back(Pipeline3D{colour, draw.depthTest, writes, draw.cull, made});
         return made;
     }
 
@@ -651,8 +672,8 @@ struct GPUDevice::State {
                 // Its texture is made by EnsureTargets, once this frame's sizes are known.
                 GPUTarget made;
                 made.filter = target->desc.filter;
-                made.isDepth = target->desc.format == R::TextureFormat::Depth;
-                made.format = made.isDepth ? depthFormat : SDLTextureFormat(target->desc.format);
+                made.isDepth = target->desc.format == R::RenderTargetFormat::Depth;
+                made.format = SDLTargetFormat(target->desc.format, depthFormat);
                 made.wanted = target->desc.size;
                 targets[target->id.value] = made;
             }
@@ -702,14 +723,13 @@ struct GPUDevice::State {
         }
     }
 
-    // The picture a pass draws on: the main target's or a render target's (id: the target's, nullopt for the main one).
+    // The picture a pass draws on: the main target's (target: none) or a render target's.
     struct Target {
         SDL_GPUTexture* texture = nullptr;
         SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
         R::TargetSize size{};
         Depth* depth = nullptr;
         GPUTarget* target = nullptr;
-        std::optional<R::TextureId> id;
     };
 
     // This frame's target of each pass, resolved once after EnsureTargets (render-pipeline declaration section 13): the
@@ -732,7 +752,7 @@ struct GPUDevice::State {
                 continue;
             }
             GPUTarget& t = it->second;
-            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, id});
+            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});
         }
         return resolved;
     }
@@ -876,6 +896,15 @@ struct GPUDevice::State {
         return true;
     }
 
+    // A pass begins drawing on a render target: true when the target has no picture (made or made again and not drawn
+    // on since), so the pass clears it instead of keeping it (colour: its clear or transparent black; depth: 1). From
+    // then on it has a picture. The one place where a target gets one.
+    static bool BeginWrite(GPUTarget& target) noexcept {
+        const bool undefined = target.fresh;
+        target.fresh = false;
+        return undefined;
+    }
+
     // How a pass's colour starts on its target: cleared to its clear colour (or transparent black) when it gives one or
     // the target's picture is undefined (the main target's first pass of the frame, a render target made or made again
     // since it was last drawn on); else as the target is (Bevy's LoadOp::Load, texture_attachment.rs:52). Marks the
@@ -883,8 +912,7 @@ struct GPUDevice::State {
     static SDL_GPUColorTargetInfo StartColour(const Target& on, const std::optional<R::Color8>& clear, bool& mainBegun) {
         bool undefined = false;
         if (on.target != nullptr) {
-            undefined = on.target->fresh;
-            on.target->fresh = false;
+            undefined = BeginWrite(*on.target);
         } else {
             undefined = !mainBegun;
             mainBegun = true;
@@ -911,25 +939,25 @@ struct GPUDevice::State {
             if (!resolved[p]) continue;
             const R::RenderPass& item = commands.passes[p];
             const Target& on = *resolved[p];
-            RequirePictures(on, item);
+            const R::PassWrites writes = R::WritesOf(item);
             const bool onDepth = on.target != nullptr && on.target->isDepth;
-            if (const auto* passDepth = std::get_if<R::PassDepth>(&item)) {
-                GYO_ASSERT(onDepth && "a depth-only pass's target is a Depth target");
-                RecordPassDepth(cmd, on, *passDepth, vertexBase, indexBase, instanceBase, tally);
-            } else if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
-                GYO_ASSERT(!onDepth && "a 3D pass's target is a colour target (its depth is Pass3D::depth)");
-                const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
-                RecordPass3D(cmd, on, colour, *pass3d, vertexBase, indexBase, instanceBase, tally);
-            } else if (const auto* fullscreen = std::get_if<R::PassFullscreen>(&item)) {
-                GYO_ASSERT(!onDepth && "a full-screen pass's target is a colour target");
-                const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
-                RecordPassFullscreen(cmd, on, colour, *fullscreen, tally);
-            } else {
-                GYO_ASSERT(!onDepth && "a 2D pass's target is a colour target");
-                const R::Pass2D& pass2d = std::get<R::Pass2D>(item);
-                const SDL_GPUColorTargetInfo colour = StartColour(on, pass2d.clear, mainBegun);
-                RecordPass2D(cmd, on, colour, pass2d, vertexBase, indexBase, tally);
-            }
+            GYO_ASSERT(onDepth == !writes.colour && "a depth-only pass on a Depth target, every other pass on a colour target");
+            std::visit(Overloaded{
+                           [&](const R::PassDepth& pass) { RecordPassDepth(cmd, on, writes, pass, vertexBase, indexBase, instanceBase, tally); },
+                           [&](const R::Pass3D& pass) {
+                               const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
+                               RecordPass3D(cmd, on, writes, colour, pass, vertexBase, indexBase, instanceBase, tally);
+                           },
+                           [&](const R::PassFullscreen& pass) {
+                               const SDL_GPUColorTargetInfo colour = StartColour(on, std::nullopt, mainBegun);
+                               RecordPassFullscreen(cmd, on, writes, colour, pass, tally);
+                           },
+                           [&](const R::Pass2D& pass) {
+                               const SDL_GPUColorTargetInfo colour = StartColour(on, pass.clear, mainBegun);
+                               RecordPass2D(cmd, on, writes, colour, pass, vertexBase, indexBase, tally);
+                           },
+                       },
+                       item);
             const PassGeometry g = GeometryOf(item);
             vertexBase += static_cast<std::uint32_t>(g.vertexBytes);
             indexBase += static_cast<std::uint32_t>(g.indexBytes);
@@ -951,6 +979,7 @@ struct GPUDevice::State {
         ApplyMeshAsks(meshAsks, frame, tally);
         EnsureTargets(main ? std::optional<R::TargetSize>(main->size) : std::nullopt, tally);
         const std::vector<std::optional<Target>> resolved = ResolveTargets(commands, main, tally);
+        RequirePictures(commands, resolved);
         if (!RecordUploads(cmd, frame, commands, resolved, tally, error)) {
             RecordPasses(cmd, R::RenderCommands{}, {}, main, tally);
             return false;
@@ -961,22 +990,29 @@ struct GPUDevice::State {
 
     // A draw that samples the target its pass draws on reads and writes one texture at once (undefined on the GPU):
     // skipped and counted.
-    static bool SamplesOwnTarget(const Target& on, const R::TextureId texture) noexcept { return on.id && *on.id == texture; }
+    // A draw that samples what its pass draws on (its colour target or its depth target) reads and writes one texture
+    // at once.
+    static bool SamplesOwnTarget(const R::PassWrites& writes, const R::TextureId texture) noexcept { return writes.Writes(texture); }
 
-    // RP-3 (render-pipeline declaration section 14): what a pass samples (ReadsOf) of the render targets has a
-    // picture: some pass drew on it since it was made or made again at a new size (earlier this frame, or in an
-    // earlier frame). One with no GPU texture, or the pass's own target, is skipped and counted where it is drawn.
-    void RequirePictures(const Target& on, const R::RenderPass& pass) const {
-        for (const R::TextureId id : R::ReadsOf(pass)) {
-            const auto it = targets.find(id.value);
-            if (it == targets.end() || it->second.texture == nullptr || SamplesOwnTarget(on, id)) continue;
-            GYO_ASSERT(!it->second.fresh && "a pass samples a render target no pass drew on since it was made or made again (RP-3)");
+    // RP-3 (render-pipeline declaration section 14): before anything of the frame is recorded, the render targets the
+    // drawn passes sample have a picture (render's FirstUnwrittenRead over this frame's targets without one).
+    void RequirePictures(const R::RenderCommands& commands, const std::vector<std::optional<Target>>& resolved) const {
+        std::vector<R::TextureId> noPicture;
+        for (const auto& [id, t] : targets) {
+            if (t.texture != nullptr && t.fresh) noPicture.push_back(R::TextureId{id});
         }
+        if (noPicture.empty()) return;
+        const std::unique_ptr<bool[]> drawn = std::make_unique<bool[]>(resolved.size());
+        for (std::size_t p = 0; p < resolved.size(); ++p) drawn[p] = resolved[p].has_value();
+        const std::optional<R::UnwrittenRead> unwritten =
+            R::FirstUnwrittenRead(commands.passes, std::span<const bool>(drawn.get(), resolved.size()), noPicture);
+        GYO_ASSERT(!unwritten && "a pass samples a render target no pass drew on since it was made or made again (RP-3)");
     }
 
     // Records one Pass2D on its target (colour: how it starts). vertexBase, indexBase: where its vertices and indices
     // are in the frame's buffers.
-    void RecordPass2D(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour, const R::Pass2D& pass,
+    void RecordPass2D(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassWrites& writes, const SDL_GPUColorTargetInfo& colour,
+                      const R::Pass2D& pass,
                       const std::uint32_t vertexBase, const std::uint32_t indexBase, FrameTally& tally) {
         const SDL_GPUTextureFormat format = on.format;
         const R::TargetSize size = on.size;
@@ -1008,7 +1044,7 @@ struct GPUDevice::State {
                        "a draw's indices outside its pass");
             if (draw.indexCount == 0 || !bound) continue;
             const std::optional<Sampled> t = SampledOf(draw.texture);
-            if (!t || SamplesOwnTarget(on, draw.texture)) {
+            if (!t || SamplesOwnTarget(writes, draw.texture)) {
                 ++tally.skippedDraws;
                 continue;
             }
@@ -1040,8 +1076,9 @@ struct GPUDevice::State {
     // keeps it (or a Depth target has no picture yet), its colour kept as the target is (colour: cleared to
     // transparent black when it is the target's first pass of the frame, as a Pass2D without a clear). vertexBase,
     // indexBase, instanceBase: where the pass's own vertices and indices and its instances are in the frame's buffers.
-    void RecordPass3D(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour, const R::Pass3D& pass,
-                      const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
+    void RecordPass3D(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassWrites& writes, const SDL_GPUColorTargetInfo& colour,
+                      const R::Pass3D& pass, const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase,
+                      FrameTally& tally) {
         SDL_GPUTexture* depth = nullptr;
         bool undefined = false;
         if (pass.depth) {
@@ -1056,8 +1093,7 @@ struct GPUDevice::State {
             GYO_ASSERT(t.isDepth && "a 3D pass's depth is a Depth target");
             GYO_ASSERT(t.size == on.size && "a 3D pass's depth target has its target's size");
             depth = t.texture;
-            undefined = t.fresh;
-            t.fresh = false;
+            undefined = BeginWrite(t);
         } else if (EnsureDepth(*on.depth, on.size, tally.lastRefusal)) {
             depth = on.depth->texture;
         } else {
@@ -1066,28 +1102,29 @@ struct GPUDevice::State {
             SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr));
             return;
         }
-        RecordMeshes(cmd, on, &colour, depth, pass.clearDepth || undefined, pass, vertexBase, indexBase, instanceBase, tally);
+        RecordMeshes(cmd, on, writes, &colour, depth, pass.clearDepth || undefined, pass, std::span<const R::Draw3D>(pass.draws), vertexBase,
+                     indexBase, instanceBase, tally);
     }
 
     // Records one PassDepth on its Depth target (on): cleared to 1 unless the pass keeps it (or it has no picture
     // yet), no colour.
-    void RecordPassDepth(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassDepth& pass, const std::uint32_t vertexBase,
-                         const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
-        const bool undefined = on.target->fresh;
-        on.target->fresh = false;
-        RecordMeshes(cmd, on, nullptr, on.texture, pass.clearDepth || undefined, pass, vertexBase, indexBase, instanceBase, tally);
+    void RecordPassDepth(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassWrites& writes, const R::PassDepth& pass,
+                         const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
+        const bool undefined = BeginWrite(*on.target);
+        RecordMeshes(cmd, on, writes, nullptr, on.texture, pass.clearDepth || undefined, pass, std::span<const R::MeshDraw>(pass.draws),
+                     vertexBase, indexBase, instanceBase, tally);
     }
 
-    // Records the draws of a Pass3D (colour: how its colour target starts) or a PassDepth (colour: none; the draws'
-    // textures not bound) with depth as the depth target, cleared to 1 when clearDepth, else as it is (and stored, so
-    // a later pass may keep it or sample it).
-    template <class Pass>
-    void RecordMeshes(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo* colour, SDL_GPUTexture* depth,
-                      const bool clearDepth, const Pass& pass, const std::uint32_t vertexBase, const std::uint32_t indexBase,
-                      const std::uint32_t instanceBase, FrameTally& tally) {
-        const bool textured = colour != nullptr;
-        // A depth-only pipeline has no colour format.
-        const SDL_GPUTextureFormat format = textured ? on.format : SDL_GPU_TEXTUREFORMAT_INVALID;
+    // Records the draws of a pass that draws meshes, geometry its viewport, view, own geometry and instances: a 3D
+    // pass's (Draw3D; colour: how its colour target starts, each draw's texture bound and its blend in its pipeline) or a
+    // depth-only pass's (MeshDraw; colour: none). depth is the depth target, cleared to 1 when clearDepth, else as it
+    // is (and stored, so a later pass may keep it or sample it).
+    template <class Draw>
+    void RecordMeshes(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassWrites& writes, const SDL_GPUColorTargetInfo* colour,
+                      SDL_GPUTexture* depth, const bool clearDepth, const R::MeshGeometry& pass, const std::span<const Draw> draws,
+                      const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
+        constexpr bool kColour = std::is_same_v<Draw, R::Draw3D>;
+        GYO_ASSERT((colour != nullptr) == kColour && "a 3D pass's draws on its colour, a depth-only pass's on none");
         const R::TargetSize size = on.size;
         SDL_GPUDepthStencilTargetInfo depthTarget{};
         depthTarget.texture = depth;
@@ -1099,7 +1136,7 @@ struct GPUDevice::State {
         depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
         depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
         depthTarget.cycle = clearDepth;
-        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, colour, textured ? 1 : 0, &depthTarget);
+        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, colour, kColour ? 1 : 0, &depthTarget);
         const R::PixelRect area = R::ViewportOf(pass, size);
         const bool drawable = area.width != 0 && area.height != 0;
         // Clip space lands on the viewport; clipping keeps every triangle inside it (no scissor needed).
@@ -1126,7 +1163,7 @@ struct GPUDevice::State {
         SDL_GPUGraphicsPipeline* boundPipeline = nullptr;
         SDL_GPUBuffer* boundVertices = nullptr;
         SDL_GPUTextureSamplerBinding boundTexture{};
-        for (const R::Draw3D& draw : pass.draws) {
+        for (const Draw& draw : draws) {
             GYO_ASSERT(draw.instanceOffset <= pass.instances.size() && draw.instanceCount <= pass.instances.size() - draw.instanceOffset &&
                        "a draw's instances outside its pass");
             if (draw.indexCount == 0 || draw.instanceCount == 0 || !drawable || !instanced) continue;
@@ -1150,15 +1187,17 @@ struct GPUDevice::State {
                 ib = SDL_GPUBufferBinding{it->second.indices, 0};
             }
             std::optional<SDL_GPUTextureSamplerBinding> binding;
-            if (textured) {
+            std::optional<MeshColour> output;
+            if constexpr (kColour) {
                 const std::optional<Sampled> tex = SampledOf(draw.texture);
-                if (!tex || SamplesOwnTarget(on, draw.texture)) {
+                if (!tex || SamplesOwnTarget(writes, draw.texture)) {
                     ++tally.skippedDraws;
                     continue;
                 }
                 binding = SDL_GPUTextureSamplerBinding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
+                output = MeshColour{on.format, draw.blend};
             }
-            SDL_GPUGraphicsPipeline* pipeline = Pipeline3DFor(format, draw, !textured, tally.lastRefusal);
+            SDL_GPUGraphicsPipeline* pipeline = Pipeline3DFor(output, draw, tally.lastRefusal);
             if (pipeline == nullptr) {
                 ++tally.skippedDraws;
                 continue;
@@ -1187,7 +1226,7 @@ struct GPUDevice::State {
     // fragment shader, its inputs bound in order and its parameters pushed. Nothing is drawn, and the pass is counted
     // as a skipped draw, when the device carries no shader of its name, an input has no GPU texture or is the pass's own
     // target, or SDL refuses the pipeline.
-    void RecordPassFullscreen(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour,
+    void RecordPassFullscreen(SDL_GPUCommandBuffer* cmd, const Target& on, const R::PassWrites& writes, const SDL_GPUColorTargetInfo& colour,
                               const R::PassFullscreen& pass, FrameTally& tally) {
         SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr);
         const R::PixelRect area = R::ViewportOf(pass, on.size);
@@ -1207,10 +1246,11 @@ struct GPUDevice::State {
         GYO_ASSERT(pass.parameters.empty() == (shader->resources.uniformBuffers == 0) &&
                    shader->resources.uniformBuffers <= Abi::kFullscreenFragmentUniformBuffersAtMost &&
                    "a full-screen pass has parameters when (and only when) its shader declares them");
+        GYO_ASSERT(pass.parameters.size() % 16 == 0 && "a full-screen pass's parameters are float4 lanes (a multiple of 16 bytes)");
         std::vector<SDL_GPUTextureSamplerBinding> bindings;
         for (const R::TextureId input : pass.inputs) {
             const std::optional<Sampled> in = SampledOf(input);
-            if (!in || SamplesOwnTarget(on, input)) return skip({});
+            if (!in || SamplesOwnTarget(writes, input)) return skip({});
             bindings.push_back(SDL_GPUTextureSamplerBinding{in->texture, in->filter == R::TextureFilter::Nearest ? nearest : linear});
         }
         SDL_GPUGraphicsPipeline* pipeline = PipelineFullscreenFor(*shader, on.format, tally.lastRefusal);
@@ -1243,18 +1283,29 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
     static_cast<void>(SDL_ResetHint(SDL_HINT_NO_SIGNAL_HANDLERS));
     if (!state->videoStarted) return Err(DeviceFailure::Make(DeviceFailureCode::VideoFailed, std::move(startError)));
 
-    const EmbeddedShader* vertex = FindEmbeddedShader("pass2d.vert");
-    const EmbeddedShader* fragment = FindEmbeddedShader("pass2d.frag");
-    const EmbeddedShader* meshVertex = FindEmbeddedShader("mesh3d.vert");
-    const EmbeddedShader* meshFragment = FindEmbeddedShader("mesh3d.frag");
-    const EmbeddedShader* depthVertex = FindEmbeddedShader("depth.vert");
-    const EmbeddedShader* depthFragment = FindEmbeddedShader("depth.frag");
-    const EmbeddedShader* fullscreenVertex = FindEmbeddedShader("fullscreen.vert");
-    const EmbeddedShader* const builtIn[] = {vertex, fragment, meshVertex, meshFragment, depthVertex, depthFragment, fullscreenVertex};
+    // The passes' built-in shaders, by their sources' names (render's ShaderAbi.hpp), and where each goes.
+    struct BuiltIn {
+        std::string_view source;
+        SDL_GPUShader* State::*made;
+        const EmbeddedShader* shader = nullptr;
+    };
+    BuiltIn builtIns[] = {
+        {Abi::kPass2DVertexSource, &State::vertex},         {Abi::kPass2DFragmentSource, &State::fragment},
+        {Abi::kMesh3DVertexSource, &State::meshVertex},     {Abi::kMesh3DFragmentSource, &State::meshFragment},
+        {Abi::kDepthVertexSource, &State::depthVertex},     {Abi::kDepthFragmentSource, &State::depthFragment},
+        {Abi::kFullscreenVertexSource, &State::fullscreenVertex},
+    };
     SDL_GPUShaderFormat formats = ~SDL_GPUShaderFormat{0};
-    for (const EmbeddedShader* shader : builtIn) {
-        GYO_ASSERT(shader != nullptr && "the passes' shaders are compiled into sdl_gpu");
-        formats &= FormatsOf(*shader);
+    for (BuiltIn& builtIn : builtIns) {
+        builtIn.shader = FindEmbeddedShader(Abi::ShaderName(builtIn.source));
+        GYO_ASSERT(builtIn.shader != nullptr && "the passes' shaders are compiled into sdl_gpu");
+        formats &= FormatsOf(*builtIn.shader);
+    }
+    // The device takes the formats every shader a pass may name is compiled to; a name is one shader's.
+    for (std::size_t i = 0; i < more.size(); ++i) {
+        GYO_ASSERT(FindEmbeddedShader(more[i].name) == nullptr && "a shader of more named as an embedded one");
+        for (std::size_t j = 0; j < i; ++j) GYO_ASSERT(more[j].name != more[i].name && "two shaders of more with one name");
+        formats &= FormatsOf(more[i]);
     }
     state->more = more;
     state->device = SDL_CreateGPUDevice(formats, debug, nullptr);
@@ -1268,14 +1319,10 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
         state->window = sdlWindow;
     }
     std::string error;
-    state->vertex = MakeShader(state->device, *vertex, error);
-    if (state->vertex != nullptr) state->fragment = MakeShader(state->device, *fragment, error);
-    if (state->fragment != nullptr) state->meshVertex = MakeShader(state->device, *meshVertex, error);
-    if (state->meshVertex != nullptr) state->meshFragment = MakeShader(state->device, *meshFragment, error);
-    if (state->meshFragment != nullptr) state->depthVertex = MakeShader(state->device, *depthVertex, error);
-    if (state->depthVertex != nullptr) state->depthFragment = MakeShader(state->device, *depthFragment, error);
-    if (state->depthFragment != nullptr) state->fullscreenVertex = MakeShader(state->device, *fullscreenVertex, error);
-    if (state->fullscreenVertex == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, std::move(error)));
+    for (const BuiltIn& builtIn : builtIns) {
+        state.get()->*builtIn.made = MakeShader(state->device, *builtIn.shader, error);
+        if (state.get()->*builtIn.made == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, std::move(error)));
+    }
     for (const SDL_GPUTextureFormat format : kDepthFormats) {
         if (SDL_GPUTextureSupportsFormat(state->device, format, SDL_GPU_TEXTURETYPE_2D, State::kDepthTargetUsage)) {
             state->depthFormat = format;
@@ -1351,7 +1398,7 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
     std::optional<State::Target> main;
     if (acquired && swapchain != nullptr) {
         main = State::Target{swapchain, SDL_GetGPUSwapchainTextureFormat(state_->device, state_->window), R::TargetSize{width, height},
-                             &state_->depth, nullptr, std::nullopt};
+                             &state_->depth, nullptr};
     }
     std::string error;
     const bool uploaded = state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error);
@@ -1397,7 +1444,7 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     // The picture stands for the main target this frame: a render target that follows the main target takes its size
     // (and the window's again at the next Submit).
     std::string error;
-    const State::Target main{target, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, size, &state_->depth, nullptr, std::nullopt};
+    const State::Target main{target, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, size, &state_->depth, nullptr};
     if (!state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error)) {
         SDL_CancelGPUCommandBuffer(cmd);
         cleanup();

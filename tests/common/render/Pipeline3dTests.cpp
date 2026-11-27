@@ -375,6 +375,28 @@ TEST_CASE("compose: cameras in order, each clear first: the first on a target cl
                   "[cp-emptied] the slots are emptied");
 }
 
+TEST_CASE("compose: a camera on a target an earlier camera's pass drew on clears only its viewport") {
+    // The world camera draws on the main target and post-processes into the target 5 a later camera shows: the later
+    // camera is not the first on target 5.
+    R::ExtractedCameras cameras;
+    R::ExtractedCamera world = Camera3d(std::nullopt, 0);
+    world.clear = R::Color8{1, 2, 3, 255};
+    R::ExtractedCamera monitor = Camera3d(R::TextureId{5}, 1);
+    monitor.clear = R::Color8{4, 5, 6, 255};
+    cameras.cameras = {world, monitor};
+    R::CameraPasses passes;
+    passes.byCamera.resize(2);
+    R::PassFullscreen post;
+    post.target = R::TextureId{5};
+    passes.byCamera[0][R::CameraPhase::PostProcess].push_back(post);
+    R::RenderCommands out;
+    R::ComposePasses(cameras, passes, out);
+    REQUIRE_MESSAGE(out.passes.size() == 3, "[cp-written-all] the world's clear, its post-processing, the monitor's clear");
+    const auto* clear = std::get_if<R::Pass2D>(&out.passes[2]);
+    CHECK_MESSAGE((clear != nullptr && !clear->clear.has_value() && clear->draws.size() == 1),
+                  "[cp-written-not-first] the later camera clears its viewport, not the picture the earlier pass drew");
+}
+
 TEST_CASE("compose: the views that are no camera's first; each camera's clear, then its phases in order") {
     R::ExtractedCameras cameras;
     R::ExtractedCamera world = Camera3d(std::nullopt, 0);
@@ -399,7 +421,7 @@ TEST_CASE("compose: the views that are no camera's first; each camera's clear, t
     passes.byCamera[0][R::CameraPhase::Prepass].push_back(tagged(2));
     R::PassDepth shadow;
     shadow.target = R::TextureId{8};
-    passes.nonCameraViews.push_back(shadow);
+    passes.beforeCameras.push_back(shadow);
     R::RenderCommands out;
     R::ComposePasses(cameras, passes, out);
     std::vector<std::uint32_t> order;
@@ -414,7 +436,7 @@ TEST_CASE("compose: the views that are no camera's first; each camera's clear, t
     CHECK_MESSAGE((order[2] == 2 && order[3] == 3 && order[4] == 7 && order[5] == 4 && order[6] == 5 && order[7] == 6),
                   "[cp-phase-order] Prepass, Opaque (in its order), Transparent, PostProcess, Overlay");
     CHECK_MESSAGE(order[8] == 9, "[cp-phase-camera-order] then the next camera's");
-    CHECK_MESSAGE((passes.nonCameraViews.empty() && passes.byCamera[0][R::CameraPhase::Opaque].empty() &&
+    CHECK_MESSAGE((passes.beforeCameras.empty() && passes.byCamera[0][R::CameraPhase::Opaque].empty() &&
                    passes.byCamera[0][R::CameraPhase::Overlay].empty()),
                   "[cp-phase-emptied] every list is emptied");
 }

@@ -377,7 +377,7 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, id});",
+   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});",
    "replace": "            static_cast<void>(t);\n            ++tally.unmappedPasses;\n            resolved.emplace_back();",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",
@@ -391,7 +391,7 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, id});",
+   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});",
    "replace": "            static_cast<void>(t);\n            resolved.push_back(main);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",
@@ -405,8 +405,8 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            undefined = on.target->fresh;",
-   "replace": "            undefined = true;",
+   "find": "            undefined = BeginWrite(*on.target);",
+   "replace": "            static_cast<void>(BeginWrite(*on.target));\n            undefined = true;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a target keeps*",
    "expect": "\\[gt\\-target\\-kept\\]"
@@ -461,7 +461,7 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            if (!t || SamplesOwnTarget(on, draw.texture)) {",
+   "find": "            if (!t || SamplesOwnTarget(writes, draw.texture)) {",
    "replace": "            if (!t) {",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a draw that samples*",

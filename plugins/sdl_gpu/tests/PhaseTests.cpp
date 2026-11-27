@@ -72,7 +72,10 @@ void ClipQuad(Pass& pass, const float x0, const float x1, const float z, const R
     pass.vertices = {{{x0, -1, z}, {}, {}}, {{x1, -1, z}, {}, {}}, {{x1, 1, z}, {}, {}}, {{x0, 1, z}, {}, {}}};
     pass.indices = {0, 1, 2, 0, 2, 3};
     pass.instances.push_back(R::Instance3D{{}, colour});
-    pass.draws.push_back(R::Draw3D{R::MeshId{}, 0, 6, 0, 0, 1});
+    // One draw of the pass's own six indices and its one instance (a Draw3D or a MeshDraw).
+    pass.draws.emplace_back();
+    pass.draws.back().indexCount = 6;
+    pass.draws.back().instanceCount = 1;
 }
 
 R::PassFullscreen Fullscreen(const std::optional<R::TextureId> target, std::string shader, std::vector<R::TextureId> inputs,
@@ -141,7 +144,7 @@ struct PhaseCase {
     }
 };
 
-R::RenderTargetDesc Fixed(const R::TextureFormat format = R::TextureFormat::Rgba8Unorm) {
+R::RenderTargetDesc Fixed(const R::RenderTargetFormat format = R::RenderTargetFormat::Rgba8Unorm) {
     return R::RenderTargetDesc{kSize, format, R::TextureFilter::Nearest};
 }
 
@@ -192,7 +195,7 @@ TEST_CASE("sdl_gpu phases: a full-screen pass whose shader the device does not c
 
 TEST_CASE("sdl_gpu phases: a depth-only pass writes a Depth target; a 3D pass tests against it; a 2D pass samples it") {
     PhaseCase c;
-    const R::TextureId depth = c.Target(Fixed(R::TextureFormat::Depth));
+    const R::TextureId depth = c.Target(Fixed(R::RenderTargetFormat::Depth));
     const R::TextureId colour = c.Target(Fixed());
     R::RenderCommands commands;
     // The prepass: the left half of clip space at depth 0.25; the rest stays at the clear, 1.
@@ -221,6 +224,17 @@ TEST_CASE("sdl_gpu phases: a depth-only pass writes a Depth target; a 3D pass te
     CHECK_MESSAGE(p.Red(0, 4, 4, 8, 64), "[gd-sampled] the depth the prepass wrote, 0.25 (64 of 255)");
     CHECK_MESSAGE(p.Red(4, 4, 6, 8, 128), "[gd-sampled-scene] the depth the 3D pass wrote into it, 0.5");
     CHECK_MESSAGE(p.Red(6, 4, 8, 8, 255), "[gd-sampled-clear] the cleared depth, 1");
+
+    // A 3D pass whose draw samples the depth target it tests and writes reads and writes one texture at once: skipped.
+    R::RenderCommands loop;
+    R::Pass3D own;
+    own.target = colour;
+    own.depth = depth;
+    ClipQuad(own, -1.0F, 1.0F, 0.5F);
+    own.draws.back().texture = depth;
+    loop.passes.push_back(std::move(own));
+    const Picture q = c.Frame(loop);
+    CHECK_MESSAGE(q.tally.skippedDraws == 1, "[gd-own-depth-skipped] the draw sampling its pass's depth target is skipped and counted");
 }
 
 TEST_CASE("sdl_gpu unwritten: sampling a render target no pass drew on since it was made is a Programmer Error (RP-3)" * doctest::skip()) {

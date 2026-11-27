@@ -3,6 +3,7 @@
 # HLSL sources and ABI. No SDL, no GPU object, no backend interface (SDL declaration, B'): a backend Plugin reads the
 # data and compiles the sources. A library, in no World (library_only in config/modules.csv).
 add_library(gyo_render STATIC
+    src/Compose.cpp
     src/Pipeline2d.cpp
     src/Pipeline3d.cpp
     src/Render.cpp

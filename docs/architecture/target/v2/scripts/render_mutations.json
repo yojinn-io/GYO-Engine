@@ -1113,7 +1113,7 @@
    "guards": [
     "render RD-7"
    ],
-   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "file": "engine/modules/render/src/Compose.cpp",
    "find": "            if (first) {\n                clear.clear = camera.clear;",
    "replace": "            if (true) {\n                clear.clear = camera.clear;",
    "target": "gyo_render_tests",
@@ -1126,7 +1126,7 @@
    "guards": [
     "render RD-7"
    ],
-   "file": "engine/modules/render/src/Pipeline3d.cpp",
+   "file": "engine/modules/render/src/Compose.cpp",
    "find": "            out.passes.push_back(std::move(clear));\n        }",
    "replace": "            passes.byCamera.resize(std::max(passes.byCamera.size(), i + 1));\n            passes.byCamera[i][CameraPhase::Overlay].push_back(std::move(clear));\n        }",
    "target": "gyo_render_tests",
@@ -1139,9 +1139,9 @@
    "guards": [
     "render RD-7"
    ],
-   "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "        const bool first = std::find(drawn.begin(), drawn.end(), camera.target) == drawn.end();",
-   "replace": "        const bool first = drawn.empty();",
+   "file": "engine/modules/render/src/Compose.cpp",
+   "find": "        const bool first = std::find(cameraTargets.begin(), cameraTargets.end(), camera.target) == cameraTargets.end() &&",
+   "replace": "        const bool first = cameraTargets.empty() &&",
    "target": "gyo_render_tests",
    "cases": "compose:*",
    "expect": "\\[cp\\-per\\-target\\]"
@@ -1276,8 +1276,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "p.blend == draw.blend && p.depthTest == draw.depthTest && ",
-   "replace": "p.blend == draw.blend && ",
+   "find": "p.colour == colour && p.depthTest == draw.depthTest && ",
+   "replace": "p.colour == colour && ",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: depth*",
    "expect": "\\[g3\\-no\\-test\\-over\\]"
@@ -1302,8 +1302,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "p.format == format && p.blend == draw.blend && p.depthTest",
-   "replace": "p.format == format && p.depthTest",
+   "find": "    friend bool operator==(const MeshColour&, const MeshColour&) = default;",
+   "replace": "    friend bool operator==(const MeshColour& a, const MeshColour& b) { return a.format == b.format; }",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: Alpha*",
    "expect": "\\[g3\\-blend\\-alpha\\]"
@@ -1315,8 +1315,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": " &&\n                p.cull == draw.cull) {",
-   "replace": ") {",
+   "find": " && p.cull == draw.cull) return p.pipeline;",
+   "replace": ") return p.pipeline;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: cull*",
    "expect": "\\[g3\\-cull\\-none\\-both\\]"
@@ -1468,8 +1468,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                if (!tex || SamplesOwnTarget(on, draw.texture)) {\n                    ++tally.skippedDraws;\n                    continue;",
-   "replace": "                if (!tex || SamplesOwnTarget(on, draw.texture)) {\n                    continue;",
+   "find": "                if (!tex || SamplesOwnTarget(writes, draw.texture)) {\n                    ++tally.skippedDraws;\n                    continue;",
+   "replace": "                if (!tex || SamplesOwnTarget(writes, draw.texture)) {\n                    continue;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: a texture*",
    "expect": "\\[g3\\-tex\\-missing\\-counted\\]"

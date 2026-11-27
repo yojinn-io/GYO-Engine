@@ -12,7 +12,8 @@
 struct FullscreenVarying
 {
     float4 position : SV_Position;
-    // The target's texture coordinates: (0, 0) its top-left corner, (1, 1) its bottom-right one (as Pass2D's uv).
+    // (0, 0) at the top-left corner of the pass's viewport (the whole target when it has none), (1, 1) at its
+    // bottom-right one, y down (as Pass2D's uv).
     float2 uv : TEXCOORD0;
 };
 #endif

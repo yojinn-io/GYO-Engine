@@ -70,5 +70,5 @@ set_tests_properties(object_connect.runtime PROPERTIES LABELS "cpu" TIMEOUT 120
 gyo_get_game_target(object_connect main object_connect_main)
 add_test(NAME object_connect.main COMMAND ${object_connect_main} --frames 30)
 set_tests_properties(object_connect.main PROPERTIES LABELS "gpu" TIMEOUT 120)
-# An SDL assertion ends the run instead of showing SDL's dialog (tests/common/support/SdlAssertTestSupport.hpp).
+# An SDL assertion ends the run instead of showing SDL's dialog (SDL_ASSERT=abort; render-pipeline declaration 14.9).
 set_property(TEST object_connect.main APPEND PROPERTY ENVIRONMENT "SDL_ASSERT=abort")

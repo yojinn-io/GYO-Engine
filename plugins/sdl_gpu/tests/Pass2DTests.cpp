@@ -559,7 +559,7 @@ struct TargetCase {
 };
 
 R::RenderTargetDesc Fixed(const std::uint32_t width, const std::uint32_t height) {
-    return R::RenderTargetDesc{R::TargetSize{width, height}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest};
+    return R::RenderTargetDesc{R::TargetSize{width, height}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest};
 }
 
 // The whole of a target sampled onto the main target's (0, 0) .. (width, height), nearest pixel.
@@ -608,7 +608,7 @@ TEST_CASE("sdl_gpu targets: a pass draws into an 8 x 8 target and a later pass s
     scene.vertices = {{{-1, -1, 0.5F}, {}, {}}, {{1, -1, 0.5F}, {}, {}}, {{1, 1, 0.5F}, {}, {}}, {{-1, 1, 0.5F}, {}, {}}};
     scene.indices = {0, 1, 2, 0, 2, 3};
     scene.instances.push_back(R::Instance3D{{}, kYellow});
-    scene.draws.push_back(R::Draw3D{R::MeshId{}, 0, 6, 0, 0, 1});
+    scene.draws.push_back(R::Draw3D{{R::MeshId{}, 0, 6, 0, 0, 1}});
     next.passes.push_back(std::move(scene));
     next.passes.push_back(SampleTarget(target, 8, 8));
     const Picture q = c.Frame(next);
@@ -650,7 +650,7 @@ TEST_CASE("sdl_gpu targets: an sRGB texture is sampled as linear values; a Unorm
 
 TEST_CASE("sdl_gpu targets: a target follows the main target's size, or another target's, again when it changes") {
     TargetCase c;
-    const R::TextureId target = c.Target(R::RenderTargetDesc{R::FollowTarget{}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    const R::TextureId target = c.Target(R::RenderTargetDesc{R::FollowTarget{}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest});
     // Into the target: blue, a red square of 4 x 4 pixels at its top-left (no view: one unit a pixel).
     const auto frame = [&](const R::TargetSize size) {
         R::RenderCommands commands;
@@ -673,7 +673,7 @@ TEST_CASE("sdl_gpu targets: a target follows the main target's size, or another 
 
     // A target following a fixed 4 x 4 one: sampled over 8 x 8, each of its pixels is 2 x 2 (it is 4 x 4 too).
     const R::TextureId fixed = c.Target(Fixed(4, 4));
-    const R::TextureId follower = c.Target(R::RenderTargetDesc{R::FollowTarget{fixed}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    const R::TextureId follower = c.Target(R::RenderTargetDesc{R::FollowTarget{fixed}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest});
     R::RenderCommands commands;
     commands.passes.push_back(On(fixed, kBlue));
     R::Pass2D into = On(follower, kBlue);

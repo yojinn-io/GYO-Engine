@@ -302,40 +302,4 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     return pass;
 }
 
-void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out) {
-    for (RenderPass& pass : passes.nonCameraViews) out.passes.push_back(std::move(pass));
-    passes.nonCameraViews.clear();
-    std::vector<std::optional<TextureId>> drawn;
-    for (const RenderPass& pass : out.passes) drawn.push_back(TargetOf(pass));
-    for (std::size_t i = 0; i < cameras.cameras.size(); ++i) {
-        const ExtractedCamera& camera = cameras.cameras[i];
-        const bool first = std::find(drawn.begin(), drawn.end(), camera.target) == drawn.end();
-        drawn.push_back(camera.target);
-        if (camera.clear) {
-            Pass2D clear;
-            clear.target = camera.target;
-            if (first) {
-                clear.clear = camera.clear;
-            } else {
-                const Camera::Viewport& vp = camera.computed.viewport;
-                clear.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
-                                           static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
-                const auto w = static_cast<float>(vp.size.x);
-                const auto h = static_cast<float>(vp.size.y);
-                const Color8 c = *camera.clear;
-                clear.vertices = {{{0.0F, 0.0F}, {}, c}, {{w, 0.0F}, {}, c}, {{w, h}, {}, c}, {{0.0F, h}, {}, c}};
-                clear.indices = {0, 1, 2, 0, 2, 3};
-                clear.draws.push_back(Draw2D{TextureId{}, BlendMode::Opaque, std::nullopt, 0, 6, 0});
-            }
-            out.passes.push_back(std::move(clear));
-        }
-        if (i < passes.byCamera.size()) {
-            for (std::vector<RenderPass>& phase : passes.byCamera[i].lists) {
-                for (RenderPass& pass : phase) out.passes.push_back(std::move(pass));
-                phase.clear();
-            }
-        }
-    }
-}
-
 } // namespace GYO::Engine::Render

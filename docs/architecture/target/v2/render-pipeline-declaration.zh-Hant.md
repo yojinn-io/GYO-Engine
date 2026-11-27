@@ -1,7 +1,7 @@
 # 總宣告：渲染管線線（`v8-arch-gyo2-render-pipeline`）
 
 更新：2026-11-27（修訂 1：記入使用者的決定，第 12 節）。Owner：渲染管線線的任務卡（GYO2 主會話開）。
-**狀態：總宣告；第 11 節的決定點已由使用者決定（第 12 節），合併等使用者說「合併」。** 第 13 節 A1 小宣告：修訂 1（2026-11-27，設計審查與純淨 Code Review 之後）。 第 14 節 A2 小宣告（2026-11-27）。 這一階段只寫宣告與分批，不寫實作程式；各批開工前另寫小宣告（判定、測試、突變）。
+**狀態：總宣告；第 11 節的決定點已由使用者決定（第 12 節），合併等使用者說「合併」。** 第 13 節 A1 小宣告：修訂 1（2026-11-27，設計審查與純淨 Code Review 之後）。 第 14 節 A2 小宣告（2026-11-27；修訂 1：設計審查與純淨 Code Review 之後，第 14.10 節）。 這一階段只寫宣告與分批，不寫實作程式；各批開工前另寫小宣告（判定、測試、突變）。
 
 **核心一句**（每一項都拿來對照）：**清單照原樣全做。Engine 只給「只有 Engine 做得到」的機制（畫到哪裡、pass 的先後、材質怎麼接 shader、光與影怎麼算）；PBR、tonemapping、後處理這些是 Engine 給的「預設規則」，作者可以換掉；遊戲自己的 shader、材質參數、哪個模式開哪些效果，是遊戲的資料。**
 
@@ -499,3 +499,19 @@ phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（
 - **為什麼 Metal 走到 SDL 的斷言**：建貼圖前的 `SDL_GPUTextureSupportsFormat` 在 Metal 只查「深度用途要深度格式」，不查反過來（`SDL_gpu_metal.m:4176-4180`），所以對 D32F＋`COLOR_TARGET` 回 true；Vulkan 把用途換成 `VkImageUsage` 問驅動（`SDL_gpu_vulkan.c:10992-11001`），會回 false，後端算一次被拒、不進 SDL 的驗證。**Linux L1 不會發生**：一是 Vulkan 先拒；二是突變不在 CI 跑（D184）；三是 A2 還沒推、還沒經過 L1。
 - **做法**（SDL 自己的機制）：`plugins/sdl/tests/adapters/sdl/UnattendedAssertions.cpp` 在 main 之前呼叫 `SDL_SetAssertionHandler`（`SDL_assert.h:589`），handler 把條件與位置印到 stderr、回 `SDL_ASSERTION_ABORT`（SDL 會 `SDL_Quit` 再 abort，`SDL_assert.c:123-127`）；`SDL_Quit` 不會換回預設 handler（`:387`）。做成 OBJECT library `gyo_sdl_unattended_assertions`，連進每個會啟動 SDL 的測試執行檔（`gyo_sdl_tests`、`gyo_sdl_audio_tests`、`gyo_sdl_gpu_tests`、`gyo_sdl_window_tests`）；它在 Plugin 的測試 adapter 目錄（SDL-1）。跑產品執行檔的 ctest（`sdl_window.example`、`window_mode.example`、`object_connect.main`、`object_fps_pvp.main`、`object_fps_pvp.main_connect`）沒有測試的 main，改用 SDL 的 hint：環境變數 `SDL_ASSERT=abort`（`SDL_hints.h:4587-4609`；預設 handler 讀它、不開視窗，`SDL_assert.c:177-196`）。這是讓測試能無人跑完，不是擋誤用的守衛。
 - **檢查**：每個執行檔一案「handler 已裝好」（`[sdl-assert-unattended]`）；`sdl.unattended_assertion`（cpu）在子行程強制一個 SDL 斷言（平常 `skip` 的一案，同時把 hint 設成 abort 當第二層網：handler 沒裝時也不開對話框，只是少了 handler 的字、ctest 失敗），由 `ExpectUnattendedAbort.cmake` 判「行程結束、印出 handler 的字」（ctest 對訊號結束的行程不看輸出一律算失敗，所以用腳本判）。突變 `sdl-unattended-handler-not-installed`（`sdl_mutations.json`）killed。
+
+### 14.10 修訂 1：設計審查與純淨 Code Review 之後（2026-11-27）
+
+審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a2/`，不在 git）：每批的設計審查（Opus／high，Blocker 0、Should 2、Nit 5、Note 6）、純淨 Code Review（Fable／high，高 3、中 6、低 8）。逐項的處理與一句理由在 dev_log。改了的形狀（第 14.3 節的對應點以這裡為準）：
+
+1. **mesh 類 pass 共用**（純淨 H3）：`MeshGeometry{viewport, clipFromWorld, vertices, indices, instances}` 是 `Pass3D` 與 `PassDepth` 的共同部分（繼承，所以 `pass.draws`、`pass.instances` 的寫法不變）；`MeshDraw{mesh, 範圍, depthTest, depthWrite, cull}` 是 draw 的共同部分，`Draw3D : MeshDraw` 多 `texture`、`blend`。`PassDepth::draws` 是 `MeshDraw`：沒有用不到的欄位。後端的 mesh pipeline 以「有沒有顏色輸出（`MeshColour{format, blend}`）」為鍵的一部分，只寫深度＝沒有顏色輸出（同一個概念一個名字；混合不再把只寫深度的 pipeline 分成兩條，純淨 M6）。
+2. **寫的宣告**（純淨 M1）：`WritesOf(pass)`＝`PassWrites{colour, colourTarget, depthTarget}`（顏色：`PassDepth` 以外都畫；深度：`Pass3D::depth`、`PassDepth::target`）。`TargetOf` 由它推出（後端開 render pass 的那個 attachment）。用在三處：`ComposePasses` 判「目標上第一個相機」（前面的相機的 pass 畫過顏色的目標，後面的相機不再當第一個——之前只看相機的目標，前一台相機的 `PostProcess` 寫進的 target 會被後一台整張清掉：先寫成失敗的測試 `[cp-written-not-first]` 再修）；後端「取樣自己畫的東西」的 draw 跳過（`Pass3D` 取樣自己的深度 target 也算）；`FirstUnwrittenRead`。
+3. **RP-3 的檢查改成 render 的純函式**（純淨 M5；行為暫不改，等使用者選 (A)／(B)／(C)）：`FirstUnwrittenRead(passes, drawn, noPicture)` 回「第一個取樣沒有畫面的 target 的 pass」；後端在解析完目標、錄任何東西之前，以這一幀還沒有畫面的 target 呼叫它並斷言。測試不用 GPU（`render.data` 的 `[rd-unwritten-*]`）。`Submit` 要先拿到 swapchain 才知道跟主目標的 target 的大小（重建與否），所以在取 command buffer 之後、錄之前，不在取之前。「沒有畫面 → 第一次寫時清」收成後端一個函式 `BeginWrite`（顏色、`Pass3D::depth`、`PassDepth` 三處都經它）。選 (B) 時改的是這兩處：後端把 `noPicture` 的 target 先清，而不是斷言。
+4. **格式分兩個型別**（純淨 M3、設計 N-4／S-2）：`TextureFormat{Rgba8Unorm, Rgba8UnormSrgb}` 給貼圖，`RenderTargetFormat{Rgba8Unorm, Depth}` 給 target：「Depth 的貼圖」與「sRGB 的 target」寫不出來，原本的兩個斷言拿掉。`Depth` target 不看 `filter`，後端一律用最近的 texel 取樣（AGENTS §1.10）。
+5. **phase**（純淨 M2、設計 N-2）：`CameraPhase` 從 0 起（和專案其他 enum 不同，理由：它是索引，`CameraPhase{}` 也是一個 phase），`kCameraPhaseCount` 由最後一個值推出；`CameraPhases` 的列表私有、`InOrder()` 給合成用。五個名字不變（設計審查 (c)）。
+6. **`nonCameraViews` 改名 `beforeCameras`**（純淨 L3、設計 N-5）：它是「在所有相機之前畫的 pass」；註解改成點光、聚光的陰影（Bevy 的 `RootNonCameraView`，`bevy_pbr/src/render/light.rs:2235,2328`；方向光的 cascade 跟著相機，C1 多半放相機的 `Prepass`）。只有 `ComposePasses` 清它（`ExtractCameras` 只做每台相機的格子）。`ComposePasses` 搬到 `Compose.cpp`。
+7. **全畫面 pass**（純淨 H2，只修便宜的；形狀照設計審查 (b) 保留到 B1）：**到 A4 的 tonemapping 之前，Engine 沒有任何產品可用的全畫面 fragment shader**（只有測試的）；`more` 的 shader 也算進建裝置時的格式交集；`more` 與嵌進去的重名、`more` 自己重名是 Programmer Error（不再默默遮住）；`parameters` 要是 16 bytes 的倍數（Programmer Error）。其餘（id 登記、經 Plugin 選項給 `more`）交 B1／B2（RC-A2-3）。
+8. **其他**：`GPUDevice::Create` 的內建 shader 是一張（原始檔名 → 成員）的表，名字由 `ShaderAbi::ShaderName(k*Source)` 推出（純淨 L1）；`RenderPass` 的分派都用窮舉的 overloaded visitor（純淨 M4）。
+
+第 14.8 節（RP-3 的讀法）與 `gt-unwritten-*` 照舊，等使用者的決定。
+
