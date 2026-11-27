@@ -182,6 +182,16 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 
 - 等使用者（SDL-5）的測試：後端畫不成的那一幀之後沿用（要後端的實況）。
 
+### 第 14.12 節的驗證
+
+- 本機（macOS Intel，只跑 cpu；`327a4be5` 的內容）：全量建置成功；`ctest -L 'cpu|shader'` 256/257（`cmake.PluginSelection` 是借用依賴的環境問題，同前；新的 `sdl_gpu.contracts` 通過）；cpu 突變 88 個跑一次 85 killed，其餘 3 個是我的突變寫錯或測試不夠：
+  - `rd-tex-clear-forgets`（wrong_failure）：改寫 find 時把「清要求時也忘了貼圖」寫成「不清要求」，改回原意後 killed。
+  - `re-main-size-not-set`（wrong_failure）：沒有主目標的大小時，跟它走的 target 永遠沒有大小、就永遠沒有畫面，先失敗的是 `[re-update-reused]`（每幀都畫）。這就是這個錯的後果，expect 改成它。
+  - `re-update-shared-waits`（survived）：`[re-update-shared-drawn]` 只要求 target 上有兩個 pass，Always 那台自己就有兩個。改成和第一幀（兩台都畫）的 pass 數相等後 killed。
+  - 之後改名（後端的 `picture`、`noteOnceStage`／`settleOnceStage`）、`gt-unwritten-always` 改到 CPU 的 `sdl_gpu contracts` 一案（原本指的 chain 案不經 `RequireRenderContracts`），再跑相關的 4 個（`gt-unwritten-*`、`wr-once-*`）4/4 killed；每個突變的 find 都在檔案裡、恰好一處。
+- Linux 主機（`327a4be5`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 257/257；`sdl_gpu.phases`、`unwritten`、`contracts`、`targets`、`pass2d` 5/5；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 59/59 killed（上一節的 59 個，`gd-depth-pass-fresh-kept` 改名、`gt-unwritten-*` 移到 cpu，加 `gd-depth-size-asserted`、`gd-size-ask-ignored`、`gd-depth-pass-picture-not-given`）。
+- B-1 先失敗：見上表第一列（`b1b173a5`＋一案，SIGABRT）；修正後同一個情境是 `[gd-depth-size-skipped]`，通過。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
