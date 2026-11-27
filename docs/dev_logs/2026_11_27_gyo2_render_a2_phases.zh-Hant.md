@@ -81,6 +81,8 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
   - 合計：新的 23 個全部 killed（cpu 13、Metal 5、Lavapipe 5）；D184 既有的 cpu 14＋GPU 49 全部 killed；`sdl-unattended-handler-not-installed` killed。
 - **已知缺口：Metal 上的行為現在沒有驗證**。這批 GPU 驗證跑在 Linux／Vulkan，不是 Metal：`[gf-uv-down]` 與改過 expect 的突變沒在 Metal 跑；Metal 特有的行為——`SDL_GPUTextureSupportsFormat` 不拒「深度格式＋顏色用途」（`SDL_gpu_metal.m:4176-4180`）、沒寫過又被載入的深度讀成 0——只有這次在 Mac 上看到的紀錄，沒有在 Mac 上重跑確認。macOS 的 L1 是 macos-arm64，只建置、不跑 GPU。
 
+- **和 L1 比**（run 45993881896，head `334ecc08`）：linux-x64 的 CPU 255/255、主機建置的 shader 3/3、core 236/236，和 Linux 主機一致；macos-arm64 成功（只建置）。linux-x64 的「Run Linux GPU tests」失敗，但**沒跑到任何 GPU 測試**：開頭的 `xvfb-run … vulkaninfo --summary` 連不上 Xvfb（`vulkan-info.log`：「XCB failed to connect to the X server due to error:1」、`AppCreateXcbSurface failed to establish connection`），`set -euo pipefail` 讓這一步在 `ctest -L gpu` 之前結束（沒有 `gpu-tests.log`）。和 A2 的程式無關；A2 的 GPU 案在 L1 上還沒跑過，要重跑那一列。windows-x64 寫這段時還在跑。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
