@@ -355,6 +355,21 @@ v8-arch-gyo2-ink-spike
   2. World 的組成綁在建置層產生的表上。
 - 對這張卡的影響：`ink` 照現在的 `GYO_PLUGINS` 路徑建，spike 不改。研究卡來問 ink 接進來的細節時配合。
 
+### 11.3 U7：介面的取捨（2026-11-27）
+
+出處：HANDOFF `v8-arch-gyo2-ink-spike-u7`，由主會話轉交。到這裡 U5～U7 都處理完。
+
+- **原話**：「我同意你的看法。」（回的是 side chat 對 U7 的看法。）
+- 比過：和卡片在 12.5 的建議相同，只多了 (d) 的「先報錯」條件。
+- **(a) 現在做**：`Save` 告訴呼叫端這份存檔能不能讀回、能不能遷移。照 U5 (3)，在選項畫面存（D2 的情況）要明確標出「讀不回」。
+  - 理由：D2 已經確認存在，不標出來，等於默默交出一份壞掉的存檔。
+  - 做法（I4，owner 頁第 9 節、INK-7）：`Save` 回 `Saved{bytes, restorable, migratable}`，位元組照給，留不留由作者決定。
+  - I4 的設計審查發現 inkcpp 的缺陷 D4：tunnel 裡存的檔，inkcpp 說能遷移，搬過去後卻回到別處。`migratable` 照 inkcpp 給，寫明 D4；要不要多做交使用者（12.6 U8）。
+- **(b) 種子放哪、(c) tag 怎麼切、(d) 不支援的參數怎麼處理**：等第一個用 ink 的遊戲時再定。
+  - 理由：都是「怎麼用」的細節，沒有成熟答案可抄，要看遊戲的需求。
+  - **(d) 的附帶條件**：定案之前，現在的行為至少要報錯（回 `Result`），不能默默忽略。理由同樣是「告訴外面發生了什麼」。
+  - 照程式核對（I4）：list 參數在 `ReadArgument` 丟例外，`Advance` 回 `ScriptFault`，不是忽略，不用改。外部可驗的測試已經有（`[ink-list-argument]`，突變 `ink-list-argument-accepted`）。無號數走同一條路，ink 的台本寫不出來，沒有測試。
+
 ## 12. 實作時發現的事（I1、I2，2026-11-27）
 
 細節與程式位置在 owner 頁 [ink.zh-Hant.md](ink.zh-Hant.md)。
@@ -406,7 +421,12 @@ v8-arch-gyo2-ink-spike
 
 | # | 事 | 卡片的建議 |
 |---|---|---|
-| U7 | **介面的幾個取捨**（兩份審查共同或各自提出），都是公開介面的形狀：(a) `Save` 要不要告訴作者「這份存檔讀不讀得回來、能不能遷移」（inkcpp 的 Unreal 整合有 `Migratable`；現在作者要等到 `Restore` 才知道，D2、D3 讓這件事變重要）；(b) `seed` 只對 `Start` 有用，要不要拆出 `DialogueOptions`；(c) tag：現在固定拆兩個鍵（`line`、`speaker`），要不要改成「所有 `鍵:值` 的 tag 都拆成鍵值對」；(d) 不支援的參數（list）現在是 `ScriptFault`、整段對話停掉，要不要改成交出一個「不支援」的值 | (a) 現在加：只是多給資訊，不替作者決定存不存；(b)(c)(d) 等第一個遊戲用時再定（spike 沒有使用者，形狀還看不出來） |
+| U7 | **介面的幾個取捨**（兩份審查共同或各自提出），都是公開介面的形狀：(a) `Save` 要不要告訴作者「這份存檔讀不讀得回來、能不能遷移」（inkcpp 的 Unreal 整合有 `Migratable`；現在作者要等到 `Restore` 才知道，D2、D3 讓這件事變重要）；(b) `seed` 只對 `Start` 有用，要不要拆出 `DialogueOptions`；(c) tag：現在固定拆兩個鍵（`line`、`speaker`），要不要改成「所有 `鍵:值` 的 tag 都拆成鍵值對」；(d) 不支援的參數（list）現在是 `ScriptFault`、整段對話停掉，要不要改成交出一個「不支援」的值 | (a) 現在加：只是多給資訊，不替作者決定存不存；(b)(c)(d) 等第一個遊戲用時再定（spike 沒有使用者，形狀還看不出來） <br>**已決定（11.3）**：照建議；(d) 定案前至少要報錯 |
 
 另外寫進 owner 頁的偏離與觸發條件（不需要現在決定）：每個 `Dialogue` 有自己的 globals（RC-INK2）、`Advance` 一次跑到選項（RC-INK3）、資料契約綁在 inkcpp 的二進位格式（RC-INK5）、沒有選項的無窮迴圈會卡住 `Advance`（範囲の限界）。
 
+### 12.6 I4 發現的事（交使用者）
+
+| # | 事 | 選項 | 卡片的建議 |
+|---|---|---|---|
+| U8 | **inkcpp 的缺陷 D4**：tunnel 裡選完之後存的檔，`can_be_migrated()` 是 true，`Restore` 讀進新版也成功，但之後 tunnel 回到別的地方，多出台詞和玩家沒選的指令（owner 頁第 8 節；`runner_impl.cpp:695-717`、`870-916`）。讀回同一個台本沒事。`Saved::migratable` 現在照 inkcpp 給，所以這時是錯的 | (a) 照 U5 的先例：不打補丁，寫明 D4、測試釘住現狀，和 D2 一起交回報卡回報 upstream（現狀）；(b) adapter 自己判斷「在 tunnel 裡就不能遷移」：要讀 inkcpp 私有的 `runner_impl` 堆疊，打破 adapter 只用公開介面的界線；(c) 給 inkcpp 打補丁（宣告第 1 節原本不做，要擴大範圍） | (a)：spike 沒有遊戲會在 tunnel 裡存檔又更新台本；照 U5 (3) 的存檔時機，遊戲也能避開 tunnel（在 hub 存）。(b) 的代價是綁住 inkcpp 的私有結構，升版就可能壞 |

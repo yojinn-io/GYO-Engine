@@ -63,10 +63,14 @@ void Choose(I::Dialogue& dialogue, const std::size_t index) {
     REQUIRE_MESSAGE(chosen, Why(chosen));
 }
 
-std::vector<std::byte> Save(const I::Dialogue& dialogue) {
+I::Saved TakeSave(const I::Dialogue& dialogue) {
     auto saved = dialogue.Save();
     REQUIRE_MESSAGE(saved, Why(saved));
     return std::move(saved).value();
+}
+
+std::vector<std::byte> Save(const I::Dialogue& dialogue) {
+    return TakeSave(dialogue).bytes;
 }
 
 // Advances, then takes each pick in turn; the beats rendered one after another.
@@ -351,7 +355,7 @@ TEST_CASE("a save restored into the story's next version: migrated, old globals 
                   "[ink-migrate]");
 }
 
-TEST_CASE("a save taken inside a tunnel, waiting for a choice, does not move to the next version: SnapshotNotMigratable") {
+TEST_CASE("a save taken waiting for a choice (inside a tunnel) does not move to the next version: SnapshotNotMigratable") {
     const I::Story story = Load("merchant.ink.json");
     const I::Story next = Load("merchant_v2.ink.json");
     I::Dialogue dialogue = Start(story, MerchantOptions(0));
@@ -409,6 +413,98 @@ TEST_CASE("inkcpp defect, not patched: a save taken before the first Advance res
     const I::Beat beat = Advance(restored->dialogue);
     CHECK(beat.outputs.empty());
     CHECK(beat.ended);
+}
+
+// ---- What Save says Restore can do (the game decides what to keep)
+
+// One save point: where it is taken, and what Save says of it.
+enum class At {
+    Start,       // before the first Advance
+    AfterChoice, // right after the last pick, before the next Advance
+    Choices,     // after the picks, waiting for a choice
+};
+
+struct SavePoint {
+    const char* name;
+    const char* story;
+    const char* next; // a next version that keeps the save's place, or none
+    std::vector<std::size_t> picks;
+    At at;
+    bool restorable;
+    bool migratable;
+};
+
+I::Dialogue PlayTo(const I::Story& story, const SavePoint& point) {
+    I::Dialogue dialogue = Start(story, MerchantOptions(0));
+    if (point.at == At::Start) return dialogue;
+    Advance(dialogue);
+    for (std::size_t i = 0; i < point.picks.size(); ++i) {
+        Choose(dialogue, point.picks[i]);
+        if (i + 1 < point.picks.size() || point.at == At::Choices) Advance(dialogue);
+    }
+    return dialogue;
+}
+
+TEST_CASE("Save says whether Restore on the same story gives the dialogue back, and whether it can move it") {
+    const char* merchant = "merchant.ink.json";
+    const char* next = "merchant_v2.ink.json";
+    const std::vector<SavePoint> points = {
+        {"right after a choice", merchant, next, {2}, At::AfterChoice, true, true},
+        {"right after a choice inside a tunnel (D4)", merchant, next, {1, 0}, At::AfterChoice, true, true},
+        {"at a choice inside a tunnel (D2)", merchant, next, {1}, At::Choices, false, false},
+        {"at a choice, the story has a sequence (D2)", merchant, next, {}, At::Choices, false, false},
+        {"at a choice, the story has no sequence", "once.ink.json", nullptr, {}, At::Choices, true, false},
+        {"before the first Advance (D3)", merchant, next, {}, At::Start, false, false},
+    };
+    for (const SavePoint& point : points) {
+        const I::Story story = Load(point.story);
+        I::Dialogue dialogue = PlayTo(story, point);
+        const I::Saved saved = TakeSave(dialogue);
+        CHECK_MESSAGE(saved.restorable == point.restorable, "[ink-save-restorable] " << std::string(point.name));
+        CHECK_MESSAGE(saved.migratable == point.migratable, "[ink-save-migratable] " << std::string(point.name));
+
+        // What Save said, checked by restoring: whether inkcpp moves the save to
+        // the next version (where it lands there: D4, below); the same text
+        // from here on, or not.
+        if (point.restorable && point.next != nullptr) {
+            auto moved = I::Dialogue::Restore(Load(point.next), saved.bytes, MerchantOptions(0));
+            CHECK_MESSAGE(static_cast<bool>(moved) == point.migratable,
+                          "[ink-save-migratable] " << std::string(point.name) << ", moved: " << Why(moved));
+        }
+        const std::string expected = Render(Advance(dialogue));
+        auto restored = I::Dialogue::Restore(story, saved.bytes, MerchantOptions(0));
+        const bool same = restored && Render(Advance(restored->dialogue)) == expected;
+        CHECK_MESSAGE(same == point.restorable, "[ink-save-restorable] " << std::string(point.name) << ", restored: " << Why(restored));
+    }
+}
+
+TEST_CASE("a save Save says cannot be restored still gives its bytes") {
+    const I::Story story = Load("merchant.ink.json");
+    I::Dialogue dialogue = Start(story, MerchantOptions(0));
+    Advance(dialogue); // at a choice: D2
+    const I::Saved saved = TakeSave(dialogue);
+    CHECK(!saved.restorable);
+    CHECK_MESSAGE(saved.bytes.size() > 8, "[ink-save-bytes] the bytes are the game's to keep or drop");
+}
+
+// runner_impl.cpp can_be_migrated does not look at the tunnel's return on the
+// stack (snapshot.h says a tunnel in use is not migratable), and migrate_to
+// keeps the stack: the tunnel returns to the old version's offset.
+TEST_CASE("inkcpp defect, not patched: a save right after a choice inside a tunnel is migratable, and its tunnel returns elsewhere in the next version") {
+    const I::Story story = Load("merchant.ink.json");
+    I::Dialogue dialogue = Start(story, MerchantOptions(0));
+    Advance(dialogue);
+    Choose(dialogue, 1); // haggle: into the tunnel
+    Advance(dialogue);
+    Choose(dialogue, 0); // insist
+    const I::Saved saved = TakeSave(dialogue);
+    CHECK(saved.migratable);
+    auto moved = I::Dialogue::Restore(Load("merchant_v2.ink.json"), saved.bytes, MerchantOptions(0));
+    REQUIRE_MESSAGE(moved, Why(moved));
+    // The haggle's "No." returns into the sword's branch: a line and a command the player did not choose.
+    CHECK(Render(Advance(moved->dialogue)).starts_with("merchant: No. [haggle_no]\n"
+                                                       "merchant: Here you go, friend. [hub_sold]\n"
+                                                       "> play_sound(3)\n"));
 }
 
 TEST_CASE("a save taken right after a choice inside a tunnel restores the same dialogue") {

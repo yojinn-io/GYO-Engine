@@ -77,4 +77,22 @@ Owner：Ink spike 任務卡。分支 `claude/gyo2-ink-spike-9fa94f`（PR #366）
 
 - U5 已決定（宣告 11.1，HANDOFF `v8-arch-gyo2-ink-spike-u5`）：「照建議，不過讓主會話開一張任務卡來專門處理回報的問題」。D2 由另一張回報卡回報 upstream；存檔時機（選完之後、下一次 `Advance` 之前，選項畫面不存）是遊戲的規則，adapter 不改。要不要在 `Save` 上露出，等 U7 (a)。
 - U6 擱置（宣告 11.2，HANDOFF `v8-arch-gyo2-ink-spike-u6-unit-research`）：「先擱置這個問題，開一張研究卡。看下應該如何設計。」unit 的選擇、建置、連結與註冊交研究卡 `v8-arch-gyo2-unit-composition-research`；`ink` 照現在的 `GYO_PLUGINS` 路徑建，spike 不改。
-- 還沒定：宣告 12.5 的 U7。
+- U7 已決定（宣告 11.3，HANDOFF `v8-arch-gyo2-ink-spike-u7`）：「我同意你的看法。」(a) 現在做（見 I4）；(b)(c)(d) 等第一個用 ink 的遊戲，(d) 定案前至少要報錯。U5～U7 都處理完。
+
+## I4 U7 (a)：`Save` 說讀不讀得回來
+
+- 介面：`Save` 回 `Saved{bytes, restorable, migratable}`（原本只回位元組）。位元組照給，不擋。
+- `restorable` 的判法：`Save` 當場在同一個台本上照 `Restore` 的做法重建一次（抽出 `Rebuild`，`Restore` 與 `Save` 共用），失敗是 false；成功但 `can_continue` 和原本不同也是 false（D3）。
+  - 為什麼不用規則猜：D2 取決於台本有沒有 sequence。`once.ink` 沒有 sequence，在選項處存讀得回來，所以「在選項處 → false」會錯。
+- `migratable`：`restorable` 而且 inkcpp 的 `snapshot::can_be_migrated()`。
+  - 我原本以為 tunnel 裡選完之後不能搬，inkcpp 說能，`Restore` 讀進第二版也成功，我就照這個寫了測試。但只核對了 `Restore` 有沒有成功。
+  - 設計審查（general-purpose，Opus／high）指出 **D4**：搬過去之後 `Advance`，tunnel 回到別的地方，多出一句台詞和一個玩家沒選的指令。我用測試重現（「No.」之後是「Here you go, friend.」與 `play_sound(3)`），讀碼確認 inkcpp 的 `can_be_migrated` 不看 tunnel 的返回點、`migrate_to` 不清堆疊。
+  - 這個 D4 和 I2 那次「一度以為有 D4」的誤報不同：那次是讀回**同一個**台本（確認沒事），這次是讀進**新版**台本。代號沿用 D4，因為誤報沒有佔用代號（owner 頁只記 D1～D3）。
+  - 處置照 U5 的先例：不打補丁，記成 D4（owner 頁第 8 節），加一個「inkcpp defect, not patched」的測試釘住現狀；旗標照 inkcpp 給，註解與 owner 頁寫明 D4。adapter 自己判斷 tunnel 要讀 inkcpp 私有的堆疊，沒有做，交使用者（宣告 12.6 U8）。
+- 原本也比選項的個數，突變 `ink-save-choices-uncompared` 存活：這一版 inkcpp 沒有會讓它不同的情形，拿掉。
+- (d) 照程式核對：list 參數已經是 `ScriptFault`，沒有改。
+- 測試：新增 3 案（6 個存檔點的旗標＋用 `Restore` 核對；讀不回的存檔仍給位元組；D4）。
+- 審查的其他修正：`migratable` 的說明照 inkcpp 實際的條件改寫（原本寫成「在 tunnel 裡不行」）；`restorable` 的說法收斂成「試讀一次、比能不能往下跑」；`SnapshotNotMigratable` 的註解與一個測試名改成「在等選擇」（真正的原因）；owner 頁「參數個數不限」改成最多 10 個。`Rebuild` 用 `optional<string>` 表示失敗原因（審查建議改 `Result`），沒有改：它只在 adapter 內部用。
+- 突變：新增 4 個；`Rebuild` 抽出後 4 個舊突變的 `find` 更新。跑了相關的 12 個（新 5＋`find` 更新的 4＋`find` 在 `Restore` 附近的 `ink-migrated-inverted`、`ink-migration-failure-unreadable`、`ink-save-version-unchecked`）：11 killed，`ink-save-choices-uncompared` 存活（上一條，連同突變拿掉）。拿掉之後受影響的 2 個重跑，2/2 killed。目錄共 19 個。
+- 驗證：`ink.dialogue` 27 案通過；ASan＋UBSan 27 案通過，沒有記憶體錯誤，UBSan 同樣 6 處都在 inkcpp。
+- 另：主會話發現一個跑了約 3 小時的 probe（PID 2113，查 D2 時留下）。原因是當時的測試在 `-s` 下對成功的 `Result` 呼叫 `.error()`，GYO 的 assert 觸發 abort，doctest 的 signal handler 再去鎖已持有的 mutex，於是死鎖；不是 inkcpp 的行為。已結束它；之後的探測都加逾時。

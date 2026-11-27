@@ -5,6 +5,7 @@
 #include "plugins/ink/Dialogue.hpp"
 
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -131,6 +132,21 @@ void BindCommands(Dialogue::State& state) {
     }
 }
 
+// Builds the globals and the runner a snapshot holds on story; why not, when
+// inkcpp cannot.
+std::optional<std::string> Rebuild(ink::runtime::story& story, const ink::runtime::snapshot& snapshot,
+                                   ink::runtime::globals& globals, ink::runtime::runner& runner) {
+    try {
+        globals = story.new_globals_from_snapshot(snapshot);
+        if (!globals) return "inkcpp gave no globals for the save";
+        runner = story.new_runner_from_snapshot(snapshot, globals);
+        if (!runner) return "inkcpp found no place in the story to continue the save from";
+    } catch (const ink::ink_exception& e) {
+        return e.what();
+    }
+    return std::nullopt;
+}
+
 DialogueError Stopped() {
     return MakeError(DialogueErrorCode::Stopped, "the dialogue stopped on an earlier ScriptFault");
 }
@@ -211,10 +227,7 @@ Base::Result<Restored, DialogueError> Dialogue::Restore(const Story& story, cons
         // Not owned: inkcpp reads the bytes only while the dialogue is rebuilt.
         const std::unique_ptr<ink::runtime::snapshot> snapshot(ink::runtime::snapshot::from_binary(
             reinterpret_cast<const unsigned char*>(snapshotBytes.data()), snapshotBytes.size(), false));
-        state->globals = ink.new_globals_from_snapshot(*snapshot);
-        if (!state->globals) return Base::Err(failed("inkcpp gave no globals for the save"));
-        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);
-        if (!state->runner) return Base::Err(failed("inkcpp found no place in the story to continue the save from"));
+        if (auto why = Rebuild(ink, *snapshot, state->globals, state->runner)) return Base::Err(failed(std::move(*why)));
         BindCommands(*state);
     } catch (const ink::ink_exception& e) {
         return Base::Err(failed(e.what()));
@@ -262,21 +275,32 @@ Base::Result<void, DialogueError> Dialogue::Choose(const std::size_t index) {
     return {};
 }
 
-Base::Result<std::vector<std::byte>, DialogueError> Dialogue::Save() const {
+Base::Result<Saved, DialogueError> Dialogue::Save() const {
     const State& state = *state_;
     if (state.stopped) return Base::Err(Stopped());
+    std::unique_ptr<ink::runtime::snapshot> snapshot;
     try {
-        const std::unique_ptr<ink::runtime::snapshot> snapshot(state.runner->create_snapshot());
-        std::vector<std::byte> bytes;
-        bytes.reserve(kSaveHeader + snapshot->get_data_len());
-        PutU32(bytes, kSaveVersion);
-        PutU32(bytes, state.story->hash);
-        const auto* data = reinterpret_cast<const std::byte*>(snapshot->get_data());
-        bytes.insert(bytes.end(), data, data + snapshot->get_data_len());
-        return bytes;
+        snapshot.reset(state.runner->create_snapshot());
     } catch (const ink::ink_exception& e) {
         return Base::Err(MakeError(DialogueErrorCode::ScriptFault, "the dialogue could not be saved", e.what()));
     }
+    Saved saved;
+    saved.bytes.reserve(kSaveHeader + snapshot->get_data_len());
+    PutU32(saved.bytes, kSaveVersion);
+    PutU32(saved.bytes, state.story->hash);
+    const auto* data = reinterpret_cast<const std::byte*>(snapshot->get_data());
+    saved.bytes.insert(saved.bytes.end(), data, data + snapshot->get_data_len());
+
+    // Whether inkcpp restores what it saved depends on the story and the place
+    // (the owner page, section 8): restored here on the story, as Restore would.
+    // A restore can also succeed at another place (D3: an ended dialogue), so
+    // whether it goes on is compared with this dialogue.
+    ink::runtime::globals globals;
+    ink::runtime::runner runner;
+    saved.restorable = !Rebuild(*state.story->story, *snapshot, globals, runner) &&
+                       runner->can_continue() == state.runner->can_continue();
+    saved.migratable = saved.restorable && snapshot->can_be_migrated();
+    return saved;
 }
 
 } // namespace GYO::Plugins::Ink

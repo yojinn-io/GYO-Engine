@@ -47,7 +47,8 @@ enum class DialogueErrorCode : std::uint16_t {
     // inkcpp cannot restore one; docs/architecture/target/v2/ink.zh-Hant.md).
     SnapshotUnreadable = 5,
     // Restore, another version of the story: inkcpp could not move the save
-    // there (taken inside a tunnel or a thread, or its place in the story gone).
+    // there (taken while waiting for a choice or in a thread, or its place in
+    // the story gone).
     SnapshotNotMigratable = 6,
 };
 
@@ -128,6 +129,7 @@ private:
 // Reads the bytes of a story compiled by inkcpp's compiler (ink.json to binary).
 [[nodiscard]] Engine::Base::Result<Story, DialogueError> LoadStory(std::span<const std::byte> compiled);
 
+struct Saved;
 struct Restored;
 
 // One dialogue in progress on a story. It keeps its story alive.
@@ -154,14 +156,31 @@ public:
     [[nodiscard]] Engine::Base::Result<Beat, DialogueError> Advance();
     // Takes the choice at index (of the last Beat's choices).
     [[nodiscard]] Engine::Base::Result<void, DialogueError> Choose(std::size_t index);
-    // The dialogue's state as bytes, for Restore.
-    [[nodiscard]] Engine::Base::Result<std::vector<std::byte>, DialogueError> Save() const;
+    // The dialogue's state as bytes, for Restore, and what Restore can do with
+    // them. The bytes come back wherever the save is taken; whether to keep a
+    // save that cannot be restored is the game's.
+    [[nodiscard]] Engine::Base::Result<Saved, DialogueError> Save() const;
 
     struct State;
 
 private:
     explicit Dialogue(std::unique_ptr<State> state) noexcept;
     std::unique_ptr<State> state_;
+};
+
+struct Saved {
+    std::vector<std::byte> bytes;
+    // Save restored the bytes once on the same story, as Restore does, and the
+    // dialogue it got goes on as this one does (or both wait or have ended).
+    // False where this inkcpp cannot restore a save
+    // (docs/architecture/target/v2/ink.zh-Hant.md): the restore failed, or
+    // gave a dialogue that has ended where this one goes on.
+    bool restorable = false;
+    // Restorable, and inkcpp says it can move the save to another version of
+    // the story (not while waiting for a choice, not in a thread, at a place it
+    // can name). Moving can still fail (the save's place is gone from that
+    // version) or land elsewhere (a save inside a tunnel: the owner page, D4).
+    bool migratable = false;
 };
 
 struct Restored {

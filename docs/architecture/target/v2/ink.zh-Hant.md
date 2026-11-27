@@ -13,7 +13,7 @@ Owner：架構。
 - 指令 `play_sound(3)`；
 - 回到 hub 的台詞與選項。
 
-作者的 System 把 `give_item` 變成自己的 `Message`（另一個 System 算進背包），把 `play_sound` 變成自己的 `Event`（observer 聽到）。Plugin 不知道這些型別（`plugins/ink/tests/SceneTests.cpp`）。存檔時呼叫 `Save` 拿到位元組，由作者放進自己的存檔。讀回時：
+作者的 System 把 `give_item` 變成自己的 `Message`（另一個 System 算進背包），把 `play_sound` 變成自己的 `Event`（observer 聽到）。Plugin 不知道這些型別（`plugins/ink/tests/SceneTests.cpp`）。存檔時呼叫 `Save` 拿到位元組，以及 `restorable`（讀不讀得回來）、`migratable`（能不能搬到新版台本）；要不要留下這份存檔，由作者決定。讀回時：
 
 - 台本沒換，接著跑的輸出和沒存讀時逐字相同（包括亂數）；
 - 台本換成第二版，`migrated` 是 true：舊的全域變數保留值，新的從預設值開始。
@@ -74,8 +74,8 @@ plugins/ink/
 - `Choose(i)`：`i` 是上一個 `Beat` 的第幾個選項。
 - tag：`<lineIdTag>:<id>`（預設 `line`）放進 `lineId`，`<speakerTag>:<id>`（預設 `speaker`）放進 `speaker`，其餘照順序放進 `tags`。沒有 line ID 不算錯誤，`lineId` 是空字串；「每行都有 ID」是寫作的約定，由測試檢查台本。
   - **選項的 tag 要寫在 `[...]` 裡面**（`* [Buy a sword #line:hub_buy]`）。寫在 `]` 之後，照 ink 的語法是選了之後那段輸出的 tag。
-- 指令：`options.commands` 裡的每個 EXTERNAL 都用 inkcpp 的陣列呼叫綁定，參數個數不限，`lookaheadSafe=false`（只在台本走到時執行一次）。參數照台本寫的順序（inkcpp 從堆疊彈出，`values[0]` 是最後一個，adapter 會反過來）。字串參數當場複製。參數可以是 bool、int、float、string，list 是 `ScriptFault`。指令沒有回傳值。
-- `Save()` → 位元組；`Restore(story, bytes, options)` → `Restored{dialogue, migrated}`。`Restore` 不用 `options.seed`，亂數狀態來自存檔。指令在 `Restore` 時重新綁定：inkcpp 的存檔裡沒有綁定。
+- 指令：`options.commands` 裡的每個 EXTERNAL 都用 inkcpp 的陣列呼叫綁定，參數最多 10 個（inkcpp `shared/public/config.h:81`；超過時 inkcpp 的斷言丟例外，是 `ScriptFault`，沒有測試），`lookaheadSafe=false`（只在台本走到時執行一次）。參數照台本寫的順序（inkcpp 從堆疊彈出，`values[0]` 是最後一個，adapter 會反過來）。字串參數當場複製。參數可以是 bool、int、float、string，list 是 `ScriptFault`。指令沒有回傳值。
+- `Save()` → `Saved{bytes, restorable, migratable}`（第 9 節）；`Restore(story, bytes, options)` → `Restored{dialogue, migrated}`。`Restore` 不用 `options.seed`，亂數狀態來自存檔。指令在 `Restore` 時重新綁定：inkcpp 的存檔裡沒有綁定。
 
 ## 6. 錯誤（`DialogueErrorCode`）
 
@@ -103,13 +103,46 @@ plugins/ink/
 
 ## 8. inkcpp d38608d 的缺陷（沒有打補丁）
 
-三個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住（D1 用自己的台本 `once.ink`，主台本 `merchant.ink` 不碰它）。inkcpp 修好時，只有那個測試會失敗。
+四個缺陷都用素的 inkcpp 重現過，各有一個測試把現狀釘住（D1 用自己的台本 `once.ink`，主台本 `merchant.ink` 不碰它）。inkcpp 修好時，只有那個測試會失敗。
 
 - **D1 跳過的選項的 tag 給了下一個選項**：一次性選項（`*`）已經選過、或條件為假時，`runner_impl.cpp:1554-1573` 在 `assign_tags` 之前就 `break`。已經算好的 tag 沒有被收走，於是跟到下一個選項上。line ID 的約定會因此拿錯。
 - **D2 在選項處存的檔，台本裡有 sequence 就讀不回來**：等選擇時的 snapshot 不能遷移，讀它時 inkcpp 要求每個計數的 container 都有具名的 hash（`globals_impl.cpp:294-297`）。可是台本裡任何地方只要有 sequence（`{a|b}`、`{&a|b}`、`{!a|b}`、`{~a|b}`），就有沒有具名 hash 的 container，連讀回**同一個**台本都失敗。用小台本逐一試過：plain、`RANDOM`、一次性選項、tunnel、EXTERNAL 都沒事，四種 sequence 都會失敗，sequence 放在沒走到的 knot 也一樣。
 - **D3 第一次 `Advance` 之前存的檔，讀回來已經結束**。
+- **D4 tunnel 裡選完之後存的檔，inkcpp 說能遷移，搬到新版之後 tunnel 回到別的地方**（I4 設計審查發現）：`runner_impl::can_be_migrated`（`runner_impl.cpp:695-717`）不看堆疊上 tunnel 的返回點，`migrate_to`（`runner_impl.cpp:870-916`）也不清堆疊，`->->` 用舊版台本的位移返回。`snapshot.h` 自己寫的是 tunnel 用著時不能遷移，旗標和文件不一致。實例：商人台本 Haggle → Insist 之後存，讀進第二版，「No.」之後跑進「買劍」那條分支的尾巴，多出台詞「Here you go, friend.」和玩家沒選的指令 `play_sound(3)`。讀回**同一個**台本沒有這個問題。
 
-**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。tunnel 裡也可以，讀回同一個台本會逐字接上，讀進新版台本也能遷移（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」）。使用者的決定（宣告 11.1 U5）：存檔時機照 inkcpp 作者在 #146 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存。這是**遊戲的規則**，adapter 不擋：在選項處存仍然回位元組，讀不回來時 `Restore` 回錯誤。D2 由另一張卡回報 upstream，不打補丁。要不要在 `Save` 上露出「讀不讀得回來」，等 U7 (a)。
+**能存的時間點**（這一版 inkcpp）：選完之後、下一次 `Advance` 之前。讀回同一個台本會逐字接上，tunnel 裡也一樣；讀進新版台本能遷移，但 tunnel 裡存的會遇到 D4（測試「a save taken after a choice…」「…inside a tunnel…」「…next version…」、D4 的測試）。使用者的決定（宣告 11.1 U5）：存檔時機照 inkcpp 作者在 #146 的建議，選完之後、下一次 `Advance` 之前存，選項畫面不存。這是**遊戲的規則**，adapter 不擋：在選項處存仍然回位元組，`Save` 把 `restorable` 標成 false（第 9 節，宣告 11.3 U7 (a)），`Restore` 讀它時回錯誤。D2、D4 由另一張卡回報 upstream，不打補丁。
+
+## 9. `Save` 說的事（U7 (a)）
+
+`Saved` 有三樣：
+
+- `bytes`：存檔的位元組。不管在哪裡存都給；不擋、不改。
+- `restorable`：`Restore` 用**同一個**台本讀回，是不是同一段對話。
+- `migratable`：`Restore` 用**另一版**台本讀回時，inkcpp 說它能不能搬過去。
+
+怎麼判斷：
+
+- `restorable`：`Save` 當場在同一個台本上照 `Restore` 的做法重建一次 globals 與 runner，再比「還能不能往下跑」。這是試讀一次的判斷，不是逐字比對；位置只比 `can_continue` 這一個值，為的是 D3。
+  - 重建失敗（D2：inkcpp 丟例外）是 false。
+  - 重建成功、但「還能不能往下跑」（`can_continue`）和原本的對話不同，也是 false（D3：讀回來已經結束）。
+  - 理由：D2 取決於台本裡有沒有 sequence、D3 取決於有沒有 `Advance` 過，只看位置猜不準；讓 inkcpp 自己讀一次最準。代價是每次 `Save` 多建一份 globals 與 runner。
+- `migratable`：`restorable`，而且 inkcpp 的 `snapshot::can_be_migrated()` 是 true。inkcpp 判 false 的條件（`runner_impl.cpp:695-717`）：在等選擇、剛進 knot（`_entered_knot`）、位置沒有名字、在 thread 裡，以及輸出、堆疊等元件在 lookahead 的保存狀態。
+  - inkcpp 說能搬，搬的時候仍可能失敗：存檔所在的 knot 或選項在新版不見了（`SnapshotNotMigratable`，第 6 節）。
+  - 也可能 `Restore` 成功、卻搬到別的地方：tunnel 裡存的（D4，第 8 節）。adapter 照 inkcpp 給的值交出，沒有自己再判：要知道是不是在 tunnel 裡，得讀 inkcpp 私有的 `runner_impl` 堆疊，會打破 adapter 只用 inkcpp 公開介面的界線。
+  - `Save` 不知道下一版台本長什麼樣，所以不保證。
+
+這一版 inkcpp 實際的結果（測試「Save says whether Restore on the same story gives the dialogue back…」逐點用 `Restore` 核對）：
+
+| 存的時間點 | `restorable` | `migratable` |
+|---|---|---|
+| 選完之後、下一次 `Advance` 之前 | true | true |
+| tunnel 裡選完之後 | true | true（D4：搬過去後 tunnel 回到別處） |
+| 等選擇，台本有 sequence（D2；tunnel 裡也一樣） | false | false |
+| 等選擇，台本沒有 sequence（`once.ink`） | true | false |
+| 第一次 `Advance` 之前（D3） | false | false |
+
+- 只比 `can_continue`，不比選項的個數：這一版 inkcpp 沒有「讀回成功、往不往下跑相同、選項個數不同」的情形，比了也測不到（突變存活），所以拿掉。
+- 不支援的參數（U7 (d)）照程式核對過：list 參數丟例外，`Advance` 回 `ScriptFault`，不會被默默忽略（測試 `[ink-list-argument]`、突變 `ink-list-argument-accepted`）。無號數走同一條路，但 ink 的台本寫不出無號數，沒有測試。
 
 ## Design Invariants
 
@@ -119,10 +152,11 @@ plugins/ink/
 - **INK-4 thread 的契約**：同一個 `Story`、它的複本、從它開始或讀回的所有 `Dialogue` 是一家，同一時間只給一條 thread 用；交給別的 thread 時兩邊之間要有同步。各自讀進來的 `Story` 是不同的家。理由：inkcpp 的參照計數不是 atomic（`story_ptr.h:25`），沒有 `thread_local`，也沒有可寫的全域狀態。放進 World 時當一般 Resource（使用者 U4），不用 `threadBound`。守衛：`[ink-threads-apart]`、`[ink-threads-in-turn]`；同時碰同一家的情形是未定義行為，測不出可靠的失敗，由契約與審查負責。
 - **INK-5 `"C"` locale**：process 的 `LC_NUMERIC` 必須是 `"C"`（inkcpp 用 `snprintf("%.7f")` 寫浮點）。adapter 不檢查。守衛：`[ink-locale]`。
 - **INK-6 不假設單機**：adapter 裡沒有本地玩家、UI、輸入、視窗、牆鐘；`Beat`、`Choice` 是一般資料，可以複製給 Client；選項編號當不可信的輸入檢查（`ChoiceOutOfRange`）。守衛：審查。
+- **INK-7 `Save` 說讀不讀得回來**：`Saved::restorable` 是 `Save` 當場用同一個台本試讀一次的結果：試讀失敗（D2）或讀回已結束（D3）是 false。`migratable` 只在 `restorable` 時才可能是 true，值是 inkcpp 給的（D4 時是錯的，第 8 節）。位元組照給，留不留由作者決定。守衛：測試 `[ink-save-restorable]`、`[ink-save-migratable]`、`[ink-save-bytes]`；突變 `ink-save-restorable-unchecked`、`ink-save-place-uncompared`、`ink-save-migratable-from-restorable`、`ink-save-migratable-from-inkcpp`。
 
 ## Replacement Criteria
 
-- **RC-INK1**：第 8 節的 D2 讓需要的存檔點存不了（例：遊戲要在選項處存檔）→ 在「給 inkcpp 打補丁」「回報 upstream 等修」「換 runtime」之間選。
+- **RC-INK1**：第 8 節的 D2 讓需要的存檔點存不了（例：遊戲要在選項處存檔），或 D4 讓 tunnel 裡的存檔搬不了版本（例：遊戲在 tunnel 裡存檔、又要更新台本）→ 在「給 inkcpp 打補丁」「回報 upstream 等修」「換 runtime」之間選。
 - **RC-INK2**：第二個遊戲要用台本、遊戲需要「放進 World 的對話單位」、或幾段對話要共用台本變數（例：多個 NPC 記得同一件事；現在每個 `Dialogue` 有自己的 globals、自己的存檔，inkcpp 的 Unreal 整合是一個 runtime 共用 globals）→ 重看第 1 節的「未解決」與宣告的 Q5（多後端）。
 - **RC-INK3**：遊戲需要有回傳值的外部函式、或要讀寫 ink 變數 → 在「query 回呼」和「遊戲寫 ink 變數」之間選（宣告第 5.4 節）。這時也要重看 `Advance`「一次跑到選項」的粒度：同一次 `Advance` 裡，指令之後的 query 會讀到指令變成的 `Message` 還沒被處理時的狀態（Unreal 有 `Yield`／`Resume`）。
 - **RC-INK5**：換 runtime → 資產的格式也跟著換（`LoadStory` 讀的是 inkcpp 的二進位格式，資料契約綁在它上面；ink.json 是 ink 官方的中間格式，不綁）。
@@ -131,7 +165,7 @@ plugins/ink/
 ## 範囲の限界
 
 - 本機只在 Intel Mac 跑過（一般建置，以及 ASan＋UBSan 的 Debug 建置）。Windows、Linux 的編譯與測試只靠 L1。
-- ASan：24 案沒有記憶體錯誤（I3 修正後重跑）（macOS 上沒有開 leak 檢查）。UBSan 報了 6 種，全部在 inkcpp 裡（adapter 沒有）：讀位元組碼時位址沒有對齊（`runner_impl.cpp:179`、`story_impl.cpp:263`），以及在 null 指標上加位移（`array.h:277`、`runner_impl.h:397`、`snapshot_interface.h:33`、`list_table.cpp:956`）。在 x86-64 與 arm64 上照樣能跑；沒有打補丁。
+- ASan：27 案沒有記憶體錯誤（I4 後重跑）（macOS 上沒有開 leak 檢查）。UBSan 報了 6 種，全部在 inkcpp 裡（adapter 沒有）：讀位元組碼時位址沒有對齊（`runner_impl.cpp:179`、`story_impl.cpp:263`），以及在 null 指標上加位移（`array.h:277`、`runner_impl.h:397`、`snapshot_interface.h:33`、`list_table.cpp:956`）。在 x86-64 與 arm64 上照樣能跑；沒有打補丁。
 - 存檔在三平台之間能不能互讀，沒有測試（第 7 節）。
 - `ink_assert` 帶格式參數時 `malloc` 的訊息不會釋放（`shared/public/system.h:258-261`）：每次 `ScriptFault` 漏一小段。沒有打補丁。
 - `.ink` 與 `.ink.json` 的一致性 CI 不檢查（第 4 節）。

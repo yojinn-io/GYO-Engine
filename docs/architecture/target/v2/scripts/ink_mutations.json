@@ -117,8 +117,8 @@
     "ink-spike-declaration 7.1"
    ],
    "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
-   "find": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);\n",
-   "replace": "        state->runner = ink.new_runner_from_snapshot(*snapshot, state->globals);\n        state->runner->set_rng_seed(state->options.seed);\n",
+   "find": "        if (auto why = Rebuild(ink, *snapshot, state->globals, state->runner)) return Base::Err(failed(std::move(*why)));\n        BindCommands(*state);",
+   "replace": "        if (auto why = Rebuild(ink, *snapshot, state->globals, state->runner)) return Base::Err(failed(std::move(*why)));\n        state->runner->set_rng_seed(state->options.seed);\n        BindCommands(*state);",
    "target": "gyo_ink_tests",
    "expect": "\\[ink-restore\\]"
   },
@@ -142,8 +142,8 @@
     "ink-spike-declaration 7.3"
    ],
    "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
-   "find": "        if (!state->globals) return Base::Err(failed(\"inkcpp gave no globals for the save\"));",
-   "replace": "        if (false) return Base::Err(failed(\"inkcpp gave no globals for the save\"));",
+   "find": "        if (!globals) return \"inkcpp gave no globals for the save\";",
+   "replace": "        if (false) return \"inkcpp gave no globals for the save\";",
    "target": "gyo_ink_tests",
    "expect": "\\[ink-not-migratable\\]|SIGSEGV|SIGBUS|THREW"
   },
@@ -155,8 +155,8 @@
     "ink-spike-declaration 7.3"
    ],
    "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
-   "find": "        if (!state->runner) return Base::Err(failed(\"inkcpp found no place in the story to continue the save from\"));\n        BindCommands(*state);",
-   "replace": "        if (!state->runner) return Base::Err(failed(\"inkcpp found no place in the story to continue the save from\"));",
+   "find": "        if (auto why = Rebuild(ink, *snapshot, state->globals, state->runner)) return Base::Err(failed(std::move(*why)));\n        BindCommands(*state);",
+   "replace": "        if (auto why = Rebuild(ink, *snapshot, state->globals, state->runner)) return Base::Err(failed(std::move(*why)));",
    "target": "gyo_ink_tests",
    "expect": "\\[ink-restore\\]"
   },
@@ -168,8 +168,8 @@
     "ink.zh-Hant.md 第 6 節"
    ],
    "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
-   "find": "        if (!state->runner) return Base::Err(failed(\"inkcpp found no place in the story to continue the save from\"));",
-   "replace": "        if (false) return Base::Err(failed(\"inkcpp found no place in the story to continue the save from\"));",
+   "find": "        if (!runner) return \"inkcpp found no place in the story to continue the save from\";",
+   "replace": "        if (false) return \"inkcpp found no place in the story to continue the save from\";",
    "target": "gyo_ink_tests",
    "expect": "\\[ink-place-gone\\]|SIGSEGV|SIGBUS"
   },
@@ -184,6 +184,54 @@
    "replace": "    auto failed = [](std::string detail) {\n        return false ? MakeError(",
    "target": "gyo_ink_tests",
    "expect": "\\[ink-place-gone\\]"
+  },
+  {
+   "id": "ink-save-restorable-unchecked",
+   "what": "Save says every save can be restored",
+   "guards": [
+    "ink.zh-Hant.md INK-7"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    saved.restorable = !Rebuild(",
+   "replace": "    saved.restorable = true || !Rebuild(",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-save-restorable\\]"
+  },
+  {
+   "id": "ink-save-place-uncompared",
+   "what": "Save trusts a restore that inkcpp builds without comparing whether the dialogue goes on (D3)",
+   "guards": [
+    "ink.zh-Hant.md INK-7"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    saved.restorable = !Rebuild(*state.story->story, *snapshot, globals, runner) &&\n                       runner->can_continue() == state.runner->can_continue();",
+   "replace": "    saved.restorable = !Rebuild(*state.story->story, *snapshot, globals, runner);",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-save-restorable\\]"
+  },
+  {
+   "id": "ink-save-migratable-from-restorable",
+   "what": "Save says every restorable save can be moved, without asking inkcpp",
+   "guards": [
+    "ink.zh-Hant.md INK-7"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    saved.migratable = saved.restorable && snapshot->can_be_migrated();",
+   "replace": "    saved.migratable = saved.restorable;",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-save-migratable\\]"
+  },
+  {
+   "id": "ink-save-migratable-from-inkcpp",
+   "what": "Save says a save inkcpp cannot restore can be moved",
+   "guards": [
+    "ink.zh-Hant.md INK-7"
+   ],
+   "file": "plugins/ink/src/adapters/inkcpp/Dialogue.cpp",
+   "find": "    saved.migratable = saved.restorable && snapshot->can_be_migrated();",
+   "replace": "    saved.migratable = snapshot->can_be_migrated();",
+   "target": "gyo_ink_tests",
+   "expect": "\\[ink-save-migratable\\]"
   }
  ]
 }
