@@ -25,6 +25,7 @@
 - [camera.zh-Hant.md](camera.zh-Hant.md)：相機 `camera`（元件、投影、2D／3D、推導值、目標大小的副本、座標換算）的用法、Design Invariants CM-1～CM-5 與 Replacement Criteria（同上）。
 - [voxel-map.zh-Hant.md](voxel-map.zh-Hant.md)：分塊地圖 Module `voxel_map`（`gyo.voxel_map`／`gyo.voxel_region` v1，wire 同 master；region 兩步驗證、展開、兩個 loader）的契約、VM-1～VM-7 與 RC（`v8-arch-gyo2-big-map-s1`）。
 - [big-map-declaration.zh-Hant.md](big-map-declaration.zh-Hant.md)：大地圖線的事前宣告（分層重劃、別家對照、地圖來源、量測、loading、分段）與 S1、S2 小宣告（`v8-arch-gyo2-big-map`）。
+- [overhead-ui-declaration.zh-Hant.md](overhead-ui-declaration.zh-Hant.md)：Object_PvP 頭頂的名字與血條的事前宣告（螢幕空間 vs billboard、`Overhead` 標記、隱藏條件、模式的 `overhead` 組、測試與分批；`v8-arch-gyo2-overhead-ui`，待核准）。
 - [save-version.zh-Hant.md](save-version.zh-Hant.md)：存檔版本 `save_version`（純程式庫、預設不帶）的 Design Invariants SV-1～SV-3 與 Replacement Criteria（`v8-arch-gyo2-restore-impl`，使用者 2026-11-22 合併前核准）。
 - [sdl.zh-Hant.md](sdl.zh-Hant.md)：SDL 的 Plugin（`plugins/sdl*`）——列與依賴、目錄的形、只建被選的 Plugin（`GYO_PLUGINS`）、SDL 3.4.0 的取得與補丁、Design Invariants SDL-1、SDL-2（子批 P `v8-arch-gyo2-sdl-p` 開頁；W、A、R2a 各自補）。
 - [ink.zh-Hant.md](ink.zh-Hant.md)：ink 的 Plugin（`plugins/ink`，`library_only`）——inkcpp d38608d 的取得、台本的工具端（inklecate 1.1.1）、對話的介面（台詞、選項、指令、種子、存讀與遷移）、錯誤、存檔的位元組、inkcpp 的缺陷 D1～D3、Design Invariants INK-1～INK-6 與 Replacement Criteria（`v8-arch-gyo2-ink-spike`，最終文字在合併前核准）。
