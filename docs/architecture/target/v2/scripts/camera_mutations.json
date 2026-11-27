@@ -115,8 +115,8 @@
     "camera CM-3"
    ],
    "file": "engine/modules/camera/src/CameraModule.cpp",
-   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id));",
-   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(CameraTarget{}), letterboxes.Get<Letterbox>(id));\n        (void)target;",
+   "find": "        ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id),\n                                      views.Get<Transform::GlobalTransform>(id));",
+   "replace": "        ComputedCamera next = Compute(camera, projection, sizes->Find(CameraTarget{}), letterboxes.Get<Letterbox>(id),\n                                      views.Get<Transform::GlobalTransform>(id));\n        (void)target;",
    "target": "gyo_camera_tests",
    "cases": "camera: each camera uses*",
    "expect": "\\[cm\\-target\\-own\\]"
@@ -460,8 +460,8 @@
     "camera CM-6"
    ],
    "file": "engine/modules/camera/src/CameraModule.cpp",
-   "find": "ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id));",
-   "replace": "ComputedCamera next = Compute(camera, projection, sizes->Find(target));\n        (void)id;",
+   "find": "        ComputedCamera next = Compute(camera, projection, sizes->Find(target), letterboxes.Get<Letterbox>(id),\n                                      views.Get<Transform::GlobalTransform>(id));",
+   "replace": "        ComputedCamera next = Compute(camera, projection, sizes->Find(target), nullptr,\n                                      views.Get<Transform::GlobalTransform>(id));\n        (void)letterboxes;",
    "target": "gyo_camera_tests",
    "cases": "camera: UpdateCameras uses*",
    "expect": "\\[cm\\-letterbox\\-system\\]"

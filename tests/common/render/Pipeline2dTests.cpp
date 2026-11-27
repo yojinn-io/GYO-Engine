@@ -38,9 +38,11 @@ R::ExtractedCamera Camera2d(const float x = 0.0F, const float y = 0.0F) {
     o.scalingMode = C::ScalingFixed{1280.0F, 720.0F};
     const C::TargetSize size{{2560, 1600}, 1.0F};
     const C::Letterbox box{1280.0F, 720.0F};
+    // The view point goes through Compute, as UpdateCameras does: the pipelines take its clipFromWorld.
+    const T::GlobalTransform view{At(x, y, 0.0F)};
     R::ExtractedCamera camera;
-    camera.computed = C::Compute(C::Camera{}, C::Projection{o}, &size, &box);
-    camera.view = At(x, y, 0.0F);
+    camera.computed = C::Compute(C::Camera{}, C::Projection{o}, &size, &box, &view);
+    camera.view = view.matrix;
     camera.is2d = true;
     camera.clear = R::Color8{0, 0, 0, 255};
     return camera;

@@ -205,7 +205,8 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     const Camera::Viewport& vp = camera.computed.viewport;
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
-    pass.clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);
+    // The camera's one world-to-clip value (camera's CM-3); the view's inverse above is for the distances alone.
+    pass.clipFromWorld = camera.computed.clipFromWorld;
     pass.clearDepth = camera.clearDepth;
 
     // 0: opaque and depth-tested, near to far; 1: blended and depth-tested, far to near; 2: not depth-tested, far to near.

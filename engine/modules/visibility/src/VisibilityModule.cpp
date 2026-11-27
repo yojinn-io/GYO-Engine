@@ -54,9 +54,8 @@ SystemResult CheckVisibility(
     cameras.ForEach([&](const Kernel::EntityId camera, const Camera::Camera& settings, const Camera::ComputedCamera& computed,
                         const Transform::GlobalTransform& view) {
         if (!settings.active || !computed.valid) return;
-        const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(view.matrix);
-        if (!viewFromWorld) return;
-        const Math::Frustum frustum = Math::MakeFrustum(Math::Multiply(computed.clipFromView, *viewFromWorld));
+        // The camera's one world-to-clip value (CM-3), made by UpdateCameras from this frame's view point.
+        const Math::Frustum frustum = Math::MakeFrustum(computed.clipFromWorld);
         const Math::Vec3 position{view.matrix.values[12], view.matrix.values[13], view.matrix.values[14]};
         Render::CulledEntities next;
         for (const auto& [id, candidate] : candidates) {

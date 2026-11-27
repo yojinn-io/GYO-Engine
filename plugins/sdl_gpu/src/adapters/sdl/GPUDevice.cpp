@@ -1,7 +1,7 @@
 // sdl_gpu's adapter (Design Invariant SDL-1: with ShaderTool.cpp, the only place of sdl_gpu that includes SDL3/). It
-// implements GPUDevice (../../GPUDevice.hpp): the device, the window's swapchain, the textures and meshes keyed by
-// render's ids, the passes' pipelines and the frame (uploads in one copy pass, then one render pass per Pass2D or
-// Pass3D, in their order). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
+// implements GPUDevice (../../GPUDevice.hpp): the device, the window's swapchain, the textures (render targets among
+// them) and meshes keyed by render's ids, the passes' pipelines and the frame (uploads in one copy pass, then one
+// render pass per Pass2D or Pass3D, in their order, each on its target). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
 // (imgui_impl_sdlgpu3.cpp): one transfer buffer cycled each frame, vertex, index and instance buffers grown to the
 // frame's need, the scissor per draw; the 3D pass's depth texture as SDL's examples make one (a depth target cleared by its pass's
 // load op, made again when the target's size changes).
@@ -11,9 +11,12 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "engine/base/Assert.hpp"
 #include "engine/math/linear/Matrix4.hpp"
@@ -64,11 +67,33 @@ std::uint32_t GrowTo(const std::uint64_t need) noexcept {
     return static_cast<std::uint32_t>(std::min(size, kMaxFrameBytes));
 }
 
+// SDL's format of a render format (SDL_gpu.h:767, :824).
+SDL_GPUTextureFormat SDLTextureFormat(const R::TextureFormat format) noexcept {
+    switch (format) {
+    case R::TextureFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    case R::TextureFormat::Rgba8UnormSrgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    }
+    return SDL_GPU_TEXTUREFORMAT_INVALID;
+}
+
+// A 3D pass's depth texture for one colour target, made again when the target's size changes.
+struct Depth {
+    SDL_GPUTexture* texture = nullptr;
+    R::TargetSize size{};
+};
+
+// A texture of render's asks: made from pixels, or a render target (render-pipeline declaration section 13).
 struct GPUTexture {
     SDL_GPUTexture* texture = nullptr;
     R::TextureFilter filter = R::TextureFilter::Linear;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    // A render target: passes draw on it. One that follows the main target (fixedSize none) has no texture until a
+    // frame's main size is known, and is made again whenever that size changes.
+    bool target = false;
+    std::optional<R::TargetSize> fixedSize;
+    Depth depth;
 };
 
 struct Pipeline {
@@ -149,10 +174,9 @@ struct GPUDevice::State {
     std::vector<Pipeline> pipelines;
     std::unordered_map<std::uint32_t, GPUMesh> meshes;
     std::vector<Pipeline3D> pipelines3d;
-    // The 3D passes' depth texture, for the size of the last target a 3D pass drew on.
+    // The 3D passes' depth format, and the depth texture of the main target (each render target has its own).
     SDL_GPUTextureFormat depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-    SDL_GPUTexture* depth = nullptr;
-    R::TargetSize depthSize{};
+    Depth depth;
     SDL_GPUTransferBuffer* transfer = nullptr;
     std::uint32_t transferSize = 0;
     SDL_GPUBuffer* vertices = nullptr;
@@ -165,12 +189,12 @@ struct GPUDevice::State {
 
     ~State() {
         if (device != nullptr) {
-            for (auto& [id, t] : textures) SDL_ReleaseGPUTexture(device, t.texture);
+            for (auto& [id, t] : textures) ReleaseTexture(t);
             if (white.texture != nullptr) SDL_ReleaseGPUTexture(device, white.texture);
             for (Pipeline& p : pipelines) SDL_ReleaseGPUGraphicsPipeline(device, p.pipeline);
             for (Pipeline3D& p : pipelines3d) SDL_ReleaseGPUGraphicsPipeline(device, p.pipeline);
             ReleaseMeshes();
-            if (depth != nullptr) SDL_ReleaseGPUTexture(device, depth);
+            if (depth.texture != nullptr) SDL_ReleaseGPUTexture(device, depth.texture);
             if (linear != nullptr) SDL_ReleaseGPUSampler(device, linear);
             if (nearest != nullptr) SDL_ReleaseGPUSampler(device, nearest);
             if (vertex != nullptr) SDL_ReleaseGPUShader(device, vertex);
@@ -185,6 +209,14 @@ struct GPUDevice::State {
             SDL_DestroyGPUDevice(device);
         }
         if (videoStarted) SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    }
+
+    // A texture of the table and, for a target, its depth (both may be none).
+    void ReleaseTexture(GPUTexture& t) {
+        if (t.texture != nullptr) SDL_ReleaseGPUTexture(device, t.texture);
+        if (t.depth.texture != nullptr) SDL_ReleaseGPUTexture(device, t.depth.texture);
+        t.texture = nullptr;
+        t.depth = Depth{};
     }
 
     void ReleaseMeshes() {
@@ -306,10 +338,10 @@ struct GPUDevice::State {
         return made;
     }
 
-    // The depth texture for a target of this size (made again when the size changes). false: SDL refused it.
-    bool EnsureDepth(const R::TargetSize size, std::string& error) {
-        if (depth != nullptr && depthSize == size) return true;
-        if (depth != nullptr) SDL_ReleaseGPUTexture(device, depth);
+    // The depth texture of a colour target of this size (made again when the size changes). false: SDL refused it.
+    bool EnsureDepth(Depth& depth, const R::TargetSize size, std::string& error) {
+        if (depth.texture != nullptr && depth.size == size) return true;
+        if (depth.texture != nullptr) SDL_ReleaseGPUTexture(device, depth.texture);
         SDL_GPUTextureCreateInfo info{};
         info.type = SDL_GPU_TEXTURETYPE_2D;
         info.format = depthFormat;
@@ -319,10 +351,10 @@ struct GPUDevice::State {
         info.layer_count_or_depth = 1;
         info.num_levels = 1;
         info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        depth = SDL_CreateGPUTexture(device, &info);
-        depthSize = depth != nullptr ? size : R::TargetSize{};
-        if (depth == nullptr) error = SDLError("SDL_CreateGPUTexture (depth)");
-        return depth != nullptr;
+        depth.texture = SDL_CreateGPUTexture(device, &info);
+        depth.size = depth.texture != nullptr ? size : R::TargetSize{};
+        if (depth.texture == nullptr) error = SDLError("SDL_CreateGPUTexture (depth)");
+        return depth.texture != nullptr;
     }
 
     bool EnsureBuffer(SDL_GPUBuffer*& buffer, std::uint32_t& size, const std::uint64_t need, const SDL_GPUBufferUsageFlags usage,
@@ -350,17 +382,51 @@ struct GPUDevice::State {
         return transfer != nullptr;
     }
 
-    SDL_GPUTexture* MakeTexture(const std::uint32_t width, const std::uint32_t height, const SDL_GPUTextureUsageFlags usage) const {
+    // A 2D texture; nullptr when the device does not take the format for usage or SDL refuses (error says which).
+    SDL_GPUTexture* MakeTexture(const std::uint32_t width, const std::uint32_t height, const SDL_GPUTextureUsageFlags usage,
+                                const SDL_GPUTextureFormat format, std::string& error) const {
+        // SDL_gpu.h:4478: a format is not taken for every usage on every driver (Lavapipe included); asked, not assumed.
+        if (!SDL_GPUTextureSupportsFormat(device, format, SDL_GPU_TEXTURETYPE_2D, usage)) {
+            error = "the device does not support this texture format for this usage";
+            return nullptr;
+        }
         SDL_GPUTextureCreateInfo info{};
         info.type = SDL_GPU_TEXTURETYPE_2D;
-        info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        info.format = format;
         info.usage = usage;
         info.width = width;
         info.height = height;
         info.layer_count_or_depth = 1;
         info.num_levels = 1;
         info.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        return SDL_CreateGPUTexture(device, &info);
+        SDL_GPUTexture* made = SDL_CreateGPUTexture(device, &info);
+        if (made == nullptr) error = SDLError("SDL_CreateGPUTexture");
+        return made;
+    }
+
+    // The usage of a render target: drawn on, then sampled.
+    static constexpr SDL_GPUTextureUsageFlags kTargetUsage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+
+    // Whether a pass's target has a picture here: 0 (the main target) or a render target of the asks (made, or
+    // following the main target).
+    bool Mapped(const std::uint32_t target) const {
+        if (target == 0) return true;
+        const auto it = textures.find(target);
+        return it != textures.end() && it->second.target;
+    }
+
+    // The targets that follow the main target, made (again) for this frame's main size. One SDL refuses has no
+    // texture: passes on it are counted as unmapped, draws sampling it skipped.
+    void EnsureTargets(const R::TargetSize main, FrameTally& tally) {
+        for (auto& [id, t] : textures) {
+            if (!t.target || t.fixedSize) continue;
+            if (t.texture != nullptr && t.width == main.width && t.height == main.height) continue;
+            ReleaseTexture(t);
+            t.texture = MakeTexture(main.width, main.height, kTargetUsage, t.format, tally.lastRefusal);
+            t.width = t.texture != nullptr ? main.width : 0;
+            t.height = t.texture != nullptr ? main.height : 0;
+            if (t.texture == nullptr) ++tally.refusedAsks;
+        }
     }
 
     // One frame's work on a target: the asks, the uploads, the passes whose target is 0. Records what it could not do.
@@ -405,13 +471,20 @@ struct GPUDevice::State {
         };
         for (const R::TextureOp& ask : asks) {
             if (const auto* make = std::get_if<R::TextureCreate>(&ask)) {
-                SDL_GPUTexture* texture = MakeTexture(make->desc.width, make->desc.height, SDL_GPU_TEXTUREUSAGE_SAMPLER);
+                const SDL_GPUTextureFormat format = SDLTextureFormat(make->desc.format);
+                SDL_GPUTexture* texture =
+                    MakeTexture(make->desc.width, make->desc.height, SDL_GPU_TEXTUREUSAGE_SAMPLER, format, tally.lastRefusal);
                 if (texture == nullptr) {
                     ++tally.refusedAsks;
-                    tally.lastRefusal = SDLError("SDL_CreateGPUTexture");
                     continue;
                 }
-                textures[make->id.value] = GPUTexture{texture, make->desc.filter, make->desc.width, make->desc.height};
+                GPUTexture made;
+                made.texture = texture;
+                made.filter = make->desc.filter;
+                made.width = make->desc.width;
+                made.height = make->desc.height;
+                made.format = format;
+                textures[make->id.value] = made;
                 frame.made.push_back(make->id.value);
                 frame.textureCopies.push_back({place(make->pixels), texture, R::TextureRegion{0, 0, make->desc.width, make->desc.height}});
             } else if (const auto* update = std::get_if<R::TextureUpdate>(&ask)) {
@@ -424,8 +497,30 @@ struct GPUDevice::State {
             } else if (const auto* release = std::get_if<R::TextureRelease>(&ask)) {
                 const auto it = textures.find(release->id.value);
                 if (it == textures.end()) continue;
-                frame.released.push_back(it->second.texture);
+                if (it->second.texture != nullptr) frame.released.push_back(it->second.texture);
+                if (it->second.depth.texture != nullptr) frame.released.push_back(it->second.depth.texture);
                 textures.erase(it);
+            } else if (const auto* target = std::get_if<R::TextureTargetCreate>(&ask)) {
+                GPUTexture made;
+                made.filter = target->desc.filter;
+                made.format = SDLTextureFormat(target->desc.format);
+                made.target = true;
+                made.fixedSize = target->desc.size;
+                if (made.fixedSize) {
+                    made.texture = MakeTexture(made.fixedSize->width, made.fixedSize->height, kTargetUsage, made.format, tally.lastRefusal);
+                    if (made.texture == nullptr) {
+                        ++tally.refusedAsks;
+                        continue;
+                    }
+                    made.width = made.fixedSize->width;
+                    made.height = made.fixedSize->height;
+                } else if (!SDL_GPUTextureSupportsFormat(device, made.format, SDL_GPU_TEXTURETYPE_2D, kTargetUsage)) {
+                    // Refused now rather than every frame it would be sized.
+                    ++tally.refusedAsks;
+                    tally.lastRefusal = "the device does not support this target format";
+                    continue;
+                }
+                textures[target->id.value] = made;
             }
         }
     }
@@ -480,7 +575,7 @@ struct GPUDevice::State {
         std::uint64_t indexBytes = 0;
         std::uint64_t instanceBytes = 0;
         for (const R::RenderPass& pass : commands.passes) {
-            if (R::TargetOf(pass) != 0) {
+            if (!Mapped(R::TargetOf(pass))) {
                 ++tally.unmappedPasses;
                 continue;
             }
@@ -505,7 +600,7 @@ struct GPUDevice::State {
         std::uint64_t i = frame.indexOffset;
         std::uint64_t n = frame.instanceOffset;
         for (const R::RenderPass& pass : commands.passes) {
-            if (R::TargetOf(pass) != 0) continue;
+            if (!Mapped(R::TargetOf(pass))) continue;
             const PassGeometry g = GeometryOf(pass);
             geometry.push_back(Upload{v, g.vertices, g.vertexBytes});
             geometry.push_back(Upload{i, g.indices, g.indexBytes});
@@ -537,7 +632,7 @@ struct GPUDevice::State {
         for (const std::uint32_t id : frame.made) {
             const auto it = textures.find(id);
             if (it == textures.end()) continue;
-            SDL_ReleaseGPUTexture(device, it->second.texture);
+            ReleaseTexture(it->second);
             textures.erase(it);
             ++tally.refusedAsks;
         }
@@ -616,121 +711,146 @@ struct GPUDevice::State {
         return true;
     }
 
-    // Records one render pass per Pass2D or Pass3D on target 0 into texture (format, size), in their order; none: one
-    // pass that clears.
+    // The picture a pass draws on: the main target's (target 0) or a render target's.
+    struct Target {
+        SDL_GPUTexture* texture = nullptr;
+        SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
+        R::TargetSize size{};
+        Depth* depth = nullptr;
+    };
+
+    // Records one render pass per Pass2D or Pass3D, in their order, each on its target: 0 is texture (format, size),
+    // another the render target of the asks with that id (render-pipeline declaration section 13). A pass whose
+    // target has no picture is skipped (counted once in PlaceGeometry, or here when a target could not be made). The
+    // first pass of the frame on a target clears it to transparent black unless it clears it itself; the main target
+    // with no pass gets one pass that clears.
     void RecordPasses(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* texture, const SDL_GPUTextureFormat format, const R::TargetSize size,
                       const R::RenderCommands& commands, FrameTally& tally) {
-        bool first = true;
+        EnsureTargets(size, tally);
+        std::vector<std::uint32_t> begun;
         std::uint32_t vertexBase = 0;
         std::uint32_t indexBase = 0;
         std::uint32_t instanceBase = 0;
-        const auto begin = [&](const std::optional<R::Color8>& clear) {
+        const auto beginOn = [&](const Target& on, const std::uint32_t id, const std::optional<R::Color8>& clear) {
+            const bool first = std::find(begun.begin(), begun.end(), id) == begun.end();
+            if (first) begun.push_back(id);
             SDL_GPUColorTargetInfo target{};
-            target.texture = texture;
+            target.texture = on.texture;
             target.store_op = SDL_GPU_STOREOP_STORE;
             const R::Color8 colour = clear.value_or(R::Color8{0, 0, 0, 0});
             target.clear_color = SDL_FColor{colour.r / 255.0F, colour.g / 255.0F, colour.b / 255.0F, colour.a / 255.0F};
             target.load_op = (first || clear) ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-            first = false;
-            return SDL_BeginGPURenderPass(cmd, &target, 1, nullptr);
+            return target;
         };
         for (const R::RenderPass& item : commands.passes) {
-            if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
-                if (pass3d->target != 0) continue;
-                RecordPass3D(cmd, texture, format, size, *pass3d, first, vertexBase, indexBase, instanceBase, tally);
-                const PassGeometry g = GeometryOf(item);
-                vertexBase += static_cast<std::uint32_t>(g.vertexBytes);
-                indexBase += static_cast<std::uint32_t>(g.indexBytes);
-                instanceBase += static_cast<std::uint32_t>(g.instanceBytes);
-                continue;
+            const std::uint32_t id = R::TargetOf(item);
+            if (!Mapped(id)) continue;
+            const PassGeometry g = GeometryOf(item);
+            Target on{texture, format, size, &depth};
+            if (id != 0) {
+                GPUTexture& t = textures.at(id);
+                on = Target{t.texture, t.format, R::TargetSize{t.width, t.height}, &t.depth};
             }
-            const R::Pass2D& pass = std::get<R::Pass2D>(item);
-            if (pass.target != 0) continue;
-            SDL_GPURenderPass* render = begin(pass.clear);
-            // The clear above covers the whole target; the draws land in the pass's viewport.
-            const R::PixelRect area = R::ViewportOf(pass, size);
-            const bool drawable = area.width != 0 && area.height != 0;
-            const SDL_GPUViewport viewport{static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.width),
-                                           static_cast<float>(area.height), 0.0F, 1.0F};
-            if (drawable) SDL_SetGPUViewport(render, &viewport);
-            const Engine::Math::Rect view = drawable ? R::ViewOf(pass, size) : Engine::Math::Rect{};
-            if (drawable) {
-                const Abi::Pass2DViewUniform uniform = Abi::ToUniform(R::ViewToClip(view));
-                SDL_PushGPUVertexUniformData(cmd, Abi::kPass2DViewUniformSlot, &uniform, sizeof(uniform));
+            if (on.texture == nullptr) {
+                ++tally.unmappedPasses;
+            } else if (const auto* pass3d = std::get_if<R::Pass3D>(&item)) {
+                RecordPass3D(cmd, on, beginOn(on, id, std::nullopt), *pass3d, vertexBase, indexBase, instanceBase, tally);
+            } else {
+                RecordPass2D(cmd, on, beginOn(on, id, std::get<R::Pass2D>(item).clear), std::get<R::Pass2D>(item), vertexBase,
+                             indexBase, tally);
             }
-            // A pass with no vertices or no indices has nothing a draw could name.
-            const bool bound = drawable && !pass.vertices.empty() && !pass.indices.empty() && vertices != nullptr && indices != nullptr;
-            if (bound) {
-                const SDL_GPUBufferBinding vb{vertices, vertexBase};
-                SDL_BindGPUVertexBuffers(render, 0, &vb, 1);
-                const SDL_GPUBufferBinding ib{indices, indexBase};
-                SDL_BindGPUIndexBuffer(render, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
-            }
-            // Binds only what changes from one draw to the next (a pass of many small draws, such as ImGui's).
-            SDL_GPUGraphicsPipeline* boundPipeline = nullptr;
-            SDL_GPUTextureSamplerBinding boundTexture{};
-            for (const R::Draw2D& draw : pass.draws) {
-                GYO_ASSERT(draw.indexOffset <= pass.indices.size() && draw.indexCount <= pass.indices.size() - draw.indexOffset &&
-                           "a draw's indices outside its pass");
-                if (draw.indexCount == 0 || !bound) continue;
-                const GPUTexture* t = &white;
-                if (draw.texture.value != 0) {
-                    const auto it = textures.find(draw.texture.value);
-                    if (it == textures.end()) {
-                        ++tally.skippedDraws;
-                        continue;
-                    }
-                    t = &it->second;
-                }
-                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);
-                if (scissor.width == 0 || scissor.height == 0) continue;
-                SDL_GPUGraphicsPipeline* pipeline = PipelineFor(format, draw.blend, tally.lastRefusal);
-                if (pipeline == nullptr) {
+            vertexBase += static_cast<std::uint32_t>(g.vertexBytes);
+            indexBase += static_cast<std::uint32_t>(g.indexBytes);
+            instanceBase += static_cast<std::uint32_t>(g.instanceBytes);
+        }
+        if (std::find(begun.begin(), begun.end(), 0U) == begun.end()) {
+            const SDL_GPUColorTargetInfo clear = beginOn(Target{texture, format, size, &depth}, 0, std::nullopt);
+            SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &clear, 1, nullptr));
+        }
+    }
+
+    // Records one Pass2D on its target (colour: how it starts). vertexBase, indexBase: where its vertices and indices
+    // are in the frame's buffers.
+    void RecordPass2D(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour, const R::Pass2D& pass,
+                      const std::uint32_t vertexBase, const std::uint32_t indexBase, FrameTally& tally) {
+        const SDL_GPUTextureFormat format = on.format;
+        const R::TargetSize size = on.size;
+        SDL_GPURenderPass* render = SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr);
+        // The clear above covers the whole target; the draws land in the pass's viewport.
+        const R::PixelRect area = R::ViewportOf(pass, size);
+        const bool drawable = area.width != 0 && area.height != 0;
+        const SDL_GPUViewport viewport{static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.width),
+                                       static_cast<float>(area.height), 0.0F, 1.0F};
+        if (drawable) SDL_SetGPUViewport(render, &viewport);
+        const Engine::Math::Rect view = drawable ? R::ViewOf(pass, size) : Engine::Math::Rect{};
+        if (drawable) {
+            const Abi::Pass2DViewUniform uniform = Abi::ToUniform(R::ViewToClip(view));
+            SDL_PushGPUVertexUniformData(cmd, Abi::kPass2DViewUniformSlot, &uniform, sizeof(uniform));
+        }
+        // A pass with no vertices or no indices has nothing a draw could name.
+        const bool bound = drawable && !pass.vertices.empty() && !pass.indices.empty() && vertices != nullptr && indices != nullptr;
+        if (bound) {
+            const SDL_GPUBufferBinding vb{vertices, vertexBase};
+            SDL_BindGPUVertexBuffers(render, 0, &vb, 1);
+            const SDL_GPUBufferBinding ib{indices, indexBase};
+            SDL_BindGPUIndexBuffer(render, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+        }
+        // Binds only what changes from one draw to the next (a pass of many small draws, such as ImGui's).
+        SDL_GPUGraphicsPipeline* boundPipeline = nullptr;
+        SDL_GPUTextureSamplerBinding boundTexture{};
+        for (const R::Draw2D& draw : pass.draws) {
+            GYO_ASSERT(draw.indexOffset <= pass.indices.size() && draw.indexCount <= pass.indices.size() - draw.indexOffset &&
+                       "a draw's indices outside its pass");
+            if (draw.indexCount == 0 || !bound) continue;
+            const GPUTexture* t = &white;
+            if (draw.texture.value != 0) {
+                const auto it = textures.find(draw.texture.value);
+                if (it == textures.end() || it->second.texture == nullptr) {
                     ++tally.skippedDraws;
                     continue;
                 }
-                if (pipeline != boundPipeline) {
-                    SDL_BindGPUGraphicsPipeline(render, pipeline);
-                    boundPipeline = pipeline;
-                }
-                const SDL_Rect rect{static_cast<int>(scissor.x), static_cast<int>(scissor.y), static_cast<int>(scissor.width),
-                                    static_cast<int>(scissor.height)};
-                SDL_SetGPUScissor(render, &rect);
-                const SDL_GPUTextureSamplerBinding binding{t->texture, t->filter == R::TextureFilter::Nearest ? nearest : linear};
-                if (binding.texture != boundTexture.texture || binding.sampler != boundTexture.sampler) {
-                    SDL_BindGPUFragmentSamplers(render, Abi::kPass2DTextureSlot, &binding, 1);
-                    boundTexture = binding;
-                }
-                SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, static_cast<std::int32_t>(draw.vertexOffset), 0);
+                t = &it->second;
             }
-            SDL_EndGPURenderPass(render);
-            vertexBase += static_cast<std::uint32_t>(pass.vertices.size() * sizeof(R::Vertex2D));
-            indexBase += static_cast<std::uint32_t>(pass.indices.size() * sizeof(std::uint32_t));
+            const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);
+            if (scissor.width == 0 || scissor.height == 0) continue;
+            SDL_GPUGraphicsPipeline* pipeline = PipelineFor(format, draw.blend, tally.lastRefusal);
+            if (pipeline == nullptr) {
+                ++tally.skippedDraws;
+                continue;
+            }
+            if (pipeline != boundPipeline) {
+                SDL_BindGPUGraphicsPipeline(render, pipeline);
+                boundPipeline = pipeline;
+            }
+            const SDL_Rect rect{static_cast<int>(scissor.x), static_cast<int>(scissor.y), static_cast<int>(scissor.width),
+                                static_cast<int>(scissor.height)};
+            SDL_SetGPUScissor(render, &rect);
+            const SDL_GPUTextureSamplerBinding binding{t->texture, t->filter == R::TextureFilter::Nearest ? nearest : linear};
+            if (binding.texture != boundTexture.texture || binding.sampler != boundTexture.sampler) {
+                SDL_BindGPUFragmentSamplers(render, Abi::kPass2DTextureSlot, &binding, 1);
+                boundTexture = binding;
+            }
+            SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, static_cast<std::int32_t>(draw.vertexOffset), 0);
         }
-        if (first) SDL_EndGPURenderPass(begin(std::nullopt));
+        SDL_EndGPURenderPass(render);
     }
 
-    // Records one Pass3D: its depth cleared to 1 (each 3D pass has a depth of its own), its colour kept as the target
-    // is (cleared to transparent black when it is the target's first pass of the frame, as a Pass2D without a clear).
-    // vertexBase, indexBase, instanceBase: where the pass's own vertices and indices and its instances are in the
-    // frame's buffers.
-    void RecordPass3D(SDL_GPUCommandBuffer* cmd, SDL_GPUTexture* texture, const SDL_GPUTextureFormat format, const R::TargetSize size,
-                      const R::Pass3D& pass, bool& first, const std::uint32_t vertexBase, const std::uint32_t indexBase,
-                      const std::uint32_t instanceBase, FrameTally& tally) {
-        SDL_GPUColorTargetInfo colour{};
-        colour.texture = texture;
-        colour.store_op = SDL_GPU_STOREOP_STORE;
-        colour.clear_color = SDL_FColor{0.0F, 0.0F, 0.0F, 0.0F};
-        colour.load_op = first ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
-        first = false;
-        if (!EnsureDepth(size, tally.lastRefusal)) {
+    // Records one Pass3D on its target: its depth (the target's own) cleared to 1 unless the pass keeps it, its colour
+    // kept as the target is (colour: cleared to transparent black when it is the target's first pass of the frame, as
+    // a Pass2D without a clear). vertexBase, indexBase, instanceBase: where the pass's own vertices and indices and its
+    // instances are in the frame's buffers.
+    void RecordPass3D(SDL_GPUCommandBuffer* cmd, const Target& on, const SDL_GPUColorTargetInfo& colour, const R::Pass3D& pass,
+                      const std::uint32_t vertexBase, const std::uint32_t indexBase, const std::uint32_t instanceBase, FrameTally& tally) {
+        const SDL_GPUTextureFormat format = on.format;
+        const R::TargetSize size = on.size;
+        if (!EnsureDepth(*on.depth, size, tally.lastRefusal)) {
             // No depth to draw with: the pass's draws are skipped; the colour is still what the rule above says.
             tally.skippedDraws += pass.draws.size();
             SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &colour, 1, nullptr));
             return;
         }
         SDL_GPUDepthStencilTargetInfo depthTarget{};
-        depthTarget.texture = depth;
+        depthTarget.texture = on.depth->texture;
         depthTarget.clear_depth = 1.0F;
         // Cleared unless the pass keeps the depth of the passes before it (Pass3D::clearDepth; SDL cycles a target
         // only when it is cleared). Stored, so a later pass may keep it.
@@ -792,7 +912,7 @@ struct GPUDevice::State {
             const GPUTexture* tex = &white;
             if (draw.texture.value != 0) {
                 const auto it = textures.find(draw.texture.value);
-                if (it == textures.end()) {
+                if (it == textures.end() || it->second.texture == nullptr) {
                     ++tally.skippedDraws;
                     continue;
                 }
@@ -912,10 +1032,10 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
         return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, SDLError("SDL_CreateGPUSampler")));
     }
     // The white texture (TextureId{}): one opaque white pixel.
-    state->white.texture = state->MakeTexture(1, 1, SDL_GPU_TEXTUREUSAGE_SAMPLER);
+    state->white.texture = state->MakeTexture(1, 1, SDL_GPU_TEXTUREUSAGE_SAMPLER, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, error);
     state->white.width = 1;
     state->white.height = 1;
-    if (state->white.texture == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, SDLError("SDL_CreateGPUTexture")));
+    if (state->white.texture == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, std::move(error)));
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(state->device);
     if (cmd == nullptr) return Err(DeviceFailure::Make(DeviceFailureCode::SetupFailed, SDLError("SDL_AcquireGPUCommandBuffer")));
     if (!state->EnsureTransfer(4, error)) {
@@ -992,8 +1112,10 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     const auto Err = [](std::string text) { return Engine::Base::Err(CaptureFailure::Make(CaptureFailureCode::Refused, std::move(text))); };
     GYO_ASSERT(size.width > 0 && size.height > 0 && "a capture of zero size");
     SDL_GPUDevice* device = state_->device;
-    SDL_GPUTexture* target = state_->MakeTexture(size.width, size.height, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET);
-    if (target == nullptr) return Err(SDLError("SDL_CreateGPUTexture"));
+    std::string made;
+    SDL_GPUTexture* target =
+        state_->MakeTexture(size.width, size.height, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, made);
+    if (target == nullptr) return Err(std::move(made));
     const std::uint32_t bytes = size.width * size.height * 4;
     SDL_GPUTransferBufferCreateInfo downloadInfo{};
     downloadInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
@@ -1090,7 +1212,7 @@ SwapchainPresentMode GPUDevice::ActivePresentMode() const noexcept { return stat
 
 void GPUDevice::ForgetTextures() {
     RequireMainThread();
-    for (auto& [id, t] : state_->textures) SDL_ReleaseGPUTexture(state_->device, t.texture);
+    for (auto& [id, t] : state_->textures) state_->ReleaseTexture(t);
     state_->textures.clear();
 }
 
@@ -1099,7 +1221,11 @@ void GPUDevice::ForgetMeshes() {
     state_->ReleaseMeshes();
 }
 
-std::size_t GPUDevice::TextureCount() const noexcept { return state_->textures.size(); }
+std::size_t GPUDevice::TextureCount() const noexcept {
+    // A target that follows the main target has no texture until a frame sizes it.
+    return static_cast<std::size_t>(std::count_if(state_->textures.begin(), state_->textures.end(),
+                                                   [](const auto& entry) { return entry.second.texture != nullptr; }));
+}
 
 std::size_t GPUDevice::MeshCount() const noexcept { return state_->meshes.size(); }
 

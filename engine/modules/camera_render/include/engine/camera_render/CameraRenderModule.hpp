@@ -7,6 +7,11 @@
 // projection, view point, 2D / 3D marker, clear (ClearColorConfig against the source's ClearColor) and RenderLayers,
 // sorted by order, then by source entity.
 //
+// Render targets (render-pipeline declaration section 13): ExtractRenderTargets, before it, keeps render's
+// TargetTextures in step with the source's RenderTargets (a render target of RenderTextures for each; let go when the
+// source lets its target go). A camera's target is the pass target its CameraTarget maps to (0 stays 0); a camera
+// whose CameraTarget is neither 0 nor a live target of the source is not extracted (it has nothing to draw on).
+//
 // The pipelines (sprite_render, mesh_render) put each camera's passes in its slot of render's CameraPasses (emptied
 // by ExtractCameras); ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after
 // the pipelines' Update), writes them to RenderCommands camera by camera, each camera's clear first (Compose.hpp).

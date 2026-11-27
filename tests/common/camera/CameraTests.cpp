@@ -502,6 +502,53 @@ TEST_CASE("camera: a World with the skeleton off names where UpdateCameras runs"
     CHECK_MESSAGE((*built)->World("Main").GetWorld().Get<C::ComputedCamera>(1)->valid, "[cm-options] UpdateCameras did not run in Late");
 }
 
+// ---- clipFromWorld: one value for every reader (render-pipeline declaration section 13, A1; CM-3)
+
+TEST_CASE("camera: Compute makes clipFromWorld from the view point; none is the origin; a view point with no inverse is not valid") {
+    const C::TargetSize size = Size(800, 600);
+    const T::GlobalTransform view = At({3.0F, 1.0F, -5.0F});
+    const C::ComputedCamera computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size, nullptr, &view);
+    REQUIRE(computed.valid);
+    CHECK_MESSAGE(SameMatrix(computed.clipFromWorld, M::Multiply(computed.clipFromView, *M::Inverse(view.matrix))),
+                  "[cm-clip-from-world] clipFromView times the view point's inverse");
+    const C::ComputedCamera origin = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size);
+    CHECK_MESSAGE(SameMatrix(origin.clipFromWorld, origin.clipFromView), "[cm-clip-from-world-origin] no view point: at the origin");
+    T::GlobalTransform flat;
+    flat.matrix.values[0] = 0.0F;  // a zero scale on x: no inverse
+    CHECK_MESSAGE(!C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size, nullptr, &flat).valid,
+                  "[cm-clip-from-world-singular] a view point with no inverse leaves the camera not valid");
+}
+
+namespace {
+K::SystemResult MoveCamera(K::Query<K::Write<T::Transform>, K::With<C::Camera3d>> cameras, K::Local<int> frame) {
+    ++*frame;
+    if (*frame != 4) return {};
+    cameras.ForEach([](K::EntityId, K::Mut<T::Transform> t) { t->translation = {0.0F, 2.0F, -10.0F}; });
+    return {};
+}
+} // namespace
+
+TEST_CASE("camera: UpdateCameras takes this frame's GlobalTransform into clipFromWorld, and writes when the camera moves") {
+    Changes().clear();
+    auto p = Make([](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&Spawn3d>(In("Spawn3d", "Main", "Update"));
+        s.Registrar().AddSystem<&MoveCamera>(In("MoveCamera", "Main", "Update"));
+        s.Registrar().AddSystem<&CountChanged>(In("CountChanged", "Main", "Last"));
+    });
+    WorldOf(*p).ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, Size(800, 600));
+    Frames(*p, 3);
+    const K::EntityId id = WorldOf(*p).Keys<C::Camera3d>().at(0);
+    Frames(*p);  // frame 4: the camera moves in Update; PostUpdate propagates, then UpdateCameras
+    const C::ComputedCamera& computed = *WorldOf(*p).Get<C::ComputedCamera>(id);
+    const T::GlobalTransform moved = At({0.0F, 2.0F, -10.0F});
+    CHECK_MESSAGE(SameMatrix(computed.clipFromWorld, M::Multiply(computed.clipFromView, *M::Inverse(moved.matrix))),
+                  "[cm-clip-from-world-this-frame] the view point of this frame (after the propagation)");
+    REQUIRE(Changes().size() == 4);
+    CHECK_MESSAGE(Changes()[3] == 1, "[cm-writes-when-moved] a camera that moved has its ComputedCamera written");
+    Frames(*p);
+    CHECK_MESSAGE(Changes().back() == 0, "[cm-writes-when-equal] a camera that stays is not written again");
+}
+
 // ---- The summary (CM-3, CM-5)
 
 TEST_CASE("camera: the summary hashes the author's settings and nothing of ComputedCamera or the target sizes") {

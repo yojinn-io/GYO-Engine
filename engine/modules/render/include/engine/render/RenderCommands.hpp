@@ -2,8 +2,10 @@
 
 // What a renderer is asked to draw this frame, as data (docs/architecture/target/v2/render.zh-Hant.md, section 2;
 // SDL declaration section 3.3, P27; Design Invariant RD-1). No SDL, no GPU object, no backend type: a backend (today
-// sdl_gpu's GPUSubmit) reads it and draws it; a test reads it and compares it. Batch R2a carries one kind of pass,
-// the 2D pass (textures, blending, clipping); the 3D scene, cameras and custom shaders come with batch R2b.
+// sdl_gpu's GPUSubmit) reads it and draws it; a test reads it and compares it. The frame is a list of passes drawn in
+// their order, each a 2D pass (textures, blending, clipping) or a 3D pass (meshes, instances, depth), each on one
+// target: 0, the main target, or a render target RenderTextures handed out (render-pipeline declaration section 13),
+// which a later pass's draws may sample.
 //
 // Coordinates of a 2D pass are view units with y down: the pass's view rectangle is stretched over the whole
 // target, its top-left corner on the target's top-left pixel. Texture coordinate (0, 0) is a texture's top-left
@@ -11,7 +13,8 @@
 // one place where up and down turn round is ViewToClip (y-down view units to y-up clip space).
 //
 // Colours are bytes as they are stored (sRGB-encoded for colour pictures), alpha straight: the 2D pass blends the
-// bytes as they are, like Dear ImGui and SDL_Renderer do (render.zh-Hant.md section 2, "colour").
+// bytes as they are, like Dear ImGui and SDL_Renderer do (render.zh-Hant.md section 2, "colour"). A texture whose
+// format is Rgba8UnormSrgb is read decoded to linear (RenderTextures.hpp); the 2D pipelines make none.
 
 #include <cstdint>
 #include <optional>
@@ -77,14 +80,6 @@ struct Draw2D final {
     std::uint32_t vertexOffset = 0;
 };
 
-// A target's size in pixels.
-struct TargetSize final {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-
-    friend bool operator==(const TargetSize&, const TargetSize&) = default;
-};
-
 // A rectangle of whole pixels on a target.
 struct PixelRect final {
     std::uint32_t x = 0;
@@ -98,8 +93,9 @@ struct PixelRect final {
 // A 2D pass on one target. The vertices and indices of all its draws are in one list each, so a producer such as
 // Dear ImGui hands its draw list over as it is.
 struct Pass2D final {
-    // The target, in camera's id space (CameraTarget::id): 0 is the main target, the main window when there is one.
-    // What another id names is the backend's to map.
+    // The target: 0 is the main target (the main window when there is one); another value is the id of a render target
+    // of RenderTextures (RenderTextures::CreateTarget). camera_render gives a camera's passes the target its
+    // CameraTarget maps to.
     std::uint32_t target = 0;
     // The whole target (not only the viewport, as a GPU clear does) is cleared to this colour before the draws (the
     // 2D pipeline gives it to a target's first camera only; Pipeline2d.hpp, Queue2d). A target's first pass of the frame with no clear starts from transparent black: a window's
@@ -177,6 +173,7 @@ struct Draw3D final {
 // has a depth of its own by default, as in Bevy: a viewmodel camera after the world camera draws over the world); its
 // colour starts as the target is (the camera's clear is a pass of its own before it). Draws are drawn in their order.
 struct Pass3D final {
+    // As Pass2D's.
     std::uint32_t target = 0;
     // As Pass2D's: the pixels of the target the pass draws on; nullopt: the whole target.
     std::optional<PixelRect> viewport;

@@ -130,7 +130,8 @@ const TargetSize* CameraTargetSizes::Find(const CameraTarget target) const {
     return at != sizes_.end() && at->first == target.id ? &at->second : nullptr;
 }
 
-ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size, const Letterbox* letterbox) {
+ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size, const Letterbox* letterbox,
+                       const Transform::GlobalTransform* view) {
     ComputedCamera out;
     if (size == nullptr) return out;
     out.targetPhysicalSize = size->physicalSize;
@@ -151,6 +152,15 @@ ComputedCamera Compute(const Camera& camera, const Projection& projection, const
     const float logicalWidth = static_cast<float>(viewport.size.x) / size->scaleFactor;
     const float logicalHeight = static_cast<float>(viewport.size.y) / size->scaleFactor;
     out.clipFromView = ProjectionMatrix(projection, logicalWidth, logicalHeight);
+    // Bevy's compute_frustum (bevy_camera/src/projection.rs:72) and prepare_view_uniforms
+    // (bevy_render/src/view/mod.rs:1230-1239) each make it from clip_from_view and the view; here once.
+    if (view != nullptr) {
+        const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(view->matrix);
+        if (!viewFromWorld) return out;
+        out.clipFromWorld = Math::Multiply(out.clipFromView, *viewFromWorld);
+    } else {
+        out.clipFromWorld = out.clipFromView;
+    }
     out.valid = true;
     return out;
 }

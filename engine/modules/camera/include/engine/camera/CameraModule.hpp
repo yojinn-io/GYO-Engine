@@ -4,8 +4,10 @@
 // Invariants CM-1 to CM-5 in docs/architecture/target/v2/camera.zh-Hant.md). Carried by default (config/modules.csv).
 // In every World it joins it registers the camera components and CameraTargetSizes (empty unless one is already
 // there), declares the initial values (Camera2d / Camera3d -> Camera and Projection; Camera -> CameraTarget and
-// ComputedCamera) and mounts UpdateCameras (Bevy's camera_system) in the set kUpdateSet. UpdateCameras reads no
-// GlobalTransform, so it has no order with the transform Module's propagation (as in Bevy).
+// ComputedCamera) and mounts UpdateCameras (Bevy's camera_system) in the set kUpdateSet, after the transform
+// Module's propagation: it reads the view point to make ComputedCamera::clipFromWorld (Bevy's camera_system reads
+// none and its update_frusta runs after the propagation; render-pipeline declaration section 13). So CameraOptions
+// names transform's schedule.
 //
 // Its duties (CM-1): these and the conversions in Camera.hpp. Not: drawing, visibility, clear colours, the window.
 

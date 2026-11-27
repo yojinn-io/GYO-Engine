@@ -521,4 +521,160 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     CHECK(pipeMs > 0.0);
 }
 
+// ---- Render targets and texture formats (render-pipeline declaration section 13, A1; label gpu, ctest sdl_gpu.targets)
+
+namespace {
+
+Picture DrawAt(const R::RenderCommands& commands, const R::RenderTextures& textures, const R::TargetSize size) {
+    Picture picture;
+    auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally);
+    REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
+    picture.image = std::move(*captured);
+    return picture;
+}
+
+// The whole of a target sampled onto the main target's (0, 0) .. (width, height), nearest pixel.
+R::Pass2D SampleTarget(const R::TextureId target, const float width, const float height) {
+    R::Pass2D pass = Cleared(kWhite);
+    Quad(pass, Rect{0, 0, width, height}, kWhite, target);
+    return pass;
+}
+
+} // namespace
+
+TEST_CASE("sdl_gpu targets: a pass draws into an 8 x 8 target and a later pass samples it onto the main target") {
+    R::RenderTextures textures;
+    const R::TextureId target =
+        textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    R::RenderCommands commands;
+    // Into the target: blue, a red left half, a green bottom-right quarter.
+    R::Pass2D into = Cleared(kBlue);
+    into.target = target.value;
+    Quad(into, Rect{0, 0, 4, 8}, kRed);
+    Quad(into, Rect{4, 4, 4, 4}, kGreen);
+    commands.passes.push_back(std::move(into));
+    // The main target shows the target, flipped left to right by its uv (so its left half lands on the right).
+    R::Pass2D main = Cleared(kWhite);
+    main.vertices = {{{0, 0}, {1, 0}, kWhite}, {{8, 0}, {0, 0}, kWhite}, {{8, 8}, {0, 1}, kWhite}, {{0, 8}, {1, 1}, kWhite}};
+    main.indices = {0, 1, 2, 0, 2, 3};
+    main.draws.push_back(R::Draw2D{target, R::BlendMode::Opaque, std::nullopt, 0, 6, 0});
+    commands.passes.push_back(std::move(main));
+    const Picture p = DrawAt(commands, textures, kSize);
+    CHECK_MESSAGE(p.tally.unmappedPasses == 0, "[gt-target-mapped] a pass on a target RenderTextures made is drawn");
+    CHECK_MESSAGE(p.tally.refusedAsks == 0, "[gt-target-made] " << p.tally.lastRefusal);
+    CHECK_MESSAGE(p.All(4, 0, 8, 8, kRed), "[gt-target-sampled] the target's red half, sampled and flipped onto the right");
+    CHECK_MESSAGE(p.All(0, 0, 4, 4, kBlue), "[gt-target-sampled] the target's blue, top left");
+    CHECK_MESSAGE(p.All(0, 4, 4, 8, kGreen), "[gt-target-sampled] the target's green quarter, bottom left");
+
+    // A later frame: a 3D pass draws into the target too (its own depth, the target's size), then the main pass.
+    textures.ClearPending();
+    R::RenderCommands next;
+    R::Pass2D clear = Cleared(kBlue);
+    clear.target = target.value;
+    next.passes.push_back(std::move(clear));
+    R::Pass3D scene;
+    scene.target = target.value;
+    scene.vertices = {{{-1, -1, 0.5F}, {}, {}}, {{1, -1, 0.5F}, {}, {}}, {{1, 1, 0.5F}, {}, {}}, {{-1, 1, 0.5F}, {}, {}}};
+    scene.indices = {0, 1, 2, 0, 2, 3};
+    scene.instances.push_back(R::Instance3D{{}, kYellow});
+    scene.draws.push_back(R::Draw3D{R::MeshId{}, 0, 6, 0, 0, 1});
+    next.passes.push_back(std::move(scene));
+    next.passes.push_back(SampleTarget(target, 8, 8));
+    const Picture q = DrawAt(next, textures, R::TargetSize{8, 8});
+    CHECK_MESSAGE(q.All(0, 0, 8, 8, kYellow), "[gt-target-3d] a 3D pass on the target covers it (clip space is the target's)");
+    CHECK_MESSAGE(q.tally.skippedDraws == 0, "[gt-target-3d] " << q.tally.lastRefusal);
+
+    textures.ClearPending();
+    textures.Release(target);
+    static_cast<void>(DrawAt(R::RenderCommands{}, textures, kSize));
+    CHECK_MESSAGE(Device().TextureCount() == 0, "[gt-target-released] the target's GPU texture is gone");
+}
+
+TEST_CASE("sdl_gpu targets: an sRGB texture is sampled as linear values; a Unorm one as stored") {
+    R::RenderTextures textures;
+    // The same bytes in both: 188 and 128 (sRGB-encoded 0.5029 and 0.2158 in linear), alpha 255.
+    const std::vector<std::uint8_t> bytes{188, 188, 188, 255, 128, 128, 128, 255};
+    const R::TextureId srgb =
+        textures.Create(R::TextureDesc{2, 1, R::TextureFilter::Nearest, R::TextureFormat::Rgba8UnormSrgb}, bytes);
+    const R::TextureId stored = textures.Create(R::TextureDesc{2, 1, R::TextureFilter::Nearest, R::TextureFormat::Rgba8Unorm}, bytes);
+    R::RenderCommands commands;
+    R::Pass2D pass = Cleared(kBlue);
+    Quad(pass, Rect{0, 0, 8, 4}, kWhite, srgb);
+    Quad(pass, Rect{0, 4, 8, 4}, kWhite, stored);
+    commands.passes.push_back(std::move(pass));
+    const Picture p = DrawAt(commands, textures, kSize);
+    REQUIRE_MESSAGE(p.tally.refusedAsks == 0, p.tally.lastRefusal);
+    // The main target is Unorm: what the shader read is written as it is (0.5029 * 255 = 128.2, 0.2158 * 255 = 55.0).
+    const R::Color8 decoded = p.At(1, 1);
+    const R::Color8 decodedDark = p.At(6, 1);
+    CHECK_MESSAGE((Diff(decoded.r, 128) <= 1 && decoded.r == decoded.g && decoded.g == decoded.b && decoded.a == 255),
+                  "[gt-srgb-decoded] sRGB 188 sampled as " << int(decoded.r));
+    CHECK_MESSAGE(Diff(decodedDark.r, 55) <= 1, "[gt-srgb-decoded] sRGB 128 sampled as " << int(decodedDark.r));
+    CHECK_MESSAGE((p.All(0, 4, 4, 8, R::Color8{188, 188, 188, 255}) && p.All(4, 4, 8, 8, R::Color8{128, 128, 128, 255})),
+                  "[gt-unorm-stored] a Unorm texture is sampled as stored");
+    textures.ClearPending();
+    textures.Release(srgb);
+    textures.Release(stored);
+    static_cast<void>(DrawAt(R::RenderCommands{}, textures, kSize));
+}
+
+TEST_CASE("sdl_gpu targets: a target that follows the main target takes its size, again when it changes") {
+    R::RenderTextures textures;
+    const R::TextureId target =
+        textures.CreateTarget(R::RenderTargetDesc{std::nullopt, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    // Into the target: blue, a red square of 4 x 4 pixels at its top-left (no view: one unit a pixel).
+    const auto frame = [&](const R::TargetSize size) {
+        R::RenderCommands commands;
+        R::Pass2D into = Cleared(kBlue);
+        into.target = target.value;
+        Quad(into, Rect{0, 0, 4, 4}, kRed);
+        commands.passes.push_back(std::move(into));
+        commands.passes.push_back(SampleTarget(target, static_cast<float>(size.width), static_cast<float>(size.height)));
+        return commands;
+    };
+    const Picture small = DrawAt(frame(kSize), textures, kSize);
+    REQUIRE_MESSAGE(small.tally.refusedAsks == 0, small.tally.lastRefusal);
+    CHECK_MESSAGE((small.All(0, 0, 4, 4, kRed) && small.All(4, 0, 8, 8, kBlue) && small.All(0, 4, 4, 8, kBlue)),
+                  "[gt-target-follows] at 8 x 8 the square is 4 x 4 pixels");
+    textures.ClearPending();
+    const R::TargetSize large{16, 16};
+    const Picture big = DrawAt(frame(large), textures, large);
+    // Had the target kept 8 x 8, its square would be stretched to 8 x 8 pixels of the main target.
+    CHECK_MESSAGE((big.All(0, 0, 4, 4, kRed) && big.All(4, 0, 16, 16, kBlue) && big.All(0, 4, 4, 16, kBlue)),
+                  "[gt-target-follows] at 16 x 16 the target is 16 x 16 too: the square stays 4 x 4 pixels");
+    CHECK_MESSAGE(Device().TextureCount() == 1, "[gt-target-follows] one texture for the target, made again, not added");
+    textures.Release(target);
+    static_cast<void>(DrawAt(R::RenderCommands{}, textures, kSize));
+}
+
+TEST_CASE("sdl_gpu targets: a target's first pass of the frame with no clear starts from transparent black") {
+    R::RenderTextures textures;
+    const R::TextureId target =
+        textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    // Frame 1 leaves the whole target red.
+    R::RenderCommands red;
+    R::Pass2D fill = Cleared(kRed);
+    fill.target = target.value;
+    red.passes.push_back(std::move(fill));
+    red.passes.push_back(SampleTarget(target, 8, 8));
+    REQUIRE(DrawAt(red, textures, kSize).All(0, 0, 8, 8, kRed));
+    textures.ClearPending();
+    // Frame 2: the main target's pass comes first, then the target's first pass, which has no clear and draws green
+    // on its left half; the right half is what a target's first pass starts from, not frame 1's red.
+    R::RenderCommands commands;
+    commands.passes.push_back(Cleared(kWhite));
+    R::Pass2D into;
+    into.target = target.value;
+    Quad(into, Rect{0, 0, 4, 8}, kGreen);
+    commands.passes.push_back(std::move(into));
+    R::Pass2D main;
+    Quad(main, Rect{0, 0, 8, 8}, kWhite, target, R::BlendMode::Opaque);
+    commands.passes.push_back(std::move(main));
+    const Picture p = DrawAt(commands, textures, kSize);
+    CHECK_MESSAGE((p.All(0, 0, 4, 8, kGreen) && p.All(4, 0, 8, 8, R::Color8{0, 0, 0, 0})),
+                  "[gt-target-first-clear] the rest of the target is transparent black, each target's first pass on its own");
+    textures.Release(target);
+    static_cast<void>(DrawAt(R::RenderCommands{}, textures, kSize));
+}
+
 } // namespace GYO::Plugins::SDLGPU

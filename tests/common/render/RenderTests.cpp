@@ -12,6 +12,7 @@
 
 #include "AssertTestSupport.hpp"
 #include "engine/render/RenderCommands.hpp"
+#include "engine/render/RenderTargets.hpp"
 #include "engine/render/RenderTextures.hpp"
 #include "engine/render/ShaderAbi.hpp"
 
@@ -24,6 +25,8 @@ namespace {
 Vec2 Apply(const R::ViewTransform& t, const Vec2 p) { return {p.x * t.scale.x + t.offset.x, p.y * t.scale.y + t.offset.y}; }
 
 std::vector<std::uint8_t> Pixels(std::uint32_t w, std::uint32_t h) { return std::vector<std::uint8_t>(std::size_t{w} * h * 4, 7); }
+
+bool PassTargetOfOk(const std::optional<std::uint32_t>& got, const std::uint32_t expected) { return got.has_value() && *got == expected; }
 
 } // namespace
 
@@ -177,6 +180,109 @@ TEST_CASE("render: wrong texture asks are Programmer Errors") {
     const R::TextureId edge = textures.Create(R::TextureDesc{4, 4}, Pixels(4, 4));
     textures.Update(edge, R::TextureRegion{3, 3, 1, 1}, Pixels(1, 1));
     CHECK_MESSAGE(textures.Pending().size() == 4, "[rd-tex-edge-region] a region on the far edges is accepted");
+}
+
+// ---- Render targets and formats (render-pipeline declaration section 13, A1)
+
+TEST_CASE("render: targets take their ids from the textures' counter, never given twice; Find and FindTarget keep them apart") {
+    R::RenderTextures textures;
+    const R::TextureId picture = textures.Create(R::TextureDesc{1, 1}, Pixels(1, 1));
+    const R::RenderTargetDesc fixed{R::TargetSize{8, 8}, R::TextureFormat::Rgba8Unorm, R::TextureFilter::Nearest};
+    const R::TextureId target = textures.CreateTarget(fixed);
+    CHECK_MESSAGE(target.value == 2, "[rd-target-id-shared] a target's id comes after the texture's, from the same counter");
+    textures.Release(target);
+    const R::TextureId again = textures.CreateTarget(R::RenderTargetDesc{});
+    CHECK_MESSAGE(again.value == 3, "[rd-target-no-reuse] a released target's id is not given again");
+    CHECK_MESSAGE(textures.FindTarget(target) == nullptr, "[rd-target-released-gone] a released target is not live");
+    REQUIRE(textures.FindTarget(again) != nullptr);
+    CHECK_MESSAGE(!textures.FindTarget(again)->size.has_value(), "[rd-target-find] its description is kept (follows the main target)");
+    CHECK_MESSAGE((textures.Find(again) == nullptr && textures.FindTarget(picture) == nullptr),
+                  "[rd-target-apart] a target is not a texture of pixels, nor the other way round");
+    CHECK_MESSAGE(textures.LiveCount() == 2, "[rd-target-live-count] the texture and the target");
+    const auto pending = textures.Pending();
+    REQUIRE_MESSAGE(pending.size() == 4, "[rd-target-ask] making a target is an ask, in order");
+    const auto* made = std::get_if<R::TextureTargetCreate>(&pending[1]);
+    REQUIRE_MESSAGE(made != nullptr, "[rd-target-ask] making a target is an ask, in order");
+    CHECK_MESSAGE((made->id == target && made->desc == fixed), "[rd-target-ask] the ask carries the id and the description");
+    CHECK(std::holds_alternative<R::TextureRelease>(pending[2]));
+}
+
+TEST_CASE("render: a texture keeps its format; Rgba8Unorm is the default") {
+    R::RenderTextures textures;
+    const R::TextureId plain = textures.Create(R::TextureDesc{1, 1}, Pixels(1, 1));
+    const R::TextureId colour = textures.Create(R::TextureDesc{1, 1, R::TextureFilter::Linear, R::TextureFormat::Rgba8UnormSrgb}, Pixels(1, 1));
+    CHECK_MESSAGE(textures.Find(plain)->format == R::TextureFormat::Rgba8Unorm, "[rd-format-default] sampled as stored unless asked");
+    CHECK_MESSAGE(textures.Find(colour)->format == R::TextureFormat::Rgba8UnormSrgb, "[rd-format-kept] the format is kept");
+    const auto* made = std::get_if<R::TextureCreate>(&textures.Pending()[1]);
+    REQUIRE(made != nullptr);
+    CHECK_MESSAGE(made->desc.format == R::TextureFormat::Rgba8UnormSrgb, "[rd-format-ask] the make ask carries the format");
+}
+
+TEST_CASE("render: wrong target asks are Programmer Errors") {
+    R::RenderTextures textures;
+    GYO_CHECK_ASSERTS(textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{0, 8}}));
+    const R::TextureId target = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}});
+    GYO_CHECK_ASSERTS(textures.Update(target, R::TextureRegion{0, 0, 1, 1}, Pixels(1, 1)));
+    R::RenderTargets targets;
+    GYO_CHECK_ASSERTS(targets.Create(R::RenderTargetDesc{R::TargetSize{8, 0}}));
+    GYO_CHECK_ASSERTS(targets.Release(GYO::Engine::Camera::CameraTarget{1}));
+}
+
+TEST_CASE("render: the source's targets: ids from 1 for cameras, never given twice; the sizes a camera computes with") {
+    namespace C = GYO::Engine::Camera;
+    R::RenderTargets targets;
+    const C::CameraTarget a = targets.Create(R::RenderTargetDesc{R::TargetSize{8, 4}});
+    const C::CameraTarget b = targets.Create(R::RenderTargetDesc{});
+    CHECK_MESSAGE((a.id == 1 && b.id == 2), "[rt-ids] from 1 (0 is the main target), growing");
+    targets.Release(a);
+    CHECK_MESSAGE(targets.Create(R::RenderTargetDesc{}).id == 3, "[rt-no-reuse] a released id is not given again");
+    CHECK_MESSAGE((targets.Find(a) == nullptr && targets.Find(b) != nullptr && targets.Find(C::CameraTarget{0}) == nullptr), "[rt-find]");
+    CHECK_MESSAGE(targets.Live().size() == 2, "[rt-live]");
+
+    const C::TargetSize main{{1920, 1080}, 2.0F};
+    const auto fixed = R::TargetSizeOf(R::RenderTargetDesc{R::TargetSize{8, 4}}, &main);
+    REQUIRE(fixed.has_value());
+    CHECK_MESSAGE((fixed->physicalSize == GYO::Engine::Math::Vec2i{8, 4} && fixed->scaleFactor == 1.0F),
+                  "[rt-size-fixed] a fixed size, scale factor 1 whatever the window's");
+    const auto follows = R::TargetSizeOf(R::RenderTargetDesc{}, &main);
+    REQUIRE_MESSAGE(follows.has_value(), "[rt-size-follows] a following target has the main target's size");
+    CHECK_MESSAGE((follows->physicalSize == main.physicalSize && follows->scaleFactor == 2.0F), "[rt-size-follows] the main target's size and scale");
+    CHECK_MESSAGE(!R::TargetSizeOf(R::RenderTargetDesc{}, nullptr).has_value(), "[rt-size-unknown] none before the main size is known");
+}
+
+TEST_CASE("render: the render World keeps one target of its own per source target, in step; cameras map to it") {
+    namespace C = GYO::Engine::Camera;
+    R::RenderTargets source;
+    R::RenderTextures textures;
+    R::TargetTextures mapped;
+    const R::TextureId picture = textures.Create(R::TextureDesc{1, 1}, Pixels(1, 1));  // an image's texture, id 1
+    const C::CameraTarget minimap = source.Create(R::RenderTargetDesc{R::TargetSize{8, 8}});
+    R::SyncTargetTextures(&source, textures, mapped);
+    REQUIRE(mapped.Find(minimap.id) != nullptr);
+    const R::TextureId made = *mapped.Find(minimap.id);
+    CHECK_MESSAGE((made.value != picture.value && textures.FindTarget(made) != nullptr), "[rt-sync-made] a render target of RenderTextures, its own id");
+    CHECK_MESSAGE((PassTargetOfOk(R::PassTargetOf(minimap.id, mapped), made.value)), "[rt-pass-target] a camera on it draws on that target");
+    CHECK_MESSAGE((PassTargetOfOk(R::PassTargetOf(0, mapped), 0)), "[rt-pass-target-main] 0 stays 0");
+    CHECK_MESSAGE(!R::PassTargetOf(9, mapped).has_value(), "[rt-pass-target-none] an id the source has no target for maps to nothing");
+
+    textures.ClearPending();
+    R::SyncTargetTextures(&source, textures, mapped);
+    CHECK_MESSAGE((textures.Pending().empty() && *mapped.Find(minimap.id) == made), "[rt-sync-kept] the same target is kept, nothing asked");
+
+    // A replaced source World gives id 1 again, to a target of another size: a new render target, the old let go.
+    R::RenderTargets replaced;
+    const C::CameraTarget other = replaced.Create(R::RenderTargetDesc{R::TargetSize{4, 4}});
+    REQUIRE(other.id == minimap.id);
+    R::SyncTargetTextures(&replaced, textures, mapped);
+    REQUIRE(mapped.Find(other.id) != nullptr);
+    CHECK_MESSAGE((*mapped.Find(other.id) != made && textures.FindTarget(made) == nullptr && textures.FindTarget(*mapped.Find(other.id)) != nullptr),
+                  "[rt-sync-changed] another description: made again, the old one let go");
+
+    textures.ClearPending();
+    const R::TextureId last = *mapped.Find(other.id);
+    R::SyncTargetTextures(nullptr, textures, mapped);
+    CHECK_MESSAGE((mapped.entries.empty() && textures.FindTarget(last) == nullptr && textures.Pending().size() == 1),
+                  "[rt-sync-gone] a target the source no longer has is let go");
 }
 
 TEST_CASE("render: the shader ABI's vertex layout is Vertex2D's") {

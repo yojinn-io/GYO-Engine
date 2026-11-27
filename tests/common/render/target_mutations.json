@@ -1,0 +1,387 @@
+{
+ "version": 1,
+ "description": "Declared mutants of render targets, texture formats and the one clip-from-world value (render-pipeline declaration section 13, v8-arch-gyo2-render-a1; T1 to T7; camera CM-3, CM-5; render RD-3, RD-11). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gt- mutants need a GPU (label gpu). Queue2d and Queue3d taking the one value are guarded by p2-view-ignored and p3-view-ignored (render_mutations.json, rewritten to the new code), not repeated here. Not added (with the reason): UpdateCameras' explicit order after TransformPropagate (the kernel already runs an undeclared conflicting pair in registration order and camera's row depends on transform, so the propagation runs first without it; a mutant that drops the order survives every case, run 2026-11-27, so it is stated as visibility's is and not counted); a target's own depth texture (with every target the main target's size in the tests a shared depth draws the same, so no case could kill it; RC-A1-3 names when it matters); camera_render skipping a camera whose target maps to nothing (the same decision as PassTargetOf's nullopt, rt-pass-target-raw, criterion 1); the backend's format support check (Lavapipe and Metal take both formats; refusing one is not reachable without a driver that lacks it); the Programmer Errors of a zero target size and of an update of a target (asserts, guarded by their GYO_CHECK_ASSERTS cases; the README keeps assert mutants for contracts a test cannot reach otherwise).",
+ "mutants": [
+  {
+   "id": "cm-clip-from-world-view-ignored",
+   "what": "T4: clipFromWorld leaves the view point out",
+   "guards": [
+    "render-pipeline-declaration 判定 T4",
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        out.clipFromWorld = Math::Multiply(out.clipFromView, *viewFromWorld);",
+   "replace": "        out.clipFromWorld = out.clipFromView;",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Compute makes clipFromWorld*",
+   "expect": "\\[cm\\-clip\\-from\\-world\\]"
+  },
+  {
+   "id": "cm-singular-view-valid",
+   "what": "T4: a view point with no inverse leaves the camera valid",
+   "guards": [
+    "render-pipeline-declaration 判定 T4",
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/Camera.cpp",
+   "find": "        if (!viewFromWorld) return out;",
+   "replace": "        if (!viewFromWorld) {\n            out.valid = true;\n            return out;\n        }",
+   "target": "gyo_camera_tests",
+   "cases": "camera: Compute makes clipFromWorld*",
+   "expect": "\\[cm\\-clip\\-from\\-world\\-singular\\]"
+  },
+  {
+   "id": "cm-view-not-read",
+   "what": "T4: UpdateCameras does not hand the view point to Compute (every camera at the origin)",
+   "guards": [
+    "render-pipeline-declaration 判定 T4",
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "                                      views.Get<Transform::GlobalTransform>(id));",
+   "replace": "                                      nullptr);\n        static_cast<void>(views);",
+   "target": "gyo_camera_tests",
+   "cases": "camera: UpdateCameras takes this frame's*",
+   "expect": "\\[cm\\-clip\\-from\\-world\\-this\\-frame\\]"
+  },
+  {
+   "id": "cm-clip-from-world-not-compared",
+   "what": "T4: a camera that moved is not written (clipFromWorld left out of the comparison)",
+   "guards": [
+    "render-pipeline-declaration 判定 T4",
+    "camera CM-3"
+   ],
+   "file": "engine/modules/camera/src/CameraModule.cpp",
+   "find": "        if (!SameBits(a.clipFromWorld.values[i], b.clipFromWorld.values[i])) return false;\n",
+   "replace": "",
+   "target": "gyo_camera_tests",
+   "cases": "camera: UpdateCameras takes this frame's*",
+   "expect": "\\[cm\\-writes\\-when\\-moved\\]"
+  },
+  {
+   "id": "a1-visibility-own-clip",
+   "what": "T4: visibility makes its frustum without the view point (not the one value)",
+   "guards": [
+    "render-pipeline-declaration 判定 T4",
+    "camera CM-3",
+    "render VS-1"
+   ],
+   "file": "engine/modules/visibility/src/VisibilityModule.cpp",
+   "find": "        const Math::Frustum frustum = Math::MakeFrustum(computed.clipFromWorld);",
+   "replace": "        const Math::Frustum frustum = Math::MakeFrustum(computed.clipFromView);",
+   "target": "gyo_render_tests",
+   "cases": "visibility: the frustum is the camera's*",
+   "expect": "\\[vs\\-clip\\-from\\-world\\]"
+  },
+  {
+   "id": "rd-target-own-counter",
+   "what": "T1: targets count their own ids (they would collide with textures)",
+   "guards": [
+    "render-pipeline-declaration 判定 T1",
+    "render RD-3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    GYO_ASSERT(next_ != 0 && \"every texture id has been given\");\n    const TextureId id{next_++};\n    targets_.emplace_back(id.value, desc);",
+   "replace": "    GYO_ASSERT(next_ != 0 && \"every texture id has been given\");\n    const TextureId id{static_cast<std::uint32_t>(targets_.size() + 1)};\n    targets_.emplace_back(id.value, desc);",
+   "target": "gyo_render_tests",
+   "cases": "render: targets take*",
+   "expect": "\\[rd\\-target\\-id\\-shared\\]"
+  },
+  {
+   "id": "rd-target-no-ask",
+   "what": "T1: making a target asks the backend for nothing",
+   "guards": [
+    "render-pipeline-declaration 判定 T1",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    pending_.emplace_back(TextureTargetCreate{id, desc});\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: targets take*",
+   "expect": "\\[rd\\-target\\-ask\\]"
+  },
+  {
+   "id": "rd-target-release-kept",
+   "what": "T1: a released target stays live",
+   "guards": [
+    "render-pipeline-declaration 判定 T1",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "        targets_.erase(target);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: targets take*",
+   "expect": "\\[rd\\-target\\-released\\-gone\\]"
+  },
+  {
+   "id": "rd-format-dropped",
+   "what": "T6: a texture's format is not kept (every texture sampled as stored)",
+   "guards": [
+    "render-pipeline-declaration 判定 T6",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    const TextureId id{next_++};\n    live_.emplace_back(id.value, desc);\n    pending_.emplace_back(TextureCreate{id, desc, std::move(pixels)});",
+   "replace": "    const TextureId id{next_++};\n    TextureDesc plain = desc;\n    plain.format = TextureFormat::Rgba8Unorm;\n    live_.emplace_back(id.value, plain);\n    pending_.emplace_back(TextureCreate{id, plain, std::move(pixels)});",
+   "target": "gyo_render_tests",
+   "cases": "render: a texture keeps its format*",
+   "expect": "\\[rd\\-format\\-kept\\]"
+  },
+  {
+   "id": "rt-ids-reused",
+   "what": "T1: the source's target ids are given again after a release",
+   "guards": [
+    "render-pipeline-declaration 判定 T1",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "    const Camera::CameraTarget target{next_++};",
+   "replace": "    const Camera::CameraTarget target{static_cast<std::uint32_t>(live_.size() + 1)};",
+   "target": "gyo_render_tests",
+   "cases": "render: the source's targets*",
+   "expect": "\\[rt\\-no\\-reuse\\]"
+  },
+  {
+   "id": "rt-size-fixed-window-scale",
+   "what": "T2: a fixed target takes the window's scale factor",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "static_cast<std::int32_t>(desc.size->height)}, 1.0F};",
+   "replace": "static_cast<std::int32_t>(desc.size->height)}, main != nullptr ? main->scaleFactor : 1.0F};",
+   "target": "gyo_render_tests",
+   "cases": "render: the source's targets*",
+   "expect": "\\[rt\\-size\\-fixed\\]"
+  },
+  {
+   "id": "rt-size-follows-ignored",
+   "what": "T2: a target that follows the main target has no size",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "    if (main == nullptr) return std::nullopt;\n    return *main;",
+   "replace": "    static_cast<void>(main);\n    return std::nullopt;",
+   "target": "gyo_render_tests",
+   "cases": "render: the source's targets*",
+   "expect": "\\[rt\\-size\\-follows\\]"
+  },
+  {
+   "id": "rt-sync-made-again",
+   "what": "T3: the render World makes its target again every frame",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "[&](const TargetTextures::Entry& e) { return e.source == id && e.desc == desc; });",
+   "replace": "[&](const TargetTextures::Entry&) { return false; });",
+   "target": "gyo_render_tests",
+   "cases": "render: the render World keeps*",
+   "expect": "\\[rt\\-sync\\-kept\\]"
+  },
+  {
+   "id": "rt-sync-desc-ignored",
+   "what": "T3: a changed description keeps the old target (a replaced source World gives ids again)",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "return e.source == id && e.desc == desc; });",
+   "replace": "return e.source == id; });",
+   "target": "gyo_render_tests",
+   "cases": "render: the render World keeps*",
+   "expect": "\\[rt\\-sync\\-changed\\]"
+  },
+  {
+   "id": "rt-sync-gone-kept",
+   "what": "T3: a target the source let go is not let go in the render World",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "    for (const TargetTextures::Entry& gone : mapped.entries) textures.Release(gone.texture);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render: the render World keeps*",
+   "expect": "\\[rt\\-sync\\-gone\\]"
+  },
+  {
+   "id": "rt-pass-target-raw",
+   "what": "T3: an id the source has no target for is drawn on as it is",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/render/src/RenderTargets.cpp",
+   "find": "    if (texture == nullptr) return std::nullopt;",
+   "replace": "    if (texture == nullptr) return cameraTarget;",
+   "target": "gyo_render_tests",
+   "cases": "render: the render World keeps*,render_extract: a camera on a source render target*",
+   "expect": "(?=[\\s\\S]*(?:\\[rt\\-pass\\-target\\-none\\]))[\\s\\S]*(?:\\[re\\-target\\-none\\])"
+  },
+  {
+   "id": "re-target-not-mapped",
+   "what": "T3: camera_render copies the source's id instead of the render World's target for it",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "        e.target = *passTarget;",
+   "replace": "        e.target = target != nullptr ? target->id : 0;",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[re\\-target\\-pass\\]"
+  },
+  {
+   "id": "re-target-not-synced",
+   "what": "T3: the render World makes no target for the source's",
+   "guards": [
+    "render-pipeline-declaration 判定 T3",
+    "render RD-11"
+   ],
+   "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+   "find": "    Render::SyncTargetTextures(source.Present() ? &*source : nullptr, textures.Get(), mapped.Get());",
+   "replace": "    static_cast<void>(source);\n    static_cast<void>(textures);\n    static_cast<void>(mapped);",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[re\\-target\\-made\\]"
+  },
+  {
+   "id": "wr-sizes-not-written",
+   "what": "T2: world_render copies no target size",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5",
+    "render RD-11"
+   ],
+   "file": "engine/modules/world_render/src/WorldRenderModule.cpp",
+   "find": "        sizes.Get().Set(Camera::CameraTarget{id}, *size);\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[wr\\-target\\-size\\]"
+  },
+  {
+   "id": "wr-sizes-written-once",
+   "what": "T2: a size already there is never written again (the window's new size does not reach a following target)",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5"
+   ],
+   "file": "engine/modules/world_render/src/WorldRenderModule.cpp",
+   "find": "        if (current != nullptr && SameSize(*current, *size)) continue;",
+   "replace": "        if (current != nullptr) continue;",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[wr\\-target\\-size\\-follows\\] a new window size"
+  },
+  {
+   "id": "wr-sizes-not-removed",
+   "what": "T2: a released target's size stays",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5"
+   ],
+   "file": "engine/modules/world_render/src/WorldRenderModule.cpp",
+   "find": "            sizes.Get().Remove(Camera::CameraTarget{id});\n",
+   "replace": "",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[wr\\-target\\-size\\-removed\\]"
+  },
+  {
+   "id": "wr-sizes-after-update",
+   "what": "T2: the sizes are not ordered before CameraUpdate (a camera on a target computes a frame late)",
+   "guards": [
+    "render-pipeline-declaration 判定 T2",
+    "camera CM-5"
+   ],
+   "file": "engine/modules/world_render/src/WorldRenderModule.cpp",
+   "find": "    mount.before.push_back(std::string(Camera::kUpdateSet));\n",
+   "replace": "    mount.after.push_back(std::string(Camera::kUpdateSet));\n",
+   "target": "gyo_render_tests",
+   "cases": "render_extract: a camera on a source render target*",
+   "expect": "\\[wr\\-target\\-same\\-frame\\]"
+  },
+  {
+   "id": "gt-target-not-mapped",
+   "what": "T5: the backend maps no target but 0 (A1 before)",
+   "guards": [
+    "render-pipeline-declaration 判定 T5",
+    "render RD-11"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "        return it != textures.end() && it->second.target;",
+   "replace": "        return false && it != textures.end();",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu targets: a pass draws into*",
+   "expect": "\\[gt\\-target\\-mapped\\]"
+  },
+  {
+   "id": "gt-target-drawn-on-main",
+   "what": "T5: a pass on a target is drawn on the main target",
+   "guards": [
+    "render-pipeline-declaration 判定 T5",
+    "render RD-11"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "                on = Target{t.texture, t.format, R::TargetSize{t.width, t.height}, &t.depth};",
+   "replace": "                static_cast<void>(t);",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu targets: a pass draws into*",
+   "expect": "\\[gt\\-target\\-sampled\\]"
+  },
+  {
+   "id": "gt-target-first-shared",
+   "what": "T5: only the frame's first pass of all clears (a target's first pass keeps last frame's picture)",
+   "guards": [
+    "render-pipeline-declaration 判定 T5",
+    "render RD-11"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            const bool first = std::find(begun.begin(), begun.end(), id) == begun.end();",
+   "replace": "            const bool first = begun.empty();",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu targets: a target's first pass*",
+   "expect": "\\[gt\\-target\\-first\\-clear\\]"
+  },
+  {
+   "id": "gt-srgb-as-unorm",
+   "what": "T6: an Rgba8UnormSrgb texture is made Unorm (sampled as stored)",
+   "guards": [
+    "render-pipeline-declaration 判定 T6",
+    "render RD-11"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "    case R::TextureFormat::Rgba8UnormSrgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;",
+   "replace": "    case R::TextureFormat::Rgba8UnormSrgb: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu targets: an sRGB*",
+   "expect": "\\[gt\\-srgb\\-decoded\\]"
+  },
+  {
+   "id": "gt-target-not-resized",
+   "what": "T7: a target that follows the main target keeps its first size",
+   "guards": [
+    "render-pipeline-declaration 判定 T7",
+    "render RD-11"
+   ],
+   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+   "find": "            if (t.texture != nullptr && t.width == main.width && t.height == main.height) continue;",
+   "replace": "            if (t.texture != nullptr) continue;",
+   "target": "gyo_sdl_gpu_tests",
+   "cases": "sdl_gpu targets: a target that follows*",
+   "expect": "\\[gt\\-target\\-follows\\] at 16"
+  }
+ ]
+}

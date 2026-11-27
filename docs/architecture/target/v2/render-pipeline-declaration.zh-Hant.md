@@ -304,3 +304,80 @@ v8-arch-gyo2-render-pipeline
 | Q4 合併貼圖的通道 | **ORM（R＝AO、G＝roughness、B＝metallic），後綴 `_ORM`** | 維持 `_RMA` 的通道順序 | B4 照原文；使用者的美術規格草稿那一列已由主會話改成 `_ORM` |
 
 **卡片判、使用者沒有推翻的**：光照不做 clustering（RC-RP2）；2D 照 bytes 混合（第 4.4 節）；shader 離線編、熱重載換編好的檔（第 4.6 節）；decal 只做 forward（RC-RP6）；粒子在渲染 World 用 CPU 模擬（RC-RP3）。這些照原文做，觸發各自的 RC 時再議。
+
+## 13. A1 小宣告：render target（`v8-arch-gyo2-render-a1`）
+
+2026-11-27。使用者說「A 段開始」（HANDOFF `v8-arch-gyo2-render-a-start`，gyo2 `172b7546`），主會話交 A1。Opus／high（上段：`RenderCommands`、`CameraTarget` 的對應、`RenderTextures` 的格式、camera 推導值的條文）。小宣告寫完直接實作（主會話的指示：不等核准）。
+
+讀的版本：gyo2 `172b7546`；Bevy `6a911653f`；Godot `94fc09c`；SDL 3.4.0（建置抓下來的 `_deps/sdl3-src`）。
+
+### 13.1 現況（程式，A1 前）與 SDL 查到的事
+
+- **render target 沒有**：`CameraTarget::id` 只有 0 有對應（`Camera.hpp:52-58`）；`sdl_gpu` 只畫 target 0 的 pass、別的計數（`GPUDevice.cpp:483,508,639,648`）；`camera_render` 把來源的 id 原樣抄進 `ExtractedCamera::target`（`CameraRenderModule.cpp:47`）。
+- **貼圖只有一種格式**：`TextureDesc` 沒有格式（`RenderTextures.hpp:37`），後端一律 `R8G8B8A8_UNORM`（`GPUDevice.cpp:356`）。3D 的深度貼圖只有一張、跟著最後一個畫 3D 的目標的大小（`:154`）。
+- **clip-from-world 算三次**：visibility（`VisibilityModule.cpp:57-59`，來源 World）、`Queue2d`（`Pipeline2d.cpp:133-135`，渲染 World）、`Queue3d`（`Pipeline3d.cpp:206-208`，渲染 World），都是 `clipFromView × inverse(GlobalTransform)`；`UpdateCameras` 不讀 `GlobalTransform`（`CameraModule.cpp:46`）。
+- **〔源〕SDL_GPU 3.4.0 不能對同一張貼圖開別的格式的 view**（第 4.4 節的未確認點）：`SDL_GPUTextureCreateInfo` 只有一個 `format`（`SDL_gpu.h:1769-1781`），API 裡沒有建 view 的函式（建立、命名、釋放貼圖只有 `:2801,2938,3022`）；綁定是 `SDL_GPUTextureSamplerBinding{texture, sampler}`（`:2142`），沒有格式。Vulkan 後端建 image 時只加 `CUBE_COMPATIBLE`／`2D_ARRAY_COMPATIBLE`，沒有 `VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT`（`src/gpu/vulkan/SDL_gpu_vulkan.c:5607-5640`）。對照：Bevy 經 wgpu 的 `view_formats` 給 sRGB 變體（`bevy_image/src/image.rs:30-50`）；Godot 的 `texture_create_shared`（`servers/rendering/rendering_device.h:470`）靠 `shareable_formats` 開 `MUTABLE_FORMAT`（`drivers/vulkan/rendering_device_driver_vulkan.cpp:2316-2317`）。**判**：同一張圖要「解碼」與「照存的」兩種讀法時建兩份貼圖（`RenderImages` 以圖＋格式為鍵，B4 用到時做）；A1 只讓 `RenderTextures` 帶格式。
+
+### 13.2 前提：誰要解決
+
+| 項 | 前提 | 理由 |
+|---|---|---|
+| target 的 id、GPU 貼圖、pass 畫進去再被取樣 | **〔Engine〕** | 作者伸不進後端；id 由資料側配才能讓 `RenderCommands` 保持純資料（RD-3 同理） |
+| target 的大小進相機的推導值 | **〔Engine〕** | `camera` 不認得 render 的型別（CM-2），來源 World 要有人把大小抄進 `CameraTargetSizes`（同 `window_camera`） |
+| 跟視窗大小走的 target | **〔Engine〕** | 只有後端知道這一幀主目標的大小（swapchain、Capture） |
+| 貼圖取樣時要不要 sRGB 解碼 | **〔Engine〕機制、〔作者〕選** | 格式是 Engine 給的欄位；哪張圖是彩色（`_D`、`_E`）、哪張是資料（`_N`、`_ORM`）是作者／素材的事 |
+| clip-from-world 一處 | **〔Engine〕** | 三個讀者都在 Engine 內 |
+| 用 target 做小地圖、監視器畫面 | **〔作者〕** | 作者建 target、放相機、在自己的 pass 取樣 |
+
+### 13.3 設計（卡片判）
+
+1. **target 是 `RenderTextures` 的貼圖**（渲染 World）：`RenderTextures::CreateTarget(RenderTargetDesc{size, format, filter})` 回 `TextureId`，和圖片共用一個計數器、不重用（RD-3）。pass 用 `target = id.value` 畫進去，之後的 draw 用 `texture = id` 取樣。`size` 沒給＝跟主目標（target 0）一樣大，後端每幀照主目標的大小建（變了就重建）。照 Bevy：target 就是一張 `Image`（`Image::new_target_texture`，`bevy_image/src/image.rs:1279`），相機的 `RenderTarget::Image` 與 sprite 的圖是同一個 handle（`bevy_camera/src/camera.rs:896`）。新的要求 `TextureTargetCreate` 接在 `TextureOp` 的最後；`Update` 一個 target 是 Programmer Error（它沒有 CPU 像素）。
+2. **來源 World 的 target 與對應**：
+   - `RenderTargets`（render 的型別、來源 World 的 Resource，`world_render` 登記）：`Create(desc)` 回作者放進相機的 `CameraTarget`（從 1 起、不重用）。
+   - `world_render` 的 `WriteRenderTargetSizes`（`PostUpdate`、在 `CameraUpdate` 之前；**改了 render 頁第 7.2 節「`world_render` 不跑 System」這一條**，大地圖宣告第 13 節把它當 Architecture Delta、沒有改。卡片判：比過的另一個選項是像 `window_camera` 那樣另立一列膠水（多一列、每個用 target 的來源 World 都要多帶）；大小的副本是 target 的擁有者那一側的事，`world_render` 正是來源側登記 `RenderTargets` 的那一列，所以放這裡）：每個 target 的大小抄進 `CameraTargetSizes`——固定大小的 scale 1（Bevy `ImageRenderTarget::scale_factor` 的預設），跟主目標的抄 target 0 的；值不同才寫；放掉的 target 拿掉大小。所以 `world_render` 的登記列多依賴 `camera`。
+   - `camera_render` 的 `ExtractRenderTargets`（`Extract`、在 `ExtractCameras` 之前）：`SyncTargetTextures` 讓渲染 World 的 `TargetTextures` 跟上來源——第一次看到、或描述變了（被替換的來源 World 從 1 重配）就 `CreateTarget`（舊的放掉）；來源沒有了就放掉。`ExtractCameras` 把相機的目標換成對應的貼圖 id（0 還是 0）；**來源沒有這個 target 的相機不抽**（沒有東西可畫）。
+   - 渲染 World 自己的中間 target（A4 的 HDR、A2 的深度、D1 的 bloom）直接 `CreateTarget`，不經來源。
+3. **格式**：`TextureFormat{Rgba8Unorm, Rgba8UnormSrgb}`（Bevy／wgpu 的 `TextureFormat` 的兩個值）。`TextureDesc::format` 預設 `Rgba8Unorm`：既有的呼叫者（2D 的圖、ImGui、字形、3D 的 unlit）全部照舊照 bytes 取樣（RP-4、`sdl_gpu.pass3d` 不變）。`Rgba8UnormSrgb` 取樣解碼成線性、畫進去時編碼。target 也帶格式（同一個 enum）。**現在不做、位置已留**：`Rgba16Float`（A4）、深度格式（A2 的只寫深度 pass）、BC 壓縮（F1）——都是加 enum 值，後端加一列對應；誰要誰加（主會話的指示：只做 A1 驗收要的與免費的）。
+4. **後端**（`sdl_gpu`）：每個 pass 畫在自己的目標上（0＝視窗或 Capture 的圖；別的＝那張 target）；一個目標這一幀的第一個 pass 沒給清除色時清成透明黑（同 target 0）；每個 target 有自己的深度貼圖（3D pass 畫進 target 時用它的大小）；建貼圖前用 `SDL_GPUTextureSupportsFormat` 查格式與用途（`SDL_gpu.h:4478`；Lavapipe 也一樣查，不假設），不支援就算 refused。沒有圖的目標（沒建、或 SDL 拒絕）的 pass 照舊計數 `UnmappedPasses`。
+5. **clip-from-world 收一處**：`ComputedCamera::clipFromWorld`＝`clipFromView × inverse(GlobalTransform)`，由 `UpdateCameras`（排在 `TransformPropagate` 之後，讀這一幀的視點）寫；沒有 `GlobalTransform` 的相機當在原點；視點沒有反矩陣（scale 0）時 `valid == false`。`Compute` 多一個可選的 `view` 參數。visibility、`Queue2d`、`Queue3d` 都讀這一個值（`Queue3d` 另外用視點的反矩陣算排序距離，不是 clip）。相機動了 `ComputedCamera` 就變（`Changed` 照實亮）；不動不寫（CM-3 照舊）。
+
+**偏離 Bevy 的地方、理由與膠水**：
+
+| Bevy | gyo2 | 理由 | 膠水 |
+|---|---|---|---|
+| 相機目標是來源的 `Image` handle，渲染側以 `AssetId` 為鍵（`render_asset.rs:393`） | 來源的 `RenderTargets` id；渲染 World 的 `TargetTextures` 對到 `RenderTextures` 的 id | gyo2 的 asset 沒有執行期加入（`v8-arch-gyo2-mesh3d-held`），來源不能「新增一張圖」；渲染 World 的 id 由它自己的 `RenderTextures` 配（RD-3） | 一個 Resource＋一個 extract System（同 `RenderImages` 的形狀） |
+| `camera_system` 自己從 `Assets<Image>` 讀圖的大小（`bevy_render/src/camera.rs:292-298`） | `world_render` 把大小抄進 `CameraTargetSizes` | `camera` 不依賴 render（CM-2）；同 `window_camera` 抄視窗大小 | 一個 System |
+| 目標圖的大小固定，跟視窗變要作者自己改（`camera.rs:292`） | `size` 不給＝跟主目標走，後端每幀對齊 | A4 的 HDR、D1、C4 的中間 target 都要跟相機的目標一樣大；Bevy 的這些是 `ViewTarget` 內部建的（`view/mod.rs:794`），gyo2 的 pass 是資料，要一個看得到的 target | 無（後端多一個判斷） |
+| 一張圖可開 sRGB／非 sRGB 兩種 view（wgpu `view_formats`） | 一張貼圖一種格式 | SDL_GPU 沒有 view（第 13.1 節） | 要兩種讀法時兩份貼圖（B4） |
+| `clip_from_world` 算兩次：`update_frusta`（`bevy_camera/src/projection.rs:72`，主 World）、`prepare_view_uniforms`（`bevy_render/src/view/mod.rs:1230-1239`，渲染 World） | `ComputedCamera::clipFromWorld` 一個值，三個讀者都取它 | 大地圖 #342 S-4：三處各算、各自可能錯；gyo2 的相機推導值已經是被抽的元件，帶過去不另算 | `UpdateCameras` 排在 propagation 之後（Bevy 的 `update_frusta` 也在它之後，`bevy_camera/src/visibility/mod.rs:503-507`）。TAA（D3）的 jitter 在渲染 World 改 `Pass3D::clipFromWorld`，不回寫相機（同 Bevy 在 prepare 時加 jitter，`view/mod.rs:1223-1235`） |
+
+**別家對照**：Godot 的 viewport 自己有 RID，取樣要另拿 `viewport_get_texture`（`servers/rendering/rendering_server.h:577`），大小由 `viewport_set_size` 給（`:557`）。gyo2 照 Bevy 用同一個 id（少一個 id 空間）。
+
+### 13.4 判定（合併前）
+
+- **T1**（cpu）：target 的 id 由資料側配、和圖片共用計數器、不重用；`Find`／`FindTarget` 分得開；建立是一個依序的要求。來源的 `RenderTargets` 從 1 起、不重用。
+- **T2**（cpu）：來源 target 的大小進 `CameraTargetSizes`（固定的 scale 1；跟主目標的抄 target 0 的、視窗變了跟著變；放掉的拿掉），相機在同一幀算得出來。
+- **T3**（cpu）：渲染 World 對每個來源 target 有自己的 render target；同一個不重建；描述變了重建、舊的放掉；來源沒有了放掉；相機的 pass 畫在對應的 target；來源沒有的 id 的相機不畫。
+- **T4**（cpu）：`ComputedCamera::clipFromWorld`＝`clipFromView × inverse(視點)`、沒有視點時＝`clipFromView`、視點沒有反矩陣時 `valid == false`；`UpdateCameras` 用這一幀 propagation 後的視點；相機動了才寫。visibility、`Queue2d`、`Queue3d` 取同一個值。
+- **T5**（gpu，`sdl_gpu.targets`）：畫進 8×8 的 target、在 2D pass 取樣到主目標，逐像素比；3D pass 也畫得進 target（它自己的深度）；target 第一個沒清除色的 pass 從透明黑開始；放掉後沒有 GPU 貼圖。
+- **T6**（gpu）：`Rgba8UnormSrgb` 的 188／128 取樣成線性 128／55（±1）；`Rgba8Unorm` 照存的。
+- **T7**（gpu）：跟主目標的 target 在 8×8 與 16×16 的 Capture 都和主目標一樣大（4×4 像素的方塊不被拉伸），重建不增加貼圖數。
+- **T8**：既有測試照過（`render.*`、`camera.module`、`sdl_gpu.pass2d`、`sdl_gpu.pass3d`）；第 13.5 節的突變全部 killed。
+
+**既有測試的改動**（只改輸入的做法，判斷不變）：`Pipeline2dTests.cpp` 的 `Camera2d`、`Pipeline3dTests.cpp` 的 `Camera3d` 兩個輔助函式把視點也交給 `Compute`（同 `UpdateCameras`），因為管線改讀 `computed.clipFromWorld`；斷言一行都沒改。
+
+### 13.5 測試與突變
+
+- 測試：`tests/common/render/RenderTests.cpp`（`render.data`）五案；`PipelineWorldTests.cpp`（`render.extract`）一案；`VisibilityTests.cpp`（`render.visibility`）一案；`tests/common/camera/CameraTests.cpp`（`camera.module`）兩案；`plugins/sdl_gpu/tests/Pass2DTests.cpp` 的 `sdl_gpu targets:` 四案（新 ctest `sdl_gpu.targets`，標籤 `gpu`）。
+- 突變：`tests/common/render/target_mutations.json`，27 個（T1～T7 各個獨立可錯的判斷；沒加的與理由在檔案的 `description`）。`Queue2d`、`Queue3d` 取同一個值由既有的 `p2-view-ignored`、`p3-view-ignored` 守（改寫成「管線不取 `computed.clipFromWorld`」）。
+- 既有突變（D184）：find 失效的 16 個：15 個改寫到新程式、守同一個性質，1 個併入（`render_mutations.json` 的 `rd-tex-reuse`、`rd-tex-release-kept-live`、`gp-no-scissor`、`gp-release-kept`、`gp-unmapped-drawn`、`gp-viewport-not-set`、`gp-scissor-whole-target`、`p2-view-ignored`、`p3-view-ignored`、`g3-colour-cleared`、`g3-first-kept`、`g3-base-not-advanced`；`instancing_mutations.json` 的 `in-g3-instance-base-not-advanced`；`camera_mutations.json` 的 `cm-target-always-zero`、`cm-letterbox-ignored`；`g3-unmapped-drawn` 和 `gp-unmapped-drawn` 是同一個改動了——2D 與 3D 的 pass 走同一條路到目標——照 README 的合わせ方併成一個）。find 落在改過的程式裡的、與被改過的測試輔助函式（`Camera2d`、`Camera3d`）殺的也重跑。
+
+### 13.6 RC
+
+- **RC-A1-1**：來源的 sprite／網格要直接取樣來源的 target（小地圖當 `Sprite` 的圖）→ `ImageRef` 加一種「來源 target」，`RenderImages` 經 `TargetTextures` 對到貼圖（Bevy 的同一個 handle）。現在作者在渲染 World 用自己的 pass 取樣。
+- **RC-A1-2**：要 target 的一部分大小（半解析度的 SSAO、bloom 的 mip 鏈要主目標的 1/2、1/4）→ `RenderTargetDesc` 加比例（加法）。
+- **RC-A1-3**：一幀裡多個不同大小的 3D target 讓每個 target 的深度貼圖成為記憶體的主要部分 → 深度改成依大小共用（RC-RP1 的 aliasing 那一層）。
+
+### 13.7 不做
+
+phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（A3）；HDR、tonemapping（A4）；材質（B1）；mip 與壓縮（F1）；MSAA 的 target（D2）；「讀一個這一幀還沒被寫的 target」的後端斷言（RP-3，A2 定 pass 的讀寫宣告時一起做）。

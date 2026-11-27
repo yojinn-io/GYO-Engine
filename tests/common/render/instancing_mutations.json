@@ -206,7 +206,7 @@
     "render IN-3"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                instanceBase += static_cast<std::uint32_t>(g.instanceBytes);\n",
+   "find": "            instanceBase += static_cast<std::uint32_t>(g.instanceBytes);\n",
    "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: each pass starts*",

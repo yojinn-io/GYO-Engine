@@ -140,8 +140,8 @@
     "render RD-3"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "    live_.erase(it);\n    pending_.emplace_back(TextureRelease{id});",
-   "replace": "    live_.erase(it);\n    next_ = id.value;\n    pending_.emplace_back(TextureRelease{id});",
+   "find": "        live_.erase(it);\n    } else {",
+   "replace": "        live_.erase(it);\n        next_ = id.value;\n    } else {",
    "target": "gyo_render_tests",
    "cases": "render: texture ids*",
    "expect": "\\[rd\\-tex\\-no\\-reuse\\]"
@@ -153,8 +153,8 @@
     "render RD-3"
    ],
    "file": "engine/modules/render/src/Render.cpp",
-   "find": "    GYO_ASSERT(it != live_.end() && \"a release of a texture that is not live\");\n    live_.erase(it);\n",
-   "replace": "    GYO_ASSERT(it != live_.end() && \"a release of a texture that is not live\");\n",
+   "find": "it != live_.end()) {\n        live_.erase(it);\n    } else {",
+   "replace": "it != live_.end()) {\n    } else {",
    "target": "gyo_render_tests",
    "cases": "render: texture ids*",
    "expect": "\\[rd\\-tex\\-released\\-gone\\]"
@@ -323,7 +323,7 @@
     "render section 2"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                SDL_SetGPUScissor(render, &rect);\n",
+   "find": "            SDL_SetGPUScissor(render, &rect);\n",
    "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a clip*",
@@ -388,7 +388,7 @@
     "render section 3"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                frame.released.push_back(it->second.texture);\n                textures.erase(it);\n",
+   "find": "                if (it->second.texture != nullptr) frame.released.push_back(it->second.texture);\n                if (it->second.depth.texture != nullptr) frame.released.push_back(it->second.depth.texture);\n                textures.erase(it);\n",
    "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a texture*",
@@ -396,16 +396,17 @@
   },
   {
    "id": "gp-unmapped-drawn",
-   "what": "a pass on another target is drawn on the window",
+   "what": "a pass on another target is drawn on the window (with g3-unmapped-drawn merged in: since A1 the 2D and the 3D pass take one path to their target, so one change makes both draw on the main target)",
    "guards": [
-    "sdl sdl_gpu"
+    "sdl sdl_gpu",
+    "render-pipeline-declaration 判定 T5"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            if (pass.target != 0) continue;\n            SDL_GPURenderPass* render",
-   "replace": "            SDL_GPURenderPass* render",
+   "find": "            if (!Mapped(id)) continue;\n            const PassGeometry g = GeometryOf(item);\n            Target on{texture, format, size, &depth};\n            if (id != 0) {",
+   "replace": "            const PassGeometry g = GeometryOf(item);\n            Target on{texture, format, size, &depth};\n            if (id != 0 && textures.count(id) != 0) {",
    "target": "gyo_sdl_gpu_tests",
-   "cases": "sdl_gpu pass2d: a view*",
-   "expect": "\\[gp\\-"
+   "cases": "sdl_gpu pass2d: a view*,sdl_gpu pass3d: drawn among*",
+   "expect": "(?=[\\s\\S]*(?:\\[gp\\-view\\-scale\\]))[\\s\\S]*(?:\\[g3\\-unmapped\\-not\\-drawn\\])"
   },
   {
    "id": "gp-clear-ignored",
@@ -519,8 +520,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            if (drawable) SDL_SetGPUViewport(render, &viewport);",
-   "replace": "            static_cast<void>(viewport);",
+   "find": "        if (drawable) SDL_SetGPUViewport(render, &viewport);",
+   "replace": "        static_cast<void>(viewport);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a viewport*",
    "expect": "\\[gp\\-viewport\\-fill\\]"
@@ -533,8 +534,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);",
-   "replace": "                const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, size);",
+   "find": "            const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);",
+   "replace": "            const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, size);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a viewport*",
    "expect": "\\[gp\\-viewport\\-clip\\-above\\]"
@@ -727,11 +728,13 @@
    "id": "p2-view-ignored",
    "what": "the camera's position is ignored",
    "guards": [
-    "render section 7"
+    "render section 7",
+    "camera CM-3",
+    "render-pipeline-declaration 判定 T4"
    ],
    "file": "engine/modules/render/src/Pipeline2d.cpp",
-   "find": "    const Math::Matrix4 clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);",
-   "replace": "    const Math::Matrix4 clipFromWorld = camera.computed.clipFromView;",
+   "find": "    const Math::Matrix4& clipFromWorld = camera.computed.clipFromWorld;",
+   "replace": "    const Math::Matrix4& clipFromWorld = camera.computed.clipFromView;",
    "target": "gyo_render_tests",
    "cases": "pipeline2d: one camera*",
    "expect": "\\[p2\\-map\\-view\\]"
@@ -1001,10 +1004,12 @@
    "id": "p3-view-ignored",
    "what": "the camera's view point is ignored",
    "guards": [
-    "render RD-8"
+    "render RD-8",
+    "camera CM-3",
+    "render-pipeline-declaration 判定 T4"
    ],
    "file": "engine/modules/render/src/Pipeline3d.cpp",
-   "find": "    pass.clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);",
+   "find": "    pass.clipFromWorld = camera.computed.clipFromWorld;",
    "replace": "    pass.clipFromWorld = camera.computed.clipFromView;",
    "target": "gyo_render_tests",
    "cases": "pipeline3d: a 3D camera*",
@@ -1394,8 +1399,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "        colour.load_op = first ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;",
-   "replace": "        colour.load_op = SDL_GPU_LOADOP_CLEAR;",
+   "find": "            target.load_op = (first || clear) ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;",
+   "replace": "            target.load_op = SDL_GPU_LOADOP_CLEAR;",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: each pass*",
    "expect": "\\[g3\\-pass\\-keeps\\-colour\\]"
@@ -1408,8 +1413,8 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "        first = false;\n        if (!EnsureDepth",
-   "replace": "        if (!EnsureDepth",
+   "find": "            if (first) begun.push_back(id);\n",
+   "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: drawn among*",
    "expect": "\\[g3\\-then\\-2d\\-keeps\\]"
@@ -1557,24 +1562,11 @@
     "sdl section 7"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                vertexBase += static_cast<std::uint32_t>(g.vertexBytes);\n",
+   "find": "            vertexBase += static_cast<std::uint32_t>(g.vertexBytes);\n",
    "replace": "",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass3d: drawn among*",
    "expect": "\\[g3\\-then\\-2d\\-over\\]"
-  },
-  {
-   "id": "g3-unmapped-drawn",
-   "what": "a 3D pass on another target is drawn on target 0",
-   "guards": [
-    "sdl section 7"
-   ],
-   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                if (pass3d->target != 0) continue;\n",
-   "replace": "",
-   "target": "gyo_sdl_gpu_tests",
-   "cases": "sdl_gpu pass3d: drawn among*",
-   "expect": "\\[g3\\-unmapped\\-not\\-drawn\\]"
   },
   {
    "id": "g3-viewport-ignored",

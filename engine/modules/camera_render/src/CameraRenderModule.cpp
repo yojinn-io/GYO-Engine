@@ -1,6 +1,8 @@
 #include "engine/camera_render/CameraRenderModule.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -12,6 +14,8 @@
 #include "engine/render/Compose.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
+#include "engine/render/RenderTargets.hpp"
+#include "engine/render/RenderTextures.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
 #include "engine/transform/Transform.hpp"
 
@@ -20,6 +24,14 @@ namespace GYO::Engine::CameraRender {
 namespace {
 
 using SystemResult = Base::Result<void, Kernel::KernelError>;
+
+// Before ExtractCameras: a render target of the render World for each of the source's (render-pipeline declaration
+// section 13; Bevy's prepare_assets makes the GpuImage of a target image keyed by its id, render_asset.rs:393).
+SystemResult ExtractRenderTargets(Kernel::ExtractRes<Render::RenderTargets> source, Kernel::ResMut<Render::RenderTextures> textures,
+                                  Kernel::ResMut<Render::TargetTextures> mapped) {
+    Render::SyncTargetTextures(source.Present() ? &*source : nullptr, textures.Get(), mapped.Get());
+    return {};
+}
 
 SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> cameras,
                             Kernel::Extract<Kernel::Read<Camera::ComputedCamera>> computed,
@@ -31,8 +43,8 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
                             Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
                             Kernel::Extract<Kernel::Read<Render::Camera3dDepth>> depths,
                             Kernel::Extract<Kernel::Read<Render::CulledEntities>> culled,
-                            Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::ResMut<Render::ExtractedCameras> out,
-                            Kernel::ResMut<Render::CameraPasses> passes) {
+                            Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::Res<Render::TargetTextures> mapped,
+                            Kernel::ResMut<Render::ExtractedCameras> out, Kernel::ResMut<Render::CameraPasses> passes) {
     std::vector<Render::ExtractedCamera> list;
     const Render::Color8 defaultClear = clearColor.Present() ? clearColor->color : Render::ClearColor{}.color;
     cameras.ForEach([&](const Kernel::EntityId id, const Camera::Camera& camera) {
@@ -40,11 +52,14 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
         const Camera::ComputedCamera* c = computed.Get(id);
         const Transform::GlobalTransform* g = globals.Get(id);
         if (c == nullptr || !c->valid || g == nullptr) return;
+        // The pass target its CameraTarget maps to; a target the source has none for is nothing to draw on.
+        const Camera::CameraTarget* target = targets.Get(id);
+        const std::optional<std::uint32_t> passTarget = Render::PassTargetOf(target != nullptr ? target->id : 0, *mapped);
+        if (!passTarget) return;
         Render::ExtractedCamera e;
         e.entity = id;
         e.order = camera.order;
-        const Camera::CameraTarget* target = targets.Get(id);
-        e.target = target != nullptr ? target->id : 0;
+        e.target = *passTarget;
         e.computed = *c;
         e.view = g->matrix;
         e.is2d = markers2d.Contains(id);
@@ -88,6 +103,15 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::ExtractedCameras>({.name = "ExtractedCameras"});
     r.Resource<Render::CameraPasses>({.name = "CameraPasses"});
+    r.Resource<Render::TargetTextures>({.name = "TargetTextures"});
+    Kernel::SystemOptions targetsExtract;
+    targetsExtract.name = "ExtractRenderTargets";
+    Kernel::Mount targetsMount;
+    targetsMount.schedule = std::string(RenderWorld::kExtractSchedule);
+    targetsMount.stage = std::string(RenderWorld::kExtractSchedule);
+    targetsMount.before.push_back("ExtractCameras");
+    targetsExtract.mounts.push_back(std::move(targetsMount));
+    r.AddSystem<&ExtractRenderTargets>(std::move(targetsExtract));
     Kernel::SystemOptions extract;
     extract.name = "ExtractCameras";
     Kernel::Mount mount;
@@ -105,6 +129,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         if (world.Resource<Render::ExtractedCameras>() == nullptr) world.SetResource(Render::ExtractedCameras{});
         if (world.Resource<Render::CameraPasses>() == nullptr) world.SetResource(Render::CameraPasses{});
+        if (world.Resource<Render::TargetTextures>() == nullptr) world.SetResource(Render::TargetTextures{});
         return {};
     });
 }

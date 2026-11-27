@@ -39,9 +39,11 @@ bool Near(const float a, const float b) { return std::fabs(a - b) <= 1e-4F; }
 // A 3D camera at (1, 0, -2) looking along +Z on a 100 x 100 target.
 R::ExtractedCamera Camera3d(const std::uint32_t target = 0, const std::int32_t order = 0) {
     const C::TargetSize size{{100, 100}, 1.0F};
+    // The view point goes through Compute, as UpdateCameras does: Queue3d takes its clipFromWorld.
+    const T::GlobalTransform view{At(1, 0, -2)};
     R::ExtractedCamera camera;
-    camera.computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size);
-    camera.view = At(1, 0, -2);
+    camera.computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size, nullptr, &view);
+    camera.view = view.matrix;
     camera.is3d = true;
     camera.order = order;
     camera.target = target;

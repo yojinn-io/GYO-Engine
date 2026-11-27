@@ -6,6 +6,7 @@ add_library(gyo_render STATIC
     src/Pipeline2d.cpp
     src/Pipeline3d.cpp
     src/Render.cpp
+    src/RenderTargets.cpp
 )
 add_library(GYO::Render ALIAS gyo_render)
 

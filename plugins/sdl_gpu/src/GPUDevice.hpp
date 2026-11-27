@@ -76,8 +76,9 @@ struct CapturedImage final {
 
 // What happened to the asks and draws of one frame that SDL or the data did not allow (counted, the frame goes on).
 struct FrameTally final {
-    // Texture asks SDL refused (a texture too large, no memory): the id has no GPU texture; draws naming it are
-    // skipped.
+    // Texture asks SDL refused (a texture too large, no memory, a format the device does not take for that use; a
+    // target that follows the main target, each frame it could not be made at that size): the id has no GPU
+    // texture; draws naming it are skipped.
     std::uint64_t refusedAsks = 0;
     // Mesh asks SDL refused (its buffers could not be made, or the frame's uploads failed): the id has no GPU buffers;
     // draws naming it are skipped.
@@ -85,7 +86,8 @@ struct FrameTally final {
     // Draws skipped: their texture or mesh has no GPU object, their pipeline could not be made, or (3D) the pass's
     // depth texture could not be made.
     std::uint64_t skippedDraws = 0;
-    // Passes whose target has no picture here (the window is target 0; nothing else is mapped yet).
+    // Passes whose target has no picture here: neither 0 (the window, or Capture's picture) nor a render target of the
+    // asks, or a render target SDL refused.
     std::uint64_t unmappedPasses = 0;
     // SDL's text for the last refusal of this frame (a texture, a mesh, a pipeline, a depth texture); empty when none.
     std::string lastRefusal;
@@ -104,12 +106,13 @@ public:
     GPUDevice(const GPUDevice&) = delete;
     GPUDevice& operator=(const GPUDevice&) = delete;
 
-    // Applies the asks in order (textures, then meshes), then draws the passes on the window and shows the picture.
-    // Target 0 is the window.
+    // Applies the asks in order (textures, then meshes), then draws the passes on their targets and shows the
+    // window's picture. Target 0 is the window; a render target that follows the main target takes the window's size.
     FrameOutcome Submit(std::span<const Engine::Render::TextureOp> asks, std::span<const Engine::Render::MeshOp> meshAsks,
                         const Engine::Render::RenderCommands& commands, FrameTally& tally);
-    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture)
-    // and reads it back, waiting for the GPU. A zero size is a Programmer Error.
+    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture; a
+    // render target that follows the main target takes this size) and reads it back, waiting for the GPU. A zero size
+    // is a Programmer Error.
     [[nodiscard]] Engine::Base::Result<CapturedImage, CaptureFailure> Capture(std::span<const Engine::Render::TextureOp> asks,
                                                                            std::span<const Engine::Render::MeshOp> meshAsks,
                                                                            const Engine::Render::RenderCommands& commands,

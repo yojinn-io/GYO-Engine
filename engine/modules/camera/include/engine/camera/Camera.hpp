@@ -49,8 +49,9 @@ struct Camera final {
     std::optional<Viewport> viewport;
 };
 
-// Where the camera draws: a neutral id. 0 is the main target (the main window when there is one); what other ids
-// name is render's and the GPU backend's to map (batches R2a, R2b).
+// Where the camera draws: a neutral id. 0 is the main target (the main window when there is one); another id is a
+// render target render's data side handed out (render's RenderTargets::Create in the source World; render-pipeline
+// declaration section 13). The camera Module knows nothing of what an id names, only its size (CameraTargetSizes).
 struct CameraTarget final {
     std::uint32_t id = 0;
 
@@ -112,7 +113,7 @@ struct Camera3d final {};
 
 // Derived, written only by the camera Module (CM-3).
 struct ComputedCamera final {
-    // The target size is known and the viewport size is not zero.
+    // The target size is known, the viewport size is not zero and the view point has an inverse.
     bool valid = false;
     Math::Vec2i targetPhysicalSize{};
     // Physical pixels per logical pixel.
@@ -120,6 +121,10 @@ struct ComputedCamera final {
     // The viewport used (the whole target when Camera has none), clamped into the target.
     Viewport viewport{};
     Math::Matrix4 clipFromView{};
+    // clipFromView times the inverse of the view point (the camera entity's GlobalTransform; none: the origin), the
+    // one value every reader of world to clip space takes: visibility's frustum, the 2D and 3D pipelines' passes
+    // (render-pipeline declaration section 13; Bevy computes it twice, update_frusta and prepare_view_uniforms).
+    Math::Matrix4 clipFromWorld{};
 };
 
 struct TargetSize final {
@@ -164,12 +169,13 @@ static_assert(Base::CodedError<ViewportConversionFailure>);
 
 // The derived values of one camera, the function UpdateCameras writes ComputedCamera with: the viewport clamped
 // into the target, the projection (perspective: the viewport's aspect; orthographic: Bevy's ScalingMode on the
-// logical viewport size, scale and viewportOrigin). valid is false when size is null, its scale factor is not
-// positive or the viewport size is zero. A pure function: a caller that needs the values of a camera that is not
-// in a World (a tool's preview, a test) calls it; it writes nothing.
-// letterbox: the camera's Letterbox, or null.
+// logical viewport size, scale and viewportOrigin) and world to clip space through the view point. valid is false
+// when size is null, its scale factor is not positive, the viewport size is zero or the view point has no inverse.
+// A pure function: a caller that needs the values of a camera that is not in a World (a tool's preview, a test)
+// calls it; it writes nothing.
+// letterbox: the camera's Letterbox, or null. view: the camera entity's GlobalTransform, or null (the origin).
 [[nodiscard]] ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size,
-                                     const Letterbox* letterbox = nullptr);
+                                     const Letterbox* letterbox = nullptr, const Transform::GlobalTransform* view = nullptr);
 
 // Bevy's world_to_viewport: the point's position in the target's logical pixels. NDC depth below 0 is PastNearPlane,
 // above 1 PastFarPlane (so a point behind a perspective camera is PastFarPlane, as in Bevy).

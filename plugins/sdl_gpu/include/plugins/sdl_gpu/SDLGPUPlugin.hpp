@@ -69,7 +69,7 @@ public:
     // Texture asks SDL refused (that texture has no GPU texture; also the textures made in a frame whose uploads
     // failed), mesh asks SDL refused (the same for meshes), draws skipped (their texture or mesh has no GPU object,
     // their pipeline could not be made, or a 3D pass's depth texture could not be), passes whose target is not mapped
-    // (only target 0, the window, is).
+    // (neither 0, the window, nor a render target of render's asks that SDL made).
     [[nodiscard]] std::uint64_t RefusedTextureAsks() const;
     [[nodiscard]] std::uint64_t RefusedMeshAsks() const;
     [[nodiscard]] std::uint64_t SkippedDraws() const;
@@ -83,7 +83,7 @@ public:
     // Presentation changes.
     [[nodiscard]] std::uint64_t PresentModeSets() const;
     [[nodiscard]] std::uint64_t RefusedPresentModes() const;
-    // The textures of render's asks that have a GPU texture now (the white one not counted).
+    // The textures of render's asks that have a GPU texture now, render targets included (the white one not counted).
     [[nodiscard]] std::size_t TextureCount() const;
     // The meshes of render's asks that have GPU buffers now.
     [[nodiscard]] std::size_t MeshCount() const;
