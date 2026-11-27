@@ -1,7 +1,7 @@
 # 事前宣告：Ink spike（`v8-arch-gyo2-ink-spike`）
 
-更新：2026-11-27（修訂 0）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
-**狀態：事前宣告，等使用者核准第 10 節的決定點；核准前不實作。**
+更新：2026-11-27（修訂 1：補第 11 節「使用者的決定」）。Owner：Ink spike 任務卡（GYO2 重建主會話開）。
+**狀態：事前宣告；第 10 節的決定點已由使用者決定（第 11 節）。開始實作等主會話另外通知。**
 
 **核心一句**（每一項都拿來對照）：**這一批驗的是「inkcpp 能不能照 gyo2 的根接進來」：外部組件的型別只在 adapter 裡，對外用遊戲的詞；錯誤用 `Result` 告訴外面發生了什麼，不替外面決定；狀態（亂數、存讀、thread）由外面控制。台本怎麼寫、指令代表什麼、存檔怎麼放，是作者的。**
 
@@ -320,3 +320,15 @@ v8-arch-gyo2-ink-spike
 | U4 | thread 的條件（第 7.4 節） | 照源碼改成「同一個 Story 一家不同時用」＋一般 Resource／照工作指示的「同一個 thread」＋`threadBound` | 前者（text TX-7 的先例；Match 的模擬執行緒能用） |
 
 卡片判、不需要逐項看的（不同意時再說）：Plugin 叫 `ink`、`library_only`（5.5）；只做沒有回傳值的指令（5.4）；沒有 line ID 不算錯誤（6.2）；locale 寫成契約不檢查（7.5）；`Restore` 用快照的亂數狀態（7.1）。
+
+## 11. 使用者的決定（2026-11-27）
+
+出處：HANDOFF `v8-arch-gyo2-ink-spike-u1-u4`（gyo2 3825f51b），由主會話轉交。
+
+- **原話**：「全部照推薦，空殼刪掉」。使用者先說「全部展示出來我過一遍」，主會話逐題列出選項與推薦後，使用者這樣回覆。
+- **U1**：C，測試層級的場景（第 2 節）。
+- **U2**：FetchContent 寫在 `plugins/ink`（第 3 節）。使用者同意 CI 每台機器 clone `github.com/JBenda/inkcpp` 的 d38608d。
+- **U3**：同意在本機下載 `inklecate_mac.zip`（29,173,014 bytes，`https://github.com/inkle/ink/releases/download/v1.1.1/inklecate_mac.zip`）（第 4 節）。**同意只限這一個檔**；它需要 .NET 的話先停下回報；任何其他下載都要先問。
+- **U4**：「同一個 Story 不能同時給兩處用」，當一般 Resource 處理，不用 `threadBound`（第 7.4 節）。
+- **卡片判、使用者沒有推翻的**：Plugin 名 `ink`、`library_only`（5.5）；只做沒有回傳值的指令（5.4）；沒有 line ID 不算錯誤（6.2）；locale 寫成契約（7.5）；`Restore` 用快照的亂數狀態（7.1）。
+- 開始實作（I1）等主會話另外通知；合併等使用者說「合併」。
