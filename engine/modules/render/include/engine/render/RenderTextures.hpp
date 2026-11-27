@@ -141,7 +141,14 @@ struct TextureTargetCreate final {
     RenderTargetDesc desc;
 };
 
-using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, TextureTargetCreate>;
+// A target's size from this frame on (after its TextureTargetCreate): the backend makes its texture at this size, or
+// makes it again, with no picture (render-pipeline declaration 14.11).
+struct TextureTargetSize final {
+    TextureId id;
+    TargetSize size;
+};
+
+using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, TextureTargetCreate, TextureTargetSize>;
 
 // render_world's Resource. The asks of a frame stay until render_world clears them after the frame was drawn (its
 // Cleanup stage); a backend reads them in order before it draws. Ids are never given twice.
@@ -153,14 +160,28 @@ public:
     // texture or of zero size, or pixels of another size, is a Programmer Error.
     void Update(TextureId id, TextureRegion region, std::vector<std::uint8_t> pixels);
     // Lets the texture (or the target) go; draws and passes must not name it any more. An id that is not live is a
-    // Programmer Error. A target that follows it has no picture from then on.
+    // Programmer Error. A target that follows it keeps its last size (it has no size to follow).
     void Release(TextureId id);
-    // A new render target: passes name it as their target, draws sample it by the id. Its picture is kept from frame
-    // to frame (a pass with no clear draws over it, as Bevy's LoadOp::Load); it has none when it is made and when the
-    // backend makes it again at a new size: the first pass that draws on it then starts from transparent black (a
-    // Depth target: cleared to 1), and sampling it before that is a Programmer Error (RenderCommands.hpp, RP-3). A
-    // fixed size of zero width or height, or following an id that is not a live target, is a Programmer Error.
+    // A new render target: passes name it as their target, draws sample it by the id. Its size is decided here, on
+    // the data side (render-pipeline declaration 14.11): fixed, the main target's (SetMainSize) or another target's,
+    // each change asked of the backend as a TextureTargetSize. Its texture is kept from frame to frame (a pass with no
+    // clear draws over it, as Bevy's LoadOp::Load); it has no picture when it is made and whenever its size changes,
+    // until a frame's RenderCommands draw on it (KeepPictures): the first pass that draws on it then starts from
+    // transparent black (a Depth target: cleared to 1). A pass samples it only after a pass of the same frame drew on
+    // it or reused it (RenderCommands.hpp, RP-3). A fixed size of zero width or height, or following an id that is not
+    // a live target, is a Programmer Error.
     TextureId CreateTarget(RenderTargetDesc desc);
+    // The main target's size this frame (the window's, as the source World's cameras computed with it; camera_render
+    // sets it in the extract): targets that follow it take it. nullopt: not known (they keep the size they have).
+    void SetMainSize(std::optional<TargetSize> size);
+    // A frame's RenderCommands drew on the target: it has a picture until its size changes. A texture that is not a
+    // live target is not counted.
+    void MarkDrawn(TextureId id) noexcept;
+
+    // The live target's size, or nullopt (not known yet: it follows a size not known; or not a live target).
+    [[nodiscard]] std::optional<TargetSize> SizeOf(TextureId id) const noexcept;
+    // Whether the live target has a picture: a frame drew on it since it was made or its size last changed.
+    [[nodiscard]] bool HasPicture(TextureId id) const noexcept;
 
     // The live texture's description, or nullptr (also for a target).
     [[nodiscard]] const TextureDesc* Find(TextureId id) const noexcept;
@@ -174,9 +195,21 @@ public:
     void ClearPending() noexcept { pending_.clear(); }
 
 private:
+    // Each target's size as asked of the backend and its picture, in id order.
+    struct TargetState {
+        std::uint32_t id = 0;
+        std::optional<TargetSize> size;
+        bool picture = false;
+    };
+    // Gives every target the size its description says now (in id order: a followed target before its follower), and
+    // asks the backend for each change.
+    void ResolveSizes();
+
     std::uint32_t next_ = 1;
     // One table for both: one id space, one counter (RD-3).
     std::vector<std::pair<std::uint32_t, std::variant<TextureDesc, RenderTargetDesc>>> live_;
+    std::vector<TargetState> targets_;
+    std::optional<TargetSize> main_;
     std::vector<TextureOp> pending_;
 };
 

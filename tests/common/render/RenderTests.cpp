@@ -202,11 +202,14 @@ TEST_CASE("render: targets take their ids from the textures' counter, never give
     const R::TextureId follower = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{again}});
     CHECK_MESSAGE((std::get<R::FollowTarget>(textures.FindTarget(follower)->size).target == again), "[rd-target-follows] a target may follow another");
     const auto pending = textures.Pending();
-    REQUIRE_MESSAGE(pending.size() == 5, "[rd-target-ask] making a target is an ask, in order");
+    // The picture, the fixed target and its size (known at once), its release, the two that follow (no main size yet).
+    REQUIRE_MESSAGE(pending.size() == 6, "[rd-target-ask] making a target is an ask, in order");
     const auto* made = std::get_if<R::TextureTargetCreate>(&pending[1]);
     REQUIRE_MESSAGE(made != nullptr, "[rd-target-ask] making a target is an ask, in order");
     CHECK_MESSAGE((made->id == target && made->desc == fixed), "[rd-target-ask] the ask carries the id and the description");
-    CHECK(std::holds_alternative<R::TextureRelease>(pending[2]));
+    const auto* sized = std::get_if<R::TextureTargetSize>(&pending[2]);
+    CHECK_MESSAGE((sized != nullptr && sized->id == target && sized->size == R::TargetSize{8, 8}), "[rd-target-size-ask] then its size");
+    CHECK(std::holds_alternative<R::TextureRelease>(pending[3]));
 }
 
 TEST_CASE("render: a texture keeps its format; Rgba8Unorm is the default") {
@@ -272,7 +275,7 @@ TEST_CASE("render: what each kind of pass draws on and samples") {
                   "[rd-pass-writes-depth-only] a depth-only pass draws no colour, only its depth target");
 }
 
-TEST_CASE("render: RP-3 as data: the first pass sampling a target with no picture before this frame drew on it") {
+TEST_CASE("render: RP-3 as data: a target is sampled only after an earlier pass of the frame drew on it or reused it") {
     const auto sampling = [](const std::optional<R::TextureId> target, const std::uint32_t texture) {
         R::Pass2D pass;
         pass.target = target;
@@ -280,17 +283,59 @@ TEST_CASE("render: RP-3 as data: the first pass sampling a target with no pictur
         pass.draws.back().texture = R::TextureId{texture};
         return R::RenderPass{pass};
     };
-    const std::vector<R::TextureId> fresh{R::TextureId{3}};
+    const std::vector<R::TextureId> targets{R::TextureId{3}};
     const std::vector<R::RenderPass> unwritten{sampling(std::nullopt, 3)};
-    CHECK_MESSAGE((R::FirstUnwrittenRead(unwritten, {}, fresh) == R::UnwrittenRead{0, R::TextureId{3}}), "[rd-unwritten-found] sampled with no picture");
-    CHECK_MESSAGE(!R::FirstUnwrittenRead(unwritten, {}, {}).has_value(), "[rd-unwritten-has-picture] a target with a picture is not counted");
+    CHECK_MESSAGE((R::FirstUnwrittenRead(unwritten, targets) == R::UnwrittenRead{0, R::TextureId{3}}),
+                  "[rd-unwritten-found] sampled, neither drawn on nor reused this frame");
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(unwritten, {}).has_value(), "[rd-unwritten-picture-only] a texture that is no render target is not counted");
     const std::vector<R::RenderPass> drawnFirst{sampling(R::TextureId{3}, 0), sampling(std::nullopt, 3)};
-    CHECK_MESSAGE(!R::FirstUnwrittenRead(drawnFirst, {}, fresh).has_value(), "[rd-unwritten-drawn-before] a pass drew on it earlier this frame");
-    const bool drawnFlags[] = {false, true};
-    CHECK_MESSAGE((R::FirstUnwrittenRead(drawnFirst, drawnFlags, fresh) == R::UnwrittenRead{1, R::TextureId{3}}),
-                  "[rd-unwritten-not-drawn] a pass the backend does not draw draws nothing on it");
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(drawnFirst, targets).has_value(), "[rd-unwritten-drawn-before] a pass drew on it earlier this frame");
+    const std::vector<R::RenderPass> drawnAfter{sampling(std::nullopt, 3), sampling(R::TextureId{3}, 0)};
+    CHECK_MESSAGE((R::FirstUnwrittenRead(drawnAfter, targets) == R::UnwrittenRead{0, R::TextureId{3}}),
+                  "[rd-unwritten-drawn-after] a pass that draws on it later does not count");
+    const std::vector<R::RenderPass> reused{R::PassReuse{R::TextureId{3}}, sampling(std::nullopt, 3)};
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(reused, targets).has_value(), "[rd-unwritten-reused] reused this frame");
     const std::vector<R::RenderPass> own{sampling(R::TextureId{3}, 3)};
-    CHECK_MESSAGE(!R::FirstUnwrittenRead(own, {}, fresh).has_value(), "[rd-unwritten-own] sampling what a pass draws on is not counted");
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(own, targets).has_value(), "[rd-unwritten-own] sampling what a pass draws on is not counted");
+    const R::PassWrites reuse = R::WritesOf(R::PassReuse{R::TextureId{3}});
+    CHECK_MESSAGE((reuse.Writes(R::TextureId{3}) && reuse.WritesColour(R::TextureId{3}) && !reuse.WritesColour(std::nullopt) &&
+                   R::TargetOf(R::PassReuse{R::TextureId{3}}) == R::TextureId{3} && R::ReadsOf(R::PassReuse{R::TextureId{3}}).empty()),
+                  "[rd-reuse-writes] a reuse stands for its target's picture, samples nothing");
+}
+
+TEST_CASE("render: target sizes are decided on the data side; a size change is an ask and loses the picture") {
+    R::RenderTextures textures;
+    const R::TextureId follower = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{}});
+    CHECK_MESSAGE(!textures.SizeOf(follower).has_value(), "[rd-size-unknown] no size before the main target's is known");
+    const R::TextureId fixed = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{4, 2}});
+    const R::TextureId second = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{fixed}});
+    CHECK_MESSAGE((textures.SizeOf(fixed) == R::TargetSize{4, 2} && textures.SizeOf(second) == R::TargetSize{4, 2}),
+                  "[rd-size-fixed] a fixed size, and a target following it, sized when made");
+    textures.SetMainSize(R::TargetSize{8, 8});
+    CHECK_MESSAGE((textures.SizeOf(follower) == R::TargetSize{8, 8}), "[rd-size-follows-main] the main target's size");
+    std::vector<std::uint32_t> sized;
+    for (const R::TextureOp& op : textures.Pending()) {
+        if (const auto* s = std::get_if<R::TextureTargetSize>(&op)) sized.push_back(s->id.value);
+    }
+    CHECK_MESSAGE((sized == std::vector<std::uint32_t>{fixed.value, second.value, follower.value}), "[rd-size-asks] one size ask each, when known");
+    CHECK_MESSAGE((!textures.HasPicture(follower) && !textures.HasPicture(fixed)), "[rd-picture-none] no picture when made");
+    textures.ClearPending();
+    R::RenderCommands frame;
+    R::Pass2D on;
+    on.target = follower;
+    frame.passes.push_back(on);
+    R::KeepPictures(frame, textures);
+    CHECK_MESSAGE((textures.HasPicture(follower) && !textures.HasPicture(fixed)), "[rd-picture-drawn] a frame that drew on it gives it one");
+    R::RenderCommands reuse;
+    reuse.passes.push_back(R::PassReuse{fixed});
+    R::KeepPictures(reuse, textures);
+    CHECK_MESSAGE(!textures.HasPicture(fixed), "[rd-picture-not-by-reuse] a reuse makes none");
+    textures.SetMainSize(R::TargetSize{8, 8});
+    CHECK_MESSAGE((textures.Pending().empty() && textures.HasPicture(follower)), "[rd-size-same] the same size: no ask, the picture stays");
+    textures.SetMainSize(R::TargetSize{16, 8});
+    CHECK_MESSAGE((textures.Pending().size() == 1 && !textures.HasPicture(follower)), "[rd-size-changed] a new size: an ask, no picture");
+    textures.SetMainSize(std::nullopt);
+    CHECK_MESSAGE((textures.SizeOf(follower) == R::TargetSize{16, 8}), "[rd-size-kept] an unknown main size keeps the size it has");
 }
 
 TEST_CASE("render: the source's targets: ids from 1 for cameras, never given twice; the sizes a camera computes with") {

@@ -15,6 +15,10 @@
 // sizes are a copy, used for the projections alone). Bevy's camera_system reads an image target's size from
 // Assets<Image> itself (bevy_render/src/camera.rs:292); camera cannot read render's types (CM-2), so the copy is
 // written here, as window_camera writes the window's.
+//
+// A camera's TargetUpdate (render-pipeline declaration 14.11) is registered here too: NoteOnceUpdates (Last) notes the
+// cameras that are Once as the frame ends (as the render World extracts them), SettleOnceUpdates (First) makes those
+// Disabled at the start of the next frame.
 
 #include <string>
 
@@ -29,6 +33,10 @@ namespace GYO::Engine::WorldRender {
 struct WorldRenderOptions final {
     std::string schedule = std::string(Orchestration::DefaultSchedules::frame);
     std::string stage = std::string(Orchestration::DefaultSchedules::postUpdate);
+    // Where NoteOnceUpdates runs (the end of the frame: the cameras the render World extracts as Once) and
+    // SettleOnceUpdates (the start of the next frame: those are Disabled from then on).
+    std::string noteStage = std::string(Orchestration::DefaultSchedules::last);
+    std::string onceStage = std::string(Orchestration::DefaultSchedules::first);
 };
 
 class WorldRenderModule final : public Orchestration::Module {

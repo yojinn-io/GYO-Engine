@@ -427,31 +427,31 @@
   },
   {
    "id": "gt-target-not-resized",
-   "what": "T7: a target that follows the main target keeps its first size",
+   "what": "S-1: a target that follows the main target keeps its first size (data side since 14.11: render decides the sizes)",
    "guards": [
     "render-pipeline-declaration 判定 T7",
     "render RD-11"
    ],
-   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            if (!wanted || t.size == *wanted) continue;",
-   "replace": "            if (!wanted || t.texture != nullptr) continue;",
-   "target": "gyo_sdl_gpu_tests",
-   "cases": "sdl_gpu targets: a target follows*",
-   "expect": "\\[gt\\-target\\-follows\\] at 16"
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "        if (!wanted || t.size == wanted) continue;",
+   "replace": "        if (!wanted || t.size) continue;",
+   "target": "gyo_render_tests",
+   "cases": "render: target sizes are decided*",
+   "expect": "\\[rd\\-size\\-changed\\]"
   },
   {
    "id": "gt-follows-other-as-main",
-   "what": "S-1: a target that follows another render target takes the main target's size",
+   "what": "S-1: a target following another target takes the main target's size instead (data side since 14.11)",
    "guards": [
     "render-pipeline-declaration 判定 T7",
     "render RD-11"
    ],
-   "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "                if (of != targets.end() && of->second.texture != nullptr) wanted = of->second.size;",
-   "replace": "                if (of != targets.end() && of->second.texture != nullptr) wanted = main;",
-   "target": "gyo_sdl_gpu_tests",
-   "cases": "sdl_gpu targets: a target follows*",
-   "expect": "\\[gt\\-target\\-follows\\-other\\]"
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "            wanted = SizeOf(*followed);",
+   "replace": "            wanted = main_;",
+   "target": "gyo_render_tests",
+   "cases": "render: target sizes are decided*",
+   "expect": "\\[rd\\-size\\-fixed\\]"
   },
   {
    "id": "gt-feedback-drawn",

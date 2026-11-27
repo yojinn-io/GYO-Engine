@@ -133,6 +133,20 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
   - 第一次跑 cpu 時 `sdl.build` 失敗：我的腳本把 `SDL_VIDEODRIVER=x11` 匯出給整個執行（GPU 用的），環境變數蓋過那一案自己設的 `dummy` hint（`SDL_SetHint` 回 false）。不帶它重跑 255/255；L1 的 cpu 那一步本來就不帶。和程式無關。
 - RP-3 的「明示重用」（使用者的決定，HANDOFF `v8-arch-gyo2-render-a2-target-reuse`）：評估後停下、交主會話——強制重畫要資料側在合成前知道 target 這一幀被重建，現在跟別人大小走的 target 是後端在 `Submit` 時才定大小（`GPUDevice.cpp` 的 `EnsureTargets`），要改成資料側定大小才做得到。第 14.8 節、RP-3 條文與 `gt-unwritten-*` 的語意等核准後一起改。
 
+## RP-3 的機制：資料側定大小、相機的更新模式、明示沿用（同日，使用者的決定）
+
+- 使用者：RP-3 原條文不改、改機制（「我其實想維持原條文，需要改的是機制。……」，HANDOFF `v8-arch-gyo2-render-a2-target-reuse`）；卡片評估後停下報告「重建時強制重畫要資料側先知道大小」，使用者「照建議，主要是解法符合邏輯，而不是補丁。」（HANDOFF `v8-arch-gyo2-render-a2-target-size-data-side`）。條文加的一句是使用者的原話：「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」。宣告第 14.11 節（小宣告）、第 4.3 節與 RP-3 各加這一句、第 14.8 節記下決定。
+- 做了什麼：
+  1. `RenderTextures`：`SetMainSize`、每個 target 在資料側解析大小（`ResolveSizes`，照 id 順序），變了發 `TextureTargetSize`；`HasPicture`／`MarkDrawn`；`render_world` 的 Cleanup 呼叫 `KeepPictures`。
+  2. `camera_render`：`ExtractRenderTargets` 從來源的 `CameraTargetSizes[kMainTarget]` 給主目標大小；`ExtractCameras` 對 Disabled、target 有畫面的相機放 `PassReuse`、不抽。
+  3. `render`：`PassReuse`、`TargetUpdate{Always, Once, Disabled}`；`PassWrites::reused`；`FirstUnwrittenRead(passes, targets)` 只看資料。
+  4. `world_render`：登記 `TargetUpdate`；`NoteOnceUpdates`（Last）與 `SettleOnceUpdates`（First）把 Once 在被看到的下一幀改成 Disabled。
+  5. `sdl_gpu`：拿掉 `EnsureTargets`（後端不再解析 follow 的大小），照 `TextureTargetSize` 建、重建；`PassReuse` 不錄東西；RP-3 的斷言照資料。
+- 寫的時候的一件事：Once 一開始只在 First 改成 Disabled，宿主在兩幀之間設 Once 時，First 在渲染 World 抽到之前就改了，Once 一次也沒畫（`[re-update-once-drawn]` 失敗）。改成兩步：Last 記下（渲染 World 抽到的就是那時的狀態）、下一幀的 First 只改記下的。這是 Once 的定義本身（看到的那一幀畫），不是例外；兩個 World 誰先跑都成立。
+- 沒有需要例外的地方：主目標上的 Disabled 相機一定畫，是「沒有畫面就畫」那一條（主目標的畫面不跨幀保留），不是另立的規則。沿用一張後端沒有畫面的 target（例：上一幀上傳失敗，`FramesFailed` 已經報了）取樣到的是未定的內容；資料側照它畫過的紀錄判斷，不另外處理。
+- 測試：`render.data` 二案（大小與畫面、沿用與 RP-3 的資料判斷）；`render.extract` 一案（Disabled 第一幀畫、之後沿用、視窗變大那一幀畫、Once）；`sdl_gpu.phases` 的沿用後取樣；`sdl_gpu.unwritten` 改成「前一幀畫過、這一幀沒畫也沒沿用」。既有測試只改輸入：`render.data` 的要求清單多一個大小要求（A1 的案）、`sdl_gpu.targets` 的 `TargetCase::Frame` 照 `Capture` 的大小呼叫 `SetMainSize`。
+- 突變：`phase_mutations.json` 新增 10 個（`rd-reuse-not-written`、`rd-size-picture-kept`、`rd-picture-not-marked`、`rd-picture-by-reuse`、`re-update-disabled-ignored`、`re-update-picture-ignored`、`re-update-once-reused`、`re-main-size-not-set`、`wr-once-never-settled`、`wr-once-settled-unseen`），退役 `rd-unwritten-drawn-ignored`；A1 的 `gt-target-not-resized`、`gt-follows-other-as-main` 改寫到資料側（`render.data`）；`gt-unwritten-not-asserted`、`rd-writes-3d-depth-dropped`、`rd-unwritten-drawing-ignored` 的 find 跟著改。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。

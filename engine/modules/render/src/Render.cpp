@@ -63,16 +63,18 @@ void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
 
 PassWrites WritesOf(const RenderPass& pass) noexcept {
     return std::visit(Overloaded{
-                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt}; },
-                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth}; },
-                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt}; },
-                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target}; },
+                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt, std::nullopt}; },
+                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth, std::nullopt}; },
+                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt, std::nullopt}; },
+                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target, std::nullopt}; },
+                          [](const PassReuse& p) { return PassWrites{false, std::nullopt, std::nullopt, p.target}; },
                       },
                       pass);
 }
 
 std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
     const PassWrites writes = WritesOf(pass);
+    if (writes.reused) return writes.reused;
     return writes.colour ? writes.colourTarget : writes.depthTarget;
 }
 
@@ -82,27 +84,37 @@ std::vector<TextureId> ReadsOf(const RenderPass& pass) {
                    [&](const Pass2D& p) { AppendTextures(p.draws, reads); },
                    [&](const Pass3D& p) { AppendTextures(p.draws, reads); },
                    [&](const PassFullscreen& p) { reads = p.inputs; },
-                   // A depth-only pass's draws have no texture.
+                   // A depth-only pass's draws have no texture; a reuse pass draws nothing.
                    [](const PassDepth&) {},
+                   [](const PassReuse&) {},
                },
                pass);
     return reads;
 }
 
-std::optional<UnwrittenRead> FirstUnwrittenRead(const std::span<const RenderPass> passes, const std::span<const bool> drawn,
-                                                const std::span<const TextureId> noPicture) {
-    GYO_ASSERT((drawn.empty() || drawn.size() == passes.size()) && "a drawn flag for each pass");
-    std::vector<TextureId> without(noPicture.begin(), noPicture.end());
+std::optional<UnwrittenRead> FirstUnwrittenRead(const std::span<const RenderPass> passes, const std::span<const TextureId> targets) {
+    std::vector<TextureId> written;
     for (std::size_t i = 0; i < passes.size(); ++i) {
-        if (!drawn.empty() && !drawn[i]) continue;
         const PassWrites writes = WritesOf(passes[i]);
         for (const TextureId read : ReadsOf(passes[i])) {
             if (writes.Writes(read)) continue;
-            if (std::find(without.begin(), without.end(), read) != without.end()) return UnwrittenRead{i, read};
+            const bool target = std::find(targets.begin(), targets.end(), read) != targets.end();
+            if (target && std::find(written.begin(), written.end(), read) == written.end()) return UnwrittenRead{i, read};
         }
-        std::erase_if(without, [&](const TextureId id) { return writes.Writes(id); });
+        for (const TextureId id : targets) {
+            if (writes.Writes(id)) written.push_back(id);
+        }
     }
     return std::nullopt;
+}
+
+void KeepPictures(const RenderCommands& commands, RenderTextures& textures) {
+    for (const RenderPass& pass : commands.passes) {
+        const PassWrites writes = WritesOf(pass);
+        if (writes.colour && writes.colourTarget) textures.MarkDrawn(*writes.colourTarget);
+        if (writes.depthTarget) textures.MarkDrawn(*writes.depthTarget);
+        // A reuse makes no picture: the target keeps what it has.
+    }
 }
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
@@ -169,6 +181,7 @@ void RenderTextures::Release(const TextureId id) {
     GYO_ASSERT(it != live_.end() && "a release of a texture that is not live");
     live_.erase(it);
     pending_.emplace_back(TextureRelease{id});
+    std::erase_if(targets_, [&](const TargetState& t) { return t.id == id.value; });
 }
 
 TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
@@ -181,7 +194,52 @@ TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);
     pending_.emplace_back(TextureTargetCreate{id, desc});
+    targets_.push_back(TargetState{id.value, std::nullopt, false});
+    ResolveSizes();
     return id;
+}
+
+void RenderTextures::SetMainSize(const std::optional<TargetSize> size) {
+    main_ = size;
+    ResolveSizes();
+}
+
+void RenderTextures::ResolveSizes() {
+    for (TargetState& t : targets_) {
+        const RenderTargetDesc* desc = FindTarget(TextureId{t.id});
+        std::optional<TargetSize> wanted;
+        if (const auto* fixed = std::get_if<TargetSize>(&desc->size)) {
+            wanted = *fixed;
+        } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc->size).target) {
+            wanted = SizeOf(*followed);
+        } else {
+            wanted = main_;
+        }
+        if (!wanted || t.size == wanted) continue;
+        t.size = wanted;
+        t.picture = false;
+        pending_.emplace_back(TextureTargetSize{TextureId{t.id}, *wanted});
+    }
+}
+
+void RenderTextures::MarkDrawn(const TextureId id) noexcept {
+    for (TargetState& t : targets_) {
+        if (t.id == id.value) t.picture = true;
+    }
+}
+
+std::optional<TargetSize> RenderTextures::SizeOf(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.size;
+    }
+    return std::nullopt;
+}
+
+bool RenderTextures::HasPicture(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.picture;
+    }
+    return false;
 }
 
 const TextureDesc* RenderTextures::Find(const TextureId id) const noexcept {

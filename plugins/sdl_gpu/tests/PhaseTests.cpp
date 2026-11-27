@@ -168,17 +168,19 @@ TEST_CASE("sdl_gpu phases: two full-screen passes in a chain: the first inverts 
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kCyan), "[gf-chain] the inverted red, shifted right by 2 pixels, still at the top");
     CHECK_MESSAGE((p.All(4, 0, 8, 4, kYellow) && p.All(0, 4, 8, 8, kYellow)), "[gf-chain] the inverted blue around it");
 
-    // The next frame samples the inverted target no pass draws on this frame: its picture is kept (RP-3 needs a
-    // picture since it was made, not in this frame).
+    // The next frame reuses the inverted target (no pass draws on it): its last picture is sampled (RP-3: written this
+    // frame or reused).
     R::RenderCommands next;
+    next.passes.push_back(R::PassReuse{inverted});
     next.passes.push_back(Fullscreen(std::nullopt, "test_shift.frag", {inverted}, {0.0F, 0.0F, 0.0F, 0.0F}));
     const Picture q = c.Frame(next);
     CHECK_MESSAGE((q.All(0, 0, 2, 4, kCyan) && q.All(2, 0, 8, 4, kYellow) && q.All(0, 4, 8, 8, kYellow)),
-                  "[gf-kept-sampled] the inverted picture of the last frame, not moved");
+                  "[gf-reused-sampled] the inverted picture of the last frame, not moved");
 
     // One full-screen pass reading what a 2D pass drew (the chain's two passes would turn a wrong uv round twice): the
-    // source's red is at the top, so uv runs down the target as a 2D pass's does.
+    // source's red is at the top, so uv runs down the target as a 2D pass's does. The source is reused.
     R::RenderCommands once;
+    once.passes.push_back(R::PassReuse{source});
     once.passes.push_back(Fullscreen(std::nullopt, "test_invert.frag", {source}));
     const Picture r = c.Frame(once);
     CHECK_MESSAGE((r.All(0, 0, 2, 4, kCyan) && r.All(0, 4, 2, 8, kYellow)), "[gf-uv-down] uv (0, 0) is the target's top-left");
@@ -237,7 +239,7 @@ TEST_CASE("sdl_gpu phases: a depth-only pass writes a Depth target; a 3D pass te
     CHECK_MESSAGE(q.tally.skippedDraws == 1, "[gd-own-depth-skipped] the draw sampling its pass's depth target is skipped and counted");
 }
 
-TEST_CASE("sdl_gpu unwritten: sampling a render target no pass drew on since it was made is a Programmer Error (RP-3)" * doctest::skip()) {
+TEST_CASE("sdl_gpu unwritten: sampling a render target neither drawn on nor reused this frame is a Programmer Error (RP-3)" * doctest::skip()) {
     // The assertion fails inside the frame's recording: the handler tells it and ends the process (ctest
     // sdl_gpu.unwritten passes on the tag).
     GYO::Engine::Base::SetAssertionHandler([](const GYO::Engine::Base::AssertionFailure& failure) {
@@ -247,13 +249,17 @@ TEST_CASE("sdl_gpu unwritten: sampling a render target no pass drew on since it 
     });
     PhaseCase c;
     const R::TextureId target = c.Target(Fixed());
+    // Drawn on in one frame, sampled in the next with no pass drawing on it and no reuse.
+    R::RenderCommands drawn;
+    drawn.passes.push_back(On(target, kBlue));
+    static_cast<void>(c.Frame(drawn));
     R::RenderCommands commands;
     R::Pass2D main = On(std::nullopt, kWhite);
     Quad(main, Rect{0, 0, 8, 8}, kWhite, target);
     commands.passes.push_back(std::move(main));
     static_cast<void>(c.Frame(commands));
     GYO::Engine::Base::SetAssertionHandler(nullptr);
-    FAIL("[gt-unwritten-not-asserted] the target with no picture was sampled without a Programmer Error");
+    FAIL("[gt-unwritten-not-asserted] the target neither drawn on nor reused was sampled without a Programmer Error");
 }
 
 } // namespace GYO::Plugins::SDLGPU

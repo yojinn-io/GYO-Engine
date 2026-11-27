@@ -29,8 +29,18 @@ using SystemResult = Base::Result<void, Kernel::KernelError>;
 // section 13; Bevy's prepare_assets makes the GpuImage of a target image keyed by its id, render_asset.rs:393).
 constexpr std::string_view kExtractCameras = "ExtractCameras";
 
-SystemResult ExtractRenderTargets(Kernel::ExtractRes<Render::RenderTargets> source, Kernel::ResMut<Render::RenderTextures> textures,
-                                  Kernel::ResMut<Render::TargetTextures> mapped) {
+SystemResult ExtractRenderTargets(Kernel::ExtractRes<Render::RenderTargets> source, Kernel::ExtractRes<Camera::CameraTargetSizes> sizes,
+                                  Kernel::ResMut<Render::RenderTextures> textures, Kernel::ResMut<Render::TargetTextures> mapped) {
+    // The main target's size the source's cameras computed with (window_camera writes the window's): the size of the
+    // targets that follow it, decided here on the data side (render-pipeline declaration 14.11).
+    std::optional<Render::TargetSize> main;
+    if (sizes.Present()) {
+        if (const Camera::TargetSize* size = sizes->Find(Camera::kMainTarget);
+            size != nullptr && size->physicalSize.x > 0 && size->physicalSize.y > 0) {
+            main = Render::TargetSize{static_cast<std::uint32_t>(size->physicalSize.x), static_cast<std::uint32_t>(size->physicalSize.y)};
+        }
+    }
+    textures.Get().SetMainSize(main);
     Render::SyncTargetTextures(source.Present() ? &*source : nullptr, textures.Get(), mapped.Get());
     return {};
 }
@@ -45,8 +55,10 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
                             Kernel::Extract<Kernel::Read<Render::RenderLayers>> layers,
                             Kernel::Extract<Kernel::Read<Render::Camera3dDepth>> depths,
                             Kernel::Extract<Kernel::Read<Render::CulledEntities>> culled,
+                            Kernel::Extract<Kernel::Read<Render::TargetUpdate>> updates,
                             Kernel::ExtractRes<Render::ClearColor> clearColor, Kernel::Res<Render::TargetTextures> mapped,
-                            Kernel::ResMut<Render::ExtractedCameras> out, Kernel::ResMut<Render::CameraPasses> passes) {
+                            Kernel::Res<Render::RenderTextures> textures, Kernel::ResMut<Render::ExtractedCameras> out,
+                            Kernel::ResMut<Render::CameraPasses> passes) {
     std::vector<Render::ExtractedCamera> list;
     const Render::Color8 defaultClear = clearColor.Present() ? clearColor->color : Render::ClearColor{}.color;
     cameras.ForEach([&](const Kernel::EntityId id, const Camera::Camera& camera) {
@@ -62,6 +74,13 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
             const Render::TextureId* made = mapped->Find(*target);
             if (made == nullptr) return;
             passTarget = *made;
+        }
+        // A camera whose TargetUpdate says not to draw this frame, on a target with a picture: its last picture
+        // stands for this frame's (a target with none is drawn: the camera draws as one updating every frame).
+        const Render::TargetUpdate* update = updates.Get(id);
+        if (update != nullptr && update->mode == Render::TargetUpdate::Mode::Disabled && passTarget && textures->HasPicture(*passTarget)) {
+            passes.Get().beforeCameras.push_back(Render::PassReuse{*passTarget});
+            return;
         }
         Render::ExtractedCamera e;
         e.entity = id;

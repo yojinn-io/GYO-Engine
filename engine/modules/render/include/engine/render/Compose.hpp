@@ -61,8 +61,8 @@ private:
 // render's Resource in the render World (camera_render): one slot per extracted camera (ExtractedCameras' order, made
 // when the cameras are extracted) and the passes of views that are no camera's; ComposePasses empties them.
 struct CameraPasses final {
-    // Views that are no camera's, drawn before every camera (Bevy's RootNonCameraView): a point or spot light's shadow
-    // map.
+    // Passes before every camera: the views that are no camera's (Bevy's RootNonCameraView: a point or spot light's
+    // shadow map), and the PassReuse of each camera that does not draw this frame (TargetUpdate).
     std::vector<RenderPass> beforeCameras;
     std::vector<CameraPhases> byCamera;
 };

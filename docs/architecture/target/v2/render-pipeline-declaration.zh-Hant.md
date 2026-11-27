@@ -129,7 +129,7 @@ Product 的詞不進 Engine：元件名照 Bevy（`DirectionalLight`、`ForwardD
 
 - **CPU 這一側**：`CameraPasses` 每台相機的一格，從「一個 pass 列表」變成**照 phase 分的列表**（`Prepass`、`Opaque`、`Transparent`、`PostProcess`、`Overlay`；Bevy 的 `Core3dSystems`）。各 Module 的 System 把自己的 pass 放進對的 phase；同一 phase 內的先後由 System 的排序（set、before／after）決定。陰影這種不屬於相機的 view 在所有相機之前（Bevy 的 `RootNonCameraView`）。
 - **GPU 這一側**：仍是 `RenderCommands::passes` 的順序。新的 pass 種類：**全畫面 pass**（shader＋輸入的貼圖或 target＋參數 bytes＋輸出 target；後處理與 tonemapping 用）、**只寫深度的 pass**（陰影、prepass）。每個 pass 宣告寫哪個 target、讀哪些 target。
-- **不做的**：自動重排、自動剔除沒人讀的 pass、資源 aliasing（Godot 的 `RenderingDeviceGraph`、URP 的 RenderGraph 有）。SDL_GPU 自己處理同一資源在 pass 之間的同步（cycling）；寫的人照順序放就對。「讀一個這一幀還沒被寫的 target」是契約（寫明、後端斷言），不加擋誤用的守衛（`no-guards-against-misuse`）。量到 target 的記憶體成為問題時再做 aliasing（RC-RP1）。
+- **不做的**：自動重排、自動剔除沒人讀的 pass、資源 aliasing（Godot 的 `RenderingDeviceGraph`、URP 的 RenderGraph 有）。SDL_GPU 自己處理同一資源在 pass 之間的同步（cycling）；寫的人照順序放就對。「讀一個這一幀還沒被寫的 target」是契約（寫明、後端斷言），不加擋誤用的守衛（`no-guards-against-misuse`）。「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」（使用者 2026-11-27，HANDOFF `v8-arch-gyo2-render-a2-target-reuse`；機制在第 14.11 節）。量到 target 的記憶體成為問題時再做 aliasing（RC-RP1）。
 - **和 Bevy 的差別與膠水**：Bevy 的 pass 是直接錄 GPU 命令的 System；GYO 的 pass 是資料（RD-1，`sdl_gpu` 讀了再錄），所以 phase 是**資料上的格子**，不是每台相機一個 schedule。衝突點：Bevy 的作者加 pass＝加一個 System；GYO 的作者加 pass＝加一個 System 往格子放資料（同樣是一個 System）。膠水：`CameraPasses` 多一層 phase。不需要 Kernel 的新功能（不用「每台相機跑一次 schedule」）。
 
 ### 4.4 顏色的路徑（RC-RD 3 在這條線觸發）
@@ -264,7 +264,7 @@ v8-arch-gyo2-render-pipeline
 
 - **RP-1 機制在 Engine、規則可換**：內建的 PBR、tonemapping、後處理都經公開的材質／全畫面 pass 機制接上；作者用同一個機制換掉它們，不需要改 Engine。
 - **RP-2 渲染側只讀來源**（K.3-6）：光、材質引用、後處理設定、發射器、decal 只經 Extract 讀；渲染 World 的狀態（陰影貼圖、粒子、TAA 歷史）不寫回、不進雜湊。
-- **RP-3 GPU 的先後＝`RenderCommands` 的順序**：沒有第二個排序者；pass 讀的 target 在同一幀裡已被前面的 pass 寫過（契約，後端斷言）。A2 定稿（第 14.3 節第 5 點）：「要有畫面」＝自建立或重建之後被畫過（同一幀較前，或前幾幀），讀法交使用者確認（第 14.8 節）。
+- **RP-3 GPU 的先後＝`RenderCommands` 的順序**：沒有第二個排序者；pass 讀的 target 在同一幀裡已被前面的 pass 寫過（契約，後端斷言）。「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」（使用者 2026-11-27；第 14.11 節）。
 - **RP-4 2D 的顏色路徑不變**：2D pass 照 bytes 混合、ABI 不變（RD-4）；線性空間只在 3D 相機的中間 target。
 - RD-1（`render` 不含 GPU 物件、不依賴 Plugin）照舊；新的 shader 原始碼放 `render/shaders/`，遊戲的放產品自己的目錄。
 
@@ -489,9 +489,10 @@ phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（
 
 除錯標記與計時（A3）；HDR、tonemapping 與任何內建的全畫面效果（A4）；材質與 `ShaderId`（B1）、遊戲 shader（B2）；陰影本身（C1）；MRT（RC-A2-4）；MSAA（D2）；自動重排、剔除、aliasing（Q2）。
 
-### 14.8 和總宣告原文不同、交使用者確認的一點
+### 14.8 和總宣告原文不同、交使用者確認的一點（已決定：第 14.11 節）
 
 - **RP-3 的「這一幀」**：總宣告第 4.3 節與第 9 節寫「讀一個**這一幀**還沒被寫的 target」是契約。A1 照 Bevy 讓 target 的畫面跨幀保留（第 13.3 節第 1 點、設計審查 S-2），所以「這一幀沒寫、前幾幀寫過」的 target 有畫面（例：每兩幀更新一次的監視器畫面），讀它是對的；真正沒有定義的是「建好（或重建）之後還沒畫過」。本批照後者斷言（第 14.3 節第 5 點）。照字面（這一幀沒寫就斷言）會讓 A1 的跨幀保留只剩「在上面疊畫」一種用途。Bevy 沒有這個斷言（wgpu 把新資源清成 0〔知〕）。
+- **使用者的決定**（2026-11-27，HANDOFF `v8-arch-gyo2-render-a2-target-reuse`）：上面的讀法不採用，(A)／(B)／(C) 都不選。原條文不改、改機制：明示的「沿用」算這一幀寫過，條文加一句「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」；重建的那一幀強制重畫。機制（資料側定大小、相機的更新模式）在第 14.11 節（使用者 2026-11-27「照建議，主要是解法符合邏輯，而不是補丁。」，HANDOFF `v8-arch-gyo2-render-a2-target-size-data-side`）。第 14.3 節第 5 點與第 14.10 節第 3 點的 RP-3 以第 14.11 節為準。
 
 ### 14.9 SDL 的斷言在測試裡不開對話框（主會話的指示，A2 實作中）
 
@@ -514,4 +515,54 @@ phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（
 8. **其他**：`GPUDevice::Create` 的內建 shader 是一張（原始檔名 → 成員）的表，名字由 `ShaderAbi::ShaderName(k*Source)` 推出（純淨 L1）；`RenderPass` 的分派都用窮舉的 overloaded visitor（純淨 M4）。
 
 第 14.8 節（RP-3 的讀法）與 `gt-unwritten-*` 照舊，等使用者的決定。
+
+### 14.11 RP-3 的機制：資料側定大小、相機的更新模式、明示沿用（使用者的決定）
+
+2026-11-27。兩個使用者的決定：一、RP-3 原條文不改、改機制，條文加一句「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」（HANDOFF `v8-arch-gyo2-render-a2-target-reuse`；原話「我其實想維持原條文，需要改的是機制。……」，主會話轉）；二、機制照卡片的建議（HANDOFF `v8-arch-gyo2-render-a2-target-size-data-side`；原話「照建議，主要是解法符合邏輯，而不是補丁。」）。上段（render 的公開介面、相機的元件）。
+
+**例子**：走廊的監視器畫面（一個跟視窗大小走的 target、一台相機）每兩幀拍一次。第 1 幀相機畫進 target、螢幕的材質取樣它；第 2 幀相機不畫，`RenderCommands` 裡有一句「沿用 target」，螢幕照樣取樣它（算這一幀寫過）。使用者拖動視窗：target 的大小變了、內容沒了，那一幀相機一定畫，不會沿用、也不會斷言。哪一幀誰寫了哪個 target，都在資料裡看得到。
+
+**前提**：
+
+| 項 | 前提 | 理由 |
+|---|---|---|
+| target 的大小、「這一幀新建或重建」 | **〔Engine〕** | 要在合成之前知道，才能把「沿用」換成「畫」；只有資料側（`RenderTextures`）在合成之前定得了 |
+| 相機哪一幀畫、哪一幀沿用 | **〔Engine〕**機制、**〔作者〕**選模式 | 作者選 Always／Once／Disabled；強制重畫是 Engine 的事 |
+| 作者自己的 pass 畫的 target 要沿用 | **〔作者〕** | 作者在自己的 System 放一句 `PassReuse`（同 Engine 放的那一句） |
+
+**設計**：
+
+1. **大小在資料側定**：`RenderTextures` 對每個 target 照描述算大小（固定、主目標的、另一個 target 的；照 id 順序），每次變了發一個 `TextureTargetSize{id, size}` 要求；後端只照要求建（重建）貼圖，不再自己解析 follow（拿掉 `EnsureTargets`）。主目標的大小由 `camera_render` 在 extract 從來源的 `CameraTargetSizes[kMainTarget]`（`window_camera` 寫的視窗大小）給（`SetMainSize`）。同 Bevy：`prepare_view_targets` 照抽出的相機目標大小建貼圖；同 Godot：viewport 的大小是場景的資料（`servers/rendering/renderer_viewport.cpp:1135-1141`）。
+2. **畫面（picture）是資料**：target 建好、或大小變了，就沒有畫面；一幀的 `RenderCommands` 有 pass 畫它（顏色或深度），那一幀結束時就有了（`render_world` 的 Cleanup 呼叫 `KeepPictures`）。沿用不給畫面（沒有畫面的 target 沿用了也還是沒有）。
+3. **明示沿用 `PassReuse{target}`**：`RenderPass` 的一種，什麼都不畫；對後面取樣的 pass 而言，那個 target 算這一幀寫過。Engine 放（下一點）或作者自己放。
+4. **相機的更新模式 `TargetUpdate{Always, Once, Disabled}`**（`render` 的元件，`world_render` 登記；Godot SubViewport 的 `render_target_update_mode`，`scene/main/viewport.h:917-921`）：沒有元件＝Always。`camera_render` 在 extract 時：Disabled 的相機、它的 target **有畫面** → 放一句 `PassReuse`、不抽這台相機（管線不排它的 pass）；target 沒有畫面（新建、重建、從沒畫過）→ 照常抽、照常畫（強制重畫）。Once＝這一幀畫，下一幀起 Disabled：`world_render` 在 Last 記下哪些相機是 Once（渲染 World 抽到的就是這個狀態），下一幀的 First 把它們改成 Disabled（Godot 在畫完後把模式寫回 `UPDATE_DISABLED`，`renderer_viewport.cpp:982-983`）。主目標的畫面不跨幀保留（視窗的畫面每幀未定），所以主目標上的相機一定畫——不是例外，是「沒有畫面就畫」那一條。
+5. **RP-3 的檢查只看資料**：`FirstUnwrittenRead(passes, targets)`：一個 pass 取樣某個 render target，而這一幀前面沒有 pass 畫它、也沒有沿用 → 後端在錄之前斷言。後端畫不出來的（沒有貼圖）不影響判斷——條文講的是程式。
+
+**偏離 Bevy／Godot 與膠水**：
+
+| Bevy／Godot | gyo2 | 理由 | 膠水 |
+|---|---|---|---|
+| Bevy：相機 `is_active = false` 時目標圖照舊（隱含的跨幀保留）；圖重建後內容沒了、不強制重畫 | 沿用是明示的一句 `PassReuse`；重建那一幀強制重畫 | 使用者的條文：每一幀誰寫了哪個 target 看得到，錯的順序是斷言、不是黑畫面 | 一種 pass、一個元件、`camera_render` 的一個判斷 |
+| Godot：`UPDATE_DISABLED` 改大小時只重配、不重畫（`renderer_viewport.cpp:831`、`:1135-1141`） | 沒有畫面就畫 | 同上；「沿用」只對有畫面的 target 有意義 | 同上 |
+| A1（卡片判）：後端照 swapchain／Capture 解析 follow 的大小 | 資料側解析，後端照要求建 | 「重建」要在合成前就是資料；同 Bevy 的 prepare_view_targets | `RenderTextures` 一個解析函式、一種要求 |
+
+Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`CaptureScene()`）是同一類「作者決定哪一幀拍」〔知，本機沒有原始碼〕。
+
+**比過、沒選的**：(A)／(B)／(C)（第 14.8 節）；「沿用 T＋附上重畫用的 pass，後端決定」（不用動大小的解析，但每幀照樣抽取、排 pass，只省 GPU）；「每幀真的複製」（使用者原本的想法：每幀多讀寫一整張、兩份記憶體，重建時複製的來源也沒了，一樣要強制重畫）。
+
+**使用者接受的代價**：推翻 A1 的卡片判「後端定 follow 的大小」；跟視窗走的 target 照來源 World 知道的視窗大小，可能比 swapchain 晚一幀；A1 的 follow 測試與突變換成新的輸入（守同一個性質）；重建時強制重畫是 Bevy／Godot 之外的膠水。
+
+**A1 條文的變化**（RD-11）：跨幀保留對「疊畫」不變（沒有清除色的 pass 從上一幀的內容開始，Bevy 的 `LoadOp::Load`）；**取樣**要這一幀畫過或沿用；新建（或重建）時第一個 pass 從透明黑開始照舊；follow 的大小由資料側解析（`Capture` 的大小不再決定 target 的大小）。
+
+**判定**：
+- **U1**（cpu，`render.data`）：大小在資料側：固定的建好就有大小、跟另一個的跟它、跟主目標的在主目標大小知道後才有；每次變了一個要求、一樣的不發；主目標大小未知時保留原大小；新建、改大小沒有畫面，畫過的有，沿用不給畫面。
+- **U2**（cpu，`render.extract`）：Disabled 的相機第一幀（沒有畫面）畫；之後放一句沿用、不畫；視窗變大（target 重建）那一幀畫；Once 在被看到的那一幀畫、下一幀起 Disabled（`world_render` 改的）。
+- **U3**（cpu／gpu）：`FirstUnwrittenRead`：這一幀前面畫過或沿用的不算；之後才畫的算；沿用的 target 取樣到上一幀的畫面（`[gf-reused-sampled]`，Lavapipe）；前一幀畫過、這一幀沒畫也沒沿用就取樣 → 斷言（`sdl_gpu.unwritten`，子行程）。
+- 既有測試的改動（只改輸入，性質不變）：A1 的 `render.data` 一案的要求清單多一個大小要求；`sdl_gpu.targets` 的 `TargetCase::Frame` 照 `Capture` 的大小呼叫 `SetMainSize`（跟主目標的 target 由資料側定大小）；A2 自己的 `gf-kept-sampled` 改成先沿用再取樣（`gf-reused-sampled`）、死亡測試改成「前一幀畫過、這一幀沒畫也沒沿用」。
+
+**突變**：`phase_mutations.json` 新增 10 個（U1～U3，id 見 dev_log）、退役 1 個（`rd-unwritten-drawn-ignored`：判斷只看資料、沒有 drawn 旗標了）；A1 的 `gt-target-not-resized`、`gt-follows-other-as-main` 改寫到資料側（同一個性質）。
+
+**RC**：
+- **RC-A2-5**：視窗大小比 swapchain 晚一幀成為可見的問題 → 後端把這一幀的 swapchain 大小回報給資料側（下一幀生效），或 `window_camera` 改在取 swapchain 之後寫。
+- **RC-A2-6**：要「每 N 幀更新一次」這種模式 → `TargetUpdate` 加值（加法；作者現在用 Once 自己排）。
 

@@ -381,6 +381,53 @@ TEST_CASE("render_extract: a camera on a source render target computes with its 
     CHECK_MESSAGE(Released(seen[3].asks, made[0]), "[re-target-released] the render World lets its target for it go");
 }
 
+namespace {
+
+std::size_t ReusesOf(const std::vector<R::RenderPass>& passes, const R::TextureId target) {
+    std::size_t n = 0;
+    for (const R::RenderPass& pass : passes) {
+        if (const auto* reuse = std::get_if<R::PassReuse>(&pass)) n += reuse->target == target ? 1 : 0;
+    }
+    return n;
+}
+
+} // namespace
+
+TEST_CASE("render_extract: a camera that does not update reuses its target's picture; a target without one is drawn") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    R::RenderTargets& targets = *source.ResourceMut<R::RenderTargets>();
+    // A monitor following the window's size, its camera Disabled from the start.
+    const C::CameraTarget monitor = targets.Create(R::SourceTargetDesc{});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    const std::vector<R::TextureId> made = TargetsMade(seen[0].asks);
+    REQUIRE(made.size() == 1);
+    CHECK_MESSAGE((PassesOn(seen[0].all, made[0]) > 0 && ReusesOf(seen[0].all, made[0]) == 0),
+                  "[re-update-first-drawn] a target with no picture is drawn, Disabled or not");
+    Frames(*p);
+    CHECK_MESSAGE((ReusesOf(seen[1].all, made[0]) == 1 && PassesOn(seen[1].all, made[0]) == 1),
+                  "[re-update-reused] then its camera does not draw: one reuse of its target, nothing drawn on it");
+    // The window grows: the monitor follows it, is made again and has no picture: drawn this frame (the forced draw).
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{1280, 720}, 1.0F});
+    Frames(*p);
+    CHECK_MESSAGE((ReusesOf(seen[2].all, made[0]) == 0 && PassesOn(seen[2].all, made[0]) > 0),
+                  "[re-update-resized-drawn] made again at the new size: drawn, not reused");
+    Frames(*p);
+    CHECK_MESSAGE(ReusesOf(seen[3].all, made[0]) == 1, "[re-update-reused-again] and reused after that");
+    // Once: drawn in the frame it is seen, Disabled from the next one.
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Once});
+    Frames(*p);
+    CHECK_MESSAGE((ReusesOf(seen[4].all, made[0]) == 0 && PassesOn(seen[4].all, made[0]) > 0), "[re-update-once-drawn] Once draws");
+    Frames(*p);
+    CHECK_MESSAGE(ReusesOf(seen[5].all, made[0]) == 1, "[re-update-once-then-disabled] then it is Disabled");
+    CHECK_MESSAGE(source.Get<R::TargetUpdate>(1)->mode == R::TargetUpdate::Mode::Disabled, "[wr-update-once-settled] world_render set it Disabled");
+}
+
 TEST_CASE("render_extract: a HUD camera on another layer draws after, without clearing; a gone entity is not drawn") {
     auto p = Make();
     K::World& game = GameOf(*p);

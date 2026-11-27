@@ -26,6 +26,8 @@ const RenderWorldOptions& OptionsOf(const RenderWorldOptions* given) {
 // After the frame was drawn (kCleanupStage): this frame's passes and texture asks are gone; the textures stay.
 SystemResult ClearRenderFrame(Kernel::ResMut<Render::RenderCommands> commands, Kernel::ResMut<Render::RenderTextures> textures,
                               Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images) {
+    // What this frame's passes drew on has a picture from now on (render-pipeline declaration 14.11).
+    Render::KeepPictures(commands.Get(), textures.Get());
     commands.Get().passes.clear();
     textures.Get().ClearPending();
     meshes.Get().ClearPending();

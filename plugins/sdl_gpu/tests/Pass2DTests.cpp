@@ -542,8 +542,10 @@ struct TargetCase {
         textures.Release(id);
         live.erase(std::find(live.begin(), live.end(), id));
     }
-    // A frame: this case's asks, then they are cleared (as render_world's Cleanup).
+    // A frame on a main target of size: this case's asks (targets that follow the main target take its size, as
+    // camera_render gives it), then they are cleared (as render_world's Cleanup).
     Picture Frame(const R::RenderCommands& commands, const R::TargetSize size = kSize) {
+        textures.SetMainSize(size);
         Picture picture;
         auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));

@@ -95,6 +95,24 @@ struct ClearColorConfig final {
     Color8 color{0, 0, 0, 255};
 };
 
+// When a camera on a render target draws (render-pipeline declaration 14.11; Godot's SubViewport render_target_update_mode,
+// scene/main/viewport.h:917-921, servers/rendering/renderer_viewport.cpp:831-860). No component: Always. On a frame it
+// does not draw, camera_render puts a PassReuse for its target (its last picture stands for this frame's); when the
+// target has no picture (made, or its size changed, and not drawn on since) it draws anyway. A camera on the main target
+// always draws (the window's picture is not kept from frame to frame).
+struct TargetUpdate final {
+    enum class Mode : std::uint8_t {
+        // Every frame (Godot's UPDATE_ALWAYS).
+        Always = 1,
+        // In the frame it is seen, then Disabled (Godot's UPDATE_ONCE): world_render sets Disabled at the start of the
+        // next frame.
+        Once,
+        // Not again until its target has no picture (Godot's UPDATE_DISABLED, which this one leaves on a resize).
+        Disabled,
+    };
+    Mode mode = Mode::Always;
+};
+
 // The source World's default clear colour (Bevy's ClearColor; opaque black here, where Bevy's is a dark grey: the
 // letterbox bars of a fixed-resolution game are black).
 struct ClearColor final {
@@ -224,6 +242,7 @@ inline void HashValue(Kernel::Hasher&, const Camera3dDepth&) {}
 inline void HashValue(Kernel::Hasher&, const Sprite&) {}
 inline void HashValue(Kernel::Hasher&, const Shape2d&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColorConfig&) {}
+inline void HashValue(Kernel::Hasher&, const TargetUpdate&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColor&) {}
 
 } // namespace GYO::Engine::Render

@@ -80,8 +80,7 @@ struct CapturedImage final {
 // What happened to the asks and draws of one frame that SDL or the data did not allow (counted, the frame goes on).
 struct FrameTally final {
     // Texture asks SDL refused (a texture too large, no memory, a format the device does not take for that use; a
-    // target that follows the main target, each frame it could not be made at that size): the id has no GPU
-    // texture; draws naming it are skipped.
+    // target's size): the id has no GPU texture (a target: until its next size); draws naming it are skipped.
     std::uint64_t refusedAsks = 0;
     // Mesh asks SDL refused (its buffers could not be made, or the frame's uploads failed): the id has no GPU buffers;
     // draws naming it are skipped.
@@ -112,12 +111,12 @@ public:
     GPUDevice& operator=(const GPUDevice&) = delete;
 
     // Applies the asks in order (textures, then meshes), then draws the passes on their targets and shows the
-    // window's picture. Target 0 is the window; a render target that follows the main target takes the window's size.
+    // window's picture. Target 0 is the window; a render target has the size render's asks give it.
     FrameOutcome Submit(std::span<const Engine::Render::TextureOp> asks, std::span<const Engine::Render::MeshOp> meshAsks,
                         const Engine::Render::RenderCommands& commands, FrameTally& tally);
-    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture; a
-    // render target that follows the main target takes this size) and reads it back, waiting for the GPU. A zero size
-    // is a Programmer Error.
+    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture;
+    // render targets keep the sizes render's asks give them) and reads it back, waiting for the GPU. A zero size is a
+    // Programmer Error.
     [[nodiscard]] Engine::Base::Result<CapturedImage, CaptureFailure> Capture(std::span<const Engine::Render::TextureOp> asks,
                                                                            std::span<const Engine::Render::MeshOp> meshAsks,
                                                                            const Engine::Render::RenderCommands& commands,

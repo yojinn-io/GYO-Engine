@@ -10,10 +10,9 @@
 //
 // The order of the list is the GPU's order (Design Invariant RP-3, render-pipeline declaration section 14): nothing
 // reorders, culls or aliases passes (Bevy's render graph is systems since #22144; no graph object). Each pass names
-// what it writes (TargetOf; a 3D pass's depth target) and what it samples (ReadsOf). A pass may sample a render target
-// only once some pass drew on it since it was made or made again at a new size (earlier in this frame, or in an
-// earlier frame: a target keeps its picture); sampling one with no picture yet is a Programmer Error the backend
-// asserts.
+// what it writes (WritesOf) and what it samples (ReadsOf). A pass samples a render target only after an earlier pass
+// of the same frame drew on it or reused it (PassReuse); one neither drawn on nor reused, then sampled, is a
+// Programmer Error the backend asserts (FirstUnwrittenRead).
 //
 // Coordinates of a 2D pass are view units with y down: the pass's view rectangle is stretched over the whole
 // target, its top-left corner on the target's top-left pixel. Texture coordinate (0, 0) is a texture's top-left
@@ -246,42 +245,57 @@ struct PassDepth final : MeshGeometry {
     std::vector<MeshDraw> draws;
 };
 
-using RenderPass = std::variant<Pass2D, Pass3D, PassFullscreen, PassDepth>;
+// "This frame, target reuses the picture it has from the last frame" (render-pipeline declaration 14.11): nothing is
+// drawn, and for what later passes sample the target counts as written this frame (RP-3). camera_render puts one for a
+// camera whose TargetUpdate says not to draw this frame; an author's own System may put one for a target it draws
+// itself. Reusing a target that has no picture (RenderTextures::HasPicture: made, or its size changed, and not drawn on
+// since) samples nothing defined: the one who reuses checks it and draws instead.
+struct PassReuse final {
+    TextureId target;
+};
+
+using RenderPass = std::variant<Pass2D, Pass3D, PassFullscreen, PassDepth, PassReuse>;
 
 // What a pass draws on. Its colour target when it draws colour (every pass but a depth-only one): colourTarget,
 // nullopt being the main target. Its depth target when it names one (Pass3D::depth, a depth-only pass's target).
+// A reuse pass draws nothing and reuses its target's picture: reused (colour false).
 struct PassWrites final {
     bool colour = true;
     std::optional<TextureId> colourTarget;
     std::optional<TextureId> depthTarget;
+    std::optional<TextureId> reused;
 
-    // Whether it draws on this render target (as colour or as depth).
-    [[nodiscard]] bool Writes(const TextureId id) const noexcept { return (colour && colourTarget == id) || depthTarget == id; }
-    // Whether it draws colour on this target (nullopt: the main one).
-    [[nodiscard]] bool WritesColour(const std::optional<TextureId>& target) const noexcept { return colour && colourTarget == target; }
+    // Whether, this frame, the render target's picture is this pass's (drawn on as colour or as depth, or reused).
+    [[nodiscard]] bool Writes(const TextureId id) const noexcept {
+        return (colour && colourTarget == id) || depthTarget == id || reused == id;
+    }
+    // Whether the target's colour is this pass's (drawn or reused; nullopt: the main target, which is never reused).
+    [[nodiscard]] bool WritesColour(const std::optional<TextureId>& target) const noexcept {
+        return (colour && colourTarget == target) || (target && reused == target);
+    }
 };
 [[nodiscard]] PassWrites WritesOf(const RenderPass& pass) noexcept;
 
-// The target the backend begins the pass on: its colour target (nullopt: the main target), or a depth-only pass's
-// depth target.
+// The target the backend begins the pass on: its colour target (nullopt: the main target), a depth-only pass's
+// depth target, or a reuse pass's target (nothing is begun on it).
 [[nodiscard]] std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept;
 
 // What a pass samples, in the order it names them: its draws' textures (the white texture left out) or a full-screen
 // pass's inputs. What it draws on (WritesOf) is not sampled: a backend skips a draw that names it.
 [[nodiscard]] std::vector<TextureId> ReadsOf(const RenderPass& pass);
 
-// RP-3's check (render-pipeline declaration 14.3, point 5), as data: the first pass that samples one of the render
-// targets in noPicture (none drawn on since it was made or made again) before a pass of this frame drew on it. drawn:
-// whether the backend draws each pass (a pass on a target it has no picture for draws nothing); empty: every pass.
-// What a pass samples of what it draws on itself is not counted (the backend skips that draw).
+// RP-3 (render-pipeline declaration 14.3 point 5 and 14.11): "讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言" —
+// the first pass that samples one of the render targets (targets: every render target's id) when no earlier pass of
+// these passes drew on it or reused it. What a pass samples of what it draws on itself is not counted (the backend
+// skips that draw). Data alone: what a backend could not draw (a target it has no texture for) does not change it.
 struct UnwrittenRead final {
     std::size_t pass = 0;
     TextureId target;
 
     friend bool operator==(const UnwrittenRead&, const UnwrittenRead&) = default;
 };
-[[nodiscard]] std::optional<UnwrittenRead> FirstUnwrittenRead(std::span<const RenderPass> passes, std::span<const bool> drawn,
-                                                              std::span<const TextureId> noPicture);
+[[nodiscard]] std::optional<UnwrittenRead> FirstUnwrittenRead(std::span<const RenderPass> passes, std::span<const TextureId> targets);
+
 
 // This frame's passes, drawn in their order (render_world's Resource; empty at the start of each frame).
 struct RenderCommands final {
@@ -290,6 +304,10 @@ struct RenderCommands final {
 
 // The render World is not decided state: nothing of it goes into a consistency fingerprint (as sdl_window's handle).
 inline void HashValue(Kernel::Hasher&, const RenderCommands&) {}
+
+// After a frame (render_world's Cleanup): the render targets its passes drew on have a picture (RenderTextures::MarkDrawn);
+// a reused one keeps what it had.
+void KeepPictures(const RenderCommands& commands, RenderTextures& textures);
 
 // Clip space of a view: clip = position * scale + offset (x right and y up, -1 to 1 over the target).
 struct ViewTransform final {
