@@ -279,18 +279,30 @@ TEST_CASE("world: a gameplay set is registered after the core: the core's decisi
     CHECK(mine.back().find("ProbeMark") != std::string::npos);
 }
 
-TEST_CASE("world: a Client whose arena carries another block for a set the mode turns on is a content mismatch (rules)") {
+TEST_CASE("world: a Client whose arena carries another block for a set the mode turns on is a content mismatch (arena data)") {
     // The Match's first arena carries marker 9 for the probe; the Client's, marker 8. Same mode, same arena, same walls.
     auto other = std::make_shared<PW::GameContent>(*WithProbe());
     std::string error;
     auto blocks = PW::ReadArenaSets(R"({"sets": {"probe": {"marker": 8}}})", other->sets, error);
     REQUIRE_MESSAGE(blocks.has_value(), error);
     other->arenaSets.front() = std::move(*blocks);
-    CHECK(other->MatchRulesDigest(1, 0) != WithProbe()->MatchRulesDigest(1, 0));
-    // The mode leaves the set off: the arena's block is not played, the digest is the mode's.
-    CHECK(other->MatchRulesDigest(0, 0) == WithProbe()->modes.front().rulesDigest);
+    CHECK(other->ArenaDigest(1, 0) != WithProbe()->ArenaDigest(1, 0));
+    // The mode leaves the set off: the arena's block is not played, the digest is the one of no block.
+    CHECK(other->ArenaDigest(0, 0) == WithProbe()->ArenaDigest(0, 1));
+    // The mode's own rules digest does not see the arena (design review 2, S1).
+    CHECK(other->modes[1].rulesDigest == WithProbe()->modes[1].rulesDigest);
     Session session(1, 4, 0, other, {}, 60, std::nullopt, WithProbe(), 1);
     session.Frames(90);
     const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
-    CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Rules, "[pvp-set-arena-digest] " << mismatch.reason);
+    CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::ArenaData, "[pvp-set-arena-digest] " << mismatch.reason);
+}
+
+TEST_CASE("world: a Client of another arena than the Match's, only the Match's carrying a block for the mode's set, is told another arena") {
+    // The Match plays arena 0 (the probe's block), the Client arena 1 (none), both in probe_on: another arena, which the
+    // Client can build its game again on -- not other rules (design review 2, S1).
+    Session session(1, 4, 0, WithProbe(), {}, 60, std::size_t{1}, WithProbe(), 1);
+    session.Frames(90);
+    const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+    CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Arena, "[pvp-set-other-arena] " << mismatch.reason);
+    CHECK(mismatch.matchArena == WithProbe()->arenas[0].id);
 }

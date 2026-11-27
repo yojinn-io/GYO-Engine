@@ -13,6 +13,7 @@
 #include "object_fps_pvp/sim/Arena.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
+#include "object_fps_pvp/world/ContentHash.hpp"
 #include "object_fps_pvp/world/GameplaySets.hpp"
 
 #include <cstdint>
@@ -21,12 +22,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
-namespace object_fps_pvp::sim {
-// The rule tables' values, field by field, for the rules digest (the sim library has no Kernel).
-void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v);
-void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v);
-} // namespace object_fps_pvp::sim
 
 namespace object_fps_pvp::world {
 

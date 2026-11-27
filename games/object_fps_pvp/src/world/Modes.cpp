@@ -2,7 +2,6 @@
 
 #include "data/JsonFields.hpp"
 
-#include "engine/base/Fnv1a.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllText.hpp"
 #include "engine/kernel/Hash.hpp"
@@ -82,7 +81,7 @@ std::optional<ModeFile> ParseMode(const std::string_view text, const std::vector
         if (data::Integer(data::Member(json, "version"), "version") != 1) throw std::runtime_error("unsupported mode version");
         ModeFile mode;
         mode.id = data::String(data::Member(json, "id"), "id");
-        if (mode.id.empty() || mode.id.size() > 64) throw std::runtime_error("id is 1 to 64 characters");
+        if (mode.id.empty() || mode.id.size() > sim::kMaxContentIdBytes) throw std::runtime_error("id is 1 to 64 characters");
         mode.name = data::String(data::Member(json, "name"), "name");
         for (const auto rule : data::AsObject(data::Member(json, "rules"), "rules")) {
             std::string kind(rule.key);
@@ -188,37 +187,6 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
     return modes;
 }
 
-} // namespace object_fps_pvp::world
-
-namespace object_fps_pvp::sim {
-
-void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v) {
-    HashValue(h, v.crouchBodyHeight);
-    HashValue(h, v.crouchEyeHeight);
-    HashValue(h, v.crouchSpeedScale);
-    HashValue(h, v.sprintSpeedScale);
-    HashValue(h, v.holdJump);
-}
-
-void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v) {
-    HashValue(h, v.maximumHp);
-    HashValue(h, v.shotDamage);
-    HashValue(h, v.maximumShotDamage);
-    HashValue(h, v.headPermille);
-    HashValue(h, v.bodyPermille);
-    HashValue(h, v.legPermille);
-    HashValue(h, v.shotRange);
-    HashValue(h, v.magazineCapacity);
-    HashValue(h, v.cooldownSeconds);
-    HashValue(h, v.reloadSeconds);
-    HashValue(h, v.respawnSeconds);
-}
-
-} // namespace object_fps_pvp::sim
-
-
-namespace object_fps_pvp::world {
-
 std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& table, const sim::StanceRules& stance,
                           const sim::CombatRules& combat) {
     K::Hasher h;
@@ -236,8 +204,7 @@ std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& 
     // The rule tables, by kind (movement), and the combat rules (the game's defaults until a rule table carries them).
     HashValue(h, stance);
     HashValue(h, combat);
-    const auto bytes = h.Data();
-    return GYO::Engine::Base::Fnv1a64(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    return Digest64(h);
 }
 
 } // namespace object_fps_pvp::world

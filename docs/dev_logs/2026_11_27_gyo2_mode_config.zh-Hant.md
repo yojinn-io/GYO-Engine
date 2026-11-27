@@ -64,3 +64,9 @@ Owner：模式配置的任務卡。分支 `claude/gyo2-mode-config-declaration`�
 - 使用者先選 U2 (b)；卡片寫小宣告（宣告第 12 節）、照指示在改 Kernel 條文前停下回報；使用者「那這樣沒有問題，我同意你的看法。」後實作。
 - `Condition<&Fn>(name, value)`、`ResourceExists`／`ResourceEquals`／`ResourceExistsAndEquals`（照 Bevy `condition.rs:688、728、770`）、`ConditionRef::Identity`（值的雜湊進指紋；沒有值的條件指紋不變）。遊戲層的 slot 模板表拿掉。
 - 檢驗：kernel、authority、rollback、net、state_machine、orchestration、world_time、scenario、object_fps_pvp 的 ctest 共 136 項全過；compile-fail 樣本多兩個變體、照預期被拒。突變：Kernel `cv-` 6 個（值不進 identity、沒有值也加後綴、不存在時回 true、相等反過來、存在恆真、值沒傳進去）6/6 killed；遊戲層 27 個重跑 27/27 killed。A/B（macOS）權威 digest 仍逐位元組相同。
+
+## 第 2 輪審查（`797471c1..517d52a8`，含 `engine/`）
+
+- 設計審查 blocker 0、should 3；純淨 Code Review 17 條。兩份都抓到同一個邏輯錯誤：arena 的組區塊併在 `rulesDigest` 裡、又排在 Arena 之前比，換 arena 會被判成規則不同（遊戲的組表目前是空的，產品路徑走不到）。拆成 `MatchInfo::arenaDigest`（Codec 5）、比對順序加 ArenaData，補測試。
+- 其他處置與不採的理由：宣告 12.5。
+- 檢驗：kernel、authority、rollback、net、state_machine、orchestration、world_time、scenario、object_fps_pvp 的 ctest 136 項全過；Go 全過。過時的 find 17 個照新程式改寫；突變 Kernel 9/9（`cv-` 8＋`ks-s3-set-conditions-dropped`）、遊戲層 51/51 killed（`pvp-set-arena-undigested` 的期待字串先改了一次）。A/B（macOS）權威 digest 仍逐位元組相同，報告差異是 `MatchInfo` v2 → v5。

@@ -260,12 +260,12 @@ int main(int argc, char** argv) {
     auto shared = std::make_shared<const PW::GameContent>(std::move(*content));
     std::size_t arena = 0;
     if (!arenaId.empty()) {
-        const auto* found = shared->Find(arenaId);
-        if (found == nullptr) {
+        const auto found = shared->FindArena(arenaId);
+        if (!found) {
             Log(GYO::Engine::Base::LogLevel::Error, "no installed arena has the id '" + arenaId + "'");
             return 2;
         }
-        arena = static_cast<std::size_t>(found - shared->arenas.data());
+        arena = *found;
     }
     std::size_t mode = 0;
     if (!modeId.empty()) {

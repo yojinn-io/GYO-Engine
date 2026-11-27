@@ -18,10 +18,6 @@ std::optional<std::vector<PW::ModeContent>> Load(const ModeFolder& folder, std::
     return PW::LoadModes(folder.root.string(), content.arenas, content.combat, PW::GameSets(), error);
 }
 
-std::string Mode(const std::string& id, const std::string& rules = R"({"movement": "rules/movement_rules.json"})",
-                 const std::string& sets = "{}", const std::string& arenas = "[]") {
-    return ModeText(id, rules, sets, arenas);
-}
 
 } // namespace
 
@@ -42,10 +38,10 @@ TEST_CASE("world: a mode file reads; a second mode with other rules has another 
     folder.Write("rules/slow.json", R"({"version": 2, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.25,)"
                                      R"( "sprint_speed_scale": 1.0, "hold_jump": true})");
     // The same values as core_pvp written otherwise (CRLF, other spaces): the digest does not see the bytes.
-    folder.Modes({{"a.json", Mode("core_pvp")},
+    folder.Modes({{"a.json", ModeText("core_pvp")},
                   {"b.json", "{\r\n  \"arenas\": [],\r\n \"sets\": {},  \"rules\": {\"movement\": \"rules/movement_rules.json\"},\r\n"
                              "\"version\": 1, \"id\": \"copy\", \"name\": \"N\"}\r\n"},
-                  {"c.json", Mode("slow", R"({"movement": "rules/slow.json"})", "{}", R"(["pvp_training_v1"])")}});
+                  {"c.json", ModeText("slow", R"({"movement": "rules/slow.json"})", "{}", R"(["pvp_training_v1"])")}});
     std::string error;
     const auto modes = Load(folder, error);
     REQUIRE_MESSAGE(modes.has_value(), error);
@@ -66,7 +62,7 @@ TEST_CASE("world: the rules digest follows each rule value: the movement rules a
     const auto digestOf = [&](const std::string& movement, const sim::CombatRules& combat) {
         ModeFolder folder;
         folder.Write("rules/movement.json", movement);
-        folder.Modes({{"a.json", Mode("same", R"({"movement": "rules/movement.json"})")}});
+        folder.Modes({{"a.json", ModeText("same", R"({"movement": "rules/movement.json"})")}});
         std::string error;
         const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, PW::GameSets(), error);
         REQUIRE_MESSAGE(modes.has_value(), error);
@@ -126,21 +122,21 @@ TEST_CASE("world: a mode that names an unknown rule kind, set or arena, no movem
         CHECK_FALSE_MESSAGE(modes.has_value(), "refused: " << expected);
         CHECK_MESSAGE(error.find(expected) != std::string::npos, error);
     };
-    refused({{"a.json", Mode("a", R"({"movement": "rules/movement_rules.json", "weapons": "rules/movement_rules.json"})")}},
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json", "weapons": "rules/movement_rules.json"})")}},
             "no rule kind 'weapons'");
-    refused({{"a.json", Mode("a", "{}")}}, "no movement rules");
-    refused({{"a.json", Mode("a", R"({"movement": "rules/movement_rules.json"})", R"({"doors": {}})")}}, "no gameplay set 'doors'");
-    refused({{"a.json", Mode("a", R"({"movement": "rules/movement_rules.json"})", "{}", R"(["no_such_arena"])")}},
+    refused({{"a.json", ModeText("a", "{}")}}, "no movement rules");
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json"})", R"({"doors": {}})")}}, "no gameplay set 'doors'");
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json"})", "{}", R"(["no_such_arena"])")}},
             "no installed arena has the id 'no_such_arena'");
-    refused({{"a.json", Mode("same")}, {"b.json", Mode("same")}}, "another installed mode has the id 'same'");
-    refused({{"a.json", Mode(std::string(65, 'a'))}}, "id is 1 to 64 characters");
-    refused({{"a.json", Mode("a", R"({"movement": "../rules/movement_rules.json"})")}}, "not a path inside the content");
-    refused({{"a.json", Mode("a", R"({"movement": "rules/missing.json"})")}}, "missing.json");
+    refused({{"a.json", ModeText("same")}, {"b.json", ModeText("same")}}, "another installed mode has the id 'same'");
+    refused({{"a.json", ModeText(std::string(65, 'a'))}}, "id is 1 to 64 characters");
+    refused({{"a.json", ModeText("a", R"({"movement": "../rules/movement_rules.json"})")}}, "not a path inside the content");
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/missing.json"})")}}, "missing.json");
 }
 
 TEST_CASE("world: which arenas a mode plays is one question to the content: every choice asks GameContent::Plays") {
     ModeFolder folder;
-    folder.Modes({{"a.json", Mode("all")}, {"b.json", Mode("one", R"({"movement": "rules/movement_rules.json"})", "{}", R"(["pvp_corners_v1"])")}});
+    folder.Modes({{"a.json", ModeText("all")}, {"b.json", ModeText("one", R"({"movement": "rules/movement_rules.json"})", "{}", R"(["pvp_corners_v1"])")}});
     std::string error;
     auto modes = Load(folder, error);
     REQUIRE_MESSAGE(modes.has_value(), error);

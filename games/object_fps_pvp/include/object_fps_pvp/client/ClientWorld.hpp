@@ -161,10 +161,7 @@ struct ClientView final {
     double jitterTicks = 0.0;                       // ClockSync::jitterTicks
     bool connected = false;                         // the own Peer is there
     GYO::Kernel::EntityId ownPlayer = 0;            // world::OwnPlayer of the Sim World (0: not yet)
-    std::string mismatch;                           // world::ContentMismatch::reason
-    std::string mismatchArena;                      // world::ContentMismatch::matchArena
-    std::string mismatchMode;                       // world::ContentMismatch::matchMode
-    world::MismatchKind mismatchKind = world::MismatchKind::None;  // world::ContentMismatch::kind
+    world::ContentMismatch mismatch;                // what differs from the Match's (kind None: nothing)
     world::MapLoad mapLoad;                         // how far the Sim (or Solo) World has come with its map
     std::uint64_t deaths = 0;                       // a Local World's: its player's deaths so far (world::LocalDeaths)
     bool started = false;                           // the match has started (world::MatchInfo::phase)

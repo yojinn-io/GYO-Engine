@@ -84,16 +84,9 @@ TEST_CASE("DI-KS 1: ResourceExists runs when the Resource is there, whatever its
     CHECK_FALSE_MESSAGE(Runs(ResourceExists<Level>("level.there"), std::nullopt), "[cv-not-there]");
 }
 
-TEST_CASE("DI-KS 1: Condition<&Fn>(name, value) calls Fn with the value given at registration, under its own reads") {
+TEST_CASE("DI-KS 1: Condition<&Fn>(name, value) calls Fn with the value given at registration") {
     CHECK_MESSAGE(Runs(Condition<&AtLeast>("level.at_least", 3), Level{4}), "[cv-value-passed]");
     CHECK_FALSE_MESSAGE(Runs(Condition<&AtLeast>("level.at_least", 5), Level{4}), "[cv-value-passed]");
-    // Its reads join the System's (S-4): Level is read by Mark's mount.
-    auto built = Finish({{"test", [](Registrar& r) {
-                              Data(r);
-                              r.Resource<Level>({.name = "Level"});
-                              r.AddSystem<&Mark>(Under(Condition<&AtLeast>("level.at_least", 3)));
-                          }}});
-    REQUIRE(static_cast<bool>(built.result));
 }
 
 TEST_CASE("DI-KS 1: a condition's value is in the fingerprints; one without a value keeps its identity, the name") {

@@ -1142,7 +1142,7 @@ TEST_CASE("client: a game whose Match plays another mode is built again on it; t
         Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, other, 0, ShippedContent());
         REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
                         "[pvp-mode-rules-left] a mode with other rules is not played");
-        CHECK_MESSAGE(setup.Scene().status.find("rules digest") != std::string::npos, setup.Scene().status);
+        CHECK_MESSAGE(setup.Scene().status.find("の規則が Match と違います") != std::string::npos, setup.Scene().status);
     }
     {
         // Another character (the user's decision U1): not played again, back with the reason.
@@ -1151,7 +1151,7 @@ TEST_CASE("client: a game whose Match plays another mode is built again on it; t
         Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, other, 0, ShippedContent());
         REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
                         "[pvp-character-left] a game of another character is not played");
-        CHECK_MESSAGE(setup.Scene().status.find("character digest") != std::string::npos, setup.Scene().status);
+        CHECK_MESSAGE(setup.Scene().status.find("キャラクター") != std::string::npos, setup.Scene().status);
     }
 }
 

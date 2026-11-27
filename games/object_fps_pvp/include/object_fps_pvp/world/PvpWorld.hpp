@@ -84,9 +84,10 @@ struct GameContent final {
     [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
     // Whether the mode (an index into modes) plays the arena (an index into arenas): the one place every choice asks.
     [[nodiscard]] bool Plays(std::size_t mode, std::size_t arena) const;
-    // What a Client compares with the Match's for a match of this mode on this arena (MatchInfo::rulesDigest): the
-    // mode's rules digest with the blocks the arena carries for the sets the mode turns on.
-    [[nodiscard]] std::uint64_t MatchRulesDigest(std::size_t mode, std::size_t arena) const;
+    // The digest of the blocks the arena carries for the sets the mode turns on (MatchInfo::arenaDigest; one formula,
+    // also when there is none). The mode's own rules are ModeContent::rulesDigest: kept apart, so another arena is
+    // known as another arena (built again on it), not as other rules (design review 2, S1).
+    [[nodiscard]] std::uint64_t ArenaDigest(std::size_t mode, std::size_t arena) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
@@ -94,9 +95,10 @@ struct GameContent final {
 [[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
 
 // What differs from the Match's (FollowMatchContent compares in this order): another mode, the same mode with other
-// rules (the rules digest), another character (the character digest), another arena, the same arena with other walls
-// (the walls digest).
-enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, Walls };
+// rules (the rules digest), another character (the character digest), another arena, the same arena with other blocks
+// for the sets the mode turns on (the arena digest), the same arena with other walls (the walls digest). Mode and Arena
+// are another match this Client may have; the others are other content.
+enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, ArenaData, Walls };
 
 // Why this Client cannot play the Match's match (kind None: it can). Set by FollowMatchContent; it only says what
 // differs, the program decides (it may build its game again on matchMode and matchArena when it has them -- kind Mode
@@ -111,12 +113,9 @@ struct ContentMismatch final {
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
 
-// The character's digest (the user's decision U1, mode-config declaration 11.7): what the Match judges the shots on
-// and a Client predicts and draws with -- the body model's catalog id, its skeleton (each node's name, parent and rest
-// pose), the clips as retargeted onto it (every key), the upper body's nodes, the animation rules, the scale and anchor
-// to the world, and the hit shapes on the bones (hitbox.json). The meshes' vertices and the materials are left out (the
-// picture, not the play). The values through the Kernel's Hasher, never the files' bytes.
-[[nodiscard]] std::uint64_t CharacterDigest(const character::CharacterRig& character);
+// The rules a World of this mode on this arena plays with (both ends: GameRules is the same at the Match and every
+// Client); its walls digest is put once its map is built (LoadArena).
+[[nodiscard]] GameRules GameRulesOf(const GameContent& content, std::size_t mode, std::size_t arena);
 
 // Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
 // nullopt with error naming the file and what was wrong: a file that does not read or parse, an arena whose stance

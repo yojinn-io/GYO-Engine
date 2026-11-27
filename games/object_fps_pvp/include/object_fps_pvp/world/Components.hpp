@@ -134,8 +134,10 @@ struct GameRules final {
     sim::CombatRules combat;
     // The arena's walls (BoxSet::Digest): a Client compares it with the Match's (MatchInfo).
     std::uint64_t wallsDigest = 0;
-    // The character's (world::CharacterDigest): a Client compares it with the Match's (MatchInfo).
+    // The character's (world::CharacterDigest) and the arena's blocks for the mode's sets (GameContent::ArenaDigest): a
+    // Client compares them with the Match's (MatchInfo).
     std::uint64_t characterDigest = 0;
+    std::uint64_t arenaDigest = 0;
     // The character whose bones carry the hit shapes (LoadGameContent always gives one).
     std::shared_ptr<const character::CharacterRig> character;
 };
@@ -154,6 +156,7 @@ struct MatchInfo final {
     std::string modeId;
     std::uint64_t rulesDigest = 0;
     std::uint64_t characterDigest = 0;
+    std::uint64_t arenaDigest = 0;
     MatchPhase phase = MatchPhase::Waiting;
     // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
     std::uint64_t startTick = 0;

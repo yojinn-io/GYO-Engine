@@ -6,13 +6,16 @@
 //
 //   ResourceExists<R>(name)                   R is there                                      (resource_exists, :688)
 //   ResourceEquals<R>(name, value)            *R == value; R not there is an assertion         (resource_equals, :728;
-//                                             Bevy panics)
+//                                             Bevy fails the parameter's validation and gives it to its error handler,
+//                                             a panic by default; a GYO condition returns bool and the Kernel has no
+//                                             error handler, DI-KS 2)
 //   ResourceExistsAndEquals<R>(name, value)   R is there and *R == value; not there: false    (resource_exists_and_equals,
 //                                                                                              :770)
 
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
 
+#include <concepts>
 #include <string>
 #include <utility>
 
@@ -23,11 +26,11 @@ template <class R>
 bool ResourceIsThere(Res<R> resource) {
     return resource.Present();
 }
-template <class R>
+template <std::equality_comparable R>
 bool ResourceIs(const R& value, Res<R> resource) {
     return *resource == value;
 }
-template <class R>
+template <std::equality_comparable R>
 bool ResourceIsThereAndIs(const R& value, Res<R> resource) {
     return resource.Present() && *resource == value;
 }
@@ -38,12 +41,12 @@ template <class R>
     return Condition<&Detail::ResourceIsThere<R>>(std::move(name));
 }
 
-template <class R>
+template <std::equality_comparable R>
 [[nodiscard]] ConditionRef ResourceEquals(std::string name, R value) {
     return Condition<&Detail::ResourceIs<R>>(std::move(name), std::move(value));
 }
 
-template <class R>
+template <std::equality_comparable R>
 [[nodiscard]] ConditionRef ResourceExistsAndEquals(std::string name, R value) {
     return Condition<&Detail::ResourceIsThereAndIs<R>>(std::move(name), std::move(value));
 }

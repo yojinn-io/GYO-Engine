@@ -196,7 +196,7 @@ Lyra 的分法：**Engine 給「執行期啟用一包程式與內容」的機制
   2. `rules` 裡的每一張表（第一批：`StanceRules`）；
   3. 程式裡的 `CombatRules`（搬進資料之前也要比）；
   4. 角色的判定形狀（`hitbox.json` 解析後的值；#365 第 1.4 節第 1 點，(1c) 之後標籤名由它宣告）；（11.7 U1 之後）角色移到自己的 `characterDigest`，連同骨架與動畫，見 11.7；
-  5. （實作後補，設計審查 S1）這一場的 arena 檔裡、模式開著的組的區塊（門的位置、撤離點……）。所以比對值是「模式＋arena」的：`GameContent::MatchRulesDigest(mode, arena)`，模式沒開任何組的區塊時就是模式本身的 digest。
+  5. （實作後補，設計審查 S1）這一場的 arena 檔裡、模式開著的組的區塊（門的位置、撤離點……）。~~所以比對值是「模式＋arena」的：`GameContent::MatchRulesDigest(mode, arena)`。~~（第 2 輪設計審查 S1：換 arena 會被判成規則不同）另一欄 `MatchInfo::arenaDigest`（`GameContent::ArenaDigest(mode, arena)`），在 arena id 之後比；`rulesDigest` 只放模式本身。
 - **Client 的判斷**（`FollowMatchArena` 改成也比模式）：`modeId` 不同、或 `rulesDigest` 不同 → `ContentMismatch`，`reason` 寫哪一項不同，並帶 `matchMode`。模式的比對不等地圖讀完（和「另一個 arena 當場就知道」同一個時機）。
 - **程式怎麼處理**（不是 Engine 的事，照現在 arena 的做法）：Client 有那個模式、而且只是模式不同 → 用 Match 的模式重建 World（`ClientWorld.cpp:1408-1423` 加上模式）；digest 不同（同名模式、內容不同）→ 不能玩，回大廳並顯示原因。
 
@@ -356,11 +356,11 @@ v8-arch-gyo2-mode-config（一個 PR，開向 gyo2）
 ### 11.2 和本宣告不同的地方
 
 - `GameplaySet` 多了 `readArena`（3.2 末段「arena 也能帶區塊」的落實）；`SetData`＝讀到的值的 digest＋放進 World 的函式（宣告沒寫到的細節）。`put` 在每一端都執行、由比對值保證兩端相同，所以組的設定不複製。
-- 比對值加上 arena 區塊（3.3 第 5 項）。
+- 比對值加上 arena 區塊（3.3 第 5 項），另開一欄 `arenaDigest`（`MatchInfo` Codec 5），不併進 `rulesDigest`。
 - `ContentMismatch` 加 `kind`（Mode／Rules／Arena／Walls）：只說發生了什麼；Client 只在 Mode／Arena 時重建（審查前，同模式 digest 不同且 arena 也不同時會白白重建一次）。`FollowMatchArena` 改名 `FollowMatchContent`。
 - 「模式玩不玩這個 arena」只有一個出口 `GameContent::Plays`；大廳與單人只列選到的模式玩的 arena（`ModeChoice::maps`）。
 - 模式 id 限 1～64 字元（和 arena 同一條；`MatchInfo` 的 Codec 只收 64）。
-- 規則表的雜湊改成每個型別一個 `HashValue`（`StanceRules`、`CombatRules`、`HitShapeDefinition`；放在 `world/Modes.hpp`，因為 sim 與 character 函式庫不連 Kernel）。digest 的值不變（同樣的位元組）。
+- 規則表的雜湊改成每個型別一個 `HashValue`（`StanceRules`、`CombatRules`、`AnimationRules`、`HitShapeDefinition`；放在 `world/ContentHash.hpp`，因為 sim 與 character 函式庫不連 Kernel），`CharacterDigest` 與 `Digest64` 也在那裡。digest 的值不變（同樣的位元組）。
 - 第 5 節的「另比 `BoxSet` digest」：見 11.4。
 
 ### 11.3 檢驗
@@ -433,7 +433,7 @@ Linux（Ryzen 7 6800H，16 執行緒），head `df375eec`、base `6be715a6`；�
 - `MatchInfo` 加 `characterDigest`（Codec 3 → 4），和 `wallsDigest` 同一種：讀內容時算一次（`GameContent::characterDigest`，`CharacterDigest`），Match 在 `Prepare` 放進 `MatchInfo`，Client 的 `GameRules` 帶自己的；連線時多比 8 bytes。
 - 範圍：身體模型的 catalog id、骨架（每個節點的名字、父節點、靜止姿勢）、重定向到它上面的 clip（每條 track 的每個 key）、上半身的節點、動畫規則、scale 與 anchor、骨頭上的命中形狀。網格的頂點與材質不收（畫面，不是玩法）。值經 Kernel 的 Hasher，不 hash 檔案位元組。
 - 命中形狀、scale、anchor 從 `rulesDigest` 移到這裡（審查 P5：hitbox 不同時不再被說成「模式不同」）；`LoadModes`、`RulesDigest` 不再收角色。
-- 不一致：`MismatchKind::Character`，原因「the character differs from the Match's (character digest: skeleton, clips, hit shapes)」；比對順序 Mode → Rules → Character → Arena → Walls。角色不同不重建（同一個 Client 沒有別的角色），帶原因回大廳。
+- 不一致：`MismatchKind::Character`，原因「the character differs from the Match's (character digest: skeleton, clips, hit shapes)」；比對順序 Mode → Rules → Character → Arena → ArenaData → Walls（第 2 輪審查後加 ArenaData）。角色不同不重建（同一個 Client 沒有別的角色），帶原因回大廳。
 - 檢驗：本機 `object_fps_pvp.*` 15 項與 Go 全過；A/B（macOS）權威 digest 仍相同，報告差異是 `MatchInfo` v2 → v4；突變 27 個全部 killed。Linux 的 A/B 與 S5 沒有重跑（`MatchInfo` 多 8 bytes，讀圖與權威的程式不變）。
 - 測試：world `[pvp-character-mismatch]`、`[pvp-character-reason]`（Client 的角色不同被擋下、原因看得出來；一致時連上的情況由既有的各案涵蓋）；`world: the character digest follows...`（模型 id、骨架、clip、動畫規則、命中形狀各改一個值，digest 都變）；client `[pvp-character-left]`（回大廳、狀態列有原因）。
 
@@ -480,7 +480,7 @@ Linux，2026-11-27（U4 之後，約 1 小時）。證據：主 checkout `build/
 - **`Condition<&Fn>(name, value)`**：`Fn` 的第一個參數是 `const V&`，就是登記時給的那個值（複製一份、之後不變）；其餘參數照現有條件的規則（唯讀、存取從簽名推，S-4、S-5）。可呼叫物本身仍是非成員函式、無捕獲。
 - **Kernel 給三個常用條件，照 Bevy 的名字與語意**：
   - `ResourceExists<R>(name)`：有值就 true。
-  - `ResourceEquals<R>(name, value)`：`*res == value`；沒有 Resource 時是斷言，對應 Bevy 的 panic（`Res` 的取值本來就斷言）。
+  - `ResourceEquals<R>(name, value)`：`*res == value`；沒有 Resource 時是斷言（`Res` 的取值本來就斷言）。Bevy 在那時是參數驗證失敗、交給 error handler（預設 panic，可換；條件當 false：`crates/bevy_ecs/src/system/system_param.rs:904`、`schedule/executor/single_threaded.rs:246-262`）。GYO 的條件回 `bool`、Kernel 沒有 error handler（DI-KS 2），所以用斷言（第 2 輪設計審查 N1）。
   - `ResourceExistsAndEquals<R>(name, value)`：沒有就 false。
   - `R` 要有 `operator==`。
 - **指紋**：值的雜湊進 consistency fingerprint（`V` 要有 `HashValue`）。兩端同名、不同值時指紋不同。Bevy 沒有指紋，這是 GYO 自己的部分：不收的話，名字相同、值不同的兩端會照樣連上、跑出不同的 System。
@@ -489,7 +489,7 @@ Linux，2026-11-27（U4 之後，約 1 小時）。證據：主 checkout `build/
 
 ### 12.3 和 Bevy 的不同、要改的條文（停下回報的原因）
 
-- **偏離 Bevy 一處**：Bevy 的條件可以捕獲任何東西、而且可變（`FnMut`）；這裡只收**一個登記時給定、之後不變的值**。理由是保住 Kernel 的契約「捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道」（`docs/architecture/target/system-contract.zh-Hant.md:45`）：不變的值是登記的一部分（和 `StateMachine::InState<S, V>` 的模板參數同一個角色，差別是執行期才知道），不是狀態。
+- **偏離 Bevy 一處**（另有兩個既有的差異：條件的名字由呼叫者給；`ResourceEquals` 在 Resource 不存在時見 12.2）：Bevy 的條件可以捕獲任何東西、而且可變（`FnMut`）；這裡只收**一個登記時給定、之後不變的值**。理由是保住 Kernel 的契約「捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道」（`docs/architecture/target/system-contract.zh-Hant.md:45`）：不變的值是登記的一部分（和 `StateMachine::InState<S, V>` 的模板參數同一個角色，差別是執行期才知道），不是狀態。
 - **要改的條文**（改前給使用者看）：
   - `docs/architecture/target/kernel.zh-Hant.md:19`（併自 system-contract DI 1、DI 3）：「可呼叫物是非成員函式或無捕獲 lambda……有捕獲的 lambda……編譯失敗。」後面加一句：「run 條件可以帶一個登記時給定的值（`Condition<&Fn>(name, value)`：複製一份、唯讀，值的雜湊進 consistency fingerprint）；可呼叫物本身仍無捕獲。」
   - `system-contract.zh-Hant.md:59` 的 API 表加 `Condition<&Fn>(name, value)` 與三個 Resource 條件。
@@ -512,3 +512,28 @@ Linux，2026-11-27（U4 之後，約 1 小時）。證據：主 checkout `build/
   - Kernel：`DI-KS 1:` 6 案（`ConditionValueTests.cpp`）：`ResourceExistsAndEquals` 的相等、不相等、不存在；`ResourceEquals` 的相等、不相等、不存在時斷言；`ResourceExists`；`Condition<&Fn>(name, value)` 收到登記時的值；同名不同值的指紋不同、同值相同、沒有值的條件 identity 就是名字；形狀不對的被拒。
   - 編譯失敗樣本：`CONDITION_CAPTURE`（有捕獲的 lambda 當條件 → `GYO_KERNEL_REJECT_CAPTURE`）、`CONDITION_VALUE`（→ `GYO_KERNEL_REJECT_CONDITION_VALUE`）；控制組多登記一個帶值條件、照常編譯。
   - 遊戲層：`[pvp-set-off-*]`、`[pvp-set-on-*]` 照舊通過。
+
+### 12.5 第 2 輪審查的處置（範圍 `797471c1..517d52a8`，含 `engine/`）
+
+設計審查（Opus／high）：blocker 0、should 3、nit 7。純淨 Code Review（Fable／high）：17 條（編號 Q1～Q17）。報告：主 checkout `build/evidence/gyo2-mode-config/design-review-2.md`、`pure-code-review-2.md`。
+
+| # | 內容 | 處置 |
+|---|---|---|
+| S1／Q1、Q2 | `rulesDigest` 含 arena 的組區塊、又排在 Arena 之前：換 arena 被判成規則不同；同名欄位兩種意義 | 採用 (a)：`rulesDigest` 只放模式；arena 區塊另開 `MatchInfo::arenaDigest`（`GameContent::ArenaDigest`，永遠同一條公式；Codec 5），比對順序 Mode → Rules → Character → Arena → **ArenaData** → Walls。測試 `[pvp-set-other-arena]`（不同 arena、只有 Match 的帶區塊 → Arena）、`[pvp-set-arena-digest]`（同 arena 不同區塊 → ArenaData） |
+| S2／Q7、Q17 | `CharacterDigest` 逐欄手寫、放在 world 的大檔；`Modes.hpp` 重開 `sim` 宣告 `HashValue` | 採用：`world/ContentHash.hpp/.cpp`：`StanceRules`、`CombatRules`、`AnimationRules`、`HitShapeDefinition` 各一個 `HashValue`，骨架節點與 clip 是具名函式，`CharacterDigest` 搬過來；digest 的值不變 |
+| S3 | consistency fingerprint 沒有測試 | 採用：`ConsistencyTests.cpp` 加一案（掛載點、set 各一），突變 `cv-authority-mount-name-only`、`cv-set-info-name-only` |
+| Q8 | mismatch 兩個真相來源；英文 reason 接到日文 UI；`ClientView` 攤平四欄 | 採用：`ClientView::mismatch` 是 `world::ContentMismatch`；有沒有一律看 `kind`；玩家看到的文字由 Client 依種類產生（`MismatchText`），`reason` 留給 log 與 `FrameNotes` |
+| Q9、N6 | 死碼；單人房間的地圖清單存兩份 | 採用：拿掉 `LeaveOnEnd` 的 `Res<GameRules>`、`GameOrigin::modeId`、大廳與單人走不到的 `maps.empty()` 分支；`SoloRoomState` 只留 `mode` |
+| Q10 | arena 的查找三種寫法 | 部分：`ArenaOf`、`match_main` 改用 `FindArena`；`Find`（回 arena 內容）測試還在用，留著。強型別 index、把 arena 與區塊包成一個：不改 |
+| Q11 | `GameRules` 的組裝兩處重複 | 採用：`GameRulesOf(content, mode, arena)` |
+| Q14 | 長度上限 64 寫死三處 | 採用：`sim::kMaxContentIdBytes` |
+| Q6、N3 | Hasher → 64 位元 digest 四份 | 部分：遊戲的三份收成 `world::Digest64`；Kernel 自己的一份留在 `Detail`（Kernel 的 `Hash.hpp` 寫明「雜湊函式由呼叫的一方定」，不另開公開 API） |
+| N1 | `ResourceEquals` 不存在時「對應 Bevy 的 panic」不準 | 採用：照實寫（Bevy 交 error handler、預設 panic；GYO 的條件回 `bool`、Kernel 沒有 error handler），12.2、system-contract 同改 |
+| N2／Q5 | `Evaluator()` 的意思變了 | 部分：註解寫明只用來認函式、執行走 `Evaluate`；不拿掉（rollback 在用） |
+| N4／Q16 | 測試名說得比驗的多；`Mode()` 純轉呼叫 | 採用：改名、拿掉沒驗的那段；`ModeTests` 直接用 `ModeText` |
+| N7 | system-contract §3 沒指向例外 | 採用：加一句連到 DI-KS 1 |
+| Q13 | 帶值條件 API 細節 | 部分：`ResourceEquals`／`ResourceExistsAndEquals` 加 `std::equality_comparable`。值型別要和參數完全相同：不改（改成 `type_identity` 會讓形狀不對時變成「找不到函式」，失去 `GYO_KERNEL_REJECT_CONDITION_VALUE` 的標記）；lambda 的帶值版本：沒有使用者，不加 |
+| Q3 | 值的身分用「名字=16 位 hex」字串 | 不採：要撞上得有一個沒帶值、名字剛好是「x=<16 位 hex>」的條件；改成位元組會改變 Kernel 指紋的格式（每個既有的指紋都變）。記為已知限界 |
+| Q4 | 空的 `HashValue` 讓不同值同一個身分 | 不採（記錄）：值的雜湊是作者給的；寫成空的就是作者選擇不區分。`Registry.hpp` 的註解寫明 |
+| Q12、Q15、N5 | `SetsOn` 手刻；條件名與值都帶組；遊戲層只有一個組 | 不採：組只有幾個，線性找就夠；slot 進身分讓兩端組表順序不同時指紋不同（設計審查認為正確）；傳值由 Kernel 的 `[cv-value-passed]` 驗 |
+| Q16（其他） | 等待迴圈重寫了 `FramesUntil`；位置參數太多 | 不採：`FramesUntil` 只等 1.2 秒，CI 不夠（L1 失敗的那一案）；位置參數是既有的形狀，改成 options struct 另開小批 |

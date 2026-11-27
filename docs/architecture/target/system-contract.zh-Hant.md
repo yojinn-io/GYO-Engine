@@ -42,7 +42,7 @@
 
 ## 3. 無狀態與禁止的形狀（spec S-1、B.4 第 1 點）
 
-- 可呼叫物是非成員函式（`AddSystem<&Fn>()`，非型別模板引數）或無捕獲 lambda（以型別傳入）。有捕獲的 lambda、成員函式、泛型 lambda、多載的 `operator()` 編譯失敗：捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道。
+- 可呼叫物是非成員函式（`AddSystem<&Fn>()`，非型別模板引數）或無捕獲 lambda（以型別傳入）。有捕獲的 lambda、成員函式、泛型 lambda、多載的 `operator()` 編譯失敗：捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道。run 條件可以帶一個登記時給定、之後不變的值（`Condition<&Fn>(name, value)`；[target/kernel DI-KS 1](kernel.zh-Hant.md)）：那是登記的一部分，不是狀態。
 - (c) 區的 System 不得有 `Local<T>`、不得宣告外部副作用（**唯一例外 `Diagnostics`**：只寫不讀回的診斷句柄 `DiagnosticsWriter<T>`，不進存取集合、不產生衝突邊；spec S-8 v0.3）、不得用變更過濾、不得持 `ExclusiveWorld`（spec Z4）。
 
 ## 4. API 名稱（`v8-arch-kernel-registry-schedule` 定；只對應名字與條文，不改上面的規則）
@@ -58,7 +58,7 @@
 | `ParamTraits<P>`（`valid`、`readOnly`、`Contribution`） | 參數型別的特化；`Contribution` 是 `TypeList<Access::…>`，存取項在 `Access.hpp` | spec B.4 第 3 點；DI-KS 1 |
 | `Condition<&Fn>(name)`、`Condition<Lambda>(name)`（`ConditionRef`） | run 條件：回 `bool`、參數全唯讀 | spec E.4、S-5 |
 | `Condition<&Fn>(name, value)` | 帶值的 run 條件：`Fn` 的第一個參數是 `const V&`（登記時給的值，複製、唯讀），其餘同上；值的雜湊進指紋（`ConditionRef::Identity`） | target/kernel DI-KS 1（2026-11-27） |
-| `ResourceExists<R>(name)`、`ResourceEquals<R>(name, value)`、`ResourceExistsAndEquals<R>(name, value)`（`engine/kernel/Conditions.hpp`） | Resource 的 run 條件，名字與語意照 Bevy（`bevy_ecs/src/schedule/condition.rs:688、728、770`）；`ResourceEquals` 在 Resource 不存在時斷言（Bevy panic） | 同上 |
+| `ResourceExists<R>(name)`、`ResourceEquals<R>(name, value)`、`ResourceExistsAndEquals<R>(name, value)`（`engine/kernel/Conditions.hpp`） | Resource 的 run 條件，名字與語意照 Bevy（`bevy_ecs/src/schedule/condition.rs:688、728、770`）；`ResourceEquals` 在 Resource 不存在時斷言（Bevy 交 error handler、預設 panic；GYO 的條件回 `bool`、沒有 error handler） | 同上 |
 | `Rejection`、`SystemRejectionOf<F>()`、`SystemRejectionOfFunction<Fn>()`、`ConditionRejectionOf…` | 簽名被拒的理由（測試讀它）；登記點以 `static_assert` 擋，訊息帶 `GYO_KERNEL_REJECT_…` 標記 | spec S-1～S-3、S-5、S-10、J-10、J-11、J-13 |
 | `AccessSet`、`AccessKey`、`AccessKind` | finish 後以 id 表示的推導存取（reads、writes、membershipReads、deferredWrites、setReads、extractReads 與旗標） | spec B.1 derived、S-4 |
 | `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前，每個 World 一份）：驗證開關、`breakOnKernelError`、hook 輪上限的預設 `hookRoundLimit`（spec F-12）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |

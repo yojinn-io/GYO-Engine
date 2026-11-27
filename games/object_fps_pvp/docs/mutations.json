@@ -1578,7 +1578,7 @@
     "game-flow-declaration 4 (segment 2)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],\n                                        .mode = room.mode.id};\n",
+   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.mode.maps[room.map],\n                                        .mode = room.mode.id};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -1890,7 +1890,7 @@
     "game-flow-declaration 4 (segment 4)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        next.network = sim->ownPlayer != 0 && sim->mismatch.empty();",
+   "find": "        next.network = sim->ownPlayer != 0 && sim->mismatch.kind == PW::MismatchKind::None;",
    "replace": "        next.network = true;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: without its own player*",
@@ -2059,7 +2059,7 @@
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.maps.empty() ? std::string() : room.maps[room.map],",
+   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.mode.maps[room.map],",
    "replace": "request->next = SceneChange{.scene = Scene::SoloGame,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
@@ -2072,7 +2072,7 @@
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
    "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            if (!room.maps.empty()) room.map = (room.map + 1) % room.maps.size();\n",
+   "find": "            room.map = (room.map + 1) % room.mode.maps.size();\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
@@ -2436,7 +2436,7 @@
     "big-map declaration 15.3, 15.6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": ".room = from.room, .map = sim->mismatchArena,",
+   "find": ".room = from.room, .map = mismatch.matchArena,",
    "replace": ".room = from.room,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a game whose Match plays another arena*",
@@ -3202,7 +3202,7 @@
    "guards": [
     "mode-config-declaration 3.3"
    ],
-   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
    "find": "    HashValue(h, v.crouchSpeedScale);",
    "replace": "    (void)v.crouchSpeedScale;",
    "target": "gyo_object_fps_pvp_world_tests",
@@ -3216,7 +3216,7 @@
     "mode-config-declaration 3.3"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "                                            .mode = sim->mismatchMode};",
+   "find": "                                            .mode = mismatch.matchMode};",
    "replace": "                                            .mode = {}};",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a game whose Match plays another mode*",
@@ -3311,7 +3311,7 @@
    "guards": [
     "mode-config-declaration 3.3"
    ],
-   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
    "find": "    HashValue(h, v.legPermille);",
    "replace": "    (void)v.legPermille;",
    "target": "gyo_object_fps_pvp_world_tests",
@@ -3325,9 +3325,9 @@
     "mode-config-declaration 11.7 (U1)",
     "limb-damage-research 1.4"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        HashValue(h, shape.radius);",
-   "replace": "        (void)shape.radius;",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, v.radius);\n}\n\n} // namespace object_fps_pvp::character",
+   "replace": "    (void)v.radius;\n}\n\n} // namespace object_fps_pvp::character",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the character digest follows*",
    "expect": "characterDigest: the hit shapes"
@@ -3417,11 +3417,11 @@
     "mode-config-declaration 3.3 (design review S1)"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "    if (blocks.empty()) return played.rulesDigest;",
-   "replace": "    return played.rulesDigest;",
+   "find": "        if (played.on.Has(slot)) blocks.emplace_back(sets[slot].name, read.digest);",
+   "replace": "        (void)played, (void)slot, (void)read;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a Client whose arena carries another block*",
-   "expect": "MatchRulesDigest"
+   "expect": "pvp-set-arena-digest"
   },
   {
    "id": "pvp-mode-plays-any",
@@ -3443,7 +3443,7 @@
     "mode-config-declaration 3.2 (pure code review 2)"
    ],
    "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "        if (mode.id.empty() || mode.id.size() > 64) throw",
+   "find": "        if (mode.id.empty() || mode.id.size() > sim::kMaxContentIdBytes) throw",
    "replace": "        if (mode.id.empty()) throw",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a mode that names*",
@@ -3456,8 +3456,8 @@
     "mode-config-declaration 3.3 (design review S5)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        const bool another = sim->mismatchKind == PW::MismatchKind::Mode || sim->mismatchKind == PW::MismatchKind::Arena;",
-   "replace": "        const bool another = sim->mismatchKind != PW::MismatchKind::None;",
+   "find": "        const bool another = mismatch.kind == PW::MismatchKind::Mode || mismatch.kind == PW::MismatchKind::Arena;",
+   "replace": "        const bool another = mismatch.kind != PW::MismatchKind::None;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a game whose Match plays another mode*",
    "expect": "pvp-mode-rules-left"
@@ -3494,7 +3494,7 @@
    "guards": [
     "mode-config-declaration 11.7 (U1)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
    "find": "    HashValue(h, character.bodyAssetId);",
    "replace": "    (void)character.bodyAssetId;",
    "target": "gyo_object_fps_pvp_world_tests",
@@ -3507,9 +3507,9 @@
    "guards": [
     "mode-config-declaration 11.7 (U1)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        HashVec3(h, node.rest.translation);",
-   "replace": "        (void)node.rest.translation;",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashVec3(h, node.rest.translation);",
+   "replace": "    (void)node.rest.translation;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the character digest follows*",
    "expect": "characterDigest: the skeleton"
@@ -3520,9 +3520,9 @@
    "guards": [
     "mode-config-declaration 11.7 (U1)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "            HashKeys(h, track.rotation, HashQuaternion);",
-   "replace": "            (void)track.rotation;",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "        HashKeys(h, track.rotation, HashQuaternion);",
+   "replace": "        (void)track.rotation;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the character digest follows*",
    "expect": "characterDigest: the clips"
@@ -3533,9 +3533,9 @@
    "guards": [
     "mode-config-declaration 11.7 (U1)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        HashValue(h, value);\n    }\n    HashValue(h, rules.aimUpRadians);",
-   "replace": "        (void)value;\n    }\n    HashValue(h, rules.aimUpRadians);",
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, character.rules);",
+   "replace": "    (void)character.rules;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the character digest follows*",
    "expect": "characterDigest: the animation rules"

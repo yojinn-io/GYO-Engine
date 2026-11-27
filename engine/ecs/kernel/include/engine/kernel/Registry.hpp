@@ -63,13 +63,16 @@ class Registry;
 // value it compares with (bevy_ecs/src/schedule/condition.rs:728); here only that
 // one fixed value, never state. The value's hash is part of the condition's
 // identity, so two Worlds whose conditions have one name and other values have
-// other fingerprints.
+// other fingerprints. The value's HashValue is the author's: one that writes
+// nothing gives every value one identity.
 class ConditionRef {
 public:
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     // What the fingerprints take: the name, and with a value "name=<its hash, 16 hex digits>".
     [[nodiscard]] std::string Identity() const;
     [[nodiscard]] Detail::ResolveFn Resolver() const noexcept { return resolve_; }
+    // The condition's function, to tell which function a condition is (each Fn has one); it needs the condition's value
+    // to be called, so a run goes through Evaluate.
     [[nodiscard]] Detail::ConditionFn Evaluator() const noexcept { return evaluate_; }
     [[nodiscard]] bool Evaluate(Detail::SystemContext& call) const { return evaluate_(call, value_.get()); }
 

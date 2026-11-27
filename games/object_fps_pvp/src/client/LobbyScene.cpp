@@ -75,7 +75,7 @@ const std::vector<std::string>& MapsOf(const LobbyState& state) { return state.m
 void ShowState(const LobbyState& state, Ui::UiBindings& bindings) {
     bindings.Set("rooms", RoomRows(state));
     bindings.Set("mode", "モード: " + state.modes[state.mode].name);
-    bindings.Set("map", "マップ: " + (MapsOf(state).empty() ? std::string("—") : MapsOf(state)[state.map]));
+    bindings.Set("map", "マップ: " + MapsOf(state)[state.map]);
     bindings.Set("empty", std::string(state.rooms.empty() ? "開いている部屋はありません" : ""));
 }
 
@@ -106,13 +106,12 @@ K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<L
             lobby.mode = (lobby.mode + 1) % lobby.modes.size();
             lobby.map = 0;
         } else if (id == "pvp.map") {
-            if (!MapsOf(lobby).empty()) lobby.map = (lobby.map + 1) % MapsOf(lobby).size();
+            lobby.map = (lobby.map + 1) % MapsOf(lobby).size();
         } else if ((id == "pvp.join" || id == "pvp.create") && !lobby.asking) {
             if (id == "pvp.join") {
                 if (!PickedRow(lobby)) continue;
                 gateway->Ask("enter", JoinRequest(lobby.picked, RandomHex(16)));
             } else {
-                if (MapsOf(lobby).empty()) continue;
                 gateway->Ask("enter", CreateRoomRequest(lobby.modes[lobby.mode].id, MapsOf(lobby)[lobby.map], RandomHex(16)));
             }
             lobby.asking = true;
