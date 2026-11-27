@@ -309,14 +309,14 @@ scene 物件的例子（格式照 #375 5.1；`id` 的分配見下）：
 |---|---|---|
 | scene 格式、`readScene`、`kSceneEntities`、`sceneDigest`、`Placed` | **照用**，不改 | 做（#375 第 2、4 步） |
 | `sandbox` 模式、`scenes/pvp_arena.json` | 加一個 `targets` 組、加三個物件（`id` 101～） | 建檔（#375 第 5 步），門用小號（目前 `id` 1） |
-| 物件 `id` 的分配 | 101 起 | 1 起；手寫期間照這個約定，之後由工具負責 |
-| 長方體的 `Mesh3d` | 靶子照門的做法；做成一個共用的 helper | 門先做（#375 第 6 步） |
-| `WorldSnapshot` 帶 scene 物件的狀態 | 加靶子 | 加門 |
+| 物件 `id` 的分配 | 101 起 | 1 起。**寫的人之間的約定，不是格式**：reader 不檢查各組的號段；之後由工具分配；寫進 scene 的資料契約頁（#375 9e0a29c5，5.1） |
+| 長方體的 `Mesh3d` | 用門的 helper | 門先做成共用的 helper（#375 第 6 步）：參數是大小、顏色、原點在長方體的哪裡（門＝門軸那一邊，靶子＝底面中心） |
+| `WorldSnapshot` 帶 scene 物件的狀態 | `targets`：`std::vector<{EntityId id; TargetState}>` | `doors`：`std::vector<{EntityId id; DoorState}>`。每組一個 vector、照 `id` 由小到大，由那一組的 Sim 側 System 填（#375 9e0a29c5，第 8 節） |
 | 開賽前 Peer 看得到 `Placed` 的實體 | 靶子自動適用 | `ShowPlayers` 改一行（#375 3.2） |
 | `JudgeShots` | 加 `Object`（O8 (a)） | 不改（門經 `Walls` 自動擋子彈；門沒有 `Shootable`，仍是 `World`） |
 | 世界點 → HUD 座標 | 第 4.4 節的函式 | 互動提示如果也要，共用它 |
 
-已把這張表的要點傳給門卡（2026-11-27），請它確認 `id` 的約定與共用的 helper。
+門卡已確認這張表（2026-11-28，#375 9e0a29c5）：沒有矛盾；門沒有 `Shootable`，打到仍是 `World`；靶子沒有 `Interactable`，按 E 的判定只把它當成擋住射線的牆。`ShotRecord` 的 Codec 由這張卡的第 3 步升，#375 不改 `ShotRecord`。#375 的 D2（互動鍵的 wire）和靶子無關。
 
 ---
 
