@@ -4587,6 +4587,136 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: what an arena file says*",
    "expect": "65 characters"
+  },
+  {
+   "id": "pvp-scene-digest-off-counted",
+   "what": "the scene digest counts the objects of a set the mode leaves off",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        if (on.Has(object.slot)) played.push_back(&object);",
+   "replace": "        played.push_back(&object);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: *scene*",
+   "expect": "pvp-scene-digest-off"
+  },
+  {
+   "id": "pvp-scene-digest-value-ignored",
+   "what": "the scene digest leaves out what an object's set read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        HashValue(h, object->data.digest);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the scene digest*",
+   "expect": "pvp-scene-digest\\] an object of a set that is on"
+  },
+  {
+   "id": "pvp-scene-digest-id-ignored",
+   "what": "the scene digest leaves out the objects' ids",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        HashValue(h, object->id);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the scene digest*",
+   "expect": "an object's id"
+  },
+  {
+   "id": "pvp-scene-put-ignores-mode",
+   "what": "the objects of a set the mode leaves off are put too",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        if (on.Has(object.slot) && object.data.put) object.data.put(world);",
+   "replace": "        if (object.data.put) object.data.put(world);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: *scene*",
+   "expect": "pvp-scene-put-off"
+  },
+  {
+   "id": "pvp-scene-id-reused",
+   "what": "two objects with one id read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "                throw std::runtime_error(\"id is another object's\");",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene file that says*",
+   "expect": "id is another object's', read"
+  },
+  {
+   "id": "pvp-scene-id-unbounded",
+   "what": "an object id past the scene entities' range reads",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "            if (id == 0 || id > kMaxSceneObjectId) throw",
+   "replace": "            if (id == 0) throw",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene file that says*",
+   "expect": "expected 'id is not 1 to 99999'"
+  },
+  {
+   "id": "pvp-scene-mismatch-unchecked",
+   "what": "a Client furnished otherwise than the Match is not told",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    } else if (match.sceneDigest != own.sceneDigest) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client furnished*",
+   "expect": "pvp-scene-mismatch"
+  },
+  {
+   "id": "pvp-scene-not-announced",
+   "what": "the Match does not say its scene digest",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            info.sceneDigest = sceneDigest;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene's objects are at every end*",
+   "expect": "pvp-scene-info"
+  },
+  {
+   "id": "pvp-scene-not-read",
+   "what": "an arena's scene is not read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (arena->scene) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: an arena whose scene*",
+   "expect": "pvp-scene-missing"
+  },
+  {
+   "id": "pvp-scene-not-put",
+   "what": "a World is not furnished with its arena's scene",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        PutScene(options.content->scenes[options.arena], mode.on, world);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene's objects are at every end*",
+   "expect": "pvp-scene-put\\]"
   }
  ]
 }

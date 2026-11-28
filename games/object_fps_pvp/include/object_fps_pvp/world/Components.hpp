@@ -167,6 +167,8 @@ struct GameRules final {
     // them with the Match's (MatchInfo).
     std::uint64_t characterDigest = 0;
     std::uint64_t arenaDigest = 0;
+    // The arena's scene as the mode plays it (GameContent::SceneDigest): a Client compares it with the Match's.
+    std::uint64_t sceneDigest = 0;
     // The character whose bones carry the hit shapes (LoadGameContent always gives one).
     std::shared_ptr<const character::CharacterRig> character;
 };
@@ -177,8 +179,8 @@ void HashValue(K::Hasher&, const GameRules&);
 enum class MatchPhase : std::uint8_t { Waiting = 0, Playing = 1 };
 
 // The Match tells every Client which arena it plays and the digest of its walls (replicated; port declaration PV14),
-// which mode and the digest of its rules (mode-config declaration 3.3), the digest of its character (11.7), and whether
-// the match has started.
+// which mode and the digest of its rules (mode-config declaration 3.3), the digest of its character (11.7), its arena's
+// own values and its scene (interact-door declaration 5.4), and whether the match has started.
 struct MatchInfo final {
     std::string arenaId;
     std::uint64_t wallsDigest = 0;
@@ -186,6 +188,7 @@ struct MatchInfo final {
     std::uint64_t rulesDigest = 0;
     std::uint64_t characterDigest = 0;
     std::uint64_t arenaDigest = 0;
+    std::uint64_t sceneDigest = 0;
     MatchPhase phase = MatchPhase::Waiting;
     // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
     std::uint64_t startTick = 0;

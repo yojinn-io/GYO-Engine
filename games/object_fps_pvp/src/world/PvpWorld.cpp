@@ -251,19 +251,20 @@ N::Codec<MatchInfo> MatchInfoCodec() {
                 w.Value(v.rulesDigest);
                 w.Value(v.characterDigest);
                 w.Value(v.arenaDigest);
+                w.Value(v.sceneDigest);
                 w.Value(static_cast<std::uint8_t>(v.phase));
                 w.Value(v.startTick);
             },
             [](N::NetReader& r, MatchInfo& v) {
                 std::uint8_t phase = 0;
                 if (!ReadId(r, v.arenaId) || !r.Value(v.wallsDigest) || !ReadId(r, v.modeId) || !r.Value(v.rulesDigest) ||
-                    !r.Value(v.characterDigest) || !r.Value(v.arenaDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
+                    !r.Value(v.characterDigest) || !r.Value(v.arenaDigest) || !r.Value(v.sceneDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
                     return false;
                 }
                 v.phase = static_cast<MatchPhase>(phase);
                 return true;
             },
-            5};
+            6};
 }
 
 // ---- The body's shape and the queries against the walls
@@ -845,6 +846,9 @@ K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rul
     } else if (match.arenaDigest != own.arenaDigest) {
         kind = MismatchKind::ArenaData;
         reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: map, bounds, floor, kill height, spawns)";
+    } else if (match.sceneDigest != own.sceneDigest) {
+        kind = MismatchKind::Scene;
+        reason = "arena '" + match.arenaId + "' is furnished otherwise than the Match's (scene digest)";
     } else if (load->stage == MapStage::Done && match.wallsDigest != own.wallsDigest) {
         kind = MismatchKind::Walls;
         reason = "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
@@ -1019,6 +1023,10 @@ std::optional<std::size_t> GameContent::FindArena(const std::string_view id) con
 
 bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }
 
+std::uint64_t GameContent::SceneDigest(const std::size_t mode, const std::size_t arena) const {
+    return world::SceneDigest(scenes[arena], modes[mode].on, sets);
+}
+
 GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const std::size_t arena) {
     GameRules rules;
     rules.arena = content.arenas[arena];
@@ -1029,6 +1037,7 @@ GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const 
     rules.characterDigest = content.characterDigest;
     rules.body = content.character->bodySize;
     rules.arenaDigest = ArenaDigest(content.arenas[arena]);
+    rules.sceneDigest = content.SceneDigest(mode, arena);
     return rules;
 }
 
@@ -1060,7 +1069,24 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": " + error;
             return std::nullopt;
         }
+        // Its scene, read with the sets' table (each object's set reads its data).
+        SceneContent scene;
+        if (arena->scene) {
+            const std::string path = root + "/" + *arena->scene;
+            auto sceneText = ReadText(fs, path, error);
+            if (!sceneText) {
+                error = maps + name + ": its scene: " + error;
+                return std::nullopt;
+            }
+            auto read = ParseScene(*sceneText, sets, error);
+            if (!read) {
+                error = maps + name + ": its scene " + path + ": " + error;
+                return std::nullopt;
+            }
+            scene = std::move(*read);
+        }
         content.arenas.push_back(std::move(*arena));
+        content.scenes.push_back(std::move(scene));
     }
     auto rig = character::LoadCharacterRig(root, error);
     if (!rig) return std::nullopt;
@@ -1253,6 +1279,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         const ModeContent& mode = options.content->modes[options.mode];
         GameRules rules = GameRulesOf(*options.content, options.mode, options.arena);
         const std::uint64_t arenaDigest = rules.arenaDigest;
+        const std::uint64_t sceneDigest = rules.sceneDigest;
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
@@ -1268,6 +1295,8 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         for (const auto& [slot, read] : mode.sets) {
             if (read.put) read.put(world);
         }
+        // The arena's furnishing: the objects of the sets the mode turns on, at every end with the same ids.
+        PutScene(options.content->scenes[options.arena], mode.on, world);
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.
         MatchStart start;
@@ -1283,6 +1312,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
             info.modeId = mode.id;
             info.rulesDigest = mode.rulesDigest;
             info.arenaDigest = arenaDigest;
+            info.sceneDigest = sceneDigest;
             info.characterDigest = options.content->characterDigest;
         }
         if (end == WorldEnd::Match && options.expectUsers.empty()) info.phase = MatchPhase::Playing;

@@ -687,3 +687,16 @@ P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下
 | 11 | `Remove<NotReceiving>` 的結果被丟掉 | **修**：錯誤往上傳，和 `MarkNotReceiving` 一致 |
 
 沒蓋到、留著的：K3 下 `Placed` 的刪除、可靠送件被拒當下的藏起、藏起當下的 Resync（都沒有測試）；未知操作的 Malformed 沒有專門的測試。
+
+---
+
+## 14. 實作和宣告不同的地方
+
+### 14.1 第 5 步（scene 檔）
+
+- **`readScene` 的型別**：宣告 5.2 寫「`SetReader` 同型」。實作是 `SceneReader`：多一個參數 `K::EntityId entity`（物件要成為的實體，`SceneEntity(id)`），回傳仍是 `SetData{digest, put}`。理由：`put` 要知道放在哪個實體上；讓膠水換算 `EntityId`、組的 reader 只管自己的元件，組不用知道換算公式。
+- **`kSceneEntities`**：寫成 `kSceneEntityBase = 3'100'000` 與 `kMaxSceneObjectId = 99'999`，`SceneEntity(id) = kSceneEntityBase + id`（範圍 3'100'001～3'199'999，和 5.3 相同）。
+- **`sceneDigest` 放哪**：`GameContent::SceneDigest(mode, arena)` 算；`GameRules::sceneDigest` 帶著（照 `arenaDigest` 的做法），`Prepare` 寫進 `MatchInfo`；`MatchInfoCodec` 5 → 6。scene 的 `id` 不進 digest（宣告只列物件）。
+- **錯誤訊息**：寫成 `object <第幾個> (id <id>): <哪裡錯>`；LoadGameContent 再加上 `maps/<arena 檔>: its scene <路徑>:`。
+- **測試的 helper**：`ContentFolder`（#379 寫在 `ModeTests.cpp` 的匿名 namespace）搬到 `WorldTestSupport.hpp`，scene 的測試也用它。
+- **Go `./services/...`（9.4 最後一列）**：gyo2 分支沒有 `services/`，這一列沒有對象。

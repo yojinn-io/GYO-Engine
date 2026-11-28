@@ -44,6 +44,13 @@ struct SetData final {
 // Reads a set's block (an object). nullopt with error naming what was wrong.
 using SetReader = std::function<std::optional<SetData>(const GYO::Engine::Json::ObjectView& block, std::string& error)>;
 
+// Reads one object of a scene file that belongs to the set (its data, an object) as the entity it becomes (world/Scene.hpp:
+// SceneEntity of the object's id): the digest of the values it read (into the scene digest) and what it puts into a
+// World that plays the scene with the set on (the entity and its components, before the first frame). nullopt with
+// error naming what was wrong.
+using SceneReader =
+    std::function<std::optional<SetData>(K::EntityId entity, const GYO::Engine::Json::ObjectView& data, std::string& error)>;
+
 struct GameplaySet final {
     // Its name (ASCII, as the game's names): the key in a mode file's sets.
     std::string name;
@@ -51,6 +58,8 @@ struct GameplaySet final {
     std::function<void(O::WorldSetup&)> build;
     // Its settings in a mode file (none: it takes {} only).
     SetReader readMode;
+    // Its objects in a scene file (none: a scene may not have one of its objects).
+    SceneReader readScene;
     // The sets it works on (a kind of interaction needs the interaction set): a mode that turns it on without one of
     // them does not load (interact-door declaration 2.5; not turned on for it: a mode says what it plays).
     std::vector<std::string> needs;

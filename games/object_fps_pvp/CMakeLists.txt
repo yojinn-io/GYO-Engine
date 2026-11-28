@@ -72,6 +72,7 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     src/world/Modes.cpp
     src/world/Interaction.cpp
     src/world/PvpWorld.cpp
+    src/world/Scene.cpp
     src/world/Sight.cpp)
 # The mode files are read with the game's JSON helpers (src/data/JsonFields.hpp, in the logic library).
 target_include_directories(${object_fps_pvp_world} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
