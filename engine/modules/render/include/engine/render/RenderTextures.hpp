@@ -42,7 +42,8 @@ enum class TextureFilter : std::uint8_t {
 };
 
 // How a texture made from pixels stores and reads its texels (Bevy's TextureFormat, of which these are the ones in use;
-// the compressed ones come with F1). Its pixels are 4 bytes R, G, B, A.
+// the compressed ones come with F1). Its pixels are 4 bytes R, G, B, A: a float format is a render target's alone
+// (RenderTargetFormat::Rgba16Float; a picture of float pixels, a sky's, comes with C3).
 enum class TextureFormat : std::uint8_t {
     // Sampled as stored: the 2D pass's pictures (it blends bytes, RP-4), data pictures (the normal map _N, _ORM).
     Rgba8Unorm = 1,
@@ -52,11 +53,12 @@ enum class TextureFormat : std::uint8_t {
     Rgba8UnormSrgb,
 };
 
-// How a render target stores what passes draw on it (Rgba16Float comes with HDR, A4). Its own type: a target of
-// pixels' formats, a texture of a target's, cannot be written down.
+// How a render target stores what passes draw on it. Its own type: a target of pixels' formats, a texture of a
+// target's, cannot be written down.
 enum class RenderTargetFormat : std::uint8_t {
-    // R, G, B, A, 8 bits each: what colour passes draw, sampled as stored (its bytes are blended as they are). An sRGB
-    // target is not one yet: what a clear colour and blending mean on one comes with the linear path (A4).
+    // R, G, B, A, 8 bits each: what colour passes draw, sampled as stored (its bytes are blended as they are). There is
+    // no sRGB target (render-pipeline declaration 16): the linear path encodes in its tonemapping pass's shader and
+    // writes bytes on an 8-bit target, where the 2D passes and the UI blend bytes (RP-4).
     Rgba8Unorm = 1,
     // Depth, 0 near to 1 far (render-pipeline declaration section 14): drawn on by depth-only passes and 3D passes
     // (Pass3D::depth), sampled (as a texture whose first channel is the depth) between its pixels by the nearest one
@@ -65,7 +67,32 @@ enum class RenderTargetFormat : std::uint8_t {
     // bevy_core_pipeline/src/core_3d/mod.rs:5; SDL_GPU guarantees only D16 for both drawing and sampling,
     // SDL_gpu.h:703,747).
     Depth,
+    // R, G, B, A, a 16-bit float each: linear light, values past 1 kept (a Hdr camera's picture, Drawables.hpp's Hdr;
+    // Bevy's Rgba16Float main texture, bevy_render/src/camera.rs:799-801). Its colours are ColourSpace::Linear's; sampled
+    // as stored, so as linear light.
+    Rgba16Float,
 };
+
+// What the colours on a target stand for (render-pipeline declaration 16.8): the one rule every pass on it follows, a
+// clear, a 2D pass, a 3D pass alike. A colour given as Color8 (a clear, a vertex's or an instance's colour) is bytes as
+// stored, sRGB-encoded for a colour picture; a texel is what its texture samples: bytes for Rgba8Unorm, linear light for
+// Rgba8UnormSrgb (decoded by the sampler) and for a Rgba16Float target (SampledAsLinear).
+enum class ColourSpace : std::uint8_t {
+    // Bytes (Rgba8Unorm, the main target): colours are taken and blended as they are, texels as sampled (RP-4: as Dear
+    // ImGui and SDL_Renderer blend; the unlit 3D pass the same).
+    Encoded = 1,
+    // Linear light (Rgba16Float): every colour is taken to the light it stands for before it is used and blended there,
+    // as Bevy takes colours to linear for its main texture (bevy_render/src/view/mod.rs:1442-1450, LinearRgba): a
+    // Color8 and a texel sampled as bytes are decoded (sRGB), a texel sampled as linear light is taken as it is (never
+    // decoded twice).
+    Linear,
+};
+[[nodiscard]] constexpr ColourSpace ColourSpaceOf(const RenderTargetFormat format) noexcept {
+    return format == RenderTargetFormat::Rgba16Float ? ColourSpace::Linear : ColourSpace::Encoded;
+}
+// Whether a texture's texels sample as linear light (else as bytes).
+[[nodiscard]] constexpr bool SampledAsLinear(const TextureFormat format) noexcept { return format == TextureFormat::Rgba8UnormSrgb; }
+[[nodiscard]] constexpr bool SampledAsLinear(const RenderTargetFormat format) noexcept { return format == RenderTargetFormat::Rgba16Float; }
 
 struct TextureDesc final {
     std::uint32_t width = 0;

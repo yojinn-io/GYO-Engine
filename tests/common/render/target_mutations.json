@@ -377,7 +377,7 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});",
+   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, t.space});",
    "replace": "            static_cast<void>(t);\n            ++tally.unmappedPasses;\n            resolved.emplace_back();",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",
@@ -391,7 +391,7 @@
     "render RD-11"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});",
+   "find": "            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, t.space});",
    "replace": "            static_cast<void>(t);\n            resolved.push_back(main);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu targets: a pass draws into*",

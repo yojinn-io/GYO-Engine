@@ -12,6 +12,9 @@
 // - TargetTextures (the render World's Resource, registered by camera_render): the render target of RenderTextures
 //   made for each source target, kept in step by SyncTargetTextures in the extract; a camera's passes go to it.
 //
+// - HdrTargets (the render World's Resource, registered by camera_render): the targets the render World makes for its
+//   Hdr cameras itself (render-pipeline declaration section 16), kept in step by SyncHdrTargets in the extract.
+//
 // A render World that draws without a source (a single World writing RenderCommands itself) makes its targets with
 // RenderTextures::CreateTarget and needs neither.
 
@@ -95,5 +98,45 @@ inline void HashValue(Kernel::Hasher&, const TargetTextures&) {}
 // target made for it); a mapped target the source no longer has is let go, and so is one following a target the source
 // let go.
 void SyncTargetTextures(const RenderTargets* source, RenderTextures& textures, TargetTextures& mapped);
+
+// A 3D camera with Hdr drawing this frame, and the pass target its own target maps to (nullopt: the main target).
+struct HdrCamera final {
+    std::uint64_t camera = 0;
+    std::optional<TextureId> output;
+};
+
+// The render World's targets for its Hdr cameras (render-pipeline declaration 16, revision 16.8), all following their
+// camera target's size:
+// - a picture per Hdr camera (Rgba16Float, read at its own texels: the nearest): the camera's phases up to PostProcess
+//   draw on it alone, so its tonemapping puts on the target what this camera drew and nothing of the cameras before it
+//   (they keep what they drew under it, as without Hdr). Bevy shares one main texture per target among its cameras
+//   (bevy_render/src/view/mod.rs:1385), whose UI is drawn into it; here the UI draws bytes on the target (RP-4).
+// - a depth per camera target with a Hdr camera on it (Depth), which every 3D camera on that target tests and writes
+//   (Pass3D::depth), Hdr or not: one depth per target, as Bevy's ViewDepthTexture keyed by (target, msaa)
+//   (bevy_core_pipeline/src/core_3d/mod.rs:699-700), so a viewmodel camera that keeps the depth (Camera3dDepth{false})
+//   keeps the world camera's.
+struct HdrTargets final {
+    struct Picture {
+        std::uint64_t camera = 0;
+        std::optional<TextureId> output;
+        TextureId picture{};
+    };
+    struct Depth {
+        std::optional<TextureId> output;
+        TextureId depth{};
+    };
+    std::vector<Picture> pictures;
+    std::vector<Depth> depths;
+
+    [[nodiscard]] std::optional<TextureId> PictureOf(std::uint64_t camera) const noexcept;
+    [[nodiscard]] std::optional<TextureId> DepthOf(const std::optional<TextureId>& output) const noexcept;
+};
+
+inline void HashValue(Kernel::Hasher&, const HdrTargets&) {}
+
+// Keeps a picture for each of cameras (made the first time, kept while the camera draws on the same target) and a depth
+// for each camera target they draw on, and lets go of the others: a camera that does not draw this frame, a target no
+// Hdr camera draws on, has none.
+void SyncHdrTargets(std::span<const HdrCamera> cameras, RenderTextures& textures, HdrTargets& targets);
 
 } // namespace GYO::Engine::Render

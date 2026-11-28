@@ -1,6 +1,6 @@
 # Tests of the render Module and render_world (docs/architecture/target/v2/render.zh-Hant.md, RD-1 to RD-4). Data and
 # arithmetic only: no backend, no GPU (the 2D pass on a GPU is sdl_gpu's test, label gpu).
-add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp VisibilityTests.cpp)
+add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp TonemappingTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp VisibilityTests.cpp)
 target_link_libraries(gyo_render_tests PRIVATE GYO::Render GYO::RenderWorld GYO::WorldRender GYO::CameraRender GYO::SpriteRender GYO::MeshRender
     GYO::Visibility GYO::EntityIds gyo_test_support doctest::doctest)
 # The asset path of sprite_render reads a real PNG through world_asset (the store's test executor and content).

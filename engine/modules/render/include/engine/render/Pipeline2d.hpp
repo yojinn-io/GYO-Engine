@@ -37,6 +37,14 @@ struct ExtractedCamera final {
     std::int32_t order = 0;
     // The pass target its CameraTarget maps to (nullopt: the main target).
     std::optional<TextureId> target;
+    // A 3D camera with Hdr: its picture (HdrTargets, RenderTargets.hpp), on which its phases up to PostProcess draw
+    // (PhaseTarget, Compose.hpp); its tonemapping pass then puts it on target. nullopt: no Hdr.
+    std::optional<TextureId> hdr;
+    // The depth its 3D passes test and write (Pass3D::depth): the one of its target when a Hdr camera draws there
+    // (HdrTargets); nullopt: the target's own.
+    std::optional<TextureId> depth;
+    // The curve of its tonemapping pass (its Tonemapping, or the default).
+    Tonemapping::Method tonemapping = Tonemapping{}.method;
     Camera::ComputedCamera computed;
     // The camera's view (CameraView): world to clip space and view space, the one value the pipelines take.
     Camera::CameraView view;

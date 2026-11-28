@@ -127,6 +127,26 @@ TEST_CASE("sdl_gpu shaders: the depth-only and full-screen passes' built-in shad
     }
 }
 
+TEST_CASE("sdl_gpu shaders: the tonemapping pass's and the linear target's 2D and 3D built-in shaders use what render's ABI says") {
+    const G::EmbeddedShader* tonemapping = G::FindEmbeddedShader(std::string(Abi::ShaderName(Abi::kTonemappingFragmentSource)));
+    const G::EmbeddedShader* linear2d = G::FindEmbeddedShader(std::string(Abi::ShaderName(Abi::kPass2DLinearFragmentSource)));
+    const G::EmbeddedShader* linear3d = G::FindEmbeddedShader(std::string(Abi::ShaderName(Abi::kMesh3DLinearFragmentSource)));
+    REQUIRE_MESSAGE((tonemapping != nullptr && linear2d != nullptr && linear3d != nullptr), "[sg-hdr-embedded] they are embedded");
+    CHECK_MESSAGE((tonemapping->stage == G::ShaderStage::Fragment && linear2d->stage == G::ShaderStage::Fragment &&
+                   linear3d->stage == G::ShaderStage::Fragment),
+                  "[sg-hdr-stages] fragment stages");
+    CHECK_MESSAGE((tonemapping->resources.samplers == Abi::kTonemappingInputs && tonemapping->resources.uniformBuffers == 1),
+                  "[sg-hdr-tonemapping] one input (the picture) and its parameters");
+    for (const G::EmbeddedShader* shader : {linear2d, linear3d}) {
+        CHECK_MESSAGE((shader->resources.samplers == Abi::kLinearFragmentSamplers && shader->resources.uniformBuffers == Abi::kLinearFragmentUniformBuffers),
+                      "[sg-hdr-linear] the draw's texture and the linear colour uniform");
+    }
+    for (const G::EmbeddedShader* shader : {tonemapping, linear2d, linear3d}) {
+        CHECK_MESSAGE((shader->resources.storageTextures == 0 && shader->resources.storageBuffers == 0), "[sg-hdr-no-storage]");
+        CHECK_MESSAGE(!shader->compiled.empty(), "[sg-hdr-compiled] at least one format is embedded");
+    }
+}
+
 TEST_CASE("sdl_gpu present: render's PresentMode falls back along Bevy's chain to what the window supports") {
     using PM = GYO::Engine::Render::PresentMode;
     using SM = G::SwapchainPresentMode;

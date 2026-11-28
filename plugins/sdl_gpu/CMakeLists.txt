@@ -89,7 +89,9 @@ endif()
 string(JOIN "," gyo_shader_format_list ${gyo_shader_formats})
 
 get_target_property(gyo_render_shader_dir GYO::Render GYO_RENDER_SHADER_DIR)
-file(GLOB gyo_render_shader_sources CONFIGURE_DEPENDS "${gyo_render_shader_dir}/*.hlsl" "${gyo_render_shader_dir}/*.hlsli")
+# The tonemapping methods' values are one list for C++ and HLSL, in render's include directory (TonemappingMethods.h).
+file(GLOB gyo_render_shader_sources CONFIGURE_DEPENDS "${gyo_render_shader_dir}/*.hlsl" "${gyo_render_shader_dir}/*.hlsli"
+     "${gyo_render_shader_dir}/../include/engine/render/TonemappingMethods.h")
 set(gyo_embedded_shaders "${CMAKE_CURRENT_BINARY_DIR}/generated/EmbeddedShaders.cpp")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(OUTPUT "${gyo_embedded_shaders}"
@@ -102,6 +104,9 @@ add_custom_command(OUTPUT "${gyo_embedded_shaders}"
             --shader depth.vert vertex "${gyo_render_shader_dir}/depth.vert.hlsl"
             --shader depth.frag fragment "${gyo_render_shader_dir}/depth.frag.hlsl"
             --shader fullscreen.vert vertex "${gyo_render_shader_dir}/fullscreen.vert.hlsl"
+            --shader pass2d_linear.frag fragment "${gyo_render_shader_dir}/pass2d_linear.frag.hlsl"
+            --shader mesh3d_linear.frag fragment "${gyo_render_shader_dir}/mesh3d_linear.frag.hlsl"
+            --shader tonemapping.frag fragment "${gyo_render_shader_dir}/tonemapping.frag.hlsl"
     DEPENDS ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
     COMMENT "Compiling render's shaders for sdl_gpu (${gyo_shader_format_list})"
     VERBATIM)

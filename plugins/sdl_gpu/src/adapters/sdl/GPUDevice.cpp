@@ -23,6 +23,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/render/ShaderAbi.hpp"
+#include "engine/math/scalar/ColorSpace.hpp"
 
 #include "../../EmbeddedShaders.hpp"
 #include "../../FrameDraws.hpp"
@@ -84,8 +85,18 @@ SDL_GPUTextureFormat SDLTargetFormat(const R::RenderTargetFormat format, const S
     switch (format) {
     case R::RenderTargetFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     case R::RenderTargetFormat::Depth: return depthFormat;
+    case R::RenderTargetFormat::Rgba16Float: return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
     }
     return SDL_GPU_TEXTUREFORMAT_INVALID;
+}
+
+// A clear colour on a target whose colours are space's (render's ColourSpace, RenderTextures.hpp): the bytes / 255,
+// or on a linear target the light they stand for (decoded; alpha as it is).
+SDL_FColor ClearColour(const R::Color8 c, const R::ColourSpace space) noexcept {
+    const auto unit = [](const std::uint8_t byte) { return static_cast<float>(byte) / 255.0F; };
+    if (space == R::ColourSpace::Encoded) return SDL_FColor{unit(c.r), unit(c.g), unit(c.b), unit(c.a)};
+    using Engine::Math::DecodeSrgb;
+    return SDL_FColor{DecodeSrgb(unit(c.r)), DecodeSrgb(unit(c.g)), DecodeSrgb(unit(c.b)), unit(c.a)};
 }
 
 template <class... F>
@@ -105,6 +116,8 @@ struct Depth {
 struct GPUTexture {
     SDL_GPUTexture* texture = nullptr;
     R::TextureFilter filter = R::TextureFilter::Linear;
+    // Its texels sample as linear light (render's SampledAsLinear), else as bytes.
+    bool linear = false;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
 };
@@ -125,6 +138,9 @@ struct GPUTarget {
     bool picture = false;
     // A Depth target (the device's depth format): drawn on by depth-only passes and as a 3D pass's depth.
     bool isDepth = false;
+    // What its colours stand for (render's ColourSpaceOf) and whether it samples as linear light (SampledAsLinear).
+    R::ColourSpace space = R::ColourSpace::Encoded;
+    bool linear = false;
     // A colour target's own depth for its 3D passes (none for a Depth target).
     Depth depth;
 };
@@ -133,17 +149,22 @@ struct GPUTarget {
 struct Sampled {
     SDL_GPUTexture* texture = nullptr;
     R::TextureFilter filter = R::TextureFilter::Linear;
+    // Its texels are linear light (else bytes).
+    bool linear = false;
 };
 
 struct Pipeline {
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
+    R::ColourSpace space = R::ColourSpace::Encoded;
     R::BlendMode blend = R::BlendMode::Alpha;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 };
 
-// The colour a mesh pipeline puts on its target: the target's format and the draw's blend. A depth-only pass has none.
+// The colour a mesh pipeline puts on its target: the target's format and colour space, and the draw's blend. A
+// depth-only pass has none.
 struct MeshColour {
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
+    R::ColourSpace space = R::ColourSpace::Encoded;
     R::BlendMode blend = R::BlendMode::Opaque;
 
     friend bool operator==(const MeshColour&, const MeshColour&) = default;
@@ -159,10 +180,11 @@ struct Pipeline3D {
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 };
 
-// A full-screen pass's pipeline and its key: its fragment shader and the target's format.
+// A full-screen pass's pipeline and its key: its fragment shader, the target's format and the pass's blend.
 struct PipelineFullscreen {
     const EmbeddedShader* shader = nullptr;
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
+    R::BlendMode blend = R::BlendMode::Opaque;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 };
 
@@ -261,8 +283,12 @@ struct GPUDevice::State {
     SwapchainPresentMode presentMode = SwapchainPresentMode::Vsync;
     SDL_GPUShader* vertex = nullptr;
     SDL_GPUShader* fragment = nullptr;
+    // The 2D and 3D passes' fragment stages on a target whose colours are linear light (render's ColourSpace::Linear,
+    // ShaderAbi.hpp's kPass2DLinearFragmentSource / kMesh3DLinearFragmentSource).
+    SDL_GPUShader* fragmentLinear = nullptr;
     SDL_GPUShader* meshVertex = nullptr;
     SDL_GPUShader* meshFragment = nullptr;
+    SDL_GPUShader* meshFragmentLinear = nullptr;
     SDL_GPUShader* depthVertex = nullptr;
     SDL_GPUShader* depthFragment = nullptr;
     SDL_GPUShader* fullscreenVertex = nullptr;
@@ -312,7 +338,7 @@ struct GPUDevice::State {
             if (fragment != nullptr) SDL_ReleaseGPUShader(device, fragment);
             if (meshVertex != nullptr) SDL_ReleaseGPUShader(device, meshVertex);
             if (meshFragment != nullptr) SDL_ReleaseGPUShader(device, meshFragment);
-            for (SDL_GPUShader* shader : {depthVertex, depthFragment, fullscreenVertex}) {
+            for (SDL_GPUShader* shader : {fragmentLinear, meshFragmentLinear, depthVertex, depthFragment, fullscreenVertex}) {
                 if (shader != nullptr) SDL_ReleaseGPUShader(device, shader);
             }
             if (transfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, transfer);
@@ -337,12 +363,14 @@ struct GPUDevice::State {
     // GPU texture, or (a target) no picture here: neither drawn by a frame handed to the GPU nor by this frame (a frame
     // the GPU did not get: render-pipeline declaration 14.14).
     std::optional<Sampled> SampledOf(const R::TextureId id) const {
-        if (id.value == 0) return Sampled{white.texture, R::TextureFilter::Linear};
-        if (const auto it = textures.find(id.value); it != textures.end()) return Sampled{it->second.texture, it->second.filter};
+        if (id.value == 0) return Sampled{white.texture, R::TextureFilter::Linear, false};
+        if (const auto it = textures.find(id.value); it != textures.end()) {
+            return Sampled{it->second.texture, it->second.filter, it->second.linear};
+        }
         if (const auto it = targets.find(id.value);
             it != targets.end() && it->second.texture != nullptr && (it->second.picture || frameDraws.Drew(id.value))) {
             // A Depth target between its texels: the nearest (RenderTargetFormat::Depth).
-            return Sampled{it->second.texture, it->second.isDepth ? R::TextureFilter::Nearest : it->second.filter};
+            return Sampled{it->second.texture, it->second.isDepth ? R::TextureFilter::Nearest : it->second.filter, it->second.linear};
         }
         return std::nullopt;
     }
@@ -371,10 +399,12 @@ struct GPUDevice::State {
         return target;
     }
 
-    // The pipeline for a target format and a blend mode, made the first time it is asked for; nullptr when SDL refuses.
-    SDL_GPUGraphicsPipeline* PipelineFor(const SDL_GPUTextureFormat format, const R::BlendMode blend, std::string& error) {
+    // The pipeline for a target format and colour space and a blend mode, made the first time it is asked for; nullptr
+    // when SDL refuses. A linear target's takes the linear fragment stage (render's ShaderAbi.hpp).
+    SDL_GPUGraphicsPipeline* PipelineFor(const SDL_GPUTextureFormat format, const R::ColourSpace space, const R::BlendMode blend,
+                                         std::string& error) {
         for (const Pipeline& p : pipelines) {
-            if (p.format == format && p.blend == blend) return p.pipeline;
+            if (p.format == format && p.space == space && p.blend == blend) return p.pipeline;
         }
         const SDL_GPUColorTargetDescription target = ColorTarget(format, blend);
         SDL_GPUVertexBufferDescription buffer{};
@@ -387,7 +417,7 @@ struct GPUDevice::State {
         attributes[2] = {Abi::kPass2DColorLocation, 0, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, Abi::kPass2DColorOffset};
         SDL_GPUGraphicsPipelineCreateInfo info{};
         info.vertex_shader = vertex;
-        info.fragment_shader = fragment;
+        info.fragment_shader = space == R::ColourSpace::Linear ? fragmentLinear : fragment;
         info.vertex_input_state.vertex_buffer_descriptions = &buffer;
         info.vertex_input_state.num_vertex_buffers = 1;
         info.vertex_input_state.vertex_attributes = attributes;
@@ -404,7 +434,7 @@ struct GPUDevice::State {
             error = SDLError("SDL_CreateGPUGraphicsPipeline");
             return nullptr;
         }
-        pipelines.push_back(Pipeline{format, blend, made});
+        pipelines.push_back(Pipeline{format, space, blend, made});
         return made;
     }
 
@@ -440,7 +470,7 @@ struct GPUDevice::State {
         SDL_GPUGraphicsPipelineCreateInfo info{};
         // A depth-only pass's vertex stage reads the position and the world alone; the other inputs stay bound.
         info.vertex_shader = depthOnly ? depthVertex : meshVertex;
-        info.fragment_shader = depthOnly ? depthFragment : meshFragment;
+        info.fragment_shader = depthOnly ? depthFragment : (colour->space == R::ColourSpace::Linear ? meshFragmentLinear : meshFragment);
         info.vertex_input_state.vertex_buffer_descriptions = buffers;
         info.vertex_input_state.num_vertex_buffers = 2;
         info.vertex_input_state.vertex_attributes = attributes;
@@ -478,9 +508,10 @@ struct GPUDevice::State {
 
     // The full-screen pipeline of a fragment shader and a target format, made the first time it is asked for (the
     // shader too); nullptr when SDL refuses. One triangle of no vertex input, no depth, the colour replaced.
-    SDL_GPUGraphicsPipeline* PipelineFullscreenFor(const EmbeddedShader& shader, const SDL_GPUTextureFormat format, std::string& error) {
+    SDL_GPUGraphicsPipeline* PipelineFullscreenFor(const EmbeddedShader& shader, const SDL_GPUTextureFormat format, const R::BlendMode blend,
+                                                   std::string& error) {
         for (const PipelineFullscreen& p : pipelinesFullscreen) {
-            if (p.shader == &shader && p.format == format) return p.pipeline;
+            if (p.shader == &shader && p.format == format && p.blend == blend) return p.pipeline;
         }
         auto made = fragments.find(&shader);
         if (made == fragments.end()) {
@@ -488,7 +519,7 @@ struct GPUDevice::State {
             if (fragment == nullptr) return nullptr;
             made = fragments.emplace(&shader, fragment).first;
         }
-        const SDL_GPUColorTargetDescription target = ColorTarget(format, R::BlendMode::Opaque);
+        const SDL_GPUColorTargetDescription target = ColorTarget(format, blend);
         SDL_GPUGraphicsPipelineCreateInfo info{};
         info.vertex_shader = fullscreenVertex;
         info.fragment_shader = made->second;
@@ -503,7 +534,7 @@ struct GPUDevice::State {
             error = SDLError("SDL_CreateGPUGraphicsPipeline");
             return nullptr;
         }
-        pipelinesFullscreen.push_back(PipelineFullscreen{&shader, format, pipeline});
+        pipelinesFullscreen.push_back(PipelineFullscreen{&shader, format, blend, pipeline});
         return pipeline;
     }
 
@@ -626,7 +657,8 @@ struct GPUDevice::State {
                     ++tally.refusedAsks;
                     continue;
                 }
-                textures[make->id.value] = GPUTexture{texture, make->desc.filter, make->desc.width, make->desc.height};
+                textures[make->id.value] =
+                    GPUTexture{texture, make->desc.filter, R::SampledAsLinear(make->desc.format), make->desc.width, make->desc.height};
                 frame.made.push_back(make->id.value);
                 frame.textureCopies.push_back({place(make->pixels), texture, R::TextureRegion{0, 0, make->desc.width, make->desc.height}});
             } else if (const auto* update = std::get_if<R::TextureUpdate>(&ask)) {
@@ -671,6 +703,8 @@ struct GPUDevice::State {
                 made.filter = target->desc.filter;
                 made.isDepth = target->desc.format == R::RenderTargetFormat::Depth;
                 made.format = SDLTargetFormat(target->desc.format, depthFormat);
+                made.space = R::ColourSpaceOf(target->desc.format);
+                made.linear = R::SampledAsLinear(target->desc.format);
                 targets[target->id.value] = made;
             }
         }
@@ -726,6 +760,8 @@ struct GPUDevice::State {
         R::TargetSize size{};
         Depth* depth = nullptr;
         GPUTarget* target = nullptr;
+        // What its colours stand for (the main target's: bytes).
+        R::ColourSpace space = R::ColourSpace::Encoded;
     };
 
     // This frame's target of each pass, resolved once after the asks (render-pipeline declaration section 13): the
@@ -748,7 +784,7 @@ struct GPUDevice::State {
                 continue;
             }
             GPUTarget& t = it->second;
-            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t});
+            resolved.push_back(Target{t.texture, t.format, t.size, &t.depth, &t, t.space});
         }
         return resolved;
     }
@@ -919,8 +955,7 @@ struct GPUDevice::State {
         SDL_GPUColorTargetInfo colour{};
         colour.texture = on.texture;
         colour.store_op = SDL_GPU_STOREOP_STORE;
-        const R::Color8 c = clear.value_or(R::Color8{0, 0, 0, 0});
-        colour.clear_color = SDL_FColor{c.r / 255.0F, c.g / 255.0F, c.b / 255.0F, c.a / 255.0F};
+        colour.clear_color = ClearColour(clear.value_or(R::kTransparentBlack), on.space);
         colour.load_op = (undefined || clear) ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
         return colour;
     }
@@ -997,6 +1032,13 @@ struct GPUDevice::State {
 
     // A draw that samples the target its pass draws on reads and writes one texture at once (undefined on the GPU):
     // skipped and counted.
+    // On a linear target, the draw's fragment uniform: whether its texture's texels are linear light (render's
+    // ShaderAbi.hpp, LinearColourUniform).
+    static void PushLinearColour(SDL_GPUCommandBuffer* cmd, const Sampled& texture) {
+        const Abi::LinearColourUniform uniform = Abi::ToLinearColour(texture.linear);
+        SDL_PushGPUFragmentUniformData(cmd, Abi::kLinearColourUniformSlot, &uniform, sizeof(uniform));
+    }
+
     // A draw that samples what its pass draws on (its colour target or its depth target) reads and writes one texture
     // at once.
     static bool SamplesOwnTarget(const R::PassWrites& writes, const R::TextureId texture) noexcept { return writes.Writes(texture); }
@@ -1043,7 +1085,7 @@ struct GPUDevice::State {
             }
             const R::PixelRect scissor = R::ClipToPixels(draw.clip, view, area);
             if (scissor.width == 0 || scissor.height == 0) continue;
-            SDL_GPUGraphicsPipeline* pipeline = PipelineFor(format, draw.blend, tally.lastRefusal);
+            SDL_GPUGraphicsPipeline* pipeline = PipelineFor(format, on.space, draw.blend, tally.lastRefusal);
             if (pipeline == nullptr) {
                 ++tally.skippedDraws;
                 continue;
@@ -1060,6 +1102,7 @@ struct GPUDevice::State {
                 SDL_BindGPUFragmentSamplers(render, Abi::kPass2DTextureSlot, &binding, 1);
                 boundTexture = binding;
             }
+            if (on.space == R::ColourSpace::Linear) PushLinearColour(cmd, *t);
             SDL_DrawGPUIndexedPrimitives(render, draw.indexCount, 1, draw.indexOffset, static_cast<std::int32_t>(draw.vertexOffset), 0);
         }
         SDL_EndGPURenderPass(render);
@@ -1195,7 +1238,8 @@ struct GPUDevice::State {
                     continue;
                 }
                 binding = SDL_GPUTextureSamplerBinding{tex->texture, tex->filter == R::TextureFilter::Nearest ? nearest : linear};
-                output = MeshColour{on.format, draw.blend};
+                output = MeshColour{on.format, on.space, draw.blend};
+                if (on.space == R::ColourSpace::Linear) PushLinearColour(cmd, *tex);
             }
             SDL_GPUGraphicsPipeline* pipeline = Pipeline3DFor(output, draw, tally.lastRefusal);
             if (pipeline == nullptr) {
@@ -1253,7 +1297,7 @@ struct GPUDevice::State {
             if (!in || SamplesOwnTarget(writes, input)) return skip({});
             bindings.push_back(SDL_GPUTextureSamplerBinding{in->texture, in->filter == R::TextureFilter::Nearest ? nearest : linear});
         }
-        SDL_GPUGraphicsPipeline* pipeline = PipelineFullscreenFor(*shader, on.format, tally.lastRefusal);
+        SDL_GPUGraphicsPipeline* pipeline = PipelineFullscreenFor(*shader, on.format, pass.blend, tally.lastRefusal);
         if (pipeline == nullptr) return skip({});
         const SDL_GPUViewport viewport{static_cast<float>(area.x), static_cast<float>(area.y), static_cast<float>(area.width),
                                        static_cast<float>(area.height), 0.0F, 1.0F};
@@ -1292,6 +1336,7 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
     BuiltIn builtIns[] = {
         {Abi::kPass2DVertexSource, &State::vertex},         {Abi::kPass2DFragmentSource, &State::fragment},
         {Abi::kMesh3DVertexSource, &State::meshVertex},     {Abi::kMesh3DFragmentSource, &State::meshFragment},
+        {Abi::kPass2DLinearFragmentSource, &State::fragmentLinear},  {Abi::kMesh3DLinearFragmentSource, &State::meshFragmentLinear},
         {Abi::kDepthVertexSource, &State::depthVertex},     {Abi::kDepthFragmentSource, &State::depthFragment},
         {Abi::kFullscreenVertexSource, &State::fullscreenVertex},
     };

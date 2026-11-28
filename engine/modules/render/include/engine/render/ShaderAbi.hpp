@@ -1,8 +1,8 @@
 #pragma once
 
 // The C++ side of the passes' shader ABI (docs/architecture/target/v2/render.zh-Hant.md, section 4; Design Invariant
-// RD-4). The HLSL side is shaders/Pass2D.hlsli, Mesh3D.hlsli and Fullscreen.hlsli; a backend binds what is written
-// here. Both sides change together.
+// RD-4). The HLSL side is shaders/Pass2D.hlsli, Mesh3D.hlsli, Fullscreen.hlsli, Tonemapping.hlsli and
+// TonemappingMethods.h; a backend binds what is written here. Both sides change together.
 
 #include <cstddef>
 #include <cstdint>
@@ -123,5 +123,39 @@ inline constexpr std::uint32_t kFullscreenFirstInputSlot = 0;
 inline constexpr std::uint32_t kFullscreenParametersSlot = 0;
 // A full-screen fragment shader declares at most one uniform buffer (its parameters).
 inline constexpr std::uint32_t kFullscreenFragmentUniformBuffersAtMost = 1;
+
+// ---- The 2D and 3D passes on a linear target (ColourSpace::Linear, RenderTextures.hpp; render-pipeline declaration
+// 16.8): the same vertex stages, inputs and texture slot as pass2d / mesh3d, a fragment stage of their own that takes the
+// colour and the texel to linear light before it multiplies them (a Color8 decoded; a texel decoded unless the draw's
+// texture samples as linear light). Their fragment uniform at slot 0 (b0, space3) is LinearColourUniform: lane 0 is 1
+// when the draw's texture samples as linear light (SampledAsLinear), else 0. A backend uses these on a target whose
+// ColourSpaceOf is Linear and the pass2d / mesh3d ones on every other.
+inline constexpr std::string_view kPass2DLinearFragmentSource = "pass2d_linear.frag.hlsl";
+inline constexpr std::string_view kMesh3DLinearFragmentSource = "mesh3d_linear.frag.hlsl";
+inline constexpr std::uint32_t kLinearColourUniformSlot = 0;
+inline constexpr std::uint32_t kLinearFragmentUniformBuffers = 1;
+inline constexpr std::uint32_t kLinearFragmentSamplers = 1;
+struct LinearColourUniform final {
+    float lanes[4];
+};
+static_assert(sizeof(LinearColourUniform) == 16);
+[[nodiscard]] constexpr LinearColourUniform ToLinearColour(const bool texelsLinear) noexcept {
+    return LinearColourUniform{{texelsLinear ? 1.0F : 0.0F, 0.0F, 0.0F, 0.0F}};
+}
+
+// ---- The tonemapping pass (render-pipeline declaration section 16; Compose.hpp's TonemappingPass): a full-screen
+// fragment shader of the Engine's own. Its one input is a Hdr camera's picture, read at the pass's own pixel (the
+// picture is as large as the target); its parameters one float4, lane 0 the method's value (TonemappingMethods.h, the
+// one list both sides take), lanes 1 to 3 zero. It writes the curve's result, clamped and sRGB-encoded, and the
+// picture's alpha.
+inline constexpr std::string_view kTonemappingFragmentSource = "tonemapping.frag.hlsl";
+inline constexpr std::uint32_t kTonemappingInputs = 1;
+struct TonemappingParameters final {
+    float lanes[4];
+};
+static_assert(sizeof(TonemappingParameters) == 16);
+[[nodiscard]] constexpr TonemappingParameters ToParameters(const std::uint8_t method) noexcept {
+    return TonemappingParameters{{static_cast<float>(method), 0.0F, 0.0F, 0.0F}};
+}
 
 } // namespace GYO::Engine::Render::ShaderAbi

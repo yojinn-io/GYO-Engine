@@ -1025,3 +1025,140 @@ TEST_CASE("render_extract: a scene of one model repeated is one instanced draw p
     }
     CHECK_MESSAGE((draws == 3 && instances == 29), "[in-scene-draws-constant] more copies are more instances, not more draws");
 }
+
+
+// ---- Hdr cameras (render-pipeline declaration section 16, revision 16.8, v8-arch-gyo2-render-a4).
+
+namespace {
+
+// A 3D camera on the main target.
+void Camera3dAt(K::World& world, const K::EntityId id, const std::int32_t order) {
+    C::Camera camera;
+    camera.order = order;
+    world.Insert(id, camera);
+    world.Insert(id, C::Camera3d{});
+    world.Insert(id, C::CameraTarget{});
+    world.Insert(id, C::Projection{C::PerspectiveProjection{}});
+    world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
+    Place(world, id, 0.0F, 0.0F, -5.0F);
+}
+
+const R::ExtractedCamera* ExtractedOf(O::Product& p, const K::EntityId id) {
+    const auto* cameras = p.World("Render").GetWorld().Resource<R::ExtractedCameras>();
+    if (cameras == nullptr) return nullptr;
+    for (const R::ExtractedCamera& camera : cameras->cameras) {
+        if (camera.entity == id) return &camera;
+    }
+    return nullptr;
+}
+
+std::size_t TonemapsOf(const std::vector<R::RenderPass>& passes, const R::TextureId picture) {
+    return static_cast<std::size_t>(std::count_if(passes.begin(), passes.end(), [&](const R::RenderPass& pass) {
+        const auto* f = std::get_if<R::PassFullscreen>(&pass);
+        return f != nullptr && f->inputs == std::vector<R::TextureId>{picture} && f->shader == "tonemapping.frag";
+    }));
+}
+
+bool Unwritten(const std::vector<R::RenderPass>& passes, const std::vector<R::TextureId>& retained, const R::RenderTextures& textures) {
+    R::RenderCommands commands;
+    commands.passes = passes;
+    commands.retained = retained;
+    return R::FirstUnwrittenRead(commands, textures).has_value();
+}
+
+} // namespace
+
+TEST_CASE("render_extract: Hdr 3D cameras have a picture each and share their target's depth with its 3D cameras; let go after") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"}));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{16, 16}, 1.0F});
+    Camera3dAt(game, 1, 0);
+    game.Insert(1, R::Hdr{});
+    game.Insert(1, R::Tonemapping{R::Tonemapping::Method::AcesFitted});
+    // A viewmodel camera over it that keeps the world's depth.
+    Camera3dAt(game, 2, 1);
+    game.Insert(2, R::Hdr{});
+    game.Insert(2, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    game.Insert(2, R::Camera3dDepth{false});
+    Camera3dAt(game, 3, 2);
+    game.Insert(3, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    Camera2dAt(game, 4, 3);
+    game.Insert(4, R::Hdr{});
+    game.Insert(4, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    Frames(*p);
+    const R::ExtractedCamera* world = ExtractedOf(*p, 1);
+    const R::ExtractedCamera* viewmodel = ExtractedOf(*p, 2);
+    const R::ExtractedCamera* plain = ExtractedOf(*p, 3);
+    const R::ExtractedCamera* flat = ExtractedOf(*p, 4);
+    REQUIRE((world != nullptr && viewmodel != nullptr && plain != nullptr && flat != nullptr));
+    REQUIRE_MESSAGE((world->hdr.has_value() && viewmodel->hdr.has_value()), "[re-hdr-picture] a Hdr 3D camera has a picture");
+    CHECK_MESSAGE(*world->hdr != *viewmodel->hdr, "[re-hdr-picture-each] each Hdr camera its own");
+    const R::TextureId picture = *world->hdr;
+    const R::RenderTextures& textures = *p->World("Render").GetWorld().Resource<R::RenderTextures>();
+    const R::RenderTargetDesc* desc = textures.FindTarget(picture);
+    const auto* follows = desc != nullptr ? std::get_if<R::FollowTarget>(&desc->size) : nullptr;
+    CHECK_MESSAGE((desc != nullptr && desc->format == R::RenderTargetFormat::Rgba16Float && follows != nullptr && !follows->target),
+                  "[re-hdr-picture] a linear target of the render World's that follows the camera's target");
+    REQUIRE_MESSAGE(world->depth.has_value(), "[re-hdr-depth-shared] the target's depth");
+    CHECK_MESSAGE((viewmodel->depth == world->depth && plain->depth == world->depth),
+                  "[re-hdr-depth-shared] every 3D camera on the target tests the one depth, Hdr or not");
+    CHECK_MESSAGE(!plain->hdr.has_value(), "[re-hdr-without] a camera without Hdr has no picture");
+    CHECK_MESSAGE((!flat->hdr.has_value() && !flat->depth.has_value()), "[re-hdr-2d-ignored] Hdr on a 2D camera is not looked at");
+    CHECK_MESSAGE((world->tonemapping == R::Tonemapping::Method::AcesFitted && plain->tonemapping == R::Tonemapping{}.method),
+                  "[re-hdr-tonemapping] each camera's Tonemapping, or the default");
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    const auto drawsOn = [&](const R::TextureId target) {
+        return std::count_if(all.begin(), all.end(), [&](const R::RenderPass& pass) {
+            const auto* p3 = std::get_if<R::Pass3D>(&pass);
+            return p3 != nullptr && p3->target == target && p3->depth == world->depth;
+        });
+    };
+    CHECK_MESSAGE((drawsOn(picture) == 1 && drawsOn(*viewmodel->hdr) == 1 && TonemapsOf(all, picture) == 1 && TonemapsOf(all, *viewmodel->hdr) == 1),
+                  "[re-hdr-composed] each Hdr camera's scene on its picture with the shared depth, tonemapped onto the target");
+    CHECK_MESSAGE(!Unwritten(all, seen.back().retained, textures), "[re-hdr-rp3] the pictures are drawn before they are sampled");
+    Frames(*p);
+    CHECK_MESSAGE((ExtractedOf(*p, 1)->hdr == picture && Count(seen.back().asks, 3) == 0), "[re-hdr-kept] the same targets the next frame, none made");
+    const R::TextureId depth = *world->depth;
+    game.Remove<R::Hdr>(1);
+    game.Remove<R::Hdr>(2);
+    Frames(*p);
+    CHECK_MESSAGE((!ExtractedOf(*p, 1)->hdr.has_value() && !ExtractedOf(*p, 3)->depth.has_value() && textures.FindTarget(picture) == nullptr &&
+                   textures.FindTarget(depth) == nullptr && Released(seen.back().asks, picture)),
+                  "[re-hdr-let-go] no Hdr camera on the target: its pictures and its depth are let go");
+}
+
+TEST_CASE("render_extract: a Hdr camera on a render target that does not update: drawn with a picture, then its target retained") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"}));
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera3dAt(source, 1, 0);
+    source.Insert(1, monitor);
+    source.Insert(1, R::Hdr{});
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    const R::TextureId* found = p->World("Render").GetWorld().Resource<R::TargetTextures>()->Find(monitor);
+    REQUIRE(found != nullptr);
+    const R::TextureId screen = *found;
+    const R::ExtractedCamera* camera = ExtractedOf(*p, 1);
+    REQUIRE_MESSAGE((camera != nullptr && camera->hdr.has_value()), "[re-hdr-update-first-drawn] a target with no picture is drawn, its camera with its picture");
+    const R::TextureId picture = *camera->hdr;
+    const R::RenderTextures& textures = *p->World("Render").GetWorld().Resource<R::RenderTextures>();
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && TonemapsOf(seen[0].all, picture) == 1 && !Retains(seen[0], screen) &&
+                   !Unwritten(seen[0].all, seen[0].retained, textures)),
+                  "[re-hdr-update-first-drawn] tonemapped onto the monitor, nothing retained, every sample drawn first");
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0 && ExtractedOf(*p, 1) == nullptr &&
+                   Released(seen[1].asks, picture) && !Retains(seen[1], picture)),
+                  "[re-hdr-update-waits] waiting, the monitor is retained and the camera's picture let go (not retained)");
+    CHECK_MESSAGE(!Unwritten(seen[1].all, seen[1].retained, textures), "[re-hdr-update-rp3] nothing samples what was not drawn");
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Once});
+    Frames(*p);
+    const R::ExtractedCamera* again = ExtractedOf(*p, 1);
+    CHECK_MESSAGE((again != nullptr && again->hdr.has_value() && *again->hdr != picture && TonemapsOf(seen[2].all, *again->hdr) == 1 &&
+                   !Unwritten(seen[2].all, seen[2].retained, textures)),
+                  "[re-hdr-update-once-drawn] Once draws again, on a picture made again");
+    Frames(*p);
+    CHECK_MESSAGE(Retains(seen[3], screen), "[re-hdr-update-once-then-retained] then the monitor is retained");
+}

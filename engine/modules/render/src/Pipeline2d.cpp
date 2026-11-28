@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "engine/math/linear/Vec4.hpp"
+#include "engine/render/Compose.hpp"
 
 namespace GYO::Engine::Render {
 
@@ -137,7 +138,7 @@ std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<con
     const float height = static_cast<float>(vp.size.y);
 
     Pass2D pass;
-    pass.target = camera.target;
+    pass.target = PhaseTarget(camera, CameraPhase::Transparent);
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
     // Back to front: the z of each item's position, ties by source entity.

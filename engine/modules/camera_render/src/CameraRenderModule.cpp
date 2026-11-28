@@ -28,6 +28,7 @@ using SystemResult = Base::Result<void, Kernel::KernelError>;
 // Before ExtractCameras: a render target of the render World for each of the source's (render-pipeline declaration
 // section 13; Bevy's prepare_assets makes the GpuImage of a target image keyed by its id, render_asset.rs:393).
 constexpr std::string_view kExtractCameras = "ExtractCameras";
+constexpr std::string_view kExtractHdr = "ExtractHdr";
 
 SystemResult ExtractRenderTargets(Kernel::ExtractRes<Render::RenderTargets> source, Kernel::ExtractRes<Camera::CameraTargetSizes> sizes,
                                   Kernel::ResMut<Render::RenderTextures> textures, Kernel::ResMut<Render::TargetTextures> mapped) {
@@ -137,6 +138,26 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     return {};
 }
 
+// After ExtractCameras: each drawing camera's curve and its Hdr targets (render-pipeline declaration section 16,
+// revision 16.8; HdrTargets, RenderTargets.hpp): a Camera3d with Hdr draws on a picture of its own; every 3D camera on a
+// target a Hdr camera draws on this frame tests the one depth of that target. Made by the render World itself,
+// following their target's size; let go when no camera draws with them.
+SystemResult ExtractHdr(Kernel::Extract<Kernel::Read<Render::Hdr>> hdr, Kernel::Extract<Kernel::Read<Render::Tonemapping>> tonemappings,
+                        Kernel::ResMut<Render::ExtractedCameras> cameras, Kernel::ResMut<Render::RenderTextures> textures,
+                        Kernel::ResMut<Render::HdrTargets> targets) {
+    std::vector<Render::HdrCamera> withHdr;
+    for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
+        if (const Render::Tonemapping* t = tonemappings.Get(camera.entity)) camera.tonemapping = t->method;
+        if (camera.is3d && hdr.Contains(camera.entity)) withHdr.push_back(Render::HdrCamera{camera.entity, camera.target});
+    }
+    Render::SyncHdrTargets(withHdr, textures.Get(), targets.Get());
+    for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
+        camera.hdr = targets.Read().PictureOf(camera.entity);
+        if (camera.is3d) camera.depth = targets.Read().DepthOf(camera.target);
+    }
+    return {};
+}
+
 SystemResult ComposeCameraPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel::ResMut<Render::CameraPasses> passes,
                                  Kernel::ResMut<Render::RenderCommands> commands) {
     Render::ComposePasses(*cameras, passes.Get(), commands.Get());
@@ -156,6 +177,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.Resource<Render::ExtractedCameras>({.name = "ExtractedCameras"});
     r.Resource<Render::CameraPasses>({.name = "CameraPasses"});
     r.Resource<Render::TargetTextures>({.name = "TargetTextures"});
+    r.Resource<Render::HdrTargets>({.name = "HdrTargets"});
     Kernel::SystemOptions targetsExtract;
     targetsExtract.name = "ExtractRenderTargets";
     Kernel::Mount targetsMount;
@@ -171,6 +193,14 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     mount.stage = std::string(RenderWorld::kExtractSchedule);
     extract.mounts.push_back(std::move(mount));
     r.AddSystem<&ExtractCameras>(std::move(extract));
+    Kernel::SystemOptions hdrExtract;
+    hdrExtract.name = std::string(kExtractHdr);
+    Kernel::Mount hdrMount;
+    hdrMount.schedule = std::string(RenderWorld::kExtractSchedule);
+    hdrMount.stage = std::string(RenderWorld::kExtractSchedule);
+    hdrMount.after.push_back(std::string(kExtractCameras));
+    hdrExtract.mounts.push_back(std::move(hdrMount));
+    r.AddSystem<&ExtractHdr>(std::move(hdrExtract));
     Kernel::SystemOptions compose;
     compose.name = std::string(kComposeCameraPasses);
     Kernel::Mount composeMount;
@@ -182,6 +212,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
         if (world.Resource<Render::ExtractedCameras>() == nullptr) world.SetResource(Render::ExtractedCameras{});
         if (world.Resource<Render::CameraPasses>() == nullptr) world.SetResource(Render::CameraPasses{});
         if (world.Resource<Render::TargetTextures>() == nullptr) world.SetResource(Render::TargetTextures{});
+        if (world.Resource<Render::HdrTargets>() == nullptr) world.SetResource(Render::HdrTargets{});
         return {};
     });
 }

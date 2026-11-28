@@ -16,6 +16,7 @@
 // not a system set: a pipeline adds a pass to a phase with a System, and the order inside a phase is the order of
 // those Systems (before / after).
 #include <array>
+#include <optional>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -53,6 +54,13 @@ public:
     }
     // The lists in the order they are drawn.
     [[nodiscard]] std::span<std::vector<RenderPass>> InOrder() noexcept { return lists_; }
+    // The lists of the phases up to last (included), and of those after it, in the order they are drawn.
+    [[nodiscard]] std::span<std::vector<RenderPass>> Through(const CameraPhase last) noexcept {
+        return InOrder().first(static_cast<std::size_t>(last) + 1);
+    }
+    [[nodiscard]] std::span<std::vector<RenderPass>> After(const CameraPhase last) noexcept {
+        return InOrder().subspan(static_cast<std::size_t>(last) + 1);
+    }
 
 private:
     std::array<std::vector<RenderPass>, kCameraPhaseCount> lists_;
@@ -76,6 +84,23 @@ inline void HashValue(Kernel::Hasher&, const CameraPasses&) {}
 // its colour (a Pass2D with clear only: the letterbox bars); a later camera with a colour clears its own viewport (a
 // Pass2D whose one draw is an opaque rectangle over it); a camera without one clears nothing. Then the camera's phases
 // in CameraPhase's order, each phase's passes in their order. Empties every list.
+//
+// A camera with Hdr (ExtractedCamera::hdr, render-pipeline declaration section 16, revision 16.8) clears its target as
+// one without does, its picture being its own: its picture is cleared whole each frame (to its colour, or transparent
+// black: it draws over what the cameras before it drew, which its picture does not hold); its phases up to PostProcess
+// draw on the picture (PhaseTarget); then its tonemapping pass (TonemappingPass) puts the picture on its target over
+// its viewport, replacing what is there when it is the first camera on the target and blending over it (alpha) when
+// it is not (Bevy's upscaling, bevy_core_pipeline/src/upscaling/mod.rs:70-78); then its Overlay, bytes on its target
+// (RP-4). So a Hdr camera keeps what earlier cameras drew where it draws nothing, as one without Hdr does.
 void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out);
+
+// Where a camera's passes of a phase draw: a Hdr camera's phases up to PostProcess on its picture, the rest (and every
+// phase of a camera without Hdr) on its target. The pipelines take their pass targets from here.
+[[nodiscard]] std::optional<TextureId> PhaseTarget(const ExtractedCamera& camera, CameraPhase phase) noexcept;
+
+// A Hdr camera's tonemapping pass: the built-in full-screen shader (ShaderAbi.hpp, kTonemappingFragmentSource) over
+// viewport of output, sampling picture, the method in its parameters, put on output by blend.
+[[nodiscard]] PassFullscreen TonemappingPass(TextureId picture, std::optional<TextureId> output, std::optional<PixelRect> viewport,
+                                             Tonemapping::Method method, BlendMode blend);
 
 } // namespace GYO::Engine::Render

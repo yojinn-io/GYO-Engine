@@ -51,6 +51,9 @@ struct Color8 final {
     friend bool operator==(const Color8&, const Color8&) = default;
 };
 
+// What a target with no picture, or a pass with no clear colour of its own, starts from.
+inline constexpr Color8 kTransparentBlack{0, 0, 0, 0};
+
 // One vertex of a 2D pass. Its byte layout is the shader's vertex input (ShaderAbi.hpp): position at 0, uv at 8,
 // colour at 16, 20 bytes in all.
 struct Vertex2D final {
@@ -215,16 +218,17 @@ struct Pass3D final : MeshGeometry {
 
 // A full-screen pass (render-pipeline declaration section 14; Bevy's FullscreenShader with a FullscreenMaterial,
 // bevy_core_pipeline/src/fullscreen_material.rs): one triangle over the viewport, each pixel the fragment shader's
-// colour from its inputs and parameters, replacing what is there (no blending). Post-processing and tonemapping are
-// such passes. Its colour starts as the target is (as Pass3D's).
+// colour from its inputs and parameters, put on the target by blend (by default replacing what is there, Bevy's
+// blend: None, fullscreen_material.rs:129). Post-processing and tonemapping are such passes. Its colour starts as the
+// target is (as Pass3D's).
 struct PassFullscreen final {
     // As Pass2D's. A pass that samples its own target draws nothing (counted by the backend).
     std::optional<TextureId> target;
     // As Pass2D's: the pixels the triangle covers; nullopt: the whole target.
     std::optional<PixelRect> viewport;
     // The fragment shader, by the name the backend carries it under (an HLSL file's name without ".hlsl"; render's
-    // ShaderAbi.hpp names the built-in ones; until A4's tonemapping the Engine has none, render-pipeline declaration
-    // 14.3). Its stage takes FullscreenVarying (shaders/Fullscreen.hlsli). A shader the backend does not carry draws
+    // ShaderAbi.hpp names the built-in ones: the Engine's one is the tonemapping pass's, A4, render-pipeline declaration
+    // 16). Its stage takes FullscreenVarying (shaders/Fullscreen.hlsli). A shader the backend does not carry draws
     // nothing (counted). The material mechanism (B1) replaces the name with an id.
     std::string shader;
     // What the shader samples: its textures and samplers 0, 1, ... in this order (render targets, pictures). As many
@@ -233,6 +237,10 @@ struct PassFullscreen final {
     // The shader's fragment uniform at slot 0, as its bytes in float4 lanes (a multiple of 16 bytes); empty when the
     // shader declares none.
     std::vector<std::uint8_t> parameters;
+    // How its colour goes on the target: Opaque replaces (the default), Alpha blends straight alpha over it (as a 2D
+    // draw does): a later camera's tonemapping on a target others drew on, Bevy's upscaling of a camera not the first
+    // on its output (bevy_core_pipeline/src/upscaling/mod.rs:70-78).
+    BlendMode blend = BlendMode::Opaque;
 };
 
 // A depth-only pass (render-pipeline declaration section 14; Bevy's prepass and the point and spot lights' shadow

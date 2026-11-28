@@ -97,4 +97,54 @@ void SyncTargetTextures(const RenderTargets* source, RenderTextures& textures, T
     mapped.entries = std::move(next);
 }
 
+std::optional<TextureId> HdrTargets::PictureOf(const std::uint64_t camera) const noexcept {
+    for (const Picture& p : pictures) {
+        if (p.camera == camera) return p.picture;
+    }
+    return std::nullopt;
+}
+
+std::optional<TextureId> HdrTargets::DepthOf(const std::optional<TextureId>& output) const noexcept {
+    for (const Depth& d : depths) {
+        if (d.output == output) return d.depth;
+    }
+    return std::nullopt;
+}
+
+void SyncHdrTargets(const std::span<const HdrCamera> cameras, RenderTextures& textures, HdrTargets& targets) {
+    const auto make = [&](const std::optional<TextureId>& output, const RenderTargetFormat format) {
+        RenderTargetDesc desc;
+        desc.size = FollowTarget{output};
+        desc.format = format;
+        desc.filter = TextureFilter::Nearest;
+        return textures.CreateTarget(desc);
+    };
+    std::vector<HdrTargets::Picture> pictures;
+    std::vector<HdrTargets::Depth> depths;
+    for (const HdrCamera& camera : cameras) {
+        const auto kept = std::find_if(targets.pictures.begin(), targets.pictures.end(), [&](const HdrTargets::Picture& p) {
+            return p.camera == camera.camera && p.output == camera.output;
+        });
+        if (kept != targets.pictures.end()) {
+            pictures.push_back(*kept);
+            targets.pictures.erase(kept);
+        } else {
+            pictures.push_back(HdrTargets::Picture{camera.camera, camera.output, make(camera.output, RenderTargetFormat::Rgba16Float)});
+        }
+        if (std::any_of(depths.begin(), depths.end(), [&](const HdrTargets::Depth& d) { return d.output == camera.output; })) continue;
+        const auto keptDepth = std::find_if(targets.depths.begin(), targets.depths.end(),
+                                            [&](const HdrTargets::Depth& d) { return d.output == camera.output; });
+        if (keptDepth != targets.depths.end()) {
+            depths.push_back(*keptDepth);
+            targets.depths.erase(keptDepth);
+        } else {
+            depths.push_back(HdrTargets::Depth{camera.output, make(camera.output, RenderTargetFormat::Depth)});
+        }
+    }
+    for (const HdrTargets::Picture& gone : targets.pictures) textures.Release(gone.picture);
+    for (const HdrTargets::Depth& gone : targets.depths) textures.Release(gone.depth);
+    targets.pictures = std::move(pictures);
+    targets.depths = std::move(depths);
+}
+
 } // namespace GYO::Engine::Render
