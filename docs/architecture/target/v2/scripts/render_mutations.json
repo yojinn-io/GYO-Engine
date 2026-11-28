@@ -1127,8 +1127,8 @@
     "render RD-7"
    ],
    "file": "engine/modules/render/src/Compose.cpp",
-   "find": "            out.passes.push_back(std::move(clear));\n        }",
-   "replace": "            passes.byCamera.resize(std::max(passes.byCamera.size(), i + 1));\n            passes.byCamera[i][CameraPhase::Overlay].push_back(std::move(clear));\n        }",
+   "find": "            out.passes.push_back(ClearOnly(camera.target, *camera.clear));",
+   "replace": "            passes.byCamera.resize(std::max(passes.byCamera.size(), i + 1));\n            passes.byCamera[i][CameraPhase::Overlay].push_back(ClearOnly(camera.target, *camera.clear));",
    "target": "gyo_render_tests",
    "cases": "compose:*",
    "expect": "\\[cp\\-order\\]"

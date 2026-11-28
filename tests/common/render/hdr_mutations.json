@@ -383,7 +383,7 @@
       "replace": "        Append(phases.Through(CameraPhase::Overlay), out);",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera clears its picture*",
-      "expect": "\\[cp\\-hdr\\-tonemap\\-before\\-overlay\\]"
+      "expect": "\\[cp\\-hdr\\-tonemap\\-placed\\]"
     },
     {
       "id": "cp-hdr-tonemapping-curve",

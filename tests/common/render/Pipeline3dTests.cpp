@@ -531,7 +531,7 @@ TEST_CASE("compose: a Hdr camera clears its picture, draws there, tonemaps after
     const auto* posted = std::get_if<R::PassFullscreen>(&out.passes[3]);
     CHECK_MESSAGE((posted != nullptr && posted->target == R::TextureId{30}), "[cp-hdr-tonemap-after-post] its PostProcess passes before the tonemapping");
     const auto* tonemap = std::get_if<R::PassFullscreen>(&out.passes[4]);
-    REQUIRE(tonemap != nullptr);
+    REQUIRE_MESSAGE(tonemap != nullptr, "[cp-hdr-tonemap-placed] the tonemapping right after its PostProcess passes");
     const R::PassFullscreen expected =
         R::TonemappingPass(picture, std::nullopt, R::PixelRect{10, 0, 80, 100}, R::Tonemapping::Method::AcesFitted, R::BlendMode::Opaque);
     CHECK_MESSAGE((tonemap->target == expected.target && tonemap->viewport == expected.viewport && tonemap->shader == expected.shader &&
