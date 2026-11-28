@@ -6,6 +6,10 @@
 //
 //   gyo_object_fps_pvp_core_script [--report] [--check]
 //
+// Each frame also prints, per World, a "rest" line (the authority digest without PlayerInput's term) and an "input"
+// line per player (PlayerInput's fields): the A/B of a change of PlayerInput's form compares those instead of the
+// digest (interact-door declaration 9.3).
+//
 // --check: exits 1 unless the script went through every path it is there for (a head, a body and a leg hit, a kill,
 // a respawn, a reload, a fall below the kill height, a landing that hurts, the Clients' walk and hit).
 //
@@ -20,6 +24,7 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "engine/authority/Consistency.hpp"
+#include "engine/authority/Registrations.hpp"
 #include "engine/net/Link.hpp"
 #include "engine/net/MemoryLink.hpp"
 #include "engine/net/NetModule.hpp"
@@ -30,11 +35,13 @@
 #include "engine/world_time/Sampling.hpp"
 #include "engine/world_time/TimeTypes.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <iostream>
 #include <map>
@@ -152,6 +159,47 @@ std::string DigestOf(K::World& world) {
     return Hex(*digest);
 }
 
+// The authority digest without PlayerInput's term: the digest is a sum of one term per decision type (mod 2^64), so
+// the term is taken out by the type's registration (interact-door declaration 9.3 (i)).
+std::string RestOf(K::World& world) {
+    const auto digest = A::Digest(world);
+    if (!digest) return "error:" + digest.error().message;
+    const A::AuthorityRegistry* registry = world.Resource<A::AuthorityRegistry>();
+    std::uint64_t input = 0;
+    for (const A::DataRecord& record : registry->data) {
+        if (record.key != K::KeyOf<PW::PlayerInput>() || record.options.digestExclude || record.ops->digest == nullptr) continue;
+        input += record.ops->digest(world, record.seq);
+    }
+    return Hex(*digest - input);
+}
+
+std::string Bits(const float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof bits);
+    char text[9];
+    std::snprintf(text, sizeof text, "%08x", bits);
+    return text;
+}
+
+// PlayerInput's fields, written so that the A/B maps an older form onto a newer one (interact-door declaration 9.3 (ii)).
+std::string InputText(const PW::PlayerInput& v) {
+    std::ostringstream out;
+    out << "axes=" << Bits(v.forward) << Bits(v.right) << Bits(v.yaw) << Bits(v.pitch) << " present=" << int{v.present}
+        << " jump=" << int{v.jump} << " crouch=" << int{v.crouch} << " fire=" << int{v.fire} << " reload=" << int{v.reload}
+        << " ready=" << int{v.ready};
+    return out.str();
+}
+
+// The "rest" line and the "input" lines of one World at this frame, by entity id.
+void PrintInputs(const std::string& label, K::World& world) {
+    std::cout << "rest " << label << " t=" << TickOf(world) << " x=" << RestOf(world) << "\n";
+    std::vector<K::EntityId> players = world.Keys<PW::PlayerInput>();
+    std::sort(players.begin(), players.end());
+    for (const K::EntityId id : players) {
+        std::cout << "input " << label << " t=" << TickOf(world) << " e=" << id << " " << InputText(*world.Get<PW::PlayerInput>(id)) << "\n";
+    }
+}
+
 PW::PlayerInput Input(const float forward, const float right, const float yaw, const float pitch = 0.0F) {
     PW::PlayerInput input;
     input.present = 1;
@@ -239,6 +287,7 @@ struct Lone {
             Must(static_cast<bool>(product->RunFrame()), label + ": a frame failed");
             *clock += std::chrono::milliseconds(16);
             std::cout << label << " t=" << TickOf(World()) << " d=" << DigestOf(World()) << "\n";
+            PrintInputs(label, World());
         }
     }
     const PW::PlayerCombat& Combat(const K::EntityId id) { return *World().Get<PW::PlayerCombat>(id); }
@@ -436,6 +485,8 @@ struct Net {
         std::cout << "net m t=" << TickOf(Match()) << " d=" << DigestOf(Match());
         for (std::size_t i = 0; i < clients.size(); ++i) std::cout << " c" << i + 1 << " t=" << TickOf(Client(i)) << " d=" << DigestOf(Client(i));
         std::cout << "\n";
+        PrintInputs("net m", Match());
+        for (std::size_t i = 0; i < clients.size(); ++i) PrintInputs("net c" + std::to_string(i + 1), Client(i));
     }
     void Frames(const int n, const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
         for (int i = 0; i < n; ++i) Frame(inputs);
@@ -519,6 +570,7 @@ void PlayLocal(Coverage& coverage, const bool report) {
     const auto frame = [&] {
         Must(static_cast<bool>(product->RunFrame()), "local: a frame failed");
         std::cout << "local t=" << TickOf(world) << " d=" << DigestOf(world) << "\n";
+        PrintInputs("local", world);
     };
     frame();
     const K::EntityId player = PlayerOf(world, 9);
