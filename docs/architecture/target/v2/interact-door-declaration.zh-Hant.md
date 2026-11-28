@@ -94,16 +94,17 @@ GYO 沒有 reflection，不能像 Bevy 那樣「檔裡寫 component 的型別、
 |---|---|---|---|---|---|---|
 | **bevy_replicon** | `ScopeLifetime`：`WhileVisible`（看得見才在，看不見就刪／拿掉）、`AfterFirstVisibility`（第一次看見後留著，看不見時不收改動）、`AlwaysPresent`（一開始就在，看不見時不收改動）（`src/shared/replication/visibility.rs:346-392`） | `WhileVisible`（`VisibilityFilter::LIFETIME` 的預設，`:208`；registry 預設也是，`src/server/visibility/registry.rs:134`） | 每個 filter 一個 lifetime；filter 是實體上的 component，範圍可以是整個實體、幾個 component、或「除了這幾個」（`VisibilityScope`，`visibility.rs:332-338`） | 沒有 | 回到視野時**不重播**，Client 可能留著舊 component（`visibility.rs:362-366` 的說明） | 源碼 |
 | **lightyear**（建在 replicon 上） | `lose_visibility`（刪）、`lose_visibility_retained`、`lose_visibility_always_present`（`crates/replication/replication/src/visibility/immediate.rs:12-27`；`src/lib.rs:62-67`） | `lose_visibility`：刪（`lib.rs:63-64`） | 每個實體×每個 Client；底下登記三個整個實體範圍的 scope（`immediate.rs:88-110`） | 沒有：「Client 不會自動得知實體被藏了，要標『不是最新』或停預測的，應用自己送或自己推」（`immediate.rs:29-33`） | 同 replicon（`immediate.rs:32-34`） | 源碼 |
+| Unity Netcode for Entities | 只有一種：ghost 對某個連線不相關（relevancy）就送 despawn（`Runtime/Snapshot/GhostChunkSerializer.cs:1822-1841`；理由 `PendingGhostDespawn.DespawnReason.Irrelevant`，`Runtime/Snapshot/PendingGhostDespawn.cs:44-45`）；**pre-spawned ghost 也一樣**，Client 收得到它的 despawn（`Runtime/Snapshot/GhostChunkSerializationState.cs:372-374`） | 不開 relevancy 時全部相關；開了以後不相關＝刪 | 每個 ghost×每個連線（`GhostRelevancySet`，`Runtime/Snapshot/GhostRelevancy.cs:13-30`） | 沒有 | —（刪掉） | 源碼；再相關時 pre-spawned ghost 怎麼回來沒逐行讀 |
 | Unreal `bNetStartup` | 地圖裡放好的 actor 失去 relevancy 時保留 | — | — | — | — | **未確認**（side chat 的記憶；本機沒有源碼） |
 | **GYO 現在** | 只有一種：看不見就在 Client 刪（`Replication.hpp:450-453`、`Replication.cpp:363`，＝replicon `WhileVisible`） | 同左 | 每個實體（`PeerVisibility::entities`）；private component 另有 component 範圍（C-VIS2，`Replication.hpp:457-461`） | 沒有 | —（刪掉後重送整個實體） | 源碼 |
 
 **GYO 的判斷**：
 
 - **兩種預設**：卸下＝`WhileVisible`，因為放好的實體屬於兩端的 scene、不能刪，範圍縮成「複製來的 component」；保留＝`AfterFirstVisibility`。`AlwaysPresent` 不需要：放好的實體一開始就在兩端，這正是 `Placed` 的意思。
-- **作者什麼都不寫時用卸下**：兩家的預設都是「看得見才在」（replicon `WhileVisible`、lightyear `lose_visibility`）。
-- **單位是實體**：lightyear 照實體設定；replicon 的 lifetime 跟著 filter，filter 也是放在實體上的。replicon 另外可以把範圍縮到幾個 component，這一批用不到；GYO 的 private component（C-VIS2）已經是 component 範圍，之後要時再加。
+- **作者什麼都不寫時用卸下**：三家的預設都是「看得見才在」（replicon `WhileVisible`、lightyear `lose_visibility`、Unity 的不相關＝刪）。Unity 連 pre-spawned ghost 也刪，那是使用者否決的「照一般實體刪掉」；GYO 的卸下是在不刪實體的前提下最接近的做法。
+- **單位是實體**：lightyear 照實體設定、Unity 照 ghost 設定；replicon 的 lifetime 跟著 filter，filter 也是放在實體上的。replicon 另外可以把範圍縮到幾個 component，這一批用不到；GYO 的 private component（C-VIS2）已經是 component 範圍，之後要時再加。
 - **和別家不同的兩處**：
-  1. **標 `NotReceiving`**：兩家都不標、交給應用。這是使用者點名要的機制（第 11.2 節 P2），照做。膠水：Engine 多一個 Client 端的本地 component，在現有的 apply 路徑放上與拿掉。
+  1. **標 `NotReceiving`**：三家都不標（replicon、lightyear 交給應用；Unity 只有刪）。這是使用者點名要的機制（第 11.2 節 P2），照做。膠水：Engine 多一個 Client 端的本地 component，在現有的 apply 路徑放上與拿掉。
   2. **回到視野時對齊**：看不見期間伺服器拿掉的複製 component，Client 也拿掉。replicon、lightyear 不重播，寫明「Client 可能留著舊 component」，要作者讓結構穩定或自己重新同步。GYO 的附上本來就送整份，Client 多做一件事：把這次沒送到的已登記複製 component 拿掉。這一處要使用者確認（第 10.2 節 P3）。
 
 ---
@@ -575,13 +576,13 @@ v8-arch-gyo2-interact-door（一個 PR，開向 gyo2；動工前核准後才動�
 
 五個決策點已定（第 11.2 節）：P1 (a)；P2 由 Engine 提供機制＋兩種預設；D2 (a)；Q-b；Q-c。
 
-P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下**，單位是**實體**，兩件都和 replicon、lightyear 一致。和別家不同、要使用者確認的只有一處：
+P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下**，單位是**實體**，兩件都和 replicon、lightyear、Unity Netcode 一致。和別家不同、要使用者確認的只有一處：
 
 | # | 問題 | 選項 | 推薦 |
 |---|---|---|---|
 | **P3** | 放好的實體回到視野時，看不見期間伺服器拿掉的複製 component，Client 要不要也拿掉（4.2、4.3） | (a) **拿掉**：附上本來就送整份，Client 把這次沒送到的已登記複製 component 拿掉 (b) **照 replicon、lightyear 不重播**：Client 可能一直留著伺服器已經沒有的 component，要作者讓結構穩定或自己重新同步 | **(a)**：保留的意思是「最後所知的狀態」，留著伺服器已經沒有的 component，就不只是舊、而是錯，而且回到視野後也不會自己修正；replicon 把這一點寫成限制（`visibility.rs:362-366`），lightyear 照抄（`immediate.rs:32-34`）。代價：Client 在附上時對這個實體多走一遍登記的複製型別。這一批的門不會拿掉 `DoorState`，眼前沒有差別 |
 
-和別家不同，但是照使用者的決定做的（列出來讓你知道）：放好的實體看不見時標 `NotReceiving`（兩家都不標、交給應用，1.5）。
+和別家不同，但是照使用者的決定做的（列出來讓你知道）：放好的實體看不見時標 `NotReceiving`（三家都不標，1.5）。
 
 卡片自己判的（列出來讓你知道；要改就說）：
 
