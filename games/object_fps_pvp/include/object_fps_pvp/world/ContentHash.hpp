@@ -19,6 +19,7 @@
 
 namespace object_fps_pvp::sim {
 void HashValue(GYO::Kernel::Hasher& h, const MovementRules& v);
+void HashValue(GYO::Kernel::Hasher& h, const FallDamage& v);
 void HashValue(GYO::Kernel::Hasher& h, const DamageRules& v);
 void HashValue(GYO::Kernel::Hasher& h, const BodySize& v);
 void HashValue(GYO::Kernel::Hasher& h, const SpawnPoint& v);
@@ -44,5 +45,10 @@ namespace object_fps_pvp::world {
 // rules, the scale and anchor to the world, and the hit shapes on the bones (hitbox.json). Left out: the meshes' vertices and the materials, and the
 // third-person weapon's mount (the picture, not the play).
 [[nodiscard]] std::uint64_t CharacterDigest(const character::CharacterRig& character);
+
+// The arena's digest (MatchInfo::arenaDigest): its own values (HashValue(ArenaContent)). The mode's rules are its rules
+// digest, kept apart, so another arena is known as another arena (built again on it), not as other rules (mode-config
+// design review 2, S1).
+[[nodiscard]] std::uint64_t ArenaDigest(const sim::ArenaContent& arena);
 
 } // namespace object_fps_pvp::world

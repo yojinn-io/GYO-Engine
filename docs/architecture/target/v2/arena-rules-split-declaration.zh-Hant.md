@@ -309,7 +309,8 @@ dev_log：`docs/dev_logs/2026_11_28_gyo2_arena_rules_split.zh-Hant.md`。證據�
 | commit | 內容 |
 |---|---|
 | `3c5248a7` | 第 1 步全部（格式、讀取、比對值、A 的拿掉、assets、測試、突變表、dev_log） |
-| （本 commit） | 第 3 步：設計審查的處置（11.4）、Linux A/B、本節 |
+| `eb59b522` | 第 3 步：設計審查的處置（11.4）、Linux A/B、本節 |
+| （本 commit） | 純粹的 Code Review 的處置（11.4） |
 
 ### 11.2 和本宣告不同的地方
 
@@ -343,3 +344,23 @@ dev_log：`docs/dev_logs/2026_11_28_gyo2_arena_rules_split.zh-Hant.md`。證據�
 | N5 | 重排的註解超過 120 字元 | 採用：`ContentHash.hpp` 那兩段重排 |
 
 處置後：本機 `object_fps_pvp.*` 16 項全過；A/B（macOS）權威 digest 仍 1257 行逐位元組相同、report 沒有差異。
+
+純粹的 Code Review（Fable／high，prompt 只給範圍 `d2329a80..eb59b522`）13 項：
+
+| # | 內容 | 處置 |
+|---|---|---|
+| P1 | 模擬讀身體要穿過可為 null 的 `shared_ptr<CharacterRig>`，舊系統有 null 防護、新加的沒有 | 採用：`GameRules::body`（值），`GameRulesOf` 從角色複製；移動、射線、膠囊、出生點、相機、聲音都讀它。來源仍只有角色檔 |
+| P2 | 規則種類寫死、加一種要改六七處（同檔的 `sets` 用表） | 不採（記錄）：現在兩種；G6 加 `damage` 的部位欄位或第三種規則表時，一起收成 `ModeRules`＋種類表（設計審查 N4 同） |
+| P3 | `scene` 沒有讀者、不進 `arenaDigest` 還被測試釘住 | 不採：門線 #375 的第 5 步就是讀者（宣告第 3.1 節、門線宣告第 5、6 節；使用者已核准）；scene 的內容由門線的 `sceneDigest` 比，路徑不進 `arenaDigest` 是第 3.6 節的決定 |
+| P4 | 規則檔沒有種類標記、未知成員忽略；「帶舊成員」的斷言太弱 | 部分：測試改成逐欄比對（邊界、map、floor、kill height、每個出生點）。封閉 schema 與種類標記不採：全遊戲的讀者都忽略未知成員，誤用不加守衛（AGENTS §3） |
+| P5 | 同一檔必填／選填不一致、預設值與資料檔兩份 | 不採：必填的三欄是 v2 就有的，選填的三欄沿用舊 arena 的預設（宣告 3.2，AGENTS §1.10 既定值便利） |
+| P6 | `ParseBodySize` 重新解析整個檔、version 在呼叫端 | 不採（同設計審查 N2） |
+| P7 | `ArenaDigest` 仍是 `GameContent` 的成員、吃索引；optional 的雜湊兩種臨時寫法 | 採用：`world::ArenaDigest(const sim::ArenaContent&)` 放 `ContentHash`，和 `CharacterDigest` 並列；optional 用 Kernel Hasher 自己的 `HashValue(optional<T>)`（加 `HashValue(FallDamage)`） |
+| P8 | `kMaximumMilliPointsPerMetre` 拿來夾總傷害；兩個裸 float | 部分：上限改用 `std::numeric_limits<std::uint32_t>::max()`。參數形狀不改（同 `Fall` 的寫法，設計審查 N1） |
+| P9 | 版本號、salt、上限的字面值 | 不採：遊戲裡每個讀者的既有寫法；這一批不另立慣例 |
+| P10 | `PlainName`、`ReadText` 重複；`LoadModes` 長 | 不採：既有（#367 審查 P10 已記），收成一處時連同其他使用者一起做 |
+| P11 | `sprintSpeedScale` 沒有效果 | 不採：既有（衝刺還沒做），原樣搬過來 |
+| P12 | 測試：出貨數值的特性測試、fixture 兩份、`Character()` 脆弱、`RulesTests` 的分類、原因斷言不區分 | 部分：拿掉「出貨表＝舊 arena 的值」那一案（那是遷移的一次性證明，已由 A/B 證）；落地傷害那一案改名「PvP damage rules」；原因斷言改成比對 `arena digest` 那一句。fixture 合併與 `Character()` 不改（測試內的小工具） |
+| P13 | 出生點範圍查兩次；`clamp` 的前提只靠間接保證 | 不採：`LoadGameContent` 的半徑檢查保證「至少兩個出生點都離邊界 ≥ 半徑」，所以 `width ≥ 2·radius` 成立；兩次檢查各有用途（`ParseArena` 單獨可用） |
+
+處置後：本機 `object_fps_pvp.*` 16 項全過；A/B（macOS）權威 digest 仍 1257 行逐位元組相同、report 沒有差異（`ab3/`）。

@@ -1,6 +1,6 @@
 // The movement, damage, body and combat rules that need no World (sim/MovementRules.hpp, sim/DamageRules.hpp,
 // sim/BodySize.hpp, sim/CombatRules.hpp): the jump reaches the rules' height, the fall stops at the floor, a landing's
-// damage, the stance heights, the shipped rules and body, the damage of each part, the steps of a duration, the view
+// damage, the stance heights, the damage of each part, the steps of a duration, the view
 // direction, the shot's tie rules and the spawn choice.
 #include <doctest/doctest.h>
 
@@ -12,11 +12,9 @@
 
 #include <cmath>
 #include <cstdint>
-#include <fstream>
 #include <limits>
 #include <optional>
 #include <numbers>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -32,13 +30,6 @@ ArenaContent Arena() {
     return arena;
 }
 
-std::string Shipped(const std::string& file) {
-    std::ifstream in(std::string(PVP_CONTENT_ROOT) + "/" + file, std::ios::binary);
-    REQUIRE_MESSAGE(in.good(), "cannot open " << file);
-    std::ostringstream text;
-    text << in.rdbuf();
-    return text.str();
-}
 } // namespace
 
 TEST_CASE("PvP movement rules: a jump peaks at the rules' height whatever the step") {
@@ -81,7 +72,7 @@ TEST_CASE("PvP movement rules: the fall is the analytic constant acceleration an
     CHECK(open.impact == 0.0F);
 }
 
-TEST_CASE("PvP movement rules: a landing hurts by the metres beyond the safe height; below the kill height is out") {
+TEST_CASE("PvP damage rules: a landing hurts by the metres beyond the safe height; below the kill height is out") {
     MovementRules movement;
     movement.gravity = 20.0F;
     DamageRules damage;
@@ -223,31 +214,6 @@ TEST_CASE("PvP body: what a character file says of its body and what it refuses"
     bad(R"({"radius": 0.7})");                                 // the crouched body is shorter than its two caps
     bad(R"(1.8)");
     CHECK(ParseBodySize(R"({"body": {"crouch_height": 0.5, "crouch_eye_height": 0.3}})", error).has_value());  // exactly its caps
-}
-
-TEST_CASE("PvP rules: the shipped rule tables and body are the values the arenas carried before version 5") {
-    // The core PvP's values (every shipped arena of version 4 carried the same; arena-rules-split declaration 0.2).
-    std::string error;
-    const auto movement = ParseMovementRules(Shipped("rules/movement_rules.json"), error);
-    REQUIRE_MESSAGE(movement.has_value(), error);
-    CHECK(movement->movementSpeed == 3.0F);
-    CHECK(movement->jumpHeight == 0.6F);
-    CHECK(movement->gravity == 18.0F);
-    CHECK(movement->crouchSpeedScale == 0.5F);
-    CHECK(movement->sprintSpeedScale == 1.0F);
-    CHECK(movement->holdJump);
-    const auto damage = ParseDamageRules(Shipped("rules/damage_rules.json"), error);
-    REQUIRE_MESSAGE(damage.has_value(), error);
-    REQUIRE(damage->fall.has_value());
-    CHECK(damage->fall->safeHeight == 4.0F);
-    CHECK(damage->fall->milliPointsPerMetre == 15'000U);
-    const auto body = ParseBodySize(Shipped("characters/player/character.json"), error);
-    REQUIRE_MESSAGE(body.has_value(), error);
-    CHECK(body->height == 1.8F);
-    CHECK(body->radius == 0.25F);
-    CHECK(body->eyeHeight == 1.6F);
-    CHECK(body->crouchHeight == 1.2F);
-    CHECK(body->crouchEyeHeight == 1.0F);
 }
 
 TEST_CASE("PvP combat rules: the damage of each part") {

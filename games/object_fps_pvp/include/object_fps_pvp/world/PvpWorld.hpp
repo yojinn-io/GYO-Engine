@@ -82,10 +82,6 @@ struct GameContent final {
     [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
     // Whether the mode (an index into modes) plays the arena (an index into arenas): the one place every choice asks.
     [[nodiscard]] bool Plays(std::size_t mode, std::size_t arena) const;
-    // The digest of the arena's own values (MatchInfo::arenaDigest): its map, bounds, floor, kill height and spawns. The
-    // mode's rules are ModeContent::rulesDigest: kept apart, so another arena is known as another arena (built again on
-    // it), not as other rules (mode-config design review 2, S1).
-    [[nodiscard]] std::uint64_t ArenaDigest(std::size_t arena) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it

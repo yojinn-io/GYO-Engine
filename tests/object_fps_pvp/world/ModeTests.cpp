@@ -210,14 +210,14 @@ TEST_CASE("world: which arenas a mode plays is one question to the content: ever
 
 TEST_CASE("world: the arena digest follows the arena's own values -- map, bounds, floor, kill height, spawns -- not its id or scene") {
     const auto& content = *ShippedContent();
-    const std::uint64_t base = content.ArenaDigest(0);
+    const std::uint64_t base = PW::ArenaDigest(content.arenas[0]);
     const auto changed = [&](const auto& change) {
-        PW::GameContent copy = content;
-        change(copy.arenas[0]);
-        return copy.ArenaDigest(0);
+        sim::ArenaContent copy = content.arenas[0];
+        change(copy);
+        return PW::ArenaDigest(copy);
     };
     CHECK(changed([](sim::ArenaContent&) {}) == base);
-    CHECK(content.ArenaDigest(1) != base);
+    CHECK(PW::ArenaDigest(content.arenas[1]) != base);
     CHECK_MESSAGE(changed([](auto& a) { a.map += "_other"; }) != base, "[pvp-arena-digest] the map");
     CHECK_MESSAGE(changed([](auto& a) { a.width += 1.0F; }) != base, "[pvp-arena-digest] the width");
     CHECK_MESSAGE(changed([](auto& a) { a.depth += 1.0F; }) != base, "[pvp-arena-digest] the depth");
@@ -239,7 +239,7 @@ TEST_CASE("world: a Client whose arena has another spawn than the Match's, with 
     session.Frames(90);
     const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
     CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::ArenaData, "[pvp-arena-data-mismatch] " << mismatch.reason);
-    CHECK_MESSAGE(mismatch.reason.find("spawns") != std::string::npos, mismatch.reason);
+    CHECK_MESSAGE(mismatch.reason.find("arena 'pvp_training_v1' differs from the Match's (arena digest") != std::string::npos, mismatch.reason);
     CHECK(mismatch.matchArena == "pvp_training_v1");
 }
 

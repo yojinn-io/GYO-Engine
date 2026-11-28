@@ -31,4 +31,4 @@ Owner：「任務卡」arena 規則拆出。分支 `claude/gyo2-arena-rules-spli
 ## 設計審查與純粹的 Code Review
 
 - 設計審查（Opus／high，唯讀）：沒有 blocker；兩處和宣告不同的字串（出生點半徑的錯誤、`ArenaData` 的原因）、S1（角色檔 → rig 的身體沒有測試）、S2（arena 的錯誤不是每種都有一案）、五個 nit。處置在宣告 11.4：D1、D2、S1、S2、N1、N3、N5 採用，N2、N4 不採（理由在表）。處置後 `object_fps_pvp.*` 16 項全過，A/B（macOS）仍逐位元組相同。
-- 純粹的 Code Review（Fable／high）：見宣告 11.4。
+- 純粹的 Code Review（Fable／high，只給範圍）：13 項。採用 P1（`GameRules::body` 值，模擬不再穿過可為 null 的角色指標）、P7（`world::ArenaDigest(ArenaContent)` 與 Kernel 的 optional 雜湊）；部分採用 P4（舊成員的斷言逐欄）、P8（總傷害的上限）、P12（拿掉出貨數值的特性測試、落地傷害改分類、原因斷言）；其餘不採，理由在宣告 11.4（P2 的種類表留給 G6）。處置後 `object_fps_pvp.*` 16 項全過，A/B（macOS）仍逐位元組相同，突變 62/62 killed。

@@ -47,7 +47,8 @@ std::uint32_t LandingDamage(const float gravity, const DamageRules& damage, cons
     const double beyond = height - damage.fall->safeHeight;
     if (!(beyond > 0)) return 0;
     const double points = std::floor(beyond * damage.fall->milliPointsPerMetre);
-    return points >= kMaximumMilliPointsPerMetre ? std::numeric_limits<std::uint32_t>::max() : static_cast<std::uint32_t>(points);
+    constexpr std::uint32_t kMost = std::numeric_limits<std::uint32_t>::max();
+    return points >= static_cast<double>(kMost) ? kMost : static_cast<std::uint32_t>(points);
 }
 
 } // namespace object_fps_pvp::sim

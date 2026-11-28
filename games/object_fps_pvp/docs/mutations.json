@@ -2762,7 +2762,7 @@
    "find": "    const double beyond = height - damage.fall->safeHeight;",
    "replace": "    const double beyond = height;",
    "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "PvP movement rules: a landing hurts*",
+   "cases": "PvP damage rules: a landing hurts*",
    "expect": "LandingDamage",
    "guards": [
     "v8-product-pvp-playtest-fixes"
@@ -3696,7 +3696,7 @@
    "find": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * gravity);",
    "replace": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * 20.0);",
    "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "PvP movement rules: a landing hurts*",
+   "cases": "PvP damage rules: a landing hurts*",
    "expect": "pvp-landing-gravity"
   },
   {

@@ -217,7 +217,16 @@ TEST_CASE("PvP arena: what an arena file says and what it refuses") {
                                            R"("gravity": 5, "fall_damage": {"safe_height": 1, "points_per_metre": 1}, )" + twoSpawns),
                                      error);
     REQUIRE_MESSAGE(old.has_value(), error);
-    CHECK(old->spawns.size() == bare->spawns.size());
+    CHECK(old->width == bare->width);
+    CHECK(old->depth == bare->depth);
+    CHECK(old->map == bare->map);
+    CHECK(old->floor == bare->floor);
+    CHECK(old->killHeight == bare->killHeight);
+    REQUIRE(old->spawns.size() == bare->spawns.size());
+    for (std::size_t i = 0; i < old->spawns.size(); ++i) {
+        CHECK(old->spawns[i].position.x == bare->spawns[i].position.x);
+        CHECK(old->spawns[i].position.z == bare->spawns[i].position.z);
+    }
     // The bounds: no floor (absent), a kill height (required, below the floor and every spawn).
     CHECK_FALSE(bare->floor.has_value());
     CHECK(bare->killHeight == -10.0F);

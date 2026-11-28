@@ -321,7 +321,7 @@ Math::Vec3 InsideBounds(const sim::ArenaContent& arena, const float radius, Math
 Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRules& rules, PlayerBody& body,
                                                const PlayerInput& input, const bool alive, const double seconds) {
     const sim::ArenaContent& arena = rules.arena;
-    const sim::BodySize& size = rules.character->bodySize;
+    const sim::BodySize& size = rules.body;
     const bool steering = alive && input.present != 0;
     if (steering) {
         body.yaw = Math::WrapRadians(input.yaw);
@@ -473,14 +473,14 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
 
 // The shot's ray from a body's eye along its view.
 Math::Ray ShotRay(const GameRules& rules, const PlayerBody& body) {
-    const float eye = sim::EyeHeight(rules.character->bodySize, body.crouched != 0);
+    const float eye = sim::EyeHeight(rules.body, body.crouched != 0);
     return Math::Ray{body.feet + Math::Vec3{0.0F, eye, 0.0F}, sim::ViewDirection(body.yaw, body.pitch)};
 }
 
 // The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
 P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
-    const float height = sim::BodyHeight(rules.character->bodySize, body.crouched != 0);
-    const float r = rules.character->bodySize.radius;
+    const float height = sim::BodyHeight(rules.body, body.crouched != 0);
+    const float r = rules.body.radius;
     return P::Capsule{body.feet + Math::Vec3{0.0F, r, 0.0F}, body.feet + Math::Vec3{0.0F, height - r, 0.0F}, r};
 }
 
@@ -575,7 +575,7 @@ K::SystemResult AnimatePlayers(K::Query<K::Read<PlayerBody>, K::Read<PlayerComba
 // Whether a standing body fits at a spawn: free of the walls and of every living body.
 Base::Result<bool, P::Physics3dError> SpawnFree(const Walls& walls, const GameRules& rules, const sim::SpawnPoint& spawn,
                                                 const std::vector<PlayerBody>& living) {
-    auto fits = Fits(walls, spawn.position, rules.character->bodySize.height, rules.character->bodySize.radius);
+    auto fits = Fits(walls, spawn.position, rules.body.height, rules.body.radius);
     if (!fits || !*fits) return fits;
     PlayerBody standing;
     standing.feet = spawn.position;
@@ -941,7 +941,7 @@ K::SystemResult LoadArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetVi
         return hold();
     }
     P::BoxSet boxes = std::move(**built);
-    if (auto inside = SpawnInWall(rules.Read().arena, rules.Read().character->bodySize, boxes)) {
+    if (auto inside = SpawnInWall(rules.Read().arena, rules.Read().body, boxes)) {
         fail(std::move(*inside));
         return hold();
     }
@@ -1024,13 +1024,6 @@ std::optional<std::size_t> GameContent::FindArena(const std::string_view id) con
 
 bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }
 
-std::uint64_t GameContent::ArenaDigest(const std::size_t arena) const {
-    K::Hasher h;
-    HashValue(h, std::string("gyo.object_fps_pvp.arena/1"));
-    HashValue(h, arenas[arena]);
-    return Digest64(h);
-}
-
 GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const std::size_t arena) {
     GameRules rules;
     rules.arena = content.arenas[arena];
@@ -1039,7 +1032,8 @@ GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const 
     rules.combat = content.combat;
     rules.character = content.character;
     rules.characterDigest = content.characterDigest;
-    rules.arenaDigest = content.ArenaDigest(arena);
+    rules.body = content.character->bodySize;
+    rules.arenaDigest = ArenaDigest(content.arenas[arena]);
     return rules;
 }
 

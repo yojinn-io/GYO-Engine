@@ -2,20 +2,10 @@
 
 #include "engine/base/Fnv1a.hpp"
 
-#include <optional>
 #include <string>
 #include <string_view>
 
 namespace object_fps_pvp::sim {
-
-namespace {
-
-void HashOptional(GYO::Kernel::Hasher& h, const std::optional<float>& v) {
-    HashValue(h, v.has_value());
-    HashValue(h, v.value_or(0.0F));
-}
-
-} // namespace
 
 void HashValue(GYO::Kernel::Hasher& h, const MovementRules& v) {
     HashValue(h, v.movementSpeed);
@@ -26,12 +16,12 @@ void HashValue(GYO::Kernel::Hasher& h, const MovementRules& v) {
     HashValue(h, v.holdJump);
 }
 
-void HashValue(GYO::Kernel::Hasher& h, const DamageRules& v) {
-    HashValue(h, v.fall.has_value());
-    const FallDamage fall = v.fall.value_or(FallDamage{});
-    HashValue(h, fall.safeHeight);
-    HashValue(h, fall.milliPointsPerMetre);
+void HashValue(GYO::Kernel::Hasher& h, const FallDamage& v) {
+    HashValue(h, v.safeHeight);
+    HashValue(h, v.milliPointsPerMetre);
 }
+
+void HashValue(GYO::Kernel::Hasher& h, const DamageRules& v) { HashValue(h, v.fall); }
 
 void HashValue(GYO::Kernel::Hasher& h, const BodySize& v) {
     HashValue(h, v.height);
@@ -52,7 +42,7 @@ void HashValue(GYO::Kernel::Hasher& h, const ArenaContent& v) {
     HashValue(h, v.map);
     HashValue(h, v.width);
     HashValue(h, v.depth);
-    HashOptional(h, v.floor);
+    HashValue(h, v.floor);
     HashValue(h, v.killHeight);
     HashValue(h, v.spawns);
 }
@@ -183,6 +173,13 @@ std::uint64_t CharacterDigest(const character::CharacterRig& character) {
     HashValue(h, character.scale);
     HashVec3(h, character.anchor);
     HashValue(h, character.hitShapes);
+    return Digest64(h);
+}
+
+std::uint64_t ArenaDigest(const sim::ArenaContent& arena) {
+    K::Hasher h;
+    HashValue(h, std::string("gyo.object_fps_pvp.arena/1"));
+    HashValue(h, arena);
     return Digest64(h);
 }
 

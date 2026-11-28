@@ -713,7 +713,7 @@ K::SystemResult PlaceCamera(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> u
                             K::Query<K::Write<T::Transform>, K::With<C::Camera3d>> cameras) {
     players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body) {
         if (owner.userId != user->userId) return;
-        const float eye = sim::EyeHeight(rules->character->bodySize, body.crouched != 0);
+        const float eye = sim::EyeHeight(rules->body, body.crouched != 0);
         cameras.ForEach([&](K::EntityId, K::Mut<T::Transform> camera) {
             T::Transform t = camera.Read();
             t.translation = body.feet + Math::Vec3{0.0F, eye, 0.0F};
@@ -1090,9 +1090,9 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     // lowers them (PW::Blocked).
     const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
         if (own == nullptr) return;
-        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->character->bodySize, own->crouched != 0), 0.0F};
+        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->body, own->crouched != 0), 0.0F};
         const Math::Vec3 source =
-            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->character->bodySize, body.crouched != 0), 0.0F};
+            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->body, body.crouched != 0), 0.0F};
         const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
         if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
     };
