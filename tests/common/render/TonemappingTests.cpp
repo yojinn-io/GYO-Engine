@@ -81,7 +81,8 @@ TEST_CASE("render: Reinhard on the luminance keeps black black") {
 }
 
 TEST_CASE("render: the default tonemapping and the methods' values") {
-    CHECK_MESSAGE(R::Tonemapping{}.method == Method::ReinhardLuminance, "[tm-default] Bevy's default before its lookup-table curves");
+    CHECK_MESSAGE(R::Tonemapping{}.method == Method::None,
+                  "[tm-default] no curve by default (Godot's default, environment.h:116): the author picks one; a Hdr camera looks as one without");
     // The C++ enum takes its values from the one list the shader includes too.
     CHECK_MESSAGE((static_cast<int>(Method::None) == GYO_TONEMAP_NONE && static_cast<int>(Method::Reinhard) == GYO_TONEMAP_REINHARD &&
                    static_cast<int>(Method::KhronosPbrNeutral) == GYO_TONEMAP_KHRONOS_PBR_NEUTRAL),

@@ -4,14 +4,15 @@
   "mutants": [
     {
       "id": "tm-default-method",
-      "what": "H1: the default curve is not ReinhardLuminance",
+      "what": "H1: the default curve is not None (no curve; revision 16.9: the author picks the curve)",
       "guards": [
         "render-pipeline-declaration 判定 H1",
-        "render RD-14"
+        "render RD-14",
+        "render-pipeline-declaration 16.9"
       ],
       "file": "engine/modules/render/include/engine/render/Drawables.hpp",
-      "find": "    Method method = Method::ReinhardLuminance;",
-      "replace": "    Method method = Method::None;",
+      "find": "    Method method = Method::None;",
+      "replace": "    Method method = Method::ReinhardLuminance;",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
       "expect": "\\[tm\\-default\\]"

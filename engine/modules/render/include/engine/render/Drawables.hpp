@@ -140,8 +140,11 @@ struct Tonemapping final {
         // Khronos PBR Neutral (tonemapping.wesl:258-301).
         KhronosPbrNeutral = GYO_TONEMAP_KHRONOS_PBR_NEUTRAL,
     };
-    // Bevy's default before its lookup-table curves (#7594, 912fb5886); Bevy's TonyMcMapface needs a 3D lookup table.
-    Method method = Method::ReinhardLuminance;
+    // No curve by default, as Godot's (scene/resources/environment.h:116, TONE_MAPPER_LINEAR): whether and how to
+    // compress the highlights is the author's art rule, and with no curve a camera looks the same with Hdr as without.
+    // Bevy defaults to a curve (TonyMcMapface) because its default is PBR lighting; GYO's comes with B4 (render-pipeline
+    // declaration 16.9, RC-A4-1).
+    Method method = Method::None;
 };
 
 // The source World's default clear colour (Bevy's ClearColor; opaque black here, where Bevy's is a dark grey: the
