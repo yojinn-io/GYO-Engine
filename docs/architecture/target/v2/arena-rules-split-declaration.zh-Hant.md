@@ -277,6 +277,18 @@ v8-arch-gyo2-arena-rules-split（一個 PR，開向 gyo2；這份宣告的 draft
 
 卡片自己判、不交決定的（使用者可推翻）：重力進 `movement` 表；墜落傷害進新的 `damage` 表；`floor`、`kill_height`、`spawns`、邊界留 arena；`cell_size` 刪掉；`StanceRules` 改名 `MovementRules`；三個比對值的涵蓋（3.6）；不做 v4 的相容讀法。
 
+### 9.1 使用者的決定（2026-11-28，動工前核准）
+
+主會話轉交。原話：「照推薦，A、B、C 都核准，開工」。
+
+| # | 決定 | 比過的選項 | 理由（本文） |
+|---|---|---|---|
+| A | **(a)** 拿掉 arena 的 `sets` 區塊（`sets`、`readArena`、`ReadArenaSets`、`GameContent::arenaSets` 與放進 World 的那段）；`arenaDigest` 改成比 arena 自己的值。**這推翻 #367 已核准的部分**：`mode-config-declaration.zh-Hant.md` 3.2「arena 檔也可以帶玩法組的一塊資料」（第 185 行）、6「門」那一列的「從 arena 檔的 `sets.doors` 生成門」、11.2 的 `readArena` 與 3.3 第 5 項的 `arenaDigest`（組的區塊）。門已經改放 scene（`v8-arch-gyo2-map-scene-split`） | (b) 留著，給「某張地圖的某一組設定」 | 第 4 節 |
+| B | **(a)** 移動速度與跳高放進模式配置的 `movement` 表。**和別家不同**（avian、Godot、Unreal 放在角色上） | (b) 角色資料 | 第 9 節 B |
+| C | **(b)** 蹲下的身高與眼高搬到角色的 `body`（`crouch_height`、`crouch_eye_height`）；`movement` 表只留「怎麼動」，跨檔的 `StanceFits` 拿掉 | (a) 留在 `movement` 表 | 第 9 節 C |
+
+卡片自己判的項目（上一段），使用者沒有推翻，照本文進行。
+
 ---
 
 ## 10. 沒查到、未確認的

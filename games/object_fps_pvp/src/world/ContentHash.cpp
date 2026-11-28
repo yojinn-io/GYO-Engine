@@ -2,17 +2,59 @@
 
 #include "engine/base/Fnv1a.hpp"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace object_fps_pvp::sim {
 
-void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v) {
-    HashValue(h, v.crouchBodyHeight);
-    HashValue(h, v.crouchEyeHeight);
+namespace {
+
+void HashOptional(GYO::Kernel::Hasher& h, const std::optional<float>& v) {
+    HashValue(h, v.has_value());
+    HashValue(h, v.value_or(0.0F));
+}
+
+} // namespace
+
+void HashValue(GYO::Kernel::Hasher& h, const MovementRules& v) {
+    HashValue(h, v.movementSpeed);
+    HashValue(h, v.jumpHeight);
+    HashValue(h, v.gravity);
     HashValue(h, v.crouchSpeedScale);
     HashValue(h, v.sprintSpeedScale);
     HashValue(h, v.holdJump);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const DamageRules& v) {
+    HashValue(h, v.fall.has_value());
+    const FallDamage fall = v.fall.value_or(FallDamage{});
+    HashValue(h, fall.safeHeight);
+    HashValue(h, fall.milliPointsPerMetre);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const BodySize& v) {
+    HashValue(h, v.height);
+    HashValue(h, v.radius);
+    HashValue(h, v.eyeHeight);
+    HashValue(h, v.crouchHeight);
+    HashValue(h, v.crouchEyeHeight);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const SpawnPoint& v) {
+    HashValue(h, v.position.x);
+    HashValue(h, v.position.y);
+    HashValue(h, v.position.z);
+    HashValue(h, v.yaw);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const ArenaContent& v) {
+    HashValue(h, v.map);
+    HashValue(h, v.width);
+    HashValue(h, v.depth);
+    HashOptional(h, v.floor);
+    HashValue(h, v.killHeight);
+    HashValue(h, v.spawns);
 }
 
 void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v) {
@@ -131,6 +173,7 @@ std::uint64_t CharacterDigest(const character::CharacterRig& character) {
     K::Hasher h;
     HashValue(h, std::string("gyo.object_fps_pvp.character/1"));
     HashValue(h, character.bodyAssetId);
+    HashValue(h, character.bodySize);
     HashValue(h, static_cast<std::uint64_t>(character.body->nodes.size()));
     for (const Model::Node& node : character.body->nodes) HashNode(h, node);
     HashValue(h, static_cast<std::uint64_t>(character.clips.size()));

@@ -1,6 +1,7 @@
 // The arena files and their maps (big-map declaration section 15): the shipped maps read through Engine's voxel_map
 // Module, the walls of pvp_arena occupying the same cells as the v1 file they were migrated from (the alignment test
-// the game owns), what the reader refuses, the regions' pictures, and the arena file's rules.
+// the game owns), what the reader refuses, the regions' pictures, and what an arena file says (version 5: what the
+// ground decides; the rules are the mode's, the body the character's).
 #include <doctest/doctest.h>
 
 #include "object_fps_pvp/data/ArenaMap.hpp"
@@ -154,63 +155,77 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and map") {
     CHECK(arena->id == "pvp_training_v1");
     CHECK(arena->map == "object_fps_pvp.map.pvp_arena");
     CHECK(arena->width == 20.0F);
-    CHECK(arena->movementSpeed == 3.0F);
-    CHECK(arena->jumpHeight == 0.6F);  // not in the file: the default
-    CHECK(arena->gravity == 18.0F);
     CHECK(arena->spawns[1].position.z == 12.0F);
-    // Version 4's bounds: the training arena stands on a floor plane; the big maps have their own ground.
+    // The bounds: the training arena stands on a floor plane; the big maps have their own ground.
     REQUIRE(arena->floor.has_value());
     CHECK(*arena->floor == 0.0F);
     CHECK(arena->killHeight == -10.0F);
-    REQUIRE(arena->fallDamage.has_value());
-    CHECK(arena->fallDamage->safeHeight == 4.0F);
-    CHECK(arena->fallDamage->milliPointsPerMetre == 15'000U);
+    // Not furnished yet (the doors' line names its scene).
+    CHECK_FALSE(arena->scene.has_value());
     const auto town = sim::ParseArena(ReadFile(kMaps + "kiriyu_town_graybox.json"), error);
     REQUIRE_MESSAGE(town.has_value(), error);
     CHECK_FALSE(town->floor.has_value());
     CHECK(town->killHeight == -13.0F);
 }
 
-TEST_CASE("PvP arena: the rules of an arena file") {
+TEST_CASE("PvP arena: what an arena file says and what it refuses") {
     const auto arena = [](const std::string& patch) {
-        return R"({"version": 4, "id": "a", "width": 10, "depth": 10, "map": "a", "kill_height": -10, )" + patch + "}";
+        return R"({"version": 5, "id": "a", "width": 10, "depth": 10, "map": "a", "kill_height": -10, )" + patch + "}";
     };
     const std::string twoSpawns = R"("spawns": [{"position": [1, 0, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])";
     std::string error;
     CHECK(sim::ParseArena(arena(twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [{"position": [1, 0, 1], "yaw": 0}])"), error).has_value());
-    CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [{"position": [0.1, 0, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])"), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("floor": 0, "spawns": [{"position": [1, -1, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])"), error).has_value());
-    CHECK_FALSE(sim::ParseArena(arena(R"("eye_height": 2, )" + twoSpawns), error).has_value());
-    CHECK_FALSE(sim::ParseArena(arena(R"("body_height": 0.4, )" + twoSpawns), error).has_value());
-    CHECK_FALSE(sim::ParseArena(arena(R"("movement_speed": -1, )" + twoSpawns), error).has_value());
-    CHECK_FALSE(sim::ParseArena(R"({"version": 4, "id": "a", "width": 10, "depth": 10, "map": "", "kill_height": -10, )" + twoSpawns + "}", error)
+    CHECK_FALSE(sim::ParseArena(R"({"version": 5, "id": "a", "width": 10, "depth": 10, "map": "", "kill_height": -10, )" + twoSpawns + "}", error)
                     .has_value());
-    // Version 3 had no bounds (its floor was always y = 0); it is not read as version 4, even with version 4's members.
-    CHECK_FALSE(sim::ParseArena(R"({"version": 3, "id": "a", "width": 10, "depth": 10, "map": "a", "kill_height": -10, )" + twoSpawns + "}", error)
+    CHECK_FALSE(sim::ParseArena(R"({"version": 5, "id": "a", "depth": 10, "map": "a", "kill_height": -10, )" + twoSpawns + "}", error)
                     .has_value());
-    // The bounds: no floor (absent), a kill height (required, below the floor and every spawn), the fall damage.
+    CHECK_FALSE(sim::ParseArena(arena(R"("width": 0, )" + twoSpawns), error).has_value());
+    // The bounds without a body: a spawn may stand anywhere in [0, width] x [0, depth] (the room for the character's
+    // radius is LoadGameContent's to check), not outside.
+    CHECK(sim::ParseArena(arena(R"("spawns": [{"position": [0, 0, 0], "yaw": 0}, {"position": [10, 0, 10], "yaw": 0}])"), error).has_value());
+    CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [{"position": [-0.1, 0, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])"), error).has_value());
+    CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [{"position": [1, 0, 1], "yaw": 0}, {"position": [9, 0, 10.1], "yaw": 0}])"), error).has_value());
+    // Version 4 carried the rules and the body; it is not read as version 5, even with version 5's members only.
+    CHECK_FALSE(sim::ParseArena(R"({"version": 4, "id": "a", "width": 10, "depth": 10, "map": "a", "kill_height": -10, )" + twoSpawns + "}", error)
+                    .has_value());
+    CHECK(error == "unsupported arena version");
+    // The members version 4 had for the rules and the body are not read: they change nothing an arena says.
     const auto bare = sim::ParseArena(arena(twoSpawns), error);
     REQUIRE_MESSAGE(bare.has_value(), error);
+    const auto old = sim::ParseArena(arena(R"("movement_speed": 9, "body_height": 3, "radius": 1, "eye_height": 2.5, "jump_height": 2, )"
+                                           R"("gravity": 5, "fall_damage": {"safe_height": 1, "points_per_metre": 1}, )" + twoSpawns),
+                                     error);
+    REQUIRE_MESSAGE(old.has_value(), error);
+    CHECK(old->spawns.size() == bare->spawns.size());
+    // The bounds: no floor (absent), a kill height (required, below the floor and every spawn).
     CHECK_FALSE(bare->floor.has_value());
-    CHECK_FALSE(bare->fallDamage.has_value());
     CHECK(bare->killHeight == -10.0F);
-    CHECK_FALSE(sim::ParseArena(R"({"version": 4, "id": "a", "width": 10, "depth": 10, "map": "a", )" + twoSpawns + "}", error).has_value());
+    CHECK_FALSE(sim::ParseArena(R"({"version": 5, "id": "a", "width": 10, "depth": 10, "map": "a", )" + twoSpawns + "}", error).has_value());
     CHECK(sim::ParseArena(arena(R"("floor": 0, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("floor": -10, )" + twoSpawns), error).has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("floor": 0.5, )" + twoSpawns), error).has_value());  // a spawn below the floor
     CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [{"position": [1, -10, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}])"), error)
                     .has_value());  // a spawn not above the kill height
-    const auto hurt = sim::ParseArena(arena(R"("fall_damage": {"safe_height": 3.5, "points_per_metre": 12.5}, )" + twoSpawns), error);
-    REQUIRE_MESSAGE(hurt.has_value(), error);
-    REQUIRE(hurt->fallDamage.has_value());
-    CHECK(hurt->fallDamage->safeHeight == 3.5F);
-    CHECK(hurt->fallDamage->milliPointsPerMetre == 12'500U);
-    for (const std::string bad : {R"("fall_damage": {"points_per_metre": 10}, )", R"("fall_damage": {"safe_height": 0, "points_per_metre": 10}, )",
-                                  R"("fall_damage": {"safe_height": 4, "points_per_metre": -1}, )",
-                                  R"("fall_damage": {"safe_height": 4, "points_per_metre": 5000000}, )",
-                                  R"("fall_damage": {"safe_height": 4, "points_per_metre": 0.0001}, )"}) {
+}
+
+TEST_CASE("PvP arena: the scene an arena names is a path inside the content, written as a mode's rule files") {
+    const auto arena = [](const std::string& scene) {
+        return R"({"version": 5, "id": "a", "width": 10, "depth": 10, "map": "a", "kill_height": -10, "scene": )" + scene +
+               R"(, "spawns": [{"position": [1, 0, 1], "yaw": 0}, {"position": [9, 0, 9], "yaw": 0}]})";
+    };
+    std::string error;
+    const auto furnished = sim::ParseArena(arena(R"("scenes/pvp_arena.json")"), error);
+    REQUIRE_MESSAGE(furnished.has_value(), error);
+    REQUIRE(furnished->scene.has_value());
+    CHECK_MESSAGE(*furnished->scene == "scenes/pvp_arena.json", "[pvp-arena-scene] " << furnished->scene.value_or("(none)"));
+    const auto plain = sim::ParseArena(arena(R"("pvp_arena.json")"), error);
+    REQUIRE_MESSAGE(plain.has_value(), error);
+    CHECK(plain->scene == std::optional<std::string>("pvp_arena.json"));
+    for (const std::string bad : {R"("")", R"("../scenes/a.json")", R"("scenes/../a.json")", R"("/scenes/a.json")", R"("scenes//a.json")",
+                                  R"("./a.json")", R"("scenes\\a.json")", R"("C:/a.json")", R"(7)"}) {
         CAPTURE(bad);
-        CHECK_FALSE(sim::ParseArena(arena(bad + twoSpawns), error).has_value());
+        CHECK_MESSAGE(!sim::ParseArena(arena(bad), error).has_value(), "[pvp-arena-scene-path] " << bad);
     }
 }

@@ -23,5 +23,12 @@ namespace object_fps_pvp::data {
 [[nodiscard]] std::uint64_t Unsigned(const GYO::Engine::Json::Value& value, std::string_view what);
 [[nodiscard]] std::string String(const GYO::Engine::Json::Value& value, std::string_view what);
 [[nodiscard]] bool Boolean(const GYO::Engine::Json::Value& value, std::string_view what);
+// A number that is finite and positive as a float.
+[[nodiscard]] float Positive(const GYO::Engine::Json::Value& value, std::string_view what);
+// The member key as Positive; absent: fallback.
+[[nodiscard]] float PositiveOr(const GYO::Engine::Json::ObjectView& object, std::string_view key, float fallback);
+// A file under the content root: a relative path of plain names separated by '/' (none empty, "." or "..", none with
+// a backslash or ':').
+[[nodiscard]] std::string ContentPath(const GYO::Engine::Json::Value& value, std::string_view what);
 
 } // namespace object_fps_pvp::data

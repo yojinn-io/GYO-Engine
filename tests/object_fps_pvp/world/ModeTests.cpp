@@ -1,11 +1,16 @@
 // The game's modes (world/Modes.hpp; mode-config declaration, section 3): the shipped core PvP mode, what a mode file
-// may not say, and the rules digest. A Client whose mode is not the Match's: WorldTests.cpp (its Session).
+// may not say, and the rules digest; the character's and the arena's digests, and the arena spawns' room for the
+// character (arena-rules-split declaration 3.6, 5). A Client whose mode is not the Match's: WorldTests.cpp (its Session).
 #include <doctest/doctest.h>
 
 #include "WorldTestSupport.hpp"
 
 #include "object_fps_pvp/character/CharacterRig.hpp"
 #include "object_fps_pvp/world/Modes.hpp"
+
+#include <filesystem>
+#include <fstream>
+#include <random>
 
 
 using namespace object_fps_pvp::test;
@@ -35,52 +40,95 @@ TEST_CASE("world: the shipped modes: core PvP comes first, plays every arena wit
 
 TEST_CASE("world: a mode file reads; a second mode with other rules has another digest, the same values the same one") {
     ModeFolder folder;
-    folder.Write("rules/slow.json", R"({"version": 2, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.25,)"
+    folder.Write("rules/slow.json", R"({"version": 3, "movement_speed": 3, "jump_height": 0.6, "gravity": 18, "crouch_speed_scale": 0.25,)"
                                      R"( "sprint_speed_scale": 1.0, "hold_jump": true})");
     // The same values as core_pvp written otherwise (CRLF, other spaces): the digest does not see the bytes.
     folder.Modes({{"a.json", ModeText("core_pvp")},
-                  {"b.json", "{\r\n  \"arenas\": [],\r\n \"sets\": {},  \"rules\": {\"movement\": \"rules/movement_rules.json\"},\r\n"
+                  {"b.json", "{\r\n  \"arenas\": [],\r\n \"sets\": {},  \"rules\": {\"damage\": \"rules/damage_rules.json\", \"movement\": \"rules/movement_rules.json\"},\r\n"
                              "\"version\": 1, \"id\": \"copy\", \"name\": \"N\"}\r\n"},
-                  {"c.json", ModeText("slow", R"({"movement": "rules/slow.json"})", "{}", R"(["pvp_training_v1"])")}});
+                  {"c.json", ModeText("slow", R"({"movement": "rules/slow.json", "damage": "rules/damage_rules.json"})", "{}", R"(["pvp_training_v1"])")}});
     std::string error;
     const auto modes = Load(folder, error);
     REQUIRE_MESSAGE(modes.has_value(), error);
     REQUIRE(modes->size() == 3);
     CHECK(modes->at(0).rulesDigest == ShippedContent()->modes.front().rulesDigest);
     // Another id is another mode: its digest differs (the id is in it), the rule values are the same.
-    CHECK(modes->at(1).stance == modes->at(0).stance);
+    CHECK(modes->at(1).movement == modes->at(0).movement);
+    CHECK(modes->at(1).damage == modes->at(0).damage);
     CHECK(modes->at(1).rulesDigest != modes->at(0).rulesDigest);
-    CHECK(modes->at(2).stance.crouchSpeedScale == 0.25F);
+    CHECK(modes->at(2).movement.crouchSpeedScale == 0.25F);
     CHECK(modes->at(2).Plays("pvp_training_v1"));
     CHECK_FALSE(modes->at(2).Plays("pvp_corners_v1"));
     CHECK(modes->at(2).rulesDigest != modes->at(0).rulesDigest);
 }
 
-TEST_CASE("world: the rules digest follows each rule value: the movement rules and the combat rules") {
+TEST_CASE("world: the rules digest follows each rule value: the movement, damage and combat rules") {
     // One mode id, read with one rule value changed at a time: each gives another digest.
     const auto& content = *ShippedContent();
-    const auto digestOf = [&](const std::string& movement, const sim::CombatRules& combat) {
+    const std::string shippedMovement = R"({"version": 3, "movement_speed": 3, "jump_height": 0.6, "gravity": 18, "crouch_speed_scale": 0.5,)"
+                                        R"( "sprint_speed_scale": 1.0, "hold_jump": true})";
+    const std::string shippedDamage = R"({"version": 1, "fall_damage": {"safe_height": 4.0, "points_per_metre": 15}})";
+    const auto digestOf = [&](const std::string& movement, const std::optional<std::string>& damage, const sim::CombatRules& combat) {
         ModeFolder folder;
         folder.Write("rules/movement.json", movement);
-        folder.Modes({{"a.json", ModeText("same", R"({"movement": "rules/movement.json"})")}});
+        std::string rules = R"({"movement": "rules/movement.json")";
+        if (damage) {
+            folder.Write("rules/damage.json", *damage);
+            rules += R"(, "damage": "rules/damage.json")";
+        }
+        folder.Modes({{"a.json", ModeText("same", rules + "}")}});
         std::string error;
         const auto modes = PW::LoadModes(folder.root.string(), content.arenas, combat, PW::GameSets(), error);
         REQUIRE_MESSAGE(modes.has_value(), error);
         return modes->front().rulesDigest;
     };
-    const std::string shipped = R"({"version": 2, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.5,)"
-                                R"( "sprint_speed_scale": 1.0, "hold_jump": true})";
-    const std::uint64_t base = digestOf(shipped, content.combat);
-    CHECK(digestOf(shipped, content.combat) == base);
-    std::string slower = shipped;
-    slower.replace(slower.find("0.5"), 3, "0.4");
-    CHECK_MESSAGE(digestOf(slower, content.combat) != base, "rulesDigest: the movement rules");
+    const auto with = [](std::string text, const std::string& from, const std::string& to) {
+        text.replace(text.find(from), from.size(), to);
+        return text;
+    };
+    const std::uint64_t base = digestOf(shippedMovement, shippedDamage, content.combat);
+    CHECK(digestOf(shippedMovement, shippedDamage, content.combat) == base);
+    CHECK_MESSAGE(digestOf(with(shippedMovement, "\"crouch_speed_scale\": 0.5", "\"crouch_speed_scale\": 0.4"), shippedDamage, content.combat) != base,
+                  "rulesDigest: the movement rules' crouch speed scale");
+    CHECK_MESSAGE(digestOf(with(shippedMovement, "\"movement_speed\": 3", "\"movement_speed\": 3.5"), shippedDamage, content.combat) != base,
+                  "[pvp-rules-digest-speed] rulesDigest: the movement speed");
+    CHECK_MESSAGE(digestOf(with(shippedMovement, "\"jump_height\": 0.6", "\"jump_height\": 0.7"), shippedDamage, content.combat) != base,
+                  "[pvp-rules-digest-jump] rulesDigest: the jump height");
+    CHECK_MESSAGE(digestOf(with(shippedMovement, "\"gravity\": 18", "\"gravity\": 17"), shippedDamage, content.combat) != base,
+                  "[pvp-rules-digest-gravity] rulesDigest: the gravity");
+    CHECK_MESSAGE(digestOf(shippedMovement, with(shippedDamage, "4.0", "4.5"), content.combat) != base,
+                  "[pvp-rules-digest-fall] rulesDigest: the fall damage's safe height");
+    CHECK_MESSAGE(digestOf(shippedMovement, with(shippedDamage, "15}", "16}"), content.combat) != base,
+                  "[pvp-rules-digest-fall] rulesDigest: the fall damage's points");
+    CHECK_MESSAGE(digestOf(shippedMovement, std::nullopt, content.combat) != base, "[pvp-rules-digest-fall] rulesDigest: no damage rules");
     sim::CombatRules combat = content.combat;
     combat.legPermille += 1;
-    CHECK_MESSAGE(digestOf(shipped, combat) != base, "rulesDigest: the combat rules");
+    CHECK_MESSAGE(digestOf(shippedMovement, shippedDamage, combat) != base, "rulesDigest: the combat rules");
+    // The shipped core PvP is these tables.
+    std::string error;
+    const auto movement = sim::ParseMovementRules(shippedMovement, error);
+    REQUIRE_MESSAGE(movement.has_value(), error);
+    CHECK(content.modes.front().movement == *movement);
 }
 
-TEST_CASE("world: the character digest follows the body model's id, the skeleton, the clips, the animation rules and the hit shapes") {
+TEST_CASE("world: a mode without damage rules plays with none; a mode's damage rules are read from their file") {
+    ModeFolder folder;
+    folder.Write("rules/soft.json", R"({"version": 1, "fall_damage": {"safe_height": 2.5, "points_per_metre": 40}})");
+    folder.Modes({{"a.json", ModeText("none", R"({"movement": "rules/movement_rules.json"})")},
+                  {"b.json", ModeText("soft", R"({"movement": "rules/movement_rules.json", "damage": "rules/soft.json"})")}});
+    std::string error;
+    const auto modes = Load(folder, error);
+    REQUIRE_MESSAGE(modes.has_value(), error);
+    CHECK_MESSAGE(!modes->at(0).damage.fall.has_value(), "[pvp-mode-no-damage] no damage rules: a landing never hurts");
+    REQUIRE_MESSAGE(modes->at(1).damage.fall.has_value(), "[pvp-mode-damage-read]");
+    CHECK(modes->at(1).damage.fall->safeHeight == 2.5F);
+    CHECK(modes->at(1).damage.fall->milliPointsPerMetre == 40'000U);
+    // The shipped core PvP's: as every arena of version 4 carried.
+    REQUIRE(ShippedContent()->modes.front().damage.fall.has_value());
+    CHECK(ShippedContent()->modes.front().damage.fall->safeHeight == 4.0F);
+}
+
+TEST_CASE("world: the character digest follows the body model's id, the body, the skeleton, the clips, the animation rules and the hit shapes") {
     // The user's decision U1 (mode-config declaration 11.7). One value changed at a time: each gives another digest.
     const auto& shipped = *ShippedContent()->character;
     const std::uint64_t base = PW::CharacterDigest(shipped);
@@ -92,6 +140,11 @@ TEST_CASE("world: the character digest follows the body model's id, the skeleton
         return PW::CharacterDigest(rig);
     };
     CHECK_MESSAGE(changed([](auto& rig) { rig.bodyAssetId += "_other"; }) != base, "characterDigest: the body model's id");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodySize.height += 0.01F; }) != base, "[pvp-character-digest-body] the body's height");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodySize.radius += 0.01F; }) != base, "[pvp-character-digest-body] the body's radius");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodySize.eyeHeight += 0.01F; }) != base, "[pvp-character-digest-body] the eye's height");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodySize.crouchHeight += 0.01F; }) != base, "[pvp-character-digest-body] the crouched body");
+    CHECK_MESSAGE(changed([](auto& rig) { rig.bodySize.crouchEyeHeight += 0.01F; }) != base, "[pvp-character-digest-body] the crouched eye");
     CHECK_MESSAGE(changed([](auto& rig) {
                       auto body = std::make_shared<GYO::Engine::Model::ModelData>(*rig.body);
                       body->nodes.back().rest.translation.y += 0.01F;
@@ -132,6 +185,8 @@ TEST_CASE("world: a mode that names an unknown rule kind, set or arena, no movem
     refused({{"a.json", ModeText(std::string(65, 'a'))}}, "id is 1 to 64 characters");
     refused({{"a.json", ModeText("a", R"({"movement": "../rules/movement_rules.json"})")}}, "not a path inside the content");
     refused({{"a.json", ModeText("a", R"({"movement": "rules/missing.json"})")}}, "missing.json");
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json", "damage": "rules/movement_rules.json"})")}},
+            "rules/movement_rules.json: unsupported version");
 }
 
 TEST_CASE("world: which arenas a mode plays is one question to the content: every choice asks GameContent::Plays") {
@@ -150,4 +205,85 @@ TEST_CASE("world: which arenas a mode plays is one question to the content: ever
     CHECK_FALSE_MESSAGE(content->Plays(1, *training), "[pvp-mode-plays] a mode that lists its arenas plays only them");
     CHECK(content->Plays(1, *corners));
     CHECK_FALSE(content->FindArena("no_such_arena").has_value());
+}
+
+TEST_CASE("world: the arena digest follows the arena's own values -- map, bounds, floor, kill height, spawns -- not its id or scene") {
+    const auto& content = *ShippedContent();
+    const std::uint64_t base = content.ArenaDigest(0);
+    const auto changed = [&](const auto& change) {
+        PW::GameContent copy = content;
+        change(copy.arenas[0]);
+        return copy.ArenaDigest(0);
+    };
+    CHECK(changed([](sim::ArenaContent&) {}) == base);
+    CHECK(content.ArenaDigest(1) != base);
+    CHECK_MESSAGE(changed([](auto& a) { a.map += "_other"; }) != base, "[pvp-arena-digest] the map");
+    CHECK_MESSAGE(changed([](auto& a) { a.width += 1.0F; }) != base, "[pvp-arena-digest] the width");
+    CHECK_MESSAGE(changed([](auto& a) { a.depth += 1.0F; }) != base, "[pvp-arena-digest] the depth");
+    CHECK_MESSAGE(changed([](auto& a) { a.floor.reset(); }) != base, "[pvp-arena-digest] no floor");
+    CHECK_MESSAGE(changed([](auto& a) { a.floor = 0.5F; }) != base, "[pvp-arena-digest] the floor's height");
+    CHECK_MESSAGE(changed([](auto& a) { a.killHeight -= 1.0F; }) != base, "[pvp-arena-digest] the kill height");
+    CHECK_MESSAGE(changed([](auto& a) { a.spawns[1].position.z += 1.0F; }) != base, "[pvp-arena-digest] a spawn's position");
+    CHECK_MESSAGE(changed([](auto& a) { a.spawns[1].yaw += 0.1F; }) != base, "[pvp-arena-digest] a spawn's yaw");
+    CHECK_MESSAGE(changed([](auto& a) { a.spawns.pop_back(); }) != base, "[pvp-arena-digest] the spawns");
+    // Its id is compared on its own; its scene's content is (the scene's own comparison).
+    CHECK(changed([](auto& a) { a.id += "_other"; }) == base);
+    CHECK(changed([](auto& a) { a.scene = "scenes/other.json"; }) == base);
+}
+
+TEST_CASE("world: a Client whose arena has another spawn than the Match's, with the same id and walls, is a content mismatch (arena data)") {
+    auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+    other->arenas[0].spawns[1].position.z += 1.0F;
+    Session session(1, 4, 0, other);
+    session.Frames(90);
+    const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+    CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::ArenaData, "[pvp-arena-data-mismatch] " << mismatch.reason);
+    CHECK_MESSAGE(mismatch.reason.find("spawns") != std::string::npos, mismatch.reason);
+    CHECK(mismatch.matchArena == "pvp_training_v1");
+}
+
+TEST_CASE("world: content whose arena has a spawn closer to the bounds than the character's radius does not load") {
+    // A content root of the test's own: the shipped character, modes and rules, and one arena of its own.
+    std::random_device random;
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / ("gyo_pvp_content_" + std::to_string(random()));
+    const std::filesystem::path shipped(PVP_CONTENT_ROOT);
+    struct Remove {
+        std::filesystem::path path;
+        ~Remove() {
+            std::error_code ignored;
+            std::filesystem::remove_all(path, ignored);
+        }
+    } remove{root};
+    std::filesystem::create_directories(root / "maps");
+    for (const char* folder : {"characters", "animations", "rules"}) {
+        std::filesystem::copy(shipped / folder, root / folder, std::filesystem::copy_options::recursive);
+    }
+    std::filesystem::copy_file(shipped / "asset_catalog.json", root / "asset_catalog.json");
+    const auto write = [&](const std::string& path, const std::string& text) {
+        std::ofstream out(root / path, std::ios::binary);
+        out << text;
+    };
+    std::filesystem::create_directories(root / "modes");
+    write("modes/modes.json", R"({"version": 1, "modes": ["a.json"]})");
+    write("modes/a.json", ModeText("a"));
+    write("maps/arenas.json", R"({"version": 1, "arenas": ["edge.json"]})");
+    const auto arena = [](const std::string& x) {
+        return R"({"version": 5, "id": "edge", "width": 10, "depth": 10, "map": "object_fps_pvp.map.pvp_arena", "kill_height": -10,)"
+               R"( "spawns": [{"position": [)" + x + R"(, 0, 5], "yaw": 0}, {"position": [5, 0, 5], "yaw": 0}]})";
+    };
+    const float radius = ShippedContent()->character->bodySize.radius;
+    std::string error;
+    // Exactly the radius from the bound: room enough.
+    write("maps/edge.json", arena(std::to_string(radius)));
+    const auto fits = PW::LoadGameContent(root.string(), error);
+    REQUIRE_MESSAGE(fits.has_value(), error);
+    CHECK(fits->arenas.front().spawns.front().position.x == radius);
+    // Inside the arena (the arena file reads) but closer than the radius: the content does not load.
+    write("maps/edge.json", arena("0.1"));
+    REQUIRE(sim::ParseArena(R"({"version": 5, "id": "edge", "width": 10, "depth": 10, "map": "m", "kill_height": -10,)"
+                            R"( "spawns": [{"position": [0.1, 0, 5], "yaw": 0}, {"position": [5, 0, 5], "yaw": 0}]})",
+                            error)
+                .has_value());
+    CHECK_FALSE_MESSAGE(PW::LoadGameContent(root.string(), error).has_value(), "[pvp-spawn-radius-unchecked]");
+    CHECK_MESSAGE(error.find("edge.json: spawn 0 is outside the bounds for the character's radius") != std::string::npos, error);
 }

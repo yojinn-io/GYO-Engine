@@ -135,7 +135,7 @@ void RestBounds(const Model::ModelData& model, float& minimum, float& maximum) {
 
 } // namespace
 
-std::optional<CharacterRig> LoadCharacterRig(const std::string& root, const float bodyHeight, std::string& error) {
+std::optional<CharacterRig> LoadCharacterRig(const std::string& root, std::string& error) {
     error.clear();
     try {
         IO::FS::NativeFileSystem fs;
@@ -146,6 +146,10 @@ std::optional<CharacterRig> LoadCharacterRig(const std::string& root, const floa
         const std::string characterText = ReadText(fs, dir + "character.json");
         const auto characterDocument = data::ParseDocument(characterText);
         const auto character = data::AsObject(characterDocument.Root(), "character.json");
+        if (data::Integer(data::Member(character, "version"), "version") != 2) throw std::runtime_error("character.json: unsupported version");
+        auto bodySize = sim::ParseBodySize(characterText, error);
+        if (!bodySize) throw std::runtime_error("character.json: " + error);
+        rig.bodySize = *bodySize;
         rig.bodyAssetId = data::String(data::Member(character, "model_asset_id"), "model_asset_id");
         auto body = std::make_shared<Model::ModelData>(LoadFbx(fs, root, catalog, rig.bodyAssetId));
         const auto binding = data::AsObject(data::Member(character, "animation_binding"), "animation_binding");
@@ -200,11 +204,11 @@ std::optional<CharacterRig> LoadCharacterRig(const std::string& root, const floa
         const float* r = presentation->weaponRotation;
         rig.weaponMount = Math::ComposeTRS(presentation->weaponTranslation, Math::Quaternion{r[0], r[1], r[2], r[3]},
                                            Math::Vec3{presentation->weaponScale, presentation->weaponScale, presentation->weaponScale});
-        // The body's height: the arena's body over the model's.
+        // The body's height over the model's.
         float minimum = 0, maximum = 0;
         RestBounds(*body, minimum, maximum);
         if (!(maximum - minimum > 1e-3F)) throw std::runtime_error("the body model has no usable height");
-        rig.scale = bodyHeight / (maximum - minimum);
+        rig.scale = rig.bodySize.height / (maximum - minimum);
         rig.anchor = {0.0F, minimum, 0.0F};
         // hitbox.json: the shapes on the bones.
         const std::string hitText = ReadText(fs, dir + "hitbox.json");

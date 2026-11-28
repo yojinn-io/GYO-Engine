@@ -63,15 +63,13 @@ namespace N = GYO::Engine::Net;
 
 // What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), every
 // installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables and gameplay sets), the gameplay
-// sets' table (world/GameplaySets.hpp; every World registers all of them) with each arena's set blocks (arenaSets, by
-// arena), the combat rules (the game's defaults) and the character (its skeleton, clips and hit shapes; the arenas
-// share one body height). An arena's map is not here: the World that plays the arena reads it (LoadArena, big-map
-// declaration 15.6).
+// sets' table (world/GameplaySets.hpp; every World registers all of them), the combat rules (the game's defaults) and
+// the character (its body, skeleton, clips and hit shapes). An arena's map is not here: the World that plays the arena
+// reads it (LoadArena, big-map declaration 15.6).
 struct GameContent final {
     std::vector<sim::ArenaContent> arenas;
     std::vector<ModeContent> modes;
     std::vector<GameplaySet> sets;
-    std::vector<SetBlocks> arenaSets;
     // CharacterDigest of the character, read once (MatchInfo::characterDigest).
     std::uint64_t characterDigest = 0;
     sim::CombatRules combat;
@@ -84,10 +82,10 @@ struct GameContent final {
     [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
     // Whether the mode (an index into modes) plays the arena (an index into arenas): the one place every choice asks.
     [[nodiscard]] bool Plays(std::size_t mode, std::size_t arena) const;
-    // The digest of the blocks the arena carries for the sets the mode turns on (MatchInfo::arenaDigest; one formula,
-    // also when there is none). The mode's own rules are ModeContent::rulesDigest: kept apart, so another arena is
-    // known as another arena (built again on it), not as other rules (design review 2, S1).
-    [[nodiscard]] std::uint64_t ArenaDigest(std::size_t mode, std::size_t arena) const;
+    // The digest of the arena's own values (MatchInfo::arenaDigest): its map, bounds, floor, kill height and spawns. The
+    // mode's rules are ModeContent::rulesDigest: kept apart, so another arena is known as another arena (built again on
+    // it), not as other rules (mode-config design review 2, S1).
+    [[nodiscard]] std::uint64_t ArenaDigest(std::size_t arena) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
@@ -95,8 +93,8 @@ struct GameContent final {
 [[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
 
 // What differs from the Match's (FollowMatchContent compares in this order): another mode, the same mode with other
-// rules (the rules digest), another character (the character digest), another arena, the same arena with other blocks
-// for the sets the mode turns on (the arena digest), the same arena with other walls (the walls digest). Mode and Arena
+// rules (the rules digest), another character (the character digest), another arena, the same arena with other bounds,
+// floor, kill height or spawns (the arena digest), the same arena with other walls (the walls digest). Mode and Arena
 // are another match this Client may have; the others are other content.
 enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, ArenaData, Walls };
 
@@ -118,9 +116,9 @@ void HashValue(K::Hasher&, const ContentMismatch&);
 [[nodiscard]] GameRules GameRulesOf(const GameContent& content, std::size_t mode, std::size_t arena);
 
 // Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
-// nullopt with error naming the file and what was wrong: a file that does not read or parse, an arena whose stance
-// rules do not fit, a set block a set does not read. Whether its map reads, and its spawns
-// are free of its walls, is known when a World reads the map (MapLoad).
+// nullopt with error naming the file and what was wrong: a file that does not read or parse (an arena, a mode, a rule
+// table, the character), an arena spawn that leaves no room for the character's radius to the bounds. Whether its map
+// reads, and its spawns are free of its walls, is known when a World reads the map (MapLoad).
 [[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error,
                                                          const std::vector<GameplaySet>& sets = GameSets());
 

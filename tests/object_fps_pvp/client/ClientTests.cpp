@@ -893,7 +893,7 @@ TEST_CASE("client: holding Space jumps again on every landing; letting go stops"
     Setup setup;
     setup.Loaded();
     setup.Frames(60);
-    REQUIRE(ShippedContent()->modes.front().stance.holdJump);
+    REQUIRE(ShippedContent()->modes.front().movement.holdJump);
     // The loading screen gone: a click before it is the screen's, not the game's.
     setup.Shown();
     I::MouseButtonInput click;
