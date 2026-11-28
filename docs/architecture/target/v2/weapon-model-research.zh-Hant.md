@@ -1,6 +1,6 @@
 # Object_PvP 的武器模型怎麼組成（`v8-arch-gyo2-weapon-model-research`）
 
-更新：2026-11-28。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：只是研究，不實作。決策點 U1 待使用者定（第 10 節）。這份文件沒有改任何已定的決定。**
+更新：2026-11-28（同日加第 14 節：素材資料夾結構，使用者已定、排進 W1）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：只是研究，不實作。決策點 U1 待使用者定（第 10 節）。素材資料夾結構使用者已定（第 14 節），改寫了第 5.2 節的資料夾形狀與第 11 節 G1 的內容；其他已定的決定沒有改。**
 
 查的版本：`gyo2` 9eea5968；E1、E2 看的是 `origin/claude/gyo2-model-pose-ik` 170c610f（#377，還沒合併）。本地源碼：Bevy 6a911653f、Godot 94fc09c、Blender 4.5 內附的 FBX 匯出器（`/Applications/Blender.app/Contents/Resources/4.5/scripts/addons_core/io_scene_fbx/`。素材是用 Blender 5.2.3 匯出的，**版本不同**，5.2 的選項是不是一樣，未確認）。Unreal 只讀官方文件（附 URL）。Source（CS:GO、Garry's Mod）、塔科夫、Valorant 沒有原始碼，Valve Developer Community 的頁面也抓不到（HTTP 403），所以只能用搜尋摘要，全部標「未確認」。
 
@@ -176,7 +176,7 @@ W3 背包裡有射釘槍和步槍。按 2 切到步槍：Client 要知道步槍�
 
 ### 5.2 推薦的形狀（W1、W2、G3 各加一部分）
 
-`weapon.json` 當**索引**，兩個視角各自的檔原樣留在自己的資料夾（`assets.zh-Hant.md` 的 `weapons/<weapon>/{viewmodel,world}/`）。這樣 W1 可以不動現有兩份檔的內容。
+`weapon.json` 當**索引**，兩個視角各自的定義檔原樣留在自己的資料夾（`weapons/<weapon>/{viewmodel,world}/`）。這樣 W1 不用改現有兩份定義檔的欄位。資料夾裡依種類分 `models/`、`animations/`、`textures/`，這是使用者 2026-11-28 定的結構（第 14 節）。
 
 ```text
 weapons/<weapon>/
@@ -184,18 +184,22 @@ weapons/<weapon>/
 ├── viewmodel/
 │   ├── <weapon>_viewmodel.json 現有：模型、材質表、animset／anim_events／event_sounds 的 id、錨點、放置、FOV、後座力
 │   │                           W2 加：arms（選填；沒寫＝手臂在武器的模型裡，就是現況）
-│   ├── <Weapon>_FPS.fbx        骨架＋槍網格＋片段（W2 之後不含手臂網格）
 │   ├── viewmodel.animset.json  role → 片段（Idle、Shoot、Reload、Draw、Hide）
 │   ├── viewmodel.anim_events.json、viewmodel.event_sounds.json
+│   ├── models/                 <Weapon>_FPS.fbx：骨架＋槍網格（W1 時仍是現在的一體檔；W2 之後不含手臂網格與片段）
+│   ├── animations/             W2：<Weapon>_FPS_Anims.fbx（骨架＋這把槍的片段，無網格）
 │   └── textures/
 └── world/
     ├── character.json          現有：模型、材質覆寫
     │                           G3 加：left_grip_node（例 "grip_l"）；W1 或 G3 加：mount（掛點微調，預設單位矩陣）
-    └── <Weapon>_TPS.fbx        網格＋ Empty（muzzle、grip_l）
+    ├── models/                 <Weapon>_TPS.fbx：網格＋ Empty（muzzle、grip_l）
+    └── textures/
 
 characters/player/
 ├── presentation.json           現有的 weapon{node, …} 留下「手掌握把在哪」（每副骨架一份）
-└── arms/                       W2：第一人稱手臂（手臂骨＋手臂網格、手套的材質表）
+├── models/                     Player_V20.fbx
+├── textures/
+└── arms/                       W2：第一人稱手臂（arms.json＝手套的材質表；models/ 手臂骨＋手臂網格；textures/）
 ```
 
 | 欄位 | 誰讀 | 對齊的已定事項 | 哪一批加 |
@@ -319,7 +323,7 @@ nailer.blend（一把武器一個檔；手臂用 Link／Append 從上面帶進�
 ```text
 W 線 × 武器模型（本卡新增或補充的部分）
 ├─ Engine：0 批
-├─ G1  high｜（既有，W1）＋本卡補充：LoadViewmodel 的檔名改從 weapon.json 找；mount 搬進 world/character.json；不加 arms 欄
+├─ G1  high｜（既有，W1）＋本卡補充：LoadViewmodel 的檔名改從 weapon.json 找；mount 搬進 world/character.json；不加 arms 欄；素材搬進 models／textures（第 14 節）
 ├─ A1  美術｜（使用者，W2 素材）Blender 重新匯出：手臂檔＋武器檔、Armature 套用縮放、muzzle／grip_l 的 Empty、第三人稱真實尺寸
 ├─ G7  high｜（新，W2）第一人稱手臂分檔：arms 選填欄、依名字複製姿勢、手臂的材質表（需 A1、G1）
 └─ G3  high｜（既有）＋本卡補充：第三人稱槍的 grip_l 節點；Match 用 meshes=false 讀槍的節點（需 A1 的第三人稱部分、E2）
@@ -327,9 +331,9 @@ W 線 × 武器模型（本卡新增或補充的部分）
 
 | 代號 | 內容 | 上段／下段（根據） | 實作者／審查者／檢證者（模型／檔位） |
 |---|---|---|---|
-| G1 `v8-product-pvp-weapon-data`（W1，既有） | 研究 #363 第 8 節的內容，加：`LoadViewmodel` 不再寫死 `nailer_v2_viewmodel.json`、`Nailer1_FPS.fbx`（`ClientWorld.cpp:2023`、`:2027`），改從 `weapon.json` 找；右手掛點 `mount` 搬進 `world/character.json`，角色留單位矩陣（5.2 節，逐位元一致）；`muzzle` 留著或刪掉由 G1 判（現在沒人讀） | 上段（資料格式） | 照 #363：Opus／high；審查 Opus／high |
+| G1 `v8-product-pvp-weapon-data`（W1，既有） | 研究 #363 第 8 節的內容，加：`LoadViewmodel` 不再寫死 `nailer_v2_viewmodel.json`、`Nailer1_FPS.fbx`（`ClientWorld.cpp:2023`、`:2027`），改從 `weapon.json` 找；右手掛點 `mount` 搬進 `world/character.json`，角色留單位矩陣（5.2 節，逐位元一致）；`muzzle` 留著或刪掉由 G1 判（現在沒人讀）；**素材資料夾照第 14 節重排**（只搬既有的檔，`models/`、`textures/`；`animations/` 等 W2 有檔才建）：catalog 的 `path` 跟著改、AssetId 不改，用路徑讀檔的程式一起改，`docs/object_fps_pvp/assets.zh-Hant.md` 第 2、3 節同一批改 | 上段（資料格式） | 照 #363：Opus／high；審查 Opus／high |
 | A1 `v8-product-pvp-weapon-art-reexport`（使用者的工作） | 第 6.3 節的流程；檢查照 6.4 節最後一條 | 不是程式批 | 使用者。檢查可由 G7 的卡用腳本做 |
-| G7 `v8-product-pvp-viewmodel-arms-split`（W2，新） | `<weapon>_viewmodel.json` 加選填 `arms`（沒寫＝現況）；讀檔時 `BindByName` 並檢查手臂的骨都在武器檔裡；`PoseViewmodel` 對手臂複製局部姿勢、各自 `ComputeModelSpace`；手臂的材質表；`characters/player/arms/` 的 catalog 項；外部測試：沒寫 `arms` 時姿勢與現在逐位元相同、少一根骨時報錯、手臂跟著武器的片段動 | 上段（資料格式） | Opus／high；純粹的 Code Review Fable／high；檢證者 Opus／high |
+| G7 `v8-product-pvp-viewmodel-arms-split`（W2，新） | `<weapon>_viewmodel.json` 加選填 `arms`（沒寫＝現況）；第一人稱的片段改從 `viewmodel/animations/` 的檔拿，用 `BindByName` 對到模型檔的骨（照 `CharacterRig.cpp:172-184`，第 14.3 節）；讀檔時 `BindByName` 並檢查手臂的骨都在武器檔裡；`PoseViewmodel` 對手臂複製局部姿勢、各自 `ComputeModelSpace`；手臂的材質表；`characters/player/arms/` 的 catalog 項；外部測試：沒寫 `arms` 時姿勢與現在逐位元相同、少一根骨時報錯、手臂跟著武器的片段動 | 上段（資料格式） | Opus／high；純粹的 Code Review Fable／high；檢證者 Opus／high |
 | G3 `v8-product-pvp-left-hand-ik`（既有） | #363 第 8 節的內容，加：`world/character.json` 的 `left_grip_node`；Match 讀第三人稱槍的 FBX（`meshes = false`）取 `grip_l`；IK 目標＝`hand_r` × `mount` × `grip_l`，手的朝向取 `grip_l` 的朝向；查握點要不要進內容比對（4.3 節） | 上段（判定） | 照 #363：Opus／high；審查 Opus／high；檢證者 Opus／high |
 
 順序：G1（W1）→ A1（W2 的素材）→ G7（W2）；G3 需要 A1 的第三人稱部分（`grip_l`）與 E2，可以在 G7 之前或之後。G7 不改交換內容，不必和 G2、G6 同一段升 Codec 版本。
@@ -385,3 +389,71 @@ W 線 × 武器模型（本卡新增或補充的部分）
 - 第一人稱與第三人稱的槍外觀是不是同一個設計，沒看圖。
 - G3 的握點要不要進內容比對，沒查。
 - 沒做重的本機量測。
+
+## 14. 素材資料夾結構（使用者 2026-11-28 定，排進 W1）
+
+### 14.1 決定
+
+**原話**：「現在，我要做美術資源和3D資源的整理，請給我一個資料夾結構。我想把動畫、模型、貼圖都分開」；看過本卡的提案後：「好，補進研究文件，轉給主會話排進 W1」。
+
+**決定**：第一層照舊依對象分（一個角色、一把武器的一個視角各一個資料夾）；對象資料夾裡依種類分 `models/`、`animations/`、`textures/`，定義 JSON 放對象資料夾的最上層。好幾個對象共用的動畫庫照舊放 `animations/<library>/`。
+
+**比過的**：第一層就依種類分（`models/`、`animations/`、`textures/` 各一棵樹）。不採用的理由：一把武器的檔會散在三棵樹，刪掉或換掉一個對象要到三處找。
+
+**理由**：使用者要的是種類分開；現行規範（`docs/object_fps_pvp/assets.zh-Hant.md` 第 2 節「依對象分資料夾」）要的是同一個對象的檔放一起。兩層分開排，兩邊都滿足。對象底下再分種類，在 Unreal 專案裡常見（Meshes、Animations、Textures），這是本卡的印象，沒有查證，所以不當根據。
+
+### 14.2 結構
+
+repo 裡的匯出檔（`assets/object_fps_pvp/`）：
+
+```text
+assets/object_fps_pvp/
+├── content.json, asset_catalog.json
+├── characters/
+│   └── player/
+│       ├── character.json, presentation.json, hitbox.json, animations.animset.json
+│       ├── models/                     Player_V20.fbx
+│       ├── animations/                 只有這個角色用的片段（有才建）
+│       ├── textures/                   （有才建）
+│       └── arms/                       W2：第一人稱手臂
+│           ├── arms.json               手套的材質表
+│           ├── models/                 完整骨架＋手臂網格，無片段
+│           └── textures/
+├── weapons/
+│   └── <weapon>/
+│       ├── weapon.json                 W1
+│       ├── viewmodel/
+│       │   ├── <weapon>_viewmodel.json, viewmodel.animset.json, viewmodel.anim_events.json, viewmodel.event_sounds.json
+│       │   ├── models/                 完整骨架＋槍的網格
+│       │   ├── animations/             W2：完整骨架＋這把槍的片段，無網格
+│       │   └── textures/
+│       └── world/
+│           ├── character.json
+│           ├── models/                 網格＋ muzzle、grip_l
+│           └── textures/
+└── animations/
+    └── ual_mannequin/                  共用的動畫庫（照舊）
+```
+
+原始檔（主 checkout 的 `build/art-source/object_fps_pvp/`，git 不追蹤）的路徑和上面相同，底下再加交付版本：`<對象>/<交付版本>/{blend,textures,export}/`。例：`weapons/nailer_v2/viewmodel/version03/blend/nailer.blend`。
+
+| 種類 | 放哪 | 匯出 |
+|---|---|---|
+| 定義 JSON | 對象資料夾最上層 | — |
+| 模型 | `<對象>/models/` | 骨架＋網格；關「Baked Animation」 |
+| 動畫 | 一個對象用：`<對象>/animations/`；多個對象共用：`animations/<library>/` | 骨架＋片段、無網格；只選 Armature、開「All Actions」 |
+| 貼圖 | `<對象>/textures/`；第二個對象也要用時才搬到 `textures/<group>/` | 照舊 |
+| 資料夾名 | 小寫 snake_case；交付的檔名保留原樣 | 照現行規範第 4 節 |
+
+### 14.3 對批次的影響
+
+1. **W1（G1）只搬既有的檔**，不建空資料夾（「空殼刪掉」）：
+   - `characters/player/Player_V20.fbx` → `characters/player/models/`
+   - `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` → `weapons/nailer_v2/viewmodel/models/`。現在仍是手臂＋槍＋片段的一體檔，W2 重新匯出時才拆。
+   - `weapons/nailer_v2/world/Nailer2_TPS.fbx` → `weapons/nailer_v2/world/models/`
+   - 貼圖已經在 `textures/`，不動。
+2. **catalog 只改 `path`，AssetId 不改**（現行規範第 5 節）：`asset_catalog.json:75`、`:81`、`:87`。走 catalog 讀的程式不用改。
+3. **用路徑讀的程式要一起改**：`ClientWorld.cpp:2027`（`dir + "Nailer1_FPS.fbx"`）。G1 本來就要把 `LoadViewmodel` 寫死的檔名改成從 `weapon.json` 找（第 11 節），兩件事同一批做。搬檔前再 `git grep` 一次 `.fbx`。
+4. **規範文件同一批改**：`docs/object_fps_pvp/assets.zh-Hant.md` 第 2 節的樹與第 3 節「3D 模型｜對象資料夾」，改成 `<對象>/models/`，並加 `<對象>/animations/`。這份文件寫在 master 時期，它提到的守衛 `tests/object_fps_pvp/test_asset_catalog.py` 在 `gyo2` 上沒有，所以不會撞到檢查；文件裡提到這個守衛的段落要不要一起整理，由 G1 判。
+5. **逐位元一致不受影響**：檔案內容不變，只改路徑。
+6. **W2（G7）多一件事**：第一人稱的片段改放 `viewmodel/animations/` 的獨立檔。模型檔多了網格節點，兩個檔的節點清單不同，所以要用 `BindByName` 把動畫檔的骨對到模型檔（第三人稱已經這樣做，`CharacterRig.cpp:172-184`）。研究的 (a) 不變：動畫還是每把武器一份，只是獨立成一個檔。Engine 不用改。
