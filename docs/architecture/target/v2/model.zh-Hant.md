@@ -4,7 +4,7 @@
 
 2026-11-24 修訂 1（合併後的設計審查，`build/evidence/v8-arch-gyo2-model/design-review.md`）：skin 的共用資料移到 `ModelData::skins`（M-13）；retarget 的參考姿勢可由呼叫者給（M-6）；ufbx 的記憶體上限跟著檔案大小上限（M-14）；材質在 FBX 值是空的時退回 PBR（M-15）；拿掉 adapter 自己的一套錯誤碼。貼圖照 asset 宣告的使用者決定 11 改成宣告 reference、加 `textures` 設定（M-16；主會話 2026-11-24 判 (a)：改回已核准的決定，不是推翻）。
 
-2026-11-28（`v8-arch-gyo2-model-pose-ops`）：照研究 #363 的 D3（HANDOFF `v8-arch-gyo2-anim-layers-decisions`），第 1 層補逐節點權重的 `Blend`、`ApplyAdditive`、`CrossedEvents`（4.2、4.6 節、MD-3、MD-7）；事前宣告與卡片自判的 K-1～K-16 在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md)，U1 (A) 是使用者 2026-11-28 定的。
+2026-11-28（`v8-arch-gyo2-model-pose-ops`）：照研究 #363 的 D3（HANDOFF `v8-arch-gyo2-anim-layers-decisions`），第 1 層補逐節點權重的 `Blend`、`ApplyAdditive`、`CrossedEvents`（4.2、4.6 節、MD-3、MD-7）；事前宣告與卡片自判的 K-1～K-16 在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md)，U1 (A) 是使用者 2026-11-28 定的。同日（`v8-arch-gyo2-model-two-bone-ik`）：照 D2、D5 (b) 加 two-bone IK 的純函式 `SolveTwoBoneIK`（4.7 節、MD-8），U2 (a) 是使用者 2026-11-28 定的。
 
 ## 一個例子
 
@@ -147,7 +147,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 ### 4.5 跨平台
 
-同一個建置、同樣的輸入，結果相同。不同平台、不同編譯器之間最後幾個位元可能不同（`sin`、`acos` 與 float 的運算順序沒有固定）：用在每台機器自己判的地方（Match 的命中、Client 的畫面），不要用在兩台機器必須逐位元一致的地方。PvP 在 master 也是這樣（盤點 4.6：取樣結果跨平台不同，命中只在 Match 算）。
+同一個建置、同樣的輸入，結果相同。不同平台、不同編譯器之間最後幾個位元可能不同（`sin`、`acos` 與 float 的運算順序沒有固定）：用在每台機器自己判的地方（Match 的命中、Client 的畫面），不要用在兩台機器必須逐位元一致的地方。PvP 在 master 也是這樣（盤點 4.6：取樣結果跨平台不同，命中只在 Match 算）。IK（4.7 節）用 `sqrt` 與 `Slerp` 裡的 `acos`，同樣不保證跨平台逐位元；它只在 Match 判（研究 #363 的 R3、D5 (b)），所以 RC-MD3 不因它觸發。
 
 ### 4.6 事件：`CrossedEvents`
 
@@ -166,12 +166,30 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 - `times` 的遞增與範圍是呼叫者的資料規則（遊戲讀 `gyo.anim_events` 時檢查），每次呼叫不檢查。`out` 太小、非有限的時間、負的 duration 是 Programmer Error。
 - 事件資料（`gyo.anim_events`）的讀法、事件 → 聲音是遊戲的。
 
+### 4.7 IK：`SolveTwoBoneIK`
+
+`SolveTwoBoneIK(nodes, chain, target, pole, weight, pose)`：轉 `chain.root` 與 `chain.mid` 的局部旋轉，讓 `chain.tip` 到 `target`、往 `pole` 那一側彎。`target`、`pole` 是模型空間的點（`ComputeModelSpace` 的空間）。`TwoBoneChain{root, mid, tip}`：mid 在 root 之下、tip 在 mid 之下，不必是直接的子節點（中間可以有 twist 骨）。Match 與 Client 都用（研究 #363 的 D5 (b)：手臂進判定）；哪條鏈、握點在哪、權重與何時開是遊戲的。
+
+1. weight 0：直接返回，`pose` 逐位元不變（連正規化都不做）。
+2. 沿祖先算 root、mid、tip 在模型空間的位置（矩陣，同 `ComputeModelSpace`）與旋轉（四元數連乘、不看縮放，同 Godot 的 `get_rotation_quaternion`，`two_bone_ik_3d.h:121-141`；縮放均勻時是精確的）。只走這條鏈的祖先，呼叫者 IK 之後照常算一次 `ComputeModelSpace`。
+3. 骨長取**目前的姿勢**（Godot 取 rest，`two_bone_ik_3d.cpp:663-681`）。骨長為 0、或目標就在 root 上：不動。
+4. tip 的去處：目標到 root 的距離夾在 [|a − b|, a + b]——**伸不到**時鏈沿目標方向伸直，**比兩段的差還近**（目標在身體裡）時鏈折起（Godot `two_bone_ik_3d.cpp:789-805`）。mid 在兩根骨的球面相交的圓上、在 pole 那一側（pole 先投影成垂直於 root→目標的方向，`skeleton_modifier_3d.cpp:387-398`）；**pole 落在 root→目標的直線上**時取目前 mid 那一側，鏈也是直的就取固定的垂直方向（偏離 Godot：Godot 這時 mid 落在直線上，`two_bone_ik_3d.cpp:814-831`）。
+5. 旋轉取最短弧（Godot 的 swing，`two_bone_ik_3d.h:163,176`）：先 root，再 mid（從 root 轉過之後的前臂量起）；方向正好相反時轉半圈。不做 roll 對齊（Godot `:181-215`），上臂的扭轉保留片段的。平移、縮放、其他節點不動，所以骨長不變。
+6. 0 < weight：root、mid 的局部旋轉各自 `Slerp(原本, 解出的, weight)`（Godot 的 influence，`skeleton_3d.cpp:1267`；Unity 文件也是線性插值）。不夾住。
+7. **末端骨不轉**（使用者 2026-11-28 選 U2 (a)；照 Godot，`two_bone_ik_3d.cpp:840-842`）：命中形狀只看手的位置。要手對齊握把時，呼叫者在 IK 之後設手的局部旋轉。
+
+span 大小不合、chain 的索引超出或不是祖先關係、非有限的 target／pole／weight 是 Programmer Error。
+
+- **偏離 Bevy**：Bevy 的 Engine 沒有 IK（研究 #363 第 2.1 節）；放進 model 是因為這裡本來就是「姿勢的純函式」那一層，只加一個函式、不加 modifier stack 或元件（研究 R3）。
+- Unity Two Bone IK、Unreal Two Bone IK 只讀了官方文件、沒有原始碼：目標是位置、pole 是點、三根骨，和這裡相同；兩家另有末端旋轉的選項（U2 沒選），Unreal 另有拉長（沒有需求）。取捨的全表在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md) 第 1、4 節（K-8～K-13）。
+
 ## 5. 不在本 Module
 
 - **第 2 層**（每個實體播哪個片段、播到哪裡，`AnimationModule`）：先不做，等有產品要 Bevy `AnimationPlayer`（`lib.rs:748`）那種用法（`-skeletal-animation-layers`）。
 - **第 3 層**（蒙皮顯示：網格照姿勢變形、上傳 GPU）：render（R2b 的 3D 段判 **CPU**：`mesh_render` 每幀照 `SkinPose` 算，render 頁第 8.4 節；換 GPU 的條件 RC-RD 6）。第 2.1 節的公式是 render 要照的。
 - **事件的資料**：PvP 的事件來自另一份 JSON（`viewmodel.anim_events.json`），不在 FBX 裡；它的讀法與事件 → 聲音是遊戲的（區間穿越在 4.6 節）。
-- 命中形狀、何時切片段、哪些骨是哪一層、權重與時機、瞄準、附掛：遊戲規則。
+- 命中形狀、何時切片段、哪些骨是哪一層、權重與時機、瞄準、附掛、握點、IK 的鏈與何時開：遊戲規則。
+- FABRIK、CCD、roll 對齊、拉長、IK 的末端旋轉：沒有點名的需求，不做（研究 R3；U2 (a)）。
 - FBX 以外的格式（glTF、OBJ）：有點名的 Feature 時另加 loader。
 - morph（blend shape）、dual-quaternion 蒙皮、頂點色、第二組 UV、切線：今天不讀（M-7）。
 - 第三方授權告示：打包時附，在批次表後續（K 的 tools 線）。
@@ -197,7 +215,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 | M-14 | ufbx 的記憶體上限＝max（256 MiB、檔案上限 × 8） | 產品放寬 `byteLimits` 時不必再找第二個旋鈕（§1-10；審查發現 4） | 固定 256 MiB；做成 setting |
 | M-15 | 材質的 FBX diffuse 值是空的時退回 PBR base color | ufbx 寫明自訂 shader 的 FBX 值可能是空的，PBR 對所有 shading model 都有定義（審查發現 5）；FBX 值有的時候照舊（PvP 的檔走這條） | 一律取 PBR（會改 PvP 檔的顏色，未驗證） |
 | M-16 | 貼圖預設宣告 reference，`textures: false` 關掉；模型依賴 image（只為型別） | 使用者決定 11；照 Bevy 的 `load_materials`；關掉的開關給轉過檔、要自己對的作者（§1-10）；主會話 2026-11-24 判 (a) | (b) 不宣告、登記成例外（推翻決定 11）；(c) 宣告、由轉檔工具連 FBX 一起改（工具線，今天沒有） |
-| M-17 | 4.2 節的逐節點 `Blend`、`ApplyAdditive` 與 4.6 節的 `CrossedEvents` 的取捨（偏離 Bevy 的 u64 mask、差值的收法與乘的順序、未取餘的時間、duration 0、輸出寫進呼叫者的 span 等） | 寫在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md) 第 4 節 K-1～K-7、K-15 | 同那一節的「比過的」 |
+| M-17 | 4.2 節的逐節點 `Blend`、`ApplyAdditive`、4.6 節的 `CrossedEvents` 與 4.7 節的 `SolveTwoBoneIK` 的取捨（偏離 Bevy 的 u64 mask、差值的收法與乘的順序、未取餘的時間、duration 0、輸出寫進呼叫者的 span、IK 自己算祖先、骨長取目前的姿勢、pole 在直線上的退回等） | 寫在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md) 第 4 節 K-1～K-16 | 同那一節的「比過的」 |
 
 ## Design Invariants
 
@@ -205,11 +223,12 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 1. **MD-1 ufbx 只在一個 adapter。** `ufbx.h` 只被 `engine/modules/model/src/adapters/ufbx/` 與 `third_party/ufbx/` 的實作檔 include；`gyo_ufbx` 只被 `gyo_model` **私有**連結，標頭不出現在任何 `include/` 下（AGENTS §1-4）。adapter 對外只有 `Detail::ImportFbx`，用 model 自己的型別。`UFBX_NO_STDIO` 放在 `gyo_ufbx` 的 PUBLIC 定義。守衛：設定時的檢查 `gyo_expect_model_links`（`tests/common/model/CMakeLists.txt`：連結恰好那五個、`gyo_ufbx` 不在 `gyo_model` 的 INTERFACE 連結裡）；別的 target 沒有 ufbx 的 include 路徑；「沒有別的 target 連 `gyo_ufbx`」靠審查。
 2. **MD-2 模型是 CPU 的資料。** `ModelData` 是第 2 節的型別與規則：擁有全部的值，沒有渲染的 handle、解碼的貼圖、匯入器的指標；父在子之前；權重和為 1 或全 0；片段帶 `nodeCount`。守衛：`AnimationTests.cpp` 的 `Validate` 各規則各條件、規則的先後。
-3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`（兩個）、`ApplyAdditive`、`ComputeModelSpace` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合（含逐節點的權重、和單一權重逐位元相同、寫回輸入）、additive（base＝reference 得 motion、motion＝reference 得 base、節點自己的框架、半個權重、寫回 base）、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
+3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`（兩個）、`ApplyAdditive`、`ComputeModelSpace`、`CrossedEvents`、`SolveTwoBoneIK` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合（含逐節點的權重、和單一權重逐位元相同、寫回輸入）、additive（base＝reference 得 motion、motion＝reference 得 base、節點自己的框架、半個權重、寫回 base）、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
 4. **MD-4 retarget 搬相對 rest 的動作。** 第 4.4 節的公式與規則；binding 是呼叫者的資料。守衛：`AnimationTests.cpp` 的 retarget 各案（相同節點表、rest 的 key 給 target 的 rest、呼叫者給的參考姿勢、父 rest 不同時模型空間的旋轉變化相同、平移換座標與比例、scale 比例、丟掉沒綁的、三條規則與先後）。
 5. **MD-5 中立、沒有裝置。** `GYO::Model` 的連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Image`、`GYO::Json`、`gyo_ufbx`：沒有 SDL、渲染、GPU、World、產品名。守衛：`gyo_expect_model_links`；中立靠審查。
 6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1（含認成 OBJ 的檔）、2、範例檔的節點／空間的左右手／材質／貼圖的 reference 與 `textures: false`／網格／材質分區共用 skin／蒙皮／UV／片段、「the texture is the model's dependency and not its failure」（經 store：對到 image 項目、對不到時模型照樣 Loaded、關掉）、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）沒有檔案能觸發的測試（要多 skin 的網格，Blender 做不出），靠審查；規則 4（`BadData`）只由突變 `mf-weights-not-scaled`（權重沒正規化→整檔被拒）間接守住。
 7. **MD-7 事件的區間穿越。** `CrossedEvents` 照第 4.6 節：前進 `[from, to)`、倒播 `(to, from]` 照穿過的順序；`Clamp` 走到端點的那一段穿過端點上的時刻一次；`Loop` 跨圈接上、一圈以上每個時刻一次；沒有狀態。守衛：`AnimationTests.cpp` 的 `CrossedEvents` 各案（開閉、連續區間不重不漏、倒播的順序、跨尾端與跨開頭、未取餘的時間、一圈以上、0 與 duration 同時、Clamp 的尾端與開頭、不動與 duration 0、Programmer Error）。
+8. **MD-8 two-bone IK。** `SolveTwoBoneIK` 照第 4.7 節：只改 root 與 mid 的旋轉；tip 到可達的目標、伸不到時伸直、太近時折起；往 pole 那一側彎，pole 在直線上時取目前 mid 那一側；weight 0 逐位元不動、之間逐骨 slerp；在模型空間解（祖先的旋轉、root 與 mid 之間的節點）。守衛：`AnimationTests.cpp` 的 `SolveTwoBoneIK` 各案（伸得到且其餘不變、pole 的側邊與共面、伸不到、剛好伸到、目標在身體裡與折回半圈、目標在 root 或骨長 0、權重 0、權重 0.5、pole 在直線上、祖先有旋轉與縮放且中間隔一個節點、Programmer Error）。
 
 ### Replacement Criteria
 

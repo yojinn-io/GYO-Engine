@@ -81,6 +81,35 @@ void ApplyAdditive(std::span<const LocalTransform> base, std::span<const LocalTr
 std::size_t CrossedEvents(std::span<const float> times, float from, float to, float duration, Wrap wrap,
                           std::span<std::uint32_t> out);
 
+// Three nodes of one chain for SolveTwoBoneIK: mid below root and tip below
+// mid, not necessarily their direct children (an upper arm, its forearm and
+// its hand).
+struct TwoBoneChain final {
+    std::uint32_t root = 0;
+    std::uint32_t mid = 0;
+    std::uint32_t tip = 0;
+};
+
+// Turns the root and the mid of the chain so the tip reaches target, bending
+// toward pole: both are points in model space (the space of
+// ComputeModelSpace). Only the rotations of root and mid change, by the
+// shortest arcs that move each bone; the tip keeps its local rotation and the
+// bones their lengths, as they are in pose.
+//
+// A target farther than the two bones reach straightens the chain toward it.
+// One nearer the root than the difference of the two lengths (inside the
+// body) is moved out to that distance, the chain folded. A pole on the line
+// from root to target bends the chain to the side the mid is on; a straight
+// chain then bends to a fixed side. A target on the root, or a bone of length
+// 0, leaves pose as it is.
+//
+// weight 0 leaves pose as it is; 1 is the solved pose; between them each of
+// the two rotations by slerp from its value in pose. weight is not clamped.
+// Rotations of the chain's ancestors are taken without their scale: exact for
+// uniform scales.
+void SolveTwoBoneIK(std::span<const Node> nodes, const TwoBoneChain& chain, Math::Vec3 target, Math::Vec3 pole,
+                    float weight, std::span<LocalTransform> pose);
+
 // Each node's transform in model space: the parent's times the node's own
 // (Math::Multiply(parent, local)), a root's own alone.
 void ComputeModelSpace(std::span<const Node> nodes, std::span<const LocalTransform> local,

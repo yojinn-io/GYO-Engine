@@ -1,7 +1,7 @@
 # The model Module: a model as plain CPU data (the node hierarchy, materials as
 # data, triangle meshes with their skins, animation clips), the pure functions
 # of skeletal animation's first layer (a clip's pose at a time, blending,
-# additive motion, the instants a time crosses,
+# additive motion, the instants a time crosses, two-bone IK,
 # retargeting, model space) and the loader of the "model" type (FBX). It is the
 # engine's only adapter for ufbx: its header and calls appear only under
 # src/adapters/ufbx/ (Design Invariant MD-1 of

@@ -48,6 +48,61 @@ LocalTransform Mix(const LocalTransform from, const LocalTransform to, const flo
                           Math::Lerp(from.scale, to.scale, weight)};
 }
 
+// Squared lengths at or under this are treated as 0 (a length of 1e-6).
+constexpr float kDegenerate = 1.0e-12F;
+
+// A unit vector at right angles to v (v not 0).
+Math::Vec3 AnyPerpendicular(const Math::Vec3 v) noexcept {
+    const Math::Vec3 axis = std::fabs(v.x) < 0.9F * Math::Length(v) ? Math::Vec3{1, 0, 0} : Math::Vec3{0, 1, 0};
+    return Math::Normalize(Math::Cross(v, axis));
+}
+
+// The shortest rotation taking the direction of from to that of to (neither 0).
+Math::Quaternion Arc(const Math::Vec3 from, const Math::Vec3 to) noexcept {
+    const Math::Vec3 f = Math::Normalize(from);
+    const Math::Vec3 t = Math::Normalize(to);
+    const float cosine = Math::Dot(f, t);
+    if (cosine < -1.0F + 1.0e-6F) {
+        // Opposite: half a turn about any axis at right angles.
+        const Math::Vec3 axis = AnyPerpendicular(f);
+        return Math::Quaternion{axis.x, axis.y, axis.z, 0.0F};
+    }
+    const Math::Vec3 c = Math::Cross(f, t);
+    return Math::Normalize(Math::Quaternion{c.x, c.y, c.z, 1.0F + cosine});
+}
+
+// A node's position and rotation in model space: the matrices down from its
+// root (as ComputeModelSpace), the rotations without their scale.
+struct ModelFrame final {
+    Math::Vec3 position;
+    Math::Quaternion rotation;
+};
+
+ModelFrame FrameOf(const std::span<const Node> nodes, const std::span<const LocalTransform> pose,
+                   const std::uint32_t node) noexcept {
+    Math::Matrix4 matrix = ToMatrix(pose[node]);
+    Math::Quaternion rotation = Math::NormalizeOrIdentity(pose[node].rotation);
+    for (std::uint32_t p = nodes[node].parent; p != kNoParent; p = nodes[p].parent) {
+        matrix = Math::Multiply(ToMatrix(pose[p]), matrix);
+        rotation = Math::NormalizeOrIdentity(Math::Multiply(Math::NormalizeOrIdentity(pose[p].rotation), rotation));
+    }
+    return ModelFrame{Math::TransformPoint(matrix, {0, 0, 0}), rotation};
+}
+
+// The rotation in model space of a node's parent (identity for a root node).
+Math::Quaternion ParentRotationOf(const std::span<const Node> nodes, const std::span<const LocalTransform> pose,
+                                  const std::uint32_t node) noexcept {
+    const std::uint32_t parent = nodes[node].parent;
+    return parent == kNoParent ? Math::Quaternion{} : FrameOf(nodes, pose, parent).rotation;
+}
+
+bool IsBelow(const std::span<const Node> nodes, const std::uint32_t node, const std::uint32_t ancestor) noexcept {
+    for (std::uint32_t p = nodes[node].parent; p != kNoParent; p = nodes[p].parent) {
+        if (p == ancestor) return true;
+    }
+    return false;
+}
+
 } // namespace
 
 void RestPose(const std::span<const Node> nodes, const std::span<LocalTransform> out) {
@@ -158,6 +213,64 @@ std::size_t CrossedEvents(const std::span<const float> times, const float from, 
         if (q < 0.0F) down(above(q + duration), count);
     }
     return written;
+}
+
+void SolveTwoBoneIK(const std::span<const Node> nodes, const TwoBoneChain& chain, const Math::Vec3 target,
+                    const Math::Vec3 pole, const float weight, const std::span<LocalTransform> pose) {
+    GYO_ASSERT(pose.size() == nodes.size());
+    GYO_ASSERT(chain.root < nodes.size() && chain.mid < nodes.size() && chain.tip < nodes.size());
+    GYO_ASSERT(IsBelow(nodes, chain.mid, chain.root) && IsBelow(nodes, chain.tip, chain.mid));
+    GYO_ASSERT(Math::IsFinite(target) && Math::IsFinite(pole) && std::isfinite(weight));
+    if (weight == 0.0F) return;
+    const ModelFrame root = FrameOf(nodes, pose, chain.root);
+    const ModelFrame mid = FrameOf(nodes, pose, chain.mid);
+    const Math::Vec3 tip = FrameOf(nodes, pose, chain.tip).position;
+    const Math::Vec3 upper = mid.position - root.position;
+    const Math::Vec3 lower = tip - mid.position;
+    const Math::Vec3 toTarget = target - root.position;
+    if (Math::LengthSquared(upper) <= kDegenerate || Math::LengthSquared(lower) <= kDegenerate ||
+        Math::LengthSquared(toTarget) <= kDegenerate)
+        return;
+    const float a = Math::Length(upper);
+    const float b = Math::Length(lower);
+    const float distance = Math::Length(toTarget);
+    const Math::Vec3 u = toTarget / distance;
+    // Where mid and tip go (Godot TwoBoneIK3D::_process_joints,
+    // scene/3d/two_bone_ik_3d.cpp:780-831): the tip at the target held
+    // between the two lengths' difference and their sum (out of reach the
+    // chain is straight toward it, nearer the root it folds), the mid on the
+    // circle where the two bones' spheres meet, on the pole's side of the
+    // line from root to target; with a pole on the line, on the side the mid
+    // is now.
+    const float reach = std::clamp(distance, std::fabs(a - b), a + b);
+    const auto across = [&u](const Math::Vec3 v) { return v - u * Math::Dot(v, u); };
+    Math::Vec3 side = across(pole - root.position);
+    if (Math::LengthSquared(side) <= kDegenerate) side = across(upper);
+    side = Math::LengthSquared(side) <= kDegenerate ? AnyPerpendicular(u) : Math::Normalize(side);
+    const float along = (reach * reach + a * a - b * b) / (2.0F * reach);
+    const float height = std::sqrt(std::max(a * a - along * along, 0.0F));
+    const Math::Vec3 midTo = root.position + u * along + side * height;
+    const Math::Vec3 tipTo = root.position + u * reach;
+    // The root's turn in model space, then the mid's after it (Godot's swing,
+    // two_bone_ik_3d.h:163,176). A turn s in model space of a node whose
+    // parent turns by q is the local turn inverse(q) * s * q.
+    const Math::Quaternion rootTurn = Arc(upper, midTo - root.position);
+    const Math::Quaternion midTurn = Arc(Math::Rotate(rootTurn, lower), tipTo - midTo);
+    const Math::Quaternion rootParent = ParentRotationOf(nodes, pose, chain.root);
+    const Math::Quaternion midParent = Math::Multiply(rootTurn, ParentRotationOf(nodes, pose, chain.mid));
+    Math::Quaternion rootLocal = Math::NormalizeOrIdentity(
+        Math::Multiply(Math::Conjugate(rootParent), Math::Multiply(rootTurn, root.rotation)));
+    Math::Quaternion midLocal = Math::NormalizeOrIdentity(Math::Multiply(
+        Math::Conjugate(Math::NormalizeOrIdentity(midParent)),
+        Math::Multiply(midTurn, Math::Multiply(rootTurn, mid.rotation))));
+    if (weight != 1.0F) {
+        // Godot's influence: each rotation from its value in pose
+        // (scene/3d/skeleton_3d.cpp:1267).
+        rootLocal = Math::Slerp(pose[chain.root].rotation, rootLocal, weight);
+        midLocal = Math::Slerp(pose[chain.mid].rotation, midLocal, weight);
+    }
+    pose[chain.root].rotation = rootLocal;
+    pose[chain.mid].rotation = midLocal;
 }
 
 void ComputeModelSpace(const std::span<const Node> nodes, const std::span<const LocalTransform> local,

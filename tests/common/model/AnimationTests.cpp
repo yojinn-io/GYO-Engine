@@ -16,7 +16,7 @@
 
 // The model data rules (model.zh-Hant.md section 2.2), skeletal animation's
 // first layer (section 4: RestPose, SampleClip, Blend, ApplyAdditive,
-// ComputeModelSpace, CrossedEvents) and
+// ComputeModelSpace, CrossedEvents; section 4.7: SolveTwoBoneIK) and
 // retargeting (section 4.4: BindByName, Retarget), on node lists and clips
 // written here, so each case shows the values it expects.
 
@@ -608,6 +608,219 @@ TEST_CASE("CrossedEvents: a short out or a time that is not finite or a negative
     GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, nan, 1.0F, 2.0F, Wrap::Loop, out)));
     GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, nan, 2.0F, Wrap::Loop, out)));
     GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, 1.0F, -1.0F, Wrap::Clamp, out)));
+}
+
+namespace {
+
+using Model::TwoBoneChain;
+
+// arm (0) -> forearm (1) -> hand (2) -> finger (3), along +X: the arm 1 long,
+// the forearm `forearm` long, the finger off the hand.
+std::vector<Node> Arm(const float forearm = 1.0F) {
+    return {MakeNode("arm", Model::kNoParent), MakeNode("forearm", 0, {{1, 0, 0}, {}, {1, 1, 1}}),
+            MakeNode("hand", 1, {{forearm, 0, 0}, {}, {1, 1, 1}}), MakeNode("finger", 2, {{0.25F, 0, 0}, {}, {1, 1, 1}})};
+}
+constexpr TwoBoneChain kArm{0, 1, 2};
+
+std::vector<LocalTransform> RestOf(const std::vector<Node>& nodes) {
+    std::vector<LocalTransform> pose(nodes.size());
+    Model::RestPose(nodes, pose);
+    return pose;
+}
+
+std::vector<Vec3> Positions(const std::vector<Node>& nodes, const std::vector<LocalTransform>& pose) {
+    std::vector<Math::Matrix4> model(nodes.size());
+    Model::ComputeModelSpace(nodes, pose, model);
+    std::vector<Vec3> out;
+    for (const Math::Matrix4& m : model) out.push_back(Math::TransformPoint(m, {0, 0, 0}));
+    return out;
+}
+
+constexpr float kReach = 1.0e-4F;
+
+} // namespace
+
+TEST_CASE("SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[2].rotation = AboutY(30);
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[2], {1, 1, 0}, kReach));
+    CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, kReach));
+    CHECK(Near(Math::Distance(at[1], at[2]), 1.0F, kReach));
+    // Only the rotations of root and mid change.
+    for (std::size_t i = 0; i < pose.size(); ++i) {
+        CHECK(SameBits(pose[i].translation.x, before[i].translation.x));
+        CHECK(SameBits(pose[i].scale.y, before[i].scale.y));
+        if (i >= 2) CHECK(SameBits(pose[i], before[i]));
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK bends toward the pole in the plane of root and target and pole") {
+    const auto nodes = Arm();
+    for (const float side : {1.0F, -1.0F}) {
+        auto pose = RestOf(nodes);
+        Model::SolveTwoBoneIK(nodes, kArm, {1.5F, 0, 0}, {0.75F, 0, side}, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("side " << side << " mid " << Show(at[1]) << " tip " << Show(at[2]));
+        CHECK(Near(at[2], {1.5F, 0, 0}, kReach));
+        CHECK(at[1].z * side > 0.5F);
+        CHECK(Near(at[1].y, 0.0F, kReach));
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK straightens the chain toward a target out of reach") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 4, 3}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[1], {0, 0.8F, 0.6F}, kReach));
+    CHECK(Near(at[2], {0, 1.6F, 1.2F}, kReach));
+}
+
+TEST_CASE("SolveTwoBoneIK at the edge of reach meets the straightened chain") {
+    const auto nodes = Arm();
+    auto edge = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 2, 0}, {0, 1, 1}, 1.0F, edge);
+    auto inside = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 1.9999F, 0}, {0, 1, 1}, 1.0F, inside);
+    const auto atEdge = Positions(nodes, edge);
+    const auto atInside = Positions(nodes, inside);
+    INFO("edge mid " << Show(atEdge[1]) << " inside mid " << Show(atInside[1]));
+    CHECK(Near(atEdge[1], {0, 1, 0}, kReach));
+    CHECK(Near(atEdge[2], {0, 2, 0}, kReach));
+    CHECK(Near(atInside[1], atEdge[1], 2.0e-2F));
+    CHECK(Near(atInside[2], {0, 1.9999F, 0}, kReach));
+}
+
+TEST_CASE("SolveTwoBoneIK folds the chain toward a target inside the body nearer than the bones' difference") {
+    // arm 1, forearm 0.5: nothing nearer the root than 0.5 can be reached.
+    const auto nodes = Arm(0.5F);
+    auto pose = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 0.2F, 0}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[1], {0, 1, 0}, kReach));
+    CHECK(Near(at[2], {0, 0.5F, 0}, kReach));
+    // A straight arm folding back onto itself: the forearm turns half a turn.
+    auto back = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0.2F, 0, 0}, {0, 0, 1}, 1.0F, back);
+    const auto atBack = Positions(nodes, back);
+    INFO("back mid " << Show(atBack[1]) << " tip " << Show(atBack[2]));
+    CHECK(Near(atBack[1], {1, 0, 0}, kReach));
+    CHECK(Near(atBack[2], {0.5F, 0, 0}, kReach));
+    // Equal bones reach a target close to the root.
+    const auto equal = Arm();
+    auto near = RestOf(equal);
+    Model::SolveTwoBoneIK(equal, kArm, {0.05F, 0.05F, 0}, {0, 0, 1}, 1.0F, near);
+    const auto atNear = Positions(equal, near);
+    INFO("near tip " << Show(atNear[2]));
+    CHECK(Near(atNear[2], {0.05F, 0.05F, 0}, kReach));
+    CHECK(Near(Math::Distance(atNear[0], atNear[1]), 1.0F, kReach));
+}
+
+TEST_CASE("SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 0, 0}, {0, 0, 1}, 1.0F, pose);
+    for (std::size_t i = 0; i < pose.size(); ++i) CHECK(SameBits(pose[i], before[i]));
+    const auto folded = Arm(0.0F);
+    auto zero = RestOf(folded);
+    const auto zeroBefore = zero;
+    Model::SolveTwoBoneIK(folded, kArm, {0.5F, 0.5F, 0}, {0, 0, 1}, 1.0F, zero);
+    for (std::size_t i = 0; i < zero.size(); ++i) CHECK(SameBits(zero[i], zeroBefore[i]));
+}
+
+TEST_CASE("SolveTwoBoneIK weight 0 leaves the pose bit for bit") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[0].rotation = AboutZ(10);
+    // Not of unit length: weight 0 does not even normalize it.
+    pose[1].rotation = Quaternion{0.1F, 0, 0, 1};
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 0.0F, pose);
+    for (std::size_t i = 0; i < pose.size(); ++i) CHECK(SameBits(pose[i], before[i]));
+}
+
+TEST_CASE("SolveTwoBoneIK weight 0.5 slerps each rotation halfway to the solved one") {
+    const auto nodes = Arm();
+    auto original = RestOf(nodes);
+    original[1].rotation = AboutY(40);
+    auto solved = original;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, solved);
+    auto half = original;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 0.5F, half);
+    for (const std::uint32_t node : {kArm.root, kArm.mid}) {
+        const Quaternion expected = Math::Slerp(original[node].rotation, solved[node].rotation, 0.5F);
+        CHECK(SameBits(half[node].rotation.x, expected.x));
+        CHECK(SameBits(half[node].rotation.y, expected.y));
+        CHECK(SameBits(half[node].rotation.z, expected.z));
+        CHECK(SameBits(half[node].rotation.w, expected.w));
+    }
+    REQUIRE_FALSE(SameRotation(solved[kArm.root].rotation, original[kArm.root].rotation));
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole on the line to the target bends to the side the mid is on") {
+    // The forearm turned 90 degrees: mid at (1, 0, 0), tip at (1, 1, 0).
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[1].rotation = AboutZ(90);
+    const Vec3 target{1.2F, 0.6F, 0};
+    // The mid's side of the line from root to target, before.
+    const Vec3 u = Math::Normalize(target);
+    const Vec3 side = Vec3{1, 0, 0} - u * Math::Dot(Vec3{1, 0, 0}, u);
+    Model::SolveTwoBoneIK(nodes, kArm, target, target * 2.0F, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[2], target, kReach));
+    CHECK(Math::Dot(at[1] - u * Math::Dot(at[1], u), side) > 0.0F);
+    // A straight chain with the pole on the line still reaches, to some side.
+    auto straight = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 0, 0}, {3, 0, 0}, 1.0F, straight);
+    const auto atStraight = Positions(nodes, straight);
+    INFO("straight mid " << Show(atStraight[1]) << " tip " << Show(atStraight[2]));
+    CHECK(Near(atStraight[2], {1, 0, 0}, kReach));
+    CHECK(Near(Math::Distance(atStraight[0], atStraight[1]), 1.0F, kReach));
+    CHECK(Near(Math::Distance(atStraight[1], atStraight[2]), 1.0F, kReach));
+}
+
+TEST_CASE("SolveTwoBoneIK works in model space under turned and scaled ancestors and a node between root and mid") {
+    // spine (0) up 1, turned 90 degrees about Y, scale 2 -> upperarm (1)
+    // -> twist (2) -> forearm (3) -> hand (4); the chain is upperarm, forearm, hand.
+    const std::vector<Node> nodes{MakeNode("spine", Model::kNoParent, {{0, 1, 0}, AboutY(90), {2, 2, 2}}),
+                                  MakeNode("upperarm", 0, {{0.5F, 0, 0}, AboutZ(20), {1, 1, 1}}),
+                                  MakeNode("twist", 1, {{0.5F, 0, 0}, AboutX(30), {1, 1, 1}}),
+                                  MakeNode("forearm", 2, {{0.5F, 0, 0}, {}, {1, 1, 1}}),
+                                  MakeNode("hand", 3, {{1, 0, 0}, {}, {1, 1, 1}})};
+    auto pose = RestOf(nodes);
+    const Vec3 root = Positions(nodes, pose)[1];
+    const Vec3 target = root + Vec3{0, 2.5F, 1.5F};
+    Model::SolveTwoBoneIK(nodes, {1, 3, 4}, target, root + Vec3{1, 0, 0}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("tip " << Show(at[4]) << " target " << Show(target));
+    CHECK(Near(at[4], target, kReach));
+    CHECK(Near(Math::Distance(at[1], at[3]), 2.0F, kReach));
+    CHECK(Near(Math::Distance(at[3], at[4]), 2.0F, kReach));
+}
+
+TEST_CASE("SolveTwoBoneIK: a chain or a pose that does not fit or a value that is not finite is a Programmer Error") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 1, 9}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {1, 0, 2}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 2, 1}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 1, 1}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    std::vector<LocalTransform> small(2);
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, small));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {nan, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, nan, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, nan, pose));
 }
 
 TEST_CASE("ComputeModelSpace multiplies down the hierarchy") {
