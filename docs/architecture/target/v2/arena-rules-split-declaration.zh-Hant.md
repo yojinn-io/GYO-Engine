@@ -310,7 +310,9 @@ dev_log：`docs/dev_logs/2026_11_28_gyo2_arena_rules_split.zh-Hant.md`。證據�
 |---|---|
 | `3c5248a7` | 第 1 步全部（格式、讀取、比對值、A 的拿掉、assets、測試、突變表、dev_log） |
 | `eb59b522` | 第 3 步：設計審查的處置（11.4）、Linux A/B、本節 |
-| （本 commit） | 純粹的 Code Review 的處置（11.4） |
+| `86ba8e72` | 純粹的 Code Review 的處置（11.4） |
+| `332f1a95` | 合併 `origin/gyo2`（`f243ac9a`；#376 表示名、#378 Scene 的用詞）：衝突只有 `mutations.json`，照 id 合併 |
+| （本 commit） | 本節的合併後結果 |
 
 ### 11.2 和本宣告不同的地方
 
