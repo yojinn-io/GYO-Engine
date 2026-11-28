@@ -147,10 +147,11 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
     - `cmake.PluginSelection`：借用依賴的環境問題。
     - `sdl.unattended_assertion`：我把 `SDL_ASSERT=abort` 給了整個 ctest。這一案要看自己 handler 印的字，環境變數讓 SDL 的預設 handler 先處理，所以失敗（`[sdl-assert-no-handler-text]`）。不帶環境變數單獨跑通過；帶著單獨跑會重現。和程式無關；產品執行檔的 ctest 本來就各自帶 `SDL_ASSERT=abort`。
   - cpu 突變 3/3 killed（`tm-gpu-older-kept`、`tm-gpu-time-zero`、`tm-seen-after-dropped`，都在 `sdl_gpu.framesinflight`）。runner 前確認目錄裡 23 個 find 都在、恰好一處。
-- **Linux 主機：回報時還沒有結果**。第一次送 bundle 時主機連不上（`scp: Connection closed`、`ssh: ... Host is down`，20 分鐘）；主會話確認恢復後，`4b2fe934` 的 bundle 已送過去、`run.sh a3r2`（建置 → cpu|shader → 不開視窗的 GPU → 目錄 `host_a3r2.json` 22 個突變，Lavapipe、xvfb）在跑，回報當時還在建置。下面這些在修訂 2 都還沒有結果：
-  - GPU 的 `sdl_gpu.timing`（T3 的 `after == 0`、新名字）、`phases` 等。
-  - GPU 突變：`tm-hand-not-tracked`（find 改了）、`tm-capture-not-looked-at`、`tm-gpu-from-epoch`，以及殺它們的 `sdl_gpu timing` 一案被改過、要重跑的其餘 GPU 突變。
-  - 送過去用的目錄 `host_a3r2.json`（22 個，不開視窗的全部）在 scratchpad，主機恢復後照第 15.8 節的做法跑。
+- **Linux 主機**（`4b2fe934`；Vulkan 用 Lavapipe `llvmpipe (LLVM 20.1.2, 256 bits)`，在 xvfb 下跑；不是實體 GPU）：第一次送 bundle 時主機連不上（`scp: Connection closed`、`ssh: ... Host is down`，約 20 分鐘），主會話確認恢復後跑 `run.sh a3r2`：
+  - 建置成功；`ctest -L 'cpu|shader'`：260/260。
+  - 不開視窗的 GPU（`sdl_gpu.pass2d`、`targets`、`phases`、`contracts`、`framedraws`、`unwritten`、`timing`）：7/7。`sdl_gpu.timing` 含 T3 的 `after == 0` 與新名字。
+  - GPU 突變：目錄 `host_a3r2.json`（不開視窗的全部 22 個，含 find 改過的 `tm-hand-not-tracked`、`tm-capture-not-looked-at`、`tm-gpu-from-epoch`、新的 `tm-seen-after-dropped`）：22/22 killed。
+  - bundle 用完已刪；只用 `~/Workspace/render-card-a3`，沒改機器設定。
 - 沒跑：`sdl_gpu.frames`（T4，會開視窗）與 `tm-status-timing-not-given`；Metal、D3D12。
 
 ## 沒做／沒跑
