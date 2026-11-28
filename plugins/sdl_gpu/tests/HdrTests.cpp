@@ -193,9 +193,10 @@ TEST_CASE("sdl_gpu hdr: the tonemapping pass reads the picture at its own pixels
 TEST_CASE("sdl_gpu hdr: the unlit 3D pass and a clear on a picture, through no curve, are their pixels on the target") {
     HdrCase c;
     const R::TextureId picture = c.HdrPicture();
-    // An sRGB-grey clear and a colour of every byte range: as drawn straight on the target (a camera without Hdr) ...
+    // A clear and a colour with bytes above the decoding's linear toe (40: where a power of 2.2 differs most) and one in
+    // it (10): as drawn straight on the target (a camera without Hdr) ...
     constexpr R::Color8 kClear{128, 64, 32, 255};
-    constexpr R::Color8 kColour{200, 100, 10, 255};
+    constexpr R::Color8 kColour{200, 40, 10, 255};
     R::RenderCommands direct;
     direct.passes.push_back(On(std::nullopt, kClear));
     direct.passes.push_back(Scene(std::nullopt, kColour));

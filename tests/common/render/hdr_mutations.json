@@ -14,7 +14,7 @@
       "replace": "return {c.x / (0.5F + c.x), c.y / (1.0F + c.y), c.z / (1.0F + c.z)};",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-reinhard\\]"
+      "expect": "\\[tm\\-reinhard\\]"
     },
     {
       "id": "tm-luminance-weights",
@@ -28,7 +28,7 @@
       "replace": "return 0.7152F * c.x + 0.2126F * c.y + 0.0722F * c.z;",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-reinhard\\\\-luminance\\]"
+      "expect": "\\[tm\\-reinhard\\-luminance\\]"
     },
     {
       "id": "tm-aces-fit",
@@ -42,7 +42,7 @@
       "replace": "(v * (v + 0.0F) - 0.000090537F)",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-aces\\]"
+      "expect": "\\[tm\\-aces\\]"
     },
     {
       "id": "tm-boring-curve",
@@ -56,7 +56,7 @@
       "replace": "float BoringCurve(const float v) noexcept { return v / (1.0F + v); }",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-boring\\]"
+      "expect": "\\[tm\\-boring\\]"
     },
     {
       "id": "tm-pbr-toe",
@@ -70,7 +70,7 @@
       "replace": "0.04F",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-pbr\\\\-neutral\\]"
+      "expect": "\\[tm\\-pbr\\-neutral\\]"
     },
     {
       "id": "tm-negative-kept",
@@ -84,7 +84,7 @@
       "replace": "const Vec3 c = linear;",
       "target": "gyo_render_tests",
       "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\\\-none\\]"
+      "expect": "\\[tm\\-none\\]"
     },
     {
       "id": "tm-luminance-black",
@@ -98,7 +98,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: Reinhard on the luminance*",
-      "expect": "\\[tm\\\\-luminance\\\\-black\\]"
+      "expect": "\\[tm\\-luminance\\-black\\]"
     },
     {
       "id": "tm-default-method",
@@ -112,7 +112,7 @@
       "replace": "    Method method = Method::None;",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-default\\]"
+      "expect": "\\[tm\\-default\\]"
     },
     {
       "id": "tm-encode-power",
@@ -126,7 +126,7 @@
       "replace": "std::pow(c, 1.0F / 2.2F)",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-encode\\]"
+      "expect": "\\[tm\\-encode\\]"
     },
     {
       "id": "tm-encode-toe",
@@ -140,7 +140,7 @@
       "replace": "return c <= 0.0F ? c * 12.92F",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-encode\\\\-toe\\]"
+      "expect": "\\[tm\\-encode\\-toe\\]"
     },
     {
       "id": "tm-encode-unclamped",
@@ -154,7 +154,7 @@
       "replace": "const float c = linear;",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-encode\\\\-clamped\\]"
+      "expect": "\\[tm\\-encode\\-clamped\\]"
     },
     {
       "id": "tm-decode-toe",
@@ -168,7 +168,7 @@
       "replace": "return encoded <= 0.0F ? encoded / 12.92F",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-decode\\\\-toe\\]"
+      "expect": "\\[tm\\-decode\\-toe\\]"
     },
     {
       "id": "tm-exposure-scale",
@@ -182,7 +182,7 @@
       "replace": "return std::exp2(-ev100);",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-exposure\\\\-scale\\]"
+      "expect": "\\[tm\\-exposure\\-scale\\]"
     },
     {
       "id": "tm-exposure-default",
@@ -196,7 +196,7 @@
       "replace": "static constexpr float kBlender = 12.0F;",
       "target": "gyo_render_tests",
       "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\\\-exposure\\\\-default\\]"
+      "expect": "\\[tm\\-exposure\\-default\\]"
     },
     {
       "id": "tm-bytes-alpha",
@@ -210,7 +210,7 @@
       "replace": "ToByte(LinearToSrgb(mapped.z)), 255};",
       "target": "gyo_render_tests",
       "cases": "render: what a tonemapping pass*",
-      "expect": "\\[tm\\\\-bytes\\\\-none\\]"
+      "expect": "\\[tm\\-bytes\\-none\\]"
     },
     {
       "id": "tm-pass-method-lane",
@@ -224,7 +224,7 @@
       "replace": "{{0.0F, static_cast<float>(static_cast<std::uint8_t>(method)), 0.0F, 0.0F}}",
       "target": "gyo_render_tests",
       "cases": "render: what a tonemapping pass*",
-      "expect": "\\[tm\\\\-pass\\\\-method\\]"
+      "expect": "\\[tm\\-pass\\-method\\]"
     },
     {
       "id": "tm-pass-viewport",
@@ -238,7 +238,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: what a tonemapping pass*",
-      "expect": "\\[tm\\\\-pass\\\\-on\\]"
+      "expect": "\\[tm\\-pass\\-on\\]"
     },
     {
       "id": "tm-sync-per-camera",
@@ -252,7 +252,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-one\\\\-per\\\\-target\\]"
+      "expect": "\\[tm\\-sync\\-one\\-per\\-target\\]"
     },
     {
       "id": "tm-sync-main-followed",
@@ -266,7 +266,7 @@
       "replace": "desc.size = FollowTarget{};",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-follows\\]"
+      "expect": "\\[tm\\-sync\\-follows\\]"
     },
     {
       "id": "tm-sync-format",
@@ -281,7 +281,7 @@
       "replace": "desc.format = RenderTargetFormat::Rgba8Unorm;",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-format\\]"
+      "expect": "\\[tm\\-sync\\-format\\]"
     },
     {
       "id": "tm-sync-filter",
@@ -295,7 +295,7 @@
       "replace": "desc.filter = TextureFilter::Linear;",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-format\\]"
+      "expect": "\\[tm\\-sync\\-format\\]"
     },
     {
       "id": "tm-sync-made-again",
@@ -309,7 +309,7 @@
       "replace": "        if (false) {",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-kept\\]"
+      "expect": "\\[tm\\-sync\\-kept\\]"
     },
     {
       "id": "tm-sync-never-let-go",
@@ -323,7 +323,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\\\-sync\\\\-let\\\\-go\\]"
+      "expect": "\\[tm\\-sync\\-let\\-go\\]"
     },
     {
       "id": "cp-hdr-scene-on-target",
@@ -337,7 +337,7 @@
       "replace": "{ return target; }",
       "target": "gyo_render_tests",
       "cases": "pipeline3d: a Hdr camera's 3D pass*",
-      "expect": "\\[p3\\\\-hdr\\\\-scene\\\\-target\\]"
+      "expect": "\\[p3\\-hdr\\-scene\\-target\\]"
     },
     {
       "id": "cp-hdr-picture-not-cleared",
@@ -352,7 +352,7 @@
       "replace": "            if (false) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-picture\\\\-cleared\\]"
+      "expect": "\\[cp\\-hdr\\-picture\\-cleared\\]"
     },
     {
       "id": "cp-hdr-first-not-cleared",
@@ -367,7 +367,7 @@
       "replace": "            if (camera.clear) {",
       "target": "gyo_render_tests",
       "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\\\-hdr\\\\-first\\\\-transparent\\]"
+      "expect": "\\[cp\\-hdr\\-first\\-transparent\\]"
     },
     {
       "id": "cp-hdr-colour-first-only",
@@ -381,7 +381,7 @@
       "replace": "            if (firstOnPicture) {",
       "target": "gyo_render_tests",
       "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\\\-hdr\\\\-colour\\\\-clears\\\\-whole\\]"
+      "expect": "\\[cp\\-hdr\\-colour\\-clears\\-whole\\]"
     },
     {
       "id": "cp-hdr-clear-colour-dropped",
@@ -395,7 +395,7 @@
       "replace": "clear.clear = Color8{0, 0, 0, 0};",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-picture\\\\-cleared\\]"
+      "expect": "\\[cp\\-hdr\\-picture\\-cleared\\]"
     },
     {
       "id": "cp-hdr-output-not-cleared",
@@ -409,7 +409,7 @@
       "replace": "            if (false) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-output\\\\-cleared\\]"
+      "expect": "\\[cp\\-hdr\\-output\\-cleared\\]"
     },
     {
       "id": "cp-hdr-output-cleared-as-plain",
@@ -423,7 +423,7 @@
       "replace": "        }\n        if (camera.clear) {",
       "target": "gyo_render_tests",
       "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\\\-hdr\\\\-shared\\\\-all\\]"
+      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
     },
     {
       "id": "cp-hdr-no-tonemapping",
@@ -437,7 +437,7 @@
       "replace": "if (false && static_cast<CameraPhase>(index++) == CameraPhase::Overlay) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-all\\]"
+      "expect": "\\[cp\\-hdr\\-all\\]"
     },
     {
       "id": "cp-hdr-tonemapping-before-post",
@@ -451,7 +451,7 @@
       "replace": "if (static_cast<CameraPhase>(index++) == CameraPhase::PostProcess && camera.hdr) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-tonemap\\\\-after\\\\-post\\]"
+      "expect": "\\[cp\\-hdr\\-tonemap\\-after\\-post\\]"
     },
     {
       "id": "cp-hdr-tonemapping-curve",
@@ -465,7 +465,7 @@
       "replace": "PixelsOf(camera.computed.viewport), Tonemapping::Method::None));",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-tonemap\\\\-pass\\]"
+      "expect": "\\[cp\\-hdr\\-tonemap\\-pass\\]"
     },
     {
       "id": "cp-hdr-tonemapping-whole",
@@ -479,7 +479,7 @@
       "replace": "TonemappingPass(*camera.hdr, camera.target, std::nullopt,",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\\\-hdr\\\\-tonemap\\\\-pass\\]"
+      "expect": "\\[cp\\-hdr\\-tonemap\\-pass\\]"
     },
     {
       "id": "re-hdr-no-picture",
@@ -493,7 +493,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\\\-hdr\\\\-picture\\]"
+      "expect": "\\[re\\-hdr\\-picture\\]"
     },
     {
       "id": "re-hdr-2d-looked-at",
@@ -508,7 +508,7 @@
       "replace": "if (!hdr.Contains(camera.entity)) continue;",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\\\-hdr\\\\-2d\\\\-ignored\\]"
+      "expect": "\\[re\\-hdr\\-2d\\-ignored\\]"
     },
     {
       "id": "re-hdr-tonemapping-ignored",
@@ -522,7 +522,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\\\-hdr\\\\-tonemapping\\]"
+      "expect": "\\[re\\-hdr\\-tonemapping\\]"
     },
     {
       "id": "re-hdr-exposure-ignored",
@@ -536,7 +536,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\\\-hdr\\\\-exposure\\]"
+      "expect": "\\[re\\-hdr\\-exposure\\]"
     },
     {
       "id": "re-hdr-not-registered",
@@ -550,7 +550,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\\\-hdr\\\\-picture\\]"
+      "expect": "\\[re\\-hdr\\-picture\\]"
     },
     {
       "id": "gh-picture-8bit",
@@ -565,7 +565,7 @@
       "replace": "    case R::RenderTargetFormat::Rgba16Float: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-reinhard\\]"
+      "expect": "\\[gh\\-curve\\-reinhard\\]"
     },
     {
       "id": "gh-method-lane",
@@ -579,7 +579,7 @@
       "replace": "Tonemap((uint)tonemapping.y, light.rgb)",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-reinhard\\]"
+      "expect": "\\[gh\\-curve\\-reinhard\\]"
     },
     {
       "id": "gh-method-values",
@@ -593,7 +593,7 @@
       "replace": "#define GYO_TONEMAP_REINHARD 7\n",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-reinhard\\]"
+      "expect": "\\[gh\\-curve\\-reinhard\\]"
     },
     {
       "id": "gh-reinhard",
@@ -607,7 +607,7 @@
       "replace": "return c / (0.5f + c);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-reinhard\\]"
+      "expect": "\\[gh\\-curve\\-reinhard\\]"
     },
     {
       "id": "gh-reinhard-luminance",
@@ -621,7 +621,7 @@
       "replace": "return dot(c, float3(0.7152f, 0.2126f, 0.0722f));",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-reinhard\\\\-luminance\\]"
+      "expect": "\\[gh\\-curve\\-reinhard\\-luminance\\]"
     },
     {
       "id": "gh-aces",
@@ -635,7 +635,7 @@
       "replace": "(rrt * (rrt + 0.0f) - 0.000090537f)",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-aces\\]"
+      "expect": "\\[gh\\-curve\\-aces\\]"
     },
     {
       "id": "gh-boring",
@@ -649,7 +649,7 @@
       "replace": "return lerp(tm0, tm1, bt * bt);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-boring\\]"
+      "expect": "\\[gh\\-curve\\-boring\\]"
     },
     {
       "id": "gh-pbr-neutral",
@@ -663,7 +663,7 @@
       "replace": "return colour;",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-pbr\\\\-neutral\\]"
+      "expect": "\\[gh\\-curve\\-pbr\\-neutral\\]"
     },
     {
       "id": "gh-encode-power",
@@ -677,7 +677,7 @@
       "replace": "const float3 high = pow(c, 1.0f / 2.2f);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\\\-curve\\\\-none\\]"
+      "expect": "\\[gh\\-curve\\-none\\]"
     },
     {
       "id": "gh-pixel-stretched",
@@ -691,7 +691,7 @@
       "replace": "picture.Sample(pictureSampler, input.uv)",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the tonemapping pass reads*",
-      "expect": "\\[gh\\\\-pixel\\\\-mapped\\]"
+      "expect": "\\[gh\\-pixel\\-mapped\\]"
     },
     {
       "id": "gh-clear-not-decoded",
@@ -706,7 +706,7 @@
       "replace": "    if (true) return SDL_FColor{unit(c.r), unit(c.g), unit(c.b), unit(c.a)};",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the unlit 3D pass*",
-      "expect": "\\[gh\\\\-clear\\\\-decoded\\]"
+      "expect": "\\[gh\\-clear\\-decoded\\]"
     },
     {
       "id": "gh-unlit-not-decoded",
@@ -720,7 +720,7 @@
       "replace": "meshFragment",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the unlit 3D pass*",
-      "expect": "\\[gh\\\\-unlit\\\\-linear\\]"
+      "expect": "\\[gh\\-unlit\\-linear\\]"
     },
     {
       "id": "gh-decode-power",
@@ -734,7 +734,7 @@
       "replace": "const float3 high = pow(max(encoded, 0.0f), 2.2f);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the unlit 3D pass*",
-      "expect": "\\[gh\\\\-unlit\\\\-linear\\]"
+      "expect": "\\[gh\\-unlit\\-linear\\]"
     }
   ]
 }
