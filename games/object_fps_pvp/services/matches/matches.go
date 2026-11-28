@@ -32,7 +32,14 @@ type Spec struct {
 	Saves string
 	// Players are the room's members: the Match starts when each one's
 	// Client is ready (game-flow declaration 3.5); none: played at once.
-	Players []uint64
+	Players []Player
+}
+
+// Player is one member of a room: the user and the name they signed in with
+// (empty: none), which the Match shows and decides nothing by.
+type Player struct {
+	UserID uint64 `json:"userId"`
+	Name   string `json:"name"`
 }
 
 // Running is a Match a provider started: where players connect, a channel
@@ -92,7 +99,7 @@ type Request struct {
 	Mode     string   `json:"mode"`
 	Map      string   `json:"map"`
 	Capacity int      `json:"capacity"`
-	Players  []uint64 `json:"players"`
+	Players  []Player `json:"players"`
 }
 
 // Ticket is one player's way in: the Match's address and the admission token
@@ -146,8 +153,8 @@ func (s *Service) allocate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	players := map[uint64]bool{}
-	for _, user := range request.Players {
-		players[user] = true
+	for _, player := range request.Players {
+		players[player.UserID] = true
 	}
 	s.mu.Lock()
 	s.running[matchID] = &match{address: running.Address, key: key, players: players}
@@ -159,8 +166,8 @@ func (s *Service) allocate(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 	}()
 	allocation := Allocation{MatchID: matchID}
-	for _, user := range request.Players {
-		allocation.Tickets = append(allocation.Tickets, s.ticket(matchID, running.Address, key, user))
+	for _, player := range request.Players {
+		allocation.Tickets = append(allocation.Tickets, s.ticket(matchID, running.Address, key, player.UserID))
 	}
 	api.WriteJSON(w, http.StatusOK, allocation)
 }

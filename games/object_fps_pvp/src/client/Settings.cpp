@@ -1,6 +1,7 @@
 #include "object_fps_pvp/client/Settings.hpp"
 
 #include "object_fps_pvp/client/LocalFiles.hpp"
+#include "object_fps_pvp/data/Utf8.hpp"
 
 #include "data/JsonFields.hpp"
 
@@ -31,6 +32,10 @@ std::string EncodeSettings(const ClientSettings& settings) {
     writer.String(settings.window == GYO::Engine::Window::WindowMode::BorderlessFullscreen ? "borderless" : "windowed");
     writer.Key("vsync");
     writer.Bool(settings.vsync);
+    if (settings.name) {
+        writer.Key("name");
+        writer.String(*settings.name);
+    }
     writer.EndObject();
     (void)writer.Finish();
     return out;
@@ -58,6 +63,7 @@ std::optional<ClientSettings> DecodeSettings(const std::string& text, std::strin
         const auto vsync = data::Member(root, "vsync").AsBool();
         if (!vsync) throw std::runtime_error("vsync is not true or false");
         settings.vsync = *vsync;
+        if (data::HasMember(root, "name")) settings.name = data::String(data::Member(root, "name"), "name");
         return settings;
     } catch (const std::runtime_error& failure) {
         error = failure.what();
@@ -85,6 +91,16 @@ LoadedSettings LoadSettings(const std::string& path) {
 
 Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings) {
     return WriteLocalText(path, EncodeSettings(settings));
+}
+
+std::string PlayerNameCandidate(const ClientSettings& settings, const std::function<std::optional<std::string>()>& hostName) {
+    std::string name;
+    if (settings.name) {
+        name = *settings.name;
+    } else if (const std::optional<std::string> host = hostName()) {
+        name = host->substr(0, host->find('.'));
+    }
+    return std::string(data::Utf8Prefix(name, kNameCandidateBytes));
 }
 
 Math::Vec2i WindowSizeFor(const Math::Vec2i physical, const float scale) {

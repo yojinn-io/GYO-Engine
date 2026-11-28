@@ -36,6 +36,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/data/JsonFields.cpp
     src/match/AdmissionToken.cpp
     src/match/LoadThreads.cpp
+    src/match/PlayerRoster.cpp
     src/match/PlayerSave.cpp
     src/match/SaveSync.cpp
     src/present/Controls.cpp

@@ -22,6 +22,9 @@
 //   --expect-users ID,ID,...                 the room's members: the match starts when each one's Client is ready
 //                                            (before it, each player sees only itself and nobody moves); none: it is
 //                                            played from the first step
+//   --player-names-stdin                     the room's members' names are the standard input's second line, after
+//                                            the key (with --admission-key-stdin; match/PlayerRoster.hpp), so they are
+//                                            not on the command line; without it every player's name is empty
 //   --start-deadline-seconds N               starts anyway N seconds after the first player came (default 60)
 //   --idle-seconds N                         ends once no player has been in the match for N seconds, from the start
 //                                            or since the last one left (a player who drops may come back within
@@ -30,6 +33,7 @@
 #include "object_fps_pvp/data/Hex.hpp"
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/match/LoadThreads.hpp"
+#include "object_fps_pvp/match/PlayerRoster.hpp"
 #include "object_fps_pvp/world/MatchSaves.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
@@ -51,6 +55,7 @@
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -122,6 +127,14 @@ std::optional<GYO::Engine::OS::SocketAddress> ParseAddress(const std::string_vie
 
 } // namespace
 
+// The standard input's next line, without its line end (LF or CRLF).
+std::string StdinLine() {
+    std::string line;
+    std::getline(std::cin, line);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    return line;
+}
+
 int main(int argc, char** argv) {
     std::uint16_t port = 40000;
     std::int64_t ticks = -1;
@@ -132,6 +145,7 @@ int main(int argc, char** argv) {
     std::uint32_t capacity = 4;
     std::optional<std::uint64_t> matchId;
     bool keyOnStdin = false;
+    bool namesOnStdin = false;
     std::optional<std::string_view> loadThreadsAsked;
     std::optional<std::int64_t> idleSeconds;
     std::vector<std::uint64_t> expectUsers;
@@ -174,6 +188,8 @@ int main(int argc, char** argv) {
             loadThreadsAsked = argv[++index];
         } else if (argument == "--admission-key-stdin") {
             keyOnStdin = true;
+        } else if (argument == "--player-names-stdin") {
+            namesOnStdin = true;
         } else if (argument == "--saves" && hasValue) {
             saves = ParseAddress(argv[++index]);
             if (!saves) {
@@ -208,7 +224,8 @@ int main(int argc, char** argv) {
             Log(GYO::Engine::Base::LogLevel::Error,
                 "unknown argument '" + std::string(argument) +
                     "' (--port P, --arena ID, --mode ID, --ticks N, --content DIR, --verbose, --capacity N, --load-threads N, --match-id ID, "
-                    "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N, --expect-users ID,..., --start-deadline-seconds N)");
+                    "--admission-key-stdin, --player-names-stdin, --saves A.B.C.D:P, --idle-seconds N, --expect-users ID,..., "
+                    "--start-deadline-seconds N)");
             return 2;
         }
     }
@@ -225,16 +242,17 @@ int main(int argc, char** argv) {
         Log(GYO::Engine::Base::LogLevel::Error, "--match-id and --admission-key-stdin go together");
         return 2;
     }
+    if (namesOnStdin && !keyOnStdin) {
+        Log(GYO::Engine::Base::LogLevel::Error, "--player-names-stdin needs --admission-key-stdin (the names follow the key)");
+        return 2;
+    }
     if (saves && !matchId) {
         Log(GYO::Engine::Base::LogLevel::Error, "--saves needs --match-id (the save keys name the Match)");
         return 2;
     }
     std::optional<PW::AdmissionCheck> admission;
     if (keyOnStdin) {
-        std::string line;
-        std::getline(std::cin, line);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        auto key = object_fps_pvp::data::DecodeHex(line);
+        auto key = object_fps_pvp::data::DecodeHex(StdinLine());
         if (!key || key->empty()) {
             Log(GYO::Engine::Base::LogLevel::Error, "the standard input's first line is not a hexadecimal key");
             return 2;
@@ -245,6 +263,17 @@ int main(int argc, char** argv) {
                                                        std::chrono::system_clock::now().time_since_epoch())
                                                 .count();
                                         }};
+    }
+    std::map<std::uint64_t, std::string> playerNames;
+    if (namesOnStdin) {
+        std::string error;
+        auto names = object_fps_pvp::match::ParsePlayerNames(StdinLine(), error);
+        if (!names) {
+            // What was wrong, not the line: it holds the players' names (display-name declaration section 6).
+            Log(GYO::Engine::Base::LogLevel::Error, "the standard input's second line is not the players' names: " + error);
+            return 2;
+        }
+        playerNames = std::move(*names);
     }
     if (!contentRoot) contentRoot = ContentRoot();
     if (!contentRoot) {
@@ -306,7 +335,8 @@ int main(int argc, char** argv) {
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
     O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .mode = mode, .seats = seats, .expectUsers = expectUsers,
-                                                .startDeadlineSeconds = startDeadline, .jobs = &compute});
+                                                .startDeadlineSeconds = startDeadline, .playerNames = std::move(playerNames),
+                                                .jobs = &compute});
     if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {
         world.build = [inner = std::move(world.build)](O::WorldSetup& setup) {
