@@ -30,6 +30,7 @@
 #include "engine/model/ModelData.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
+#include "engine/render/TonemappingMethods.h"
 
 namespace GYO::Engine::Render {
 
@@ -113,6 +114,34 @@ struct TargetUpdate final {
         Disabled,
     };
     Mode mode = Mode::Always;
+};
+
+// On a Camera3d: the camera draws its phases up to PostProcess on a picture of its own, linear light past 1 kept
+// (a Rgba16Float render target of the render World's), which its tonemapping pass, after its PostProcess phase, puts
+// through a curve, encodes to sRGB bytes and puts on its target (Bevy's Hdr, bevy_camera/src/components.rs:91; opt-in).
+// Not looked at on a camera that is not a Camera3d: the 2D passes blend bytes (RP-4). Render-pipeline declaration 16.
+struct Hdr final {};
+
+// How a Hdr camera's tonemapping pass maps its picture's light into 0 to 1 before it encodes it (Bevy's Tonemapping,
+// bevy_render/src/view/mod.rs:291; the curves of bevy_core_pipeline/src/tonemapping.wesl that need no lookup table). No
+// component: the default method. The values are TonemappingMethods.h's (the shader's too).
+struct Tonemapping final {
+    enum class Method : std::uint8_t {
+        // No curve: the light clamped to 0 to 1 (Bevy's None, the pass bypassed).
+        None = GYO_TONEMAP_NONE,
+        // c / (1 + c) per channel (tonemapping.wesl:230).
+        Reinhard = GYO_TONEMAP_REINHARD,
+        // Reinhard on the Rec. 709 luminance, the colour scaled to it (tonemapping.wesl:245); black stays black.
+        ReinhardLuminance = GYO_TONEMAP_REINHARD_LUMINANCE,
+        // The ACES fit of Stephen Hill (Godot's ACES; tonemapping.wesl:106-140).
+        AcesFitted = GYO_TONEMAP_ACES_FITTED,
+        // Tomasz Stachowiak's SomewhatBoringDisplayTransform (tonemapping.wesl:39-80).
+        SomewhatBoringDisplayTransform = GYO_TONEMAP_SOMEWHAT_BORING_DISPLAY_TRANSFORM,
+        // Khronos PBR Neutral (tonemapping.wesl:258-301).
+        KhronosPbrNeutral = GYO_TONEMAP_KHRONOS_PBR_NEUTRAL,
+    };
+    // Bevy's default before its lookup-table curves (#7594, 912fb5886); Bevy's TonyMcMapface needs a 3D lookup table.
+    Method method = Method::ReinhardLuminance;
 };
 
 // The source World's default clear colour (Bevy's ClearColor; opaque black here, where Bevy's is a dark grey: the
@@ -245,6 +274,8 @@ inline void HashValue(Kernel::Hasher&, const Sprite&) {}
 inline void HashValue(Kernel::Hasher&, const Shape2d&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColorConfig&) {}
 inline void HashValue(Kernel::Hasher&, const TargetUpdate&) {}
+inline void HashValue(Kernel::Hasher&, const Hdr&) {}
+inline void HashValue(Kernel::Hasher&, const Tonemapping&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColor&) {}
 
 } // namespace GYO::Engine::Render

@@ -67,14 +67,32 @@ enum class RenderTargetFormat : std::uint8_t {
     // bevy_core_pipeline/src/core_3d/mod.rs:5; SDL_GPU guarantees only D16 for both drawing and sampling,
     // SDL_gpu.h:703,747).
     Depth,
-    // R, G, B, A, a 16-bit float each: linear light, values past 1 kept (a Hdr camera's picture, Tonemapping.hpp;
-    // Bevy's Rgba16Float main texture, bevy_render/src/camera.rs:799-801). A colour is bytes as stored (sRGB-encoded,
-    // Color8): a clear colour on it is decoded to the light it stands for (as Bevy converts a clear colour to its main
-    // texture's space, bevy_render/src/view/mod.rs:1442-1450); the unlit 3D pass writes the light its bytes stand for;
-    // the 2D pass writes its bytes / 255 as they are (2D blends bytes, RP-4: the 2D pipelines draw on no such target).
-    // Sampled as stored.
+    // R, G, B, A, a 16-bit float each: linear light, values past 1 kept (a Hdr camera's picture, Drawables.hpp's Hdr;
+    // Bevy's Rgba16Float main texture, bevy_render/src/camera.rs:799-801). Its colours are ColourSpace::Linear's; sampled
+    // as stored, so as linear light.
     Rgba16Float,
 };
+
+// What the colours on a target stand for (render-pipeline declaration 16.8): the one rule every pass on it follows, a
+// clear, a 2D pass, a 3D pass alike. A colour given as Color8 (a clear, a vertex's or an instance's colour) is bytes as
+// stored, sRGB-encoded for a colour picture; a texel is what its texture samples: bytes for Rgba8Unorm, linear light for
+// Rgba8UnormSrgb (decoded by the sampler) and for a Rgba16Float target (SampledAsLinear).
+enum class ColourSpace : std::uint8_t {
+    // Bytes (Rgba8Unorm, the main target): colours are taken and blended as they are, texels as sampled (RP-4: as Dear
+    // ImGui and SDL_Renderer blend; the unlit 3D pass the same).
+    Encoded = 1,
+    // Linear light (Rgba16Float): every colour is taken to the light it stands for before it is used and blended there,
+    // as Bevy takes colours to linear for its main texture (bevy_render/src/view/mod.rs:1442-1450, LinearRgba): a
+    // Color8 and a texel sampled as bytes are decoded (sRGB), a texel sampled as linear light is taken as it is (never
+    // decoded twice).
+    Linear,
+};
+[[nodiscard]] constexpr ColourSpace ColourSpaceOf(const RenderTargetFormat format) noexcept {
+    return format == RenderTargetFormat::Rgba16Float ? ColourSpace::Linear : ColourSpace::Encoded;
+}
+// Whether a texture's texels sample as linear light (else as bytes).
+[[nodiscard]] constexpr bool SampledAsLinear(const TextureFormat format) noexcept { return format == TextureFormat::Rgba8UnormSrgb; }
+[[nodiscard]] constexpr bool SampledAsLinear(const RenderTargetFormat format) noexcept { return format == RenderTargetFormat::Rgba16Float; }
 
 struct TextureDesc final {
     std::uint32_t width = 0;

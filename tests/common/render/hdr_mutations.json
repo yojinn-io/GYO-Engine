@@ -1,113 +1,15 @@
 {
   "version": 1,
-  "description": "Declared mutants of HDR and tonemapping (render-pipeline declaration section 16, v8-arch-gyo2-render-a4; 判定 H1 to H6; render RD-4, RD-11, RD-13). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gh- mutants need a GPU (label gpu, Lavapipe); the shader ones (Tonemapping.hlsli, Color.hlsli, tonemapping.frag.hlsl) rebuild the embedded shaders. Not added (with the reason): the shader's negative channels taken as 0 (no GPU stimulus is negative: Rgba16Float light from the tests is not; the CPU's tm-negative-kept guards the formula the shader copies); the shader's black guard of Reinhard on the luminance (no GPU stimulus is black under that curve); the tonemapping pass's alpha (every stimulus has alpha 1); the 2D pass's bytes / 255 on a linear target (the shader is the 2D pass's own, unchanged); Tonemapping.hlsli's other values than REINHARD (one wrong value of the table is what gh-method-values catches; the C++ side's static_assert holds the rest); a later Hdr camera's tonemapping over an earlier one's (each camera tonemaps, [cp-hdr-each-tonemaps]: the same find as cp-hdr-no-tonemapping).",
+  "description": "Declared mutants of HDR and tonemapping (render-pipeline declaration section 16 and its revision 16.8, v8-arch-gyo2-render-a4; 判定 H1 to H6; render RD-4, RD-11, RD-13 to RD-15). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The gh- mutants need a GPU (label gpu, Lavapipe); the shader ones (Tonemapping.hlsli, Color.hlsli, LinearColour.hlsli, tonemapping.frag.hlsl) rebuild the embedded shaders. Retired with revision 16.8: the CPU curves' mutants (tm-reinhard-formula, tm-luminance-weights, tm-aces-fit, tm-boring-curve, tm-pbr-toe, tm-negative-kept, tm-luminance-black: the CPU curves are now the tests' own reference, TonemappingReference.hpp, checked against Bevy's values; the Engine's curves are the shader's, guarded by the gh- ones), the sRGB functions' (tm-encode-*, tm-decode-toe: render uses Math's DecodeSrgb / EncodeSrgb, guarded by math's tests), Exposure's (tm-exposure-*, re-hdr-exposure-ignored: Exposure moved to B4), tm-bytes-alpha (the tests' reference), gh-method-values (one list of values for both sides now, TonemappingMethods.h: a wrong value is the same on both sides), tm-sync-per-camera and re-hdr's per-target picture (a picture per camera now). Not added (with the reason): the shader's negative channels taken as 0 and its black guard (no GPU stimulus is negative or black under that curve); the tonemapping pass's alpha (every stimulus has alpha 1); a picture put in retained (no code names a picture there: camera_render retains targets of source cameras only); the backend's texture flag (GPUTexture::linear) apart from gh-linear-flag-not-pushed (the same wrong flag reaches the shader).",
   "mutants": [
-    {
-      "id": "tm-reinhard-formula",
-      "what": "H1: Reinhard's denominator wrong",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "return {c.x / (1.0F + c.x), c.y / (1.0F + c.y), c.z / (1.0F + c.z)};",
-      "replace": "return {c.x / (0.5F + c.x), c.y / (1.0F + c.y), c.z / (1.0F + c.z)};",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-reinhard\\]"
-    },
-    {
-      "id": "tm-luminance-weights",
-      "what": "H1: the Rec. 709 luminance weights swapped (red for green)",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "return 0.2126F * c.x + 0.7152F * c.y + 0.0722F * c.z;",
-      "replace": "return 0.7152F * c.x + 0.2126F * c.y + 0.0722F * c.z;",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-reinhard\\-luminance\\]"
-    },
-    {
-      "id": "tm-aces-fit",
-      "what": "H1: the ACES fit's constant dropped",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "(v * (v + 0.0245786F) - 0.000090537F)",
-      "replace": "(v * (v + 0.0F) - 0.000090537F)",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-aces\\]"
-    },
-    {
-      "id": "tm-boring-curve",
-      "what": "H1: SomewhatBoringDisplayTransform with the curve of Bevy's unused branch",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "float BoringCurve(const float v) noexcept { return 1.0F - std::exp(-v); }",
-      "replace": "float BoringCurve(const float v) noexcept { return v / (1.0F + v); }",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-boring\\]"
-    },
-    {
-      "id": "tm-pbr-toe",
-      "what": "H1: PBR Neutral without its toe (the offset always 0.04)",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "x < 0.08F ? x - 6.25F * x * x : 0.04F",
-      "replace": "0.04F",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-pbr\\-neutral\\]"
-    },
-    {
-      "id": "tm-negative-kept",
-      "what": "H1: negative channels not taken as 0 before the curve",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "const Vec3 c = Math::Max(linear, Vec3{});",
-      "replace": "const Vec3 c = linear;",
-      "target": "gyo_render_tests",
-      "cases": "render: each tonemapping curve*",
-      "expect": "\\[tm\\-none\\]"
-    },
-    {
-      "id": "tm-luminance-black",
-      "what": "H1: Reinhard on the luminance divides 0 by 0 at black",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "    if (before <= 0.0F) return Vec3{};\n",
-      "replace": "",
-      "target": "gyo_render_tests",
-      "cases": "render: Reinhard on the luminance*",
-      "expect": "\\[tm\\-luminance\\-black\\]"
-    },
     {
       "id": "tm-default-method",
       "what": "H1: the default curve is not ReinhardLuminance",
       "guards": [
         "render-pipeline-declaration 判定 H1",
-        "render-pipeline-declaration 16.3"
+        "render RD-14"
       ],
-      "file": "engine/modules/render/include/engine/render/Tonemapping.hpp",
+      "file": "engine/modules/render/include/engine/render/Drawables.hpp",
       "find": "    Method method = Method::ReinhardLuminance;",
       "replace": "    Method method = Method::None;",
       "target": "gyo_render_tests",
@@ -115,102 +17,32 @@
       "expect": "\\[tm\\-default\\]"
     },
     {
-      "id": "tm-encode-power",
-      "what": "H1: sRGB encoding as a power of 1/2.2",
+      "id": "tm-colour-space-encoded",
+      "what": "H1: a Rgba16Float target's colours taken as bytes",
       "guards": [
         "render-pipeline-declaration 判定 H1",
-        "render RD-13"
+        "render RD-15"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "1.055F * std::pow(c, 1.0F / 2.4F) - 0.055F",
-      "replace": "std::pow(c, 1.0F / 2.2F)",
+      "file": "engine/modules/render/include/engine/render/RenderTextures.hpp",
+      "find": "return format == RenderTargetFormat::Rgba16Float ? ColourSpace::Linear : ColourSpace::Encoded;",
+      "replace": "return ColourSpace::Encoded;",
       "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-encode\\]"
+      "cases": "render: what the colours on a target*",
+      "expect": "\\[tm\\-colour\\-space\\]"
     },
     {
-      "id": "tm-encode-toe",
-      "what": "H1: sRGB encoding without its linear toe",
+      "id": "tm-srgb-sampled-as-bytes",
+      "what": "H1: an sRGB texture's texels taken as bytes (decoded twice)",
       "guards": [
         "render-pipeline-declaration 判定 H1",
-        "render RD-13"
+        "render RD-15"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "return c <= 0.0031308F ? c * 12.92F",
-      "replace": "return c <= 0.0F ? c * 12.92F",
+      "file": "engine/modules/render/include/engine/render/RenderTextures.hpp",
+      "find": "SampledAsLinear(const TextureFormat format) noexcept { return format == TextureFormat::Rgba8UnormSrgb; }",
+      "replace": "SampledAsLinear(const TextureFormat format) noexcept { return false; }",
       "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-encode\\-toe\\]"
-    },
-    {
-      "id": "tm-encode-unclamped",
-      "what": "H1: sRGB encoding not clamped to 0 to 1",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "const float c = std::clamp(linear, 0.0F, 1.0F);",
-      "replace": "const float c = linear;",
-      "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-encode\\-clamped\\]"
-    },
-    {
-      "id": "tm-decode-toe",
-      "what": "H1: sRGB decoding without its linear toe",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "return encoded <= 0.04045F ? encoded / 12.92F",
-      "replace": "return encoded <= 0.0F ? encoded / 12.92F",
-      "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-decode\\-toe\\]"
-    },
-    {
-      "id": "tm-exposure-scale",
-      "what": "H1: Exposure's scale without Bevy's 1 / 1.2",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "return std::exp2(-ev100) / 1.2F;",
-      "replace": "return std::exp2(-ev100);",
-      "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-exposure\\-scale\\]"
-    },
-    {
-      "id": "tm-exposure-default",
-      "what": "H1: Exposure's default not Blender's 9.7",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/include/engine/render/Tonemapping.hpp",
-      "find": "static constexpr float kBlender = 9.7F;",
-      "replace": "static constexpr float kBlender = 12.0F;",
-      "target": "gyo_render_tests",
-      "cases": "render: the default tonemapping*",
-      "expect": "\\[tm\\-exposure\\-default\\]"
-    },
-    {
-      "id": "tm-bytes-alpha",
-      "what": "H1: the pixel's alpha byte not the picture's",
-      "guards": [
-        "render-pipeline-declaration 判定 H1",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "ToByte(LinearToSrgb(mapped.z)), ToByte(alpha)};",
-      "replace": "ToByte(LinearToSrgb(mapped.z)), 255};",
-      "target": "gyo_render_tests",
-      "cases": "render: what a tonemapping pass*",
-      "expect": "\\[tm\\-bytes\\-none\\]"
+      "cases": "render: what the colours on a target*",
+      "expect": "\\[tm\\-sampled\\-linear\\]"
     },
     {
       "id": "tm-pass-method-lane",
@@ -220,8 +52,8 @@
         "render RD-4"
       ],
       "file": "engine/modules/render/include/engine/render/ShaderAbi.hpp",
-      "find": "{{static_cast<float>(static_cast<std::uint8_t>(method)), 0.0F, 0.0F, 0.0F}}",
-      "replace": "{{0.0F, static_cast<float>(static_cast<std::uint8_t>(method)), 0.0F, 0.0F}}",
+      "find": "TonemappingParameters{{static_cast<float>(method), 0.0F, 0.0F, 0.0F}}",
+      "replace": "TonemappingParameters{{0.0F, static_cast<float>(method), 0.0F, 0.0F}}",
       "target": "gyo_render_tests",
       "cases": "render: what a tonemapping pass*",
       "expect": "\\[tm\\-pass\\-method\\]"
@@ -231,9 +63,9 @@
       "what": "H1: the tonemapping pass over the whole target, not the camera's viewport",
       "guards": [
         "render-pipeline-declaration 判定 H1",
-        "render RD-13"
+        "render RD-14"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
+      "file": "engine/modules/render/src/Compose.cpp",
       "find": "    pass.viewport = std::move(viewport);\n",
       "replace": "",
       "target": "gyo_render_tests",
@@ -241,31 +73,59 @@
       "expect": "\\[tm\\-pass\\-on\\]"
     },
     {
-      "id": "tm-sync-per-camera",
-      "what": "H1: a picture per camera, not per camera target",
+      "id": "tm-pass-blend",
+      "what": "H1: the tonemapping pass's blend not the one given",
+      "guards": [
+        "render-pipeline-declaration 判定 H1",
+        "render RD-14"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "    pass.blend = blend;\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "render: what a tonemapping pass*",
+      "expect": "\\[tm\\-pass\\-blend\\]"
+    },
+    {
+      "id": "tm-sync-picture-shared",
+      "what": "H1: cameras on one target share a picture",
       "guards": [
         "render-pipeline-declaration 判定 H1",
         "render RD-13"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "if (std::any_of(next.begin(), next.end(), [&](const HdrTargets::Entry& e) { return e.output == output; })) continue;",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "        if (p.camera == camera) return p.picture;",
+      "replace": "        return p.picture;",
+      "target": "gyo_render_tests",
+      "cases": "render: Hdr cameras' targets*",
+      "expect": "\\[tm\\-sync\\-picture\\-per\\-camera\\]"
+    },
+    {
+      "id": "tm-sync-depth-per-camera",
+      "what": "H1: a depth per camera, not per camera target",
+      "guards": [
+        "render-pipeline-declaration 判定 H1",
+        "render RD-13"
+      ],
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "        if (std::any_of(depths.begin(), depths.end(), [&](const HdrTargets::Depth& d) { return d.output == camera.output; })) continue;\n",
       "replace": "",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
-      "expect": "\\[tm\\-sync\\-one\\-per\\-target\\]"
+      "cases": "render: Hdr cameras' targets*",
+      "expect": "\\[tm\\-sync\\-depth\\-per\\-target\\]"
     },
     {
       "id": "tm-sync-main-followed",
-      "what": "H1: every picture follows the main target, not its camera's target",
+      "what": "H1: every target follows the main target, not its camera's target",
       "guards": [
         "render-pipeline-declaration 判定 H1",
         "render RD-13"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
       "find": "desc.size = FollowTarget{output};",
       "replace": "desc.size = FollowTarget{};",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
+      "cases": "render: Hdr cameras' targets*",
       "expect": "\\[tm\\-sync\\-follows\\]"
     },
     {
@@ -276,195 +136,267 @@
         "render RD-13",
         "render RD-11"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "desc.format = RenderTargetFormat::Rgba16Float;",
-      "replace": "desc.format = RenderTargetFormat::Rgba8Unorm;",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "make(camera.output, RenderTargetFormat::Rgba16Float)",
+      "replace": "make(camera.output, RenderTargetFormat::Rgba8Unorm)",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
+      "cases": "render: Hdr cameras' targets*",
       "expect": "\\[tm\\-sync\\-format\\]"
     },
     {
       "id": "tm-sync-filter",
-      "what": "H1: the picture read between its pixels (linear)",
+      "what": "H1: the picture read between its texels (linear)",
       "guards": [
         "render-pipeline-declaration 判定 H1",
         "render RD-13"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
       "find": "desc.filter = TextureFilter::Nearest;",
       "replace": "desc.filter = TextureFilter::Linear;",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
+      "cases": "render: Hdr cameras' targets*",
       "expect": "\\[tm\\-sync\\-format\\]"
     },
     {
       "id": "tm-sync-made-again",
-      "what": "H1: a named picture made again each time",
+      "what": "H1: a camera's picture made again each frame",
       "guards": [
         "render-pipeline-declaration 判定 H1",
         "render RD-13"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "        if (kept != pictures.entries.end()) {",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "        if (kept != targets.pictures.end()) {",
       "replace": "        if (false) {",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
+      "cases": "render: Hdr cameras' targets*",
       "expect": "\\[tm\\-sync\\-kept\\]"
     },
     {
-      "id": "tm-sync-never-let-go",
-      "what": "H1: a picture no camera names is kept",
+      "id": "tm-sync-kept-on-another-target",
+      "what": "H1: a camera's picture kept when it draws on another target",
       "guards": [
         "render-pipeline-declaration 判定 H1",
         "render RD-13"
       ],
-      "file": "engine/modules/render/src/Tonemapping.cpp",
-      "find": "    for (const HdrTargets::Entry& gone : pictures.entries) textures.Release(gone.picture);\n",
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "return p.camera == camera.camera && p.output == camera.output;",
+      "replace": "return p.camera == camera.camera;",
+      "target": "gyo_render_tests",
+      "cases": "render: Hdr cameras' targets*",
+      "expect": "\\[tm\\-sync\\-moved\\]"
+    },
+    {
+      "id": "tm-sync-picture-never-let-go",
+      "what": "H1: a picture no camera draws with is kept (a waiting camera's too)",
+      "guards": [
+        "render-pipeline-declaration 判定 H1",
+        "render-pipeline-declaration 判定 H3",
+        "render RD-13"
+      ],
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "    for (const HdrTargets::Picture& gone : targets.pictures) textures.Release(gone.picture);\n",
       "replace": "",
       "target": "gyo_render_tests",
-      "cases": "render: HDR pictures*",
+      "cases": "render: Hdr cameras' targets*,render_extract: a Hdr camera on a render target*",
+      "expect": "(?=[\\s\\S]*(?:\\[tm\\-sync\\-let\\-go\\]))[\\s\\S]*(?:\\[re\\-hdr\\-update\\-waits\\])"
+    },
+    {
+      "id": "tm-sync-depth-never-let-go",
+      "what": "H1: a depth no Hdr camera draws on is kept",
+      "guards": [
+        "render-pipeline-declaration 判定 H1",
+        "render RD-13"
+      ],
+      "file": "engine/modules/render/src/RenderTargets.cpp",
+      "find": "    for (const HdrTargets::Depth& gone : targets.depths) textures.Release(gone.depth);\n",
+      "replace": "",
+      "target": "gyo_render_tests",
+      "cases": "render: Hdr cameras' targets*",
       "expect": "\\[tm\\-sync\\-let\\-go\\]"
     },
     {
       "id": "cp-hdr-scene-on-target",
-      "what": "H2: a Hdr camera's scene drawn on its target, not its picture",
+      "what": "H2: a Hdr camera's phases drawn on its target, not its picture",
+      "guards": [
+        "render-pipeline-declaration 判定 H2",
+        "render RD-14"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "return camera.hdr && phase <= CameraPhase::PostProcess ? camera.hdr : camera.target;",
+      "replace": "return camera.target;",
+      "target": "gyo_render_tests",
+      "cases": "pipeline3d: a Hdr camera's 3D pass*",
+      "expect": "\\[p3\\-hdr\\-scene\\-target\\]"
+    },
+    {
+      "id": "cp-hdr-overlay-on-picture",
+      "what": "H2: a Hdr camera's Overlay drawn on its picture (tonemapped, not bytes on its target)",
+      "guards": [
+        "render-pipeline-declaration 判定 H2",
+        "render RD-14",
+        "render-pipeline-declaration RP-4"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "camera.hdr && phase <= CameraPhase::PostProcess ?",
+      "replace": "camera.hdr && phase <= CameraPhase::Overlay ?",
+      "target": "gyo_render_tests",
+      "cases": "pipeline3d: a Hdr camera's 3D pass*",
+      "expect": "\\[p3\\-phase\\-target\\-hdr\\]"
+    },
+    {
+      "id": "p3-hdr-depth-ignored",
+      "what": "H2: a 3D pass ignores its target's shared depth",
       "guards": [
         "render-pipeline-declaration 判定 H2",
         "render RD-13"
       ],
-      "file": "engine/modules/render/include/engine/render/Pipeline2d.hpp",
-      "find": "{ return hdr ? hdr : target; }",
-      "replace": "{ return target; }",
+      "file": "engine/modules/render/src/Pipeline3d.cpp",
+      "find": "    pass.depth = camera.depth;\n",
+      "replace": "",
       "target": "gyo_render_tests",
       "cases": "pipeline3d: a Hdr camera's 3D pass*",
-      "expect": "\\[p3\\-hdr\\-scene\\-target\\]"
+      "expect": "\\[p3\\-hdr\\-depth\\]"
     },
     {
       "id": "cp-hdr-picture-not-cleared",
       "what": "H2: the picture never cleared",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13",
-        "render-pipeline RP-3"
+        "render RD-14",
+        "render-pipeline-declaration RP-3"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "            if (firstOnPicture || camera.clear) {",
-      "replace": "            if (false) {",
+      "find": "        if (camera.hdr) out.passes.push_back(ClearOnly(",
+      "replace": "        if (false) out.passes.push_back(ClearOnly(",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-all\\]"
-    },
-    {
-      "id": "cp-hdr-first-not-cleared",
-      "what": "H2: the first camera on the picture without a colour does not clear it",
-      "guards": [
-        "render-pipeline-declaration 判定 H2",
-        "render RD-13",
-        "render-pipeline RP-3"
-      ],
-      "file": "engine/modules/render/src/Compose.cpp",
-      "find": "            if (firstOnPicture || camera.clear) {",
-      "replace": "            if (camera.clear) {",
-      "target": "gyo_render_tests",
-      "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
-    },
-    {
-      "id": "cp-hdr-colour-first-only",
-      "what": "H2: a later camera with a colour does not clear the picture",
-      "guards": [
-        "render-pipeline-declaration 判定 H2",
-        "render RD-13"
-      ],
-      "file": "engine/modules/render/src/Compose.cpp",
-      "find": "            if (firstOnPicture || camera.clear) {",
-      "replace": "            if (firstOnPicture) {",
-      "target": "gyo_render_tests",
-      "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
     },
     {
       "id": "cp-hdr-clear-colour-dropped",
       "what": "H2: the picture cleared to transparent black whatever the camera's colour",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "clear.clear = camera.clear.value_or(Color8{0, 0, 0, 0});",
-      "replace": "clear.clear = Color8{0, 0, 0, 0};",
+      "find": "camera.clear.value_or(kTransparentBlack)",
+      "replace": "kTransparentBlack",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-picture\\-cleared\\]"
+    },
+    {
+      "id": "cp-hdr-none-cleared-opaque",
+      "what": "H2: a picture without a colour cleared opaque black (what is under it lost)",
+      "guards": [
+        "render-pipeline-declaration 判定 H2",
+        "render RD-14"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "camera.clear.value_or(kTransparentBlack)",
+      "replace": "camera.clear.value_or(Color8{0, 0, 0, 255})",
+      "target": "gyo_render_tests",
+      "cases": "compose: a later Hdr camera*",
+      "expect": "\\[cp\\-hdr\\-none\\-transparent\\]"
+    },
+    {
+      "id": "cp-hdr-viewport-cleared-too",
+      "what": "H2: a later Hdr camera with a colour also clears its viewport on the target",
+      "guards": [
+        "render-pipeline-declaration 判定 H2",
+        "render RD-14"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "        } else if (camera.clear && !camera.hdr) {",
+      "replace": "        } else if (camera.clear) {",
+      "target": "gyo_render_tests",
+      "cases": "compose: a later Hdr camera*",
+      "expect": "\\[cp\\-hdr\\-later\\-all\\]"
     },
     {
       "id": "cp-hdr-output-not-cleared",
       "what": "H2: the first camera on the target, a Hdr one, leaves the bars uncleared",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "            if (camera.clear && first) {",
-      "replace": "            if (false) {",
+      "find": "        if (camera.clear && first) {",
+      "replace": "        if (camera.clear && first && !camera.hdr) {",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-all\\]"
     },
     {
-      "id": "cp-hdr-output-cleared-as-plain",
-      "what": "H2: a Hdr camera also clears its target as a camera without Hdr does (its viewport when not first)",
+      "id": "cp-hdr-always-replaces",
+      "what": "H2: a later Hdr camera's tonemapping replaces what earlier cameras drew",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "        } else if (camera.clear) {",
-      "replace": "        }\n        if (camera.clear) {",
+      "find": "first ? BlendMode::Opaque : BlendMode::Alpha",
+      "replace": "BlendMode::Opaque",
       "target": "gyo_render_tests",
-      "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
+      "cases": "compose: a later Hdr camera*",
+      "expect": "\\[cp\\-hdr\\-later\\-blends\\]"
+    },
+    {
+      "id": "cp-hdr-always-blends",
+      "what": "H2: the first camera's tonemapping blends over an undefined target",
+      "guards": [
+        "render-pipeline-declaration 判定 H2",
+        "render RD-14"
+      ],
+      "file": "engine/modules/render/src/Compose.cpp",
+      "find": "first ? BlendMode::Opaque : BlendMode::Alpha",
+      "replace": "BlendMode::Alpha",
+      "target": "gyo_render_tests",
+      "cases": "compose: a Hdr camera clears its picture*",
+      "expect": "\\[cp\\-hdr\\-first\\-replaces\\]"
     },
     {
       "id": "cp-hdr-no-tonemapping",
       "what": "H2: no tonemapping pass",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "if (static_cast<CameraPhase>(index++) == CameraPhase::Overlay && camera.hdr) {",
-      "replace": "if (false && static_cast<CameraPhase>(index++) == CameraPhase::Overlay) {",
+      "find": "        if (camera.hdr) {\n            out.passes.push_back(TonemappingPass(",
+      "replace": "        if (false) {\n            out.passes.push_back(TonemappingPass(",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-all\\]"
     },
     {
-      "id": "cp-hdr-tonemapping-before-post",
-      "what": "H2: the tonemapping pass before the PostProcess phase",
+      "id": "cp-hdr-tonemapping-after-overlay",
+      "what": "H2: the Overlay before the tonemapping (the UI tonemapped over)",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14",
+        "render-pipeline-declaration RP-4"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "if (static_cast<CameraPhase>(index++) == CameraPhase::Overlay && camera.hdr) {",
-      "replace": "if (static_cast<CameraPhase>(index++) == CameraPhase::PostProcess && camera.hdr) {",
+      "find": "        Append(phases.Through(CameraPhase::PostProcess), out);",
+      "replace": "        Append(phases.Through(CameraPhase::Overlay), out);",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\-hdr\\-tonemap\\-after\\-post\\]"
+      "cases": "compose: a Hdr camera clears its picture*",
+      "expect": "\\[cp\\-hdr\\-tonemap\\-before\\-overlay\\]"
     },
     {
       "id": "cp-hdr-tonemapping-curve",
       "what": "H2: the tonemapping pass ignores the camera's curve",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
-      "find": "PixelsOf(camera.computed.viewport), camera.tonemapping));",
-      "replace": "PixelsOf(camera.computed.viewport), Tonemapping::Method::None));",
+      "find": "PixelsOf(camera.computed.viewport), camera.tonemapping,",
+      "replace": "PixelsOf(camera.computed.viewport), Tonemapping::Method::None,",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-tonemap\\-pass\\]"
     },
     {
@@ -472,24 +404,24 @@
       "what": "H2: the tonemapping pass over the whole target, not the camera's viewport",
       "guards": [
         "render-pipeline-declaration 判定 H2",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/src/Compose.cpp",
       "find": "TonemappingPass(*camera.hdr, camera.target, PixelsOf(camera.computed.viewport),",
       "replace": "TonemappingPass(*camera.hdr, camera.target, std::nullopt,",
       "target": "gyo_render_tests",
-      "cases": "compose: a Hdr camera draws on its picture*",
+      "cases": "compose: a Hdr camera clears its picture*",
       "expect": "\\[cp\\-hdr\\-tonemap\\-pass\\]"
     },
     {
       "id": "re-hdr-no-picture",
-      "what": "H3: no picture made for a Hdr camera",
+      "what": "H3: no targets made for a Hdr camera",
       "guards": [
         "render-pipeline-declaration 判定 H3",
         "render RD-13"
       ],
       "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-      "find": "if (camera.is3d && hdr.Contains(camera.entity)) outputs.push_back(camera.target);",
+      "find": "if (camera.is3d && hdr.Contains(camera.entity)) withHdr.push_back(Render::HdrCamera{camera.entity, camera.target});",
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
@@ -501,21 +433,35 @@
       "guards": [
         "render-pipeline-declaration 判定 H3",
         "render RD-13",
-        "render-pipeline RP-4"
+        "render-pipeline-declaration RP-4"
       ],
       "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-      "find": "if (!camera.is3d || !hdr.Contains(camera.entity)) continue;",
-      "replace": "if (!hdr.Contains(camera.entity)) continue;",
+      "find": "if (camera.is3d && hdr.Contains(camera.entity)) withHdr",
+      "replace": "if (hdr.Contains(camera.entity)) withHdr",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
       "expect": "\\[re\\-hdr\\-2d\\-ignored\\]"
+    },
+    {
+      "id": "re-hdr-depth-hdr-only",
+      "what": "H3: only Hdr cameras test the target's shared depth",
+      "guards": [
+        "render-pipeline-declaration 判定 H3",
+        "render RD-13"
+      ],
+      "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
+      "find": "        if (camera.is3d) camera.depth = targets.Read().DepthOf(camera.target);",
+      "replace": "        if (camera.hdr) camera.depth = targets.Read().DepthOf(camera.target);",
+      "target": "gyo_render_tests",
+      "cases": "render_extract: Hdr 3D cameras*",
+      "expect": "\\[re\\-hdr\\-depth\\-shared\\]"
     },
     {
       "id": "re-hdr-tonemapping-ignored",
       "what": "H3: the camera's Tonemapping not extracted",
       "guards": [
         "render-pipeline-declaration 判定 H3",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
       "find": "if (const Render::Tonemapping* t = tonemappings.Get(camera.entity)) camera.tonemapping = t->method;",
@@ -523,20 +469,6 @@
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
       "expect": "\\[re\\-hdr\\-tonemapping\\]"
-    },
-    {
-      "id": "re-hdr-exposure-ignored",
-      "what": "H3: the camera's Exposure not extracted",
-      "guards": [
-        "render-pipeline-declaration 判定 H3",
-        "render RD-13"
-      ],
-      "file": "engine/modules/camera_render/src/CameraRenderModule.cpp",
-      "find": "if (const Render::Exposure* e = exposures.Get(camera.entity)) camera.exposure = e->Scale();",
-      "replace": "",
-      "target": "gyo_render_tests",
-      "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\-hdr\\-exposure\\]"
     },
     {
       "id": "re-hdr-not-registered",
@@ -582,25 +514,11 @@
       "expect": "\\[gh\\-curve\\-reinhard\\]"
     },
     {
-      "id": "gh-method-values",
-      "what": "H5: the shader's method values not Tonemapping::Method's",
-      "guards": [
-        "render-pipeline-declaration 判定 H5",
-        "render RD-4"
-      ],
-      "file": "engine/modules/render/shaders/Tonemapping.hlsli",
-      "find": "#define GYO_TONEMAP_REINHARD 2\n",
-      "replace": "#define GYO_TONEMAP_REINHARD 7\n",
-      "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu hdr: light past 1*",
-      "expect": "\\[gh\\-curve\\-reinhard\\]"
-    },
-    {
       "id": "gh-reinhard",
-      "what": "H5: the shader's Reinhard not the CPU's",
+      "what": "H5: the shader's Reinhard not Bevy's",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Tonemapping.hlsli",
       "find": "return c / (1.0f + c);",
@@ -614,7 +532,7 @@
       "what": "H5: the shader's luminance weights swapped",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Tonemapping.hlsli",
       "find": "return dot(c, float3(0.2126f, 0.7152f, 0.0722f));",
@@ -628,7 +546,7 @@
       "what": "H5: the shader's ACES fit constant dropped",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Tonemapping.hlsli",
       "find": "(rrt * (rrt + 0.0245786f) - 0.000090537f)",
@@ -642,7 +560,7 @@
       "what": "H5: the shader's SomewhatBoringDisplayTransform without its final 0.97",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Tonemapping.hlsli",
       "find": "return lerp(tm0, tm1, bt * bt) * 0.97f;",
@@ -656,7 +574,7 @@
       "what": "H5: the shader's PBR Neutral without its desaturation",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Tonemapping.hlsli",
       "find": "return lerp(colour, float3(newPeak, newPeak, newPeak), g);",
@@ -670,7 +588,7 @@
       "what": "H5: the shader encodes with a power of 1/2.2",
       "guards": [
         "render-pipeline-declaration 判定 H5",
-        "render RD-4"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/Color.hlsli",
       "find": "const float3 high = 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;",
@@ -684,7 +602,7 @@
       "what": "H6: the picture stretched over the pass's viewport, not read at its own pixels",
       "guards": [
         "render-pipeline-declaration 判定 H6",
-        "render RD-13"
+        "render RD-14"
       ],
       "file": "engine/modules/render/shaders/tonemapping.frag.hlsl",
       "find": "picture.Sample(pictureSampler, input.position.xy / float2(width, height))",
@@ -698,43 +616,112 @@
       "what": "H6: a clear colour on a linear target written as its bytes / 255",
       "guards": [
         "render-pipeline-declaration 判定 H6",
-        "render RD-13",
-        "render RD-11"
+        "render RD-15"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "    if (!IsLinear(format)) return SDL_FColor{unit(c.r), unit(c.g), unit(c.b), unit(c.a)};",
-      "replace": "    if (true) return SDL_FColor{unit(c.r), unit(c.g), unit(c.b), unit(c.a)};",
+      "find": "    if (space == R::ColourSpace::Encoded) return SDL_FColor{",
+      "replace": "    if (true) return SDL_FColor{",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the unlit 3D pass*",
       "expect": "\\[gh\\-clear\\-decoded\\]"
     },
     {
-      "id": "gh-unlit-not-decoded",
-      "what": "H6: the unlit 3D pass writes its bytes on a linear target",
+      "id": "gh-unlit-bytes",
+      "what": "H6: the 3D pass on a linear target takes the bytes fragment stage",
       "guards": [
         "render-pipeline-declaration 判定 H6",
-        "render RD-13"
+        "render RD-15"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "(IsLinear(colour->format) ? meshFragmentLinear : meshFragment)",
+      "find": "(colour->space == R::ColourSpace::Linear ? meshFragmentLinear : meshFragment)",
       "replace": "meshFragment",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu hdr: the unlit 3D pass*",
       "expect": "\\[gh\\-unlit\\-linear\\]"
     },
     {
+      "id": "gh-2d-bytes",
+      "what": "H6: the 2D pass on a linear target takes the bytes fragment stage",
+      "guards": [
+        "render-pipeline-declaration 判定 H6",
+        "render RD-15"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "space == R::ColourSpace::Linear ? fragmentLinear : fragment;",
+      "replace": "fragment;",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu hdr: on a picture every colour*",
+      "expect": "\\[gh\\-2d\\-linear\\]"
+    },
+    {
       "id": "gh-decode-power",
       "what": "H6: the shader decodes with a power of 2.2",
       "guards": [
         "render-pipeline-declaration 判定 H6",
-        "render RD-4"
+        "render RD-15"
       ],
       "file": "engine/modules/render/shaders/Color.hlsli",
-      "find": "const float3 high = pow((max(encoded, 0.0f) + 0.055f) / 1.055f, 2.4f);",
-      "replace": "const float3 high = pow(max(encoded, 0.0f), 2.2f);",
+      "find": "const float3 high = pow((e + 0.055f) / 1.055f, 2.4f);",
+      "replace": "const float3 high = pow(e, 2.2f);",
       "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu hdr: the unlit 3D pass*",
-      "expect": "\\[gh\\-unlit\\-linear\\]"
+      "cases": "sdl_gpu hdr: on a picture every colour*",
+      "expect": "\\[gh\\-2d\\-linear\\]"
+    },
+    {
+      "id": "gh-srgb-decoded-twice",
+      "what": "H6: the shader decodes a texel sampled as linear light again",
+      "guards": [
+        "render-pipeline-declaration 判定 H6",
+        "render RD-15"
+      ],
+      "file": "engine/modules/render/shaders/LinearColour.hlsli",
+      "find": "linearColour.x > 0.5f ? texel.rgb : SrgbToLinear(texel.rgb)",
+      "replace": "SrgbToLinear(texel.rgb)",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu hdr: on a picture every colour*",
+      "expect": "\\[gh\\-srgb\\-texture\\-once\\]"
+    },
+    {
+      "id": "gh-bytes-texel-not-decoded",
+      "what": "H6: the shader takes a texel sampled as bytes as linear light",
+      "guards": [
+        "render-pipeline-declaration 判定 H6",
+        "render RD-15"
+      ],
+      "file": "engine/modules/render/shaders/LinearColour.hlsli",
+      "find": "linearColour.x > 0.5f ? texel.rgb : SrgbToLinear(texel.rgb)",
+      "replace": "texel.rgb",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu hdr: on a picture every colour*",
+      "expect": "\\[gh\\-bytes\\-texture\\-decoded\\]"
+    },
+    {
+      "id": "gh-linear-flag-not-pushed",
+      "what": "H6: the backend tells no draw its texture samples as linear light",
+      "guards": [
+        "render-pipeline-declaration 判定 H6",
+        "render RD-15"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "Abi::ToLinearColour(texture.linear)",
+      "replace": "Abi::ToLinearColour(false)",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu hdr: on a picture every colour*",
+      "expect": "\\[gh\\-srgb\\-texture\\-once\\]"
+    },
+    {
+      "id": "gh-fullscreen-blend-ignored",
+      "what": "H6: a full-screen pass's blend ignored (always replaces)",
+      "guards": [
+        "render-pipeline-declaration 判定 H6",
+        "render RD-14"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "        const SDL_GPUColorTargetDescription target = ColorTarget(format, blend);\n        SDL_GPUGraphicsPipelineCreateInfo info{};\n        info.vertex_shader = fullscreenVertex;",
+      "replace": "        const SDL_GPUColorTargetDescription target = ColorTarget(format, R::BlendMode::Opaque);\n        SDL_GPUGraphicsPipelineCreateInfo info{};\n        info.vertex_shader = fullscreenVertex;",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu hdr: composed*",
+      "expect": "\\[gh\\-blend\\-over\\]"
     }
   ]
 }

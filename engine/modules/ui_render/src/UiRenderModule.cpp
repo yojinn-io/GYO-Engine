@@ -213,7 +213,7 @@ void AppendUiRect(Render::Pass2D& pass, const Math::Rect rect, const Math::Rect 
 std::optional<Render::Pass2D> QueueUi(const Render::ExtractedCamera& camera, const std::vector<ExtractedUiRoot>& roots,
                                       const UiAtlasTextures& atlas) {
     Render::Pass2D pass;
-    pass.target = camera.target;
+    pass.target = Render::PhaseTarget(camera, Render::CameraPhase::Overlay);
     const Camera::Viewport& viewport = camera.computed.viewport;
     pass.viewport = Render::PixelRect{static_cast<std::uint32_t>(std::max(0, viewport.position.x)),
                                       static_cast<std::uint32_t>(std::max(0, viewport.position.y)),

@@ -8,7 +8,6 @@ add_library(gyo_render STATIC
     src/Pipeline3d.cpp
     src/Render.cpp
     src/RenderTargets.cpp
-    src/Tonemapping.cpp
 )
 add_library(GYO::Render ALIAS gyo_render)
 

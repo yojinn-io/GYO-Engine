@@ -17,7 +17,6 @@
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderTargets.hpp"
 #include "engine/render/RenderTextures.hpp"
-#include "engine/render/Tonemapping.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
 
 namespace GYO::Engine::CameraRender {
@@ -29,6 +28,7 @@ using SystemResult = Base::Result<void, Kernel::KernelError>;
 // Before ExtractCameras: a render target of the render World for each of the source's (render-pipeline declaration
 // section 13; Bevy's prepare_assets makes the GpuImage of a target image keyed by its id, render_asset.rs:393).
 constexpr std::string_view kExtractCameras = "ExtractCameras";
+constexpr std::string_view kExtractHdr = "ExtractHdr";
 
 SystemResult ExtractRenderTargets(Kernel::ExtractRes<Render::RenderTargets> source, Kernel::ExtractRes<Camera::CameraTargetSizes> sizes,
                                   Kernel::ResMut<Render::RenderTextures> textures, Kernel::ResMut<Render::TargetTextures> mapped) {
@@ -138,23 +138,22 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     return {};
 }
 
-// After ExtractCameras: each drawing camera's tonemapping and exposure, and the HDR pictures (render-pipeline
-// declaration section 16): a Camera3d with Hdr draws on the picture of its target, one per target that such a camera
-// draws on this frame (made by the render World itself, following that target's size; Bevy's main textures keyed by
-// the camera's target, bevy_render/src/view/mod.rs:1385); a target no such camera draws on this frame keeps none.
+// After ExtractCameras: each drawing camera's curve and its Hdr targets (render-pipeline declaration section 16,
+// revision 16.8; HdrTargets, RenderTargets.hpp): a Camera3d with Hdr draws on a picture of its own; every 3D camera on a
+// target a Hdr camera draws on this frame tests the one depth of that target. Made by the render World itself,
+// following their target's size; let go when no camera draws with them.
 SystemResult ExtractHdr(Kernel::Extract<Kernel::Read<Render::Hdr>> hdr, Kernel::Extract<Kernel::Read<Render::Tonemapping>> tonemappings,
-                        Kernel::Extract<Kernel::Read<Render::Exposure>> exposures, Kernel::ResMut<Render::ExtractedCameras> cameras,
-                        Kernel::ResMut<Render::RenderTextures> textures, Kernel::ResMut<Render::HdrTargets> pictures) {
-    std::vector<std::optional<Render::TextureId>> outputs;
+                        Kernel::ResMut<Render::ExtractedCameras> cameras, Kernel::ResMut<Render::RenderTextures> textures,
+                        Kernel::ResMut<Render::HdrTargets> targets) {
+    std::vector<Render::HdrCamera> withHdr;
     for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
         if (const Render::Tonemapping* t = tonemappings.Get(camera.entity)) camera.tonemapping = t->method;
-        if (const Render::Exposure* e = exposures.Get(camera.entity)) camera.exposure = e->Scale();
-        if (camera.is3d && hdr.Contains(camera.entity)) outputs.push_back(camera.target);
+        if (camera.is3d && hdr.Contains(camera.entity)) withHdr.push_back(Render::HdrCamera{camera.entity, camera.target});
     }
-    Render::SyncHdrTargets(outputs, textures.Get(), pictures.Get());
+    Render::SyncHdrTargets(withHdr, textures.Get(), targets.Get());
     for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
-        if (!camera.is3d || !hdr.Contains(camera.entity)) continue;
-        if (const Render::TextureId* picture = pictures.Read().Find(camera.target)) camera.hdr = *picture;
+        camera.hdr = targets.Read().PictureOf(camera.entity);
+        if (camera.is3d) camera.depth = targets.Read().DepthOf(camera.target);
     }
     return {};
 }
@@ -195,7 +194,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     extract.mounts.push_back(std::move(mount));
     r.AddSystem<&ExtractCameras>(std::move(extract));
     Kernel::SystemOptions hdrExtract;
-    hdrExtract.name = "ExtractHdr";
+    hdrExtract.name = std::string(kExtractHdr);
     Kernel::Mount hdrMount;
     hdrMount.schedule = std::string(RenderWorld::kExtractSchedule);
     hdrMount.stage = std::string(RenderWorld::kExtractSchedule);

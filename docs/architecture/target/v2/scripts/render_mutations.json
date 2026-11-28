@@ -415,8 +415,8 @@
     "render section 2"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "        colour.clear_color = ClearColour(clear.value_or(R::Color8{0, 0, 0, 0}), on.format);",
-   "replace": "        colour.clear_color = ClearColour(R::Color8{0, 0, 0, 0}, on.format);",
+   "find": "        colour.clear_color = ClearColour(clear.value_or(R::kTransparentBlack), on.space);",
+   "replace": "        colour.clear_color = ClearColour(R::kTransparentBlack, on.space);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a pass clears*",
    "expect": "\\[gp\\-clear\\]"
@@ -1114,8 +1114,8 @@
     "render RD-7"
    ],
    "file": "engine/modules/render/src/Compose.cpp",
-   "find": "            if (first) {\n                clear.clear = camera.clear;",
-   "replace": "            if (true) {\n                clear.clear = camera.clear;",
+   "find": "        if (camera.clear && first) {",
+   "replace": "        if (camera.clear && (first || !camera.hdr)) {",
    "target": "gyo_render_tests",
    "cases": "compose:*",
    "expect": "\\[cp\\-later\\-viewport\\]"

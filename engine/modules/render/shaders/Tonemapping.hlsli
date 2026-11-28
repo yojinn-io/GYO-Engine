@@ -1,17 +1,12 @@
 #ifndef GYO_RENDER_TONEMAPPING_INCLUDED
 #define GYO_RENDER_TONEMAPPING_INCLUDED
 // The tonemapping curves (render-pipeline declaration section 16): Bevy's, bevy_core_pipeline/src/tonemapping.wesl at
-// 6a911653f. The C++ side is include/engine/render/Tonemapping.hpp (Tonemap) and ShaderAbi.hpp (the method values;
-// Design Invariant RD-4). The tonemapping pass includes it; so will a lit material that tonemaps in its own shader on
+// 6a911653f. The C++ side is the tests' reference (tests/common/render/TonemappingReference.hpp) and ShaderAbi.hpp
+// (Design Invariant RD-4). The tonemapping pass includes it; so will a lit material that tonemaps in its own shader on
 // a camera without Hdr (Bevy's TONEMAP_IN_SHADER, B4).
 
-// Tonemapping::Method's values.
-#define GYO_TONEMAP_NONE 1
-#define GYO_TONEMAP_REINHARD 2
-#define GYO_TONEMAP_REINHARD_LUMINANCE 3
-#define GYO_TONEMAP_ACES_FITTED 4
-#define GYO_TONEMAP_SOMEWHAT_BORING_DISPLAY_TRANSFORM 5
-#define GYO_TONEMAP_KHRONOS_PBR_NEUTRAL 6
+// Tonemapping::Method's values: one list for both sides (the path is from this directory, the include directory).
+#include "../include/engine/render/TonemappingMethods.h"
 
 // Rec. 709 luminance (tonemapping.wesl:236-238).
 float TonemappingLuminance(float3 c)
@@ -99,6 +94,7 @@ float3 Tonemap(uint method, float3 linearLight)
         return TonemapSomewhatBoringDisplayTransform(c);
     case GYO_TONEMAP_KHRONOS_PBR_NEUTRAL:
         return TonemapKhronosPbrNeutral(c);
+    case GYO_TONEMAP_NONE:
     default:
         return c;
     }

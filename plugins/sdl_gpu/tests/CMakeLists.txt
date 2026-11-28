@@ -26,7 +26,8 @@ add_custom_command(OUTPUT "${gyo_test_shaders}"
     COMMENT "Compiling sdl_gpu's test shaders (${gyo_shader_format_list})"
     VERBATIM)
 add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp PhaseTests.cpp HdrTests.cpp "${gyo_test_shaders}")
-target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+# The tests' CPU reference of the tonemapping curves (sdl_gpu.hdr) is render's tests' (tests/common/render).
+target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src "${GYO_REPOSITORY_ROOT}/tests/common/render")
 # A failed SDL assertion ends the run, no dialog (plugins/sdl/tests/adapters/sdl/UnattendedAssertions.hpp).
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE gyo_sdl_unattended_assertions)
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE GYO::SDLGPU GYO::SDLWindow GYO::RenderWorld GYO::Render GYO::Input GYO::Window
