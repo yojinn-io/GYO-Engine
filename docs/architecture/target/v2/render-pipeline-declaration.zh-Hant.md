@@ -649,7 +649,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 1. **元件**（render 的；`world_render` 登記；雜湊不寫，同 `TargetUpdate`）：`Hdr`（標記）、`Tonemapping{method}`（沒有元件＝預設）、`Exposure{ev100}`（預設 9.7、`Scale()`＝`exp2(-ev100) / 1.2`，同 Bevy）。`Hdr` 只看 `Camera3d`：2D 的 pass 照 bytes 混合（RP-4；總宣告第 8 節「2D 的後處理另議」）。
 2. **曲線**：`None`（不做曲線、只 clamp；Bevy 的 bypass）、`Reinhard`、`ReinhardLuminance`、`AcesFitted`、`SomewhatBoringDisplayTransform`、`KhronosPbrNeutral`——Bevy 不需要 LUT 的全部。`Linear` 不做：A4 沒有 `ColorGrading`，它和 `None` 畫出一樣的東西；D1 加 `ColorGrading` 時一起加（加值）。`ReinhardLuminance` 在黑色（亮度 0）回黑：Bevy 的式子在那裡是 0÷0。
-3. **預設曲線＝`ReinhardLuminance`**（偏離 Bevy，交使用者知悉）：Bevy 現在的預設 `TonyMcMapface` 要一張 48³ 的 3D LUT；`RenderTextures` 沒有 3D 貼圖、也沒有 KTX2 的 loader（F1），加進來是擴大範圍。根據：Bevy 自己在 LUT 曲線之前的預設（#7594）。**衝突點**：同一個場景，Bevy 的預設與 GYO 的預設亮部不一樣（`ReinhardLuminance` 有色相偏移、亮部不去飽和，`view/mod.rs:300-301`）。**膠水**：無（之後加 LUT 曲線是加值；那時要不要改預設交使用者，RC-A4-1）。
+3. **預設曲線＝`None`**（修訂 2，使用者 2026-11-28 定，第 16.9 節；原本卡片判 `ReinhardLuminance`）：**偏離 Bevy 的預設、同 Godot**。Godot 的預設 tonemapper 是 linear（`scene/resources/environment.h:116`，`TONE_MAPPER_LINEAR`；linear 不做曲線，`servers/rendering/renderer_rd/shaders/effects/tonemap.glsl:246-248`）；Bevy 的預設是 `TonyMcMapface`（`bevy_render/src/view/mod.rs:332`），因為它預設就有 PBR 打光。**衝突點**：同一個開了 Hdr、亮部超過 1 的場景，Bevy 的預設會壓亮部，GYO 的預設截在 1；沒開 Hdr、或亮部不超過 1 時兩邊一樣（unlit 的 bytes 經 `None` 等於原值）。**膠水**：無（作者放 `Tonemapping` 選曲線；B4 加打光時要不要改預設交使用者，RC-A4-7）。Bevy 的 LUT 曲線仍不做（RC-A4-1）。
 4. **`Exposure` 在 A4 只抽出、不畫**：`ExtractedCamera::exposure`（`Scale()`）。照 Bevy 乘在打光上（B4 的 `StandardMaterial`）；unlit 與 tonemapping pass 不乘。所以 A4 的像素不受 `Exposure` 影響。PvP 盤點的「exposure／gamma」（master 的「EV 的整體曝光＋gamma 調整」）在 Bevy 是 `ColorGrading`（global 的 exposure（stops）、各 section 的 gamma，`tonemapping.wesl:313-371`），歸 D1；A4 的「gamma」是線性到 sRGB 的編碼（第 6 點）。
 5. **HDR 的中間圖**（Bevy 的 main texture）：`camera_render` 的新 System `ExtractHdr`（extract，`ExtractCameras` 之後）抽每台相機的 `Tonemapping`、`Exposure`，並為這一幀**要畫的** Hdr 3D 相機，**依它的目標**（主目標或 render target）共用一張 `Rgba16Float`、`Nearest`、`FollowTarget{那個目標}` 的 render target——渲染 World 自己 `CreateTarget`，`HdrTargets` 記（`SyncHdrTargets`；Bevy 的 `main_texture_key`）。這一幀沒有 Hdr 相機要畫的目標，它的那張放掉。`ExtractedCamera::hdr` 是那張的 id；`SceneTarget()`（`hdr`，否則 `target`）是 `Prepass`～`PostProcess` 畫的地方：`Queue3d` 畫在它上面。共用的理由：viewmodel 相機（`ClearColorConfig::None`、`Camera3dDepth{false}`）要畫在世界相機的畫面與深度上（深度是每張 target 一張，A1）。
 6. **合成**（`ComposePasses`）的 Hdr 相機：
@@ -660,7 +660,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
    - `RenderTargetFormat::Rgba16Float`：線性的光，超過 1 的值保留。**`TextureFormat`（CPU 像素）不加**：`TextureDesc` 的像素一律 4 bytes（浮點像素的圖片是 C3 的天空的事）。**sRGB 的 render target 不做**（A1 留下的「sRGB target 的語意」）：編碼在 tonemapping 的 shader 裡（同 Godot 輸出不是 sRGB 格式時）；Bevy 的輸出是 sRGB 格式、由硬體編碼，GYO 的輸出是 UNORM（RP-4），所以不需要 sRGB 的 target。
    - `Color8` 是 sRGB 編碼的 bytes。畫在線性 target 上：**清除色**由後端解碼成線性（Bevy `view/mod.rs:1442-1450`）；**unlit 3D** 用 `mesh3d_linear.frag`：照 bytes 算（貼圖×實例的顏色，同 8-bit 的目標）再解碼——所以 Hdr＋`None` 的 unlit 像素和不帶 Hdr 的一樣（±1）；**2D 的 shader** 照舊寫 bytes／255（2D 照 bytes 混合，RP-4；2D 的管線不畫在線性 target）。後端照 pipeline 的目標格式選 unlit 的 fragment shader（3D pipeline 的鍵本來就有格式，A2）。
    - tonemapping pass 的輸出：曲線 → clamp 0～1 → sRGB 編碼（精確的分段式，不是 2.2 次方）→ UNORM bytes；alpha 照中間圖。這一步是 A4 的「gamma」。
-8. **`TONEMAP_IN_SHADER` 與「不帶 Hdr 的像素和現在一樣」**：兩條同時成立（主會話列的例子之一：TONEMAP_IN_SHADER 留到 B1／B4 的材質）。第 4.4 節的這一句接在「打光必須在線性空間，所以：」之下：它說的是在線性空間打光的材質（B4 的 `StandardMaterial`），那時它的 shader include 同一份 `Tonemapping.hlsli`，以相機的曲線 tonemap＋編碼。A4 唯一的 3D 材質 unlit 照 bytes 算（顯示用的值、本來就是編碼過的，沒有線性的光可以 tonemap），不帶 Hdr 時不 tonemap——`sdl_gpu.pass3d` 原樣通過。**偏離 Bevy**：Bevy 的 unlit 也 tonemap（不帶 Hdr 時在材質 shader 裡、帶 Hdr 時在 pass 裡）；GYO 的 unlit 不帶 Hdr 時不 tonemap，帶 Hdr 時照 Bevy 經 pass（`None` 時和不帶 Hdr 一樣）。衝突點：同一個 unlit 場景，Bevy 打開或關掉 Hdr 看起來一樣（都 tonemap）；GYO 打開 Hdr 會照曲線變暗一些（預設曲線把 1 壓到 0.5）。膠水：無。
+8. **`TONEMAP_IN_SHADER` 與「不帶 Hdr 的像素和現在一樣」**：兩條同時成立（主會話列的例子之一：TONEMAP_IN_SHADER 留到 B1／B4 的材質）。第 4.4 節的這一句接在「打光必須在線性空間，所以：」之下：它說的是在線性空間打光的材質（B4 的 `StandardMaterial`），那時它的 shader include 同一份 `Tonemapping.hlsli`，以相機的曲線 tonemap＋編碼。A4 唯一的 3D 材質 unlit 照 bytes 算（顯示用的值、本來就是編碼過的，沒有線性的光可以 tonemap），不帶 Hdr 時不 tonemap——`sdl_gpu.pass3d` 原樣通過。**偏離 Bevy**：Bevy 的 unlit 也 tonemap（不帶 Hdr 時在材質 shader 裡、帶 Hdr 時在 pass 裡）；GYO 的 unlit 不帶 Hdr 時不 tonemap，帶 Hdr 時照 Bevy 經 pass（`None` 時和不帶 Hdr 一樣）。衝突點：同一個 unlit 場景，Bevy 打開或關掉 Hdr 看起來一樣（都 tonemap）；GYO 打開 Hdr 時照作者選的曲線，預設 `None` 下也和不帶 Hdr 一樣（修訂 2）。膠水：無。**使用者 2026-11-28 定為這個分法（U1＝(c) Godot 式，第 16.9 節）。**
 9. **shader**：`render/shaders/` 加 `tonemapping.frag.hlsl`、`mesh3d_linear.frag.hlsl`、`Tonemapping.hlsli`（曲線；B4 的材質也 include）、`Color.hlsli`（sRGB 的轉換）；C++ 那一側是 `Tonemapping.hpp`（同樣的式子，CPU 參考值）與 `ShaderAbi.hpp`（RD-4）。`sdl_gpu` 的 CMake 多兩行 `--shader`，嵌進 Plugin 的表；全畫面 pass 以名字 `tonemapping.frag` 找（`FindEmbeddedShader`；第 14.3 節第 6 點：B1 的 `ShaderId` 之前照舊）。**曲線一個 shader、以參數分支**（Godot 的做法；Bevy 是 shader def，每條曲線一個 pipeline）：曲線不多、分支是 uniform 的，不必每條曲線編一份。參數＝一個 float4，lane 0＝`Tonemapping::Method` 的值。中間圖在**自己的像素**取樣（`SV_Position` ÷ 中間圖的大小，`Nearest`）：中間圖和目標一樣大，tonemapping 只畫 viewport 那一塊（照 viewport 拉伸 uv 會把整張中間圖擠進 viewport）。視窗大小比資料側晚一幀的那一幀（RC-A2-5），兩者大小不同時仍是 1:1（超出中間圖的像素取邊緣，clamp-to-edge），不斷言（修訂：設計 N1）。
 10. **TargetUpdate、收據、RP-3**：中間圖每一幀由合成先清（第 6 點），不沿用；它跟著目標的大小（資料側解析；大小變了重建、沒有畫面，第一個畫它的 pass 本來就清）。Hdr 相機在 render target 上 Disabled、等待時不抽 → 中間圖這一幀放掉，目標照 A2 沿用；下一次畫時重建。`FirstUnwrittenRead` 對合成的結果是空的（`[cp-hdr-written-before-read]`、`[re-hdr-rp3]`）。
 
@@ -668,7 +668,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 | Bevy | gyo2 | 理由 | 膠水 |
 |---|---|---|---|
-| 預設 `TonyMcMapface`（3D LUT） | 預設 `ReinhardLuminance`；LUT 的三條不做 | 沒有 3D 貼圖與 KTX2（F1），加了是擴大範圍；Bevy 在 LUT 之前的預設 | 無；RC-A4-1 |
+| 預設 `TonyMcMapface`（3D LUT） | 預設 `None`（同 Godot，修訂 2）；LUT 的三條不做 | 壓不壓亮部是作者的美術規則（使用者 2026-11-28）；LUT 要 3D 貼圖與 KTX2（F1） | 無；RC-A4-1、RC-A4-7 |
 | 輸出是 sRGB 格式、硬體編碼；UI 在線性空間混合 | 輸出 UNORM，tonemapping shader 編碼；UI 照 bytes | RP-4（使用者沒有推翻的卡片判，第 12 節） | shader 裡一個函式（同 Godot） |
 | 一條曲線一個 pipeline（shader def） | 一個 shader、參數分支 | 名字指 shader（A2）；同 Godot | 無 |
 | `Exposure` 乘在打光上 | 同（A4 只抽出） | — | — |
@@ -677,7 +677,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 ### 16.4 判定（合併前）
 
-- **H1**（cpu，`render.data`）：六條曲線在五個刺激（4.0 的灰、暗色、亮的飽和色、近黑（PBR Neutral 的 toe）、有負值的）上等於 Bevy 的式子（另外以倍精度算的值，容許差 2e-5）；`ReinhardLuminance` 的黑回黑；預設是 `ReinhardLuminance`；sRGB 的編碼與解碼是精確的分段式（0.5→187.5、toe、clamp），256 個 byte 解碼再編碼回原值；`Exposure` 的預設與 `Scale()`；`TonemapToBytes`、`TonemappingPass` 的形狀與參數。
+- **H1**（cpu，`render.data`）：六條曲線在五個刺激（4.0 的灰、暗色、亮的飽和色、近黑（PBR Neutral 的 toe）、有負值的）上等於 Bevy 的式子（另外以倍精度算的值，容許差 2e-5）；`ReinhardLuminance` 的黑回黑；預設是 `None`（修訂 2）；sRGB 的編碼與解碼是精確的分段式（0.5→187.5、toe、clamp），256 個 byte 解碼再編碼回原值；`Exposure` 的預設與 `Scale()`；`TonemapToBytes`、`TonemappingPass` 的形狀與參數。
 - **H2**（cpu，`render.pipeline3d`）：Hdr 相機的 `Pass3D` 畫在中間圖；合成的順序（目標的清除、中間圖的清除、場景、`PostProcess`、tonemapping、`Overlay`）；tonemapping pass 的目標、viewport、shader、輸入、參數；第一個用中間圖的相機清成透明黑、帶清除色的清整張、`None` 的不清、後面的 Hdr 相機不在目標上清 viewport；`FirstUnwrittenRead` 為空。
 - **H3**（cpu，`render.extract`）：Hdr 的 3D 相機有中間圖（`Rgba16Float`、`Nearest`、跟著相機的目標）；同一個目標的兩台共用；沒有 `Hdr` 的、2D 相機的沒有；`Tonemapping`、`Exposure` 抽進來（沒有元件＝預設）；下一幀同一張、不再建；沒有 Hdr 相機了就放掉；合成的結果裡兩台的場景都在中間圖、各 tonemap 一次、RP-3 成立。
 - **H4**（cpu，`sdl_gpu.shaders`）：`tonemapping.frag`、`mesh3d_linear.frag` 嵌進去、資源數和 `ShaderAbi.hpp` 一致。
@@ -695,7 +695,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 ### 16.6 RC
 
-- **RC-A4-1**：要 Bevy 的 LUT 曲線（`TonyMcMapface`、`AgX`、`BlenderFilmic`）→ 3D 貼圖與 LUT 的 asset（F1 的 KTX2 之後）；那時預設要不要換成 `TonyMcMapface` 交使用者。
+- **RC-A4-1**：要 Bevy 的 LUT 曲線（`TonyMcMapface`、`AgX`、`BlenderFilmic`）→ 3D 貼圖與 LUT 的 asset（F1 的 KTX2 之後）。預設曲線的去留另見 RC-A4-7。
 - **RC-A4-2**：作者的後處理要讀寫中間圖本身（D1 的 bloom 合回去、DOF）→ 第二張中間圖互換（Bevy 的 `post_process_write`）。
 - **RC-A4-3**：後面的相機和 Hdr 相機在同一個目標上重疊、要看到前面相機的畫面（tonemapping 取代了那一塊）→ tonemapping pass 對不是第一個的相機 alpha 混合（Bevy upscaling 的自動混合）。
 - **RC-A4-4**：2D 相機要 Hdr → 2D pass 的線性版本（同 `mesh3d_linear`）與 2D 的混合空間（RC-RD 3 的 2D 那一半）。
@@ -708,7 +708,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 ### 16.8 修訂 1：設計審查與純淨 Code Review 之後（2026-11-28）
 
-審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a4/design-review-a4.zh-Hant.md`、`pure-code-review-a4.zh-Hant.md`，不在 git）：每批的設計審查（Opus／high，Blocker 0、Should 6、Nit 6、Note 8）、純淨 Code Review（Fable／high，高 2、中 7、低 7）。逐項的處理與理由在 dev_log。**等使用者的，這一節不動**：設計 S1／U1（第 4.4 節的 `TONEMAP_IN_SHADER` 涵不涵蓋 unlit）、U2（預設曲線）——主會話交使用者 (a) 第 16.3 節第 8 點的讀法、(b) 照字面（Bevy）、(c) Godot 式（(a) 的分法＋預設 `None`）；綁在一起的預設值與 unlit 的 tonemap 先照第 16.3 節。改了的形狀（第 16.3 節的對應點以這裡為準）：
+審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a4/design-review-a4.zh-Hant.md`、`pure-code-review-a4.zh-Hant.md`，不在 git）：每批的設計審查（Opus／high，Blocker 0、Should 6、Nit 6、Note 8）、純淨 Code Review（Fable／high，高 2、中 7、低 7）。逐項的處理與理由在 dev_log。**等使用者的，這一節不動**（已定，第 16.9 節）：設計 S1／U1（第 4.4 節的 `TONEMAP_IN_SHADER` 涵不涵蓋 unlit）、U2（預設曲線）——主會話交使用者 (a) 第 16.3 節第 8 點的讀法、(b) 照字面（Bevy）、(c) Godot 式（(a) 的分法＋預設 `None`）；綁在一起的預設值與 unlit 的 tonemap 先照第 16.3 節。改了的形狀（第 16.3 節的對應點以這裡為準）：
 
 1. **Hdr 相機的合成和不帶 Hdr 的一致**（純淨 高-1、設計 S3／U5；主會話的指示）：
    - **每台 Hdr 相機一張自己的中間圖**（不再依目標共用）。中間圖每一幀清整張（清除色；沒有時透明黑），tonemapping 把它放到目標的 viewport 上：**目標上第一個相機取代、不是第一個的 alpha 混合**（`PassFullscreen::blend`，照 Bevy 的 upscaling，`bevy_core_pipeline/src/upscaling/mod.rs:70-78`）。所以 Hdr 相機在它沒畫到的地方留著前面相機畫的東西（2D 背景、前一台的 UI），`ClearColorConfig::None` 在 Hdr 下也是疊畫；目標上的清除照不帶 Hdr 的規則（第一個相機清整個目標＝黑邊；之後帶清除色的 Hdr 相機不必清 viewport：它的中間圖是不透明的清除色，混合後就是取代那一塊）。
@@ -735,3 +735,19 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 **新 RC**：
 - **RC-A4-2**（改寫）：D1 的前置工作——Hdr 相機的中間圖兩張互換，`PostProcess` 才能讀改它。
 - **RC-A4-6**：Hdr 相機多到中間圖的記憶體成為問題 → 依目標共用中間圖、UI 畫進中間圖（Bevy 的做法，接受 UI 再 tonemap 一次），或依相機的疊層（stack）共用。
+
+### 16.9 修訂 2：U1、U2 的決定（2026-11-28）
+
+**使用者的決定**（主會話轉 side chat，HANDOFF `v8-arch-gyo2-render-a4-u1-u2`）：原話「照建議，CG方向我是新人，需要你來輔助判斷。」
+
+- **U1＝(c) Godot 式**：保留第 16.3 節第 8 點的分法——不帶 Hdr 的 unlit 不 tonemap，帶 Hdr 才經 tonemapping pass；`TONEMAP_IN_SHADER` 給 B4 的打光材質。
+- **U2：預設曲線 `ReinhardLuminance` → `None`**（只 clamp 到 0～1）。
+- **比過的**：(a) 預設 `ReinhardLuminance`——開 Hdr 時 unlit 變暗（1.0 變 0.5）；(b) 照 Bevy 字面，不帶 Hdr 也在材質 shader 裡 tonemap（`bevy_render/src/camera.rs:776-790`、`bevy_pbr/src/render/pbr.wesl:83-92`）——今天的畫面全部變暗、像素測試要重定。
+- **理由**：壓不壓亮部、用哪條曲線，是作者的美術規則，Engine 的預設不替作者決定。選 `None`，開不開 Hdr 預設畫面都一樣、今天的畫面不變。Godot 的預設不壓（`scene/resources/environment.h:116` `TONE_MAPPER_LINEAR`；`tonemap.glsl:246-248` linear 原值返回）；Bevy 預設有曲線，是因為它預設就有 PBR 打光，GYO 到 B4 才有。
+
+**改了的**：`Tonemapping::method` 的預設（`Drawables.hpp`）；第 16.3 節第 3、8 點與偏離表、第 16.4 節 H1；render 頁第 8.2 節與 RD-14。既有的測試沒有依賴預設曲線的像素或期待值（GPU 案與合成案都明寫曲線，`[re-hdr-tonemapping]` 比的是「沒有元件＝`Tonemapping{}`」），所以只有 `[tm-default]` 改成期待 `None`。突變只改 `tm-default-method` 的 find／what（不新增、不刪）。
+
+**突變數**：使用者 2026-11-28 核准（「核准。」，HANDOFF `v8-arch-gyo2-render-a4-mutations`）：修訂 1 之後的 51 個（RD-4、RD-11、RD-13～RD-15，門檻 25）；修訂 2 只改 `tm-default-method` 的 find／what。
+
+**新 RC**：
+- **RC-A4-7**：B4 加打光（`StandardMaterial`、`Exposure`）、場景的光常常超過 1 → 預設要不要改成一條壓亮部的曲線交使用者（RC-A4-1 的 LUT 曲線做好時一起看）。

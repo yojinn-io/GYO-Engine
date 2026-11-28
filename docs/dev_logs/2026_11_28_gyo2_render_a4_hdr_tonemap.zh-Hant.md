@@ -69,8 +69,8 @@ Owner：渲染管線線的卡片。分支 `claude/gyo2-render-a4`（從 `claude/
 
 | 項 | 處理 | 理由與做法 |
 |---|---|---|
-| 設計 S1／U1（`TONEMAP_IN_SHADER` 涵不涵蓋 unlit） | 等使用者 | 主會話交 (a)／(b)／(c)；綁在一起的 unlit 不 tonemap 照第 16.3 節不動 |
-| 設計 U2（預設曲線） | 等使用者 | 同上；`ReinhardLuminance` 不動 |
+| 設計 S1／U1（`TONEMAP_IN_SHADER` 涵不涵蓋 unlit） | 已定（修訂 2） | 使用者 2026-11-28 選 (c) Godot 式：不帶 Hdr 的 unlit 不 tonemap、帶 Hdr 才經 pass（宣告第 16.9 節） |
+| 設計 U2（預設曲線） | 已定（修訂 2） | 使用者 2026-11-28：預設改 `None`（宣告第 16.9 節）；B4 時預設的去留交使用者（RC-A4-7） |
 | 純淨 高-1＋設計 S3／U5（Hdr 的合成語意） | 採用 | 每台 Hdr 相機一張中間圖、每幀清整張；tonemapping 對目標上第一個相機取代、之後的 alpha 混合（`PassFullscreen::blend`，照 Bevy upscaling）；目標的清除照不帶 Hdr 的規則；深度每個目標一張、所有 3D 相機共用（照 Bevy 的 `ViewDepthTexture` 鍵）。中間圖不依目標共用是偏離 Bevy：共用時後面相機的 tonemapping 會把前面相機畫在目標上的 UI 蓋掉（GYO 的 UI 照 bytes 在目標上，RP-4）。測試：`[cp-hdr-later-*]`、`[cp-hdr-none-transparent]`、GPU 的 `[gh-ui-kept]`（Hdr 世界相機後接非 Hdr 的 UI 相機）、`[gh-split-kept]`（兩台 Hdr 相機分 viewport）、`[gh-blend-over]`（背景＋`None` 的 Hdr 相機） |
 | 純淨 高-2＋中-7＋設計 N4（線性 target 上的顏色） | 採用 | `ColourSpace`／`ColourSpaceOf`／`SampledAsLinear` 在 render 一處；清除色、2D、3D 一致（`Color8` 與 bytes 取樣的 texel 解碼、線性取樣的 texel 照原值）；後端照它選 `*_linear.frag`、pipeline 的鍵明寫顏色空間、每個 draw 推 `LinearColourUniform`。2D 在線性 target 的語意照 Bevy／Godot（線性空間混合）。`[gh-2d-linear]`、`[gh-srgb-texture-once]`、`[gh-bytes-texture-decoded]` |
 | 設計 S2＋純淨 中-6（`Exposure`） | 採用 | 移到 B4；第 5 節的批次樹與 B4 列照實改；使用者的「空殼刪掉」（HANDOFF `v8-arch-gyo2-mode-config-m1`） |
@@ -101,4 +101,12 @@ Owner：渲染管線線的卡片。分支 `claude/gyo2-render-a4`（從 `claude/
 - **Linux 主機**（Lavapipe `llvmpipe (LLVM 20.1.2, 256 bits)`、xvfb、Release 建置，同前）：`90a774cf` 與 `569448b7` 都是 `ctest -L 'cpu|shader'` 258/258；`sdl_gpu.hdr`、`phases`、`unwritten`、`contracts`、`framedraws`、`targets`、`pass2d` 7/7；`sdl_gpu.pass3d`（去掉要視窗的 `GPUSubmit` 一案）11/12 中的 11 案全過——不帶 Hdr 的 3D 像素不變；`sdl_gpu hdr:` 5/5（新加的顏色空間一案、合成三種情形一案）。第一次建好就全過。
 - **突變**：`hdr_mutations.json` 改成 51 個（退役與理由在檔案的 `description`：CPU 曲線的 7 個——曲線的 CPU 實作現在是測試自己的參考——、sRGB 函式的 4 個、`Exposure` 的 4 個、`tm-bytes-alpha`、`gh-method-values`（值只剩一份，兩邊一起錯就等於沒錯）、依目標共用的 `tm-sync-per-camera`；新增顏色空間、混合、共用深度、`PhaseTarget`、render target 上的 Hdr 相機等）。D184 重跑 find 落在改過的行附近的既有突變 24 個（`cp-*` 7、`gd-*` 4、`gt-*` 2、`rt-sync-gone-kept`、`gp-*` 5、`p2-viewport-whole`、`g3-*` 3、`ui-pass-viewport-top`）；`gp-clear-ignored`、`cp-later-clears-target`、`gt-target-not-mapped`、`gt-target-drawn-on-main`、`cp-clear-after` 的 find 改到新的行（守同一個性質）。
   - 結果（Linux）：`90a774cf` 75 個裡 73 killed；`cp-hdr-tonemapping-after-overlay` wrong_failure（先停在沒有標籤的 `REQUIRE`）、`cp-clear-after` survived（第一台相機的清除改成 `ClearOnly` 那一行，舊的 find 只落在之後相機的 viewport 清除上）；`569448b7` 修好這兩個後 2/2 killed。合計 **75/75 killed**（新 51、既有 24）。
-  - 數量（README 基準 8）：改的條文是 RD-4、RD-11、RD-13、RD-14、RD-15，共 5 條，門檻 25；51 個超過的理由：RD-14 的曲線在 HLSL 各一個（6）與合成的獨立決定（清除兩種、混合兩向、位置、曲線、viewport）、RD-15 在 render（規則 2）與後端（片段 shader 兩種、uniform、清除色）與 shader（兩個分支、解碼）各自可錯、RD-13 的 target 生命週期（每台一張、每個目標一張深度、跟著大小、格式、過濾、留著、換目標、放掉兩種）。每一個都寫出別的突變抓不到的錯（`what`）。拆條與去掉 `Exposure` 少了 16 個重複或沒有讀者的。合併前的核准由主會話交使用者。
+  - 數量（README 基準 8）：改的條文是 RD-4、RD-11、RD-13、RD-14、RD-15，共 5 條，門檻 25；51 個超過的理由：RD-14 的曲線在 HLSL 各一個（6）與合成的獨立決定（清除兩種、混合兩向、位置、曲線、viewport）、RD-15 在 render（規則 2）與後端（片段 shader 兩種、uniform、清除色）與 shader（兩個分支、解碼）各自可錯、RD-13 的 target 生命週期（每台一張、每個目標一張深度、跟著大小、格式、過濾、留著、換目標、放掉兩種）。每一個都寫出別的突變抓不到的錯（`what`）。拆條與去掉 `Exposure` 少了 16 個重複或沒有讀者的。**已核准**（使用者 2026-11-28，side chat，經主會話；HANDOFF `v8-arch-gyo2-render-a4-mutations`，原話「核准。」）：用修訂 1 之後的 51 個（修訂 2 只改 `tm-default-method` 的 find／what，總數仍是 51）；比過的：砍到門檻 25 以內——最可能被砍的是 GPU 那份的曲線突變，但那份最難用肉眼看出錯；理由：這批同時涵蓋 CPU 與 HLSL 兩份實作、六條曲線、sRGB 雙向、`Color8` 的三種意思、中間圖的生命週期與合成，每個突變都寫了別的突變抓不到的錯、全部屬於契約，Linux 上全部 killed。
+
+## 修訂 2：U1、U2 的決定（宣告第 16.9 節）
+
+- **決定**（使用者 2026-11-28，主會話轉 side chat，HANDOFF `v8-arch-gyo2-render-a4-u1-u2`；原話「照建議，CG方向我是新人，需要你來輔助判斷。」）：U1＝(c) Godot 式（不帶 Hdr 的 unlit 不 tonemap，帶 Hdr 才經 pass）；U2：預設曲線 `ReinhardLuminance` → `None`。比過的：(a) 預設 `ReinhardLuminance`（開 Hdr 時 unlit 變暗，1.0 變 0.5）；(b) 照 Bevy 字面、不帶 Hdr 也在 shader 裡 tonemap（今天的畫面全部變暗、像素測試要重定）。理由：壓不壓亮部、用哪條曲線是作者的美術規則，Engine 的預設不替作者決定；`None` 讓開不開 Hdr 預設畫面都一樣。Godot 的預設不壓（`scene/resources/environment.h:116` `TONE_MAPPER_LINEAR`；`servers/rendering/renderer_rd/shaders/effects/tonemap.glsl:246-248` linear 原值返回）；Bevy 預設有曲線是因為它預設就有 PBR 打光。
+- **做法**：先把 `[tm-default]` 改成期待 `None`，在舊碼上確認失敗（`TonemappingTests.cpp:85: ERROR: CHECK( R::Tonemapping{}.method == Method::None ) is NOT correct!`），再改 `Drawables.hpp` 的預設值（`68fed0b4`）。查過依賴預設曲線的測試：GPU 案（`HdrTests.cpp`）與合成案都明寫曲線，`[re-hdr-tonemapping]` 比的是「沒有元件＝`Tonemapping{}`」（跟著預設走），所以**沒有要重定的像素或期待值**，只改了 `[tm-default]`。B4 時預設的去留寫成新的 RC-A4-7（RC-A4-1 是 LUT 曲線本身，另立一條比較清楚）。
+- **突變**：只改 `tm-default-method` 的 find／what（不新增、不刪，總數 51）。本機（CPU）跑它：1/1 killed。D184：find 落在這次改動範圍的只有它。
+- **本機驗證**（macOS、只跑 cpu）：全量建置成功；`SDL_ASSERT=abort ctest -L 'cpu|shader'` 256/258：`cmake.PluginSelection`（借用依賴的環境問題，同前）與 `sdl.unattended_assertion`——後者是因為把 `SDL_ASSERT=abort` 匯出給整個 ctest，SDL 的預設 handler 照 hint 直接 abort、不印測試自己 handler 的字；不帶這個環境變數單獨跑通過（產品的 ctest 本來就自己帶這個 hint）。沒有跑 GPU、沒有開視窗。
+
