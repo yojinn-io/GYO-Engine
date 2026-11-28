@@ -59,7 +59,7 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 
 | 項 | 處理 | 一句理由 |
 |---|---|---|
-| S1 視窗幀的值≈幀間隔，名字會被誤讀 | **等使用者**（主會話） | 碰到 Q1 (a) 的前提；(i) 明講、(ii) 改名、(iii) 提前 RC-A3-2（和 SDL-4 衝突）由使用者選，綁在一起的改名、區間欄位先不做 |
+| S1 視窗幀的值≈幀間隔，名字會被誤讀 | **已定 (ii)：改名**（使用者「照建議」，修訂 2） | `FrameSeenDone{frame, after, within}`／`LastFrameSeenDone()`；見下面「修訂 2」與宣告第 15.9 節 |
 | S2 `atMost > 0` 驗不到起點 | 採用 | `Capture` 前後的 `wall`：`0 < atMost ≤ wall`、CPU 時間和 ≤ `wall`；突變 `tm-gpu-from-epoch`、`tm-cpu-from-epoch` |
 | S3 `PassLabel` 不窮舉 | 採用 | 種類名字改由 render 的 `PassKindName`（`Overloaded` 窮舉）給，和純淨 M4 一起；只加純函式、不改資料形式，和 A4 的 `RenderCommands.hpp` 改動不相鄰 |
 | S4 第 5.1 節的 cpu 驗收移到 gpu 沒寫 | 採用 | 第 15.4 節加一段 |
@@ -76,7 +76,7 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 
 | 項 | 處理 | 一句理由 |
 |---|---|---|
-| H1 `Submit` 路徑的 `atMost` 由「什麼時候去看」決定 | **等使用者**（同設計 S1） | 同上；區間欄位、改名、拿出公開 status 三個建議都等決定 |
+| H1 `Submit` 路徑的 `atMost` 由「什麼時候去看」決定 | **已定：改名＋區間**（同設計 S1，修訂 2） | 建議 1 的區間（`after`、`within`）與改名一起做；建議 3（拿出公開 status）沒選 |
 | M1 診斷一律開、每幀重建字串 | 部分 | 帳本重用（`BeginTiming` 在上一幀的 `FrameTiming` 上寫、名字 `assign` 進既有的字串）；開關不加：沒有量到壓力（AGENTS §2），群組在沒有擷取工具時不做事，加開關會讓送出有兩條路（L5）；量到時 RC-A3-3 |
 | M2 隱含的不變量、三種擁有方式 | 部分 | 帳本明確傳給 `DrawFrame`／`RecordPasses`（斷言每個 pass 一格），上傳失敗那條路給空帳；帳本仍由裝置持有、getter 取（改成和 `FrameTally` 一樣由呼叫方傳入要改 `Submit`／`Capture` 的簽名，A4 同時在改所有呼叫；這一輪不改） |
 | M3 兩個 getter 不一致、參考懸空 | 採用 | 兩個都回 `optional` 的值；`Shutdown` 之後沒有值 |
@@ -116,6 +116,43 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 
 （「驗證」一節裡第一次寫的「負荷造成，未確認」以這一段為準。）
 
+## 修訂 2：看到做完的幀照實際意思改名（同日，使用者的決定）
+
+- 使用者（經主會話轉 side chat，HANDOFF `v8-arch-gyo2-render-a3-s1`）：原話「照建議」，選 S1＝H1 的 (ii)：照實際意思改名，H1 建議的區間欄位一起做，RC-A3-2 留著。比過的 (i)（只寫清楚：名字仍會被讀成 GPU 花了多久）、(iii)（提前 RC-A3-2：和 SDL-4 衝突、SDL 能否在別的執行緒等 fence 未確認）沒選。宣告第 15.9 節。
+- **定的名字**：型別 `FrameSeenDone{frame, after, within}`、getter `LastFrameSeenDone()`（`SDLGPUStatus` 與 `GPUDevice`）。
+  - 理由：同組的 `FrameTiming`↔`LastFrameTiming()` 是「型別名＝getter 去掉 Last」、沒有 `GPU` 前綴；「Seen」說出量到的是看到的時刻。
+  - `within`：使用者例子裡的字，看到做完的那一次看。`after`：上一次看到還沒做完的那一次看，是區間的下界；沒有一次看到還沒做完時是 0。兩者都從交出算起，型別是 `Engine::Time::Duration`。
+- **做了什麼**：
+  1. fence 的帳從 adapter 拆成不含 SDL 的 `FramesInFlight<Fence>`（`plugins/sdl_gpu/src/FramesInFlight.hpp`，同 `FrameDraws` 的先例），提供 `Hand`／`Look`／`Clear`／`LastSeenDone`。adapter 把 `SDL_QueryGPUFence`、`SDL_ReleaseGPUFence` 交給它，看的時機不變。
+  2. 拆出來的理由：區間的下界只有在「看了還沒做完」時才有值。`Capture` 等完才看，所以不開視窗就驗不到下界；拆成純的帳之後，可以用排好的時刻從外面驗。
+  3. 文件：宣告第 15.3 節第 5 點、T3、T4，第 15.8 節的舊名旁加注；SDL 頁第 7 節「除錯標記與計時」。render 頁沒有用到舊名。
+- **先失敗**：測試先改成新名字，並加 `sdl_gpu frames in flight:` 一案。舊碼建置失敗（本機）：
+  - `TimingTests.cpp:25:10: fatal error: 'FramesInFlight.hpp' file not found`
+  - `Pass2DTests.cpp:430:28: error: no member named 'FrameSeenDone' in namespace 'GYO::Plugins::SDLGPU'`
+  - `Pass2DTests.cpp:430:58: error: no member named 'LastFrameSeenDone' in 'GYO::Plugins::SDLGPU::SDLGPUStatus'`
+- **測試**：
+  - 新 ctest `sdl_gpu.framesinflight`（label `cpu`，T6）：排好的時刻驗區間 `{1, 4 ms, 12 ms}`、`{2, 2 ms, 10 ms}`；同一次看到兩幀做完時留最新的；做完的 fence 放掉一次；`Clear` 放掉還在飛的。
+  - `sdl_gpu.timing`（T3）多一條 `after == 0`。
+  - `sdl_gpu.frames`（T4）的檢查改成有值時 `after < within`。
+- **突變**（改名批，D184 只跑 find／expect 受影響的）：
+  - 新加一個 `tm-seen-after-dropped`：區間的下界是新的行為，沒有別的突變守它。
+  - `tm-gpu-older-kept`、`tm-gpu-time-zero` 跟著帳搬到 `FramesInFlight.hpp`，改用 cpu 的案例（`tm-gpu-time-zero` 的 expect 改成 `[tm-seen-within]`）。
+  - `tm-hand-not-tracked` 的 find 改成 `inFlight.Hand(...)`。
+  - 目錄共 23 個。`Clear` 現在由 `[tm-seen-cleared]` 看得到；description 裡「沒加」的那一條跟著改，改名批不為它加突變。
+
+### 修訂 2 的驗證
+
+- 本機（macOS Intel，只跑 cpu；`4b2fe934`）：全量建置成功、沒有新警告。
+  - `SDL_ASSERT=abort ctest -L 'cpu|shader' -j 6`（load 約 23）：260 個裡 258 通過（新的 `sdl_gpu.framesinflight` 通過）。失敗的兩個：
+    - `cmake.PluginSelection`：借用依賴的環境問題。
+    - `sdl.unattended_assertion`：我把 `SDL_ASSERT=abort` 給了整個 ctest。這一案要看自己 handler 印的字，環境變數讓 SDL 的預設 handler 先處理，所以失敗（`[sdl-assert-no-handler-text]`）。不帶環境變數單獨跑通過；帶著單獨跑會重現。和程式無關；產品執行檔的 ctest 本來就各自帶 `SDL_ASSERT=abort`。
+  - cpu 突變 3/3 killed（`tm-gpu-older-kept`、`tm-gpu-time-zero`、`tm-seen-after-dropped`，都在 `sdl_gpu.framesinflight`）。runner 前確認目錄裡 23 個 find 都在、恰好一處。
+- **Linux 主機：回報時還沒有結果**。第一次送 bundle 時主機連不上（`scp: Connection closed`、`ssh: ... Host is down`，20 分鐘）；主會話確認恢復後，`4b2fe934` 的 bundle 已送過去、`run.sh a3r2`（建置 → cpu|shader → 不開視窗的 GPU → 目錄 `host_a3r2.json` 22 個突變，Lavapipe、xvfb）在跑，回報當時還在建置。下面這些在修訂 2 都還沒有結果：
+  - GPU 的 `sdl_gpu.timing`（T3 的 `after == 0`、新名字）、`phases` 等。
+  - GPU 突變：`tm-hand-not-tracked`（find 改了）、`tm-capture-not-looked-at`、`tm-gpu-from-epoch`，以及殺它們的 `sdl_gpu timing` 一案被改過、要重跑的其餘 GPU 突變。
+  - 送過去用的目錄 `host_a3r2.json`（22 個，不開視窗的全部）在 scratchpad，主機恢復後照第 15.8 節的做法跑。
+- 沒跑：`sdl_gpu.frames`（T4，會開視窗）與 `tm-status-timing-not-given`；Metal、D3D12。
+
 ## 沒做／沒跑
 
 - **Metal（Mac）上沒驗**：本機只跑 cpu。Metal 特有的行為——debug group 在 pass 之外 push 到 command buffer 本身（`SDL_gpu_metal.m:1315-1349`）、Xcode 的擷取裡群組怎麼顯示、Metal 的 fence——都沒有在 Mac 上跑過（已知缺口）。macOS 的 L1 是 macos-arm64、只建置。
@@ -123,4 +160,4 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 - 擷取工具（RenderDoc／Xcode／PIX）裡實際看到的群組名：CI 與這張卡都沒有擷取工具，只驗次數（`[tm-groups]`）。
 - 會開視窗的 `sdl_gpu.frames`（T4）與它的突變 2 個、`gp-frames-*`；RADV（Xvfb 下建不了裝置，同 A2）。
 - 重 GPU 量測（Object_PvP 的整體幀時間）沒做；`sdl_gpu.budget` 也沒跑。
-- 設計 S1＝純淨 H1（視窗幀的整幀 GPU 時間與它的名字）：等使用者決定（第 15.8 節）。
+- 視窗幀的 `FrameSeenDone` 在 Mac／Windows 上的值；精確的 GPU 時間（RC-RP5、RC-A3-2）。
