@@ -1,6 +1,6 @@
 # Object_PvP 的武器模型怎麼組成（`v8-arch-gyo2-weapon-model-research`）
 
-更新：2026-11-28（同日加第 14 節：素材資料夾結構，使用者已定、排進 W1；同日加 14.4 節：敵人與其他武器的擴充，以及第 15 節：使用者的決定）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：只是研究，不實作。決策點已全部收完：U1 使用者選 (a)（第 15 節）；素材資料夾結構與它的擴充使用者已定（第 14 節）。改寫了第 5.2 節的資料夾形狀與第 11 節 G1 的內容；其他已定的決定沒有改。**
+更新：2026-11-28（同日加第 14 節：素材資料夾結構，使用者已定、排進 W1；同日加 14.4 節：敵人與其他武器的擴充，以及第 15 節：使用者的決定；同日加 14.4 節第 5 條：空手片段的位置）。Owner：研究卡（由 GYO2 重建主會話開出）。**狀態：只是研究，不實作。決策點已全部收完：U1 使用者選 (a)（第 15 節）；素材資料夾結構與它的擴充使用者已定（第 14 節）。改寫了第 5.2 節的資料夾形狀與第 11 節 G1 的內容；其他已定的決定沒有改。**
 
 查的版本：`gyo2` 9eea5968；E1、E2 看的是 `origin/claude/gyo2-model-pose-ik` 170c610f（#377，還沒合併）。本地源碼：Bevy 6a911653f、Godot 94fc09c、Blender 4.5 內附的 FBX 匯出器（`/Applications/Blender.app/Contents/Resources/4.5/scripts/addons_core/io_scene_fbx/`。素材是用 Blender 5.2.3 匯出的，**版本不同**，5.2 的選項是不是一樣，未確認）。Unreal 只讀官方文件（附 URL）。Source（CS:GO、Garry's Mod）、塔科夫、Valorant 沒有原始碼，Valve Developer Community 的頁面也抓不到（HTTP 403），所以只能用搜尋摘要，全部標「未確認」。
 
@@ -418,6 +418,7 @@ assets/object_fps_pvp/
 │       └── arms/                       W2：第一人稱手臂
 │           ├── arms.json               手套的材質表
 │           ├── models/                 完整骨架＋手臂網格，無片段
+│           ├── animations/             空手的片段（有才建，14.4 節第 5 條）
 │           └── textures/
 ├── weapons/
 │   └── <weapon>/
@@ -495,6 +496,7 @@ assets/object_fps_pvp/
 2. **共用的放上層，專屬的放對象裡**：片段只有一個對象用就放 `<對象>/animations/`，第二個對象也要用時才搬到 `animations/<library>/`；貼圖同一條規則（第二個對象要用時才建 `textures/<group>/`）。
 3. **敵人拿槍用武器的 `world/`**：人形敵人拿步槍，掛 `weapons/rifle_a/world/` 的第三人稱模型，和別人看玩家拿槍是同一份；敵人不需要 `viewmodel/`。怪物的爪子、酸液是怪物模型的一部分，不放 `weapons/`。
 4. **每把槍的第三人稱持槍片段放武器的 `world/animations/`**：誰拿這把槍誰就用（D4：基本組＋覆寫表，覆寫表在 `weapon.json`）。片段直接取自共用動畫庫時，留在 `animations/<library>/`，不複製。
+5. **空手的片段放 `characters/player/arms/animations/`**：空手待機、揮拳這類手上沒有武器時的第一人稱片段，不屬於任何一把武器，照第 2 條「一個對象用就放對象裡」放在手臂自己的資料夾；有這個需求時才建。這和 U1 (a) 的「手臂檔不帶片段」不衝突：(a) 說的是**武器的動作**不放手臂（拔槍 `Draw`、收槍 `Hide` 也是武器的片段，放 `weapons/<weapon>/viewmodel/animations/`；換槍＝舊武器的 `Hide` 接新武器的 `Draw`，不另做片段），手臂的模型檔仍然只有骨架與網格，空手片段是同一資料夾裡另一個動畫檔。播空手片段時，取樣的來源從武器檔換成這個動畫檔，手臂一樣照骨頭名字複製姿勢（`BindByName`），Engine 不用改。
 
 **對批次的影響**：W1 不建上面任何新資料夾（只搬既有的檔，14.3 節）；這一節是之後加怪物、加武器時照著放的規則，寫進 `docs/object_fps_pvp/assets.zh-Hant.md` 時和 14.3 節第 4 條同一批。
 
@@ -509,6 +511,7 @@ assets/object_fps_pvp/
 | U1 | **(a)**：武器檔帶完整骨架與這把武器的片段，手臂檔只帶骨架與手臂網格、沒有片段；執行時用武器檔取樣一次，手臂照骨頭名字複製姿勢 | 照推薦 |
 | 資料夾 | 第一層依對象、對象裡分 `models/`、`animations/`、`textures/`（14.1～14.3 節），排進 W1 | 照提案；主會話已記成 `v8-arch-gyo2-asset-folder-structure`（`gyo2` a092c86a） |
 | 擴充 | 敵人放 `characters/`、共用的放上層、敵人拿槍用 `world/`、持槍片段放武器的 `world/animations/`（14.4 節） | 照提案 |
+| 空手片段 | 放 `characters/player/arms/animations/`；拔槍、收槍是武器的片段（14.4 節第 5 條）。原話：「把空手片段的位置也補進研究文件」 | 照本卡的回答；W1、W2 都不建這個資料夾 |
 
 **比過的**：U1 的 (b)（手臂檔帶片段、槍的零件帶同名片段）與 (c)（不拆），見第 10 節；擴充的比較見 14.4 節。
 
