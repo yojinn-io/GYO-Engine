@@ -110,3 +110,4 @@ Owner：渲染管線線的卡片。分支 `claude/gyo2-render-a4`（從 `claude/
 - **突變**：只改 `tm-default-method` 的 find／what（不新增、不刪，總數 51）。本機（CPU）跑它：1/1 killed。D184：find 落在這次改動範圍的只有它。
 - **本機驗證**（macOS、只跑 cpu）：全量建置成功；`SDL_ASSERT=abort ctest -L 'cpu|shader'` 256/258：`cmake.PluginSelection`（借用依賴的環境問題，同前）與 `sdl.unattended_assertion`——後者是因為把 `SDL_ASSERT=abort` 匯出給整個 ctest，SDL 的預設 handler 照 hint 直接 abort、不印測試自己 handler 的字；不帶這個環境變數單獨跑通過（產品的 ctest 本來就自己帶這個 hint）。沒有跑 GPU、沒有開視窗。
 
+- **Linux 主機：沒跑**。`192.168.3.20` 在修訂 2 的驗證時連不上（`ssh: connect to host 192.168.3.20 port 22: Operation timed out`／`Host is down`，約 25 分鐘重試都一樣），bundle 沒送過去。修訂 2 的 GPU 測試（Lavapipe）與 Linux 上的突變都沒跑；這次的改動只動 C++ 的預設值與一個 CPU 測試，GPU 案都明寫曲線、不經過預設，修訂 1（`569448b7`）在 Linux 上的 GPU 結果之後沒有 shader 或後端的改動。主機回來後補跑。
