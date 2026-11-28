@@ -689,8 +689,8 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 ### 16.5 測試與突變
 
-- 測試：新 `tests/common/render/TonemappingTests.cpp`（`render.data`）四案；`Pipeline3dTests.cpp`（`render.pipeline3d`）三案；`PipelineWorldTests.cpp`（`render.extract`）一案；`SDLGPUTests.cpp`（`sdl_gpu.shaders`）一案；新 `plugins/sdl_gpu/tests/HdrTests.cpp`：`sdl_gpu hdr:` 三案（ctest `sdl_gpu.hdr`，標籤 `gpu`）；測試的 shader `test_constant.frag.hlsl`（寫參數的 float4）。
-- 突變：新 `tests/common/render/hdr_mutations.json`（H1～H6 各個獨立可錯的判斷；沒加的與理由在檔案的 `description`）。
+- 測試：新 `tests/common/render/TonemappingTests.cpp`（`render.data`）五案；`Pipeline3dTests.cpp`（`render.pipeline3d`）三案；`PipelineWorldTests.cpp`（`render.extract`）一案；`SDLGPUTests.cpp`（`sdl_gpu.shaders`）一案；新 `plugins/sdl_gpu/tests/HdrTests.cpp`：`sdl_gpu hdr:` 三案（ctest `sdl_gpu.hdr`，標籤 `gpu`）；測試的 shader `test_constant.frag.hlsl`（寫參數的 float4）。
+- 突變：新 `tests/common/render/hdr_mutations.json`（52 個，H1～H6 各個獨立可錯的判斷；沒加的與理由在檔案的 `description`；全部 killed，dev_log `2026_11_28_gyo2_render_a4_hdr_tonemap`）。
 - 既有突變（D184）：find 落在本批改過的程式裡的（`ComposePasses` 的清除、`Queue3d` 的目標、`StartColour` 的清除色、3D pipeline 的 fragment、`SDLTargetFormat`、`ExtractCameras` 周邊）全部重跑；結果記在 dev_log。
 
 ### 16.6 RC
