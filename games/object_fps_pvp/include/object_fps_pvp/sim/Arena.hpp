@@ -50,6 +50,9 @@ struct ArenaContent final {
     std::optional<FallDamage> fallDamage;
 };
 
+// The longest id an arena or a mode has (the bytes MatchInfo carries for each).
+inline constexpr std::size_t kMaxContentIdBytes = 64;
+
 inline constexpr std::size_t kMinimumSpawns = 2;
 inline constexpr std::size_t kMaximumSpawns = 64;
 

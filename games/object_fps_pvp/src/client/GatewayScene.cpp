@@ -39,9 +39,10 @@ std::string GatewayErrorText(const GatewayResult& result, const std::string& gat
     return "Gateway: " + code + (result.detail.empty() ? "" : "（" + result.detail + "）");
 }
 
-std::string ModeText(const std::string_view mode) {
-    if (mode == "coop") return "協力";
-    if (mode == "survival") return "生存";
+std::string ModeText(const std::vector<ModeChoice>& modes, const std::string_view mode) {
+    for (const ModeChoice& choice : modes) {
+        if (choice.id == mode) return choice.name;
+    }
     return std::string(mode);
 }
 

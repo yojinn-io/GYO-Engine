@@ -39,7 +39,7 @@ func runClientCase(t *testing.T, pattern string, firstPort int) {
 	}
 	local := &matches.Local{Command: match, Arguments: []string{"--content", content}, Advertise: "127.0.0.1",
 		FirstPort: firstPort, LastPort: firstPort + 9, IdleSeconds: 5}
-	s, err := Start(Config{Provider: local, Maps: []string{"pvp_training_v1", "pvp_corners_v1", "biome_trial"}})
+	s, err := Start(Config{Provider: local, Maps: []string{"pvp_training_v1", "pvp_corners_v1", "biome_trial"}, Modes: []string{"core_pvp"}})
 	if err != nil {
 		t.Fatal(err)
 	}

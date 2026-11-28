@@ -186,7 +186,8 @@ struct Setup final {
                    std::optional<PC::SceneChange> firstScene = std::nullopt, std::string dataDirectory = {},
                    std::optional<GYO::Engine::OS::SocketAddress> gateway = std::nullopt, std::vector<std::uint64_t> expectUsers = {},
                    const std::uint32_t delayAdvances = 0, const std::function<void(PC::ClientStart&)>& adjust = {},
-                   GYO::Engine::Asset::AssetExecutor* jobs = nullptr)
+                   GYO::Engine::Asset::AssetExecutor* jobs = nullptr, std::shared_ptr<const PW::GameContent> content = ShippedContent(),
+                   const std::size_t matchMode = 0, std::shared_ptr<const PW::GameContent> matchContent = nullptr)
         : framesPerStep(perStep) {
         if (delayAdvances != 0) {
             N::MemoryLinkSettings link;
@@ -199,15 +200,17 @@ struct Setup final {
         pool = std::make_unique<GYO::Engine::Threads::WorkerPool>(std::move(started).value());
         executor = std::make_unique<WA::WorkerPoolExecutor>(*pool);
         auto reader = [c = clock] { return *c; };
-        match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(std::vector<N::MemoryLink>{first.first, second.first}),
-                           SeatsOf(seats), reader, matchArena, std::move(expectUsers));
-        other = BuildClient(ShippedContent(), std::make_shared<N::MemoryLink>(second.second), 2, reader);
+        // The Match's content (none: the Client's) and the other Client's, which plays the Match's arena and mode.
+        if (!matchContent) matchContent = content;
+        match = BuildMatch(matchContent, std::make_shared<HubLink>(std::vector<N::MemoryLink>{first.first, second.first}), SeatsOf(seats),
+                           reader, matchArena, std::move(expectUsers), 60, matchMode);
+        other = BuildClient(matchContent, std::make_shared<N::MemoryLink>(second.second), 2, reader, matchArena, matchMode);
 
         std::string error;
         auto presentation = PC::LoadPresentation(PVP_CONTENT_ROOT, error);
         REQUIRE_MESSAGE(presentation.has_value(), error);
         this->presentation = std::make_shared<const PC::PresentationContent>(std::move(*presentation));
-        PC::ClientOptions options{ShippedContent(), this->presentation, 0, 1, jobs};
+        PC::ClientOptions options{content, this->presentation, 0, 1, jobs};
         O::WorldDescription solo = Stepped(PC::ClientSoloWorld(options), kStep / framesPerStep);
         O::WorldDescription sim = Stepped(PC::ClientSimWorld(options), kStep / framesPerStep);
         O::WorldDescription game = Stepped(PC::ClientFrameWorld(options, false), kStep / framesPerStep);
@@ -890,7 +893,7 @@ TEST_CASE("client: holding Space jumps again on every landing; letting go stops"
     Setup setup;
     setup.Loaded();
     setup.Frames(60);
-    REQUIRE(ShippedContent()->stance.holdJump);
+    REQUIRE(ShippedContent()->modes.front().stance.holdJump);
     // The loading screen gone: a click before it is the screen's, not the game's.
     setup.Shown();
     I::MouseButtonInput click;
@@ -1112,6 +1115,44 @@ TEST_CASE("client: a game whose Match plays another arena is built again on it")
         if (mesh != nullptr && ShowsPalette(*mesh, map)) drawn = true;
     }
     CHECK_MESSAGE(drawn, "[pvp-frame-arena] the played arena's picture is drawn");
+}
+
+// The Match plays another mode than the one the Client starts with (it has both): a World plays one mode, so the game is
+// built again on the Match's (mode-config declaration 3.3); a mode of the same id with other rules cannot be played.
+TEST_CASE("client: a game whose Match plays another mode is built again on it; the same mode with other rules, or another character, is left") {
+    {
+        auto two = std::make_shared<PW::GameContent>(*ShippedContent());
+        PW::ModeContent second = two->modes.front();
+        second.id = "second";
+        second.rulesDigest ^= 0x5a5a;
+        two->modes.push_back(second);
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, two, 1);
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().mode == "second"; }),
+                        "[pvp-mode-again] the game is built again on the Match's mode");
+        setup.Loaded();
+        setup.Frames(120);
+        CHECK(PC::StatusOf(setup.Client()).playing);
+        CHECK(setup.Sim().Resource<PW::ActiveMode>()->id == "second");
+        CHECK(setup.Sim().Resource<PW::ContentMismatch>()->reason.empty());
+    }
+    {
+        // The Client's core_pvp has other rules than the Match's: it cannot play it, and goes back with the reason.
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->modes.front().rulesDigest ^= 0x5a5a;
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, other, 0, ShippedContent());
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
+                        "[pvp-mode-rules-left] a mode with other rules is not played");
+        CHECK_MESSAGE(setup.Scene().status.find("の規則が Match と違います") != std::string::npos, setup.Scene().status);
+    }
+    {
+        // Another character (the user's decision U1): not played again, back with the reason.
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->characterDigest ^= 1;
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, other, 0, ShippedContent());
+        REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Lobby; }),
+                        "[pvp-character-left] a game of another character is not played");
+        CHECK_MESSAGE(setup.Scene().status.find("キャラクター") != std::string::npos, setup.Scene().status);
+    }
 }
 
 // The arena's map drawn region by region (big-map declaration section 15, L5): one Mesh3d per region of the played
@@ -1538,9 +1579,12 @@ TEST_CASE("client: single player: the room, a game without a server, the pause, 
         REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start]");
         CHECK_MESSAGE(HasResource<PW::GameRules>(setup.Solo()), "[pvp-solo-world] the Solo World plays");
         CHECK_MESSAGE(!HasResource<PW::GameRules>(setup.Sim()), "the Sim World does not");
-        for (int i = 0; i < 60 && !PC::StatusOf(setup.Client()).playing; ++i) {
+        // The map is read on the asset threads: wait as Setup::Loaded does (a few seconds at most), not a count of frames
+        // (L1 linux-x64 2026-11-27, with the client tests in four parallel entries: 60 frames were not enough).
+        for (int i = 0; i < 2000 && !PC::StatusOf(setup.Client()).playing; ++i) {
             setup.Frame();
             socketless = socketless && noSocket();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         REQUIRE_MESSAGE(PC::StatusOf(setup.Client()).playing, "[pvp-solo-playing] the own player reached the Frame World");
         // The loading screen until the game is loaded and drawn; then the Local World starts.
@@ -1724,7 +1768,7 @@ private:
         if (method == "GET" && target == "/v1/rooms") {
             if (std::exchange(expire_, false)) return {401, "{\"error\":\"session_expired\"}"};
             std::string rooms;
-            if (other_ != 0) rooms = "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":2,\"capacity\":4,\"state\":\"open\"}";
+            if (other_ != 0) rooms = "{\"id\":" + std::to_string(other_) + ",\"mode\":\"core_pvp\",\"map\":\"pvp_corners_v1\",\"players\":2,\"capacity\":4,\"state\":\"open\"}";
             return {200, "{\"rooms\":[" + rooms + "]}"};
         }
         if (method == "GET" && target == "/v1/saves/me") {
@@ -1742,10 +1786,10 @@ private:
             return {200, RoomJson(false)};
         }
         if (method == "POST" && target == "/v1/rooms/" + std::to_string(other_) + "/join" && other_ != 0) {
-            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[]}"};
+            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"core_pvp\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[]}"};
         }
         if (target == "/v1/rooms/" + std::to_string(other_) && other_ != 0 && method == "GET") {
-            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"survival\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[{\"userId\":9,\"ready\":true},{\"userId\":7,\"ready\":false}]}"};
+            return {200, "{\"id\":" + std::to_string(other_) + ",\"mode\":\"core_pvp\",\"map\":\"pvp_corners_v1\",\"players\":3,\"capacity\":4,\"state\":\"open\",\"owner\":9,\"members\":[{\"userId\":9,\"ready\":true},{\"userId\":7,\"ready\":false}]}"};
         }
         if (method == "GET" && target == "/v1/rooms/3") {
             if (failRoomReads_) return {503, "{\"error\":\"busy\"}"};
@@ -1809,7 +1853,7 @@ private:
     bool expire_ = false;
     bool ended_ = false;
     int sessions_ = 0;
-    std::string mode_ = "coop";
+    std::string mode_ = "core_pvp";
     std::string map_;
     bool ready_ = false;
     bool started_ = false;
@@ -1837,11 +1881,11 @@ std::string ListLine(Setup& setup, const std::size_t row) {
 
 TEST_CASE("client: gateway: the requests carry the session's token, an idempotency key on each change, and the answers read") {
     std::optional<PC::GatewaySession> session = PC::GatewaySession{7, "tok", 99};
-    const auto create = PC::ToHttp(PC::CreateRoomRequest("coop", "pvp_training_v1", "k1"), "127.0.0.1:7700", session);
+    const auto create = PC::ToHttp(PC::CreateRoomRequest("core_pvp", "pvp_training_v1", "k1"), "127.0.0.1:7700", session);
     CHECK(create.method == "POST");
     CHECK(create.target == "/v1/rooms");
     CHECK(create.host == "127.0.0.1:7700");
-    CHECK(create.body == "{\"mode\":\"coop\",\"map\":\"pvp_training_v1\"}");
+    CHECK(create.body == "{\"mode\":\"core_pvp\",\"map\":\"pvp_training_v1\"}");
     bool bearer = false, key = false;
     for (const auto& header : create.headers) {
         bearer = bearer || (header.name == "Authorization" && header.value == "Bearer tok");
@@ -1855,7 +1899,7 @@ TEST_CASE("client: gateway: the requests carry the session's token, an idempoten
     CHECK(PC::ReadyRequest(3, true, "k").target == "/v1/rooms/3/ready");
 
     std::string error;
-    const auto room = PC::ParseRoom("{\"id\":3,\"mode\":\"coop\",\"map\":\"m\",\"players\":1,\"capacity\":4,\"state\":\"started\",\"owner\":7,"
+    const auto room = PC::ParseRoom("{\"id\":3,\"mode\":\"core_pvp\",\"map\":\"m\",\"players\":1,\"capacity\":4,\"state\":\"started\",\"owner\":7,"
                                     "\"members\":[{\"userId\":7,\"ready\":true}],\"connect\":{\"server\":\"1.2.3.4:5\",\"userId\":7,\"token\":\"ab\"}}",
                                     error);
     REQUIRE_MESSAGE(room.has_value(), error);
@@ -1897,6 +1941,8 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     CHECK(Asked(gateway, "POST", "/v1/rooms"));
     setup.Load();
     CHECK_MESSAGE(FramesUntil(setup, [&] { return setup.Binding("map") == "マップ: " + picked.id; }), "[pvp-room-map] " << setup.Binding("map"));
+    // The room's mode by its name: the installed core PvP, the lobby's first (mode-config declaration, M1).
+    CHECK_MESSAGE(setup.Binding("mode") == "モード: 核心 PvP", "[pvp-room-mode] " << setup.Binding("mode"));
     // Ready (the first button), then start (the second): the game, connected where the started room says.
     REQUIRE(FramesUntil(setup, [&] { return setup.Binding("ready") == "準備する"; }));
     setup.Press(I::KeyCode::Enter);
@@ -1915,6 +1961,7 @@ TEST_CASE("client: gateway: the lobby lists and records; a made room is readied 
     CHECK_MESSAGE(setup.Sim().Resource<PW::LocalUser>()->userId == 7, "[pvp-gw-user] the player is the Gateway's user");
     // The room's map is the arena the game starts with (the Sim World's and the Frame World's), before any Match says.
     CHECK_MESSAGE(setup.Scene().map == picked.id, "[pvp-gw-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Scene().mode == "core_pvp", "[pvp-gw-mode] " << setup.Scene().mode);
     CHECK_MESSAGE(setup.Sim().Resource<PW::GameRules>()->arena.id == picked.id, "[pvp-gw-map-sim]");
     CHECK_MESSAGE(setup.Client().Resource<PW::GameRules>()->arena.id == picked.id, "[pvp-gw-map-frame]");
     CHECK(setup.Client().Resource<PW::LocalUser>()->userId == 7);
@@ -2506,7 +2553,7 @@ TEST_CASE("client: settings: the resolution is physical pixels: the window is gi
     CHECK_MESSAGE((resized.front() == GYO::Engine::Math::Vec2i{960, 540}), "[pvp-settings-rescaled] " << resized.front().x);
 }
 
-TEST_CASE("client: single player: the room is the multiplayer's: the map chosen there is played; the mode is survival") {
+TEST_CASE("client: single player: the room is the multiplayer's: the map chosen there is played; the mode is the first installed") {
     TempDirectory directory;
     Setup setup(1, 4, 0, PC::SceneChange{}, directory.Utf8());
     setup.Load();
@@ -2514,7 +2561,8 @@ TEST_CASE("client: single player: the room is the multiplayer's: the map chosen 
     REQUIRE(setup.Scene().scene == PC::Scene::SoloRoom);
     setup.Load();
     CHECK_MESSAGE(setup.Client().Get<GYO::Engine::Ui::UiRoot>(setup.Root())->canvas == "solo_room", "[pvp-solo-room-shared]");
-    CHECK_MESSAGE(setup.Binding("mode") == "モード: 生存（固定）", "[pvp-solo-survival] " << setup.Binding("mode"));
+    // The first installed mode (modes/modes.json), by its name (mode-config declaration, M1).
+    CHECK_MESSAGE(setup.Binding("mode") == "モード: 核心 PvP（固定）", "[pvp-solo-mode] " << setup.Binding("mode"));
     const auto& arenas = ShippedContent()->arenas;
     REQUIRE(arenas.size() >= 2);
     CHECK(setup.Binding("map") == "マップ: " + arenas[0].id);
@@ -2527,6 +2575,7 @@ TEST_CASE("client: single player: the room is the multiplayer's: the map chosen 
     setup.Press(I::KeyCode::Enter);
     REQUIRE_MESSAGE(setup.Scene().scene == PC::Scene::SoloGame, "[pvp-solo-start] " << setup.Binding("status"));
     CHECK_MESSAGE(setup.Scene().map == arenas[1].id, "[pvp-solo-map] " << setup.Scene().map);
+    CHECK_MESSAGE(setup.Scene().mode == "core_pvp", "[pvp-solo-mode-played] " << setup.Scene().mode);
     CHECK_MESSAGE(setup.Solo().Resource<PW::GameRules>()->arena.id == arenas[1].id, "[pvp-solo-map-played]");
     // 中止 on the loading screen (its focused button): back to the room, on the same map.
     for (int i = 0; i < 400; ++i) {

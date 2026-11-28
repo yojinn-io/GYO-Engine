@@ -154,7 +154,7 @@ void MountBytes(Bytes& out, const Mount& mount) {
     out.Strings(mount.after);
     out.Strings(mount.sets);
     out.U32(mount.conditions.size());
-    for (const ConditionRef& condition : mount.conditions) out.Str(condition.Name());
+    for (const ConditionRef& condition : mount.conditions) out.Str(condition.Identity());
 }
 
 void SystemBytes(Bytes& out, const SystemRecord& system) {
@@ -249,7 +249,7 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Strings(set.options.before);
         out.Strings(set.options.after);
         out.U32(set.conditions.size());
-        for (const ConditionRef& condition : set.conditions) out.Str(condition.Name());
+        for (const ConditionRef& condition : set.conditions) out.Str(condition.Identity());
     }
     out.U32(std::count_if(data.systems.begin(), data.systems.end(), [](const SystemRecord& s) { return !s.removed; }));
     for (const SystemRecord& system : data.systems) {

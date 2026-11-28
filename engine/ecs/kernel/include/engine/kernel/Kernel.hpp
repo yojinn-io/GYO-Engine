@@ -11,6 +11,7 @@
 // kernel_symbols.py for writable data symbols).
 
 #include "engine/kernel/Access.hpp"
+#include "engine/kernel/Conditions.hpp"
 #include "engine/kernel/WorldExecutor.hpp"
 #include "engine/kernel/Declarations.hpp"
 #include "engine/kernel/Hash.hpp"

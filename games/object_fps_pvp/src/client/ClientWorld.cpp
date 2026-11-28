@@ -102,6 +102,20 @@ void HashValue(K::Hasher&, const DrawnFrames&) {}
 
 namespace {
 
+// What the player reads for a content mismatch (world::ContentMismatch says what differs; the words are the Client's).
+std::string MismatchText(const PW::ContentMismatch& mismatch) {
+    switch (mismatch.kind) {
+    case PW::MismatchKind::Mode: return "Match は別のモード（" + mismatch.matchMode + "）を遊んでいます";
+    case PW::MismatchKind::Rules: return "モード「" + mismatch.matchMode + "」の規則が Match と違います";
+    case PW::MismatchKind::Character: return "キャラクター（骨格・アニメーション・当たり判定）が Match と違います";
+    case PW::MismatchKind::Arena: return "Match は別のマップ（" + mismatch.matchArena + "）を遊んでいます";
+    case PW::MismatchKind::ArenaData: return "マップ「" + mismatch.matchArena + "」のモード用データが Match と違います";
+    case PW::MismatchKind::Walls: return "マップ「" + mismatch.matchArena + "」の壁が Match と違います";
+    case PW::MismatchKind::None: break;
+    }
+    return {};
+}
+
 // ---- The Client's own entities: fixed ids outside both allotter ranges (world::kMatchIds, world::kClientIds), put
 // in by the prepare function before the first step; the stand-in bodies come from the Client's allotter.
 constexpr K::EntityId kCamera = 3'000'010;
@@ -1002,8 +1016,8 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     std::string hpText;
     std::string ammoText;
     std::string status;
-    if (!sim->mismatch.empty()) {
-        status = "内容が Match と違います: " + sim->mismatch;
+    if (sim->mismatch.kind != PW::MismatchKind::None) {
+        status = MismatchText(sim->mismatch);
     } else if (!sim->connected) {
         status = "Match に接続しています…";
     } else if (body == nullptr) {
@@ -1168,7 +1182,7 @@ struct GameOrigin final {
     std::string savePath;
     std::string map;  // the scene's (SceneChange::map): the single player's room comes back to it
     std::optional<N::NetConnectTarget> connect;  // the scene's (SceneChange::connect): the game again on another arena
-    std::shared_ptr<const PW::GameContent> game;  // the arenas this Client has
+    std::shared_ptr<const PW::GameContent> game;  // the arenas and modes this Client has
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
 
@@ -1245,7 +1259,7 @@ K::SystemResult TrackReadiness(K::Res<ClientAssets> assets, K::Res<WA::AssetView
         next.progress = std::max(next.progress, kWarmShare);
     }
     if (next.warmed) {
-        next.network = sim->ownPlayer != 0 && sim->mismatch.empty();
+        next.network = sim->ownPlayer != 0 && sim->mismatch.kind == PW::MismatchKind::None;
         if (next.network) next.progress = std::max(next.progress, kNetworkShare);
     }
     if (next.network) {
@@ -1405,10 +1419,11 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
 
 // Frame World: a map did not load (this World's picture or the Sim World's walls), the Match's content differs, or the
 // connection ended (the Sim World's picture says so): back to where the game came from with the reason, noted for the
-// program (FrameNotes). The Match plays another arena this Client has (a Match reached by its address): the game again
-// on that arena, as a World plays one arena (big-map declaration 15.3).
-K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::Res<PW::GameRules> rules, K::Res<GameOrigin> origin,
-                           K::ResMut<FrameNotes> notes, K::ResMut<SceneRequest> request) {
+// program (FrameNotes). The Match plays another arena or mode this Client has (a Match reached by its address): the game
+// again on them, as a World plays one arena and one mode (big-map declaration 15.3; mode-config declaration 3.3). The same
+// arena and mode with other content (walls, rules) cannot be played: back with the reason.
+K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::Res<GameOrigin> origin, K::ResMut<FrameNotes> notes,
+                           K::ResMut<SceneRequest> request) {
     if (request.Read().next) return {};
     const GameOrigin& from = *origin;
     const std::string& mapFailure = !map->failure.empty() ? map->failure : sim->mapLoad.failure;
@@ -1416,14 +1431,20 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::R
     if (!mapFailure.empty()) {
         notes->map = mapFailure;
         reason = "地図を読み込めません: " + mapFailure;
-    } else if (!sim->mismatch.empty()) {
-        if (from.scene == Scene::MultiGame && from.connect && !sim->mismatchArena.empty() && sim->mismatchArena != rules->arena.id &&
-            from.game && from.game->Find(sim->mismatchArena) != nullptr) {
-            request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = sim->mismatchArena};
-            return {};
+    } else if (const PW::ContentMismatch& mismatch = sim->mismatch; mismatch.kind != PW::MismatchKind::None) {
+        // Another mode or arena (not the same one with other content): played again when this Client has the pair.
+        const bool another = mismatch.kind == PW::MismatchKind::Mode || mismatch.kind == PW::MismatchKind::Arena;
+        if (from.scene == Scene::MultiGame && from.connect && another && from.game) {
+            const auto arena = from.game->FindArena(mismatch.matchArena);
+            const auto mode = from.game->FindMode(mismatch.matchMode);
+            if (arena && mode && from.game->Plays(*mode, *arena)) {
+                request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = mismatch.matchArena,
+                                            .mode = mismatch.matchMode};
+                return {};
+            }
         }
-        notes->mismatch = sim->mismatch;
-        reason = "Match の内容がこの Client と違います: " + sim->mismatch;
+        notes->mismatch = mismatch.reason;
+        reason = MismatchText(mismatch);
     } else if (sim->ended) {
         notes->endReason = sim->endReason;
         reason = sim->endReason;
@@ -1524,8 +1545,7 @@ WorldSnapshot SnapshotOf(K::World& world) {
     }
     view.ownPlayer = PW::OwnPlayer(world);
     if (const auto* mismatch = world.Resource<PW::ContentMismatch>()) {
-        view.mismatch = mismatch->reason;
-        view.mismatchArena = mismatch->matchArena;
+        view.mismatch = *mismatch;
     }
     if (const auto* map = Find<PW::MapLoad>(world)) view.mapLoad = *map;
     if (const auto* deaths = Find<PW::LocalDeaths>(world)) view.deaths = deaths->count;
@@ -1779,11 +1799,12 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
 
 // The arena a game scene plays: the one its change names when this Client has it, else the Client's own.
 std::size_t ArenaOf(const SceneChange& change, const ClientOptions& options) {
-    const auto& arenas = options.game->arenas;
-    for (std::size_t i = 0; i < arenas.size(); ++i) {
-        if (arenas[i].id == change.map) return i;
-    }
-    return options.arena;
+    return options.game->FindArena(change.map).value_or(options.arena);
+}
+
+// The mode a game scene plays: the one its change names when this Client has it, else the Client's own.
+std::size_t ModeOf(const SceneChange& change, const ClientOptions& options) {
+    return options.game->FindMode(change.mode).value_or(options.mode);
 }
 
 void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
@@ -1842,23 +1863,19 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     SoundPort* port = setup.ProductBuffer().Find<SoundPort>();
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
+    const std::size_t mode = ModeOf(change, options);
     GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map,
                       change.connect, options.game};
     const std::uint64_t user = LocalUserOf(change, options);
     const std::size_t played = ArenaOf(change, options);
-    setup.Prepare([options, port, origin, user, played](K::World& world) -> Base::Result<void, O::OrchestrationError> {
+    setup.Prepare([options, port, origin, user, played, mode](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         world.SetResource(origin);
         world.SetResource(GameReadiness{});
         world.SetResource(CoverState{});
         if (world.Resource<DrawnFrames>() == nullptr) world.SetResource(DrawnFrames{});
         // The rules the Sim World starts with (world::BuildWorld); the arena follows the Sim World's.
         const sim::ArenaContent& arena = options.game->arenas[played];
-        PW::GameRules rules;
-        rules.arena = arena;
-        rules.stance = options.game->stance;
-        rules.combat = options.game->combat;
-        rules.character = options.game->character;
-        world.SetResource(std::move(rules));
+        world.SetResource(PW::GameRulesOf(*options.game, mode, played));
         world.SetResource(PW::LocalUser{user});
         world.SetResource(PW::MapLoad{});
         world.SetResource(ArenaPictureLoading{.map = arena.map, .jobs = options.jobs});
@@ -2179,7 +2196,7 @@ void ConfigureClient(O::ProductSetup& setup) {
 }
 
 O::WorldDescription ClientSimWorld(ClientOptions options) {
-    O::WorldDescription world = PW::ClientWorld({.content = options.game, .arena = options.arena, .localUser = options.userId});
+    O::WorldDescription world = PW::ClientWorld({.content = options.game, .arena = options.arena, .mode = options.mode, .localUser = options.userId});
     world.name = "Sim";
     // The game only in the scene that plays it; elsewhere the World is its units alone, without a target (no
     // connection: net-connect-target). The player is the connection's user (the Gateway's user id).
@@ -2192,8 +2209,8 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
             RB::RollbackEntry(setup).StepSchedule();
             return;
         }
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = LocalUserOf(scene, options),
-                               .jobs = options.jobs},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),
+                               .localUser = LocalUserOf(scene, options), .jobs = options.jobs},
                        PW::WorldEnd::Client);
         BuildSim(setup);
         if (scene.connect) {
@@ -2207,7 +2224,7 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
 }
 
 O::WorldDescription ClientSoloWorld(ClientOptions options) {
-    O::WorldDescription world = PW::LocalWorld({.content = options.game, .arena = options.arena, .localUser = options.userId});
+    O::WorldDescription world = PW::LocalWorld({.content = options.game, .arena = options.arena, .mode = options.mode, .localUser = options.userId});
     world.name = "Solo";
     // The game only in the single player's game scene; its player at a spawn picked at random for each game.
     world.build = [options](O::WorldSetup& setup) {
@@ -2216,8 +2233,8 @@ O::WorldDescription ClientSoloWorld(ClientOptions options) {
         const SceneChange& scene = director->Current();
         if (!SoloPlays(scene.scene)) return;
         std::random_device device;
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .localUser = options.userId, .spawn = device(),
-                               .jobs = options.jobs},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),
+                               .localUser = options.userId, .spawn = device(), .jobs = options.jobs},
                        PW::WorldEnd::Local);
         BuildSolo(setup);
     };
@@ -2244,14 +2261,20 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
         GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
         const std::string& directory = start->dataDirectory;
-        // The maps a room offers: the installed arenas, by id.
-        std::vector<std::string> maps;
-        for (const sim::ArenaContent& arena : options.game->arenas) maps.push_back(arena.id);
-        GatewayContext gateway{directory, start->gateway, maps};
+        // The modes a room offers (the installed modes), each with the installed arenas it plays, by id.
+        std::vector<ModeChoice> modes;
+        for (std::size_t mode = 0; mode < options.game->modes.size(); ++mode) {
+            ModeChoice choice{options.game->modes[mode].id, options.game->modes[mode].name, {}};
+            for (std::size_t arena = 0; arena < options.game->arenas.size(); ++arena) {
+                if (options.game->Plays(mode, arena)) choice.maps.push_back(options.game->arenas[arena].id);
+            }
+            modes.push_back(std::move(choice));
+        }
+        GatewayContext gateway{directory, start->gateway, modes};
         switch (scene.scene) {
         case Scene::Menu: BuildMenu(setup, scene); break;
         case Scene::Splash: BuildSplash(setup, start->splashSeconds); break;
-        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, maps); break;
+        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, modes); break;
         case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
         case Scene::Room: BuildRoom(setup, scene, gateway); break;
         case Scene::SoloGame:
@@ -2298,7 +2321,7 @@ ClientStatus StatusOf(K::World& world) {
     if (const auto* view = world.Resource<ClientView>()) {
         status.connected = view->connected;
         status.playing = view->ownPlayer != 0;
-        status.mismatch = view->mismatch;
+        status.mismatch = view->mismatch.reason;
         status.ended = view->ended;
         status.endReason = view->endReason;
     }

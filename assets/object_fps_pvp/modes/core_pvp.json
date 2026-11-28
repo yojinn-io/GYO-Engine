@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "core_pvp",
+  "name": "核心 PvP",
+  "rules": {
+    "movement": "rules/movement_rules.json"
+  },
+  "sets": {},
+  "arenas": []
+}

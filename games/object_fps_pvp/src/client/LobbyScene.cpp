@@ -28,7 +28,6 @@ namespace WT = GYO::Engine::WorldTime;
 
 namespace {
 
-constexpr std::array<std::string_view, 2> kModes = {"coop", "survival"};
 constexpr std::int64_t kListEvery = 1'000'000'000;
 constexpr std::int64_t kRecordEvery = 5'000'000'000;
 // The rows the document's list shows (pvp_lobby.json: room_list's max_items).
@@ -38,9 +37,11 @@ constexpr std::size_t kRows = 6;
 struct LobbyState final {
     std::vector<Room> rooms;
     std::uint64_t picked = 0;  // the room picked, by id (0: none); found again in each new list
+    // The new room's mode (an index into modes: the installed ones, never none) and map (an index into that mode's
+    // maps: the arenas it plays).
     std::size_t mode = 0;
     std::size_t map = 0;
-    std::vector<std::string> maps;
+    std::vector<ModeChoice> modes;
     std::optional<std::int64_t> listed;    // when the list was last asked for
     std::optional<std::int64_t> recorded;  // when the record was last asked for
     bool asking = false;                   // a join or a creation is going
@@ -62,17 +63,19 @@ Ui::UiList RoomRows(const LobbyState& state) {
     for (std::size_t i = 0; i < Shown(state); ++i) {
         const Room& room = state.rooms[i];
         Ui::UiListItem item;
-        item.fields["line"] = std::string(room.id == state.picked ? "▶ " : "　 ") + "#" + std::to_string(room.id) + "  " + ModeText(room.mode) +
+        item.fields["line"] = std::string(room.id == state.picked ? "▶ " : "　 ") + "#" + std::to_string(room.id) + "  " + ModeText(state.modes, room.mode) +
                               "  " + room.map + "  " + std::to_string(room.players) + "/" + std::to_string(room.capacity);
         list.items.push_back(std::move(item));
     }
     return list;
 }
 
+const std::vector<std::string>& MapsOf(const LobbyState& state) { return state.modes[state.mode].maps; }
+
 void ShowState(const LobbyState& state, Ui::UiBindings& bindings) {
     bindings.Set("rooms", RoomRows(state));
-    bindings.Set("mode", "モード: " + ModeText(kModes[state.mode]));
-    bindings.Set("map", "マップ: " + (state.maps.empty() ? std::string("—") : state.maps[state.map]));
+    bindings.Set("mode", "モード: " + state.modes[state.mode].name);
+    bindings.Set("map", "マップ: " + MapsOf(state)[state.map]);
     bindings.Set("empty", std::string(state.rooms.empty() ? "開いている部屋はありません" : ""));
 }
 
@@ -99,16 +102,17 @@ K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<L
                 lobby.picked = lobby.rooms[(at + (id == "pvp.next" ? 1 : count - 1)) % count].id;
             }
         } else if (id == "pvp.mode") {
-            lobby.mode = (lobby.mode + 1) % kModes.size();
+            // Another mode: its first map (the one before may not be among its arenas).
+            lobby.mode = (lobby.mode + 1) % lobby.modes.size();
+            lobby.map = 0;
         } else if (id == "pvp.map") {
-            if (!lobby.maps.empty()) lobby.map = (lobby.map + 1) % lobby.maps.size();
+            lobby.map = (lobby.map + 1) % MapsOf(lobby).size();
         } else if ((id == "pvp.join" || id == "pvp.create") && !lobby.asking) {
             if (id == "pvp.join") {
                 if (!PickedRow(lobby)) continue;
                 gateway->Ask("enter", JoinRequest(lobby.picked, RandomHex(16)));
             } else {
-                if (lobby.maps.empty()) continue;
-                gateway->Ask("enter", CreateRoomRequest(std::string(kModes[lobby.mode]), lobby.maps[lobby.map], RandomHex(16)));
+                gateway->Ask("enter", CreateRoomRequest(lobby.modes[lobby.mode].id, MapsOf(lobby)[lobby.map], RandomHex(16)));
             }
             lobby.asking = true;
             if (auto root = bindings.GetMut<Ui::UiBindings>(action->root)) root->Set("status", std::string("Gateway に問い合わせています…"));
@@ -185,7 +189,7 @@ void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayCo
     r.AddSystem<&LobbyGateway>(InSceneUpdate("object_fps_pvp.LobbyGateway", {"object_fps_pvp.LobbyActions"}));
     setup.Prepare([change, context](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         LobbyState state;
-        state.maps = context.maps;
+        state.modes = context.modes;
         state.gateway = context.gateway.ToString();
         Ui::UiBindings bindings;
         ShowState(state, bindings);

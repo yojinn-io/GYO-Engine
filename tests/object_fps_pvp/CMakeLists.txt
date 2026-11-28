@@ -39,7 +39,8 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 # the net Module's memory links (no socket), one fixed step a frame.
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
 add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp
-    world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp)
+    world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp world/ModeTests.cpp
+    world/GameplaySetTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 # SavesTests answers as the save service through the test library gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE gyo_test_loopback_listener)
@@ -56,6 +57,22 @@ endif()
 add_test(NAME object_fps_pvp.world COMMAND gyo_object_fps_pvp_world_tests "--test-case=world:*")
 set_tests_properties(object_fps_pvp.world PROPERTIES LABELS "cpu" TIMEOUT 120
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+
+# The core PvP script (mode-config declaration, section 5): the game's three ends play a fixed sequence of inputs and
+# print every World's authority digest at every frame. The A/B of a change runs the build before it and the build
+# after it on one machine and compares the lines; here it runs with --check: it went through every path it is for.
+add_executable(gyo_object_fps_pvp_core_script script/CorePvpScript.cpp)
+target_link_libraries(gyo_object_fps_pvp_core_script PRIVATE ${object_fps_pvp_world})
+gyo_product_units(gyo_object_fps_pvp_core_script MODULES physics_3d)
+target_compile_definitions(gyo_object_fps_pvp_core_script PRIVATE PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp")
+if(MSVC)
+    target_compile_options(gyo_object_fps_pvp_core_script PRIVATE /W4 /permissive- /utf-8 /bigobj)
+    target_compile_definitions(gyo_object_fps_pvp_core_script PRIVATE NOMINMAX)
+else()
+    target_compile_options(gyo_object_fps_pvp_core_script PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME object_fps_pvp.core_script COMMAND gyo_object_fps_pvp_core_script --check)
+set_tests_properties(object_fps_pvp.core_script PROPERTIES LABELS "cpu" TIMEOUT 120)
 
 # The Client without a window or a GPU: its Game World and its Render World (no sdl_gpu; the picture is read at the
 # Submit stage), a Match and a second Client over memory links, the content through the asset Module, the input
@@ -76,11 +93,26 @@ if(MSVC)
 else()
     target_compile_options(gyo_object_fps_pvp_client_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-add_test(NAME object_fps_pvp.client COMMAND gyo_object_fps_pvp_client_tests "--test-case=client:*")
-# 300 s: the games' maps load on the asset threads and many cases wait for them (Setup::Loaded); gyo2 alone took up to
-# 118 s on the macOS runner (2026-11-26), at the old 120 s limit.
-set_tests_properties(object_fps_pvp.client PROPERTIES LABELS "cpu" TIMEOUT 300
-    FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+# Four ctest entries that run in parallel, each a range of the "client:" cases in their order in the file (doctest's
+# --first/--last; the last range is open, so a case added at the end is run): the cases wait for the maps the asset
+# threads read (Setup::Loaded), and one process took up to 118 s on the macOS runner (2026-11-26, big map #364). The
+# ranges are cut by the cases' time (macOS, 2026-11-27: about 13 s, 14 s, 12 s and 8 s); cut them again when one entry
+# takes about twice another (doctest --duration=true gives each case's time).
+set(object_fps_pvp_client_ranges "1:6" "7:14" "15:30" "31:")
+set(object_fps_pvp_client_part 0)
+foreach(range IN LISTS object_fps_pvp_client_ranges)
+    math(EXPR object_fps_pvp_client_part "${object_fps_pvp_client_part} + 1")
+    string(REPLACE ":" ";" bounds "${range}")
+    list(GET bounds 0 first)
+    list(GET bounds 1 last)
+    set(arguments "--test-case=client:*" "--first=${first}")
+    if(NOT last STREQUAL "")
+        list(APPEND arguments "--last=${last}")
+    endif()
+    add_test(NAME object_fps_pvp.client.${object_fps_pvp_client_part} COMMAND gyo_object_fps_pvp_client_tests ${arguments})
+    set_tests_properties(object_fps_pvp.client.${object_fps_pvp_client_part} PROPERTIES LABELS "cpu" TIMEOUT 300
+        FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+endforeach()
 
 # The Client program: the window and the GPU device open, the content loads, 30 frames are drawn and shown, and it
 # closes its window and exits with 0 -- the lobby (main), and the Client with --connect (no Match: it shows that it
@@ -101,6 +133,11 @@ set_tests_properties(object_fps_pvp.match PROPERTIES LABELS "network" TIMEOUT 60
 add_test(NAME object_fps_pvp.match_load_threads COMMAND ${object_fps_pvp_match} --port 0 --ticks 1 --load-threads 100)
 set_tests_properties(object_fps_pvp.match_load_threads PROPERTIES LABELS "network" TIMEOUT 60
     PASS_REGULAR_EXPRESSION "--load-threads 100 is outside 1 to 8: the map loads on [2-8] threads")
+
+# --mode names a mode that is not installed (mode-config declaration 3.5): the Match does not start, and says so.
+add_test(NAME object_fps_pvp.match_mode_unknown COMMAND ${object_fps_pvp_match} --port 0 --ticks 1 --mode no_such_mode)
+set_tests_properties(object_fps_pvp.match_mode_unknown PROPERTIES LABELS "cpu" TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "no installed mode has the id 'no_such_mode'")
 
 # The Match executable as the matches service starts it (gateway declaration, segment 2): its key on the standard
 # input, listening on its port; a bad key refuses to start. Go on the host; label network (a real UDP port).

@@ -41,6 +41,8 @@ enum class Rejection : unsigned char {
     ExclusiveWorldNotAlone,
     ConditionReturn,
     ConditionNotReadOnly,
+    // Condition<&Fn>(name, value): Fn's first parameter is not const V&.
+    ConditionValue,
 };
 
 namespace Detail {
@@ -74,6 +76,21 @@ template <class R, class C, class... A>
 struct Signature<R (C::*)(A...) noexcept> : Signature<R (C::*)(A...)> {};
 template <class R, class C, class... A>
 struct Signature<R (C::*)(A...) const noexcept> : Signature<R (C::*)(A...)> {};
+
+// A condition with a value (Condition<&Fn>(name, value)): Fn is bool(const V&, P...); the value is its first
+// parameter and the rest are the condition's parameters, under the rules of every condition.
+template <class Sig>
+struct ValuedCondition {
+    static constexpr bool shape = false;
+};
+template <class R, class V, class... P>
+struct ValuedCondition<R (*)(const V&, P...)> {
+    static constexpr bool shape = true;
+    using Value = V;
+    using Rest = R (*)(P...);
+};
+template <class R, class V, class... P>
+struct ValuedCondition<R (*)(const V&, P...) noexcept> : ValuedCondition<R (*)(const V&, P...)> {};
 
 template <class F>
 concept SingleCallOperator = std::is_class_v<F> && requires { &F::operator(); };
@@ -238,6 +255,23 @@ constexpr Rejection ConditionRejectionOfFunction() {
     }
 }
 
+// Why Condition<&Fn>(name, value) would be rejected: Fn is a non-member function whose first parameter is
+// const V& (the value; V copyable and hashable) and whose others follow the rules of every condition.
+template <auto Fn>
+constexpr Rejection ValuedConditionRejectionOf() {
+    using Sig = Detail::Signature<decltype(Fn)>;
+    if constexpr (Sig::member) {
+        return Rejection::MemberFunction;
+    } else if constexpr (!Sig::function) {
+        return Rejection::NotCallable;
+    } else if constexpr (!Detail::ValuedCondition<typename Sig::Pointer>::shape) {
+        return Rejection::ConditionValue;
+    } else {
+        using Rest = typename Detail::ValuedCondition<typename Sig::Pointer>::Rest;
+        return Detail::CheckConditionSignature<Detail::Signature<Rest>>();
+    }
+}
+
 namespace Detail {
 
 // One static_assert per reason, each with its own marker: tests/common/kernel's
@@ -268,6 +302,9 @@ constexpr void RequireAccepted() {
     static_assert(R != Rejection::ConditionReturn, "GYO_KERNEL_REJECT_CONDITION_RETURN: a run condition returns bool");
     static_assert(R != Rejection::ConditionNotReadOnly,
                   "GYO_KERNEL_REJECT_CONDITION_WRITE: a run condition has read-only parameters (spec S-5)");
+    static_assert(R != Rejection::ConditionValue,
+                  "GYO_KERNEL_REJECT_CONDITION_VALUE: a condition with a value takes it as its first parameter, "
+                  "const V& (DI-KS 1)");
 }
 
 // A hook holds no MessageReader: a hook is not a reader and has no cursor
@@ -345,7 +382,8 @@ void ResolveParams(AccessResolver& resolver) {
 // has no side effect, so the unspecified argument evaluation order (MSVC and
 // Clang differ) cannot change a result.
 using RunFn = SystemResult (*)(SystemContext&);
-using ConditionFn = bool (*)(SystemContext&);
+// A run condition's call: the value given at its registration (Condition<&Fn>(name, value)), or null.
+using ConditionFn = bool (*)(SystemContext&, const void* value);
 
 template <class Sig>
 struct InvokerOf;
@@ -359,7 +397,21 @@ struct InvokerOf<R (*)(P...)> {
     static R CallLambda([[maybe_unused]] SystemContext& call) {
         return F{}(ParamTraits<P>::Fetch(call)...);
     }
+    template <auto Fn>
+    static R CallCondition([[maybe_unused]] SystemContext& call, const void*) {
+        return Fn(ParamTraits<P>::Fetch(call)...);
+    }
+    template <class F>
+    static R CallLambdaCondition([[maybe_unused]] SystemContext& call, const void*) {
+        return F{}(ParamTraits<P>::Fetch(call)...);
+    }
+    // A condition with a value: Fn's first parameter is const V&, the value given at registration.
+    template <auto Fn, class V>
+    static R CallValuedCondition([[maybe_unused]] SystemContext& call, const void* value) {
+        return Fn(*static_cast<const V*>(value), ParamTraits<P>::Fetch(call)...);
+    }
 };
+
 
 template <class Sig>
 struct ResolverOf;
