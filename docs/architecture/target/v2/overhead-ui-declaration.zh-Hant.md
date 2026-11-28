@@ -2,11 +2,12 @@
 
 任務卡，2026-11-27。這一階段只寫事前宣告，交使用者核准；核准前不寫實作程式。#367（模式配置，`v8-arch-gyo2-mode-config`）改的是同一個遊戲的檔案，**它合併之前不動程式**，實作等主會話通知。作者 Opus 5.5／high。
 
-行號以 `gyo2` 85df84da 為準；標「#367」的是 #367 分支（`claude/gyo2-mode-config-declaration`）上的檔案；標「#375」的是門卡的宣告（`claude/gyo2-interact-door-e11d33` 9984c4aa，修訂 2，`interact-door-declaration.zh-Hant.md`）。
+行號以 `gyo2` 85df84da 為準（#367、#376 合併前；實作時照合併後的 `gyo2` 重對）；標「#367」的是 #367 分支（`claude/gyo2-mode-config-declaration`，已合併，99e20ae3）上的檔案；標「#375」的是門卡的宣告（`claude/gyo2-interact-door-e11d33` 9984c4aa，修訂 2，`interact-door-declaration.zh-Hant.md`）。
 
 - **修訂 1**：使用者改了 O1：**敵方玩家不顯示血條，怪物顯示血條，參考 Overwatch**。
 - **修訂 2**：使用者補了三點：**顯示名字（來源 (N1)），隊友也顯示名字；驗證用測試地圖裡的靶子**。靶子是 Scene 的物件，格式照門卡（#375 第 5 節），不另發明。決定的原話在第 9 節。
 - **修訂 3**：使用者定了 O6～O8（第 9.3 節，HANDOFF `v8-arch-gyo2-overhead-ui-o6-o8`）：**隊友只顯示名字、不顯示血條**（狀態之後用第三人稱動作表現，這次不做）；**靶子放 `pvp_arena`＋`sandbox` 模式配置＋門的 scene 檔**；**`JudgeShots` 只記打到的實體，怎麼處理由各組自己決定**（不加 `ShotHitKind`）。門卡的 P2 改成「卸下／保留兩種預設」，第 4.3、6 節照它重對一次，多了一個決策點 O9（第 8 節）。用詞照門卡：模式檔與它的條目一律寫「模式配置」。修訂 2 的版本是 ec3e19af。
+- **修訂 3 之後的對齊（2026-11-28）**：#367（99e20ae3）與 #376（顯示名稱，1bfb527b）已合併進 `gyo2`、也 merge 進這條分支。名字改照 #376 的 `PlayerLabel(userId, name)` 與 `PlayerName` 接（第 1、3.2、4.1、5、7 節）；第 1 步不再抽 `PlayerLabel`，第 2 步多一件：`PlayerSnapshot` 帶 `PlayerName`。決定沒有變。
 
 ---
 
@@ -19,7 +20,7 @@
 | 路線 (A)：新功能加在 Object_PvP，由模式配置決定這一場掛哪些系統；玩法組固定登記、由模式條件決定跑不跑 | HANDOFF `v8-arch-gyo2-object-pvp-route-a`；#367 宣告 2.3 |
 | 最終產品是有怪物的撤離射擊；Object_PvP 驗證核心 PvP 交互與地圖 | HANDOFF `v8-arch-gyo2-tarkov-is-reference` |
 | **敵方玩家不顯示血條**（受傷的資訊靠命中標記、受擊動作、音效）；**怪物顯示血條，參考 Overwatch** | HANDOFF `v8-arch-gyo2-overhead-ui-o1`（第 9 節） |
-| **顯示名字**，來源＝房間裡的「Player 12」（(N1)）；**隊友也顯示名字**；**驗證用測試地圖裡的靶子** | HANDOFF `v8-arch-gyo2-overhead-ui-names-targets`（第 9 節） |
+| **顯示名字**，來源＝和房間同一個字串（(N1)；#376 之後是 `PlayerLabel(userId, name)`）；**隊友也顯示名字**；**驗證用測試地圖裡的靶子** | HANDOFF `v8-arch-gyo2-overhead-ui-names-targets`（第 9 節） |
 | **隊友只顯示名字、不顯示血條**；隊友的狀態之後用第三人稱動作表現（敵我都看得到），這是作者的規則、這次不做；**靶子放 `pvp_arena`＋`sandbox` 模式配置＋門的 scene 檔**；**`JudgeShots` 只記打到的實體與距離，靶子等由自己的組讀 `ShotRecord` 處理**，不在 `ShotHitKind` 為每種東西加值 | HANDOFF `v8-arch-gyo2-overhead-ui-o6-o8`（第 9.3 節） |
 | Map＝毛坯房、Scene＝裝修（會互動、有狀態的東西），Scene 是另一個配置檔；scene 物件＝`{id, set, data}`，由玩法組的 `readScene` 解析；兩端各自放好、網路用 net 的 `Placed` 認得 | HANDOFF `v8-arch-gyo2-map-scene-split`；#375 第 4、5 節 |
 | Engine 只給機制；Product 的詞不進 Engine；錯誤用 `Result` 只告知；不對誤用加守衛；ECS 相關以 Bevy 為主參考 | AGENTS §1、批次表〈每批的設計審查〉第 5 項 |
@@ -31,7 +32,7 @@
 
 來源有兩種：
 
-- **玩家**：其他玩家顯示名字（`PlayerLabel(userId)`，和房間同一個字串），**不顯示血條**；看得到就顯示。**敵人和隊友一樣**（隊友也只有名字），所以不用分關係（第 3.2 節）。核心 PvP 也看得到名字，模式配置不改。
+- **玩家**：其他玩家顯示名字（`PlayerLabel(userId, name)`，#376 已做好，和房間同一個字串），**不顯示血條**；看得到就顯示。**敵人和隊友一樣**（隊友也只有名字），所以不用分關係（第 3.2 節）。核心 PvP 也看得到名字，模式配置不改。
 - **靶子**（代替還沒有的怪物）：玩法組 `targets`，scene 物件，有血量、會被打、打壞了過幾秒復原。血條照 Overwatch：**交戰中**（自己剛打中、或血量低）才顯示，之後淡出；標成 `always` 的一直顯示（Boss 的代替）。放在門卡的 `sandbox` 模式配置與 `pvp_arena` 的 scene 檔。靶子要能被子彈打到：**`JudgeShots` 把有 `Shootable` 的 collider 也當成候選，打到時在 `ShotRecord` 記下那個實體**；扣不扣血、扣多少由 `targets` 組自己讀 `ShotRecord` 決定（第 3.5 節，O8 (a′)）。靶子依賴門卡的 `Placed` 與 scene，排在門線的那兩步之後。
 
 ---
@@ -47,7 +48,7 @@
 | 射擊的判定 | `JudgeShots`（`games/object_fps_pvp/src/world/PvpWorld.cpp:470-544`）：對 `Walls`（所有沒有 `ChildOf` 的 collider，`:252`）打 `CastRay`，回傳**打到的實體**（`EntityRayHit{entity, hit}`，`engine/modules/physics_3d/include/engine/physics_3d/SpatialQuery.hpp:45-48`），但只取距離；結果只有 `Miss`／`World`／`Player`（`sim/CombatRules.hpp:54`），`World` 的 `target` 是 0 | 靶子是 collider，現在子彈打到它只會是 `World`、不知道打到誰（第 3.5 節） |
 | 自己打中了誰 | `ShotRecord`（`world/Components.hpp:70-77`）：`kind`、`target`，已複製；Codec 不檢查 `kind` 的值（`PvpWorld.cpp:169-181`）；命中標記看它（`ShowHud` 的 `h.marker.Observe`） | 「自己剛打中它」看同一份資料，和命中標記一致 |
 | 血量的顯示 | `PlayerCombat::hp`（milli-points，`Components.hpp:52`）、`CombatRules::maximumHp`（`sim/CombatRules.hpp:21`）、`DisplayPoints`（無條件進位，`:35`） | 靶子也用 milli-points 與 `DisplayPoints` 的規則，和自己的 HUD 一致 |
-| 名字 | 沒有顯示名稱；`Owner` 只有 `userId`（`Components.hpp:100`）；房間畫面寫 `"Player " + userId`（`src/client/RoomScene.cpp:70`） | (N1)：抽成 `PlayerLabel(userId)`，房間與頭頂共用 |
+| 名字 | #376（顯示名稱，`display-name-declaration.zh-Hant.md`，已合併 1bfb527b）：玩家實體上有 `PlayerName`（Match 的 `NamePlayers` 放、複製給每個 Client，`world/Components.hpp:104-111`）；`PlayerLabel(userId, name)` 給名字、沒有時退回「Player N」（`client/Scenes.hpp:127-129`）；房間已經用它（`RoomScene.cpp:71`）。Client 沒有讀 `PlayerName` 的程式（#376 宣告：消費者是這張卡）；`PlayerSnapshot` 沒有帶它（`ClientExchange.hpp:30-37`） | 頭頂直接呼叫 `PlayerLabel(owner.userId, name.text)`；`PlayerSnapshot` 加 `PlayerName` |
 | 隊伍 | **沒有**：Object_PvP 沒有隊伍的概念，其他玩家都是敵人 | 隊友頭頂和敵人一樣只有名字（O6 (b)），有隊伍時頭頂 UI 不用改 |
 | 頭的位置 | 判定形狀有 `HitPart::Head`（`src/character/CharacterRig.cpp:219`）；`PlaceHitShapes`（`:329`）；`PoseCharacters` 每幀算其他玩家的姿勢（`ClientWorld.cpp:758`） | 玩家的錨點＝`Head` 的中心＋偏移 |
 | 遮蔽 | `PW::Blocked(walls, a, b)`（`world/PvpWorld.hpp:76`）；聲音用它（`ClientWorld.cpp:1076-1082`） | 頭頂 UI 用同一個判斷 |
@@ -140,7 +141,7 @@ struct Overhead {          // games/object_fps_pvp，Frame World 才有
 
 ### 3.2 名字與誰顯示什麼
 
-名字的來源（(N1)，已定）：把 `RoomScene.cpp:70` 的 `"Player " + userId` 抽成 `PlayerLabel(userId)`，房間與頭頂都呼叫它。同一個人在房間與場上叫同一個名字（語意一致）。真的顯示名稱（identity＋wire）等「玩家要能取名字」成為功能時另開卡，只換 `PlayerLabel` 的來源。
+名字的來源（#376 已做好，2026-11-28 合併）：頭頂和房間都呼叫 `PlayerLabel(userId, name)`（`client/Scenes.hpp:129`），同一個人在房間與場上叫同一個名字（語意一致）。`name` 是玩家實體上複製來的 `PlayerName::text`：Sim 側把它放進 `PlayerSnapshot`（多一個 `std::optional<PW::PlayerName> name`），Frame 的 `TagPlayerOverheads` 讀它。`PlayerName` 還沒到的那一兩幀，名字是空的，顯示「Player N」（#376 宣告 5.3）。名字在一場裡不變，不另做「名字變了就更新」；文字圖照 HUD 的快取，字串不變就不重畫。名字最長 32 個 code point（#376 L1），頭頂**不再縮短**：寬一點的名牌照樣擺（要縮是表現的選擇，實機看過再說）。
 
 | 對象 | 名字 | 血條 | 狀態 |
 |---|---|---|---|
@@ -232,7 +233,7 @@ scene 物件的例子（格式照 #375 5.1；`id` 的分配見下）：
 
 | System | 何時 | 做什麼 |
 |---|---|---|
-| `TagPlayerOverheads` | Main／Update，`PoseCharacters` 之後 | 每個**身體有畫出來**、活著的其他玩家：寫 `Overhead{anchor, PlayerLabel(userId), health=none}`；死了的拿掉 |
+| `TagPlayerOverheads` | Main／Update，`PoseCharacters` 之後 | 每個**身體有畫出來**、活著的其他玩家：寫 `Overhead{anchor, PlayerLabel(owner.userId, name.text), health=none}`（`PlayerName` 還沒到時 `name` 是空的）；死了的拿掉 |
 | `TagTargetOverheads` | Main／Update | 每個靶子：寫 `Overhead{anchor, name, health＝DisplayPoints 的比例, bar＝scene 的 overhead}`；這一幀的 `WorldSnapshot::targets` 沒有它（沒在收資料）時 `health＝none`：不畫舊的血量，名字照舊 |
 | `NoteOwnHits` | Main／Update | 看自己的 `ShotRecord`：`tick` 是新的、`target` 不是 0（`Player`，或打到 `Shootable` 的 `World`）→ 記下「`target` 在這個時間被自己打中」（`OwnHits` Resource，依實體 id）；目標不見了就刪紀錄 |
 | `ShowOverheads` | Main／PostUpdate，camera 的 `kUpdateSet` 與 transform 的 `kPropagateSet` 之後、visibility 的 `kCheckSet` 之前 | 每個有 `Overhead` 的實體：透明度（4.2）→ 隱藏（4.3）→ 換座標（4.4）→ 擺它的名牌實體（名字一個 `Sprite`、血條一個 `Shape2d`，在 `kHudLayer`）；目標不見了就移除名牌實體 |
@@ -286,12 +287,12 @@ scene 物件的例子（格式照 #375 5.1；`id` 的分配見下）：
 | P1 | `PlaceOverhead` 的位置：正前方 d 公尺的點 → HUD 的 (0, 0)；往右偏一個已知角度 → 由 FOV 手算的 x；往上 → y 變大。另外和「`WorldToViewport`→`ViewportToWorld2d`」來回驗證（照 Bevy 範例） | 誤差 < 0.01 HUD 單位 | `tests/object_fps_pvp/OverheadTests.cpp`（logic，cpu） |
 | P2 | 隱藏：鏡頭後面 → `Behind`；畫面外 → `OffScreen`；一面牆在中間 → `Occluded`，牆移開 → 顯示；錨點貼著牆的這一面 → 顯示；140 m 遠、沒有牆 → 顯示（沒有距離條件） | 原因逐一相符 | 同上 |
 | P3 | 透明度：名字一律 1；血條 `Always` → 1；`Engaged` 從沒打中 → 0；打中後 `holdSeconds` 內 → 1；淡出的一半 → 0.5；之後 → 0；再打中 → 1；血量 ≤ `lowHealth` → 1 | 相等 | 同上 |
-| P4 | 比例 `DisplayPoints` 的規則（1 milli-point → 1/100，不是 0）；`PlayerLabel` 和房間畫面同一個字串 | 相等 | 同上 |
+| P4 | 比例 `DisplayPoints` 的規則（1 milli-point → 1/100，不是 0）（`PlayerLabel` 本身 #376 已測，`[pvp-label-*]`） | 相等 | 同上 |
 | P5 | `ui/overhead.json` 與靶子的 scene `data`：缺欄位、型別錯、負數、範圍外 → 讀取失敗並說哪一欄 | 錯誤訊息相符 | 同上 |
 | W1 | `JudgeShots`：打到 `Shootable` 的 collider → `kind=World`、`target`＝它、`damage`＝0、`distance`＝命中距離；打到沒有 `Shootable` 的牆、或打到地板 → `World`、`target`＝0；玩家在靶子前面 → `Player`；靶子在玩家前面 → 靶子、玩家不扣血。`ChooseShotOutcome` 的同距離規則照舊（world 贏） | 相符 | `tests/object_fps_pvp/world/`（cpu） |
 | W2 | `DamageTargets`／`ResetTargets`：扣血＝`ShotDamage(Body)`；到 0 → 壞；壞了不再扣；`resetSeconds` 後回滿；同一步兩人打同一個 → 各扣一次（照 EntityId 順序）；`target` 是沒有 `TargetState` 的實體 → 不扣 | 相符 | 同上 |
 | W3 | 模式配置沒開 `targets`：沒有靶子的實體、沒有 `TargetState` 的格子、`kind=World` 的 `ShotRecord` 的 `target` 一律 0 | 相符 | 同上 |
-| C1 | Client 整合（`ClientTests.cpp` 的 `Setup`）：對手在視野裡 → 頭上有名牌，文字＝`PlayerLabel(對手的 userId)`、**沒有血條**；位置＝錨點換算的值；**同一幀**轉動視角，名牌的 `GlobalTransform` 跟著變；自己沒有 | 相等 | `object_fps_pvp.client.*`（cpu） |
+| C1 | Client 整合（`ClientTests.cpp` 的 `Setup`）：對手在視野裡 → 頭上有名牌，文字＝對手的 `PlayerName`（沒有 `PlayerName` 時＝「Player N」）、**沒有血條**；位置＝錨點換算的值；**同一幀**轉動視角，名牌的 `GlobalTransform` 跟著變；自己沒有 | 相等 | `object_fps_pvp.client.*`（cpu） |
 | C2 | 對手被打中很多次、血量變了 → 仍然沒有血條（敵方玩家不顯示血條的決定） | 相符 | 同上 |
 | C3 | 視角轉 180° → 隱藏；對手走到牆後 → 隱藏；對手離開 → 名牌實體被移除 | 相符 | 同上 |
 | C4 | `sandbox` 模式配置、`pvp_arena`：`engaged` 的靶子沒打 → 沒有血條；自己打中 → 出現、寬度照比例、命中標記也出現；`holdSeconds＋fadeSeconds` 之後 → 消失；`always` 的靶子一進場就有血條與名字；`WorldSnapshot::targets` 少了某個靶子 → 它只有名字、沒有血條 | 相符 | 同上 |
@@ -340,8 +341,8 @@ scene 物件的例子（格式照 #375 5.1；`id` 的分配見下）：
 
 ```
 v8-arch-gyo2-overhead-ui（一個 PR，開向 gyo2）
-├─ 第 1 步｜Opus/high  ｜上段｜present/Overhead（位置、隱藏、透明度、比例）、ui/overhead.json、PlayerLabel；P1～P5（靶子的 data 除外）
-├─ 第 2 步｜Opus/high  ｜下段｜Frame World：Overhead、OwnHits、NoteOwnHits、ShowOverheads、TagPlayerOverheads（名字）；C1～C3
+├─ 第 1 步｜Opus/high  ｜上段｜present/Overhead（位置、隱藏、透明度、比例）、ui/overhead.json；P1～P5（靶子的 data 除外）
+├─ 第 2 步｜Opus/high  ｜下段｜Frame World：PlayerSnapshot 的 PlayerName、Overhead、OwnHits、NoteOwnHits、ShowOverheads、TagPlayerOverheads（名字）；C1～C3
 │  ── 等門線的 Placed、scene、sandbox 合併 ──
 ├─ 第 3 步｜Opus/high  ｜上段｜targets 組：readScene、TargetState、Shootable、JudgeShots 記 Shootable 的實體、DamageTargets、ResetTargets、sandbox 與 pvp_arena 的物件；W1～W3、A/B
 ├─ 第 4 步｜Opus/high  ｜下段｜Client：靶子的網格、WorldSnapshot、TagTargetOverheads、打到 Shootable 的命中標記、畫出來的擋物；C4、C5
@@ -350,7 +351,7 @@ v8-arch-gyo2-overhead-ui（一個 PR，開向 gyo2）
 
 | 步 | 內容 | 上段／下段（根據） | 實作者 | 審查者 | 檢驗者 |
 |---|---|---|---|---|---|
-| 1 | 第 3.2、3.4、4.2～4.5 節：`present/Overhead.hpp`＋`.cpp`；`assets/object_fps_pvp/ui/overhead.json`；`PlayerLabel` 抽出、`RoomScene` 改用它 | **上段**：新的內容檔（資料形式） | Opus／high | Opus／high（第 5 步一起） | Opus／high |
+| 1 | 第 3.2、3.4、4.2～4.5 節：`present/Overhead.hpp`＋`.cpp`；`assets/object_fps_pvp/ui/overhead.json`（`PlayerLabel` 已由 #376 做好，不動） | **上段**：新的內容檔（資料形式） | Opus／high | Opus／high（第 5 步一起） | Opus／high |
 | 2 | 第 3.1、3.3、4.1 節（玩家的部分）：`ClientWorld.cpp` | 下段：Client 的表現，不動 wire、權威、模式配置 | Opus／high（要先懂 Frame World 與 HUD） | Opus／high | Opus／high |
 | 3 | 第 3.5 節的 Match 側與資料 | **上段**：核心 System（`JudgeShots`、`ChooseShotOutcome`）、新的複製 component 與 Codec、`ShotRecord` 的 Codec、scene 的新組 | Opus／high | Opus／high | Opus／high |
 | 4 | 第 3.5 節的 Client 側、`TagTargetOverheads`、4.3 的擋物（O9 選 (a) 時含聲音） | 下段：Client 的表現 | Opus／high | Opus／high | Opus／high |
@@ -399,7 +400,7 @@ O6～O8 已定（第 9.3 節）。修訂 3 多一個：
 | # | 決定 | 比過的選項 | 理由 |
 |---|---|---|---|
 | O1 | 敵方玩家不顯示血條（受傷的資訊靠命中標記、受擊動作、音效）；怪物顯示血條，參考 Overwatch；距離、遮擋、淡出照 Overwatch 的實際行為核對（第 2.4 節） | 修訂前的 (a) `core_pvp` 開、(b) 另建模式開、(c) 只開名字；side chat 另提的「瞄準或命中時才顯示」（Apex、The Division 一派） | 寫實射擊多半不給敵方玩家血條；有距離上限時會「看得到人、看不到狀態」；怪物（尤其 Boss）顯示血條是 PvE 的常見做法 |
-| O2 | (N1)：玩家的名字用和房間同一個字串 | (N2) 真的顯示名稱 | 第 3.2 節 |
+| O2 | (N1)：玩家的名字用和房間同一個字串 | (N2) 真的顯示名稱 | 第 3.2 節。之後 #376 做了真的顯示名稱，介面改成 `PlayerLabel(userId, name)`，「和房間同一個字串」照舊 |
 
 ### 9.2 名字、隊友、驗證（HANDOFF `v8-arch-gyo2-overhead-ui-names-targets`）
 
