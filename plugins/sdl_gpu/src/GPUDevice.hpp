@@ -144,9 +144,9 @@ public:
     // The last frame Submit or Capture recorded: each pass in a debug group named PassLabel, its CPU time
     // (render-pipeline declaration 15.3), copied; none before the first.
     [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const;
-    // The latest frame seen done on the GPU (its fence looked at, without waiting, by Submit, and by Capture once it
-    // waited for its own) and its GPU time's upper bound.
-    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const noexcept;
+    // The latest frame seen done on the GPU (its fence looked at, without waiting, twice by each Submit, and by Capture
+    // once it waited for its own), between which two looks.
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const noexcept;
     [[nodiscard]] const std::string& LastError() const noexcept { return lastError_; }
 
 private:

@@ -68,5 +68,8 @@ set_tests_properties(sdl_gpu.unwritten PROPERTIES LABELS "cpu" TIMEOUT 60 PASS_R
 # (no GPU, label cpu); a captured frame's timings, groups and GPU time (label gpu; the times printed, not judged).
 add_test(NAME sdl_gpu.passlabels COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu pass labels:*")
 set_tests_properties(sdl_gpu.passlabels PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+# The account of the frames handed to the GPU and seen done (FramesInFlight.hpp; scripted times, no GPU, label cpu).
+add_test(NAME sdl_gpu.framesinflight COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu frames in flight:*")
+set_tests_properties(sdl_gpu.framesinflight PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 add_test(NAME sdl_gpu.timing COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu timing:*" -s)
 set_tests_properties(sdl_gpu.timing PROPERTIES LABELS "gpu" TIMEOUT 120 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

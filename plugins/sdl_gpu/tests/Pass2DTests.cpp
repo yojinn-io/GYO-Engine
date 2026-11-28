@@ -427,10 +427,13 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     const std::optional<G::FrameTiming> timing = status->LastFrameTiming();
     REQUIRE_MESSAGE(timing.has_value(), "[gp-frames-timing] the last frame's timing");
     CHECK_MESSAGE((timing->passes.size() == 1 && timing->passes[0].name == "#0 Pass2D -> main"), "[gp-frames-timing] the last frame's pass");
-    const std::optional<G::GPUFrameTime> gpu = status->LastGPUFrameTime();
-    CHECK_MESSAGE((!gpu || (gpu->frame >= 1 && gpu->frame <= timing->frame && gpu->atMost.count() > 0)),
-                  "[gp-frames-gpu-time] a frame seen done on the GPU is one already recorded");
-    if (gpu) MESSAGE("frame " << gpu->frame << " of " << timing->frame << " done on the GPU within " << gpu->atMost.count() << " ticks");
+    const std::optional<G::FrameSeenDone> seen = status->LastFrameSeenDone();
+    CHECK_MESSAGE((!seen || (seen->frame >= 1 && seen->frame <= timing->frame && seen->after < seen->within)),
+                  "[gp-frames-gpu-time] a frame seen done on the GPU is one already recorded, between its two looks");
+    if (seen) {
+        MESSAGE("frame " << seen->frame << " of " << timing->frame << " seen done after " << seen->after.count() << " and within "
+                         << seen->within.count() << " ticks of its handing");
+    }
 
     // VSync off and on again from render's Presentation (window-mode-vsync declaration, section 4.3).
     CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-default] the swapchain starts with VSYNC");

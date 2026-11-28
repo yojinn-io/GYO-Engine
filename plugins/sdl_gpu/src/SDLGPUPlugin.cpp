@@ -76,8 +76,8 @@ public:
     [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const {
         return device_ ? device_->LastFrameTiming() : std::nullopt;
     }
-    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const noexcept {
-        return device_ ? device_->LastGPUFrameTime() : std::nullopt;
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const noexcept {
+        return device_ ? device_->LastFrameSeenDone() : std::nullopt;
     }
     [[nodiscard]] SwapchainPresentMode ActivePresentMode() const noexcept {
         return device_ ? device_->ActivePresentMode() : SwapchainPresentMode::Vsync;
@@ -152,7 +152,7 @@ std::uint64_t SDLGPUStatus::RefusedPresentModes() const { return service_->refus
 std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
 std::size_t SDLGPUStatus::MeshCount() const { return service_->MeshCount(); }
 std::optional<FrameTiming> SDLGPUStatus::LastFrameTiming() const { return service_->LastFrameTiming(); }
-std::optional<GPUFrameTime> SDLGPUStatus::LastGPUFrameTime() const { return service_->LastGPUFrameTime(); }
+std::optional<FrameSeenDone> SDLGPUStatus::LastFrameSeenDone() const { return service_->LastFrameSeenDone(); }
 
 SDLGPUPlugin::SDLGPUPlugin() = default;
 SDLGPUPlugin::~SDLGPUPlugin() = default;

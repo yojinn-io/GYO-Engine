@@ -84,14 +84,17 @@ struct FrameTiming final {
     std::uint64_t debugGroups = 0;
 };
 
-// A whole frame's GPU time from its fence (SDL_GPU 3.4 has no timestamp query: render-pipeline declaration 4.7, Q1
-// (a)): at most this long passed between handing the frame to the GPU and seeing it done. An upper bound: it holds the
-// GPU's work on the frames before it and how late the device looked (a frame on the window is looked at by the next
-// Submit, so within about a frame; a Capture waits for its own).
-struct GPUFrameTime final {
+// A frame seen done on the GPU through its fence (render-pipeline declaration 15.9): it was done more than after and
+// at most within of being handed to the GPU. The fence has no time of its own (SDL_GPU 3.4 has no timestamp query,
+// declaration 4.7), so these are the device's looks at it: after is the last look that found it not done (0: none
+// did), within the look that found it done. They tell when it was seen done, not how long the GPU worked on it: the
+// span holds the GPU's work on the frames before it and how seldom the device looks (a frame on the window is looked
+// at by the next Submit, so within is about the time until then; a Capture waits for its own fence before it looks).
+struct FrameSeenDone final {
     // As FrameTiming's.
     std::uint64_t frame = 0;
-    Engine::Time::Duration atMost{0};
+    Engine::Time::Duration after{0};
+    Engine::Time::Duration within{0};
 };
 
 // What became of the frames, in the Product's buffer (the counts are since the device was made).
@@ -132,9 +135,9 @@ public:
     // (render-pipeline declaration 15), as it was then (a copy); none before the first frame or without the device.
     // To print, not judged here.
     [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const;
-    // The latest frame seen done on the GPU and the upper bound of its GPU time; none before one is seen. Usually a
-    // frame or two before LastFrameTiming's: nothing waits for the GPU to tell it.
-    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const;
+    // The latest frame seen done on the GPU, between which two looks; none before one is seen. Usually a frame or two
+    // before LastFrameTiming's: nothing waits for the GPU to tell it.
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const;
 
 private:
     Service* service_;

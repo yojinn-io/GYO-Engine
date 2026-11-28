@@ -652,7 +652,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 2. **除錯群組**：adapter 錄每個有目標的 pass 時，在 render pass 之外 `SDL_PushGPUDebugGroup(cmd, 名字)`、錄完 `SDL_PopGPUDebugGroup`（一個 pass 可能錄成幾個 render pass——例如沒有深度可用時的空 pass——都在同一個群組裡；在 pass 之外 push／pop，所以 Metal 上是 command buffer 的群組，`SDL_gpu.h:2977-2980`）。每幀計數（`FrameTiming::debugGroups`），測試只驗次數（擷取工具裡的樣子 CI 看不到）。copy pass（上傳）與「沒有 pass 時清主目標」那一個不加群組（不是 `RenderCommands` 的 pass）。**一律開**：不看 debug mode（Bevy 的 pass label 也一律給；沒有擷取工具時 Vulkan 不做事、D3D12 沒有 DLL 時不做事）。
 3. **每個 pass 的 CPU 時間**：adapter 錄那個 pass 前後的 `std::chrono::steady_clock`（Bevy 的 `Instant::now()`，`internal.rs:459-482`）——是**錄製**（編碼命令）的時間，不含產生那個 pass 的 System（那是 Kernel 的事）。沒有目標的 pass（沒有對應、或這一幀上傳失敗、什麼都不錄）`recorded == false`、時間 0。
 4. **整幀的 GPU 時間（fence）**：每一幀（`Submit` 與 `Capture`）都用 `SDL_SubmitGPUCommandBufferAndAcquireFence` 送出，記下送出的時刻；之後**不阻塞**地查（`SDL_QueryGPUFence`）：`Submit` 的開頭、拿到 swapchain 之後、`Capture` 等完 fence 之後。看到 signaled 時記「送出到看到做完」的時間，放掉 fence。**這是上界**：fence 沒有時刻，所以它含排在前面的幀的 GPU 工作與「多久之後才去看」。`Capture` 本來就等它的 fence（讀回要等），所以那一幀的值是「送出到等完」；畫到視窗的幀是下一次 `Submit` 才看，粒度是一幀（GPU 跟得上時 ≈ 幀間隔；GPU 落後時是兩、三幀）。**不串行化 GPU**（(c) 被拒）：pass 之間不插 fence，`Submit` 也不等自己的 fence（等了會讓 CPU 和 GPU 不能重疊，那是另一種串行化）。每個 pass 的 GPU 時間要 timestamp：RC-RP5；那之前看擷取工具（第 2 點的群組名）。
-5. **報到哪裡**：`SDLGPUStatus`（Product 的 buffer，同其他計數）多兩個：`LastFrameTiming()`（最近錄的一幀：`frame` 號碼、每個 pass 的 `PassTiming{name, recorded, cpu}`、`debugGroups`）與 `LastGPUFrameTime()`（`optional<GPUFrameTime{frame, atMost}>`：最近看到做完的一幀與它的上界；沒有看到過時沒有值）。幀的號碼是裝置錄過的幀數（`Submit` 與 `Capture` 都算，從 1 起），兩者用它對得上。只印、不判（同 `sdl_gpu.budget`）。**不寫進渲染 World**：SDL-5 只讓後端寫收據（使用者 2026-11-27 的決定），計時不是「這一幀做成的事」，不為它改 SDL-5。adapter 的介面（`src/GPUDevice.hpp`）多兩個同名的 getter；`Submit`／`Capture` 的簽名不變（A4 同時在改測試的呼叫）。
+5. **報到哪裡**：`SDLGPUStatus`（Product 的 buffer，同其他計數）多兩個：`LastFrameTiming()`（最近錄的一幀：`frame` 號碼、每個 pass 的 `PassTiming{name, recorded, cpu}`、`debugGroups`）與 `LastFrameSeenDone()`（`optional<FrameSeenDone{frame, after, within}>`：最近看到做完的一幀，在交出後 `after` 之後、`within` 之內看到做完；沒有看到過時沒有值；第 15.9 節改名）。幀的號碼是裝置錄過的幀數（`Submit` 與 `Capture` 都算，從 1 起），兩者用它對得上。只印、不判（同 `sdl_gpu.budget`）。**不寫進渲染 World**：SDL-5 只讓後端寫收據（使用者 2026-11-27 的決定），計時不是「這一幀做成的事」，不為它改 SDL-5。adapter 的介面（`src/GPUDevice.hpp`）多兩個同名的 getter；`Submit`／`Capture` 的簽名不變（A4 同時在改測試的呼叫）。
 
 **偏離 Bevy 的地方、理由與膠水**：
 
@@ -670,8 +670,8 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 - **T1**（cpu，`sdl_gpu.passlabels`）：四種 pass 的名字帶 index、種類、目標（主目標或 target id）、全畫面 pass 的 shader；同一幀裡的名字兩兩不同；`TimingOf` 每個 pass 一格、順序同 `passes`、名字是 `PassLabel`、都還沒錄。
 - **T2**（gpu，`sdl_gpu.timing`）：`Capture` 一幀（主目標上的 2D pass、一個沒有對應的 pass、主目標上的 3D pass）之後，`LastFrameTiming()` 每個 pass 一格、名字＝`PassLabel(passes[i], i)`；有目標的 `recorded` 且 CPU 時間 > 0，沒有對應的沒錄、時間 0；`debugGroups`＝錄的 pass 數；第二次 `Capture` 的 `frame` 多 1。
-- **T3**（gpu，`sdl_gpu.timing`）：`Capture` 之後 `LastGPUFrameTime()` 有值、`frame` 是同一幀、`atMost` > 0（只印數值）。
-- **T4**（gpu，`sdl_gpu.frames`，會開視窗：L1 跑，這張卡不跑）：`SDLGPUStatus::LastFrameTiming()` 的格數等於最後一幀的 pass 數；跑了幾幀之後 `LastGPUFrameTime()` 有值、不晚於最後一幀。
+- **T3**（gpu，`sdl_gpu.timing`）：`Capture` 之後 `LastFrameSeenDone()` 有值、`frame` 是同一幀、`0 < within ≤ wall`、`after` 是 0（`Capture` 等完才看，第一次看就做完了）（只印數值）。區間的兩端由 cpu 的 `sdl_gpu.framesinflight` 用排好的時刻驗（第 15.9 節）。
+- **T4**（gpu，`sdl_gpu.frames`，會開視窗：L1 跑，這張卡不跑）：`SDLGPUStatus::LastFrameTiming()` 的格數等於最後一幀的 pass 數；`LastFrameSeenDone()` 有值時是已錄的幀、`after < within`（視窗上不等 GPU，沒有值不算錯，第 15.8 節第 10 點）。
 - **T5**：既有測試照過（`sdl_gpu.*`、`render.*`）；第 15.5 節的突變全部 killed（會開視窗的除外，寫明）。
 
 **既有測試的改動**：沒有改判斷；`sdl_gpu.frames` 只加 T4 的檢查。
@@ -698,15 +698,15 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a3/design-review-a3.zh-Hant.md`、`pure-code-review-a3.zh-Hant.md`，不在 git）：設計審查（Opus／high）Blocker 0、Should 4、Nit 6、Note 6；純淨 Code Review（Fable／high）高 1、中 7、低 8。逐項的處理與理由在 dev_log。使用者的 Q1 (a) 不變。
 
-**等使用者決定、這一輪不動**（主會話交使用者）：設計 S1＝純淨 H1——畫到視窗的幀，整幀 GPU 時間的上界實際上約等於「多久之後才去看」（GPU 跟得上時≈這一幀剩下的 CPU 時間，落後時≈VSync 間隔的倍數），而型別叫 `GPUFrameTime`、getter 叫 `LastGPUFrameTime`，會被讀成「GPU 花了多久」。Q1 (a) 的前提「fence 給得出整幀的 GPU 時間」只在 `Capture`（等自己的 fence）成立。選項：(i) 照現狀明講；(ii) 照實際意思改名；(iii) 提前 RC-A3-2（另一條執行緒等 fence，和 SDL-4「`GPUDevice` 每個進入點斷言主執行緒」衝突）。和它綁在一起的改名、區間欄位（純淨 H1 的建議 1）都等決定。
+**等使用者決定、這一輪不動**（主會話交使用者；**已決定 (ii)，第 15.9 節**）：設計 S1＝純淨 H1——畫到視窗的幀，整幀 GPU 時間的上界實際上約等於「多久之後才去看」（GPU 跟得上時≈這一幀剩下的 CPU 時間，落後時≈VSync 間隔的倍數），而型別叫 `GPUFrameTime`、getter 叫 `LastGPUFrameTime`，會被讀成「GPU 花了多久」。Q1 (a) 的前提「fence 給得出整幀的 GPU 時間」只在 `Capture`（等自己的 fence）成立。選項：(i) 照現狀明講；(ii) 照實際意思改名；(iii) 提前 RC-A3-2（另一條執行緒等 fence，和 SDL-4「`GPUDevice` 每個進入點斷言主執行緒」衝突）。和它綁在一起的改名、區間欄位（純淨 H1 的建議 1）都等決定。
 
 改了的：
 
-1. **T3 判「從哪一刻算起」**（設計 S2）：`Capture` 前後量牆上時間 `wall`，判 `0 < atMost ≤ wall`、各 pass 的 CPU 時間和 ≤ `wall`（兩端都在 `Capture` 之內，所以是從外面判的上界，不是寫死的數字）。突變 `tm-gpu-from-epoch`、`tm-cpu-from-epoch`。
+1. **T3 判「從哪一刻算起」**（設計 S2）：`Capture` 前後量牆上時間 `wall`，判 `0 < atMost ≤ wall`（第 15.9 節起叫 `within`）、各 pass 的 CPU 時間和 ≤ `wall`（兩端都在 `Capture` 之內，所以是從外面判的上界，不是寫死的數字）。突變 `tm-gpu-from-epoch`、`tm-cpu-from-epoch`。
 2. **種類的名字由 render 給、窮舉**（設計 S3、純淨 M4）：`render` 的 `PassKindName(pass)`（`RenderCommands.hpp`，`TargetOf` 旁，`Overloaded` 的窮舉 visitor：多一個 pass 種類時編譯失敗）；`PassLabel` 只排版。這是加一個純函式，不改資料形式；和 A4 的 `RenderCommands.hpp` 改動不相鄰。
 3. **CPU 驗收的對應**（設計 S4）：第 15.4 節補一段。
 4. **名字與帳本重用**（純淨 M1 的一半）：`BeginTiming(timing, frame, commands)` 在上一幀的 `FrameTiming` 上寫（`resize`、名字 `assign` 進既有的字串），每幀不重新配置。**開關不加**（理由在 15.3 的偏離表；RC-A3-3）。
-5. **時間型別**（純淨 M7 的一半）：`PassTiming::cpu`、`GPUFrameTime::atMost` 改成 `Engine::Time::Duration`，adapter 讀 `Engine::Time::Now()`（engine 的時間基準；`sdl_gpu` 多連 `GYO::Time`）。**時鐘不注入**：T3 的 `wall` 上界從外面就驗得到起點，注入要在 `GPUDevice::Create` 多一個只給測試的接縫，而且精確值會綁住「讀幾次時鐘」。
+5. **時間型別**（純淨 M7 的一半）：`PassTiming::cpu`、`GPUFrameTime::atMost`（第 15.9 節起 `FrameSeenDone::within`）改成 `Engine::Time::Duration`，adapter 讀 `Engine::Time::Now()`（engine 的時間基準；`sdl_gpu` 多連 `GYO::Time`）。**時鐘不注入**：T3 的 `wall` 上界從外面就驗得到起點，注入要在 `GPUDevice::Create` 多一個只給測試的接縫，而且精確值會綁住「讀幾次時鐘」。
 6. **getter 回值**（純淨 M3、設計 N3）：`LastFrameTiming()` 從參考改成 `std::optional<FrameTiming>`（複本；第一幀之前、沒有裝置時沒有值），和 `LastGPUFrameTime()` 同一種表示「沒有」；`Shutdown` 之後不懸空。
 7. **帳本明確傳遞**（設計 N4、純淨 M2、L2、L4）：`BeginFrame`（編號＋`BeginTiming`）與看 fence 移到 `Submit`／`Capture`；`DrawFrame`／`RecordPasses` 收 `FrameTiming&`，`RecordPasses` 斷言「每個 pass 一格」（程式的誤り）；交給 GPU 收成一個函式 `Hand`（取時刻、帶 fence 送出、`Commit`、記帳），`Submit` 與 `Capture` 共用。上傳失敗那條路傳一份空的帳。
 8. **看 fence 的迴圈**（純淨 L3）：`erase_if` 的有副作用的述詞改成明寫的迴圈。
@@ -717,3 +717,25 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 
 **新 RC**：
 - **RC-A3-3**：量到診斷（名字、時鐘、群組、fence）成為幀時間的可見部分，或有作者要在發版關掉 → `sdl_gpu` 加一個開關（預設開，AGENTS §1.10），關掉時不推群組、不量、用沒有 fence 的送出。
+
+### 15.9 修訂 2：看到做完的幀照實際意思改名（使用者的決定，2026-11-28）
+
+**使用者的決定**（HANDOFF `v8-arch-gyo2-render-a3-s1`，經主會話轉 side chat）：原話「照建議」，選第 15.8 節的 (ii)：`GPUFrameTime`／`LastGPUFrameTime` 照實際意思改名，表示「第幾幀、在多久之內畫完」的上界；純淨審查 H1 建議的區間欄位一起做；RC-A3-2 留著。
+**比過的**：(i) 名字不改、只寫清楚——名字仍會被讀成「GPU 花了多久」；(iii) 提前做 RC-A3-2——和 SDL-4（`GPUDevice` 只能在主執行緒呼叫）衝突，SDL 能不能在別的執行緒等 fence 也還沒確認。
+**理由**：畫到視窗的幀，這個值大約等於「多久之後才去看」，不是 GPU 的執行時間；名字要說出量到的是什麼。精確的 GPU 時間等 SDL 有 timestamp（RC-RP5），或量到有需求時再做。
+
+**定的名字**（卡片判，照同組 API 的寫法：`FrameTiming`↔`LastFrameTiming()`，型別名＝getter 去掉 `Last`）：
+- 型別 `FrameSeenDone{frame, after, within}`：第 `frame` 幀在交出後 `after` 之後、`within` 之內被看到做完。`within` 是看到做完的那一次看（原 `atMost`，使用者例子的 `within`）；`after` 是**上一次看到還沒做完**的那一次看（H1 建議 1 的下界；沒有任何一次看到還沒做完時是 0）。兩個都是「從交出算起的長度」，和 `PassTiming::cpu` 同樣用 `Engine::Time::Duration`。
+- getter `SDLGPUStatus::LastFrameSeenDone()`、`GPUDevice::LastFrameSeenDone()`。
+- 沒用 `GPUFrameDone`：同組的 `FrameTiming` 沒有 `GPU` 前綴；「Seen」是這個值的本質（看到的時刻，不是做完的時刻）。沒用 H1 的 `atLeast`／`atMost`：使用者的例子是 `within`，下界配 `after` 讀成「在 after 之後、within 之內」。
+
+**機制**：fence 的帳從 adapter 拆成不含 SDL 的 `FramesInFlight<Fence>`（`plugins/sdl_gpu/src/FramesInFlight.hpp`；同 `FrameDraws` 的先例）：`Hand(frame, fence, 時刻)`、`Look(現在, isDone, release)`（沒做完的記下「上一次看到還沒做完」、做完的給出區間並放掉 fence、留最新的一幀）、`Clear(release)`（裝置結束）。adapter 給 `SDL_QueryGPUFence`／`SDL_ReleaseGPUFence`。這樣區間的兩端不用 GPU 也不用視窗就能用排好的時刻驗（cpu 的 `sdl_gpu.framesinflight`）；看的時機（`Submit` 的兩次、`Capture` 等完之後）不變。
+
+**判定**（改／加）：
+- T3：`LastFrameSeenDone()` 有值、`frame` 對、`0 < within ≤ wall`、`after == 0`（`Capture` 等完才看）。
+- **T6**（cpu，`sdl_gpu.framesinflight`）：排好的時刻下，第 1 幀在 0 交出、4 沒做完、12 做完 → `{1, 4 ms, 12 ms}`；第 2 幀在 10 交出、12 沒做完、20 做完 → `{2, 2 ms, 10 ms}`；同一次看到兩幀做完時留最新的；做完的 fence 放掉一次；`Clear` 放掉還在飛的。
+- T4：有值時 `after < within`。
+
+**突變**：這是改名批（D184：只跑 find／expect 受影響的）；新加一個 `tm-seen-after-dropped`，因為下界是新的行為、沒有別的突變守它（dev_log）。`tm-gpu-older-kept`、`tm-gpu-time-zero` 跟著帳搬到 `FramesInFlight.hpp`、改用 cpu 的案例；`tm-hand-not-tracked` 的 find 改成 `FramesInFlight::Hand` 的呼叫。
+
+**RC**：RC-A3-2 照舊（另一條執行緒等 fence，要先確認 SDL 的執行緒限制與 SDL-4）；RC-RP5 照舊。

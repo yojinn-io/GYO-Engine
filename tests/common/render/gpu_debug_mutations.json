@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the passes' names, debug groups, CPU times and the frames' GPU time (render-pipeline declaration section 15, v8-arch-gyo2-render-a3; 判定 T1 to T4; revision 15.8). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The batch changes no Design Invariant (A3 is a lower-tier batch), so every guard is a 判定 or the revision of section 15. tm-label-*, tm-timing-* (but tm-timing-not-begun and tm-timing-none-given) need no GPU (label cpu; tm-label-kind-wrong runs render.data); the other tm-* need a GPU (label gpu, sdl_gpu.timing); tm-status-timing-not-given runs sdl_gpu.frames, which shows a window (not run by the A3 card: L1 runs the case, not the mutants). Retired in 15.8: tm-groups-carried-over (the reset moved into BeginTiming: tm-timing-groups-not-reset), tm-capture-not-tracked (Submit and Capture hand through one function: tm-hand-not-tracked), tm-submit-not-tracked (the same Hand; and sdl_gpu.frames no longer requires a frame seen done on the window, design review M7: nothing waits for it). Not added (with the reason): a fence taken as done before it is signaled (Capture waits for its fence before looking, so no case without a window tells it apart); the fences let go at the device's end (a leak, not seen from outside); Submit looking at the fences before the swapchain's wait (the bound only gets looser, by the wait: not seen from outside); SDL_PushGPUDebugGroup alone removed (the count is the DebugGroup's own: only a capture tool sees the call, 15.8 N2); the debug group's name in a capture tool (CI has no capture tool: only the count is checked, 15.4).",
+  "description": "Declared mutants of the passes' names, debug groups, CPU times and the frames' GPU time (render-pipeline declaration section 15, v8-arch-gyo2-render-a3; 判定 T1 to T4; revision 15.8). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The batch changes no Design Invariant (A3 is a lower-tier batch), so every guard is a 判定 or the revision of section 15. tm-label-*, tm-timing-* (but tm-timing-not-begun and tm-timing-none-given) need no GPU (label cpu; tm-label-kind-wrong runs render.data); the other tm-* need a GPU (label gpu, sdl_gpu.timing); tm-status-timing-not-given runs sdl_gpu.frames, which shows a window (not run by the A3 card: L1 runs the case, not the mutants). Retired in 15.8: tm-groups-carried-over (the reset moved into BeginTiming: tm-timing-groups-not-reset), tm-capture-not-tracked (Submit and Capture hand through one function: tm-hand-not-tracked), tm-submit-not-tracked (the same Hand; and sdl_gpu.frames no longer requires a frame seen done on the window, design review M7: nothing waits for it). Not added (with the reason): a fence taken as done before it is signaled (Capture waits for its fence before looking, so no case without a window tells it apart); the fences let go at the device's end (FramesInFlight::Clear, seen by [tm-seen-cleared] since 15.9; no mutant added in a renaming batch); Submit looking at the fences before the swapchain's wait (the bound only gets looser, by the wait: not seen from outside); SDL_PushGPUDebugGroup alone removed (the count is the DebugGroup's own: only a capture tool sees the call, 15.8 N2); the debug group's name in a capture tool (CI has no capture tool: only the count is checked, 15.4). 15.9 (renaming, the user's S1 = (ii)): tm-gpu-older-kept and tm-gpu-time-zero moved with the account into FramesInFlight.hpp and to its CPU case (scripted times); tm-hand-not-tracked's find follows FramesInFlight::Hand; one added, tm-seen-after-dropped, for the interval's new lower bound.",
   "mutants": [
     {
       "id": "tm-label-no-index",
@@ -224,7 +224,7 @@
         "render-pipeline-declaration 15 判定 T3"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        inFlight.push_back(InFlight{timing.frame, fence, handed});\n",
+      "find": "        inFlight.Hand(timing.frame, fence, handed);\n",
       "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
@@ -245,29 +245,45 @@
     },
     {
       "id": "tm-gpu-older-kept",
-      "what": "15.3 (5): the GPU time kept is the first frame seen done, not the latest",
+      "what": "15.3 (5): the frame kept as seen done is the first, not the latest (FramesInFlight, 15.9)",
       "guards": [
-        "render-pipeline-declaration 15 判定 T3"
+        "render-pipeline-declaration 15 判定 T3",
+        "render-pipeline-declaration 15.9"
       ],
-      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "            if (!gpuTime || gpuTime->frame < f.frame) gpuTime",
-      "replace": "            if (!gpuTime) gpuTime",
+      "file": "plugins/sdl_gpu/src/FramesInFlight.hpp",
+      "find": "            if (!seen_ || seen_->frame < e.frame) seen_",
+      "replace": "            if (!seen_) seen_",
       "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu timing:*",
+      "cases": "sdl_gpu frames in flight:*",
       "expect": "\\[tm\\-gpu\\-frame\\]"
     },
     {
       "id": "tm-gpu-time-zero",
-      "what": "15.3 (4): the GPU time is not the time since the frame was handed",
+      "what": "15.3 (4), 15.9: within is not the time from the handing to the look that saw the frame done",
       "guards": [
-        "render-pipeline-declaration 15 判定 T3"
+        "render-pipeline-declaration 15 判定 T3",
+        "render-pipeline-declaration 15.9"
       ],
-      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "GPUFrameTime{f.frame, now - f.handed}",
-      "replace": "GPUFrameTime{f.frame, Engine::Time::Duration{0}}",
+      "file": "plugins/sdl_gpu/src/FramesInFlight.hpp",
+      "find": "FrameSeenDone{e.frame, e.notDoneAfter, now - e.handed}",
+      "replace": "FrameSeenDone{e.frame, e.notDoneAfter, Engine::Time::Duration{0}}",
       "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu timing:*",
-      "expect": "\\[tm\\-gpu\\]"
+      "cases": "sdl_gpu frames in flight:*",
+      "expect": "\\[tm\\-seen\\-within\\]"
+    },
+    {
+      "id": "tm-seen-after-dropped",
+      "what": "15.9 (H1's interval): after is not the last look that found the frame not done (the interval's lower bound is lost)",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T3",
+        "render-pipeline-declaration 15.9"
+      ],
+      "file": "plugins/sdl_gpu/src/FramesInFlight.hpp",
+      "find": "                e.notDoneAfter = now - e.handed;\n",
+      "replace": "",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu frames in flight:*",
+      "expect": "\\[tm\\-seen\\-after\\]"
     },
     {
       "id": "tm-gpu-from-epoch",
