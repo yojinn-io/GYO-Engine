@@ -112,22 +112,33 @@ struct PlayerName final {
     friend bool operator==(const PlayerName&, const PlayerName&) = default;
 };
 
+// The keys of PlayerInput (interact-door declaration 2.4). A press lasts one step: the net Module clears every press
+// when it holds the last input, so a press added here is cleared without more code. A hold is kept while the key is
+// down.
+inline constexpr std::uint8_t kPressJump = 1U << 0U;
+inline constexpr std::uint8_t kPressFire = 1U << 1U;
+inline constexpr std::uint8_t kPressReload = 1U << 2U;
+// The interaction key (E): the Match casts the step's view to find what it is used on (JudgeInteractions).
+inline constexpr std::uint8_t kPressInteract = 1U << 3U;
+inline constexpr std::uint8_t kHoldCrouch = 1U << 0U;
+// The Client has loaded the game and drawn it (every input after says so); the Match starts when every expected
+// player is ready (game-flow declaration 3.5).
+inline constexpr std::uint8_t kHoldReady = 1U << 1U;
+
 // One step of a player's input. present 0: no input this step (a player the Client does not control, or before
-// the first input reached the Match): the player neither moves nor turns. jump, fire and reload are presses (one
-// step each; the net Module clears them when it holds the last input); crouch is held.
+// the first input reached the Match): the player neither moves nor turns.
 struct PlayerInput final {
     float forward = 0.0F;
     float right = 0.0F;
     float yaw = 0.0F;
     float pitch = 0.0F;
     std::uint8_t present = 0;
-    std::uint8_t jump = 0;
-    std::uint8_t crouch = 0;
-    std::uint8_t fire = 0;
-    std::uint8_t reload = 0;
-    // The Client has loaded the game and drawn it (held: every input after says so); the Match starts when every
-    // expected player is ready (game-flow declaration 3.5).
-    std::uint8_t ready = 0;
+    std::uint8_t presses = 0;
+    std::uint8_t holds = 0;
+    [[nodiscard]] bool Pressed(const std::uint8_t key) const { return (presses & key) != 0; }
+    [[nodiscard]] bool Held(const std::uint8_t key) const { return (holds & key) != 0; }
+    void Press(const std::uint8_t key, const bool down) { presses = static_cast<std::uint8_t>(down ? presses | key : presses & ~key); }
+    void Hold(const std::uint8_t key, const bool down) { holds = static_cast<std::uint8_t>(down ? holds | key : holds & ~key); }
     friend bool operator==(const PlayerInput&, const PlayerInput&) = default;
 };
 
@@ -156,6 +167,8 @@ struct GameRules final {
     // them with the Match's (MatchInfo).
     std::uint64_t characterDigest = 0;
     std::uint64_t arenaDigest = 0;
+    // The arena's scene as the mode plays it (GameContent::SceneDigest): a Client compares it with the Match's.
+    std::uint64_t sceneDigest = 0;
     // The character whose bones carry the hit shapes (LoadGameContent always gives one).
     std::shared_ptr<const character::CharacterRig> character;
 };
@@ -166,8 +179,8 @@ void HashValue(K::Hasher&, const GameRules&);
 enum class MatchPhase : std::uint8_t { Waiting = 0, Playing = 1 };
 
 // The Match tells every Client which arena it plays and the digest of its walls (replicated; port declaration PV14),
-// which mode and the digest of its rules (mode-config declaration 3.3), the digest of its character (11.7), and whether
-// the match has started.
+// which mode and the digest of its rules (mode-config declaration 3.3), the digest of its character (11.7), its arena's
+// own values and its scene (interact-door declaration 5.4), and whether the match has started.
 struct MatchInfo final {
     std::string arenaId;
     std::uint64_t wallsDigest = 0;
@@ -175,6 +188,7 @@ struct MatchInfo final {
     std::uint64_t rulesDigest = 0;
     std::uint64_t characterDigest = 0;
     std::uint64_t arenaDigest = 0;
+    std::uint64_t sceneDigest = 0;
     MatchPhase phase = MatchPhase::Waiting;
     // Playing: the first step of the match (the steps before it wait, also when a Client simulates them again).
     std::uint64_t startTick = 0;

@@ -1,7 +1,7 @@
 #pragma once
 
 // The single player's save (game-flow declaration 3.3): match/PlayerSave.hpp's format in a file of the player's
-// directory (Scenes.hpp SoloSavePath), read by the single player's room and settled when a game is evacuated.
+// directory (Screens.hpp SoloSavePath), read by the single player's room and settled when a game is evacuated.
 
 #include "object_fps_pvp/match/PlayerSave.hpp"
 

@@ -18,12 +18,12 @@
 # client: the Client's World around the game's (include/object_fps_pvp/client/ClientWorld.hpp): the controls, the
 # first-person camera, the arena's model and the other players' stand-in bodies (render's 3D pipeline), the HUD
 # (its 2D layer), the sounds, and the World that draws (extracts from it).
-# The client library also has the scenes (include/object_fps_pvp/client/Scenes.hpp: one Product, its Worlds replaced
-# when the scene changes, the window open throughout; docs/game-flow-declaration.zh-Hant.md): the menu, the lobby
+# The client library also has the screens (include/object_fps_pvp/client/Screens.hpp: one Product, its Worlds replaced
+# when the screen changes, the window open throughout; docs/game-flow-declaration.zh-Hant.md): the menu, the lobby
 # and the room of the Gateway (its HTTP protocol v1: include/object_fps_pvp/client/Gateway.hpp; ui, world_ui,
 # ui_render), the single player's room, the game.
 # main: the Client (src/client_main.cpp) with the sdl_window, sdl_audio and sdl_gpu Plugins: the menu first; the
-# scenes change between two frames of sdl_window's runner.
+# screens change between two frames of sdl_window's runner.
 # match: the Match (src/match_main.cpp), headless, listening on UDP.
 # services: the Gateway and the services behind it (docs/gateway-declaration.zh-Hant.md), a Go module of its own
 # (go.mod here, the packages in services/): one executable, a subcommand per service. Native builds never need Go.
@@ -40,6 +40,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/match/PlayerSave.cpp
     src/match/SaveSync.cpp
     src/present/Controls.cpp
+    src/present/DoorPicture.cpp
     src/present/HitFeedback.cpp
     src/present/Interpolation.cpp
     src/present/SoundCues.cpp
@@ -67,10 +68,14 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     src/data/ArenaMap.cpp
     src/world/ArenaLoad.cpp
     src/world/ContentHash.cpp
+    src/world/Doors.cpp
     src/world/GameplaySets.cpp
     src/world/MatchSaves.cpp
     src/world/Modes.cpp
-    src/world/PvpWorld.cpp)
+    src/world/Interaction.cpp
+    src/world/PvpWorld.cpp
+    src/world/Scene.cpp
+    src/world/Sight.cpp)
 # The mode files are read with the game's JSON helpers (src/data/JsonFields.hpp, in the logic library).
 target_include_directories(${object_fps_pvp_world} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
@@ -79,15 +84,16 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
         GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS GYO::Http GYO::IO GYO::StateMachine
     PRIVATE_LIBRARIES GYO::Json GYO::RenderWorld GYO::MeshRender
     SOURCES
+    src/client/BoxModel.cpp
     src/client/ClientWorld.cpp
     src/client/Gateway.cpp
-    src/client/GatewayScene.cpp
-    src/client/LobbyScene.cpp
+    src/client/GatewayScreen.cpp
+    src/client/LobbyScreen.cpp
     src/client/LocalFiles.cpp
-    src/client/RoomScene.cpp
-    src/client/Scenes.cpp
+    src/client/RoomScreen.cpp
+    src/client/Screens.cpp
     src/client/Settings.cpp
-    src/client/SoloScene.cpp)
+    src/client/SoloScreen.cpp)
 target_include_directories(${object_fps_pvp_client} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 gyo_game_add_executable(main MAIN OUT_TARGET object_fps_pvp_main

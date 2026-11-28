@@ -105,7 +105,7 @@ private:
 
 // The hit marker of the own shots (the HUD's X beside the crosshair, as in COD): the own player's last judged shot
 // (the Match's ShotRecord), by its tick. A newer shot that hit a player shows it, in the head colour for a head; a
-// newer miss does not take a shown marker away; the first record seen (a join, a scene) is not shown.
+// newer miss does not take a shown marker away; the first record seen (a join, a screen) is not shown.
 struct HitMarkerSample final {
     float alpha{};
     bool head{};

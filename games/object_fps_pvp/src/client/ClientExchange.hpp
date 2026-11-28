@@ -1,11 +1,12 @@
 #pragma once
 
 // What the Sim World (or the Solo World) and the Frame World hand each other: one object of the Product
-// (ConfigureClient makes it), shared by every scene.
+// (ConfigureClient makes it), shared by every screen.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
 #include "object_fps_pvp/world/Components.hpp"
+#include "object_fps_pvp/world/Doors.hpp"
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/physics_3d/Shapes.hpp"
@@ -36,9 +37,19 @@ struct PlayerSnapshot final {
     std::optional<PW::HitRecord> hits;
     std::optional<PW::ShotRecord> shot;
 };
+// A door of the scene as the Sim World has it (interact-door declaration section 8: one vector per gameplay set of
+// the scene's objects, each element the id and what the set replicates, by ascending id).
+struct DoorSnapshot final {
+    K::EntityId id = 0;
+    PW::DoorShape shape;
+    std::optional<PW::DoorState> state;  // none: the Sim World has none now (taken off while the Match hides it)
+    bool receiving = true;               // the Match is sending it (not NotReceiving)
+};
 struct WorldSnapshot final {
     std::uint64_t version = 0;
     std::vector<PlayerSnapshot> players;  // every entity with an Owner
+    std::vector<DoorSnapshot> doors;      // every entity with a DoorShape
+    std::optional<float> reach;           // world::InteractionRules (none: the interaction set is off)
     std::string arenaId;                  // the arena the Sim World plays (GameRules)
     std::uint64_t wallsDigest = 0;
     // Those walls once built (a BoxSet's body is shared and immutable: a copy is a reference), for the sounds'
@@ -78,7 +89,7 @@ public:
         const std::lock_guard<std::mutex> lock(controlsLock_);
         if (!haveControls_) return std::nullopt;
         Sent taken{controls_, viewTick_};
-        controls_.jump = controls_.fire = controls_.reload = false;
+        controls_.jump = controls_.fire = controls_.reload = controls_.interact = false;
         haveControls_ = false;
         return taken;
     }
@@ -87,17 +98,19 @@ public:
         const bool jump = into.jump || newer.jump;
         const bool fire = into.fire || newer.fire;
         const bool reload = into.reload || newer.reload;
+        const bool interact = into.interact || newer.interact;
         into = newer;
         into.jump = jump;
         into.fire = fire;
         into.reload = reload;
+        into.interact = interact;
     }
 
     // Whether the game is paused (single player's pause: the Frame World's out sets it, the Solo World's in reads it).
     void SetPaused(const bool paused) noexcept { paused_.store(paused, std::memory_order_relaxed); }
     [[nodiscard]] bool Paused() const noexcept { return paused_.load(std::memory_order_relaxed); }
 
-    // A scene change (both Worlds are being replaced): neither the picture nor the controls of the World that goes
+    // A screen change (both Worlds are being replaced): neither the picture nor the controls of the World that goes
     // reach the next one.
     void Reset() {
         {

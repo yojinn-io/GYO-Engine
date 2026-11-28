@@ -122,12 +122,27 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
     static const std::shared_ptr<const PW::GameContent> content = [] {
         auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
         copy->sets = {ProbeSet()};
+        copy->scenes.assign(copy->arenas.size(), PW::SceneContent{});
         ModeFolder folder;
         folder.Modes({{"core.json", Mode("core_pvp", "{}")}, {"probe.json", Mode("probe_on", R"({"probe": {"start": 5}})")}});
         std::string error;
         auto modes = PW::LoadModes(folder.root.string(), copy->arenas, copy->combat, copy->sets, error);
         REQUIRE_MESSAGE(modes.has_value(), error);
         copy->modes = std::move(*modes);
+        return copy;
+    }();
+    return content;
+}
+
+// The shipped content without any gameplay set: the core alone (the shipped game has sets since the interaction set),
+// with the shipped modes that turn none on.
+std::shared_ptr<const PW::GameContent> CoreOnly() {
+    static const std::shared_ptr<const PW::GameContent> content = [] {
+        auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
+        copy->sets = {};
+        copy->scenes.assign(copy->arenas.size(), PW::SceneContent{});
+        std::erase_if(copy->modes, [](const PW::ModeContent& mode) { return !mode.on.slots.empty(); });
+        REQUIRE(!copy->modes.empty());
         return copy;
     }();
     return content;
@@ -234,7 +249,7 @@ TEST_CASE("world: a gameplay set is registered after the core: the core's decisi
     // The core's decision types keep their authority registration numbers: the dataset report lists them first, in the
     // core's order, then the set's.
     Session off(1, 4, 0, WithProbe(), {}, 60, std::nullopt, WithProbe());
-    Session without(1, 4);
+    Session without(1, 4, 0, CoreOnly(), {}, 60, std::nullopt, CoreOnly());
     const auto withSet = A::DatasetReport(off.Match());
     const auto shipped = A::DatasetReport(without.Match());
     REQUIRE((withSet && shipped));

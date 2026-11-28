@@ -195,6 +195,9 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<PeerControls>({.name = "PeerControls"});
     r.Component<PeerVisibility>({.name = "PeerVisibility"});
     r.Component<NetPriority>({.name = "NetPriority"});
+    r.Component<Placed>({.name = "Placed"});
+    r.Component<WhenHidden>({.name = "WhenHidden"});
+    r.Component<NotReceiving>({.name = "NotReceiving"});
     table.role = role->role;
     r.Resource<NetWorldLink>({.name = "NetWorldLink"});
     r.Resource<NetWorldRole>({.name = "NetWorldRole"});
@@ -215,6 +218,7 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     Detail::MarkOneEnd(setup, "SendNet", reason);
     if (role->role == NetRole::Server) {
         r.Resource<NetOutbox>({.name = "NetOutbox"});
+        r.Resource<NetPlacedRecord>({.name = "NetPlacedRecord"});
         Kernel::SystemOptions out = Detail::MountedAt("ReplicateOut", Orchestration::DefaultSchedules::last);
         out.mounts.front().before.push_back("SendNet");
         r.AddSystem<&Detail::ReplicateOut>(std::move(out));
@@ -297,6 +301,7 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
             if (worldRole == NetRole::Server) {
                 service->BeginServerWorld();
                 world.SetResource(NetOutbox{});
+                world.SetResource(NetPlacedRecord{});
             } else {
                 NetReplicaState state;
                 // B1, R2: the epoch grows with every client World of the Product. A new connection carries it in its

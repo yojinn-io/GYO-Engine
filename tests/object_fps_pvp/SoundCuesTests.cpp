@@ -45,16 +45,18 @@ TEST_CASE("PvP sound settings parse the product content and reject bad values") 
     const auto settings = ProductSettings();
     CHECK(settings.cues[static_cast<std::size_t>(SoundCue::LocalShot)].clip == "object_fps_pvp.audio.gun_shoot");
     CHECK(settings.cues[static_cast<std::size_t>(SoundCue::HitConfirmed)].clip == "object_fps_pvp.audio.hit_flesh");
+    CHECK(settings.cues[static_cast<std::size_t>(SoundCue::DoorOpen)].clip == "object_fps_pvp.audio.door_open");
+    CHECK(settings.cues[static_cast<std::size_t>(SoundCue::DoorClose)].clip == "object_fps_pvp.audio.door_close");
     CHECK(settings.strideDistance > 0);
     std::string error;
-    CHECK_FALSE(ParseSoundSettings("{\"version\":4}", error));
+    CHECK_FALSE(ParseSoundSettings("{\"version\":5}", error));
     CHECK_FALSE(error.empty());
     for (const auto& [what, text] : std::vector<std::pair<std::string, std::string>>{
-             {"version 3", Changed("\"version\": 4", "\"version\": 3")},
+             {"version 4", Changed("\"version\": 5", "\"version\": 4")},
              // Event sounds are the weapon's own data since version 3.
              {"version 2's animation_events",
-              Changed("\"version\": 4,",
-                      "\"version\": 4, \"animation_events\": {\"magazine_in\": {\"cue\": \"reload\", \"sync_seconds\": 0.33}},")},
+              Changed("\"version\": 5,",
+                      "\"version\": 5, \"animation_events\": {\"magazine_in\": {\"cue\": \"reload\", \"sync_seconds\": 0.33}},")},
              {"a volume above 4", Changed("\"volume\": 0.8", "\"volume\": 9.0")},
              {"no occluded gain", Changed(", \"occluded_gain\": 0.25", "")},
              {"an occluded gain above 1", Changed("\"occluded_gain\": 0.25", "\"occluded_gain\": 1.5")},

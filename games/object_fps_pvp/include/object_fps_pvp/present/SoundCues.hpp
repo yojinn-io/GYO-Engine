@@ -15,10 +15,10 @@ namespace object_fps_pvp::present {
 // it reads the game state, never changes it, and knows nothing of how sound is
 // mixed or played.
 
-enum class SoundCue : std::uint8_t { LocalShot, RemoteShot, HitTaken, HitConfirmed, Footstep, Landing };
-inline constexpr std::size_t SoundCueCount = 6;
+enum class SoundCue : std::uint8_t { LocalShot, RemoteShot, HitTaken, HitConfirmed, Footstep, Landing, DoorOpen, DoorClose };
+inline constexpr std::size_t SoundCueCount = 8;
 
-// audio/sfx.json (version 4): the clip each cue plays, its volume, how far a
+// audio/sfx.json (version 5: the doors' two cues): the clip each cue plays, its volume, how far a
 // spatial cue carries, and the spatial and footstep tuning. Content, so it is
 // edited without code. The sounds of animation events are the weapon's own
 // data, not here.

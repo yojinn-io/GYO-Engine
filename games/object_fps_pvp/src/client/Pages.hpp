@@ -1,9 +1,9 @@
 #pragma once
 
-// The pages inside one scene (game-flow declaration 3.7): a state of the Engine's state_machine Module per scene that
+// The pages inside one screen (game-flow declaration 3.7): a state of the Engine's state_machine Module per screen that
 // has more than one page (Bevy's States). Each value has its enter and exit schedule: entering a page puts its UI root,
 // leaving takes it away; the Systems of a page run on InState<page>; a page asks for another with a request. Changing
-// scene is not a page: it replaces the World (Scenes.hpp).
+// screen is not a page: it replaces the World (Screens.hpp).
 
 #include "engine/state_machine/Conditions.hpp"
 #include "engine/state_machine/StateMachine.hpp"
@@ -17,7 +17,7 @@ namespace object_fps_pvp::client {
 
 // The main menu's pages: the menu, the settings.
 enum class MenuPage : std::uint8_t { Main, Settings };
-// The game scene's overlay: the loading screen until ready and started, then nothing (the game), or the pause while the
+// The game screen's overlay: the loading screen until ready and started, then nothing (the game), or the pause while the
 // pointer is the player's.
 enum class GamePage : std::uint8_t { Loading, Playing, Paused };
 

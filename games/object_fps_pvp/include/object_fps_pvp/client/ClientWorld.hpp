@@ -9,9 +9,9 @@
 //            cameras, the HUD, the characters, the sounds. It shows the Sim World's players as copies by their ids.
 //   "Render" extracts from "Frame".
 //
-// They are the game scene of the Client's scenes (Scenes.hpp): the descriptions below read the Product's
-// SceneDirector, and register the game only in Scene::MultiGame (the Sim World elsewhere is empty; the Frame World is
-// the scene's).
+// They are the game screen of the Client's screens (Screens.hpp): the descriptions below read the Product's
+// ScreenDirector, and register the game only in Screen::MultiGame (the Sim World elsewhere is empty; the Frame World is
+// the screen's).
 //
 // Sim and Frame hand each other two things through one object of the Product (ClientExchange, each half behind its
 // own lock): the Sim World's "out" puts the newest picture (its players, the arena, ClientView); the Frame World's
@@ -54,8 +54,10 @@
 // Frame World has no rollback: what it makes stays until it takes it away.
 
 #include "object_fps_pvp/data/ArenaMap.hpp"
+#include "object_fps_pvp/present/DoorPicture.hpp"
 #include "object_fps_pvp/present/HitFeedback.hpp"
 #include "object_fps_pvp/present/SoundCues.hpp"
+#include "object_fps_pvp/world/Doors.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "engine/image/ImageData.hpp"
@@ -64,6 +66,7 @@
 #include "engine/transform/Transform.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -106,15 +109,16 @@ struct ViewmodelDefinition final {
 // The recoil seconds after a shot (ViewmodelDefinition's recoil), in radians.
 [[nodiscard]] float RecoilRadians(const ViewmodelDefinition& viewmodel, double seconds);
 
-// What the Client reads before it starts, besides the game's content: the sound and hit feedback settings and the
-// first-person weapon.
+// What the Client reads before it starts, besides the game's content: the sound, hit feedback and door picture
+// settings and the first-person weapon.
 struct PresentationContent final {
     present::SoundSettings sound;
     present::HitFeedbackSettings hitFeedback;
+    present::DoorPictureSettings doors;
     ViewmodelDefinition viewmodel;
 };
 
-// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, weapons/nailer_v2/viewmodel/);
+// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, ui/doors.json, weapons/nailer_v2/viewmodel/);
 // nullopt with error naming the file.
 [[nodiscard]] std::optional<PresentationContent> LoadPresentation(const std::string& root, std::string& error);
 
@@ -126,11 +130,11 @@ struct ClientOptions final {
     // Where the map's walls and pictures are made (the Product's worker; it outlives the Product). None: in the
     // System, on the World's thread.
     GYO::Engine::Asset::AssetExecutor* jobs = nullptr;
-    // The mode a game scene plays when its change names none this Client has (an index into game->modes).
+    // The mode a game screen plays when its change names none this Client has (an index into game->modes).
     std::size_t mode = 0;
 };
 
-// The Product's part (its configure): the ClientExchange and the SceneDirector (from the product option ClientStart;
+// The Product's part (its configure): the ClientExchange and the ScreenDirector (from the product option ClientStart;
 // none: the menu), the game's loaders join the asset store (the map's, world::ConfigureGame; fbx, png, fonts, sounds,
 // gyo.ui documents), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
 void ConfigureClient(O::ProductSetup& setup);
@@ -139,11 +143,11 @@ void ConfigureClient(O::ProductSetup& setup);
 // players it copies by their ids.
 inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3'000'000};
 
-// The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the scene's connect),
+// The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the screen's connect),
 // "Frame" (units listed: the Modules it needs and sdl_window when window is true) and "Render" (extracts from "Frame";
 // with sdl_gpu when gpu is true, false for a test without a device; its Extract copies the player's VSync into render's
 // Presentation). Sim and Frame need ConfigureClient (their
-// ClientExchange and SceneDirector).
+// ClientExchange and ScreenDirector).
 [[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
 // "Solo": the game's Local World (world::LocalWorld; no net), the single player's game; the same exchange as "Sim".
 [[nodiscard]] O::WorldDescription ClientSoloWorld(ClientOptions options);
@@ -170,6 +174,35 @@ struct ClientView final {
 };
 void HashValue(GYO::Kernel::Hasher&, const ClientView&);
 
+// The doors the Frame World shows (a Resource of the Frame World; interact-door declaration section 8), from the Sim
+// World's pictures: each door's shape, its state as the Sim World last had it (none: never had one), whether the Match
+// is sending it now (world's net NotReceiving: a door it is not sending gives no prompt), how far its picture has
+// swung toward its state (0 shut, 1 open), and its picture's entity (0: not made yet). A state that changes between
+// two pictures is heard (cues, for PlaySounds; opened and closed count them).
+struct ShownDoor final {
+    world::DoorShape shape;
+    std::optional<world::DoorState> state;
+    bool receiving = false;
+    float turned = 0.0F;
+    GYO::Kernel::EntityId picture = 0;
+};
+struct ClientDoors final {
+    std::map<GYO::Kernel::EntityId, ShownDoor> doors;
+    // How far the player reaches (world::InteractionRules; none: the mode has no interaction).
+    std::optional<float> reach;
+    std::vector<std::pair<present::SoundCue, GYO::Engine::Math::Vec3>> cues;
+    std::uint64_t opened = 0;
+    std::uint64_t closed = 0;
+};
+void HashValue(GYO::Kernel::Hasher&, const ClientDoors&);
+
+// What the player can do with what they look at, in their words (empty: nothing): a kind's System writes it, the HUD
+// shows it (a Resource of the Frame World).
+struct InteractionPrompt final {
+    std::string text;
+};
+void HashValue(GYO::Kernel::Hasher&, const InteractionPrompt&);
+
 // What the Client shows, for its program and its tests.
 struct ClientStatus final {
     bool connected = false;
@@ -185,7 +218,7 @@ struct ClientStatus final {
 // Of the Frame World.
 [[nodiscard]] ClientStatus StatusOf(GYO::Kernel::World& world);
 
-// What the World that draws has shown (a Resource of the game scene's Frame World): the program writes it between
+// What the World that draws has shown (a Resource of the game screen's Frame World): the program writes it between
 // frames from the drawing's status (sdl_gpu's SDLGPUStatus, through an exchange function), for the loading screen's
 // warm-up (game-flow declaration 3.5). Not known (a test without a device): the warm-up is not waited for.
 struct DrawnFrames final {

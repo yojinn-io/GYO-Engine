@@ -1,4 +1,5 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/data/Utf8.hpp"
@@ -102,11 +103,8 @@ void HashValue(K::Hasher& h, const PlayerInput& v) {
     HashValue(h, v.yaw);
     HashValue(h, v.pitch);
     HashValue(h, v.present);
-    HashValue(h, v.jump);
-    HashValue(h, v.crouch);
-    HashValue(h, v.fire);
-    HashValue(h, v.reload);
-    HashValue(h, v.ready);
+    HashValue(h, v.presses);
+    HashValue(h, v.holds);
 }
 void HashValue(K::Hasher&, const GameRules&) {}
 void HashValue(K::Hasher&, const MatchInfo&) {}
@@ -208,24 +206,16 @@ N::InputOptions<PlayerInput> InputOptions() {
                          w.Value(v.yaw);
                          w.Value(v.pitch);
                          w.Value(v.present);
-                         w.Value(v.jump);
-                         w.Value(v.crouch);
-                         w.Value(v.fire);
-                         w.Value(v.reload);
-                         w.Value(v.ready);
+                         w.Value(v.presses);
+                         w.Value(v.holds);
                      },
                      [](N::NetReader& r, PlayerInput& v) {
                          return r.Value(v.forward) && r.Value(v.right) && r.Value(v.yaw) && r.Value(v.pitch) &&
-                                r.Value(v.present) && r.Value(v.jump) && r.Value(v.crouch) && r.Value(v.fire) &&
-                                r.Value(v.reload) && r.Value(v.ready);
+                                r.Value(v.present) && r.Value(v.presses) && r.Value(v.holds);
                      },
-                     2};
-    // A held input is the last one with its presses taken out: a press fires once (C-IN3).
-    options.held = [](PlayerInput& v) {
-        v.jump = 0;
-        v.fire = 0;
-        v.reload = 0;
-    };
+                     3};
+    // A held input is the last one with its presses taken out: a press fires once (C-IN3); its holds are kept.
+    options.held = [](PlayerInput& v) { v.presses = 0; };
     return options;
 }
 // Text on the wire: its length as a Length, then its bytes; a reader refuses one longer than maxBytes.
@@ -261,24 +251,24 @@ N::Codec<MatchInfo> MatchInfoCodec() {
                 w.Value(v.rulesDigest);
                 w.Value(v.characterDigest);
                 w.Value(v.arenaDigest);
+                w.Value(v.sceneDigest);
                 w.Value(static_cast<std::uint8_t>(v.phase));
                 w.Value(v.startTick);
             },
             [](N::NetReader& r, MatchInfo& v) {
                 std::uint8_t phase = 0;
                 if (!ReadId(r, v.arenaId) || !r.Value(v.wallsDigest) || !ReadId(r, v.modeId) || !r.Value(v.rulesDigest) ||
-                    !r.Value(v.characterDigest) || !r.Value(v.arenaDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
+                    !r.Value(v.characterDigest) || !r.Value(v.arenaDigest) || !r.Value(v.sceneDigest) || !r.Value(phase) || phase > 1 || !r.Value(v.startTick)) {
                     return false;
                 }
                 v.phase = static_cast<MatchPhase>(phase);
                 return true;
             },
-            5};
+            6};
 }
 
 // ---- The body's shape and the queries against the walls
 
-using Walls = K::Query<K::Read<P::Collider>, K::Read<T::Transform>, K::Without<K::ChildOf>>;
 
 // The upright capsule of a body of height (feet at the bottom), placed at feet.
 P::Shape BodyShape(const float height, const float radius) { return P::CapsuleY(0.5F * height - radius, radius); }
@@ -343,8 +333,8 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
     const Math::Vec3 start = body.feet;
     bool crouched = body.crouched != 0;
     if (steering) {
-        const bool jumpFromGround = input.jump != 0 && body.grounded != 0;
-        if (input.crouch != 0 && !jumpFromGround) {
+        const bool jumpFromGround = input.Pressed(kPressJump) && body.grounded != 0;
+        if (input.Held(kHoldCrouch) && !jumpFromGround) {
             crouched = true;
         } else if (crouched) {
             // Standing up needs room for the standing body where the feet are.
@@ -365,7 +355,7 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     }
-    if (steering && input.jump != 0 && body.grounded != 0 && !crouched) {
+    if (steering && input.Pressed(kPressJump) && body.grounded != 0 && !crouched) {
         body.verticalVelocity = sim::JumpSpeed(rules.movement);
         body.grounded = 0;
     }
@@ -408,13 +398,6 @@ double StepSeconds(const WT::ActiveTime& time) { return static_cast<double>(time
 std::uint64_t StepNanos(const WT::ActiveTime& time) { return static_cast<std::uint64_t>(time.delta); }
 
 // ---- The Systems of the fixed step
-
-// Before the start the players wait: their input is none (they neither move, turn nor fire). By the step, so a Client
-// simulating the steps around the start again gives each the Match's answer.
-const PlayerInput& Playable(const PlayerInput& input, const MatchInfo& info, const std::uint64_t tick) {
-    static const PlayerInput none{};
-    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;
-}
 
 // A living player dies at this tick: the respawn waits the rules' time, a reload in progress is dropped.
 void Die(PlayerCombat& combat, const sim::CombatRules& rules, const std::uint64_t now, const std::uint64_t stepNanos) {
@@ -470,9 +453,9 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
             next.reloadEndTick = 0;
         }
         if (input.present != 0 && next.reloadEndTick == 0) {
-            if (input.reload != 0 && next.ammo < combat.magazineCapacity) {
+            if (input.Pressed(kPressReload) && next.ammo < combat.magazineCapacity) {
                 next.reloadEndTick = now + sim::TicksFor(combat.reloadSeconds, step);
-            } else if (input.fire != 0 && next.ammo > 0 && now >= next.nextShotTick) {
+            } else if (input.Pressed(kPressFire) && next.ammo > 0 && now >= next.nextShotTick) {
                 --next.ammo;
                 next.nextShotTick = now + sim::TicksFor(combat.cooldownSeconds, step);
                 next.lastShotTick = now;
@@ -482,19 +465,6 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
         if (!(next == cell.Read())) cell.Get() = next;
     });
     return {};
-}
-
-// The shot's ray from a body's eye along its view.
-Math::Ray ShotRay(const GameRules& rules, const PlayerBody& body) {
-    const float eye = sim::EyeHeight(rules.body, body.crouched != 0);
-    return Math::Ray{body.feet + Math::Vec3{0.0F, eye, 0.0F}, sim::ViewDirection(body.yaw, body.pitch)};
-}
-
-// The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
-P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
-    const float height = sim::BodyHeight(rules.body, body.crouched != 0);
-    const float r = rules.body.radius;
-    return P::Capsule{body.feet + Math::Vec3{0.0F, r, 0.0F}, body.feet + Math::Vec3{0.0F, height - r, 0.0F}, r};
 }
 
 K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>, K::Write<ShotRecord>, K::Write<HitRecord>> players,
@@ -509,15 +479,7 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
         if (fired == nullptr || fired->lastShotTick != now || fired->life != sim::LifeState::Alive) continue;
         const PlayerBody& body = *players.Get<PlayerBody>(shooter);
         const Math::Ray ray = ShotRay(*rules, body);
-        std::optional<float> world;
-        // The floor plane (when the arena has one): a solid half-space below it.
-        if (const auto floor = rules->arena.floor) {
-            if (ray.origin.y <= *floor) {
-                world = 0.0F;
-            } else if (ray.direction.y < 0.0F) {
-                world = (ray.origin.y - *floor) / -ray.direction.y;
-            }
-        }
+        std::optional<float> world = FloorAlong(*rules, ray);
         auto wall = P::CastRay(walls, ray, range);
         if (!wall) return PhysicsFailed(wall.error());
         if (*wall && (!world || (*wall)->hit.t < *world)) world = (*wall)->hit.t;
@@ -768,7 +730,7 @@ K::SystemResult StartMatch(K::Query<K::Read<Owner>, K::Read<PlayerInput>> player
     bool anyone = false;
     players.ForEach([&](K::EntityId, const Owner& owner, const PlayerInput& input) {
         anyone = true;
-        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&
+        if (input.Held(kHoldReady) && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&
             std::find(ready.begin(), ready.end(), owner.userId) == ready.end()) {
             ready.push_back(owner.userId);
         }
@@ -784,12 +746,12 @@ K::SystemResult StartMatch(K::Query<K::Read<Owner>, K::Read<PlayerInput>> player
     return {};
 }
 
-// The Match: before the start a connection sees only the player it controls (it is the only rule of relevance so far:
-// from the start the PeerVisibility is taken away, which another rule -- distance, teams -- would have to join) (net's PeerVisibility: the others'
-// places are not sent, so no Client can show them); from the start it sees everything. Main/Update, after
-// SeatPlayers.
+// The Match: before the start a connection sees only the player it controls and what both ends placed (the scene's
+// objects: furnishing is not hidden) (it is the only rule of relevance so far: from the start the PeerVisibility is
+// taken away, which another rule -- distance, teams -- would have to join) (net's PeerVisibility: the others' places
+// are not sent, so no Client can show them); from the start it sees everything. Main/Update, after SeatPlayers.
 K::SystemResult ShowPlayers(K::Query<K::Read<N::PeerControls>> controlling, K::Query<K::Read<N::PeerVisibility>> visibility,
-                            K::Query<K::Read<N::Peer>> peers, K::Res<MatchInfo> info,
+                            K::Query<K::Read<N::Peer>> peers, K::Query<K::Read<N::Placed>> placed, K::Res<MatchInfo> info,
                             K::CommandsFor<K::Inserts<N::PeerVisibility>, K::Removes<N::PeerVisibility>> commands) {
     const bool playing = info->phase == MatchPhase::Playing;
     peers.ForEach([&](const K::EntityId peer, const N::Peer&) {
@@ -801,6 +763,7 @@ K::SystemResult ShowPlayers(K::Query<K::Read<N::PeerControls>> controlling, K::Q
         N::PeerVisibility own;
         own.everything = false;
         if (const N::PeerControls* controls = controlling.Get<N::PeerControls>(peer)) own.Show(controls->entity);
+        for (const K::EntityId furnishing : placed.Entities()) own.Show(furnishing);
         if (now == nullptr || now->everything || now->entities != own.entities) commands.Insert(peer, std::move(own));
     });
     return {};
@@ -877,6 +840,9 @@ K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rul
     } else if (match.arenaDigest != own.arenaDigest) {
         kind = MismatchKind::ArenaData;
         reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: map, bounds, floor, kill height, spawns)";
+    } else if (match.sceneDigest != own.sceneDigest) {
+        kind = MismatchKind::Scene;
+        reason = "arena '" + match.arenaId + "' is furnished otherwise than the Match's (scene digest)";
     } else if (load->stage == MapStage::Done && match.wallsDigest != own.wallsDigest) {
         kind = MismatchKind::Walls;
         reason = "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
@@ -1051,6 +1017,10 @@ std::optional<std::size_t> GameContent::FindArena(const std::string_view id) con
 
 bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }
 
+std::uint64_t GameContent::SceneDigest(const std::size_t mode, const std::size_t arena) const {
+    return world::SceneDigest(scenes[arena], modes[mode].on, sets);
+}
+
 GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const std::size_t arena) {
     GameRules rules;
     rules.arena = content.arenas[arena];
@@ -1061,6 +1031,7 @@ GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const 
     rules.characterDigest = content.characterDigest;
     rules.body = content.character->bodySize;
     rules.arenaDigest = ArenaDigest(content.arenas[arena]);
+    rules.sceneDigest = content.SceneDigest(mode, arena);
     return rules;
 }
 
@@ -1092,7 +1063,24 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": " + error;
             return std::nullopt;
         }
+        // Its scene, read with the sets' table (each object's set reads its data).
+        SceneContent scene;
+        if (arena->scene) {
+            const std::string path = root + "/" + *arena->scene;
+            auto sceneText = ReadText(fs, path, error);
+            if (!sceneText) {
+                error = maps + name + ": its scene: " + error;
+                return std::nullopt;
+            }
+            auto read = ParseScene(*sceneText, sets, error);
+            if (!read) {
+                error = maps + name + ": its scene " + path + ": " + error;
+                return std::nullopt;
+            }
+            scene = std::move(*read);
+        }
         content.arenas.push_back(std::move(*arena));
+        content.scenes.push_back(std::move(scene));
     }
     auto rig = character::LoadCharacterRig(root, error);
     if (!rig) return std::nullopt;
@@ -1285,6 +1273,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         const ModeContent& mode = options.content->modes[options.mode];
         GameRules rules = GameRulesOf(*options.content, options.mode, options.arena);
         const std::uint64_t arenaDigest = rules.arenaDigest;
+        const std::uint64_t sceneDigest = rules.sceneDigest;
         world.SetResource(std::move(rules));
         world.SetResource(LocalUser{options.localUser});
         world.SetResource(MatchSeats{options.seats});
@@ -1299,6 +1288,11 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         // What the sets the mode turns on read, at every end (the rules digest says both ends read the same).
         for (const auto& [slot, read] : mode.sets) {
             if (read.put) read.put(world);
+        }
+        // The arena's furnishing: the objects of the sets the mode turns on, at every end with the same ids -- with a
+        // net, placed at both ends (net's Placed: the Match attaches them, it never spawns them).
+        for (const K::EntityId placed : PutScene(options.content->scenes[options.arena], mode.on, world)) {
+            if (end != WorldEnd::Local) world.Insert(placed, N::Placed{});
         }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.
@@ -1315,6 +1309,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
             info.modeId = mode.id;
             info.rulesDigest = mode.rulesDigest;
             info.arenaDigest = arenaDigest;
+            info.sceneDigest = sceneDigest;
             info.characterDigest = options.content->characterDigest;
         }
         if (end == WorldEnd::Match && options.expectUsers.empty()) info.phase = MatchPhase::Playing;

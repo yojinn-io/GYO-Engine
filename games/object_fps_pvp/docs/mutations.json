@@ -265,7 +265,7 @@
   {
    "id": "pvp-hit-direction-not-drawn",
    "what": "the arc toward the attacker is never drawn",
-   "find": "        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);",
+   "find": "        arc.Get() = HitDirection(screen->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);",
    "replace": "        arc.Get() = R::Shape2d{};",
    "expect": "pvp-hit-direction",
    "guards": [
@@ -307,8 +307,8 @@
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
-   "find": "        if (id == \"pvp.back\") {\n            request->next = SceneChange{.scene = Scene::Menu};\n",
+   "file": "games/object_fps_pvp/src/client/LobbyScreen.cpp",
+   "find": "        if (id == \"pvp.back\") {\n            request->next = ScreenChange{.screen = Screen::Menu};\n",
    "replace": "        if (id == \"pvp.back\") {\n",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
@@ -329,7 +329,7 @@
   },
   {
    "id": "pvp-lobby-ui-not-drawn",
-   "what": "the Render World has no ui_render (no scene's document on screen)",
+   "what": "the Render World has no ui_render (no screen's document on screen)",
    "guards": [
     "port-declaration 4 (segment 5)"
    ],
@@ -779,11 +779,11 @@
   },
   {
    "id": "pvp-gw-ended-room-stays",
-   "what": "a room whose match ended keeps the player in the room's scene",
+   "what": "a room whose match ended keeps the player in the room's screen",
    "guards": [
     "game-flow-declaration 4 (segment 3)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "const bool out = result->status == 404 || result->status == 410 || result->errorCode == \"not_member\";",
    "replace": "const bool out = result->status == 404 || result->errorCode == \"not_member\";",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1265,7 +1265,7 @@
     "live-frame-sim-thread declaration 4.3, J6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = false;\n",
+   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a click in a frame that runs no step*",
@@ -1442,39 +1442,39 @@
    "expect": "pvp-recoil|kicks"
   },
   {
-   "id": "pvp-scene-sim-kept",
-   "what": "a scene change does not replace the Sim World (the game's World stays, or never comes)",
+   "id": "pvp-screen-sim-kept",
+   "what": "a screen change does not replace the Sim World (the game's World stays, or never comes)",
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    if (simBefore || simAfter) {",
    "replace": "    if (false) {",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
-   "expect": "pvp-scene-sim-target"
+   "expect": "pvp-screen-sim-target"
   },
   {
-   "id": "pvp-scene-sim-always-plays",
-   "what": "the Sim World plays the game in every scene",
+   "id": "pvp-screen-sim-always-plays",
+   "what": "the Sim World plays the game in every screen",
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "bool SimPlays(const Scene scene) noexcept { return scene == Scene::MultiGame; }",
-   "replace": "bool SimPlays(const Scene) noexcept { return true; }",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
+   "find": "bool SimPlays(const Screen screen) noexcept { return screen == Screen::MultiGame; }",
+   "replace": "bool SimPlays(const Screen) noexcept { return true; }",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
    "expect": "pvp-menu-sim-empty"
   },
   {
-   "id": "pvp-scene-end-stays",
-   "what": "the game scene stays when its connection ends",
+   "id": "pvp-screen-end-stays",
+   "what": "the game screen stays when its connection ends",
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason)};",
+   "find": "    request->next = ScreenChange{.screen = Screen::Lobby, .status = std::move(reason)};",
    "replace": "    static_cast<void>(reason);",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a Match that refuses*",
@@ -1486,8 +1486,8 @@
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "        if (id == \"pvp.multi\") request->next = SceneChange{.scene = Scene::Lobby};\n",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
+   "find": "        if (id == \"pvp.multi\") request->next = ScreenChange{.screen = Screen::Lobby};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: the menu goes*",
@@ -1499,7 +1499,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "        if (id == \"pvp.quit\") window->close = true;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1507,25 +1507,25 @@
    "expect": "pvp-menu-quit"
   },
   {
-   "id": "pvp-scene-exchange-not-reset",
-   "what": "a new scene's Frame World gets the last game's picture",
+   "id": "pvp-screen-exchange-not-reset",
+   "what": "a new screen's Frame World gets the last game's picture",
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    if (auto* exchange = product.Buffer().Find<ClientExchange>()) exchange->Reset();\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: leaving the game*",
-   "expect": "pvp-scene-exchange-reset"
+   "expect": "pvp-screen-exchange-reset"
   },
   {
-   "id": "pvp-scene-notes-not-carried",
-   "what": "FrameNotes start again with each scene (the program loses what the last one noted)",
+   "id": "pvp-screen-notes-not-carried",
+   "what": "FrameNotes start again with each screen (the program loses what the last one noted)",
    "guards": [
     "game-flow-declaration 4 (segment 1)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    setup.CarryOver<FrameNotes>(\"object_fps_pvp.FrameNotes\");\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1560,13 +1560,13 @@
   },
   {
    "id": "pvp-solo-never-plays",
-   "what": "the Solo World plays in no scene",
+   "what": "the Solo World plays in no screen",
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
-   "find": "bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }",
-   "replace": "bool SoloPlays(const Scene) noexcept { return false; }",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
+   "find": "bool SoloPlays(const Screen screen) noexcept { return screen == Screen::SoloGame; }",
+   "replace": "bool SoloPlays(const Screen) noexcept { return false; }",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
    "expect": "pvp-solo-world"
@@ -1577,8 +1577,8 @@
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "            request->next = SceneChange{.scene = Scene::SoloGame, .map = room.mode.maps[room.map],\n                                        .mode = room.mode.id};\n",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
+   "find": "            request->next = ScreenChange{.screen = Screen::SoloGame, .map = room.mode.maps[room.map],\n                                        .mode = room.mode.id};\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player*",
@@ -1590,7 +1590,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
    "find": "    auto written = WriteLocalText(path, match::EncodePlayerSave(after));\n    if (!written) return Base::Err(SoloSaveFailure::Make(SoloSaveFailureCode::WriteFailed, path, Base::Describe(written.error())));\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1655,7 +1655,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 2)"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
    "find": "    const std::uint64_t game = before.lastMatch + 1;",
    "replace": "    const std::uint64_t game = 1;",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1708,8 +1708,8 @@
     "game-flow-declaration 4 (segment 3)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    return scene.connect ? scene.connect->userId : options.userId;",
-   "replace": "    static_cast<void>(scene);\n    return options.userId;",
+   "find": "    return screen.connect ? screen.connect->userId : options.userId;",
+   "replace": "    static_cast<void>(screen);\n    return options.userId;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-user"
@@ -1720,7 +1720,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 3)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "    if (room.room && room.room->state == \"started\" && room.room->connect) {",
    "replace": "    if (false && room.room) {",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1733,7 +1733,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 3)"
    ],
-   "file": "games/object_fps_pvp/src/client/LobbyScene.cpp",
+   "file": "games/object_fps_pvp/src/client/LobbyScreen.cpp",
    "find": "                gateway->Ask(\"enter\", JoinRequest(lobby.picked, RandomHex(16)));",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1786,7 +1786,7 @@
     "game-flow-declaration 4 (segment 4)"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
+   "find": "        if (input.Held(kHoldReady) && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
    "replace": "        if (std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: before the start*",
@@ -1811,7 +1811,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 4)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "file": "games/object_fps_pvp/src/world/Sight.cpp",
    "find": "    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;",
    "replace": "    return info.phase == MatchPhase::Playing || tick >= 0 ? input : none;",
    "target": "gyo_object_fps_pvp_world_tests",
@@ -1902,7 +1902,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "            resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1915,7 +1915,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "            } else if (auto saved = SaveSettings(edit.Read().path, edited); !saved) {",
    "replace": "            } else if (auto saved = Base::Result<void, GYO::Engine::IO::IOError>{}; !saved) {",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1924,11 +1924,11 @@
   },
   {
    "id": "pvp-settings-not-carried",
-   "what": "the settings start again with each scene",
+   "what": "the settings start again with each screen",
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    setup.CarryOver<ClientSettings>(\"object_fps_pvp.ClientSettings\");\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1954,7 +1954,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "            mode.Send(W::SetWindowMode{edited.window});\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1980,7 +1980,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    edit->edited = *settings;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -1989,11 +1989,11 @@
   },
   {
    "id": "pvp-settings-start-ignored",
-   "what": "the first scene starts from the default settings, not the program's",
+   "what": "the first screen starts from the default settings, not the program's",
    "guards": [
     "game-flow-declaration 4 (segment 5)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "        if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);",
    "replace": "        if (w.Resource<ClientSettings>() == nullptr) w.SetResource(ClientSettings{});",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2015,11 +2015,11 @@
   },
   {
    "id": "pvp-map-not-carried",
-   "what": "the room's map does not reach the game scene",
+   "what": "the room's map does not reach the game screen",
    "guards": [
     "game-flow-declaration 3.4 (the room's map)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "                                        .room = room.id,\n                                        .map = room.room->map,",
    "replace": "                                        .room = room.id,",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2033,8 +2033,8 @@
     "game-flow-declaration 3.4 (the room's map)"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": ".arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),\n                               .localUser = LocalUserOf(scene, options),",
-   "replace": ".arena = options.arena, .mode = ModeOf(scene, options),\n                               .localUser = LocalUserOf(scene, options),",
+   "find": ".arena = ArenaOf(screen, options), .mode = ModeOf(screen, options),\n                               .localUser = LocalUserOf(screen, options),",
+   "replace": ".arena = options.arena, .mode = ModeOf(screen, options),\n                               .localUser = LocalUserOf(screen, options),",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: gateway: the lobby lists*",
    "expect": "pvp-gw-map-sim"
@@ -2058,9 +2058,9 @@
    "guards": [
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
-   "find": "request->next = SceneChange{.scene = Scene::SoloGame, .map = room.mode.maps[room.map],",
-   "replace": "request->next = SceneChange{.scene = Scene::SoloGame,",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
+   "find": "request->next = ScreenChange{.screen = Screen::SoloGame, .map = room.mode.maps[room.map],",
+   "replace": "request->next = ScreenChange{.screen = Screen::SoloGame,",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: single player: the room is the multiplayer's*",
    "expect": "pvp-solo-map"
@@ -2071,7 +2071,7 @@
    "guards": [
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
    "find": "            room.map = (room.map + 1) % room.mode.maps.size();\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2097,7 +2097,7 @@
    "guards": [
     "game-flow-declaration 3.3 (revision 6: the single player's room)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "        bindings.Set(\"map\", \"\u30de\u30c3\u30d7: \" + state.room->map);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2110,7 +2110,7 @@
    "guards": [
     "game-flow-declaration 3.6 (revision 6: physical pixels)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    resize.Send(W::ResizeWindow{WindowSizeFor(settings->resolution, window->scaleFactor)});\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2123,7 +2123,7 @@
    "guards": [
     "game-flow-declaration 3.6 (revision 6: physical pixels)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "resize.Send(W::ResizeWindow{WindowSizeFor(edited.resolution, fit->scale)});",
    "replace": "resize.Send(W::ResizeWindow{edited.resolution});",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2228,7 +2228,7 @@
    "guards": [
     "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    if (!window->known || window->scaleFactor == fit.Read().scale) return {};\n",
    "replace": "    if (!window->known || window->scaleFactor == fit.Read().scale || fit.Read().scale != 1.0F) return {};\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2241,7 +2241,7 @@
    "guards": [
     "game-flow-declaration 3.3, 3.5, 3.6 (revision 6: the design review)"
    ],
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    fit->scale = window->scaleFactor;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2332,7 +2332,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the readiness asked)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "            room.room = std::move(*read);\n",
    "replace": "            room.room = std::move(*read);\n            if (result->tag == \"room\") room.asked.reset();\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2345,7 +2345,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "            if (OwnerOf(room, SelfOf(*gateway))) {\n",
    "replace": "            if (true) {\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2358,7 +2358,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "            if (!action) room.problem.clear();\n",
    "replace": "            if (!action) {\n                room.problem.clear();\n                room.said.reset();\n            }\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2371,7 +2371,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the start is the owner's; the word on an action stays)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "\"\u958b\u59cb\uff08\u90e8\u5c4b\u4e3b\u306e\u307f\uff09\"",
    "replace": "\"\u958b\u59cb\"",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2384,7 +2384,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "if (result->tag == \"ready\" && --room.readyCalls == 0) room.asked.reset();",
    "replace": "if (result->tag == \"ready\") room.asked.reset();",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2397,7 +2397,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "        if (action) {\n            room.said = std::move(text);",
    "replace": "        if (false) {\n            room.said = std::move(text);",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2410,7 +2410,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "            room.problem = std::move(text);\n            room.said.reset();\n",
    "replace": "            room.problem = std::move(text);\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2423,7 +2423,7 @@
    "guards": [
     "v8-product-pvp-room-ready-lag (the readiness asked; the status line)"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "connect.server;\n        room.said.reset();\n",
    "replace": "connect.server;\n",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2811,8 +2811,8 @@
    "id": "pvp-hold-kept-stale",
    "what": "stale controls keep jumping while the key was held",
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = false;",
-   "replace": "        step.jump = step.fire = step.reload = false;",
+   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = step.interact = false;",
+   "replace": "        step.jump = step.fire = step.reload = step.interact = false;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: J5*",
    "expect": "pvp-hold-stale",
@@ -2876,7 +2876,7 @@
    "id": "pvp-marker-not-drawn",
    "what": "the HUD never draws the hit marker",
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));",
+   "find": "        marker.Get() = HitMarkerShape(screen->presentation->hitFeedback.hitMarker, h.marker.Sample(now, screen->presentation->hitFeedback));",
    "replace": "        marker.Get() = R::Shape2d{};",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: an own shot that hits*",
@@ -2901,7 +2901,7 @@
   {
    "id": "pvp-splash-no-wait",
    "what": "the start screen goes on to the menu at once",
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    const bool done = at && static_cast<double>(time->elapsed - *at) / 1e9 >= splash.Read().seconds;",
    "replace": "    const bool done = at.has_value();",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2914,7 +2914,7 @@
   {
    "id": "pvp-splash-stays",
    "what": "the start screen never goes on by itself",
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "        if (shown) splash->shownAt = time->elapsed;",
    "replace": "        (void)shown;",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -2927,7 +2927,7 @@
   {
    "id": "pvp-splash-unskippable",
    "what": "a key does not go on from the start screen",
-   "file": "games/object_fps_pvp/src/client/Scenes.cpp",
+   "file": "games/object_fps_pvp/src/client/Screens.cpp",
    "find": "    const bool skipped = any(*keys) || any(*mouse);",
    "replace": "    const bool skipped = false && (any(*keys) || any(*mouse));",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -3230,7 +3230,7 @@
     "mode-config-declaration M1",
     "game-flow-declaration revision 8"
    ],
-   "file": "games/object_fps_pvp/src/client/GatewayScene.cpp",
+   "file": "games/object_fps_pvp/src/client/GatewayScreen.cpp",
    "find": "        if (choice.id == mode) return choice.name;",
    "replace": "        if (choice.id == mode) return choice.id;",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -3243,7 +3243,7 @@
    "guards": [
     "mode-config-declaration M1"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "                                        .mode = room.room->mode};",
    "replace": "                                        .mode = {}};",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -3257,7 +3257,7 @@
     "mode-config-declaration M1",
     "game-flow-declaration revision 8"
    ],
-   "file": "games/object_fps_pvp/src/client/SoloScene.cpp",
+   "file": "games/object_fps_pvp/src/client/SoloScreen.cpp",
    "find": "                                        .mode = room.mode.id};",
    "replace": "                                        .mode = {}};",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -3987,7 +3987,7 @@
    "guards": [
     "display-name-declaration 9"
    ],
-   "file": "games/object_fps_pvp/src/client/GatewayScene.cpp",
+   "file": "games/object_fps_pvp/src/client/GatewayScreen.cpp",
    "find": "return name.empty() ? \"Player \" + std::to_string(userId) : std::string(name);",
    "replace": "return std::string(name);",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -4000,7 +4000,7 @@
    "guards": [
     "display-name-declaration 9"
    ],
-   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "file": "games/object_fps_pvp/src/client/RoomScreen.cpp",
    "find": "PlayerLabel(member.userId, member.name)",
    "replace": "\"Player \" + std::to_string(member.userId)",
    "target": "gyo_object_fps_pvp_client_tests",
@@ -4064,6 +4064,163 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
    "expect": "pvp-name-host-not-asked"
+  },
+  {
+   "id": "pvp-held-drops-holds",
+   "what": "a held input drops its holds too (a held crouch or readiness ends when an input is missing)",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    options.held = [](PlayerInput& v) { v.presses = 0; };",
+   "replace": "    options.held = [](PlayerInput& v) {\n        v.presses = 0;\n        v.holds = 0;\n    };",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "pvp-input-held\\] a held input keeps its holds"
+  },
+  {
+   "id": "pvp-held-keeps-presses",
+   "what": "a held input keeps its presses (a press fires on every missing step)",
+   "guards": [
+    "interact-door-declaration 2.4",
+    "C-IN3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    options.held = [](PlayerInput& v) { v.presses = 0; };",
+   "replace": "    options.held = [](PlayerInput& v) { (void)v; };",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "pvp-input-held\\] a held input has no press"
+  },
+  {
+   "id": "pvp-input-codec-no-holds",
+   "what": "the input's codec does not write the holds",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "                         w.Value(v.holds);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "codec.decode"
+  },
+  {
+   "id": "pvp-interact-reach-ignored",
+   "what": "the interaction reaches ten times the mode's reach",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        auto hit = P::CastRay(walls, ray, reach->reach);",
+   "replace": "        auto hit = P::CastRay(walls, ray, reach->reach * 10.0F);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-reach"
+  },
+  {
+   "id": "pvp-interact-through-walls",
+   "what": "the interaction looks past every collider that is not Interactable",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        auto hit = P::CastRay(walls, ray, reach->reach);",
+   "replace": "        auto hit = P::CastRay(walls, ray, reach->reach, [&](const K::EntityId e) { return targets.Contains(e); });",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-wall"
+  },
+  {
+   "id": "pvp-interact-before-start",
+   "what": "E interacts before the start",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        if (!Playable(*players.Get<PlayerInput>(actor), *info, now).Pressed(kPressInteract)) continue;",
+   "replace": "        if (!players.Get<PlayerInput>(actor)->Pressed(kPressInteract)) continue;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-before-start"
+  },
+  {
+   "id": "pvp-interact-dead",
+   "what": "a dead player interacts",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        if (players.Get<PlayerCombat>(actor)->life != sim::LifeState::Alive) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-dead"
+  },
+  {
+   "id": "pvp-interact-not-sent",
+   "what": "an interaction is judged but not written",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        interacted.Send(Interacted{actor, (*hit)->entity, now});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-hit"
+  },
+  {
+   "id": "pvp-interact-bit-overlaps",
+   "what": "the interaction key's bit is the reload's (a reload interacts)",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/include/object_fps_pvp/world/Components.hpp",
+   "find": "inline constexpr std::uint8_t kPressInteract = 1U << 3U;",
+   "replace": "inline constexpr std::uint8_t kPressInteract = 1U << 2U;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-key"
+  },
+  {
+   "id": "pvp-set-needs-unchecked",
+   "what": "a mode turns on a kind without the interaction set",
+   "guards": [
+    "interact-door-declaration 2.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "                if (found == sets.end() || !mode.on.Has(static_cast<std::size_t>(found - sets.begin()))) {",
+   "replace": "                if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-door-needs-interaction"
+  },
+  {
+   "id": "pvp-interact-key-not-read",
+   "what": "the Client does not read E",
+   "guards": [
+    "interact-door-declaration 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    frame.interact = keys->JustPressed(I::KeyCode::E);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: E reaches*",
+   "expect": "pvp-interact-key-sent"
+  },
+  {
+   "id": "pvp-interact-press-repeats",
+   "what": "the step that takes the E press leaves it for the next steps",
+   "guards": [
+    "interact-door-declaration 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;\n",
+   "replace": "    state.pending.jump = state.pending.fire = state.pending.reload = false;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: E reaches*",
+   "expect": "pvp-interact-key-sent"
   },
   {
    "id": "pvp-arena-scene-unchecked",
@@ -4430,6 +4587,370 @@
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP arena: what an arena file says*",
    "expect": "65 characters"
+  },
+  {
+   "id": "pvp-scene-digest-off-counted",
+   "what": "the scene digest counts the objects of a set the mode leaves off",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        if (on.Has(object.slot)) played.push_back(&object);",
+   "replace": "        played.push_back(&object);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: *scene*",
+   "expect": "pvp-scene-digest-off"
+  },
+  {
+   "id": "pvp-scene-digest-value-ignored",
+   "what": "the scene digest leaves out what an object's set read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        HashValue(h, object->data.digest);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the scene digest*",
+   "expect": "pvp-scene-digest\\] an object of a set that is on"
+  },
+  {
+   "id": "pvp-scene-digest-id-ignored",
+   "what": "the scene digest leaves out the objects' ids",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        HashValue(h, object->id);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the scene digest*",
+   "expect": "an object's id"
+  },
+  {
+   "id": "pvp-scene-put-ignores-mode",
+   "what": "the objects of a set the mode leaves off are put too",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "        if (!on.Has(object.slot)) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: *scene*",
+   "expect": "pvp-scene-put-off"
+  },
+  {
+   "id": "pvp-scene-id-reused",
+   "what": "two objects with one id read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "                throw std::runtime_error(\"id is another object's\");",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene file that says*",
+   "expect": "id is another object's', read"
+  },
+  {
+   "id": "pvp-scene-id-unbounded",
+   "what": "an object id past the scene entities' range reads",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Scene.cpp",
+   "find": "            if (id == 0 || id > kMaxSceneObjectId) throw",
+   "replace": "            if (id == 0) throw",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene file that says*",
+   "expect": "expected 'id is not 1 to 99999'"
+  },
+  {
+   "id": "pvp-scene-mismatch-unchecked",
+   "what": "a Client furnished otherwise than the Match is not told",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    } else if (match.sceneDigest != own.sceneDigest) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client furnished*",
+   "expect": "pvp-scene-mismatch"
+  },
+  {
+   "id": "pvp-scene-not-announced",
+   "what": "the Match does not say its scene digest",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            info.sceneDigest = sceneDigest;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene's objects are at every end*",
+   "expect": "pvp-scene-info"
+  },
+  {
+   "id": "pvp-scene-not-read",
+   "what": "an arena's scene is not read",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        if (arena->scene) {",
+   "replace": "        if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: an arena whose scene*",
+   "expect": "pvp-scene-missing"
+  },
+  {
+   "id": "pvp-scene-not-put",
+   "what": "a World is not furnished with its arena's scene",
+   "guards": [
+    "interact-door-declaration 5, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        for (const K::EntityId placed : PutScene(options.content->scenes[options.arena], mode.on, world)) {",
+   "replace": "        for (const K::EntityId placed : std::vector<K::EntityId>{}) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a scene's objects are at every end*",
+   "expect": "pvp-scene-put\\]"
+  },
+  {
+   "id": "pvp-door-pose-not-followed",
+   "what": "PoseDoors leaves a door's Transform as it was put",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (!(transform.Read() == pose)) transform.Get() = pose;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose-follows"
+  },
+  {
+   "id": "pvp-door-body-ignored",
+   "what": "a door turns into a living body",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "            if ((blocked = contact->has_value())) break;",
+   "replace": "            if (contact->has_value()) break;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-body-in-way"
+  },
+  {
+   "id": "pvp-door-dead-blocks",
+   "what": "a dead body keeps a door from turning",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "            if (players.Get<PlayerCombat>(id)->life != sim::LifeState::Alive) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "a dead body is not in the way"
+  },
+  {
+   "id": "pvp-door-leaf-left",
+   "what": "the leaf runs to the facing's left of the hinge",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "Math::Vec3{0.5F * shape.width, 0.5F * shape.height, 0.0F}",
+   "replace": "Math::Vec3{-0.5F * shape.width, 0.5F * shape.height, 0.0F}",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose\\] shut"
+  },
+  {
+   "id": "pvp-door-swing-ignored",
+   "what": "an open door stands as a shut one",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "    const Math::Quaternion turn = DoorTurn(shape, open ? 1.0F : 0.0F);",
+   "replace": "    const Math::Quaternion turn = DoorTurn(shape, 0.0F);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose\\] open"
+  },
+  {
+   "id": "pvp-door-swing-unbounded",
+   "what": "a swing of more than pi reads",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (shape.swing == 0.0F || std::abs(shape.swing) > std::numbers::pi_v<float>) throw",
+   "replace": "        if (shape.swing == 0.0F) throw",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "<= pi', read: \\n"
+  },
+  {
+   "id": "pvp-door-state-not-replicated",
+   "what": "a door's state is not sent to the Clients",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (networked) N::NetEntry(setup).Replicate<DoorState>(\"DoorState\", DoorStateCodec());\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-match-client"
+  },
+  {
+   "id": "pvp-door-needs-missing",
+   "what": "the doors set does not need the interaction set",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "    set.needs = {kInteractionSet};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-needs-interaction"
+  },
+  {
+   "id": "pvp-scene-not-placed",
+   "what": "a scene's objects are not placed at the ends with a net",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            if (end != WorldEnd::Local) world.Insert(placed, N::Placed{});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-placed"
+  },
+  {
+   "id": "pvp-show-no-placed",
+   "what": "before the start a connection does not see what both ends placed",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        for (const K::EntityId furnishing : placed.Entities()) own.Show(furnishing);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-match-client\\] attached before the start"
+  },
+  {
+   "id": "pvp-door-prompt-flipped",
+   "what": "the prompt says open for an open door and shut for a shut one",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (focused != nullptr && focused->receiving) text = focused->state->open != 0 ? \"[E] 閉める\" : \"[E] 開ける\";",
+   "replace": "    if (focused != nullptr && focused->receiving) text = focused->state->open != 0 ? \"[E] 開ける\" : \"[E] 閉める\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt"
+  },
+  {
+   "id": "pvp-door-prompt-not-received",
+   "what": "a door the Match is not sending is prompted",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (focused != nullptr && focused->receiving) text =",
+   "replace": "    if (focused != nullptr) text =",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt-receiving"
+  },
+  {
+   "id": "pvp-door-swing-instant",
+   "what": "a door's picture jumps to its state",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (door.state) door.turned = present::SwingToward(door.turned, door.state->open != 0, seconds, screen->presentation->doors);",
+   "replace": "        if (door.state) door.turned = door.state->open != 0 ? 1.0F : 0.0F;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-swing\\] the picture swings"
+  },
+  {
+   "id": "pvp-door-picture-off-hinge",
+   "what": "a door's picture turns about another point than its hinge",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const T::Transform pose{door.shape.hinge, PW::DoorTurn(door.shape, door.turned)};",
+   "replace": "        const T::Transform pose{door.shape.hinge + Math::Vec3{0.5F, 0.0F, 0.0F}, PW::DoorTurn(door.shape, door.turned)};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "turns about the hinge"
+  },
+  {
+   "id": "pvp-door-change-unheard",
+   "what": "a door's state that changes is not heard",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        } else if (door.state->open != shown.state->open) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-sound"
+  },
+  {
+   "id": "pvp-door-state-not-pictured",
+   "what": "the Sim World's picture does not carry a door's state",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            if (const PW::DoorState* state = world.Get<PW::DoorState>(id)) door.state = *state;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt\\] looking at the shut door"
+  },
+  {
+   "id": "pvp-door-swing-pace",
+   "what": "a swing goes at twice the settings' pace",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/present/DoorPicture.cpp",
+   "find": "    const auto step = static_cast<float>(std::max(0.0, seconds) / settings.swingSeconds);",
+   "replace": "    const auto step = static_cast<float>(2.0 * std::max(0.0, seconds) / settings.swingSeconds);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP door picture*",
+   "expect": "pvp-door-swing-pace"
+  },
+  {
+   "id": "pvp-door-swing-unbounded-read",
+   "what": "a negative swing time reads",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/present/DoorPicture.cpp",
+   "find": "settings.swingSeconds < 0.0F || ",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP door picture*",
+   "expect": "pvp-door-swing-read"
   }
  ]
 }

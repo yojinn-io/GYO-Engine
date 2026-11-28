@@ -16,7 +16,7 @@ void Controls::Face(const float yaw, const float pitch) noexcept {
 
 void Controls::Release() noexcept {
     captured_ = false;
-    pendingFire_ = pendingJump_ = pendingReload_ = false;
+    pendingFire_ = pendingJump_ = pendingReload_ = pendingInteract_ = false;
 }
 
 void Controls::Apply(const ControlsFrame& frame) noexcept {
@@ -37,6 +37,7 @@ void Controls::Apply(const ControlsFrame& frame) noexcept {
         pendingFire_ = pendingFire_ || frame.click;
         pendingJump_ = pendingJump_ || frame.jump;
         pendingReload_ = pendingReload_ || frame.reload;
+        pendingInteract_ = pendingInteract_ || frame.interact;
     }
     if (captured_) {
         yaw_ = GYO::Engine::Math::WrapRadians(yaw_ + frame.motion.x * MouseRadiansPerCount);
@@ -58,8 +59,9 @@ StepInput Controls::Take() noexcept {
         input.fire = pendingFire_;
         input.jump = pendingJump_;
         input.reload = pendingReload_;
+        input.interact = pendingInteract_;
     }
-    pendingFire_ = pendingJump_ = pendingReload_ = false;
+    pendingFire_ = pendingJump_ = pendingReload_ = pendingInteract_ = false;
     return input;
 }
 

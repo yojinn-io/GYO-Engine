@@ -1,7 +1,7 @@
-#include "object_fps_pvp/client/Scenes.hpp"
+#include "object_fps_pvp/client/Screens.hpp"
 
 #include "client/ClientExchange.hpp"
-#include "client/SceneBuilds.hpp"
+#include "client/ScreenBuilds.hpp"
 
 #include "engine/asset/AssetStore.hpp"
 #include "engine/base/Assert.hpp"
@@ -37,13 +37,13 @@ namespace WT = GYO::Engine::WorldTime;
 
 namespace {
 
-// --frames: the window closes itself when the budget runs out (every scene counts on: FrameNotes is carried).
+// --frames: the window closes itself when the budget runs out (every screen counts on: FrameNotes is carried).
 K::SystemResult CountFrames(K::ResMut<FrameNotes> notes, K::ResMut<W::WindowRequest> request) {
     if (notes.Read().framesLeft > 0 && --notes->framesLeft == 0) request->close = true;
     return {};
 }
 
-// Whether the scene's document is shown; when it is not, why (its asset failed, or world_ui wrote the root's failure:
+// Whether the screen's document is shown; when it is not, why (its asset failed, or world_ui wrote the root's failure:
 // a document that does not validate, a missing binding, a font it could not add). Noted once for the program to log.
 K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootState>> roots, K::Res<WA::AssetView> view,
                               K::ResMut<FrameNotes> notes) {
@@ -64,7 +64,7 @@ K::SystemResult WatchDocument(K::Query<K::Read<Ui::UiRoot>, K::Read<Ui::UiRootSt
 }
 
 // The scale factor the window's logical size was last given at (the program opens it at the settings' size as if the
-// scale were 1). Carried from scene to scene: the window is one.
+// scale were 1). Carried from screen to screen: the window is one.
 struct WindowFit final {
     float scale = 1.0F;
 };
@@ -87,7 +87,7 @@ K::SystemResult FitWindow(K::Res<W::WindowState> window, K::Res<ClientSettings> 
 constexpr std::string_view kMenuInvitation = "モードを選んでください";
 constexpr K::EntityId kSettingsRoot = 3'000'032;
 
-// The menu's document (held for the scene, so a page's root finds it loaded) and the menu's first status line.
+// The menu's document (held for the screen, so a page's root finds it loaded) and the menu's first status line.
 struct MenuDocument final {
     A::Handle<Ui::UiAsset> document;
     std::string status;
@@ -113,7 +113,7 @@ Ui::UiRoot PageRoot(const MenuDocument& menu, std::string canvas) {
     Ui::UiRoot root;
     root.document = menu.document;
     root.canvas = std::move(canvas);
-    root.camera = kSceneCamera;
+    root.camera = kScreenCamera;
     return root;
 }
 
@@ -129,13 +129,13 @@ void TakeRoot(PageRoots& roots, const K::EntityId id) {
 K::SystemResult EnterMenuMain(K::Res<MenuDocument> menu, PageRoots roots) {
     Ui::UiBindings bindings;
     bindings.Set("status", menu->status.empty() ? std::string(kMenuInvitation) : menu->status);
-    roots.Insert(kSceneRoot, PageRoot(*menu, "menu"));
-    roots.Insert(kSceneRoot, Ui::UiRootState{});
-    roots.Insert(kSceneRoot, std::move(bindings));
+    roots.Insert(kScreenRoot, PageRoot(*menu, "menu"));
+    roots.Insert(kScreenRoot, Ui::UiRootState{});
+    roots.Insert(kScreenRoot, std::move(bindings));
     return {};
 }
 K::SystemResult ExitMenuMain(PageRoots roots) {
-    TakeRoot(roots, kSceneRoot);
+    TakeRoot(roots, kScreenRoot);
     return {};
 }
 
@@ -158,14 +158,14 @@ K::SystemResult ExitSettings(PageRoots roots) {
     return {};
 }
 
-// The menu page: pvp.solo, pvp.multi (other scenes), pvp.settings (the settings page), pvp.quit.
-K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<SceneRequest> request, K::ResMut<MenuPageRequest> page,
+// The menu page: pvp.solo, pvp.multi (other screens), pvp.settings (the settings page), pvp.quit.
+K::SystemResult MenuActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<ScreenRequest> request, K::ResMut<MenuPageRequest> page,
                             K::ResMut<W::WindowRequest> window) {
     for (const Ui::UiAction* action : actions.Read()) {
         const std::string& id = action->action;
         if (id == "pvp.quit") window->close = true;
-        if (id == "pvp.solo") request->next = SceneChange{.scene = Scene::SoloRoom};
-        if (id == "pvp.multi") request->next = SceneChange{.scene = Scene::Lobby};
+        if (id == "pvp.solo") request->next = ScreenChange{.screen = Screen::SoloRoom};
+        if (id == "pvp.multi") request->next = ScreenChange{.screen = Screen::Lobby};
         if (id == "pvp.settings") page->Request(MenuPage::Settings);
     }
     return {};
@@ -227,7 +227,7 @@ void HashValue(K::Hasher&, const SplashState&) {}
 
 K::SystemResult LeaveSplash(K::Res<WT::RealTime> time, K::Res<I::ButtonInput<I::KeyCode>> keys,
                             K::Res<I::ButtonInput<I::MouseButton>> mouse, K::Query<K::Read<Ui::UiRootState>> roots,
-                            K::ResMut<SplashState> splash, K::ResMut<SceneRequest> request) {
+                            K::ResMut<SplashState> splash, K::ResMut<ScreenRequest> request) {
     if (request.Read().next) return {};
     if (!splash.Read().shownAt) {
         bool shown = false;
@@ -238,7 +238,7 @@ K::SystemResult LeaveSplash(K::Res<WT::RealTime> time, K::Res<I::ButtonInput<I::
         });
         // A logo that cannot be shown (WatchDocument notes why) does not hold the player on a black screen.
         if (failed) {
-            request->next = SceneChange{.scene = Scene::Menu};
+            request->next = ScreenChange{.screen = Screen::Menu};
             return {};
         }
         if (shown) splash->shownAt = time->elapsed;
@@ -249,7 +249,7 @@ K::SystemResult LeaveSplash(K::Res<WT::RealTime> time, K::Res<I::ButtonInput<I::
     const bool skipped = any(*keys) || any(*mouse);
     const auto& at = splash.Read().shownAt;
     const bool done = at && static_cast<double>(time->elapsed - *at) / 1e9 >= splash.Read().seconds;
-    if (skipped || done) request->next = SceneChange{.scene = Scene::Menu};
+    if (skipped || done) request->next = ScreenChange{.screen = Screen::Menu};
     return {};
 }
 
@@ -266,31 +266,31 @@ K::SystemOptions OnPage(std::string name, std::string schedule) {
 
 } // namespace
 
-bool SimPlays(const Scene scene) noexcept { return scene == Scene::MultiGame; }
-bool SoloPlays(const Scene scene) noexcept { return scene == Scene::SoloGame; }
+bool SimPlays(const Screen screen) noexcept { return screen == Screen::MultiGame; }
+bool SoloPlays(const Screen screen) noexcept { return screen == Screen::SoloGame; }
 
 std::string SoloSavePath(const std::string& dataDirectory) {
     return dataDirectory.empty() ? std::string() : dataDirectory + "/solo-save.json";
 }
 
-bool SceneChangeWanted(O::Product& product) {
-    const auto* request = std::as_const(product.World("Frame").GetWorld()).Resource<SceneRequest>();
+bool ScreenChangeWanted(O::Product& product) {
+    const auto* request = std::as_const(product.World("Frame").GetWorld()).Resource<ScreenRequest>();
     return request != nullptr && request->next.has_value();
 }
 
-Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product) {
-    auto* director = product.Buffer().Find<SceneDirector>();
-    GYO_ASSERT(director != nullptr && "the Client's Product needs ConfigureClient (it makes its SceneDirector)");
-    auto* request = product.World("Frame").GetWorld().ResourceMut<SceneRequest>();
+Base::Result<void, O::OrchestrationError> ChangeScreen(O::Product& product) {
+    auto* director = product.Buffer().Find<ScreenDirector>();
+    GYO_ASSERT(director != nullptr && "the Client's Product needs ConfigureClient (it makes its ScreenDirector)");
+    auto* request = product.World("Frame").GetWorld().ResourceMut<ScreenRequest>();
     if (request == nullptr || !request->next) return {};
-    const bool simBefore = SimPlays(director->Current().scene);
-    const bool soloBefore = SoloPlays(director->Current().scene);
-    SceneChange next = std::move(*request->next);
+    const bool simBefore = SimPlays(director->Current().screen);
+    const bool soloBefore = SoloPlays(director->Current().screen);
+    ScreenChange next = std::move(*request->next);
     request->next.reset();
-    const bool simAfter = SimPlays(next.scene);
-    const bool soloAfter = SoloPlays(next.scene);
+    const bool simAfter = SimPlays(next.screen);
+    const bool soloAfter = SoloPlays(next.screen);
     director->Enter(std::move(next));
-    // Neither World's last picture or controls reach the next scene.
+    // Neither World's last picture or controls reach the next screen.
     if (auto* exchange = product.Buffer().Find<ClientExchange>()) exchange->Reset();
     if (soloBefore || soloAfter) {
         if (auto replaced = product.ReplaceWorld("Solo", {}); !replaced) return Base::Err(std::move(replaced).error());
@@ -301,7 +301,7 @@ Base::Result<void, O::OrchestrationError> ChangeScene(O::Product& product) {
     return product.ReplaceWorld("Frame", {});
 }
 
-K::SystemOptions InSceneUpdate(std::string name, std::vector<std::string> after) {
+K::SystemOptions InScreenUpdate(std::string name, std::vector<std::string> after) {
     K::SystemOptions options;
     options.name = std::move(name);
     K::Mount mount;
@@ -312,35 +312,35 @@ K::SystemOptions InSceneUpdate(std::string name, std::vector<std::string> after)
     return options;
 }
 
-void PlaceSceneCamera(K::World& world) {
+void PlaceScreenCamera(K::World& world) {
     // The camera the document is laid out in (its target is the window: window_camera writes the size).
-    world.Insert(kSceneCamera, C::Camera{});
-    world.Insert(kSceneCamera, C::Camera2d{});
-    world.Insert(kSceneCamera, C::CameraTarget{});
-    world.Insert(kSceneCamera, C::Projection{C::OrthographicProjection::Default2d()});
-    world.Insert(kSceneCamera, C::ComputedCamera{});
+    world.Insert(kScreenCamera, C::Camera{});
+    world.Insert(kScreenCamera, C::Camera2d{});
+    world.Insert(kScreenCamera, C::CameraTarget{});
+    world.Insert(kScreenCamera, C::Projection{C::OrthographicProjection::Default2d()});
+    world.Insert(kScreenCamera, C::ComputedCamera{});
     const T::Transform at;
-    world.Insert(kSceneCamera, at);
-    world.Insert(kSceneCamera, T::GlobalTransform{T::ToMatrix(at)});
+    world.Insert(kScreenCamera, at);
+    world.Insert(kScreenCamera, T::GlobalTransform{T::ToMatrix(at)});
 }
 
-void PlaceSceneDocument(K::World& world, const std::string_view documentId, const std::string_view canvas, Ui::UiBindings bindings,
+void PlaceScreenDocument(K::World& world, const std::string_view documentId, const std::string_view canvas, Ui::UiBindings bindings,
                         Ui::UiTextFilter filter) {
-    PlaceSceneCamera(world);
+    PlaceScreenCamera(world);
     // The document, asked for by its asset id; shown once it and its font are loaded.
     Ui::UiRoot root;
     root.document = world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId(std::string(documentId)));
     root.canvas = std::string(canvas);
-    root.camera = kSceneCamera;
+    root.camera = kScreenCamera;
     root.filter = std::move(filter);
-    world.Insert(kSceneRoot, std::move(root));
-    world.Insert(kSceneRoot, Ui::UiRootState{});
-    world.Insert(kSceneRoot, std::move(bindings));
+    world.Insert(kScreenRoot, std::move(root));
+    world.Insert(kScreenRoot, Ui::UiRootState{});
+    world.Insert(kScreenRoot, std::move(bindings));
 }
 
-void BuildSceneCommon(O::WorldSetup& setup) {
+void BuildScreenCommon(O::WorldSetup& setup) {
     K::Registrar& r = setup.Registrar();
-    r.Resource<SceneRequest>({.name = "object_fps_pvp.SceneRequest"});
+    r.Resource<ScreenRequest>({.name = "object_fps_pvp.ScreenRequest"});
     r.Resource<FrameNotes>({.name = "object_fps_pvp.FrameNotes"});
     setup.CarryOver<FrameNotes>("object_fps_pvp.FrameNotes");
     r.Resource<ClientSettings>({.name = "object_fps_pvp.ClientSettings"});
@@ -349,8 +349,8 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     setup.CarryOver<GatewayClient>("object_fps_pvp.GatewayClient");
     r.Resource<WindowFit>({.name = "object_fps_pvp.WindowFit"});
     setup.CarryOver<WindowFit>("object_fps_pvp.WindowFit");
-    r.AddSystem<&CountFrames>(InSceneUpdate("object_fps_pvp.CountFrames"));
-    r.AddSystem<&FitWindow>(InSceneUpdate("object_fps_pvp.FitWindow"));
+    r.AddSystem<&CountFrames>(InScreenUpdate("object_fps_pvp.CountFrames"));
+    r.AddSystem<&FitWindow>(InScreenUpdate("object_fps_pvp.FitWindow"));
     K::SystemOptions watch;
     watch.name = "object_fps_pvp.WatchDocument";
     K::Mount last;
@@ -362,11 +362,11 @@ void BuildSceneCommon(O::WorldSetup& setup) {
     // function that puts a default does not overwrite a value already there).
     const auto* start = setup.ProductBuffer().Find<ClientStart>();
     GYO_ASSERT(start != nullptr && "the Client's Product needs ConfigureClient (it keeps its ClientStart)");
-    const auto* director = setup.ProductBuffer().Find<SceneDirector>();
-    const Scene scene = director != nullptr ? director->Current().scene : Scene::Menu;
-    const bool gatewayNeeded = scene == Scene::Lobby || scene == Scene::Room || scene == Scene::MultiGame;
+    const auto* director = setup.ProductBuffer().Find<ScreenDirector>();
+    const Screen screen = director != nullptr ? director->Current().screen : Screen::Menu;
+    const bool gatewayNeeded = screen == Screen::Lobby || screen == Screen::Room || screen == Screen::MultiGame;
     setup.Prepare([start = *start, gatewayNeeded](K::World& w) -> Base::Result<void, O::OrchestrationError> {
-        w.SetResource(SceneRequest{});
+        w.SetResource(ScreenRequest{});
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
         if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
         if (w.Resource<WindowFit>() == nullptr) w.SetResource(WindowFit{});
@@ -378,15 +378,15 @@ void BuildSceneCommon(O::WorldSetup& setup) {
 void BuildSplash(O::WorldSetup& setup, const double seconds) {
     K::Registrar& r = setup.Registrar();
     r.Resource<SplashState>({.name = "object_fps_pvp.SplashState"});
-    r.AddSystem<&LeaveSplash>(InSceneUpdate("object_fps_pvp.LeaveSplash"));
+    r.AddSystem<&LeaveSplash>(InScreenUpdate("object_fps_pvp.LeaveSplash"));
     setup.Prepare([seconds](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SplashState{seconds, std::nullopt});
-        PlaceSceneDocument(w, "object_fps_pvp.ui.splash", "splash", Ui::UiBindings{}, Ui::UiTextFilter{});
+        PlaceScreenDocument(w, "object_fps_pvp.ui.splash", "splash", Ui::UiBindings{}, Ui::UiTextFilter{});
         return {};
     });
 }
 
-void BuildMenu(O::WorldSetup& setup, const SceneChange& change) {
+void BuildMenu(O::WorldSetup& setup, const ScreenChange& change) {
     K::Registrar& r = setup.Registrar();
     r.Resource<MenuDocument>({.name = "object_fps_pvp.MenuDocument"});
     r.Resource<SettingsEdit>({.name = "object_fps_pvp.SettingsEdit"});
@@ -395,10 +395,10 @@ void BuildMenu(O::WorldSetup& setup, const SceneChange& change) {
     r.AddSystem<&ExitMenuMain>(OnPage("object_fps_pvp.ExitMenuMain", SM::ExitScheduleName(MenuPage::Main)));
     r.AddSystem<&EnterSettings>(OnPage("object_fps_pvp.EnterSettings", SM::EnterScheduleName(MenuPage::Settings)));
     r.AddSystem<&ExitSettings>(OnPage("object_fps_pvp.ExitSettings", SM::ExitScheduleName(MenuPage::Settings)));
-    K::SystemOptions menu = InSceneUpdate("object_fps_pvp.MenuActions");
+    K::SystemOptions menu = InScreenUpdate("object_fps_pvp.MenuActions");
     menu.mounts.front().conditions.push_back(SM::InState<MenuPage, MenuPage::Main>());
     r.AddSystem<&MenuActions>(std::move(menu));
-    K::SystemOptions settings = InSceneUpdate("object_fps_pvp.SettingsActions");
+    K::SystemOptions settings = InScreenUpdate("object_fps_pvp.SettingsActions");
     settings.mounts.front().conditions.push_back(SM::InState<MenuPage, MenuPage::Settings>());
     r.AddSystem<&SettingsActions>(std::move(settings));
     const auto* start = setup.ProductBuffer().Find<ClientStart>();
@@ -406,9 +406,9 @@ void BuildMenu(O::WorldSetup& setup, const SceneChange& change) {
     setup.Prepare([status = change.status, path = start->settingsPath](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         w.SetResource(SettingsEdit{*w.Resource<ClientSettings>(), path});
         w.SetResource(MenuDocument{w.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.menu")), status});
-        PlaceSceneCamera(w);
+        PlaceScreenCamera(w);
         // The pages' roots: the entities are there from the start (a page's enter puts the root's components on them).
-        w.Insert(kSceneRoot, T::Transform{});
+        w.Insert(kScreenRoot, T::Transform{});
         w.Insert(kSettingsRoot, T::Transform{});
         return {};
     });

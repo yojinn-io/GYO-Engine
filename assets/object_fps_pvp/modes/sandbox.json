@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "sandbox",
+  "name": "サンドボックス",
+  "rules": {
+    "movement": "rules/movement_rules.json",
+    "damage": "rules/damage_rules.json"
+  },
+  "sets": {
+    "interaction": {},
+    "doors": {}
+  },
+  "arenas": ["pvp_training_v1"]
+}

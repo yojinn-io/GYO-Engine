@@ -24,6 +24,7 @@
 #include <mutex>
 #include <memory>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -333,5 +334,115 @@ inline std::string ModeText(const std::string& id, const std::string& rules = kS
                             const std::string& sets = "{}", const std::string& arenas = "[]") {
     return R"({"version": 1, "id": ")" + id + R"(", "name": "M", "rules": )" + rules + R"(, "sets": )" + sets + R"(, "arenas": )" + arenas + "}";
 }
+
+// A content root of a test's own: the shipped character (its files and models), the shipped rules, one mode of its own
+// and the arenas it writes (none of their maps: LoadGameContent does not read them).
+struct ContentFolder {
+    std::filesystem::path root;
+    ContentFolder() {
+        std::random_device random;
+        root = std::filesystem::temp_directory_path() / ("gyo_pvp_content_" + std::to_string(random()));
+        const std::filesystem::path shipped(PVP_CONTENT_ROOT);
+        std::filesystem::create_directories(root / "maps");
+        std::filesystem::create_directories(root / "modes");
+        for (const char* folder : {"characters", "animations", "rules", "scenes"}) {
+            std::filesystem::copy(shipped / folder, root / folder, std::filesystem::copy_options::recursive);
+        }
+        std::filesystem::copy_file(shipped / "asset_catalog.json", root / "asset_catalog.json");
+        Write("modes/modes.json", R"({"version": 1, "modes": ["a.json"]})");
+        Write("modes/a.json", ModeText("a"));
+        Arenas({{"pvp_arena.json", ReadText(shipped / "maps" / "pvp_arena.json")}});
+    }
+    ~ContentFolder() {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+    ContentFolder(const ContentFolder&) = delete;
+    ContentFolder& operator=(const ContentFolder&) = delete;
+    static std::string ReadText(const std::filesystem::path& path) {
+        std::ifstream in(path, std::ios::binary);
+        std::ostringstream text;
+        text << in.rdbuf();
+        return text.str();
+    }
+    void Write(const std::string& path, const std::string& text) const {
+        std::ofstream out(root / path, std::ios::binary);
+        out << text;
+    }
+    // maps/arenas.json listing the files, each written as given.
+    void Arenas(const std::vector<std::pair<std::string, std::string>>& files) const {
+        std::string list = R"({"version": 1, "arenas": [)";
+        for (std::size_t i = 0; i < files.size(); ++i) {
+            list += (i == 0 ? "\"" : ", \"") + files[i].first + "\"";
+            Write("maps/" + files[i].first, files[i].second);
+        }
+        Write("maps/arenas.json", list + "]}");
+    }
+    // characters/player/character.json with its body (and version) replaced.
+    void Character(const std::string& version, const std::string& body) const {
+        std::string text = ReadText(root / "characters" / "player" / "character.json");
+        text.replace(text.find("\"version\": 2"), std::string("\"version\": 2").size(), "\"version\": " + version);
+        const std::size_t at = text.find("\"body\":");
+        text.replace(at, text.find('}', at) + 1 - at, "\"body\": " + body);
+        Write("characters/player/character.json", text);
+    }
+};
+
+// A lone Match playing a mode of a content (an index into its modes): players are put in by the test outside every
+// allotter range, their input written directly, one fixed step a frame.
+struct PlayedMatch {
+    std::pair<N::MemoryLink, N::MemoryLink> links = N::MemoryLink::Pair({});
+    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
+    std::unique_ptr<O::Product> product;
+    K::EntityId next = 5'000'001;
+
+    PlayedMatch(std::shared_ptr<const PW::GameContent> content, const std::size_t mode) {
+        product = BuildMatch(std::move(content), std::make_shared<N::MemoryLink>(links.first), std::make_shared<PW::Seats>(),
+                             [c = clock] { return *c; }, 0, {}, 60, mode);
+        Run(1);
+    }
+    K::World& World() { return GameWorld(*product); }
+    K::EntityId AddPlayer(const Math::Vec3 feet, const float yaw = 0.0F) {
+        const K::EntityId id = next++;
+        PW::PlayerBody body;
+        body.feet = feet;
+        body.yaw = yaw;
+        const object_fps_pvp::sim::CombatRules rules;
+        PW::PlayerCombat combat;
+        combat.hp = rules.maximumHp;
+        combat.ammo = rules.magazineCapacity;
+        World().Insert(id, body);
+        World().Insert(id, combat);
+        World().Insert(id, PW::ShotRecord{});
+        World().Insert(id, PW::HitRecord{});
+        World().Insert(id, PW::Owner{id});
+        World().Insert(id, PW::PlayerInput{});
+        World().Insert(id, PW::PlayerMotion{});
+        return id;
+    }
+    void Steer(const K::EntityId id, const PW::PlayerInput& input) { *World().GetMut<PW::PlayerInput>(id) = input; }
+    void Press(const K::EntityId id, const std::uint8_t key, const float yaw = 0.0F) {
+        PW::PlayerInput input;
+        input.present = 1;
+        input.yaw = yaw;
+        input.Press(key, true);
+        Steer(id, input);
+    }
+    void Release(const K::EntityId id, const float yaw = 0.0F) { Steer(id, PW::PlayerInput{.yaw = yaw, .present = 1}); }
+    void Run(const int frames) {
+        for (int i = 0; i < frames; ++i) {
+            REQUIRE(static_cast<bool>(product->RunFrame()));
+            *clock += Ms(16);
+        }
+    }
+    // Presses key for one step's frames, then releases it and runs on a little.
+    void Tap(const K::EntityId id, const std::uint8_t key = PW::kPressInteract, const float yaw = 0.0F) {
+        Press(id, key, yaw);
+        Run(4);
+        Release(id, yaw);
+        Run(8);
+    }
+    const PW::PlayerBody& Body(const K::EntityId id) { return *World().Get<PW::PlayerBody>(id); }
+};
 
 } // namespace object_fps_pvp::test

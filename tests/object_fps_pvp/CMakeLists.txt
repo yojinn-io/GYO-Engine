@@ -11,6 +11,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     AnimationTests.cpp
     ArenaTests.cpp
     ControlsTests.cpp
+    DoorPictureTests.cpp
     HitFeedbackTests.cpp
     InterpolationTests.cpp
     LoadThreadsTests.cpp
@@ -42,7 +43,7 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
 add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp
     world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp world/ModeTests.cpp
-    world/GameplaySetTests.cpp world/NameTests.cpp)
+    world/GameplaySetTests.cpp world/NameTests.cpp world/InteractionTests.cpp world/SceneTests.cpp world/DoorTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 # SavesTests answers as the save service through the test library gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE gyo_test_loopback_listener)
@@ -162,3 +163,11 @@ add_test(NAME object_fps_pvp.gateway_client
         "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealClientPlaysThroughTheGateway|TestTwoClientsInARoom" ./services/stack/
     WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
 set_tests_properties(object_fps_pvp.gateway_client PROPERTIES LABELS "network" TIMEOUT 240)
+# The retired names (v8-arch-gyo2-interact-door step 0): the game-flow Scene was renamed Screen, and this check keeps
+# the old identifiers and file names from coming back. -B: no bytecode is written into the source tree.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME object_fps_pvp.retired_names
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/naming/retired_names.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME object_fps_pvp.retired_names_selftest
+    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}/naming" -p "test_retired_names.py" -v)
+set_tests_properties(object_fps_pvp.retired_names object_fps_pvp.retired_names_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)

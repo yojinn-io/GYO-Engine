@@ -1,5 +1,7 @@
 # Gateway 的 Client 端交接說明（`v8-product-pvp-gateway` → 遊戲流程框架卡）
 
+> **改名（2026-11-28，`v8-arch-gyo2-interact-door` 第 0 步）**：本文的遊戲流程畫面 `Scene`（`Scenes.hpp`、`SceneChange`、`SceneDirector` 等）已改名為 `Screen`（`Screens.hpp`、`ScreenChange`、`ScreenDirector` 等；對照表見 `docs/architecture/target/v2/interact-door-declaration.zh-Hant.md` 第 7.1 節）。「Scene」改指裝修資料。正文保留當時的寫法，不改寫。
+
 日期：2026-11-25。寫的人：PvP Gateway 移植卡。主會話 2026-11-25 定：Client 改走 Gateway 的房間流程歸之後的遊戲流程框架卡，Gateway 卡做到 Match 端與 Go 服務，並交這份說明。
 設計與理由在[事前宣告](gateway-declaration.zh-Hant.md)（D1～D9、第 4 節限制 L1～L10）；這頁只寫 Client 要用的介面與接法。
 

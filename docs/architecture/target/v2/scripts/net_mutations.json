@@ -1216,8 +1216,8 @@
     "net 13"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "            if (rolling != nullptr && rolling->Component(wire)) {\n                registry.components[wire]->removedToInbox(world, entity, tick);\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
-   "replace": "            if (rolling != nullptr && rolling->Component(wire)) {\n                ++state.inboxRemovals;\n            } else if (wire < registry.components.size()) {",
+   "find": "    if (rolling != nullptr && rolling->Component(wire)) {\n        registry.components[wire]->removedToInbox(world, entity, tick);\n        ++state.inboxRemovals;\n    } else if (wire < registry.components.size()) {",
+   "replace": "    if (rolling != nullptr && rolling->Component(wire)) {\n        ++state.inboxRemovals;\n    } else if (wire < registry.components.size()) {",
    "target": "gyo_net_tests",
    "cases": "k3:*",
    "expect": "K3:\\ a\\ rolling\\-back\\ component\\ the\\ server\\ takes\\ off\\ is\\ gone\\ at\\ the\\ client\\ \\(Removed\\)"
@@ -1255,8 +1255,8 @@
     "net 13 (S1 a of PR-2's review)"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "                        std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });\n",
-   "replace": "                        static_cast<void>(waiting);\n",
+   "find": "                std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });\n",
+   "replace": "                static_cast<void>(waiting);\n",
    "target": "gyo_net_tests",
    "cases": "k3:*",
    "expect": "S1\\ a:"
@@ -1386,8 +1386,8 @@
     "net 13"
    ],
    "file": "engine/modules/net/src/Replication.cpp",
-   "find": "                    if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);",
-   "replace": "                    static_cast<void>(0);",
+   "find": "            if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);",
+   "replace": "            static_cast<void>(0);",
    "target": "gyo_net_tests",
    "cases": "k3: an entity hidden*",
    "expect": "K3:\\ a\\ component\\ that\\ does\\ not\\ roll\\ back\\ taken\\ off\\ a\\ seen\\ entity\\ is\\ gone\\ at\\ the\\ client"
@@ -1560,6 +1560,162 @@
    "target": "gyo_net_tests",
    "cases": "clock: a client at tick 0 jumps*",
    "expect": "\\[nt\\-clock\\-remote\\]"
+  },
+  {
+   "id": "nt-placed-attach-as-spawn",
+   "what": "the server spawns a Placed entity instead of attaching it",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                opWriter.Value(static_cast<std::uint8_t>(attach ? StructureOp::Attach : spawn ? StructureOp::Spawn : StructureOp::Change));",
+   "replace": "                opWriter.Value(static_cast<std::uint8_t>(spawn ? StructureOp::Spawn : StructureOp::Change));",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-attach\\]"
+  },
+  {
+   "id": "nt-placed-hide-as-despawn",
+   "what": "a hidden Placed entity is despawned at the client",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (SystemResult marked = MarkNotReceiving(world, entity); !marked) return marked;\n            std::erase(state.receiving, entity);\n            InsertSorted(state.hiddenPlaced, entity);\n            ++state.hides;\n",
+   "replace": "            (void)world.Despawn(entity);\n            continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: Detach*",
+   "expect": "\\[net\\-placed\\-detach\\]"
+  },
+  {
+   "id": "nt-placed-attach-unchecked",
+   "what": "an attach is applied without the client's Placed entity (a stray entity is made)",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (operation == StructureOp::Attach && !IsPlaced(world, entity)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: a client without the entity*",
+   "expect": "\\[net\\-placed\\-missing\\]"
+  },
+  {
+   "id": "nt-placed-k3-entered",
+   "what": "a K3 client writes Entered for an attached Placed entity",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        const bool spawnK3 = rolling != nullptr && operation == StructureOp::Spawn;",
+   "replace": "        const bool spawnK3 = rolling != nullptr && (operation == StructureOp::Spawn || operation == StructureOp::Attach);",
+   "target": "gyo_net_tests",
+   "cases": "k3: a Placed entity*",
+   "expect": "\\[net\\-placed\\-k3\\]"
+  },
+  {
+   "id": "nt-placed-retain-as-detach",
+   "what": "Retain takes the replicated components off like Detach",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (static_cast<HiddenRule>(rule) == HiddenRule::Detach) {",
+   "replace": "            if (true) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: Retain*",
+   "expect": "\\[net\\-placed\\-retain\\]"
+  },
+  {
+   "id": "nt-placed-attach-keeps-marker",
+   "what": "an attach does not take NotReceiving off",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (auto unmarked = world.Remove<NotReceiving>(entity); !unmarked) return Base::Err(std::move(unmarked).error());\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-attach\\]"
+  },
+  {
+   "id": "nt-placed-attach-not-whole",
+   "what": "an attach leaves a component the server took off while the entity was hidden (P3)",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            TakeOffReplicated(world, registry, state, entity, tick, rolling, attachedWires);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "placed: a replicated component the server took off*",
+   "expect": "\\[net\\-placed\\-attach\\-whole\\]"
+  },
+  {
+   "id": "nt-placed-hidden-despawn-lost",
+   "what": "a hidden Placed entity the server removed is never removed at its client",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (RuleOf(placedNow, entity)) continue;\n                WriteDespawn(opWriter, entity);\n                ++opCount;\n                goneHidden.push_back(entity);\n",
+   "replace": "                continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: a despawn at the server*",
+   "expect": "\\[net\\-placed\\-despawn\\]"
+  },
+  {
+   "id": "nt-placed-no-first-marker",
+   "what": "a Placed entity not attached yet does not carry NotReceiving",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        return MarkNotReceivingAll(world, {});\n",
+   "replace": "        return {};\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-before\\-attach\\]"
+  },
+  {
+   "id": "nt-placed-unsent-despawn-lost",
+   "what": "a Placed entity removed before its Peer was sent it stays at the client",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5; pure Code Review of 77ee6e59"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            for (std::size_t i = ledger.placedGoneSent; i < placedGone.size(); ++i) {",
+   "replace": "            for (std::size_t i = placedGone.size(); i < placedGone.size(); ++i) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: a Placed entity the server removes before*",
+   "expect": "\\[net\\-placed\\-despawn\\-unsent\\]"
+  },
+  {
+   "id": "nt-placed-all-off-hidden",
+   "what": "a seen Placed entity whose replicated components all go is hidden",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5; pure Code Review of 77ee6e59"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                    if (visibility && !visibility->Sees(it->first)) {",
+   "replace": "                    if ((visibility && !visibility->Sees(it->first)) || still == nullptr) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: a seen Placed entity*",
+   "expect": "\\[net\\-placed\\-all\\-off\\]"
+  },
+  {
+   "id": "nt-placed-k3-hidden-compared",
+   "what": "a K3 client compares a hidden Retain entity's last values at the confirmed point",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5; pure Code Review of 77ee6e59"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        for (const Kernel::EntityId hidden : state.hiddenPlaced) {",
+   "replace": "        for (const Kernel::EntityId hidden : std::vector<Kernel::EntityId>{}) {",
+   "target": "gyo_net_tests",
+   "cases": "k3: a Placed entity*",
+   "expect": "\\[net\\-placed\\-k3\\-retain\\]"
   }
  ]
 }

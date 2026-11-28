@@ -36,6 +36,7 @@
 #include "object_fps_pvp/world/ArenaLoad.hpp"
 #include "object_fps_pvp/world/Components.hpp"
 #include "object_fps_pvp/world/Modes.hpp"
+#include "object_fps_pvp/world/Scene.hpp"
 
 #include "engine/asset/AssetExecutor.hpp"
 
@@ -64,10 +65,12 @@ namespace N = GYO::Engine::Net;
 // What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), every
 // installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables and gameplay sets), the gameplay
 // sets' table (world/GameplaySets.hpp; every World registers all of them), the combat rules (the game's defaults) and
-// the character (its body, skeleton, clips and hit shapes). An arena's map is not here: the World that plays the arena
-// reads it (LoadArena, big-map declaration 15.6).
+// the character (its body, skeleton, clips and hit shapes), and each arena's scene (world/Scene.hpp). An arena's map is
+// not here: the World that plays the arena reads it (LoadArena, big-map declaration 15.6).
 struct GameContent final {
     std::vector<sim::ArenaContent> arenas;
+    // The scene of each arena, in the arenas' order (an arena without a scene: none, an empty id).
+    std::vector<SceneContent> scenes;
     std::vector<ModeContent> modes;
     std::vector<GameplaySet> sets;
     // CharacterDigest of the character, read once (MatchInfo::characterDigest).
@@ -82,6 +85,8 @@ struct GameContent final {
     [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
     // Whether the mode (an index into modes) plays the arena (an index into arenas): the one place every choice asks.
     [[nodiscard]] bool Plays(std::size_t mode, std::size_t arena) const;
+    // The digest of the arena's scene as the mode plays it (world::SceneDigest with the sets the mode turns on).
+    [[nodiscard]] std::uint64_t SceneDigest(std::size_t mode, std::size_t arena) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
@@ -90,9 +95,10 @@ struct GameContent final {
 
 // What differs from the Match's (FollowMatchContent compares in this order): another mode, the same mode with other
 // rules (the rules digest), another character (the character digest), another arena, the same arena with other bounds,
-// floor, kill height or spawns (the arena digest), the same arena with other walls (the walls digest). Mode and Arena
-// are another match this Client may have; the others are other content.
-enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, ArenaData, Walls };
+// floor, kill height or spawns (the arena digest), the same arena furnished otherwise (the scene digest: the objects of
+// the sets the mode turns on), the same arena with other walls (the walls digest). Mode and Arena are another match
+// this Client may have; the others are other content.
+enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, ArenaData, Scene, Walls };
 
 // Why this Client cannot play the Match's match (kind None: it can). Set by FollowMatchContent; it only says what
 // differs, the program decides (it may build its game again on matchMode and matchArena when it has them -- kind Mode
@@ -114,7 +120,8 @@ void HashValue(K::Hasher&, const ContentMismatch&);
 // Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
 // nullopt with error naming the file and what was wrong: a file that does not read or parse (an arena, a mode, a rule
 // table, the character), an arena spawn that leaves no room for the character's radius to the bounds. Whether its map
-// reads, and its spawns are free of its walls, is known when a World reads the map (MapLoad).
+// reads, and its spawns are free of its walls, is known when a World reads the map (MapLoad). An arena's scene that
+// does not read or parse (world::ParseScene) is that arena's failure.
 [[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error,
                                                          const std::vector<GameplaySet>& sets = GameSets());
 

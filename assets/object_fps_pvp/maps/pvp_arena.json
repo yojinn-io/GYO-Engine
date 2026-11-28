@@ -4,6 +4,7 @@
   "width": 20,
   "depth": 20,
   "map": "object_fps_pvp.map.pvp_arena",
+  "scene": "scenes/pvp_arena.json",
   "floor": 0,
   "kill_height": -10,
   "spawns": [

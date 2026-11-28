@@ -1,13 +1,13 @@
-// The lobby (Scene::Lobby; assets/object_fps_pvp/ui/pvp_lobby.json, canvas "lobby"; game-flow declaration 3.4): the
-// Gateway's open rooms, polled every second; a room is made (mode and map) or joined, and the room's scene follows. The
+// The lobby (Screen::Lobby; assets/object_fps_pvp/ui/pvp_lobby.json, canvas "lobby"; game-flow declaration 3.4): the
+// Gateway's open rooms, polled every second; a room is made (mode and map) or joined, and the room's screen follows. The
 // player's record (GET /v1/saves/me) is read again every five seconds (the Match writes it when the player leaves, a
 // little after the lobby comes back).
 //
 //   Main/Update  LobbyActions  pvp.prev / pvp.next (the room picked, kept by its id), pvp.mode / pvp.map (what a new
 //                              room is), pvp.join, pvp.create (asked of the Gateway), pvp.back (the menu)
-//                LobbyGateway  the calls: the list, the record, the join or the creation (-> the room's scene)
+//                LobbyGateway  the calls: the list, the record, the join or the creation (-> the room's screen)
 
-#include "client/SceneBuilds.hpp"
+#include "client/ScreenBuilds.hpp"
 
 #include "object_fps_pvp/match/PlayerSave.hpp"
 
@@ -89,12 +89,12 @@ std::string RecordText(const SaveAnswer& answer) {
 }
 
 K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<LobbyState> state, K::ResMut<GatewayClient> gateway,
-                             K::ResMut<SceneRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
+                             K::ResMut<ScreenRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
     for (const Ui::UiAction* action : actions.Read()) {
         LobbyState& lobby = *state;
         const std::string& id = action->action;
         if (id == "pvp.back") {
-            request->next = SceneChange{.scene = Scene::Menu};
+            request->next = ScreenChange{.screen = Screen::Menu};
         } else if (id == "pvp.prev" || id == "pvp.next") {
             const std::size_t count = Shown(lobby);
             if (count > 0) {
@@ -123,7 +123,7 @@ K::SystemResult LobbyActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<L
 }
 
 K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> state, K::ResMut<GatewayClient> gateway,
-                             K::ResMut<SceneRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
+                             K::ResMut<ScreenRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
     const std::int64_t now = time->elapsed;
     LobbyState& lobby = *state;
     if (!gateway.Read().Busy()) {
@@ -139,7 +139,7 @@ K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> st
     const auto result = gateway->Update(now);
     if (!result || request.Read().next) return {};
     // status: what the player asked (or why the lobby came back); notice: the Gateway's state, from the polls. A call
-    // another scene asked (the evacuation's leave) ends here without a word.
+    // another screen asked (the evacuation's leave) ends here without a word.
     std::optional<std::string> status;
     std::optional<std::string> notice;
     std::optional<std::string> record;
@@ -148,7 +148,7 @@ K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> st
         std::string error;
         const auto room = result->Ok() ? ParseRoom(result->body, error) : std::nullopt;
         if (room) {
-            request->next = SceneChange{.scene = Scene::Room, .room = room->id};
+            request->next = ScreenChange{.screen = Screen::Room, .room = room->id};
             return {};
         }
         status = result->Ok() ? "Gateway の答えを読めません: " + error : GatewayErrorText(*result, lobby.gateway);
@@ -182,11 +182,11 @@ K::SystemResult LobbyGateway(K::Res<WT::RealTime> time, K::ResMut<LobbyState> st
 
 } // namespace
 
-void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context) {
+void BuildLobby(O::WorldSetup& setup, const ScreenChange& change, const GatewayContext& context) {
     K::Registrar& r = setup.Registrar();
     r.Resource<LobbyState>({.name = "object_fps_pvp.LobbyState"});
-    r.AddSystem<&LobbyActions>(InSceneUpdate("object_fps_pvp.LobbyActions"));
-    r.AddSystem<&LobbyGateway>(InSceneUpdate("object_fps_pvp.LobbyGateway", {"object_fps_pvp.LobbyActions"}));
+    r.AddSystem<&LobbyActions>(InScreenUpdate("object_fps_pvp.LobbyActions"));
+    r.AddSystem<&LobbyGateway>(InScreenUpdate("object_fps_pvp.LobbyGateway", {"object_fps_pvp.LobbyActions"}));
     setup.Prepare([change, context](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         LobbyState state;
         state.modes = context.modes;
@@ -197,7 +197,7 @@ void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayCo
         bindings.Set("status", change.status.empty() ? std::string("部屋を選ぶか、作ってください") : change.status);
         bindings.Set("notice", "Gateway: " + state.gateway);
         w.SetResource(std::move(state));
-        PlaceSceneDocument(w, "object_fps_pvp.ui.lobby", "lobby", std::move(bindings), {});
+        PlaceScreenDocument(w, "object_fps_pvp.ui.lobby", "lobby", std::move(bindings), {});
         return {};
     });
 }
