@@ -700,3 +700,19 @@ P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下
 - **錯誤訊息**：寫成 `object <第幾個> (id <id>): <哪裡錯>`；LoadGameContent 再加上 `maps/<arena 檔>: its scene <路徑>:`。
 - **測試的 helper**：`ContentFolder`（#379 寫在 `ModeTests.cpp` 的匿名 namespace）搬到 `WorldTestSupport.hpp`，scene 的測試也用它。
 - **Go `./services/...`（9.4 最後一列）**：gyo2 分支沒有 `services/`，這一列沒有對象。
+
+### 14.2 第 6 步（`doors` 組）
+
+- **`Placed` 由 scene 的膠水放，不由門放**：宣告 3.2 寫「有網路時（門）另加 net 的 `Placed`」。實作在遊戲的 `Prepare`：`PutScene` 回傳放好的實體，有網路的一端（Match、Client）給每一個加 `N::Placed`。理由：
+  - 「scene 的物件兩端同號、不經網路生成」正是 `Placed` 的契約（1.3、5.3），所以它屬於每個 scene 物件，不屬於門這一種；#372 的靶子也一樣，不必每個組各寫一次。
+  - 組的 `build` 在遊戲的 `Prepare` 之前登記（`PvpWorld.cpp` 的 `set.build(setup)`），門自己的 `Prepare` 拿不到 scene 放好的實體。
+  - 組的 reader 讀檔時不知道這一端有沒有網路（`put` 只拿到 `K::World&`）。
+- **門的位置**：pvp_arena 的地圖沒有門洞（四周的牆與中間 2 m 的方塊），門放在空地上：門軸 (14, 0, 4)、面向 +Z、門板往 +X 1 m（離出生點 x = 5 夠遠，`SpawnFree` 不受影響）。宣告 5.1 的例子 (6, 0, 10) 只是格式的例子。
+- **門板的方向**：`DoorShape` 的門板從門軸往「面向 `yaw` 時的右手邊」延伸（`sim::ComputePlanarInput` 的 right 軸）；`DoorPose` 繞 +Y 轉 `yaw`（開著再加 `swing`），中心在門軸＋轉過的 (寬/2, 高/2, 0)。
+- **`BodyCapsule`** 從 `PvpWorld.cpp` 搬到 `src/world/Sight.hpp`（`SpawnFree` 與 `OperateDoors` 共用）。
+- **模式配置 `sandbox`**（`modes/sandbox.json`）：`rules` 列 `movement` 與 `damage`（#379 的轉告）；`sets` 開 `interaction`、`doors`；只玩 `pvp_training_v1`（pvp_arena）。`asset_catalog.json` 加 `mode.sandbox` 與 `scene.pvp_arena`。
+- **測試**（`tests/object_fps_pvp/world/DoorTests.cpp`，用出貨內容的 sandbox）：
+  - 有：放好與姿勢、按 E 開與關（開著時要看向門板才關得到）、太遠、中間有東西、關著擋人擋子彈、開著過得去、壓到活人不轉／死人不算、核心 PvP 沒有門、開 `doors` 沒開 `interaction` 讀取失敗、門的 `data` 檢查、Match＋2 Client（開賽前附上、`NotReceiving` 拿掉；Match 改 `DoorState` 後兩個 Client 收到並擺開）。
+  - 和 9.4 不同：`[pvp-door-before-start]`、`[pvp-door-dead]` 沒另寫，由 `interaction` 的測試蓋（開賽前、死了都沒有 `Interacted`，門就不會動）。`[pvp-door-match-client]` 的「A 按 E」改成 Match 直接改 `DoorState`；「B 的預測被關著的門擋住、門開後能過」沒有測試（Client 的移動預測走同一個 `MovePlayers`＋`Walls`，門的 Transform 由 Client 自己的 `PoseDoors` 擺）。
+  - 換掉組表的測試內容（`WithTap`、`WithProbe`、`CoreOnly`）一併清空 scene：scene 物件記的是讀它時那張組表的 slot。
+  - 出貨內容多了 sandbox 與 pvp_arena 的 scene，三個既有測試的前提跟著改：`CoreOnly` 只留沒開組的模式配置；`ArenaTests` 的 pvp_arena 有 scene；`ClientTests` 的「另一個模式配置」用新加的那個的 index（原本寫死 1，現在 1 是 sandbox）。`ModeTests` 的「不認得的組」從 `doors` 改成 `lockers`。

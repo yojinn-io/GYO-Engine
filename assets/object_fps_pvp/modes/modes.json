@@ -1,6 +1,7 @@
 {
   "version": 1,
   "modes": [
-    "core_pvp.json"
+    "core_pvp.json",
+    "sandbox.json"
   ]
 }

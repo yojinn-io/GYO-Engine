@@ -179,7 +179,7 @@ TEST_CASE("world: a mode that names an unknown rule kind, set or arena, no movem
     refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json", "weapons": "rules/movement_rules.json"})")}},
             "no rule kind 'weapons'");
     refused({{"a.json", ModeText("a", "{}")}}, "no movement rules");
-    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json"})", R"({"doors": {}})")}}, "no gameplay set 'doors'");
+    refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json"})", R"({"lockers": {}})")}}, "no gameplay set 'lockers'");
     refused({{"a.json", ModeText("a", R"({"movement": "rules/movement_rules.json"})", "{}", R"(["no_such_arena"])")}},
             "no installed arena has the id 'no_such_arena'");
     refused({{"a.json", ModeText("same")}, {"b.json", ModeText("same")}}, "another installed mode has the id 'same'");

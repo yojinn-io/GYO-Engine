@@ -122,6 +122,7 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
     static const std::shared_ptr<const PW::GameContent> content = [] {
         auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
         copy->sets = {ProbeSet()};
+        copy->scenes.assign(copy->arenas.size(), PW::SceneContent{});
         ModeFolder folder;
         folder.Modes({{"core.json", Mode("core_pvp", "{}")}, {"probe.json", Mode("probe_on", R"({"probe": {"start": 5}})")}});
         std::string error;
@@ -133,12 +134,15 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
     return content;
 }
 
-// The shipped content without any gameplay set: the core alone (the shipped game has sets since the interaction set).
+// The shipped content without any gameplay set: the core alone (the shipped game has sets since the interaction set),
+// with the shipped modes that turn none on.
 std::shared_ptr<const PW::GameContent> CoreOnly() {
     static const std::shared_ptr<const PW::GameContent> content = [] {
         auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
         copy->sets = {};
-        for (const auto& mode : copy->modes) REQUIRE(mode.on.slots.empty());
+        copy->scenes.assign(copy->arenas.size(), PW::SceneContent{});
+        std::erase_if(copy->modes, [](const PW::ModeContent& mode) { return !mode.on.slots.empty(); });
+        REQUIRE(!copy->modes.empty());
         return copy;
     }();
     return content;

@@ -1,13 +1,15 @@
 #pragma once
 
-// What the shots and the interactions share in the Match's step (interact-door declaration 2.3): both cast the eye's
-// view at the colliders, stopped by the floor plane, from the input a player has by the step.
+// What the shots, the interactions and the doors share in the Match's step (interact-door declaration 2.3): both cast
+// the eye's view at the colliders, stopped by the floor plane, from the input a player has by the step; a spawn and a
+// door's turn ask whether they meet a body where it stands.
 
 #include "object_fps_pvp/world/Components.hpp"
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/math/geometry/Ray.hpp"
 #include "engine/physics_3d/Collider.hpp"
+#include "engine/physics_3d/Shapes.hpp"
 #include "engine/transform/Transform.hpp"
 
 #include <cstdint>
@@ -24,6 +26,10 @@ using Walls = K::Query<K::Read<GYO::Engine::Physics3d::Collider>, K::Read<GYO::E
 // Where the ray meets the arena's floor plane (a solid half-space below it): 0 from inside it, nothing when the arena
 // has none or the ray does not go down to it.
 [[nodiscard]] std::optional<float> FloorAlong(const GameRules& rules, const Math::Ray& ray);
+
+// The body's stance capsule: where a body stands, for placing a spawn and turning a door (shots meet the shapes on the
+// bones).
+[[nodiscard]] GYO::Engine::Physics3d::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body);
 
 // Before the start the players wait: their input is none (they neither move, turn, fire nor interact). By the step, so
 // a Client simulating the steps around the start again gives each the Match's answer.

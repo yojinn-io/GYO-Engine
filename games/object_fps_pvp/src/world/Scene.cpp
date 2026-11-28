@@ -72,10 +72,14 @@ std::uint64_t SceneDigest(const SceneContent& scene, const SetsOn& on, const std
     return Digest64(h);
 }
 
-void PutScene(const SceneContent& scene, const SetsOn& on, K::World& world) {
+std::vector<K::EntityId> PutScene(const SceneContent& scene, const SetsOn& on, K::World& world) {
+    std::vector<K::EntityId> put;
     for (const SceneObject& object : scene.objects) {
-        if (on.Has(object.slot) && object.data.put) object.data.put(world);
+        if (!on.Has(object.slot)) continue;
+        if (object.data.put) object.data.put(world);
+        put.push_back(SceneEntity(object.id));
     }
+    return put;
 }
 
 } // namespace object_fps_pvp::world

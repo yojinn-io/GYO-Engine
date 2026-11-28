@@ -67,6 +67,7 @@ std::shared_ptr<const PW::GameContent> WithTap() {
     static const std::shared_ptr<const PW::GameContent> content = [] {
         auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
         copy->sets = {PW::InteractionSet(), TapSet()};
+        copy->scenes.assign(copy->arenas.size(), PW::SceneContent{});
         ModeFolder folder;
         folder.Modes({{"core.json", Mode("core_pvp", "{}")}, {"tap.json", Mode("tap_on", R"({"interaction": {"reach": 2.0}, "tap": {}})")}});
         std::string error;
@@ -81,36 +82,9 @@ std::shared_ptr<const PW::GameContent> WithTap() {
 constexpr K::EntityId kTarget = 6'000'001;
 constexpr K::EntityId kScreen = 6'000'002;
 
-// A lone Match in a mode of WithTap(): players are put in by the test, their input written directly.
-struct Lone {
-    std::pair<N::MemoryLink, N::MemoryLink> links = N::MemoryLink::Pair({});
-    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
-    std::unique_ptr<O::Product> product;
-    K::EntityId next = 5'000'001;
-
-    explicit Lone(const std::size_t mode, std::shared_ptr<const PW::GameContent> content = WithTap()) {
-        product = BuildMatch(std::move(content), std::make_shared<N::MemoryLink>(links.first), std::make_shared<PW::Seats>(),
-                             [c = clock] { return *c; }, 0, {}, 60, mode);
-        Run(1);
-    }
-    K::World& World() { return GameWorld(*product); }
-    K::EntityId AddPlayer(const Math::Vec3 feet) {
-        const K::EntityId id = next++;
-        PW::PlayerBody body;
-        body.feet = feet;
-        const sim::CombatRules rules;
-        PW::PlayerCombat combat;
-        combat.hp = rules.maximumHp;
-        combat.ammo = rules.magazineCapacity;
-        World().Insert(id, body);
-        World().Insert(id, combat);
-        World().Insert(id, PW::ShotRecord{});
-        World().Insert(id, PW::HitRecord{});
-        World().Insert(id, PW::Owner{id});
-        World().Insert(id, PW::PlayerInput{});
-        World().Insert(id, PW::PlayerMotion{});
-        return id;
-    }
+// A lone Match in a mode of WithTap(), with test targets.
+struct Lone : PlayedMatch {
+    explicit Lone(const std::size_t mode, std::shared_ptr<const PW::GameContent> content = WithTap()) : PlayedMatch(std::move(content), mode) {}
     // A box at the eye's height of a player standing at feet, `ahead` metres along +Z.
     void Box(const K::EntityId id, const Math::Vec3 feet, const float ahead, const bool interactable) {
         const PW::GameRules& rules = *World().Resource<PW::GameRules>();
@@ -118,26 +92,6 @@ struct Lone {
         World().Insert(id, P::Collider{P::Shape{P::Cuboid{{0.3F, 0.3F, 0.05F}}}});
         World().Insert(id, T::Transform{Math::Vec3{feet.x, feet.y + eye, feet.z + ahead}});
         if (interactable) World().Insert(id, PW::Interactable{});
-    }
-    void Press(const K::EntityId id, const std::uint8_t key) {
-        PW::PlayerInput input;
-        input.present = 1;
-        input.Press(key, true);
-        *World().GetMut<PW::PlayerInput>(id) = input;
-    }
-    void Release(const K::EntityId id) { *World().GetMut<PW::PlayerInput>(id) = PW::PlayerInput{.present = 1}; }
-    void Run(const int frames) {
-        for (int i = 0; i < frames; ++i) {
-            REQUIRE(static_cast<bool>(product->RunFrame()));
-            *clock += Ms(16);
-        }
-    }
-    // Presses key for one step's frames, then releases it and runs on a little.
-    void Tap(const K::EntityId id, const std::uint8_t key = PW::kPressInteract) {
-        Press(id, key);
-        Run(4);
-        Release(id);
-        Run(8);
     }
     const std::vector<PW::Interacted>& Seen() { return World().Resource<Taps>()->seen; }
 };

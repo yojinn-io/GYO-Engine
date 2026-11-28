@@ -467,13 +467,6 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
     return {};
 }
 
-// The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
-P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
-    const float height = sim::BodyHeight(rules.body, body.crouched != 0);
-    const float r = rules.body.radius;
-    return P::Capsule{body.feet + Math::Vec3{0.0F, r, 0.0F}, body.feet + Math::Vec3{0.0F, height - r, 0.0F}, r};
-}
-
 K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>, K::Write<ShotRecord>, K::Write<HitRecord>> players,
                            K::Query<K::Read<PlayerMotion>> motions, Walls walls, K::Res<GameRules> rules, K::Res<WT::Tick> tick, K::Res<WT::ActiveTime> time) {
     const std::uint64_t now = tick->value;
@@ -753,12 +746,12 @@ K::SystemResult StartMatch(K::Query<K::Read<Owner>, K::Read<PlayerInput>> player
     return {};
 }
 
-// The Match: before the start a connection sees only the player it controls (it is the only rule of relevance so far:
-// from the start the PeerVisibility is taken away, which another rule -- distance, teams -- would have to join) (net's PeerVisibility: the others'
-// places are not sent, so no Client can show them); from the start it sees everything. Main/Update, after
-// SeatPlayers.
+// The Match: before the start a connection sees only the player it controls and what both ends placed (the scene's
+// objects: furnishing is not hidden) (it is the only rule of relevance so far: from the start the PeerVisibility is
+// taken away, which another rule -- distance, teams -- would have to join) (net's PeerVisibility: the others' places
+// are not sent, so no Client can show them); from the start it sees everything. Main/Update, after SeatPlayers.
 K::SystemResult ShowPlayers(K::Query<K::Read<N::PeerControls>> controlling, K::Query<K::Read<N::PeerVisibility>> visibility,
-                            K::Query<K::Read<N::Peer>> peers, K::Res<MatchInfo> info,
+                            K::Query<K::Read<N::Peer>> peers, K::Query<K::Read<N::Placed>> placed, K::Res<MatchInfo> info,
                             K::CommandsFor<K::Inserts<N::PeerVisibility>, K::Removes<N::PeerVisibility>> commands) {
     const bool playing = info->phase == MatchPhase::Playing;
     peers.ForEach([&](const K::EntityId peer, const N::Peer&) {
@@ -770,6 +763,7 @@ K::SystemResult ShowPlayers(K::Query<K::Read<N::PeerControls>> controlling, K::Q
         N::PeerVisibility own;
         own.everything = false;
         if (const N::PeerControls* controls = controlling.Get<N::PeerControls>(peer)) own.Show(controls->entity);
+        for (const K::EntityId furnishing : placed.Entities()) own.Show(furnishing);
         if (now == nullptr || now->everything || now->entities != own.entities) commands.Insert(peer, std::move(own));
     });
     return {};
@@ -1295,8 +1289,11 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         for (const auto& [slot, read] : mode.sets) {
             if (read.put) read.put(world);
         }
-        // The arena's furnishing: the objects of the sets the mode turns on, at every end with the same ids.
-        PutScene(options.content->scenes[options.arena], mode.on, world);
+        // The arena's furnishing: the objects of the sets the mode turns on, at every end with the same ids -- with a
+        // net, placed at both ends (net's Placed: the Match attaches them, it never spawns them).
+        for (const K::EntityId placed : PutScene(options.content->scenes[options.arena], mode.on, world)) {
+            if (end != WorldEnd::Local) world.Insert(placed, N::Placed{});
+        }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.
         MatchStart start;

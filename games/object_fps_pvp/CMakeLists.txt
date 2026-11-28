@@ -67,6 +67,7 @@ gyo_game_add_library(world OUT_TARGET object_fps_pvp_world
     src/data/ArenaMap.cpp
     src/world/ArenaLoad.cpp
     src/world/ContentHash.cpp
+    src/world/Doors.cpp
     src/world/GameplaySets.cpp
     src/world/MatchSaves.cpp
     src/world/Modes.cpp

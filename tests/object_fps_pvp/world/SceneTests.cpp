@@ -20,7 +20,6 @@ namespace Json = GYO::Engine::Json;
 // What a crate or a shelf object puts on its entity: its size, read from its data.
 struct Crate final {
     std::uint32_t size = 0;
-    friend bool operator==(const Crate&, const Crate&) = default;
 };
 void HashValue(K::Hasher& h, const Crate& v) { HashValue(h, v.size); }
 struct Shelf final {
@@ -163,7 +162,11 @@ TEST_CASE("world: the scene digest counts the objects of the sets the mode turns
 
 TEST_CASE("world: an arena whose scene does not read or parse does not load; its scene's objects are read with the sets") {
     ContentFolder folder;
-    const std::string shipped = ContentFolder::ReadText(std::filesystem::path(PVP_CONTENT_ROOT) / "maps" / "pvp_arena.json");
+    // The shipped arena without its scene member, and with one of the test's.
+    std::string shipped = ContentFolder::ReadText(std::filesystem::path(PVP_CONTENT_ROOT) / "maps" / "pvp_arena.json");
+    const std::size_t member = shipped.find("\"scene\":");
+    REQUIRE(member != std::string::npos);
+    shipped.erase(member, shipped.find(',', member) + 1 - member);
     const auto withScene = [&](const std::string& path) {
         std::string text = shipped;
         const std::size_t at = text.find("\"map\":");

@@ -4634,8 +4634,8 @@
     "interact-door-declaration 5, 9.5"
    ],
    "file": "games/object_fps_pvp/src/world/Scene.cpp",
-   "find": "        if (on.Has(object.slot) && object.data.put) object.data.put(world);",
-   "replace": "        if (object.data.put) object.data.put(world);",
+   "find": "        if (!on.Has(object.slot)) continue;\n",
+   "replace": "",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: *scene*",
    "expect": "pvp-scene-put-off"
@@ -4712,11 +4712,141 @@
     "interact-door-declaration 5, 9.5"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        PutScene(options.content->scenes[options.arena], mode.on, world);\n",
-   "replace": "",
+   "find": "        for (const K::EntityId placed : PutScene(options.content->scenes[options.arena], mode.on, world)) {",
+   "replace": "        for (const K::EntityId placed : std::vector<K::EntityId>{}) {",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a scene's objects are at every end*",
    "expect": "pvp-scene-put\\]"
+  },
+  {
+   "id": "pvp-door-pose-not-followed",
+   "what": "PoseDoors leaves a door's Transform as it was put",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (!(transform.Read() == pose)) transform.Get() = pose;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose-follows"
+  },
+  {
+   "id": "pvp-door-body-ignored",
+   "what": "a door turns into a living body",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "            if ((blocked = contact->has_value())) break;",
+   "replace": "            if (contact->has_value()) break;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-body-in-way"
+  },
+  {
+   "id": "pvp-door-dead-blocks",
+   "what": "a dead body keeps a door from turning",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "            if (players.Get<PlayerCombat>(id)->life != sim::LifeState::Alive) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "a dead body is not in the way"
+  },
+  {
+   "id": "pvp-door-leaf-left",
+   "what": "the leaf runs to the facing's left of the hinge",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "Math::Vec3{0.5F * shape.width, 0.5F * shape.height, 0.0F}",
+   "replace": "Math::Vec3{-0.5F * shape.width, 0.5F * shape.height, 0.0F}",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose\\] shut"
+  },
+  {
+   "id": "pvp-door-swing-ignored",
+   "what": "an open door stands as a shut one",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "    const float angle = shape.yaw + (open ? shape.swing : 0.0F);",
+   "replace": "    const float angle = shape.yaw;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-pose\\] open"
+  },
+  {
+   "id": "pvp-door-swing-unbounded",
+   "what": "a swing of more than pi reads",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (shape.swing == 0.0F || std::abs(shape.swing) > std::numbers::pi_v<float>) throw",
+   "replace": "        if (shape.swing == 0.0F) throw",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "<= pi', read: \\n"
+  },
+  {
+   "id": "pvp-door-state-not-replicated",
+   "what": "a door's state is not sent to the Clients",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "        if (networked) N::NetEntry(setup).Replicate<DoorState>(\"DoorState\", DoorStateCodec());\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-match-client"
+  },
+  {
+   "id": "pvp-door-needs-missing",
+   "what": "the doors set does not need the interaction set",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Doors.cpp",
+   "find": "    set.needs = {kInteractionSet};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-needs-interaction"
+  },
+  {
+   "id": "pvp-scene-not-placed",
+   "what": "a scene's objects are not placed at the ends with a net",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            if (end != WorldEnd::Local) world.Insert(placed, N::Placed{});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-placed"
+  },
+  {
+   "id": "pvp-show-no-placed",
+   "what": "before the start a connection does not see what both ends placed",
+   "guards": [
+    "interact-door-declaration 3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        for (const K::EntityId furnishing : placed.Entities()) own.Show(furnishing);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: doors*",
+   "expect": "pvp-door-match-client\\] attached before the start"
   }
  ]
 }

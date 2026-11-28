@@ -160,8 +160,9 @@ TEST_CASE("PvP arena: the shipped arenas read with their spawns and map") {
     REQUIRE(arena->floor.has_value());
     CHECK(*arena->floor == 0.0F);
     CHECK(arena->killHeight == -10.0F);
-    // Not furnished yet (the doors' line names its scene).
-    CHECK_FALSE(arena->scene.has_value());
+    // Furnished by its scene (a door).
+    REQUIRE(arena->scene.has_value());
+    CHECK(*arena->scene == "scenes/pvp_arena.json");
     const auto town = sim::ParseArena(ReadFile(kMaps + "kiriyu_town_graybox.json"), error);
     REQUIRE_MESSAGE(town.has_value(), error);
     CHECK_FALSE(town->floor.has_value());

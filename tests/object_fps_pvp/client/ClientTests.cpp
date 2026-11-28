@@ -1165,7 +1165,7 @@ TEST_CASE("client: a game whose Match plays another mode is built again on it; t
         second.id = "second";
         second.rulesDigest ^= 0x5a5a;
         two->modes.push_back(second);
-        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, two, 1);
+        Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, two, two->modes.size() - 1);
         REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Screen().mode == "second"; }),
                         "[pvp-mode-again] the game is built again on the Match's mode");
         setup.Loaded();

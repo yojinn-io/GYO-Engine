@@ -51,7 +51,7 @@ struct SceneContent final {
 // not played); a scene with none on has the empty one's digest.
 [[nodiscard]] std::uint64_t SceneDigest(const SceneContent& scene, const SetsOn& on, const std::vector<GameplaySet>& sets);
 
-// Puts the objects of the sets the mode turns on into a World (each reader's put), in the file's order.
-void PutScene(const SceneContent& scene, const SetsOn& on, K::World& world);
+// Puts the objects of the sets the mode turns on into a World (each reader's put), in the file's order; their entities.
+std::vector<K::EntityId> PutScene(const SceneContent& scene, const SetsOn& on, K::World& world);
 
 } // namespace object_fps_pvp::world
