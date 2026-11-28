@@ -552,6 +552,7 @@ K::SystemResult ReadControls(K::Res<I::ButtonInput<I::KeyCode>> keys, K::Res<I::
     frame.jump = keys->JustPressed(I::KeyCode::Space);
     frame.jumpHeld = keys->Pressed(I::KeyCode::Space);
     frame.reload = keys->JustPressed(I::KeyCode::R);
+    frame.interact = keys->JustPressed(I::KeyCode::E);
     frame.forward = keys->Pressed(I::KeyCode::W);
     frame.back = keys->Pressed(I::KeyCode::S);
     frame.left = keys->Pressed(I::KeyCode::A);
@@ -585,11 +586,11 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
 // crouch stay.
 PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
     present::StepInput step = state.pending;
-    state.pending.jump = state.pending.fire = state.pending.reload = false;
+    state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;
     if (state.stale) {
         step.forward = step.right = 0.0F;
         step.present = false;
-        step.jump = step.jumpHeld = step.fire = step.reload = false;
+        step.jump = step.jumpHeld = step.fire = step.reload = step.interact = false;
     }
     PW::PlayerInput input;
     input.forward = step.forward;
@@ -601,6 +602,7 @@ PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
     input.Hold(PW::kHoldCrouch, step.crouch);
     input.Press(PW::kPressFire, step.fire);
     input.Press(PW::kPressReload, step.reload);
+    input.Press(PW::kPressInteract, step.interact);
     // Readiness is not the player's input: stale controls keep it.
     input.Hold(PW::kHoldReady, state.pending.ready);
     return input;

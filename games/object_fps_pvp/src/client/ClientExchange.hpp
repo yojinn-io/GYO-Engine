@@ -78,7 +78,7 @@ public:
         const std::lock_guard<std::mutex> lock(controlsLock_);
         if (!haveControls_) return std::nullopt;
         Sent taken{controls_, viewTick_};
-        controls_.jump = controls_.fire = controls_.reload = false;
+        controls_.jump = controls_.fire = controls_.reload = controls_.interact = false;
         haveControls_ = false;
         return taken;
     }
@@ -87,10 +87,12 @@ public:
         const bool jump = into.jump || newer.jump;
         const bool fire = into.fire || newer.fire;
         const bool reload = into.reload || newer.reload;
+        const bool interact = into.interact || newer.interact;
         into = newer;
         into.jump = jump;
         into.fire = fire;
         into.reload = reload;
+        into.interact = interact;
     }
 
     // Whether the game is paused (single player's pause: the Frame World's out sets it, the Solo World's in reads it).

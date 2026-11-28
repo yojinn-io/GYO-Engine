@@ -1265,7 +1265,7 @@
     "live-frame-sim-thread declaration 4.3, J6"
    ],
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = false;\n",
+   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: a click in a frame that runs no step*",
@@ -2810,8 +2810,8 @@
    "id": "pvp-hold-kept-stale",
    "what": "stale controls keep jumping while the key was held",
    "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
-   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = false;",
-   "replace": "        step.jump = step.fire = step.reload = false;",
+   "find": "        step.jump = step.jumpHeld = step.fire = step.reload = step.interact = false;",
+   "replace": "        step.jump = step.fire = step.reload = step.interact = false;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: J5*",
    "expect": "pvp-hold-stale",
@@ -4220,6 +4220,32 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: interaction*",
    "expect": "pvp-door-needs-interaction"
+  },
+  {
+   "id": "pvp-interact-key-not-read",
+   "what": "the Client does not read E",
+   "guards": [
+    "interact-door-declaration 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    frame.interact = keys->JustPressed(I::KeyCode::E);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: E reaches*",
+   "expect": "pvp-interact-key-sent"
+  },
+  {
+   "id": "pvp-interact-press-repeats",
+   "what": "the step that takes the E press leaves it for the next steps",
+   "guards": [
+    "interact-door-declaration 8"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;\n",
+   "replace": "    state.pending.jump = state.pending.fire = state.pending.reload = false;\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: E reaches*",
+   "expect": "pvp-interact-key-sent"
   }
  ]
 }

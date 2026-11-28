@@ -527,6 +527,45 @@ TEST_CASE("client: a click in a frame that runs no step still fires at the Match
     CHECK(setup.Client().Get<PW::PlayerCombat>(own)->shots == 4);
 }
 
+TEST_CASE("client: E reaches the Match as one interaction press (four frames a step)") {
+    Setup setup(4);
+    setup.Loaded();
+    setup.Frames(480);
+    REQUIRE(PC::StatusOf(setup.Client()).playing);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    setup.Shown();
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.position = {640.0F, 360.0F};
+    for (const I::ButtonState state : {I::ButtonState::Pressed, I::ButtonState::Released}) {
+        click.state = state;
+        setup.Next().buttons.push_back(click);
+        setup.Frame();
+    }
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    setup.Frames(8);
+    // E down in the second frame of a step, up two frames later; the Match's steps that carry the press are counted.
+    std::set<std::uint64_t> pressedAt;
+    const auto watch = [&] {
+        const PW::PlayerInput* input = GameWorld(*setup.match).Get<PW::PlayerInput>(own);
+        if (input != nullptr && input->Pressed(PW::kPressInteract)) pressedAt.insert(TickOf(GameWorld(*setup.match)));
+    };
+    setup.Frames(1);
+    setup.Next().keys.push_back(Key(I::KeyCode::E));
+    setup.Frame();
+    watch();
+    for (int i = 0; i < 2; ++i) {
+        setup.Frame();
+        watch();
+    }
+    setup.Next().keys.push_back(Key(I::KeyCode::E, I::ButtonState::Released));
+    for (int i = 0; i < 4 * 30; ++i) {
+        setup.Frame();
+        watch();
+    }
+    CHECK_MESSAGE(pressedAt.size() == 1, "[pvp-interact-key-sent] one E is the press of exactly one step at the Match: " << pressedAt.size());
+}
+
 // live-frame-sim-thread declaration J5 (R5): the program lends the Sim World to a thread of its own; here the test's
 // "Sim thread" runs its rounds with the Match and the MemoryLink (whose ends are used from one thread), one round a
 // step in real time, while the main thread runs the Frame World's frames and stops 1500 ms between two of them, as

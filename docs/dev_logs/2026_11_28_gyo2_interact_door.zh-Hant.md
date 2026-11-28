@@ -29,3 +29,6 @@ Owner：門＋交互骨架的任務卡。分支 `claude/gyo2-interact-door-e11d3
   - 本機 `cpu|shader` 263 項中 262 過，失敗的就是上一條，改正後 `object_fps_pvp.world`、`core_script` 通過。
   - 突變：新 7 個（`pvp-interact-*`、`pvp-set-needs-unchecked`；含第 2 步移來的位元重疊）＋搬檔的 `pvp-start-not-frozen`＋改動附近的 `pvp-shot-wall-ignored`，9/9 killed。
   - A/B（基準 77ee6e59）：權威 digest 1257 行、`rest` 2182 行、`input` 2866 行逐位元組相同；報告只多三端各兩列（dataset 的 `message Interacted`、`system JudgeInteractions`），protocol hash 不變（interaction 組沒有複製的元件）。
+- **第 7 步的一部分（E 鍵）**（Opus／high）：第 5 步等 #379 合併，先做不靠 scene 的部分。Frame 的 `ReadControls` 讀 `E`（`JustPressed`）→ `present::ControlsFrame`／`StepInput` 的 `interact` → `Controls` 的待送按一下 → `ClientExchange` 合流（按一下的鍵相加）→ Sim 的 `StepInputOf` 放進 `kPressInteract`，取出就清、`stale` 時也清。新測試 `client: E reaches the Match as one interaction press`（`[pvp-interact-key-sent]`：按一次 E，Match 恰好一步有這個鍵）。
+  - 本機 `object_fps_pvp` 的 `cpu|shader` 10 項全過。
+  - 突變：新 2 個（`pvp-interact-key-not-read`、`pvp-interact-press-repeats`）＋ find 改寫的 `pvp-step-press-repeats`、`pvp-hold-kept-stale`，4/4 killed。

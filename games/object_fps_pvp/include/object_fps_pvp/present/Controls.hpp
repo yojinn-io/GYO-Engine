@@ -21,6 +21,7 @@ struct ControlsFrame final {
     bool click = false;
     bool jump = false;
     bool reload = false;
+    bool interact = false;
     // Held.
     bool forward = false;
     bool back = false;
@@ -46,6 +47,7 @@ struct StepInput final {
     bool crouch = false;
     bool fire = false;
     bool reload = false;
+    bool interact = false;
     // Not the player's: the Frame World's readiness (the game loaded and drawn), carried with the controls.
     bool ready = false;
 };
@@ -78,6 +80,7 @@ private:
     bool pendingFire_ = false;
     bool pendingJump_ = false;
     bool pendingReload_ = false;
+    bool pendingInteract_ = false;
 };
 
 } // namespace object_fps_pvp::present
