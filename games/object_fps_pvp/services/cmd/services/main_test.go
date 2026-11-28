@@ -13,8 +13,8 @@ func TestTheRoomsOfferTheShippedModesAndArenas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(modes, []string{"core_pvp"}) {
-		t.Fatalf("the shipped modes are %v, want [core_pvp]", modes)
+	if !slices.Equal(modes, []string{"core_pvp", "sandbox"}) {
+		t.Fatalf("the shipped modes are %v, want [core_pvp sandbox]", modes)
 	}
 	maps, err := mapsOf("", content)
 	if err != nil {

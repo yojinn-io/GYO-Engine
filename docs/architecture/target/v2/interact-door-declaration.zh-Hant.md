@@ -699,7 +699,7 @@ P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下
 - **`sceneDigest` 放哪**：`GameContent::SceneDigest(mode, arena)` 算；`GameRules::sceneDigest` 帶著（照 `arenaDigest` 的做法），`Prepare` 寫進 `MatchInfo`；`MatchInfoCodec` 5 → 6。scene 的 `id` 不進 digest（宣告只列物件）。
 - **錯誤訊息**：寫成 `object <第幾個> (id <id>): <哪裡錯>`；LoadGameContent 再加上 `maps/<arena 檔>: its scene <路徑>:`。
 - **測試的 helper**：`ContentFolder`（#379 寫在 `ModeTests.cpp` 的匿名 namespace）搬到 `WorldTestSupport.hpp`，scene 的測試也用它。
-- **Go `./services/...`（9.4 最後一列）**：gyo2 分支沒有 `services/`，這一列沒有對象。
+- **Go `./services/...`（9.4 最後一列）**：在 `games/object_fps_pvp/services/`（第 5 步時只找了 repo 根目錄，誤記成「沒有」，第 6 步更正）。第 6 步加了 sandbox 後，`cmd/services/main_test.go` 的出貨模式配置清單改成 `[core_pvp sandbox]`。
 
 ### 14.2 第 6 步（`doors` 組）
 
