@@ -114,7 +114,7 @@ struct Lone {
     // A box at the eye's height of a player standing at feet, `ahead` metres along +Z.
     void Box(const K::EntityId id, const Math::Vec3 feet, const float ahead, const bool interactable) {
         const PW::GameRules& rules = *World().Resource<PW::GameRules>();
-        const float eye = sim::EyeHeight(rules.arena, rules.stance, false);
+        const float eye = sim::EyeHeight(rules.body, false);
         World().Insert(id, P::Collider{P::Shape{P::Cuboid{{0.3F, 0.3F, 0.05F}}}});
         World().Insert(id, T::Transform{Math::Vec3{feet.x, feet.y + eye, feet.z + ahead}});
         if (interactable) World().Insert(id, PW::Interactable{});
@@ -220,7 +220,7 @@ TEST_CASE("world: interaction: before the start E does nothing") {
     world.Insert(player, input);
     const PW::GameRules& rules = *world.Resource<PW::GameRules>();
     world.Insert(kTarget, P::Collider{P::Shape{P::Cuboid{{0.3F, 0.3F, 0.05F}}}});
-    world.Insert(kTarget, T::Transform{Math::Vec3{kFeet.x, sim::EyeHeight(rules.arena, rules.stance, false), kFeet.z + 1.0F}});
+    world.Insert(kTarget, T::Transform{Math::Vec3{kFeet.x, sim::EyeHeight(rules.body, false), kFeet.z + 1.0F}});
     world.Insert(kTarget, PW::Interactable{});
     for (int i = 0; i < 12; ++i) {
         REQUIRE(static_cast<bool>(product->RunFrame()));

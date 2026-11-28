@@ -1,16 +1,10 @@
 {
-  "version": 4,
+  "version": 5,
   "id": "kiriyu_incident_250m",
   "width": 250,
   "depth": 250,
-  "cell_size": 0.5,
-  "movement_speed": 3,
-  "body_height": 1.8,
-  "radius": 0.25,
-  "eye_height": 1.6,
   "map": "object_fps_pvp.map.kiriyu_incident_250m",
   "kill_height": -10,
-  "fall_damage": {"safe_height": 4.0, "points_per_metre": 15},
   "spawns": [
     {"position": [25.25, 11.5, 219.75], "yaw": 2.35619449},
     {"position": [40.25, 11.5, 22.25], "yaw": 0.785398163},

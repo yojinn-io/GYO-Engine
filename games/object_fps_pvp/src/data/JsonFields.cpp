@@ -1,5 +1,6 @@
 #include "data/JsonFields.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 
@@ -73,6 +74,31 @@ bool Boolean(const Json::Value& value, const std::string_view what) {
     const auto flag = value.AsBool();
     if (!flag) Fail(what, flag.error());
     return flag.value();
+}
+
+float Positive(const Json::Value& value, const std::string_view what) {
+    const auto number = static_cast<float>(Number(value, what));
+    if (!std::isfinite(number) || number <= 0) throw std::runtime_error(std::string{what} + " is not a finite positive number");
+    return number;
+}
+
+float PositiveOr(const Json::ObjectView& object, const std::string_view key, const float fallback) {
+    return HasMember(object, key) ? Positive(Member(object, key), key) : fallback;
+}
+
+std::string ContentPath(const Json::Value& value, const std::string_view what) {
+    std::string path = String(value, what);
+    std::size_t start = 0;
+    while (true) {
+        const std::size_t end = path.find('/', start);
+        const std::string_view part = std::string_view(path).substr(start, end == std::string::npos ? std::string::npos : end - start);
+        if (part.empty() || part == "." || part == ".." || part.find_first_of("\\:") != std::string_view::npos) {
+            throw std::runtime_error(std::string{what} + " is not a path inside the content: " + path);
+        }
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return path;
 }
 
 } // namespace object_fps_pvp::data

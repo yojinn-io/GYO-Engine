@@ -311,9 +311,9 @@ K::SystemResult PhysicsFailed(const P::Physics3dError& error) {
 
 // The arena's invisible wall: the feet stay within [radius, width - radius] x [radius, depth - radius] (a move into it
 // keeps its other axis: the body slides along it).
-Math::Vec3 InsideBounds(const sim::ArenaContent& arena, Math::Vec3 feet) {
-    feet.x = std::clamp(feet.x, arena.radius, arena.width - arena.radius);
-    feet.z = std::clamp(feet.z, arena.radius, arena.depth - arena.radius);
+Math::Vec3 InsideBounds(const sim::ArenaContent& arena, const float radius, Math::Vec3 feet) {
+    feet.x = std::clamp(feet.x, radius, arena.width - radius);
+    feet.z = std::clamp(feet.z, radius, arena.depth - radius);
     return feet;
 }
 
@@ -323,6 +323,7 @@ Math::Vec3 InsideBounds(const sim::ArenaContent& arena, Math::Vec3 feet) {
 Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRules& rules, PlayerBody& body,
                                                const PlayerInput& input, const bool alive, const double seconds) {
     const sim::ArenaContent& arena = rules.arena;
+    const sim::BodySize& size = rules.body;
     const bool steering = alive && input.present != 0;
     if (steering) {
         body.yaw = Math::WrapRadians(input.yaw);
@@ -336,25 +337,25 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
             crouched = true;
         } else if (crouched) {
             // Standing up needs room for the standing body where the feet are.
-            auto room = Fits(walls, start, arena.bodyHeight, arena.radius);
+            auto room = Fits(walls, start, size.height, size.radius);
             if (!room) return Base::Err(std::move(room).error());
             if (*room) crouched = false;
         }
     }
     body.crouched = crouched ? 1 : 0;
-    const float height = sim::BodyHeight(arena, rules.stance, crouched);
-    const float speed = sim::MoveSpeed(arena, rules.stance, crouched);
+    const float height = sim::BodyHeight(size, crouched);
+    const float speed = sim::MoveSpeed(rules.movement, crouched);
     const sim::GroundPoint step = steering ? sim::ComputePlanarDisplacement(std::clamp(input.forward, -1.0F, 1.0F),
                                                                             std::clamp(input.right, -1.0F, 1.0F), body.yaw,
                                                                             speed, static_cast<float>(seconds))
                                            : sim::GroundPoint{};
     if (body.grounded != 0) {
-        auto ground = OnGround(walls, arena, start, height, arena.radius);
+        auto ground = OnGround(walls, arena, start, height, size.radius);
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     }
     if (steering && input.Pressed(kPressJump) && body.grounded != 0 && !crouched) {
-        body.verticalVelocity = sim::JumpSpeed(arena);
+        body.verticalVelocity = sim::JumpSpeed(rules.movement);
         body.grounded = 0;
     }
     float desiredY = start.y;
@@ -362,7 +363,7 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
     float descent = 0.0F;
     const bool airborne = body.grounded == 0;
     if (airborne) {
-        const sim::VerticalStep fall = sim::Fall(start.y, body.verticalVelocity, arena.gravity, seconds, arena.floor);
+        const sim::VerticalStep fall = sim::Fall(start.y, body.verticalVelocity, rules.movement.gravity, seconds, arena.floor);
         desiredY = fall.y;
         body.verticalVelocity = fall.velocity;
         descent = std::max(fall.impact, -fall.velocity);
@@ -373,16 +374,16 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
         P::MoveAndSlideConfig config = MoveConfig();
         if (body.grounded != 0) config.planes.push_back(Math::Vec3{0.0F, 1.0F, 0.0F});
         const float invSeconds = static_cast<float>(1.0 / seconds);
-        auto moved = P::MoveAndSlide(walls, BodyShape(height, arena.radius), BodyPose(start, height), movement * invSeconds,
+        auto moved = P::MoveAndSlide(walls, BodyShape(height, size.radius), BodyPose(start, height), movement * invSeconds,
                                      static_cast<float>(seconds), config);
         if (!moved) return Base::Err(std::move(moved).error());
-        end = InsideBounds(arena, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});
+        end = InsideBounds(arena, size.radius, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});
         if (arena.floor && end.y < *arena.floor) end.y = *arena.floor;
     }
     body.feet = end;
     if (std::abs(end.y - desiredY) > 0.0001F) body.verticalVelocity = 0.0F;
     if (body.verticalVelocity <= 0.0F) {
-        auto ground = OnGround(walls, arena, end, height, arena.radius);
+        auto ground = OnGround(walls, arena, end, height, size.radius);
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     } else {
@@ -406,7 +407,7 @@ void Die(PlayerCombat& combat, const sim::CombatRules& rules, const std::uint64_
 }
 
 // Both ends (the Client predicts its own player): the body moves (StepBody); a living body that lands from higher than
-// the arena's safe height loses HP (sim::LandingDamage), and one whose feet are below the kill height dies.
+// the damage rules' safe height loses HP (sim::LandingDamage), and one whose feet are below the kill height dies.
 K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>, K::Write<PlayerBody>> players,
                             Walls walls, K::Res<GameRules> rules, K::Res<MatchInfo> info, K::Res<WT::Tick> tick,
                             K::Res<WT::ActiveTime> time) {
@@ -425,7 +426,7 @@ K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat
         }
         if (!(next == body.Read())) body.Get() = next;
         if (!alive) return;
-        const std::uint32_t damage = sim::LandingDamage(rules->arena, *stepped);
+        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, rules->damage, *stepped);
         const bool fellOut = sim::BelowKillHeight(rules->arena, next.feet.y);
         if (damage == 0 && !fellOut) return;
         PlayerCombat after = combat.Read();
@@ -467,8 +468,8 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
 
 // The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
 P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
-    const float height = sim::BodyHeight(rules.arena, rules.stance, body.crouched != 0);
-    const float r = rules.arena.radius;
+    const float height = sim::BodyHeight(rules.body, body.crouched != 0);
+    const float r = rules.body.radius;
     return P::Capsule{body.feet + Math::Vec3{0.0F, r, 0.0F}, body.feet + Math::Vec3{0.0F, height - r, 0.0F}, r};
 }
 
@@ -555,7 +556,7 @@ K::SystemResult AnimatePlayers(K::Query<K::Read<PlayerBody>, K::Read<PlayerComba
 // Whether a standing body fits at a spawn: free of the walls and of every living body.
 Base::Result<bool, P::Physics3dError> SpawnFree(const Walls& walls, const GameRules& rules, const sim::SpawnPoint& spawn,
                                                 const std::vector<PlayerBody>& living) {
-    auto fits = Fits(walls, spawn.position, rules.arena.bodyHeight, rules.arena.radius);
+    auto fits = Fits(walls, spawn.position, rules.body.height, rules.body.radius);
     if (!fits || !*fits) return fits;
     PlayerBody standing;
     standing.feet = spawn.position;
@@ -843,7 +844,7 @@ K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rul
         reason = "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'";
     } else if (match.arenaDigest != own.arenaDigest) {
         kind = MismatchKind::ArenaData;
-        reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: the blocks of the mode's sets)";
+        reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: map, bounds, floor, kill height, spawns)";
     } else if (load->stage == MapStage::Done && match.wallsDigest != own.wallsDigest) {
         kind = MismatchKind::Walls;
         reason = "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
@@ -874,10 +875,10 @@ struct ArenaLoading final {
 void HashValue(K::Hasher&, const ArenaLoading&) {}
 
 // Why a spawn of the arena is inside its walls, or nothing (whether bodies overlap is decided when they spawn).
-std::optional<std::string> SpawnInWall(const sim::ArenaContent& arena, const P::BoxSet& walls) {
+std::optional<std::string> SpawnInWall(const sim::ArenaContent& arena, const sim::BodySize& size, const P::BoxSet& walls) {
     for (std::size_t index = 0; index < arena.spawns.size(); ++index) {
         const sim::SpawnPoint& spawn = arena.spawns[index];
-        const auto found = P::FindBoxContacts(BodyShape(arena.bodyHeight, arena.radius), BodyPose(spawn.position, arena.bodyHeight), walls,
+        const auto found = P::FindBoxContacts(BodyShape(size.height, size.radius), BodyPose(spawn.position, size.height), walls,
                                               P::Pose{}, 0.0F);
         bool inside = !found;
         if (found) {
@@ -935,7 +936,7 @@ K::SystemResult LoadArena(K::Res<WA::AssetRequests> requests, K::Res<WA::AssetVi
         return hold();
     }
     P::BoxSet boxes = std::move(**built);
-    if (auto inside = SpawnInWall(rules.Read().arena, boxes)) {
+    if (auto inside = SpawnInWall(rules.Read().arena, rules.Read().body, boxes)) {
         fail(std::move(*inside));
         return hold();
     }
@@ -1018,28 +1019,16 @@ std::optional<std::size_t> GameContent::FindArena(const std::string_view id) con
 
 bool GameContent::Plays(const std::size_t mode, const std::size_t arena) const { return modes[mode].Plays(arenas[arena].id); }
 
-std::uint64_t GameContent::ArenaDigest(const std::size_t mode, const std::size_t arena) const {
-    const ModeContent& played = modes[mode];
-    // The arena's blocks of the sets the mode turns on, by set name.
-    std::vector<std::pair<std::string, std::uint64_t>> blocks;
-    for (const auto& [slot, read] : arenaSets[arena]) {
-        if (played.on.Has(slot)) blocks.emplace_back(sets[slot].name, read.digest);
-    }
-    std::sort(blocks.begin(), blocks.end());
-    K::Hasher h;
-    HashValue(h, std::string("gyo.object_fps_pvp.arena-sets/1"));
-    HashValue(h, blocks);
-    return Digest64(h);
-}
-
 GameRules GameRulesOf(const GameContent& content, const std::size_t mode, const std::size_t arena) {
     GameRules rules;
     rules.arena = content.arenas[arena];
-    rules.stance = content.modes[mode].stance;
+    rules.movement = content.modes[mode].movement;
+    rules.damage = content.modes[mode].damage;
     rules.combat = content.combat;
     rules.character = content.character;
     rules.characterDigest = content.characterDigest;
-    rules.arenaDigest = content.ArenaDigest(mode, arena);
+    rules.body = content.character->bodySize;
+    rules.arenaDigest = ArenaDigest(content.arenas[arena]);
     return rules;
 }
 
@@ -1071,23 +1060,21 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
             error = maps + name + ": " + error;
             return std::nullopt;
         }
-        auto blocks = ReadArenaSets(*arenaText, content.sets, error);
-        if (!blocks) {
-            error = maps + name + ": " + error;
-            return std::nullopt;
-        }
         content.arenas.push_back(std::move(*arena));
-        content.arenaSets.push_back(std::move(*blocks));
     }
-    // The character, for the arenas' body (they share one: the character is drawn and judged at that height).
-    for (const sim::ArenaContent& arena : content.arenas) {
-        if (arena.bodyHeight != content.arenas.front().bodyHeight) {
-            error = maps + arena.id + ": the arenas do not share one body height";
-            return std::nullopt;
+    auto rig = character::LoadCharacterRig(root, error);
+    if (!rig) return std::nullopt;
+    // Every spawn leaves room for the character's body to the arena's bounds.
+    for (std::size_t a = 0; a < content.arenas.size(); ++a) {
+        const sim::ArenaContent& arena = content.arenas[a];
+        for (std::size_t s = 0; s < arena.spawns.size(); ++s) {
+            if (!sim::SpawnInBounds(arena, arena.spawns[s], rig->bodySize.radius)) {
+                error = maps + (*list)[a] + ": spawn " + std::to_string(s) + " of arena '" + arena.id +
+                        "' is outside the bounds for the character's radius";
+                return std::nullopt;
+            }
         }
     }
-    auto rig = character::LoadCharacterRig(root, content.arenas.front().bodyHeight, error);
-    if (!rig) return std::nullopt;
     content.character = std::make_shared<const character::CharacterRig>(std::move(*rig));
     content.characterDigest = CharacterDigest(*content.character);
     auto modes = LoadModes(root, content.arenas, content.combat, content.sets, error);
@@ -1277,13 +1264,9 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(LocalDeaths{});
         if (end == WorldEnd::Match) world.SetResource(PlayerNames{options.playerNames});
         world.SetResource(ActiveMode{mode.id, mode.rulesDigest, mode.on});
-        // What the sets the mode turns on read, at every end (the rules digest says both ends read the same): the
-        // mode's settings, then the arena's blocks.
+        // What the sets the mode turns on read, at every end (the rules digest says both ends read the same).
         for (const auto& [slot, read] : mode.sets) {
             if (read.put) read.put(world);
-        }
-        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {
-            if (mode.on.Has(slot) && read.put) read.put(world);
         }
         // Who the start waits for: the Match's expected users (none: it is played from the first step, a Match
         // started by hand), a Local World's own player.

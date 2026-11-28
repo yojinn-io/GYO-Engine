@@ -109,7 +109,7 @@ std::string MismatchText(const PW::ContentMismatch& mismatch) {
     case PW::MismatchKind::Rules: return "モード「" + mismatch.matchMode + "」の規則が Match と違います";
     case PW::MismatchKind::Character: return "キャラクター（骨格・アニメーション・当たり判定）が Match と違います";
     case PW::MismatchKind::Arena: return "Match は別のマップ（" + mismatch.matchArena + "）を遊んでいます";
-    case PW::MismatchKind::ArenaData: return "マップ「" + mismatch.matchArena + "」のモード用データが Match と違います";
+    case PW::MismatchKind::ArenaData: return "マップ「" + mismatch.matchArena + "」のデータ（地図・範囲・床・落下死の高さ・出生点）が Match と違います";
     case PW::MismatchKind::Walls: return "マップ「" + mismatch.matchArena + "」の壁が Match と違います";
     case PW::MismatchKind::None: break;
     }
@@ -584,7 +584,7 @@ K::SystemResult PrepareOwnInput(K::Res<N::NetWorldLink> link, K::Query<K::Read<N
 // sent; the presses go to this step only, and the jump is the movement rules' (sim::StepJumps: with hold_jump a held
 // key asks for a jump every step). Stale controls (SimControls): no movement, no press, no held jump; the view and the
 // crouch stay.
-PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
+PW::PlayerInput StepInputOf(SimControls& state, const sim::MovementRules& rules) {
     present::StepInput step = state.pending;
     state.pending.jump = state.pending.fire = state.pending.reload = state.pending.interact = false;
     if (state.stale) {
@@ -617,7 +617,7 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
                                K::Res<PW::GameRules> rules, K::Query<K::Write<N::PeerInput<PW::PlayerInput>>> inputs,
                                K::ResMut<SimControls> state) {
     if (link->clientPeer == 0 || !inputs.Contains(link->clientPeer)) return {};
-    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
+    const PW::PlayerInput input = StepInputOf(*state, rules->movement);
     // The time the player saw (net F2): the other players' timeline of the frame the controls came from (a tick and
     // its fraction in a byte), or the confirmed point before it is timed.
     N::ViewTime seen{replica->latestConfirmed.value_or(0), 0};
@@ -634,7 +634,7 @@ K::SystemResult WriteStepInput(K::Res<WT::Tick> tick, K::Res<N::NetWorldLink> li
 // the game's Systems read it).
 K::SystemResult WriteLocalInput(K::Query<K::Read<PW::Owner>, K::Write<PW::PlayerInput>> players, K::Res<PW::LocalUser> user,
                                 K::Res<PW::GameRules> rules, K::ResMut<SimControls> state) {
-    const PW::PlayerInput input = StepInputOf(*state, rules->stance);
+    const PW::PlayerInput input = StepInputOf(*state, rules->movement);
     for (const K::EntityId id : players.Entities()) {
         if (players.Get<PW::Owner>(id)->userId == user->userId) *players.GetMut<PW::PlayerInput>(id) = input;
     }
@@ -715,7 +715,7 @@ K::SystemResult PlaceCamera(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> u
                             K::Query<K::Write<T::Transform>, K::With<C::Camera3d>> cameras) {
     players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body) {
         if (owner.userId != user->userId) return;
-        const float eye = sim::EyeHeight(rules->arena, rules->stance, body.crouched != 0);
+        const float eye = sim::EyeHeight(rules->body, body.crouched != 0);
         cameras.ForEach([&](K::EntityId, K::Mut<T::Transform> camera) {
             T::Transform t = camera.Read();
             t.translation = body.feet + Math::Vec3{0.0F, eye, 0.0F};
@@ -1092,9 +1092,9 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     // lowers them (PW::Blocked).
     const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
         if (own == nullptr) return;
-        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->arena, rules->stance, own->crouched != 0), 0.0F};
+        const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->body, own->crouched != 0), 0.0F};
         const Math::Vec3 source =
-            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->arena, rules->stance, body.crouched != 0), 0.0F};
+            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->body, body.crouched != 0), 0.0F};
         const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
         if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
     };

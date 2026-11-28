@@ -6,7 +6,7 @@
 namespace object_fps_pvp::world {
 
 Math::Ray ShotRay(const GameRules& rules, const PlayerBody& body) {
-    const float eye = sim::EyeHeight(rules.arena, rules.stance, body.crouched != 0);
+    const float eye = sim::EyeHeight(rules.body, body.crouched != 0);
     return Math::Ray{body.feet + Math::Vec3{0.0F, eye, 0.0F}, sim::ViewDirection(body.yaw, body.pitch)};
 }
 

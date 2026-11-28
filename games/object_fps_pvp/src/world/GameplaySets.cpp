@@ -18,7 +18,7 @@ const std::vector<GameplaySet>& GameSets() {
 std::string GameplaySetFixed(const std::string_view set) { return "pvp." + std::string(set) + ".fixed"; }
 std::string GameplaySetFrame(const std::string_view set) { return "pvp." + std::string(set) + ".frame"; }
 
-std::optional<SetBlocks> ReadSetBlocks(const GYO::Engine::Json::ObjectView& blocks, const std::vector<GameplaySet>& sets, const bool arena,
+std::optional<SetBlocks> ReadSetBlocks(const GYO::Engine::Json::ObjectView& blocks, const std::vector<GameplaySet>& sets,
                                        std::string& error) {
     error.clear();
     SetBlocks read;
@@ -39,10 +39,10 @@ std::optional<SetBlocks> ReadSetBlocks(const GYO::Engine::Json::ObjectView& bloc
             error = "the block of set '" + name + "' is not an object";
             return std::nullopt;
         }
-        const SetReader& reader = arena ? found->readArena : found->readMode;
+        const SetReader& reader = found->readMode;
         if (!reader) {
             if (block->Size() != 0) {
-                error = "the set '" + name + "' takes no " + (arena ? "arena data" : "settings");
+                error = "the set '" + name + "' takes no settings";
                 return std::nullopt;
             }
             read.emplace_back(slot, SetData{});
@@ -57,28 +57,6 @@ std::optional<SetBlocks> ReadSetBlocks(const GYO::Engine::Json::ObjectView& bloc
         read.emplace_back(slot, std::move(*data));
     }
     return read;
-}
-
-std::optional<SetBlocks> ReadArenaSets(const std::string_view arenaText, const std::vector<GameplaySet>& sets, std::string& error) {
-    error.clear();
-    auto document = GYO::Engine::Json::Parse(arenaText);
-    if (!document) {
-        error = "the arena does not parse";
-        return std::nullopt;
-    }
-    const auto root = document->Root().AsObject();
-    if (!root) {
-        error = "the arena is not an object";
-        return std::nullopt;
-    }
-    const auto blocks = root->Find("sets");
-    if (!blocks) return SetBlocks{};
-    const auto object = blocks->AsObject();
-    if (!object) {
-        error = "sets is not an object";
-        return std::nullopt;
-    }
-    return ReadSetBlocks(*object, sets, true, error);
 }
 
 bool SetsOn::Has(const std::size_t slot) const { return std::find(slots.begin(), slots.end(), slot) != slots.end(); }
