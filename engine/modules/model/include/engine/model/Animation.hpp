@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 
@@ -50,6 +51,70 @@ void SampleClip(std::span<const Node> nodes, const AnimationClip& clip, float se
 // are not clamped. out may be a or b.
 void Blend(std::span<const LocalTransform> a, std::span<const LocalTransform> b, float weight,
            std::span<LocalTransform> out);
+
+// The same per node with each node's own weight: out[i] = a[i] mixed toward
+// b[i] by weights[i]. A mask is weights of 0 and 1. out may be a or b.
+void Blend(std::span<const LocalTransform> a, std::span<const LocalTransform> b, std::span<const float> weights,
+           std::span<LocalTransform> out);
+
+// out[i] = base[i] plus weight times the motion of motion[i] relative to
+// reference[i]: translation and scale add weight * (motion - reference);
+// rotation is base * slerp(identity, inverse(reference) * motion, weight),
+// the change in the node's own frame. weight 1 with base equal to reference
+// gives motion; weight 0 or motion equal to reference gives base. weight is
+// not clamped. out may be any of the inputs.
+void ApplyAdditive(std::span<const LocalTransform> base, std::span<const LocalTransform> motion,
+                   std::span<const LocalTransform> reference, float weight, std::span<LocalTransform> out);
+
+// The instants of a clip that its time crosses moving from `from` to `to`,
+// in seconds as SampleClip takes them (Wrap::Loop times need not be wrapped).
+// times are the instants, ascending, each within [0, duration]. Writes their
+// indices to out in the order they are crossed and returns how many.
+//
+// Forward (from < to) crosses [from, to); backward (to < from) crosses
+// (to, from]: consecutive intervals in one direction cross each instant once.
+// Wrap::Clamp holds the time within [0, duration], and the interval that
+// reaches the end (or, backward, the start) also crosses an instant there;
+// turning back at that end crosses it again, as turning back anywhere leaves
+// the instant the time stands on. Wrap::Loop crosses the end into the start
+// (or back): the interval that reaches the end crosses the end's instants and
+// the one leaving the start those on 0 (backward, the one that reaches the
+// start those on 0 and the one leaving it the end's); an interval of a whole
+// duration or more crosses each instant once, from where it starts. from ==
+// to, or a clip of duration 0, crosses nothing. out must hold times.size()
+// indices.
+[[nodiscard]] std::size_t CrossedEvents(std::span<const float> times, float from, float to, float duration, Wrap wrap,
+                          std::span<std::uint32_t> out);
+
+// Three nodes of one chain for SolveTwoBoneIK: mid below root and tip below
+// mid, not necessarily their direct children (an upper arm, its forearm and
+// its hand).
+struct TwoBoneChain final {
+    std::uint32_t root = 0;
+    std::uint32_t mid = 0;
+    std::uint32_t tip = 0;
+};
+
+// Turns the root and the mid of the chain so the tip reaches target, bending
+// toward pole: both are points in model space (the space of
+// ComputeModelSpace). Only the rotations of root and mid change, by the
+// shortest arcs that move each bone; the tip keeps its local rotation and the
+// bones their lengths, as they are in pose.
+//
+// A target farther than the two bones reach straightens the chain toward it.
+// One nearer the root than the difference of the two lengths (inside the
+// body) is moved out to that distance, the chain folded. A pole on the line
+// from root to target bends the chain to the side the mid is on; a straight
+// chain then bends to a fixed side. A target on the root, or a bone of length
+// 0, leaves pose as it is. "On the line" is within what float tells apart
+// at the sizes of the points.
+//
+// weight 0 leaves pose as it is; 1 is the solved pose; between them each of
+// the two rotations by slerp from its value in pose. weight is not clamped.
+// Rotations of the chain's ancestors are taken without their scale: exact for
+// uniform scales.
+void SolveTwoBoneIK(std::span<const Node> nodes, const TwoBoneChain& chain, Math::Vec3 target, Math::Vec3 pole,
+                    float weight, std::span<LocalTransform> pose);
 
 // Each node's transform in model space: the parent's times the node's own
 // (Math::Multiply(parent, local)), a root's own alone.

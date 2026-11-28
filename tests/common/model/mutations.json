@@ -1,6 +1,6 @@
 {
  "version": 1,
- "description": "Declared mutants of the model Module (docs/architecture/target/v2/model.zh-Hant.md; ids md- the model data rules, ma- skeletal animation's first layer, mr- retargeting, mf- the fbx loader and its adapter, mb- build-time link checks). One per independently wrong decision of Design Invariants MD-1 to MD-6 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): removing the before-the-first-key and after-the-last-key branches of the key search, or the empty-channel checks (each then reads outside a vector, undefined behaviour); the duration-0 branch of Wrap::Loop (without it fmod gives NaN, and a channel of a duration-0 clip has one key, so the value is the same); the unbound-track skip of Retarget (indexes with the unbound marker, undefined behaviour); Validate's BadData rule of the loader and the Unsupported rule (no file Blender writes reaches them); the equal-time key merge of the adapter (Blender's linear keys never collide); one skin per mesh, shared by its material parts (structural: the skin is made once per mesh, before the parts; the shared-skin case shows it); the mesh-skin range check of Validate (without it the check reads skins out of range, undefined behaviour); the PBR base colour fallback of the materials (Blender writes the FBX diffuse colour, so no file of ours reaches it); the importer memory limit following the byte limit (the contract example never nears 256 MiB, so no test sees the limit).",
+ "description": "Declared mutants of the model Module (docs/architecture/target/v2/model.zh-Hant.md; ids md- the model data rules, ma- skeletal animation's first layer, mr- retargeting, mf- the fbx loader and its adapter, mb- build-time link checks). One per independently wrong decision of Design Invariants MD-1 to MD-6 (tests/common/mutation/README.md, criteria 1 to 3 and 9). Not added (with the reason): removing the before-the-first-key and after-the-last-key branches of the key search, or the empty-channel checks (each then reads outside a vector, undefined behaviour); the duration-0 branch of Wrap::Loop (without it fmod gives NaN, and a channel of a duration-0 clip has one key, so the value is the same); the unbound-track skip of Retarget (indexes with the unbound marker, undefined behaviour); Validate's BadData rule of the loader and the Unsupported rule (no file Blender writes reaches them); the equal-time key merge of the adapter (Blender's linear keys never collide); one skin per mesh, shared by its material parts (structural: the skin is made once per mesh, before the parts; the shared-skin case shows it); the mesh-skin range check of Validate (without it the check reads skins out of range, undefined behaviour); the PBR base colour fallback of the materials (Blender writes the FBX diffuse colour, so no file of ours reaches it); the importer memory limit following the byte limit (the contract example never nears 256 MiB, so no test sees the limit); in SolveTwoBoneIK, holding the distance between the two lengths' difference and their sum (without it the mid's height is held at 0 and only directions are used, so the chain is straight or folded the same way: an equivalent mutant), and the zero-length and degenerate checks of the bones (without them Normalize divides by 0, the same NaN the target-on-root mutant shows).",
  "mutants": [
   {
    "id": "ma-sample-no-rest-first",
@@ -92,6 +92,357 @@
    "target": "gyo_model_animation_tests",
    "cases": "Blend mixes translation and scale linearly and rotation by slerp",
    "expect": "AboutZ\\(22\\.5F\\)"
+  },
+  {
+   "id": "ma-blend-weights-first",
+   "what": "MD-3: the Blend with a weight per node gives every node the first node's weight",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Mix(a[i], b[i], weights[i])",
+   "replace": "Mix(a[i], b[i], weights[0])",
+   "target": "gyo_model_animation_tests",
+   "cases": "Blend with a weight per node mixes each node by its own weight",
+   "expect": "Near\\(out\\[1\\]\\.translation, \\{4, 0, 0\\}\\)"
+  },
+  {
+   "id": "ma-additive-parent-frame",
+   "what": "MD-3: ApplyAdditive turns the base by the change in the parent's frame (change * base, Bevy's order) instead of the node's own",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(Math::NormalizeOrIdentity(onto.rotation),\n                                                     Math::Slerp(Math::Quaternion{}, change, weight))",
+   "replace": "Math::Multiply(Math::Slerp(Math::Quaternion{}, change, weight),\n                                                     Math::NormalizeOrIdentity(onto.rotation))",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive turns the base by the change in the node's own frame",
+   "expect": "SameRotation\\(out\\[0\\]\\.rotation, own\\)"
+  },
+  {
+   "id": "ma-additive-reference-ignored",
+   "what": "MD-3: ApplyAdditive takes motion's rotation as the change, not its change from reference",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(Math::Conjugate(Math::NormalizeOrIdentity(from.rotation)),\n                                                       Math::NormalizeOrIdentity(moved.rotation))",
+   "replace": "Math::NormalizeOrIdentity(moved.rotation)",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive with motion equal to reference leaves base",
+   "expect": "SameRotation\\(out\\[0\\]\\.rotation, base\\[0\\]\\.rotation\\)"
+  },
+  {
+   "id": "ma-additive-weight-ignored",
+   "what": "MD-3: ApplyAdditive adds the whole change of rotation whatever the weight",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Slerp(Math::Quaternion{}, change, weight)",
+   "replace": "change",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive weight 0.5 adds half of the change",
+   "expect": "AboutY\\(40\\)"
+  },
+  {
+   "id": "ma-additive-scale-kept",
+   "what": "MD-3: ApplyAdditive keeps the base's scale instead of adding the change of scale",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "onto.scale + (moved.scale - from.scale) * weight",
+   "replace": "onto.scale",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive with base equal to reference and weight 1 gives motion",
+   "expect": "Near\\(out\\[0\\]\\.scale, motion\\[0\\]\\.scale\\)"
+  },
+  {
+   "id": "ma-events-forward-closed",
+   "what": "MD-7: forward crosses [from, to] instead of [from, to): the instant on to is crossed twice by consecutive intervals",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "up(atLeast(f), g == duration && f < duration ? count : atLeast(g));",
+   "replace": "up(atLeast(f), g == duration && f < duration ? count : above(g));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents forward crosses from up to but not including to",
+   "expect": "Indices\\{1, 2\\}"
+  },
+  {
+   "id": "ma-events-backward-ascending",
+   "what": "MD-7: backward intervals give their instants in ascending order, not in the order crossed",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "for (std::size_t i = end; i > begin; --i) out[written++] = static_cast<std::uint32_t>(i - 1);",
+   "replace": "for (std::size_t i = begin; i < end; ++i) out[written++] = static_cast<std::uint32_t>(i);",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward crosses from down to but not including to in descending order",
+   "expect": "Indices\\{3, 2\\}"
+  },
+  {
+   "id": "ma-events-loop-as-clamp",
+   "what": "MD-7: Wrap::Loop crosses as Wrap::Clamp, never into the start",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (wrap == Wrap::Clamp) {\n        const float f",
+   "replace": "    if (wrap == Wrap::Clamp || wrap == Wrap::Loop) {\n        const float f",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped",
+   "expect": "Indices\\{2, 0\\}"
+  },
+  {
+   "id": "ma-events-loop-no-start",
+   "what": "MD-7: a forward interval of Wrap::Loop that crosses the end does not go on into the start",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "        if (q > duration) up(0, atLeast(q - duration));\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped",
+   "expect": "Indices\\{2, 0\\}"
+  },
+  {
+   "id": "ma-events-loop-end-open",
+   "what": "MD-7: a forward interval of Wrap::Loop that stops on the end does not cross the instants on it, and the next one starts at 0 past them",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "up(atLeast(p), q >= duration ? count : atLeast(q));",
+   "replace": "up(atLeast(p), atLeast(q));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the instant on the end when an interval stops on it",
+   "expect": "Indices\\{3, 4\\}"
+  },
+  {
+   "id": "ma-events-loop-no-end",
+   "what": "MD-7: a backward interval of Wrap::Loop that crosses the start does not go on into the end",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "        if (q < 0.0F) down(above(q + duration), count);\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Loop crosses the start into the end",
+   "expect": "Indices\\{0, 2\\}"
+  },
+  {
+   "id": "ma-events-loop-start-open",
+   "what": "MD-7: a backward interval of Wrap::Loop that stops on the start does not cross the instants on 0, and the next one crosses them there again",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "down(q <= 0.0F ? 0 : above(q), above(top));",
+   "replace": "down(above(q), above(top));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Loop crosses the instant on the start when an interval stops on it",
+   "expect": "Indices\\{1, 0\\}"
+  },
+  {
+   "id": "ma-events-whole-loop-from-zero",
+   "what": "MD-7: an interval of a whole loop or more crosses its instants from 0, not from where it starts",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "            up(atLeast(p), count);\n            up(0, atLeast(p));",
+   "replace": "            up(0, count);",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop over a whole duration or more crosses each instant once from where it starts",
+   "expect": "Indices\\{2, 0, 1\\}"
+  },
+  {
+   "id": "ma-events-clamp-end-open",
+   "what": "MD-7: with Wrap::Clamp the interval that reaches the end does not cross the instant on it",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "g == duration && f < duration ? count : atLeast(g)",
+   "replace": "atLeast(g)",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it",
+   "expect": "Crossed\\(1\\.75F, 2\\.0F, Wrap::Clamp\\) == Indices\\{4\\}"
+  },
+  {
+   "id": "ma-events-clamp-end-twice",
+   "what": "MD-7: with Wrap::Clamp an interval after the end crosses the instant on the end again",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "g == duration && f < duration ? count",
+   "replace": "g == duration ? count",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it",
+   "expect": "Crossed\\(2\\.0F, 3\\.0F, Wrap::Clamp\\)\\.empty\\(\\)"
+  },
+  {
+   "id": "ma-events-clamp-start-open",
+   "what": "MD-7: backward with Wrap::Clamp, the interval that reaches the start does not cross the instant on it",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "down(g == 0.0F && f > 0.0F ? 0 : above(g), above(f));",
+   "replace": "down(above(g), above(f));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Clamp crosses the start once when the time reaches it",
+   "expect": "Crossed\\(0\\.25F, 0\\.0F, Wrap::Clamp\\) == Indices\\{0\\}"
+  },
+  {
+   "id": "ma-ik-pole-side-flipped",
+   "what": "MD-8: the chain bends away from the pole",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "const Math::Vec3 midTo = root.position + u * along + side * height;",
+   "replace": "const Math::Vec3 midTo = root.position + u * along - side * height;",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK bends toward the pole in the plane of root and target and pole",
+   "expect": "at\\[1\\]\\.z \\* side > 0\\.5F"
+  },
+  {
+   "id": "ma-ik-pole-fallback-missing",
+   "what": "MD-8: a pole on the line to the target bends the chain to a fixed side, not the side the mid is on",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (Math::LengthSquared(side) == 0.0F) side = sideOf(mid.position);\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK with a pole on the line to the target bends to the side the mid is on",
+   "expect": "Math::Dot\\(at\\[1\\] - u \\* Math::Dot\\(at\\[1\\], u\\), side\\) > 0\\.0F"
+  },
+  {
+   "id": "ma-ik-side-along-target",
+   "what": "MD-8: the pole's side is not taken across the line once more after normalizing, so a pole near the line leaves a part along it and the tip misses the target",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Normalize(across(Math::Normalize(side)))",
+   "replace": "Math::Normalize(side)",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK near the origin with a pole just off the line still reaches the target",
+   "expect": "Near\\(at\\[2\\], target, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-side-absolute",
+   "what": "MD-8: the pole's side counts as rounding by an absolute length, not by the rounding of the points, so a pole on the line near the root or far out bends the chain by rounding instead of to the side the mid is on",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "kRelativeZero * (Math::Length(point) + Math::Length(root.position) + Math::Length(v) * uRounding)",
+   "replace": "kRelativeZero",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK with a pole on the line near the root or far out bends to the side the mid is on",
+   "expect": "x - toward \\* Math::Dot\\(x, toward\\)\\) > 0\\.0F"
+  },
+  {
+   "id": "ma-ik-weight-ignored",
+   "what": "MD-8: a weight between 0 and 1 gives the whole solved pose",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (weight != 1.0F) {\n",
+   "replace": "    if (false) {\n",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK weight 0.5 slerps each rotation halfway to the solved one",
+   "expect": "SameBits\\(half\\[node\\]\\.rotation\\.[xyzw], expected\\.[xyzw]\\)"
+  },
+  {
+   "id": "ma-ik-weight-zero-touches",
+   "what": "MD-8: weight 0 writes the rotations back through slerp instead of leaving the pose as it is",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (weight == 0.0F) return;\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK weight 0 leaves the pose bit for bit",
+   "expect": "SameBits\\(pose\\[i\\], before\\[i\\]\\)"
+  },
+  {
+   "id": "ma-ik-root-parent-ignored",
+   "what": "MD-8: the root's turn is applied as a local turn, without its parent's rotation in model space",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(Math::Conjugate(rootParent), Math::Multiply(rootTurn, root.rotation))",
+   "replace": "Math::Multiply(rootTurn, Math::Normalize(pose[chain.root].rotation))",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK works in model space under turned and scaled ancestors and a node between root and mid",
+   "expect": "Near\\(at\\[4\\], target, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-mid-parent-not-turned",
+   "what": "MD-8: the mid's local rotation ignores that its parent turned with the root",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(rootTurn, ParentRotationOf(nodes, pose, chain.mid))",
+   "replace": "ParentRotationOf(nodes, pose, chain.mid)",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose",
+   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-lower-not-turned",
+   "what": "MD-8: the mid's turn is measured from the forearm before the root turned",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Arc(Math::Rotate(rootTurn, lower), tipTo - midTo)",
+   "replace": "Arc(lower, tipTo - midTo)",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose",
+   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-half-turn-missing",
+   "what": "MD-8: opposite directions (a folded chain) get no half turn, so the pose becomes NaN",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (cosine < -1.0F + kRelativeZero) {",
+   "replace": "    if (false) {",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK folds the chain toward a target inside the body nearer than the bones' difference",
+   "expect": "Near\\(atBack\\[2\\], \\{0\\.5F, 0, 0\\}, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-target-on-root",
+   "what": "MD-8: a target on the root is solved (a NaN direction) instead of leaving the pose",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": " ||\n        Math::LengthSquared(toTarget) <= kZeroLengthSquared)",
+   "replace": ")",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0",
+   "expect": "SameBits\\(pose\\[i\\], before\\[i\\]\\)"
   },
   {
    "id": "ma-modelspace-no-parent",

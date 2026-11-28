@@ -15,7 +15,8 @@
 #include "AssertTestSupport.hpp"
 
 // The model data rules (model.zh-Hant.md section 2.2), skeletal animation's
-// first layer (section 4: RestPose, SampleClip, Blend, ComputeModelSpace) and
+// first layer (section 4: RestPose, SampleClip, Blend, ApplyAdditive,
+// ComputeModelSpace, CrossedEvents; section 4.7: SolveTwoBoneIK) and
 // retargeting (section 4.4: BindByName, Retarget), on node lists and clips
 // written here, so each case shows the values it expects.
 
@@ -374,6 +375,575 @@ TEST_CASE("Blend: spans of different sizes are a Programmer Error") {
     GYO_CHECK_ASSERTS(Model::Blend(a, b, 0.5F, out));
     std::vector<LocalTransform> wide(3);
     GYO_CHECK_ASSERTS(Model::Blend(a, a, 0.5F, wide));
+}
+
+TEST_CASE("Blend with a weight per node mixes each node by its own weight") {
+    const std::vector<LocalTransform> a{{{0, 0, 0}, Quaternion{}, {1, 1, 1}},
+                                        {{0, 0, 0}, Quaternion{}, {1, 1, 1}},
+                                        {{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> b{{{4, 0, 0}, AboutZ(90), {3, 3, 3}},
+                                        {{4, 0, 0}, AboutZ(90), {3, 3, 3}},
+                                        {{4, 0, 0}, AboutZ(90), {3, 3, 3}}};
+    const std::vector<float> weights{0.0F, 1.0F, 0.25F};
+    std::vector<LocalTransform> out(3);
+    Model::Blend(a, b, weights, out);
+    CHECK(Near(out[0].translation, {0, 0, 0}));
+    CHECK(SameRotation(out[0].rotation, Quaternion{}));
+    CHECK(Near(out[0].scale, {1, 1, 1}));
+    CHECK(Near(out[1].translation, {4, 0, 0}));
+    CHECK(SameRotation(out[1].rotation, AboutZ(90)));
+    CHECK(Near(out[1].scale, {3, 3, 3}));
+    CHECK(Near(out[2].translation, {1, 0, 0}));
+    CHECK(SameRotation(out[2].rotation, AboutZ(22.5F)));
+    CHECK(Near(out[2].scale, {1.5F, 1.5F, 1.5F}));
+}
+
+TEST_CASE("Blend with a weight per node gives the single-weight Blend when every weight is the same") {
+    const std::vector<LocalTransform> a{{{1, 2, 3}, AboutY(30), {1, 1, 1}}, {{2, 0, 0}, AboutX(10), {1, 2, 1}}};
+    const std::vector<LocalTransform> b{{{5, 6, 7}, AboutY(80), {2, 2, 2}}, {{2, 0, 8}, AboutX(50), {1, 1, 3}}};
+    const std::vector<float> weights{0.375F, 0.375F};
+    std::vector<LocalTransform> perNode(2);
+    std::vector<LocalTransform> single(2);
+    Model::Blend(a, b, weights, perNode);
+    Model::Blend(a, b, 0.375F, single);
+    CHECK(SameBits(perNode[0], single[0]));
+    CHECK(SameBits(perNode[1], single[1]));
+}
+
+TEST_CASE("Blend with a weight per node may write into an input") {
+    const std::vector<LocalTransform> a{{{1, 2, 3}, AboutY(30), {1, 1, 1}}};
+    const std::vector<LocalTransform> b{{{5, 6, 7}, AboutY(60), {2, 2, 2}}};
+    const std::vector<float> half{0.5F};
+    std::vector<LocalTransform> intoA = a;
+    Model::Blend(intoA, b, half, intoA);
+    CHECK(Near(intoA[0].translation, {3, 4, 5}));
+    CHECK(SameRotation(intoA[0].rotation, AboutY(45)));
+    std::vector<LocalTransform> intoB = b;
+    Model::Blend(a, intoB, half, intoB);
+    CHECK(Near(intoB[0].translation, {3, 4, 5}));
+    CHECK(Near(intoB[0].scale, {1.5F, 1.5F, 1.5F}));
+}
+
+TEST_CASE("Blend with a weight per node: weights of another size are a Programmer Error") {
+    const std::vector<LocalTransform> a(2);
+    std::vector<LocalTransform> out(2);
+    const std::vector<float> one{0.5F};
+    GYO_CHECK_ASSERTS(Model::Blend(a, a, one, out));
+    const std::vector<float> two{0.5F, 0.5F};
+    std::vector<LocalTransform> wide(3);
+    GYO_CHECK_ASSERTS(Model::Blend(a, a, two, wide));
+}
+
+TEST_CASE("ApplyAdditive with base equal to reference and weight 1 gives motion") {
+    const std::vector<LocalTransform> reference{{{1, 0, 0}, AboutX(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{3, 2, 0}, AboutX(70), {2, 1, 1}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(reference, motion, reference, 1.0F, out);
+    CHECK(Near(out[0].translation, motion[0].translation));
+    CHECK(SameRotation(out[0].rotation, motion[0].rotation));
+    CHECK(Near(out[0].scale, motion[0].scale));
+}
+
+TEST_CASE("ApplyAdditive with motion equal to reference leaves base") {
+    const std::vector<LocalTransform> base{{{5, 6, 7}, AboutY(40), {2, 2, 2}}};
+    const std::vector<LocalTransform> reference{{{1, 0, 0}, AboutX(10), {1, 3, 1}}};
+    std::vector<LocalTransform> out(1);
+    for (const float weight : {0.0F, 0.5F, 1.0F}) {
+        Model::ApplyAdditive(base, reference, reference, weight, out);
+        CHECK(Near(out[0].translation, base[0].translation));
+        CHECK(SameRotation(out[0].rotation, base[0].rotation));
+        CHECK(Near(out[0].scale, base[0].scale));
+    }
+}
+
+TEST_CASE("ApplyAdditive turns the base by the change in the node's own frame") {
+    // base: 90 degrees about Y; the change of motion from reference: 90
+    // degrees about X. In the node's own frame the result is base * change
+    // (about Y, then about the turned X); in the parent's frame it would be
+    // change * base, another rotation.
+    const std::vector<LocalTransform> base{{{0, 0, 0}, AboutY(90), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, AboutZ(30), {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{0, 0, 0}, Math::Multiply(AboutZ(30), AboutX(90)), {1, 1, 1}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(base, motion, reference, 1.0F, out);
+    const Quaternion own = Math::Multiply(AboutY(90), AboutX(90));
+    const Quaternion parent = Math::Multiply(AboutX(90), AboutY(90));
+    INFO("out " << Show(out[0].rotation));
+    REQUIRE_FALSE(SameRotation(own, parent));
+    CHECK(SameRotation(out[0].rotation, own));
+}
+
+TEST_CASE("ApplyAdditive weight 0.5 adds half of the change") {
+    const std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{4, 0, 2}, AboutY(60), {3, 1, 2}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(base, motion, reference, 0.5F, out);
+    CHECK(Near(out[0].translation, {3, 1, 2}));
+    CHECK(SameRotation(out[0].rotation, AboutY(40)));
+    CHECK(Near(out[0].scale, {2, 1, 1.5F}));
+    Model::ApplyAdditive(base, motion, reference, 0.0F, out);
+    CHECK(Near(out[0].translation, base[0].translation));
+    CHECK(SameRotation(out[0].rotation, base[0].rotation));
+    CHECK(Near(out[0].scale, base[0].scale));
+}
+
+TEST_CASE("ApplyAdditive may write into any of its inputs") {
+    const std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{4, 0, 2}, AboutY(60), {3, 1, 2}}};
+    std::vector<LocalTransform> expected(1);
+    Model::ApplyAdditive(base, motion, reference, 1.0F, expected);
+    CHECK(Near(expected[0].translation, {5, 1, 3}));
+    CHECK(SameRotation(expected[0].rotation, AboutY(70)));
+    std::vector<LocalTransform> intoBase = base;
+    Model::ApplyAdditive(intoBase, motion, reference, 1.0F, intoBase);
+    std::vector<LocalTransform> intoMotion = motion;
+    Model::ApplyAdditive(base, intoMotion, reference, 1.0F, intoMotion);
+    std::vector<LocalTransform> intoReference = reference;
+    Model::ApplyAdditive(base, motion, intoReference, 1.0F, intoReference);
+    CHECK(SameBits(intoBase[0], expected[0]));
+    CHECK(SameBits(intoMotion[0], expected[0]));
+    CHECK(SameBits(intoReference[0], expected[0]));
+}
+
+TEST_CASE("ApplyAdditive: spans of other sizes are a Programmer Error") {
+    const std::vector<LocalTransform> base(1);
+    const std::vector<LocalTransform> reference(1);
+    const std::vector<LocalTransform> motion(1);
+    const std::vector<LocalTransform> two(2);
+    std::vector<LocalTransform> out(1);
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, two, reference, 1.0F, out));
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, motion, two, 1.0F, out));
+    std::vector<LocalTransform> wide(2);
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, motion, reference, 1.0F, wide));
+}
+
+namespace {
+
+// Instants of a clip of duration 2: at the start, inside, and at the end.
+const std::vector<float> kInstants{0.0F, 0.5F, 1.0F, 1.5F, 2.0F};
+
+std::vector<std::uint32_t> Crossed(const float from, const float to, const Wrap wrap,
+                                   const std::vector<float>& times = kInstants, const float duration = 2.0F) {
+    std::vector<std::uint32_t> out(times.size());
+    out.resize(Model::CrossedEvents(times, from, to, duration, wrap, out));
+    return out;
+}
+
+using Indices = std::vector<std::uint32_t>;
+
+} // namespace
+
+TEST_CASE("CrossedEvents forward crosses from up to but not including to") {
+    CHECK(Crossed(0.5F, 1.5F, Wrap::Clamp) == Indices{1, 2});
+    CHECK(Crossed(0.5F, 1.5F, Wrap::Loop) == Indices{1, 2});
+    CHECK(Crossed(0.0F, 0.25F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.6F, 0.9F, Wrap::Clamp).empty());
+}
+
+TEST_CASE("CrossedEvents of consecutive intervals cross each instant once") {
+    const std::vector<float> cuts{0.0F, 0.25F, 0.5F, 1.25F, 1.5F, 1.75F};
+    for (const Wrap wrap : {Wrap::Clamp, Wrap::Loop}) {
+        Indices all;
+        for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+            const Indices part = Crossed(cuts[i], cuts[i + 1], wrap);
+            all.insert(all.end(), part.begin(), part.end());
+        }
+        CHECK(all == Indices{0, 1, 2, 3});
+    }
+}
+
+TEST_CASE("CrossedEvents backward crosses from down to but not including to in descending order") {
+    CHECK(Crossed(1.5F, 0.5F, Wrap::Clamp) == Indices{3, 2});
+    CHECK(Crossed(1.5F, 0.5F, Wrap::Loop) == Indices{3, 2});
+    CHECK(Crossed(1.4F, 1.1F, Wrap::Clamp).empty());
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    // 1.5 -> 2.5 is 1.5 -> 2 then 0 -> 0.5.
+    CHECK(Crossed(1.5F, 2.5F, Wrap::Loop, times) == Indices{2, 0});
+    // The same instants six loops on, and before 0.
+    CHECK(Crossed(13.5F, 14.5F, Wrap::Loop, times) == Indices{2, 0});
+    CHECK(Crossed(-0.5F, 0.5F, Wrap::Loop, times) == Indices{2, 0});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the instant on the end when an interval stops on it") {
+    // Steps that land on the end: the one reaching it crosses the instant on
+    // the end, the next one, leaving the start, the instant on 0.
+    const std::vector<float> cuts{0.0F, 0.5F, 1.0F, 1.5F, 2.0F, 2.5F, 3.0F};
+    Indices all;
+    for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+        const Indices part = Crossed(cuts[i], cuts[i + 1], Wrap::Loop);
+        all.insert(all.end(), part.begin(), part.end());
+    }
+    CHECK(all == Indices{0, 1, 2, 3, 4, 0, 1});
+    CHECK(Crossed(1.5F, 2.0F, Wrap::Loop) == Indices{3, 4});
+    CHECK(Crossed(2.0F, 2.5F, Wrap::Loop) == Indices{0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Loop crosses the instant on the start when an interval stops on it") {
+    // The mirror of forward: the step reaching 0 crosses the instant on 0,
+    // the next one, leaving it, the instant on the end.
+    const std::vector<float> cuts{3.0F, 2.5F, 2.0F, 1.5F, 1.0F, 0.5F, 0.0F, -0.5F};
+    Indices all;
+    for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+        const Indices part = Crossed(cuts[i], cuts[i + 1], Wrap::Loop);
+        all.insert(all.end(), part.begin(), part.end());
+    }
+    CHECK(all == Indices{2, 1, 0, 4, 3, 2, 1, 0, 4});
+    CHECK(Crossed(0.5F, 0.0F, Wrap::Loop) == Indices{1, 0});
+    CHECK(Crossed(0.0F, -0.5F, Wrap::Loop) == Indices{4});
+    CHECK(Crossed(2.0F, 0.0F, Wrap::Loop) == Indices{4, 3, 2, 1, 0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Loop crosses the start into the end") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    // 0.5 -> -0.5 is 0.5 -> 0 then 2 -> 1.5.
+    CHECK(Crossed(0.5F, -0.5F, Wrap::Loop, times) == Indices{0, 2});
+    CHECK(Crossed(4.5F, 3.5F, Wrap::Loop, times) == Indices{0, 2});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop over a whole duration or more crosses each instant once from where it starts") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    CHECK(Crossed(1.5F, 3.5F, Wrap::Loop, times) == Indices{2, 0, 1});
+    CHECK(Crossed(1.5F, 9.0F, Wrap::Loop, times) == Indices{2, 0, 1});
+    CHECK(Crossed(1.5F, -0.5F, Wrap::Loop, times) == Indices{1, 0, 2});
+    CHECK(Crossed(1.5F, -7.0F, Wrap::Loop, times) == Indices{1, 0, 2});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the instants at 0 and at the duration both when it loops") {
+    CHECK(Crossed(1.75F, 2.25F, Wrap::Loop) == Indices{4, 0});
+    CHECK(Crossed(2.25F, 1.75F, Wrap::Loop) == Indices{0, 4});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it") {
+    // Reaching the end exactly, or passing it, crosses the instant on it.
+    CHECK(Crossed(1.75F, 2.0F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(1.75F, 3.0F, Wrap::Clamp) == Indices{4});
+    // After the end nothing more, whether the time stays or goes on.
+    CHECK(Crossed(2.0F, 3.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(3.0F, 4.0F, Wrap::Clamp).empty());
+    // Before the start nothing; reaching it from before crosses the instant at 0.
+    CHECK(Crossed(-2.0F, -1.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(-1.0F, 0.25F, Wrap::Clamp) == Indices{0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Clamp crosses the start once when the time reaches it") {
+    CHECK(Crossed(0.25F, 0.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.25F, -1.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.0F, -1.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(3.0F, 1.75F, Wrap::Clamp) == Indices{4});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Clamp turning back at an end crosses the instant on it again") {
+    // As at any turn: the interval leaving the instant the time stands on crosses it.
+    CHECK(Crossed(1.75F, 2.0F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(2.0F, 1.75F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(0.25F, 0.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.0F, 0.25F, Wrap::Clamp) == Indices{0});
+    // A turn inside: once.
+    CHECK(Crossed(0.25F, 0.5F, Wrap::Clamp).empty());
+    CHECK(Crossed(0.5F, 0.25F, Wrap::Clamp) == Indices{1});
+}
+
+TEST_CASE("CrossedEvents crosses nothing when the time stays or the clip has no length") {
+    CHECK(Crossed(0.5F, 0.5F, Wrap::Clamp).empty());
+    CHECK(Crossed(0.5F, 0.5F, Wrap::Loop).empty());
+    const std::vector<float> atZero{0.0F};
+    CHECK(Crossed(-1.0F, 1.0F, Wrap::Clamp, atZero, 0.0F).empty());
+    CHECK(Crossed(-1.0F, 1.0F, Wrap::Loop, atZero, 0.0F).empty());
+}
+
+TEST_CASE("CrossedEvents: a short out or a time that is not finite or a negative duration is a Programmer Error") {
+    std::vector<std::uint32_t> small(kInstants.size() - 1);
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, 1.0F, 2.0F, Wrap::Clamp, small)));
+    std::vector<std::uint32_t> out(kInstants.size());
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, nan, 1.0F, 2.0F, Wrap::Loop, out)));
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, nan, 2.0F, Wrap::Loop, out)));
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, 1.0F, -1.0F, Wrap::Clamp, out)));
+}
+
+namespace {
+
+using Model::TwoBoneChain;
+
+// arm (0) -> forearm (1) -> hand (2) -> finger (3), along +X: the arm 1 long,
+// the forearm `forearm` long, the finger off the hand.
+std::vector<Node> Arm(const float forearm = 1.0F) {
+    return {MakeNode("arm", Model::kNoParent), MakeNode("forearm", 0, {{1, 0, 0}, {}, {1, 1, 1}}),
+            MakeNode("hand", 1, {{forearm, 0, 0}, {}, {1, 1, 1}}), MakeNode("finger", 2, {{0.25F, 0, 0}, {}, {1, 1, 1}})};
+}
+constexpr TwoBoneChain kArm{0, 1, 2};
+
+std::vector<LocalTransform> RestOf(const std::vector<Node>& nodes) {
+    std::vector<LocalTransform> pose(nodes.size());
+    Model::RestPose(nodes, pose);
+    return pose;
+}
+
+std::vector<Vec3> Positions(const std::vector<Node>& nodes, const std::vector<LocalTransform>& pose) {
+    std::vector<Math::Matrix4> model(nodes.size());
+    Model::ComputeModelSpace(nodes, pose, model);
+    std::vector<Vec3> out;
+    for (const Math::Matrix4& m : model) out.push_back(Math::TransformPoint(m, {0, 0, 0}));
+    return out;
+}
+
+constexpr float kPositionTolerance = 1.0e-4F;
+
+} // namespace
+
+TEST_CASE("SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[2].rotation = AboutY(30);
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[2], {1, 1, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[1], at[2]), 1.0F, kPositionTolerance));
+    // Only the rotations of root and mid change.
+    for (std::size_t i = 0; i < pose.size(); ++i) {
+        LocalTransform unturned = pose[i];
+        unturned.rotation = before[i].rotation;
+        CHECK(SameBits(unturned, before[i]));
+        if (i >= 2) CHECK(SameBits(pose[i], before[i]));
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK bends toward the pole in the plane of root and target and pole") {
+    const auto nodes = Arm();
+    for (const float side : {1.0F, -1.0F}) {
+        auto pose = RestOf(nodes);
+        Model::SolveTwoBoneIK(nodes, kArm, {1.5F, 0, 0}, {0.75F, 0, side}, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("side " << side << " mid " << Show(at[1]) << " tip " << Show(at[2]));
+        CHECK(Near(at[2], {1.5F, 0, 0}, kPositionTolerance));
+        CHECK(at[1].z * side > 0.5F);
+        CHECK(Near(at[1].y, 0.0F, kPositionTolerance));
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK straightens the chain toward a target out of reach") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 4, 3}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[1], {0, 0.8F, 0.6F}, kPositionTolerance));
+    CHECK(Near(at[2], {0, 1.6F, 1.2F}, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK at the edge of reach meets the straightened chain") {
+    const auto nodes = Arm();
+    auto edge = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 2, 0}, {0, 1, 1}, 1.0F, edge);
+    auto inside = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 1.9999F, 0}, {0, 1, 1}, 1.0F, inside);
+    const auto atEdge = Positions(nodes, edge);
+    const auto atInside = Positions(nodes, inside);
+    INFO("edge mid " << Show(atEdge[1]) << " inside mid " << Show(atInside[1]));
+    CHECK(Near(atEdge[1], {0, 1, 0}, kPositionTolerance));
+    CHECK(Near(atEdge[2], {0, 2, 0}, kPositionTolerance));
+    CHECK(Near(atInside[1], atEdge[1], 2.0e-2F));
+    CHECK(Near(atInside[2], {0, 1.9999F, 0}, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK folds the chain toward a target inside the body nearer than the bones' difference") {
+    // arm 1, forearm 0.5: nothing nearer the root than 0.5 can be reached.
+    const auto nodes = Arm(0.5F);
+    auto pose = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 0.2F, 0}, {0, 0, 1}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[1], {0, 1, 0}, kPositionTolerance));
+    CHECK(Near(at[2], {0, 0.5F, 0}, kPositionTolerance));
+    // A straight arm folding back onto itself: the forearm turns half a turn.
+    auto back = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {0.2F, 0, 0}, {0, 0, 1}, 1.0F, back);
+    const auto atBack = Positions(nodes, back);
+    INFO("back mid " << Show(atBack[1]) << " tip " << Show(atBack[2]));
+    CHECK(Near(atBack[1], {1, 0, 0}, kPositionTolerance));
+    CHECK(Near(atBack[2], {0.5F, 0, 0}, kPositionTolerance));
+    // Equal bones reach a target close to the root.
+    const auto equal = Arm();
+    auto tight = RestOf(equal);
+    Model::SolveTwoBoneIK(equal, kArm, {0.05F, 0.05F, 0}, {0, 0, 1}, 1.0F, tight);
+    const auto atTight = Positions(equal, tight);
+    INFO("near tip " << Show(atTight[2]));
+    CHECK(Near(atTight[2], {0.05F, 0.05F, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(atTight[0], atTight[1]), 1.0F, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {0, 0, 0}, {0, 0, 1}, 1.0F, pose);
+    for (std::size_t i = 0; i < pose.size(); ++i) CHECK(SameBits(pose[i], before[i]));
+    const auto folded = Arm(0.0F);
+    auto zero = RestOf(folded);
+    const auto zeroBefore = zero;
+    Model::SolveTwoBoneIK(folded, kArm, {0.5F, 0.5F, 0}, {0, 0, 1}, 1.0F, zero);
+    for (std::size_t i = 0; i < zero.size(); ++i) CHECK(SameBits(zero[i], zeroBefore[i]));
+}
+
+TEST_CASE("SolveTwoBoneIK weight 0 leaves the pose bit for bit") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[0].rotation = AboutZ(10);
+    // Not of unit length: weight 0 does not even normalize it.
+    pose[1].rotation = Quaternion{0.1F, 0, 0, 1};
+    const auto before = pose;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 0.0F, pose);
+    for (std::size_t i = 0; i < pose.size(); ++i) CHECK(SameBits(pose[i], before[i]));
+}
+
+TEST_CASE("SolveTwoBoneIK weight 0.5 slerps each rotation halfway to the solved one") {
+    const auto nodes = Arm();
+    auto original = RestOf(nodes);
+    original[1].rotation = AboutY(40);
+    auto solved = original;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, solved);
+    auto half = original;
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 0.5F, half);
+    for (const std::uint32_t node : {kArm.root, kArm.mid}) {
+        const Quaternion expected = Math::Slerp(original[node].rotation, solved[node].rotation, 0.5F);
+        CHECK(SameBits(half[node].rotation.x, expected.x));
+        CHECK(SameBits(half[node].rotation.y, expected.y));
+        CHECK(SameBits(half[node].rotation.z, expected.z));
+        CHECK(SameBits(half[node].rotation.w, expected.w));
+    }
+    REQUIRE_FALSE(SameRotation(solved[kArm.root].rotation, original[kArm.root].rotation));
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole on the line to the target bends to the side the mid is on") {
+    // The forearm turned 90 degrees: mid at (1, 0, 0), tip at (1, 1, 0).
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    pose[1].rotation = AboutZ(90);
+    const Vec3 target{1.2F, 0.6F, 0};
+    // The mid's side of the line from root to target, before.
+    const Vec3 u = Math::Normalize(target);
+    const Vec3 side = Vec3{1, 0, 0} - u * Math::Dot(Vec3{1, 0, 0}, u);
+    Model::SolveTwoBoneIK(nodes, kArm, target, target * 2.0F, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
+    CHECK(Near(at[2], target, kPositionTolerance));
+    CHECK(Math::Dot(at[1] - u * Math::Dot(at[1], u), side) > 0.0F);
+    // A straight chain with the pole on the line still reaches, to some side.
+    auto straight = RestOf(nodes);
+    Model::SolveTwoBoneIK(nodes, kArm, {1, 0, 0}, {3, 0, 0}, 1.0F, straight);
+    const auto atStraight = Positions(nodes, straight);
+    INFO("straight mid " << Show(atStraight[1]) << " tip " << Show(atStraight[2]));
+    CHECK(Near(atStraight[2], {1, 0, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(atStraight[0], atStraight[1]), 1.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(atStraight[1], atStraight[2]), 1.0F, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole a rounding away from the line still reaches the target") {
+    // Far from the origin, with the pole just off the line from root to
+    // target: its side of the line is mostly rounding, and the mid must stay
+    // on the bones' spheres all the same.
+    std::vector<Node> nodes = Arm();
+    nodes[0].rest.translation = {100, 50, -30};
+    const Vec3 root{100, 50, -30};
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    // The larger ones are just past what counts as on the line, where the side
+    // is still mostly rounding.
+    for (const float off : {0.0F, 1.0e-6F, 1.0e-4F, 1.0e-2F, 2.0e-2F, 5.0e-2F}) {
+        auto pose = RestOf(nodes);
+        const Vec3 target = root + toward * 1.3F;
+        const Vec3 pole = root + toward * 40.0F + Vec3{0, 0, off};
+        Model::SolveTwoBoneIK(nodes, kArm, target, pole, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("off " << off << " tip " << Show(at[2]) << " target " << Show(target));
+        CHECK(Near(at[2], target, 1.0e-3F));
+        CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, 1.0e-3F));
+        if (off == 0.0F) {
+            // On the line: to the side the mid is on (+X, the arm at rest).
+            const Vec3 mid = at[1] - root;
+            const Vec3 x{1, 0, 0};
+            CHECK(Math::Dot(mid - toward * Math::Dot(mid, toward), x - toward * Math::Dot(x, toward)) > 0.0F);
+        }
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK near the origin with a pole just off the line still reaches the target") {
+    // Small coordinates: a side just past rounding still carries a part along
+    // the line that would take the tip off the target.
+    const auto nodes = Arm();
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    const Vec3 target = toward * 1.3F;
+    for (const float along : {0.1F, 3.0F, 40.0F}) {
+        for (const float off : {3.0e-7F, 8.0e-6F, 1.25e-4F}) {
+            auto pose = RestOf(nodes);
+            Model::SolveTwoBoneIK(nodes, kArm, target, toward * along + Vec3{0, 0, off}, 1.0F, pose);
+            const auto at = Positions(nodes, pose);
+            INFO("along " << along << " off " << off << " tip " << Show(at[2]));
+            CHECK(Near(at[2], target, kPositionTolerance));
+        }
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole on the line near the root or far out bends to the side the mid is on") {
+    // A pole on the line close to the root, or one far along it, with the
+    // whole arm far from the origin: the point's own rounding is larger
+    // than its side, and the chain still bends to the mid's side.
+    std::vector<Node> nodes = Arm();
+    nodes[0].rest.translation = {50, 50, 50};
+    const Vec3 root{50, 50, 50};
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    const Vec3 target = root + toward * 1.3F;
+    for (const float along : {0.01F, 0.1F, 3.0F, 40.0F}) {
+        auto pose = RestOf(nodes);
+        Model::SolveTwoBoneIK(nodes, kArm, target, root + (target - root) * along, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("along " << along << " mid " << Show(at[1]) << " tip " << Show(at[2]));
+        CHECK(Near(at[2], target, 1.0e-3F));
+        const Vec3 mid = at[1] - root;
+        const Vec3 x{1, 0, 0};
+        CHECK(Math::Dot(mid - toward * Math::Dot(mid, toward), x - toward * Math::Dot(x, toward)) > 0.0F);
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK works in model space under turned and scaled ancestors and a node between root and mid") {
+    // spine (0) up 1, turned 90 degrees about Y, scale 2 -> upperarm (1)
+    // -> twist (2) -> forearm (3) -> hand (4); the chain is upperarm, forearm, hand.
+    const std::vector<Node> nodes{MakeNode("spine", Model::kNoParent, {{0, 1, 0}, AboutY(90), {2, 2, 2}}),
+                                  MakeNode("upperarm", 0, {{0.5F, 0, 0}, AboutZ(20), {1, 1, 1}}),
+                                  MakeNode("twist", 1, {{0.5F, 0, 0}, AboutX(30), {1, 1, 1}}),
+                                  MakeNode("forearm", 2, {{0.5F, 0, 0}, {}, {1, 1, 1}}),
+                                  MakeNode("hand", 3, {{1, 0, 0}, {}, {1, 1, 1}})};
+    auto pose = RestOf(nodes);
+    const Vec3 root = Positions(nodes, pose)[1];
+    const Vec3 target = root + Vec3{0, 2.5F, 1.5F};
+    Model::SolveTwoBoneIK(nodes, {1, 3, 4}, target, root + Vec3{1, 0, 0}, 1.0F, pose);
+    const auto at = Positions(nodes, pose);
+    INFO("tip " << Show(at[4]) << " target " << Show(target));
+    CHECK(Near(at[4], target, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[1], at[3]), 2.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[3], at[4]), 2.0F, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK: a chain or a pose that does not fit or a value that is not finite is a Programmer Error") {
+    const auto nodes = Arm();
+    auto pose = RestOf(nodes);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 1, 9}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {1, 0, 2}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 2, 1}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, {0, 1, 1}, {1, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    std::vector<LocalTransform> small(2);
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, small));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {nan, 1, 0}, {0, 0, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, nan, 1}, 1.0F, pose));
+    GYO_CHECK_ASSERTS(Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, nan, pose));
 }
 
 TEST_CASE("ComputeModelSpace multiplies down the hierarchy") {
