@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 
@@ -50,6 +51,35 @@ void SampleClip(std::span<const Node> nodes, const AnimationClip& clip, float se
 // are not clamped. out may be a or b.
 void Blend(std::span<const LocalTransform> a, std::span<const LocalTransform> b, float weight,
            std::span<LocalTransform> out);
+
+// The same per node with each node's own weight: out[i] = a[i] mixed toward
+// b[i] by weights[i]. A mask is weights of 0 and 1. out may be a or b.
+void Blend(std::span<const LocalTransform> a, std::span<const LocalTransform> b, std::span<const float> weights,
+           std::span<LocalTransform> out);
+
+// out[i] = base[i] plus weight times the motion of motion[i] relative to
+// reference[i]: translation and scale add weight * (motion - reference);
+// rotation is base * slerp(identity, inverse(reference) * motion, weight),
+// the change in the node's own frame. weight 1 with base equal to reference
+// gives motion; weight 0 or motion equal to reference gives base. weight is
+// not clamped. out may be any of the inputs.
+void ApplyAdditive(std::span<const LocalTransform> base, std::span<const LocalTransform> motion,
+                   std::span<const LocalTransform> reference, float weight, std::span<LocalTransform> out);
+
+// The instants of a clip that its time crosses moving from `from` to `to`,
+// in seconds as SampleClip takes them (Wrap::Loop times need not be wrapped).
+// times are the instants, ascending, each within [0, duration]. Writes their
+// indices to out in the order they are crossed and returns how many.
+//
+// Forward (from < to) crosses [from, to); backward (to < from) crosses
+// (to, from]: consecutive intervals cross each instant once. Wrap::Clamp
+// holds the time within [0, duration], and the interval that reaches the end
+// (or, backward, the start) also crosses an instant there. Wrap::Loop crosses
+// the end into the start (or back); an interval of a whole duration or more
+// crosses each instant once, from where it starts. from == to, or a clip of
+// duration 0, crosses nothing. out must hold times.size() indices.
+std::size_t CrossedEvents(std::span<const float> times, float from, float to, float duration, Wrap wrap,
+                          std::span<std::uint32_t> out);
 
 // Each node's transform in model space: the parent's times the node's own
 // (Math::Multiply(parent, local)), a root's own alone.

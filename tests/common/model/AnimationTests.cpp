@@ -15,7 +15,8 @@
 #include "AssertTestSupport.hpp"
 
 // The model data rules (model.zh-Hant.md section 2.2), skeletal animation's
-// first layer (section 4: RestPose, SampleClip, Blend, ComputeModelSpace) and
+// first layer (section 4: RestPose, SampleClip, Blend, ApplyAdditive,
+// ComputeModelSpace, CrossedEvents) and
 // retargeting (section 4.4: BindByName, Retarget), on node lists and clips
 // written here, so each case shows the values it expects.
 
@@ -374,6 +375,239 @@ TEST_CASE("Blend: spans of different sizes are a Programmer Error") {
     GYO_CHECK_ASSERTS(Model::Blend(a, b, 0.5F, out));
     std::vector<LocalTransform> wide(3);
     GYO_CHECK_ASSERTS(Model::Blend(a, a, 0.5F, wide));
+}
+
+TEST_CASE("Blend with a weight per node mixes each node by its own weight") {
+    const std::vector<LocalTransform> a{{{0, 0, 0}, Quaternion{}, {1, 1, 1}},
+                                        {{0, 0, 0}, Quaternion{}, {1, 1, 1}},
+                                        {{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> b{{{4, 0, 0}, AboutZ(90), {3, 3, 3}},
+                                        {{4, 0, 0}, AboutZ(90), {3, 3, 3}},
+                                        {{4, 0, 0}, AboutZ(90), {3, 3, 3}}};
+    const std::vector<float> weights{0.0F, 1.0F, 0.25F};
+    std::vector<LocalTransform> out(3);
+    Model::Blend(a, b, weights, out);
+    CHECK(Near(out[0].translation, {0, 0, 0}));
+    CHECK(SameRotation(out[0].rotation, Quaternion{}));
+    CHECK(Near(out[0].scale, {1, 1, 1}));
+    CHECK(Near(out[1].translation, {4, 0, 0}));
+    CHECK(SameRotation(out[1].rotation, AboutZ(90)));
+    CHECK(Near(out[1].scale, {3, 3, 3}));
+    CHECK(Near(out[2].translation, {1, 0, 0}));
+    CHECK(SameRotation(out[2].rotation, AboutZ(22.5F)));
+    CHECK(Near(out[2].scale, {1.5F, 1.5F, 1.5F}));
+}
+
+TEST_CASE("Blend with a weight per node gives the single-weight Blend when every weight is the same") {
+    const std::vector<LocalTransform> a{{{1, 2, 3}, AboutY(30), {1, 1, 1}}, {{2, 0, 0}, AboutX(10), {1, 2, 1}}};
+    const std::vector<LocalTransform> b{{{5, 6, 7}, AboutY(80), {2, 2, 2}}, {{2, 0, 8}, AboutX(50), {1, 1, 3}}};
+    const std::vector<float> weights{0.375F, 0.375F};
+    std::vector<LocalTransform> perNode(2);
+    std::vector<LocalTransform> single(2);
+    Model::Blend(a, b, weights, perNode);
+    Model::Blend(a, b, 0.375F, single);
+    CHECK(SameBits(perNode[0], single[0]));
+    CHECK(SameBits(perNode[1], single[1]));
+}
+
+TEST_CASE("Blend with a weight per node may write into an input") {
+    const std::vector<LocalTransform> a{{{1, 2, 3}, AboutY(30), {1, 1, 1}}};
+    const std::vector<LocalTransform> b{{{5, 6, 7}, AboutY(60), {2, 2, 2}}};
+    const std::vector<float> half{0.5F};
+    std::vector<LocalTransform> intoA = a;
+    Model::Blend(intoA, b, half, intoA);
+    CHECK(Near(intoA[0].translation, {3, 4, 5}));
+    CHECK(SameRotation(intoA[0].rotation, AboutY(45)));
+    std::vector<LocalTransform> intoB = b;
+    Model::Blend(a, intoB, half, intoB);
+    CHECK(Near(intoB[0].translation, {3, 4, 5}));
+    CHECK(Near(intoB[0].scale, {1.5F, 1.5F, 1.5F}));
+}
+
+TEST_CASE("Blend with a weight per node: weights of another size are a Programmer Error") {
+    const std::vector<LocalTransform> a(2);
+    std::vector<LocalTransform> out(2);
+    const std::vector<float> one{0.5F};
+    GYO_CHECK_ASSERTS(Model::Blend(a, a, one, out));
+    const std::vector<float> two{0.5F, 0.5F};
+    std::vector<LocalTransform> wide(3);
+    GYO_CHECK_ASSERTS(Model::Blend(a, a, two, wide));
+}
+
+TEST_CASE("ApplyAdditive with base equal to reference and weight 1 gives motion") {
+    const std::vector<LocalTransform> reference{{{1, 0, 0}, AboutX(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{3, 2, 0}, AboutX(70), {2, 1, 1}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(reference, motion, reference, 1.0F, out);
+    CHECK(Near(out[0].translation, motion[0].translation));
+    CHECK(SameRotation(out[0].rotation, motion[0].rotation));
+    CHECK(Near(out[0].scale, motion[0].scale));
+}
+
+TEST_CASE("ApplyAdditive with motion equal to reference leaves base") {
+    const std::vector<LocalTransform> base{{{5, 6, 7}, AboutY(40), {2, 2, 2}}};
+    const std::vector<LocalTransform> reference{{{1, 0, 0}, AboutX(10), {1, 3, 1}}};
+    std::vector<LocalTransform> out(1);
+    for (const float weight : {0.0F, 0.5F, 1.0F}) {
+        Model::ApplyAdditive(base, reference, reference, weight, out);
+        CHECK(Near(out[0].translation, base[0].translation));
+        CHECK(SameRotation(out[0].rotation, base[0].rotation));
+        CHECK(Near(out[0].scale, base[0].scale));
+    }
+}
+
+TEST_CASE("ApplyAdditive turns the base by the change in the node's own frame") {
+    // base: 90 degrees about Y; the change of motion from reference: 90
+    // degrees about X. In the node's own frame the result is base * change
+    // (about Y, then about the turned X); in the parent's frame it would be
+    // change * base, another rotation.
+    const std::vector<LocalTransform> base{{{0, 0, 0}, AboutY(90), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, AboutZ(30), {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{0, 0, 0}, Math::Multiply(AboutZ(30), AboutX(90)), {1, 1, 1}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(base, motion, reference, 1.0F, out);
+    const Quaternion own = Math::Multiply(AboutY(90), AboutX(90));
+    const Quaternion parent = Math::Multiply(AboutX(90), AboutY(90));
+    INFO("out " << Show(out[0].rotation));
+    REQUIRE_FALSE(SameRotation(own, parent));
+    CHECK(SameRotation(out[0].rotation, own));
+}
+
+TEST_CASE("ApplyAdditive weight 0.5 adds half of the change") {
+    const std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{4, 0, 2}, AboutY(60), {3, 1, 2}}};
+    std::vector<LocalTransform> out(1);
+    Model::ApplyAdditive(base, motion, reference, 0.5F, out);
+    CHECK(Near(out[0].translation, {3, 1, 2}));
+    CHECK(SameRotation(out[0].rotation, AboutY(40)));
+    CHECK(Near(out[0].scale, {2, 1, 1.5F}));
+    Model::ApplyAdditive(base, motion, reference, 0.0F, out);
+    CHECK(Near(out[0].translation, base[0].translation));
+    CHECK(SameRotation(out[0].rotation, base[0].rotation));
+    CHECK(Near(out[0].scale, base[0].scale));
+}
+
+TEST_CASE("ApplyAdditive may write into base and spans of other sizes are a Programmer Error") {
+    std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
+    const std::vector<LocalTransform> reference{{{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
+    const std::vector<LocalTransform> motion{{{4, 0, 2}, AboutY(60), {3, 1, 2}}};
+    Model::ApplyAdditive(base, motion, reference, 1.0F, base);
+    CHECK(Near(base[0].translation, {5, 1, 3}));
+    CHECK(SameRotation(base[0].rotation, AboutY(70)));
+    const std::vector<LocalTransform> two(2);
+    std::vector<LocalTransform> out(1);
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, two, reference, 1.0F, out));
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, motion, two, 1.0F, out));
+    std::vector<LocalTransform> wide(2);
+    GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, motion, reference, 1.0F, wide));
+}
+
+namespace {
+
+// Instants of a clip of duration 2: at the start, inside, and at the end.
+const std::vector<float> kInstants{0.0F, 0.5F, 1.0F, 1.5F, 2.0F};
+
+std::vector<std::uint32_t> Crossed(const float from, const float to, const Wrap wrap,
+                                   const std::vector<float>& times = kInstants, const float duration = 2.0F) {
+    std::vector<std::uint32_t> out(times.size());
+    out.resize(Model::CrossedEvents(times, from, to, duration, wrap, out));
+    return out;
+}
+
+using Indices = std::vector<std::uint32_t>;
+
+} // namespace
+
+TEST_CASE("CrossedEvents forward crosses from up to but not including to") {
+    CHECK(Crossed(0.5F, 1.5F, Wrap::Clamp) == Indices{1, 2});
+    CHECK(Crossed(0.5F, 1.5F, Wrap::Loop) == Indices{1, 2});
+    CHECK(Crossed(0.0F, 0.25F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.6F, 0.9F, Wrap::Clamp).empty());
+}
+
+TEST_CASE("CrossedEvents of consecutive intervals cross each instant once") {
+    const std::vector<float> cuts{0.0F, 0.25F, 0.5F, 1.25F, 1.5F, 1.75F};
+    for (const Wrap wrap : {Wrap::Clamp, Wrap::Loop}) {
+        Indices all;
+        for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+            const Indices part = Crossed(cuts[i], cuts[i + 1], wrap);
+            all.insert(all.end(), part.begin(), part.end());
+        }
+        CHECK(all == Indices{0, 1, 2, 3});
+    }
+}
+
+TEST_CASE("CrossedEvents backward crosses from down to but not including to in descending order") {
+    CHECK(Crossed(1.5F, 0.5F, Wrap::Clamp) == Indices{3, 2});
+    CHECK(Crossed(1.5F, 0.5F, Wrap::Loop) == Indices{3, 2});
+    CHECK(Crossed(1.4F, 1.1F, Wrap::Clamp).empty());
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    // 1.5 -> 2.5 is 1.5 -> 2 then 0 -> 0.5.
+    CHECK(Crossed(1.5F, 2.5F, Wrap::Loop, times) == Indices{2, 0});
+    // The same instants six loops on, and before 0.
+    CHECK(Crossed(13.5F, 14.5F, Wrap::Loop, times) == Indices{2, 0});
+    CHECK(Crossed(-0.5F, 0.5F, Wrap::Loop, times) == Indices{2, 0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Loop crosses the start into the end") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    // 0.5 -> -0.5 is 0.5 -> 0 then 2 -> 1.5.
+    CHECK(Crossed(0.5F, -0.5F, Wrap::Loop, times) == Indices{0, 2});
+    CHECK(Crossed(4.5F, 3.5F, Wrap::Loop, times) == Indices{0, 2});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop over a whole duration or more crosses each instant once from where it starts") {
+    const std::vector<float> times{0.25F, 1.0F, 1.75F};
+    CHECK(Crossed(1.5F, 3.5F, Wrap::Loop, times) == Indices{2, 0, 1});
+    CHECK(Crossed(1.5F, 9.0F, Wrap::Loop, times) == Indices{2, 0, 1});
+    CHECK(Crossed(1.5F, -0.5F, Wrap::Loop, times) == Indices{1, 0, 2});
+    CHECK(Crossed(1.5F, -7.0F, Wrap::Loop, times) == Indices{1, 0, 2});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the instants at 0 and at the duration both when it loops") {
+    CHECK(Crossed(1.75F, 2.25F, Wrap::Loop) == Indices{4, 0});
+    CHECK(Crossed(2.25F, 1.75F, Wrap::Loop) == Indices{0, 4});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it") {
+    // Reaching the end exactly, or passing it, crosses the instant on it.
+    CHECK(Crossed(1.75F, 2.0F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(1.75F, 3.0F, Wrap::Clamp) == Indices{4});
+    // After the end nothing more, whether the time stays or goes on.
+    CHECK(Crossed(2.0F, 3.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(3.0F, 4.0F, Wrap::Clamp).empty());
+    // Before the start nothing; reaching it from before crosses the instant at 0.
+    CHECK(Crossed(-2.0F, -1.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(-1.0F, 0.25F, Wrap::Clamp) == Indices{0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Clamp crosses the start once when the time reaches it") {
+    CHECK(Crossed(0.25F, 0.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.25F, -1.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.0F, -1.0F, Wrap::Clamp).empty());
+    CHECK(Crossed(3.0F, 1.75F, Wrap::Clamp) == Indices{4});
+}
+
+TEST_CASE("CrossedEvents crosses nothing when the time stays or the clip has no length") {
+    CHECK(Crossed(0.5F, 0.5F, Wrap::Clamp).empty());
+    CHECK(Crossed(0.5F, 0.5F, Wrap::Loop).empty());
+    const std::vector<float> atZero{0.0F};
+    CHECK(Crossed(-1.0F, 1.0F, Wrap::Clamp, atZero, 0.0F).empty());
+    CHECK(Crossed(-1.0F, 1.0F, Wrap::Loop, atZero, 0.0F).empty());
+}
+
+TEST_CASE("CrossedEvents: a short out or a time that is not finite or a negative duration is a Programmer Error") {
+    std::vector<std::uint32_t> small(kInstants.size() - 1);
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, 1.0F, 2.0F, Wrap::Clamp, small)));
+    std::vector<std::uint32_t> out(kInstants.size());
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, nan, 1.0F, 2.0F, Wrap::Loop, out)));
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, nan, 2.0F, Wrap::Loop, out)));
+    GYO_CHECK_ASSERTS(static_cast<void>(Model::CrossedEvents(kInstants, 0.0F, 1.0F, -1.0F, Wrap::Clamp, out)));
 }
 
 TEST_CASE("ComputeModelSpace multiplies down the hierarchy") {

@@ -94,6 +94,188 @@
    "expect": "AboutZ\\(22\\.5F\\)"
   },
   {
+   "id": "ma-blend-weights-first",
+   "what": "MD-3: the Blend with a weight per node gives every node the first node's weight",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Mix(a[i], b[i], weights[i])",
+   "replace": "Mix(a[i], b[i], weights[0])",
+   "target": "gyo_model_animation_tests",
+   "cases": "Blend with a weight per node mixes each node by its own weight",
+   "expect": "Near\\(out\\[1\\]\\.translation, \\{4, 0, 0\\}\\)"
+  },
+  {
+   "id": "ma-additive-parent-frame",
+   "what": "MD-3: ApplyAdditive turns the base by the change in the parent's frame (change * base, Bevy's order) instead of the node's own",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(Math::NormalizeOrIdentity(onto.rotation),\n                                                     Math::Slerp(Math::Quaternion{}, change, weight))",
+   "replace": "Math::Multiply(Math::Slerp(Math::Quaternion{}, change, weight),\n                                                     Math::NormalizeOrIdentity(onto.rotation))",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive turns the base by the change in the node's own frame",
+   "expect": "SameRotation\\(out\\[0\\]\\.rotation, own\\)"
+  },
+  {
+   "id": "ma-additive-reference-ignored",
+   "what": "MD-3: ApplyAdditive takes motion's rotation as the change, not its change from reference",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Multiply(Math::Conjugate(Math::NormalizeOrIdentity(from.rotation)),\n                                                       Math::NormalizeOrIdentity(moved.rotation))",
+   "replace": "Math::NormalizeOrIdentity(moved.rotation)",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive with motion equal to reference leaves base",
+   "expect": "SameRotation\\(out\\[0\\]\\.rotation, base\\[0\\]\\.rotation\\)"
+  },
+  {
+   "id": "ma-additive-weight-ignored",
+   "what": "MD-3: ApplyAdditive adds the whole change of rotation whatever the weight",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Slerp(Math::Quaternion{}, change, weight)",
+   "replace": "change",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive weight 0.5 adds half of the change",
+   "expect": "AboutY\\(40\\)"
+  },
+  {
+   "id": "ma-additive-scale-kept",
+   "what": "MD-3: ApplyAdditive keeps the base's scale instead of adding the change of scale",
+   "guards": [
+    "model MD-3"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "onto.scale + (moved.scale - from.scale) * weight",
+   "replace": "onto.scale",
+   "target": "gyo_model_animation_tests",
+   "cases": "ApplyAdditive with base equal to reference and weight 1 gives motion",
+   "expect": "Near\\(out\\[0\\]\\.scale, motion\\[0\\]\\.scale\\)"
+  },
+  {
+   "id": "ma-events-forward-closed",
+   "what": "MD-7: forward crosses [from, to] instead of [from, to): the instant on to is crossed twice by consecutive intervals",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "up(atLeast(f), g == duration && f < duration ? count : atLeast(g));",
+   "replace": "up(atLeast(f), g == duration && f < duration ? count : above(g));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents forward crosses from up to but not including to",
+   "expect": "Indices\\{1, 2\\}"
+  },
+  {
+   "id": "ma-events-backward-ascending",
+   "what": "MD-7: backward intervals give their instants in ascending order, not in the order crossed",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "for (std::size_t i = end; i > begin; --i) out[written++] = static_cast<std::uint32_t>(i - 1);",
+   "replace": "for (std::size_t i = begin; i < end; ++i) out[written++] = static_cast<std::uint32_t>(i);",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward crosses from down to but not including to in descending order",
+   "expect": "Indices\\{3, 2\\}"
+  },
+  {
+   "id": "ma-events-loop-as-clamp",
+   "what": "MD-7: Wrap::Loop crosses as Wrap::Clamp, never into the start",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "    if (wrap == Wrap::Clamp) {\n        const float f",
+   "replace": "    if (wrap == Wrap::Clamp || wrap == Wrap::Loop) {\n        const float f",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped",
+   "expect": "Indices\\{2, 0\\}"
+  },
+  {
+   "id": "ma-events-loop-no-start",
+   "what": "MD-7: a forward interval of Wrap::Loop that crosses the end does not go on into the start",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "        if (q > duration) up(0, atLeast(q - duration));\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the end into the start on times not wrapped",
+   "expect": "Indices\\{2, 0\\}"
+  },
+  {
+   "id": "ma-events-loop-no-end",
+   "what": "MD-7: a backward interval of Wrap::Loop that crosses the start does not go on into the end",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "        if (q < 0.0F) down(above(q + duration), count);\n",
+   "replace": "",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Loop crosses the start into the end",
+   "expect": "Indices\\{0, 2\\}"
+  },
+  {
+   "id": "ma-events-whole-loop-from-zero",
+   "what": "MD-7: an interval of a whole loop or more crosses its instants from 0, not from where it starts",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "            up(atLeast(p), count);\n            up(0, atLeast(p));",
+   "replace": "            up(0, count);",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop over a whole duration or more crosses each instant once from where it starts",
+   "expect": "Indices\\{2, 0, 1\\}"
+  },
+  {
+   "id": "ma-events-clamp-end-open",
+   "what": "MD-7: with Wrap::Clamp the interval that reaches the end does not cross the instant on it",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "g == duration && f < duration ? count : atLeast(g)",
+   "replace": "atLeast(g)",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it",
+   "expect": "Crossed\\(1\\.75F, 2\\.0F, Wrap::Clamp\\) == Indices\\{4\\}"
+  },
+  {
+   "id": "ma-events-clamp-end-twice",
+   "what": "MD-7: with Wrap::Clamp an interval after the end crosses the instant on the end again",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "g == duration && f < duration ? count",
+   "replace": "g == duration ? count",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Clamp crosses the end once when the time reaches it",
+   "expect": "Crossed\\(2\\.0F, 3\\.0F, Wrap::Clamp\\)\\.empty\\(\\)"
+  },
+  {
+   "id": "ma-events-clamp-start-open",
+   "what": "MD-7: backward with Wrap::Clamp, the interval that reaches the start does not cross the instant on it",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "down(g == 0.0F && f > 0.0F ? 0 : above(g), above(f));",
+   "replace": "down(above(g), above(f));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Clamp crosses the start once when the time reaches it",
+   "expect": "Crossed\\(0\\.25F, 0\\.0F, Wrap::Clamp\\) == Indices\\{0\\}"
+  },
+  {
    "id": "ma-modelspace-no-parent",
    "what": "MD-3: ComputeModelSpace ignores the parent",
    "guards": [

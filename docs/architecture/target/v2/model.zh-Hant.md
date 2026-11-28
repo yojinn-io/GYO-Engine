@@ -4,6 +4,8 @@
 
 2026-11-24 修訂 1（合併後的設計審查，`build/evidence/v8-arch-gyo2-model/design-review.md`）：skin 的共用資料移到 `ModelData::skins`（M-13）；retarget 的參考姿勢可由呼叫者給（M-6）；ufbx 的記憶體上限跟著檔案大小上限（M-14）；材質在 FBX 值是空的時退回 PBR（M-15）；拿掉 adapter 自己的一套錯誤碼。貼圖照 asset 宣告的使用者決定 11 改成宣告 reference、加 `textures` 設定（M-16；主會話 2026-11-24 判 (a)：改回已核准的決定，不是推翻）。
 
+2026-11-28（`v8-arch-gyo2-model-pose-ops`）：照研究 #363 的 D3（HANDOFF `v8-arch-gyo2-anim-layers-decisions`），第 1 層補逐節點權重的 `Blend`、`ApplyAdditive`、`CrossedEvents`（4.2、4.6 節、MD-3、MD-7）；事前宣告與卡片自判的 K-1～K-16 在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md)，U1 (A) 是使用者 2026-11-28 定的。
+
 ## 一個例子
 
 一個 PvP 的 Match（伺服器，沒有視窗）開局：catalog 裡兩個 `type` 為 `model` 的項目——身體（`settings: {"meshes": false}`，只要骨架）與片段來源（同樣不要網格）。Match 經 asset 請求 `Handle<ModelData>`；worker 讀檔、`FbxLoader` 經 ufbx 解成 `ModelData`。遊戲用 `BindByName` 把片段來源的骨頭對上身體的骨頭、拿掉不要的、以 `Retarget` 把要用的片段搬到身體上（載入時一次）。之後每個 tick，遊戲自己算片段時刻與權重，`SampleClip` 取兩個姿勢、`Blend` 混合、`ComputeModelSpace` 得到每根骨頭在模型空間的矩陣，再把命中判定用的形狀擺上去。Client 用同一份資料畫角色：網格與蒙皮資料交給 render（R2b）；loader 把材質的貼圖宣告成依賴，store 照 catalog 把它載成 `image`，材質的 `baseColorImage` 帶著它的 id。Match 沒有登記 image 的 loader，依賴就略過、不去載貼圖。整個 model 不需要 SDL、GPU 或 World。
@@ -107,9 +109,21 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 - `SampleClip(nodes, clip, seconds, wrap, out)`：先填 rest，再逐 track 取樣。channel 在第一個 key 之前是第一個 key 的值、最後一個之後是最後的值；兩個 key 之間 translation 與 scale 線性、rotation 走最短路徑的 slerp。key 用二分搜尋。照 Jolt（`SkeletalAnimation.cpp:62-110`：二分搜尋、首尾夾住、translation 線性、rotation SLERP）與 Bevy（`bevy_animation/src/blendable.rs:172-179`：`Quat` 用 slerp）。
 - `Wrap::Clamp`：首尾夾住——0 之前是 0 的姿勢、duration 之後是 duration 的姿勢（key 都在 [0, duration] 內，所以不必改時間：超出時本來就取 channel 的首尾值）。`Wrap::Loop`：對 duration 取餘數（負的從尾端倒數；剛好等於 duration 就是 0）；duration 為 0 的片段永遠在 0。NaN 的時間是 Programmer Error。
 
-### 4.2 混合：`Blend`
+### 4.2 混合：`Blend`、`ApplyAdditive`
 
-`Blend(a, b, weight, out)`：逐節點 translation、scale 線性，rotation 最短路徑 slerp；weight 0 是 a、1 是 b，不夾住；`out` 可以就是 `a` 或 `b`。照 Bevy 的 `Transform` 插值（`blendable.rs:133-139`）。多個姿勢的混合、分層（上下半身）、additive、時間型 crossfade 是遊戲的規則，可以用這個與逐節點的覆寫組出來（Bevy 的混合圖把累積權重化成兩兩插值，`animation_curves.rs:486-510`）。
+- `Blend(a, b, weight, out)`：逐節點 translation、scale 線性，rotation 最短路徑 slerp；weight 0 是 a、1 是 b，不夾住；`out` 可以就是 `a` 或 `b`。照 Bevy 的 `Transform` 插值（`blendable.rs:133-139`）。
+- `Blend(a, b, weights, out)`：同上，每個節點用自己的 `weights[i]`。遮罩就是 0／1 的權重；Unreal Blend Depth 那種漸變也能表達。每個節點同一個權重時和上一個逐位元相同。**偏離 Bevy**：Bevy 用 u64 的 mask group（`graph.rs:486-489`，最多 64 組）；這裡沒有圖可以掛 mask，呼叫者從自己的分組算出權重（一個迴圈）。
+- `ApplyAdditive(base, motion, reference, weight, out)`：把 `motion` 相對 `reference` 的動作量乘上 weight 加到 `base` 上：
+
+  ```text
+  change          = inverse(reference.rotation) * motion.rotation
+  out.rotation    = base.rotation * slerp(identity, change, weight)
+  out.translation = base.translation + weight (motion.translation − reference.translation)
+  out.scale       = base.scale       + weight (motion.scale       − reference.scale)
+  ```
+
+  rotation 先正規化。weight 1 且 base＝reference 得到 motion；weight 0 或 motion＝reference 得到 base；不夾住；`out` 可以是任一個輸入。**偏離 Bevy**：Bevy 的 `Add` 節點收的是已經是差值的值，rotation 左乘（`blendable.rs:142-169`，差在父的框架）；這裡收 (motion, reference) 現場算差、右乘（差在節點自己的框架），因為 PvP 的上半身動作就是「動作片段相對第 0 幀、加在瞄準姿勢上」（`games/object_fps_pvp/src/character/CharacterRig.cpp:310-314`，照 master 的 `AddMotion`）。scale 用線性差，和 Bevy 的加法同一種算術（`blendable.rs:150`）。
+- 「哪些節點算上半身、權重多少、何時加 additive、時間型 crossfade」是遊戲的規則；混合本身在這裡。例：`ApplyAdditive(aim, action, action 的第 0 幀, 1, upper)`，再 `Blend(lower, upper, mask, out)`。
 
 ### 4.3 模型空間：`ComputeModelSpace`
 
@@ -135,12 +149,29 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 同一個建置、同樣的輸入，結果相同。不同平台、不同編譯器之間最後幾個位元可能不同（`sin`、`acos` 與 float 的運算順序沒有固定）：用在每台機器自己判的地方（Match 的命中、Client 的畫面），不要用在兩台機器必須逐位元一致的地方。PvP 在 master 也是這樣（盤點 4.6：取樣結果跨平台不同，命中只在 Match 算）。
 
+### 4.6 事件：`CrossedEvents`
+
+`CrossedEvents(times, from, to, duration, wrap, out)`：片段的時間從 `from` 走到 `to` 時穿過了哪些時刻（`times` 遞增、都在 [0, duration] 內），照穿過的順序把索引寫進 `out`、回個數。`from`、`to` 和 `SampleClip` 收的秒數相同（`Wrap::Loop` 不必先取餘數），所以遊戲從 tick 推出來的時間直接能用（第 2 層不做，`-skeletal-animation-layers`）。
+
+| | 前進（from < to） | 倒播（to < from） |
+|---|---|---|
+| 區間 | `[from, to)` | `(to, from]`（遞減的順序） |
+| `Wrap::Clamp` | 時間夾在 [0, duration]；走到尾端的那一段也穿過尾端上的時刻，之後不再 | 走到開頭的那一段也穿過 0 上的時刻 |
+| `Wrap::Loop` | 跨過尾端接到開頭（0 與 duration 上的時刻都穿過）；跨距一整圈以上時，每個時刻一次，從起點的相位開始 | 跨過開頭接到尾端，同上 |
+
+`from == to`、duration 0 的片段：沒有時刻。連續的區間每個時刻剛好一次。`out` 至少要 `times.size()` 個。
+
+- 照 Bevy `TriggeredEvents::from_animation`（`bevy_animation/src/lib.rs:1455-1528`）：前進與倒播的開閉（`:1482`、`:1493`）、跨圈拆兩段（`:1505-1524`）、播完給剩下的（`:1484-1487`、`:1496-1498`）。和 Bevy 不同：時間是未取餘的秒數，不是播放頭＋`just_completed`；duration 0 沒有時刻（Bevy 每 tick 都觸發，`lib.rs:587-596`）。
+- 一次跨過一圈以上，每個時刻**最多一次**（使用者 2026-11-28 選 U1 (A)；Bevy 的播放頭每 tick 至多跨一圈，`lib.rs:599-605`）。所以結果至多 `times.size()` 個，呼叫者用固定大小的陣列就夠。
+- `times` 的遞增與範圍是呼叫者的資料規則（遊戲讀 `gyo.anim_events` 時檢查），每次呼叫不檢查。`out` 太小、非有限的時間、負的 duration 是 Programmer Error。
+- 事件資料（`gyo.anim_events`）的讀法、事件 → 聲音是遊戲的。
+
 ## 5. 不在本 Module
 
 - **第 2 層**（每個實體播哪個片段、播到哪裡，`AnimationModule`）：先不做，等有產品要 Bevy `AnimationPlayer`（`lib.rs:748`）那種用法（`-skeletal-animation-layers`）。
 - **第 3 層**（蒙皮顯示：網格照姿勢變形、上傳 GPU）：render（R2b 的 3D 段判 **CPU**：`mesh_render` 每幀照 `SkinPose` 算，render 頁第 8.4 節；換 GPU 的條件 RC-RD 6）。第 2.1 節的公式是 render 要照的。
-- **動畫事件**（盤點 4.6 放在第 1 層的「事件資料與區間穿越」）：這張卡沒做。PvP 的事件來自另一份 JSON（`viewmodel.anim_events.json`），不在 FBX 裡；要時加一個純函式（區間內穿過了哪些時刻，含跨 loop）與它的資料，列在後續。
-- 命中形狀、何時切片段、分層、additive、瞄準、附掛：遊戲規則。
+- **事件的資料**：PvP 的事件來自另一份 JSON（`viewmodel.anim_events.json`），不在 FBX 裡；它的讀法與事件 → 聲音是遊戲的（區間穿越在 4.6 節）。
+- 命中形狀、何時切片段、哪些骨是哪一層、權重與時機、瞄準、附掛：遊戲規則。
 - FBX 以外的格式（glTF、OBJ）：有點名的 Feature 時另加 loader。
 - morph（blend shape）、dual-quaternion 蒙皮、頂點色、第二組 UV、切線：今天不讀（M-7）。
 - 第三方授權告示：打包時附，在批次表後續（K 的 tools 線）。
@@ -166,6 +197,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 | M-14 | ufbx 的記憶體上限＝max（256 MiB、檔案上限 × 8） | 產品放寬 `byteLimits` 時不必再找第二個旋鈕（§1-10；審查發現 4） | 固定 256 MiB；做成 setting |
 | M-15 | 材質的 FBX diffuse 值是空的時退回 PBR base color | ufbx 寫明自訂 shader 的 FBX 值可能是空的，PBR 對所有 shading model 都有定義（審查發現 5）；FBX 值有的時候照舊（PvP 的檔走這條） | 一律取 PBR（會改 PvP 檔的顏色，未驗證） |
 | M-16 | 貼圖預設宣告 reference，`textures: false` 關掉；模型依賴 image（只為型別） | 使用者決定 11；照 Bevy 的 `load_materials`；關掉的開關給轉過檔、要自己對的作者（§1-10）；主會話 2026-11-24 判 (a) | (b) 不宣告、登記成例外（推翻決定 11）；(c) 宣告、由轉檔工具連 FBX 一起改（工具線，今天沒有） |
+| M-17 | 4.2 節的逐節點 `Blend`、`ApplyAdditive` 與 4.6 節的 `CrossedEvents` 的取捨（偏離 Bevy 的 u64 mask、差值的收法與乘的順序、未取餘的時間、duration 0、輸出寫進呼叫者的 span 等） | 寫在 [`model-pose-ik-declaration.zh-Hant.md`](model-pose-ik-declaration.zh-Hant.md) 第 4 節 K-1～K-7、K-15 | 同那一節的「比過的」 |
 
 ## Design Invariants
 
@@ -173,10 +205,11 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 
 1. **MD-1 ufbx 只在一個 adapter。** `ufbx.h` 只被 `engine/modules/model/src/adapters/ufbx/` 與 `third_party/ufbx/` 的實作檔 include；`gyo_ufbx` 只被 `gyo_model` **私有**連結，標頭不出現在任何 `include/` 下（AGENTS §1-4）。adapter 對外只有 `Detail::ImportFbx`，用 model 自己的型別。`UFBX_NO_STDIO` 放在 `gyo_ufbx` 的 PUBLIC 定義。守衛：設定時的檢查 `gyo_expect_model_links`（`tests/common/model/CMakeLists.txt`：連結恰好那五個、`gyo_ufbx` 不在 `gyo_model` 的 INTERFACE 連結裡）；別的 target 沒有 ufbx 的 include 路徑；「沒有別的 target 連 `gyo_ufbx`」靠審查。
 2. **MD-2 模型是 CPU 的資料。** `ModelData` 是第 2 節的型別與規則：擁有全部的值，沒有渲染的 handle、解碼的貼圖、匯入器的指標；父在子之前；權重和為 1 或全 0；片段帶 `nodeCount`。守衛：`AnimationTests.cpp` 的 `Validate` 各規則各條件、規則的先後。
-3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`、`ComputeModelSpace` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
+3. **MD-3 第 1 層是純函式。** `RestPose`、`SampleClip`、`Blend`（兩個）、`ApplyAdditive`、`ComputeModelSpace` 沒有時鐘、World、呼叫之間的狀態；照第 4.1～4.3 節的定義。守衛：`AnimationTests.cpp` 的取樣（key 之間、key 上、channel 外、Clamp、Loop、duration 0、最短路徑）、混合（含逐節點的權重、和單一權重逐位元相同、寫回輸入）、additive（base＝reference 得 motion、motion＝reference 得 base、節點自己的框架、半個權重、寫回 base）、模型空間、Programmer Error 各案；`FbxLoaderTests.cpp` 用範例檔的骨頭轉 90 度驗證整條路（載入→取樣→模型空間→蒙皮）。
 4. **MD-4 retarget 搬相對 rest 的動作。** 第 4.4 節的公式與規則；binding 是呼叫者的資料。守衛：`AnimationTests.cpp` 的 retarget 各案（相同節點表、rest 的 key 給 target 的 rest、呼叫者給的參考姿勢、父 rest 不同時模型空間的旋轉變化相同、平移換座標與比例、scale 比例、丟掉沒綁的、三條規則與先後）。
 5. **MD-5 中立、沒有裝置。** `GYO::Model` 的連結恰好是 `GYO::Base`、`GYO::Math`、`GYO::Asset`、`GYO::Image`、`GYO::Json`、`gyo_ufbx`：沒有 SDL、渲染、GPU、World、產品名。守衛：`gyo_expect_model_links`；中立靠審查。
 6. **MD-6 模型的 Data Contract。** `model`／`fbx` 的規則、先後、轉法、settings 與 Version 在第 3 節；loader 是純函式（沒有 World、時鐘、全域可變狀態；不開檔），只連 `GYO::Model` 就能呼叫。守衛：`FbxLoaderTests.cpp` 的 settings、規則 1（含認成 OBJ 的檔）、2、範例檔的節點／空間的左右手／材質／貼圖的 reference 與 `textures: false`／網格／材質分區共用 skin／蒙皮／UV／片段、「the texture is the model's dependency and not its failure」（經 store：對到 image 項目、對不到時模型照樣 Loaded、關掉）、`meshes: false`、「same model for the same bytes, on any thread (AS-3)」「through the asset store」兩案。規則 3（`Unsupported`）沒有檔案能觸發的測試（要多 skin 的網格，Blender 做不出），靠審查；規則 4（`BadData`）只由突變 `mf-weights-not-scaled`（權重沒正規化→整檔被拒）間接守住。
+7. **MD-7 事件的區間穿越。** `CrossedEvents` 照第 4.6 節：前進 `[from, to)`、倒播 `(to, from]` 照穿過的順序；`Clamp` 走到端點的那一段穿過端點上的時刻一次；`Loop` 跨圈接上、一圈以上每個時刻一次；沒有狀態。守衛：`AnimationTests.cpp` 的 `CrossedEvents` 各案（開閉、連續區間不重不漏、倒播的順序、跨尾端與跨開頭、未取餘的時間、一圈以上、0 與 duration 同時、Clamp 的尾端與開頭、不動與 duration 0、Programmer Error）。
 
 ### Replacement Criteria
 
