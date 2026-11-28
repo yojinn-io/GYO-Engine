@@ -13,6 +13,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     ControlsTests.cpp
     HitFeedbackTests.cpp
     InterpolationTests.cpp
+    OverheadTests.cpp
     LoadThreadsTests.cpp
     PlanarMovementTests.cpp
     PlayerRosterTests.cpp
@@ -80,7 +81,7 @@ set_tests_properties(object_fps_pvp.core_script PROPERTIES LABELS "cpu" TIMEOUT 
 # Submit stage), a Match and a second Client over memory links, the content through the asset Module, the input
 # and window Messages written by a test System.
 gyo_get_game_target(object_fps_pvp client object_fps_pvp_client)
-add_executable(gyo_object_fps_pvp_client_tests world/TestMain.cpp client/ClientTests.cpp)
+add_executable(gyo_object_fps_pvp_client_tests world/TestMain.cpp client/ClientTests.cpp client/OverheadTests.cpp)
 target_include_directories(gyo_object_fps_pvp_client_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 # The Gateway's tests answer as the Gateway through gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_client_tests PRIVATE ${object_fps_pvp_client} GYO::Threads GYO::RenderWorld gyo_test_loopback_listener

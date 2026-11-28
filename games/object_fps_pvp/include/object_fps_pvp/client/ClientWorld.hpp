@@ -36,6 +36,12 @@
 //                    MoveBodies     a stand-in body for every other living player follows it (or goes)
 //                    AddBodies      ... and is made for one that has none
 //                    PlaySounds     shots, hits, footsteps (present/SoundCues), at the moment of the frame
+//                    NoteOwnHits    the own ShotRecord: when the own player last hit what (the labels' bars)
+//                    TagPlayerOverheads every other living player whose body is drawn: its name over its head
+//                                   (client/Overhead.hpp Overhead; PlayerLabel), no bar
+//   Main/PostUpdate  ShowOverheads  after the cameras' update and the propagation: every Overhead's name and bar on the
+//                                   2D layer where the world camera sees it (client::PlaceOverhead; none behind the
+//                                   camera, off the picture or behind the walls), the bar's alpha by present/Overhead
 //                    LeaveOnEnd     the connection ended, the Match's content differs, or a map did not load: back to
 //                                   the lobby (the Match plays another arena this Client has: the game again on it)
 //                    TrackReadiness the loading (game-flow declaration 3.5): the game's assets with their
@@ -55,6 +61,7 @@
 
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/HitFeedback.hpp"
+#include "object_fps_pvp/present/Overhead.hpp"
 #include "object_fps_pvp/present/SoundCues.hpp"
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
@@ -111,10 +118,12 @@ struct ViewmodelDefinition final {
 struct PresentationContent final {
     present::SoundSettings sound;
     present::HitFeedbackSettings hitFeedback;
+    present::OverheadSettings overhead;
     ViewmodelDefinition viewmodel;
 };
 
-// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, weapons/nailer_v2/viewmodel/);
+// Reads it from the game's asset directory (audio/sfx.json, ui/hit_feedback.json, ui/overhead.json,
+// weapons/nailer_v2/viewmodel/);
 // nullopt with error naming the file.
 [[nodiscard]] std::optional<PresentationContent> LoadPresentation(const std::string& root, std::string& error);
 

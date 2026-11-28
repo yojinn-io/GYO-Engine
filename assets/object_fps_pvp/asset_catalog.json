@@ -58,6 +58,7 @@
     {"id": "object_fps_pvp.modes", "type": "text", "path": "modes/modes.json"},
     {"id": "object_fps_pvp.mode.core_pvp", "type": "text", "path": "modes/core_pvp.json"},
     {"id": "object_fps_pvp.ui.hit_feedback", "type": "text", "path": "ui/hit_feedback.json"},
+    {"id": "object_fps_pvp.ui.overhead", "type": "text", "path": "ui/overhead.json"},
     {"id": "object_fps_pvp.audio.settings", "type": "text", "path": "audio/sfx.json"},
     {"id": "object_fps_pvp.audio.gun_shoot", "type": "sound", "path": "audio/gun_shoot.wav"},
     {"id": "object_fps_pvp.audio.hit_flesh", "type": "sound", "path": "audio/hit_flesh.wav"},

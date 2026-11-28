@@ -2,6 +2,8 @@
 
 #include "client/ClientExchange.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
+#include "object_fps_pvp/client/Overhead.hpp"
+#include "object_fps_pvp/client/Scenes.hpp"
 #include "client/Pages.hpp"
 #include "client/SceneBuilds.hpp"
 #include "object_fps_pvp/data/ArenaMap.hpp"
@@ -26,6 +28,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/base/Log.hpp"
 #include "engine/camera/Camera.hpp"
+#include "engine/camera/CameraModule.hpp"
 #include "engine/input/Input.hpp"
 #include "engine/input/InputModule.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
@@ -51,6 +54,7 @@
 #include "engine/text/TextStyle.hpp"
 #include "engine/time/MonotonicClock.hpp"
 #include "engine/transform/Transform.hpp"
+#include "engine/transform/TransformModule.hpp"
 #include "engine/window/Window.hpp"
 #include "engine/window/WindowModule.hpp"
 #include "engine/mesh_render/MeshRenderModule.hpp"
@@ -300,6 +304,8 @@ struct ClientCharacters final {
     K::EntityId shotPlayer = 0;
     std::optional<std::uint64_t> shotSeen;
     std::optional<WT::Nanoseconds> recoilAt;
+    // This frame's middle of each shown player's head hit shape (PoseCharacters): where its label stands.
+    std::map<K::EntityId, Math::Vec3> heads;
 };
 void HashValue(K::Hasher&, const ClientCharacters&) {}
 
@@ -352,13 +358,26 @@ struct ClientSound final {
     std::map<K::EntityId, std::uint64_t> shotsHeard;  // per player: the last shot tick played
     std::uint64_t confirmedHeard = 0;                 // the own ShotRecord tick played
     std::map<K::EntityId, present::FootstepTracker> steps;  // per player
-    // The walls of the arena the Sim (or Solo) World plays, from its picture (none before they are built): the
-    // other players' cues behind them are occluded.
-    std::optional<GYO::Engine::Physics3d::BoxSet> walls;
     // The own player's hits, as the hit feedback sees them (a new hit of a living player sounds).
     present::LocalHitFeedback hits;
 };
 void HashValue(K::Hasher&, const ClientSound&) {}
+
+// The walls of the arena the Sim (or Solo) World plays, from its picture (none before they are built): what stands
+// between the own player and another thing (the other players' sounds are lowered behind them; the labels over the
+// heads do not show).
+struct ArenaWalls final {
+    std::optional<GYO::Engine::Physics3d::BoxSet> walls;
+};
+void HashValue(K::Hasher&, const ArenaWalls&) {}
+
+// The own shots' hits as the labels over the heads see them (the own ShotRecord, by its tick): when the own player last
+// hit each thing (ActiveTime seconds). The first record seen (a join, a scene) is not a hit.
+struct OwnHits final {
+    std::optional<std::uint64_t> seen;
+    std::map<K::EntityId, double> last;
+};
+void HashValue(K::Hasher&, const OwnHits&) {}
 
 // The Product's submitter (ConfigureClient).
 struct SoundPort final {
@@ -798,6 +817,16 @@ K::SystemResult PoseCharacters(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser
         character::ModelSpace(rig, local, modelSpace[id]);
         bodies[id] = &body;
     });
+    // The heads, from the same pose (the hit shapes the Match judges a head shot on: port inventory PV2).
+    characters->heads.clear();
+    for (const auto& [id, nodes] : modelSpace) {
+        for (const character::HitShape& shape : character::PlaceHitShapes(rig, nodes, bodies[id]->feet, bodies[id]->yaw)) {
+            if (shape.part == sim::HitPart::Head) {
+                characters->heads[id] = (shape.a + shape.b) * 0.5F;
+                break;
+            }
+        }
+    }
     for (auto it = characters->locomotion.begin(); it != characters->locomotion.end();) {
         it = bodies.count(it->first) == 0 ? characters->locomotion.erase(it) : std::next(it);
     }
@@ -1065,7 +1094,7 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
                            K::Res<ClientScene> scene, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
-                           K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
+                           K::Res<WT::ActiveTime> time, K::Res<ArenaWalls> walls, K::ResMut<ClientSound> sound) {
     ClientSound& s = sound.Get();
     if (s.submitter == nullptr) return {};
     const present::SoundSettings& settings = scene->presentation->sound;
@@ -1093,7 +1122,7 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
         const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->body, own->crouched != 0), 0.0F};
         const Math::Vec3 source =
             body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->body, body.crouched != 0), 0.0F};
-        const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
+        const bool occluded = walls->walls && PW::Blocked(*walls->walls, ear, source);
         if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
     };
     const double now = static_cast<double>(time->elapsed) / 1e9;
@@ -1148,6 +1177,194 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     // A player gone (left, or no longer seen) starts again silently if it comes back.
     std::erase_if(s.steps, [&](const auto& entry) { return seen.count(entry.first) == 0; });
     std::erase_if(s.shotsHeard, [&](const auto& entry) { return seen.count(entry.first) == 0; });
+    return {};
+}
+
+// ---- The labels over the heads (overhead-ui declaration, sections 3 and 4): each kind's source System writes Overhead
+// on its things; ShowOverheads shows every Overhead the same way.
+
+// When the own player last hit what (the own ShotRecord: a newer tick that names a target). A thing gone is forgotten.
+K::SystemResult NoteOwnHits(K::Res<PW::LocalUser> user, K::Res<WT::ActiveTime> time,
+                            K::Query<K::Read<PW::Owner>, K::Read<PW::ShotRecord>> players, K::Query<K::Read<Overhead>> labelled,
+                            K::ResMut<OwnHits> hits) {
+    OwnHits& h = hits.Get();
+    const double now = static_cast<double>(time->elapsed) / 1e9;
+    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::ShotRecord& shot) {
+        if (owner.userId != user->userId) return;
+        if (!h.seen) {
+            // The record before this Client looked is no hit of the own.
+            h.seen = shot.tick;
+            return;
+        }
+        if (shot.tick <= *h.seen) return;
+        h.seen = shot.tick;
+        if (shot.target != 0) h.last[shot.target] = now;
+    });
+    std::erase_if(h.last, [&](const auto& entry) { return labelled.Get<Overhead>(entry.first) == nullptr; });
+    return {};
+}
+
+// The other players: the name the room shows (PlayerLabel with the Match's PlayerName; Player N until it came), no
+// health bar (the user's decision, overhead-ui declaration O1; teammates the same, O6 (b)). A player whose body is not
+// drawn (the own player has none: AddCharacters) and a dead one have none.
+K::SystemResult TagPlayerOverheads(K::Res<ClientScene> scene, K::Res<ClientCharacters> characters,
+                                   K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerCombat>> players, K::Query<K::Read<PW::PlayerName>> names,
+                                   K::Query<K::Read<CharacterPart>> parts, K::Query<K::Write<Overhead>> labels,
+                                   K::CommandsFor<K::Inserts<Overhead>, K::Removes<Overhead>> commands) {
+    std::set<K::EntityId> drawn;
+    parts.ForEach([&](K::EntityId, const CharacterPart& part) { drawn.insert(part.player); });
+    const float clearance = scene->presentation->overhead.headClearanceMetres;
+    std::set<K::EntityId> labelled;
+    players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerCombat& combat) {
+        if (combat.life != sim::LifeState::Alive || drawn.count(id) == 0) return;
+        const auto head = characters->heads.find(id);
+        if (head == characters->heads.end()) return;
+        const PW::PlayerName* name = names.Get<PW::PlayerName>(id);
+        Overhead label{head->second + Math::Vec3{0.0F, clearance, 0.0F}, PlayerLabel(owner.userId, name != nullptr ? name->text : std::string_view{}),
+                       std::nullopt, present::OverheadPolicy::Engaged};
+        labelled.insert(id);
+        if (auto now = labels.GetMut<Overhead>(id)) {
+            now.Get() = std::move(label);
+        } else {
+            commands.Insert(id, std::move(label));
+        }
+    });
+    players.ForEach([&](const K::EntityId id, const PW::Owner&, const PW::PlayerCombat&) {
+        if (labelled.count(id) == 0 && labels.Get<Overhead>(id) != nullptr) commands.Remove<Overhead>(id);
+    });
+    return {};
+}
+
+// A health bar: its back, and its fill from the left by the fraction (the low colour at or below the low mark).
+R::Shape2d OverheadBar(const present::OverheadSettings& s, const float fraction, const float alpha) {
+    R::Shape2d shape;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    const float w = s.barWidthPixels / 2;
+    const float h = s.barHeightPixels / 2;
+    Rect(shape.vertices, shape.indices, -w, -h, w, h,
+         R::Color8{byte(s.backColor[0]), byte(s.backColor[1]), byte(s.backColor[2]), byte(s.backAlpha * alpha)});
+    const auto& rgb = fraction <= s.lowHealth ? s.lowColor : s.fillColor;
+    if (fraction > 0.0F) {
+        Rect(shape.vertices, shape.indices, -w, -h, -w + s.barWidthPixels * std::clamp(fraction, 0.0F, 1.0F), h,
+             R::Color8{byte(rgb[0]), byte(rgb[1]), byte(rgb[2]), byte(alpha)});
+    }
+    return shape;
+}
+
+// Main/PostUpdate, after the camera Module's update and the transforms' propagation (this frame's cameras): every
+// Overhead's name and bar on the HUD's layer where the world camera sees its anchor (client::PlaceOverhead), its bar's
+// alpha by its policy (present::OverheadBarAlpha); hidden behind the camera, off the picture or behind the walls. Its
+// pieces are made for a new one and go with it. Transform and GlobalTransform are written together (no parent): the
+// label is drawn where it is this frame.
+K::SystemResult ShowOverheads(K::Res<ClientScene> scene, K::Res<WT::ActiveTime> time, K::Res<OwnHits> hits, K::Res<ArenaWalls> walls,
+                              K::Query<K::Read<C::ComputedCamera>> cameras, K::Query<K::Read<Overhead>> labels,
+                              K::Query<K::Read<OverheadPart>, K::Write<R::Sprite>> names,
+                              K::Query<K::Read<OverheadPart>, K::Write<R::Shape2d>> bars,
+                              K::Query<K::Write<T::Transform>, K::Write<T::GlobalTransform>> placed,
+                              K::ResMut<ClientHud> hud,
+                              K::Spawn<K::Bundle<R::Sprite, T::Transform, T::GlobalTransform, R::RenderLayers, OverheadPart>> spawnName,
+                              K::Spawn<K::Bundle<R::Shape2d, T::Transform, T::GlobalTransform, R::RenderLayers, OverheadPart>> spawnBar,
+                              K::Despawn despawn) {
+    const present::OverheadSettings& s = scene->presentation->overhead;
+    const C::ComputedCamera* world = cameras.Get<C::ComputedCamera>(kCamera);
+    const T::GlobalTransform* worldView = placed.Get<T::GlobalTransform>(kCamera);
+    const C::ComputedCamera* flat = cameras.Get<C::ComputedCamera>(kHudCamera);
+    const T::GlobalTransform* flatView = placed.Get<T::GlobalTransform>(kHudCamera);
+    if (world == nullptr || worldView == nullptr || flat == nullptr || flatView == nullptr) return {};
+    // Copies: the pieces' transforms are written through the same query below.
+    const T::GlobalTransform eye = *worldView;
+    const T::GlobalTransform flatEye = *flatView;
+    ClientHud& h = hud.Get();
+    const double now = static_cast<double>(time->elapsed) / 1e9;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    // Each label's place this frame (none: hidden) and its bar's alpha.
+    struct Shown final {
+        std::optional<Math::Vec2> at;
+        float barAlpha = 0.0F;
+    };
+    std::map<K::EntityId, Shown> shown;
+    labels.ForEach([&](const K::EntityId id, const Overhead& label) {
+        Shown& one = shown[id];
+        const auto last = hits->last.find(id);
+        one.barAlpha = present::OverheadBarAlpha(label.bar, label.health, last != hits->last.end() ? std::optional<double>(last->second) : std::nullopt,
+                                                 now, s);
+        if (label.label.empty() && one.barAlpha <= 0.0F) return;
+        const OverheadPlacement placement = PlaceOverhead(*world, eye, *flat, flatEye, label.anchor, walls->walls ? &*walls->walls : nullptr);
+        if (const auto* at = std::get_if<Math::Vec2>(&placement)) one.at = *at;
+    });
+    const auto put = [&placed](const K::EntityId part, const Math::Vec2 at) {
+        T::Transform t;
+        t.translation = {std::round(at.x), std::round(at.y), 0.5F};
+        if (auto transform = placed.GetMut<T::Transform>(part)) transform.Get() = t;
+        if (auto global = placed.GetMut<T::GlobalTransform>(part)) global.Get() = T::GlobalTransform{T::ToMatrix(t)};
+    };
+    std::set<K::EntityId> withName;
+    std::set<K::EntityId> withBar;
+    names.ForEach([&](const K::EntityId part, const OverheadPart& which, K::Mut<R::Sprite> sprite) {
+        if (which.bar) return;
+        const auto found = shown.find(which.target);
+        if (found == shown.end()) {
+            despawn.Entity(part);
+            h.texts.erase(part);
+            return;
+        }
+        withName.insert(which.target);
+        const Overhead& label = *labels.Get<Overhead>(which.target);
+        HudText& cached = h.texts[part];
+        if (cached.text != label.label || (!cached.image && !label.label.empty())) {
+            cached.text = label.label;
+            cached.image = label.label.empty() || !h.font ? nullptr : TextPicture(h, label.label, s.textPixels);
+        }
+        const bool visible = found->second.at && cached.image;
+        const R::Color8 color = visible ? R::Color8{byte(s.nameColor[0]), byte(s.nameColor[1]), byte(s.nameColor[2]), 255} : R::Color8{0, 0, 0, 0};
+        const bool same = sprite.Read().color == color &&
+                          (visible ? std::get_if<std::shared_ptr<const IM::ImageData>>(&sprite.Read().image) != nullptr &&
+                                         *std::get_if<std::shared_ptr<const IM::ImageData>>(&sprite.Read().image) == cached.image
+                                   : std::holds_alternative<std::monostate>(sprite.Read().image));
+        if (!same) {
+            R::Sprite next = sprite.Read();
+            next.color = color;
+            next.image = visible ? R::ImageRef{cached.image} : R::ImageRef{std::monostate{}};
+            sprite.Get() = next;
+        }
+        if (visible) {
+            // Above the bar when the bar shows, else at the anchor.
+            const float lift = found->second.barAlpha > 0.0F ? s.barHeightPixels / 2 + s.gapPixels : 0.0F;
+            put(part, *found->second.at + Math::Vec2{0.0F, lift});
+        }
+    });
+    bars.ForEach([&](const K::EntityId part, const OverheadPart& which, K::Mut<R::Shape2d> shape) {
+        if (!which.bar) return;
+        const auto found = shown.find(which.target);
+        if (found == shown.end()) {
+            despawn.Entity(part);
+            return;
+        }
+        withBar.insert(which.target);
+        const Overhead& label = *labels.Get<Overhead>(which.target);
+        if (!found->second.at || !label.health || found->second.barAlpha <= 0.0F) {
+            if (!shape.Read().vertices.empty()) shape.Get() = R::Shape2d{};
+            return;
+        }
+        shape.Get() = OverheadBar(s, *label.health, found->second.barAlpha);
+        put(part, *found->second.at);
+    });
+    // The pieces of a new label: drawn from the next frame.
+    for (const auto& [target, one] : shown) {
+        const Overhead& label = *labels.Get<Overhead>(target);
+        if (withName.count(target) == 0 && !label.label.empty()) {
+            R::Sprite sprite;
+            sprite.anchor = {0.0F, -0.5F};
+            sprite.color = R::Color8{0, 0, 0, 0};
+            auto spawned = spawnName.New(std::move(sprite), T::Transform{}, T::GlobalTransform{}, R::RenderLayers{1U << kHudLayer},
+                                         OverheadPart{target, false});
+            if (!spawned) return Base::Err(std::move(spawned).error());
+        }
+        if (withBar.count(target) == 0 && label.health) {
+            auto spawned = spawnBar.New(R::Shape2d{}, T::Transform{}, T::GlobalTransform{}, R::RenderLayers{1U << kHudLayer}, OverheadPart{target, true});
+            if (!spawned) return Base::Err(std::move(spawned).error());
+        }
+    }
     return {};
 }
 
@@ -1519,6 +1736,8 @@ WorldSnapshot SnapshotOf(K::World& world) {
         copy(player.combat);
         copy(player.hits);
         copy(player.shot);
+        // A World without the net (Solo) has no names.
+        if (world.Types().ComponentIdOf<PW::PlayerName>()) copy(player.name);
         snapshot.players.push_back(std::move(player));
     }
     if (const auto* rules = world.Resource<PW::GameRules>()) {
@@ -1586,6 +1805,8 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
     for (const PlayerSnapshot& player : snapshot->players) {
         players.insert(player.id);
         put(player.id, player.owner);
+        // The name does not change in a match: every player's as it is (none until the Match's NamePlayers gave it).
+        putOptional(player.id, player.name);
         if (player.owner.userId == localUser) {
             putOptional(player.id, player.body);
             putOptional(player.id, player.combat);
@@ -1616,7 +1837,7 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
         snapshot->arenaId == rules->arena.id && rules->wallsDigest != snapshot->wallsDigest) {
         world.ResourceMut<PW::GameRules>()->wallsDigest = snapshot->wallsDigest;
     }
-    if (auto* sound = world.ResourceMut<ClientSound>(); sound != nullptr && snapshot->walls) sound->walls = snapshot->walls;
+    if (snapshot->walls) world.ResourceMut<ArenaWalls>()->walls = snapshot->walls;
     world.SetResource(snapshot->view);
 }
 
@@ -1777,6 +1998,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Component<PW::PlayerCombat>({.name = "PlayerCombat"});
     r.Component<PW::HitRecord>({.name = "HitRecord"});
     r.Component<PW::ShotRecord>({.name = "ShotRecord"});
+    r.Component<PW::PlayerName>({.name = "PlayerName"});
     r.Resource<PW::GameRules>({.name = "GameRules"});
     r.Resource<PW::LocalUser>({.name = "LocalUser"});
     r.Resource<PW::MapLoad>({.name = "MapLoad"});
@@ -1788,6 +2010,10 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<ClientScene>({.name = "object_fps_pvp.ClientScene"});
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
+    r.Resource<ArenaWalls>({.name = "object_fps_pvp.ArenaWalls"});
+    r.Resource<OwnHits>({.name = "object_fps_pvp.OwnHits"});
+    r.Component<Overhead>({.name = "object_fps_pvp.Overhead"});
+    r.Component<OverheadPart>({.name = "object_fps_pvp.OverheadPart"});
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
     r.Component<ViewmodelPart>({.name = "object_fps_pvp.ViewmodelPart"});
@@ -1835,6 +2061,18 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     r.AddSystem<&AddViewmodel>(InUpdate("object_fps_pvp.AddViewmodel", {"object_fps_pvp.PoseViewmodel", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
+    r.AddSystem<&NoteOwnHits>(InUpdate("object_fps_pvp.NoteOwnHits"));
+    r.AddSystem<&TagPlayerOverheads>(InUpdate("object_fps_pvp.TagPlayerOverheads", {"object_fps_pvp.PoseCharacters", "object_fps_pvp.AddCharacters"}));
+    {
+        K::SystemOptions show;
+        show.name = "object_fps_pvp.ShowOverheads";
+        K::Mount mount;
+        mount.schedule = std::string(O::DefaultSchedules::frame);
+        mount.stage = std::string(O::DefaultSchedules::postUpdate);
+        mount.after = {std::string(C::kUpdateSet), std::string(T::kPropagateSet)};
+        show.mounts.push_back(std::move(mount));
+        r.AddSystem<&ShowOverheads>(std::move(show));
+    }
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
     r.AddSystem<&TrackReadiness>(InUpdate("object_fps_pvp.TrackReadiness", {"object_fps_pvp.RequestAssets", "object_fps_pvp.ShowArena"}));
     r.AddSystem<&RevealUnderCover>(InUpdate("object_fps_pvp.RevealUnderCover", {"object_fps_pvp.TrackReadiness"}));
@@ -1890,6 +2128,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         ClientSound sound;
         sound.submitter = port != nullptr ? &port->submitter : nullptr;
         world.SetResource(std::move(sound));
+        world.SetResource(ArenaWalls{});
+        world.SetResource(OwnHits{});
         // The world camera.
         C::PerspectiveProjection perspective;
         perspective.verticalFov = kVerticalFov;
@@ -2151,6 +2391,16 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, std
             return std::nullopt;
         }
         content.hitFeedback = *settings;
+    }
+    {
+        auto text = ReadText(fs, root + "/ui/overhead.json", error);
+        if (!text) return std::nullopt;
+        auto settings = present::ParseOverheadSettings(*text, error);
+        if (!settings) {
+            error = root + "/ui/overhead.json: " + error;
+            return std::nullopt;
+        }
+        content.overhead = *settings;
     }
     try {
         content.viewmodel = LoadViewmodel(fs, root + "/weapons/nailer_v2/viewmodel/");

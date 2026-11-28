@@ -4066,6 +4066,188 @@
    "expect": "pvp-name-host-not-asked"
   },
   {
+   "id": "pvp-overhead-engaged-as-always",
+   "what": "an engaged bar shows as if always",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "if (policy == OverheadPolicy::Always || *health <= settings.lowHealth) return 1.0F;",
+   "replace": "return 1.0F;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "A health bar shows*",
+   "expect": "pvp-overhead-engaged-unhit"
+  },
+  {
+   "id": "pvp-overhead-low-ignored",
+   "what": "low health does not keep the bar",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "policy == OverheadPolicy::Always || *health <= settings.lowHealth",
+   "replace": "policy == OverheadPolicy::Always",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "A health bar shows*",
+   "expect": "pvp-overhead-low"
+  },
+  {
+   "id": "pvp-overhead-no-hold",
+   "what": "the bar starts fading at the hit",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "    if (since <= settings.holdSeconds) return 1.0F;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "A health bar shows*",
+   "expect": "pvp-overhead-hold"
+  },
+  {
+   "id": "pvp-overhead-no-fade",
+   "what": "the bar never fades",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "    return static_cast<float>(1.0 - fading / settings.fadeSeconds);",
+   "replace": "    return 1.0F;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "A health bar shows*",
+   "expect": "pvp-overhead-fade"
+  },
+  {
+   "id": "pvp-overhead-fraction-milli",
+   "what": "the fraction counts whole points rounded down: a little health left is an empty bar",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "const std::uint32_t left = sim::DisplayPoints(milliPoints);",
+   "replace": "const std::uint32_t left = milliPoints / 1000;",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "A health bar's fraction*",
+   "expect": "pvp-overhead-fraction-points"
+  },
+  {
+   "id": "pvp-overhead-settings-unchecked",
+   "what": "a negative hold is taken",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/present/Overhead.cpp",
+   "find": "if (!std::isfinite(seconds) || seconds < 0) throw",
+   "replace": "if (!std::isfinite(seconds)) throw",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "Overhead settings*",
+   "expect": "pvp-overhead-settings"
+  },
+  {
+   "id": "pvp-overhead-behind-shown",
+   "what": "a point behind the camera is not told behind",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/Overhead.cpp",
+   "find": "return code == C::ViewportConversionFailureCode::PastNearPlane || code == C::ViewportConversionFailureCode::PastFarPlane",
+   "replace": "return code == C::ViewportConversionFailureCode::PastNearPlane",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: behind*",
+   "expect": "pvp-overhead-behind"
+  },
+  {
+   "id": "pvp-overhead-offscreen-shown",
+   "what": "a point off the picture is placed",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/Overhead.cpp",
+   "find": "        return OverheadHidden::OffScreen;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: behind*",
+   "expect": "pvp-overhead-offscreen"
+  },
+  {
+   "id": "pvp-overhead-not-occluded",
+   "what": "the walls are not asked",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/Overhead.cpp",
+   "find": "        if (world::Blocked(*walls, eye, anchor)) return OverheadHidden::Occluded;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: behind*",
+   "expect": "pvp-overhead-occluded"
+  },
+  {
+   "id": "pvp-overhead-player-bar",
+   "what": "a player's label has a health bar",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "                       std::nullopt, present::OverheadPolicy::Engaged};",
+   "replace": "                       1.0F, present::OverheadPolicy::Always};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: the other player*",
+   "expect": "pvp-overhead-player-no-bar"
+  },
+  {
+   "id": "pvp-overhead-player-room-label",
+   "what": "the label is not the room's words",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "PlayerLabel(owner.userId, name != nullptr ? name->text : std::string_view{})",
+   "replace": "\"Player\"",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: the other player's name*",
+   "expect": "pvp-overhead-player-name"
+  },
+  {
+   "id": "pvp-overhead-next-frame",
+   "what": "only the Transform is written: the label is drawn where it was",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (auto global = placed.GetMut<T::GlobalTransform>(part)) global.Get() = T::GlobalTransform{T::ToMatrix(t)};\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: the other player's name*",
+   "expect": "pvp-overhead-(at|same-frame)"
+  },
+  {
+   "id": "pvp-overhead-hidden-shown",
+   "what": "a hidden label is still drawn",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const bool visible = found->second.at && cached.image;",
+   "replace": "        const bool visible = static_cast<bool>(cached.image);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: turned away*",
+   "expect": "pvp-overhead-hidden-behind"
+  },
+  {
+   "id": "pvp-overhead-parts-stay",
+   "what": "a label's pieces stay after its thing goes",
+   "guards": [
+    "overhead-ui-declaration 5.1"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            despawn.Entity(part);\n            h.texts.erase(part);\n",
+   "replace": "            h.texts.erase(part);\n",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: overhead: turned away*",
+   "expect": "pvp-overhead-gone"
+  },
+  {
    "id": "pvp-arena-scene-unchecked",
    "what": "an arena's scene that is not a path inside the content is taken",
    "guards": [

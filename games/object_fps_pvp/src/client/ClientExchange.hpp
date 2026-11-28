@@ -35,6 +35,7 @@ struct PlayerSnapshot final {
     std::optional<PW::PlayerCombat> combat;
     std::optional<PW::HitRecord> hits;
     std::optional<PW::ShotRecord> shot;
+    std::optional<PW::PlayerName> name;
 };
 struct WorldSnapshot final {
     std::uint64_t version = 0;

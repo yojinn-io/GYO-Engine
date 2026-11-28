@@ -10,6 +10,7 @@
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
 #include "object_fps_pvp/client/LocalFiles.hpp"
+#include "object_fps_pvp/client/Overhead.hpp"
 #include "object_fps_pvp/client/SoloSave.hpp"
 
 #include "gyo_test/LoopbackListener.hpp"
@@ -41,6 +42,7 @@
 #include <cstdlib>
 #include <cctype>
 #include <mutex>
+#include <numbers>
 #include <optional>
 #include <filesystem>
 #include <fstream>
@@ -2677,6 +2679,178 @@ TEST_CASE("client: single player: the room is the multiplayer's: the map chosen 
     REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::SoloRoom; }), "[pvp-solo-abort]");
     setup.Load();
     CHECK_MESSAGE(setup.Binding("map") == "マップ: " + arenas[1].id, "[pvp-solo-map-kept] " << setup.Binding("map"));
+}
+
+namespace {
+
+// The labels over the heads (overhead-ui declaration, section 5 C1-C3): the name and the bar pieces of a thing's label.
+struct LabelParts final {
+    K::EntityId name = 0;
+    K::EntityId bar = 0;
+};
+LabelParts PartsOf(K::World& world, const K::EntityId target) {
+    LabelParts parts;
+    for (const K::EntityId id : world.Entities()) {
+        const auto* part = world.Get<PC::OverheadPart>(id);
+        if (part == nullptr || part->target != target) continue;
+        (part->bar ? parts.bar : parts.name) = id;
+    }
+    return parts;
+}
+
+bool NameShows(K::World& world, const K::EntityId part) {
+    const auto* sprite = world.Get<R::Sprite>(part);
+    return sprite != nullptr && sprite->color.a == 255 &&
+           std::holds_alternative<std::shared_ptr<const GYO::Engine::Image::ImageData>>(sprite->image);
+}
+
+// Where this frame's cameras put the anchor on the HUD (no walls), as ShowOverheads places it.
+std::optional<GYO::Engine::Math::Vec2> Expected(K::World& world, const GYO::Engine::Math::Vec3 anchor) {
+    namespace C = GYO::Engine::Camera;
+    K::EntityId eye = 0, flat = 0;
+    for (const K::EntityId id : world.Entities()) {
+        const auto* camera = world.Get<C::Camera>(id);
+        if (camera == nullptr) continue;
+        if (world.Get<C::Camera3d>(id) != nullptr && camera->order == 0) eye = id;
+        if (world.Get<C::Camera2d>(id) != nullptr) flat = id;
+    }
+    REQUIRE(eye != 0);
+    REQUIRE(flat != 0);
+    const PC::OverheadPlacement placed = PC::PlaceOverhead(*world.Get<C::ComputedCamera>(eye), *world.Get<T::GlobalTransform>(eye),
+                                                           *world.Get<C::ComputedCamera>(flat), *world.Get<T::GlobalTransform>(flat), anchor, nullptr);
+    if (const auto* at = std::get_if<GYO::Engine::Math::Vec2>(&placed)) return *at;
+    return std::nullopt;
+}
+
+// The world camera's forward on the ground.
+GYO::Engine::Math::Vec3 GroundForward(K::World& world) {
+    for (const K::EntityId id : world.Entities()) {
+        const auto* camera = world.Get<GYO::Engine::Camera::Camera>(id);
+        if (camera == nullptr || camera->order != 0 || world.Get<GYO::Engine::Camera::Camera3d>(id) == nullptr) continue;
+        GYO::Engine::Math::Vec3 forward = GYO::Engine::Math::Rotate(world.Get<T::Transform>(id)->rotation, {0.0F, 0.0F, 1.0F});
+        forward.y = 0.0F;
+        return forward * (1.0F / GYO::Engine::Math::Length(forward));
+    }
+    FAIL("no world camera");
+    return {};
+}
+
+// The own player takes the pointer (a click), so the mouse turns the view.
+void Capture(Setup& setup) {
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.state = I::ButtonState::Pressed;
+    click.position = {640.0F, 360.0F};
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    click.state = I::ButtonState::Released;
+    setup.Next().buttons.push_back(click);
+    setup.Frame();
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+}
+
+// The other player stood a few metres before the own player's eye (at the Match: the Clients follow it).
+K::EntityId RivalBefore(Setup& setup, const float metres) {
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    const K::EntityId rival = PlayerOf(GameWorld(*setup.match), 2);
+    REQUIRE(own != 0);
+    REQUIRE(rival != 0);
+    const GYO::Engine::Math::Vec3 forward = GroundForward(setup.Client());
+    K::World& match = GameWorld(*setup.match);
+    const GYO::Engine::Math::Vec3 feet = match.Get<PW::PlayerBody>(own)->feet;
+    match.GetMut<PW::PlayerBody>(rival)->feet = feet + forward * metres;
+    setup.Frames(90);
+    return rival;
+}
+} // namespace
+
+TEST_CASE("client: overhead: the other player's name stands over its head where the camera sees it, with no bar; the own has none") {
+    Setup setup;
+    setup.Shown();
+    Capture(setup);
+    const K::EntityId rival = RivalBefore(setup, 4.0F);
+    K::World& client = setup.Client();
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    CHECK_MESSAGE(client.Get<PC::Overhead>(own) == nullptr, "[pvp-overhead-not-own]");
+    const auto* label = client.Get<PC::Overhead>(rival);
+    REQUIRE_MESSAGE(label != nullptr, "[pvp-overhead-player] the other player has a label");
+    const auto* name = client.Get<PW::PlayerName>(rival);
+    CHECK_MESSAGE(label->label == PC::PlayerLabel(2, name != nullptr ? name->text : std::string_view{}), "[pvp-overhead-player-name] " << label->label);
+    CHECK_MESSAGE(!label->health.has_value(), "[pvp-overhead-player-no-bar] a player has no health bar");
+    // Over the head: above the body's top.
+    CHECK(label->anchor.y > client.Get<PW::PlayerBody>(rival)->feet.y + 1.6F);
+    const LabelParts parts = PartsOf(client, rival);
+    REQUIRE(parts.name != 0);
+    CHECK(parts.bar == 0);
+    REQUIRE_MESSAGE(NameShows(client, parts.name), "[pvp-overhead-shown] the name shows");
+    const auto expected = Expected(client, label->anchor);
+    REQUIRE(expected.has_value());
+    const auto& at = client.Get<T::GlobalTransform>(parts.name)->matrix.values;
+    CHECK_MESSAGE(std::abs(at[12] - expected->x) <= 1.0F, "[pvp-overhead-at] " << at[12] << " vs " << expected->x);
+    CHECK(std::abs(at[13] - expected->y) <= 1.0F);
+    // The view turns: in the same frame the name follows this frame's camera.
+    const float before = at[12];
+    setup.Next().motions.push_back(I::MouseMotion{{60.0F, 0.0F}, {}});
+    setup.Frame();
+    const auto turned = Expected(client, client.Get<PC::Overhead>(rival)->anchor);
+    REQUIRE(turned.has_value());
+    const auto& now = client.Get<T::GlobalTransform>(parts.name)->matrix.values;
+    CHECK_MESSAGE(std::abs(now[12] - turned->x) <= 1.0F, "[pvp-overhead-same-frame] " << now[12] << " vs " << turned->x);
+    CHECK(std::abs(now[12] - before) > 5.0F);
+}
+
+TEST_CASE("client: overhead: the other player hit many times still has no health bar") {
+    Setup setup;
+    setup.Shown();
+    Capture(setup);
+    const K::EntityId rival = RivalBefore(setup, 4.0F);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    for (int shot = 0; shot < 3; ++shot) {
+        K::World& match = GameWorld(*setup.match);
+        match.GetMut<PW::PlayerCombat>(rival)->hp -= 20'000;
+        PW::ShotRecord record;
+        record.tick = TickOf(match);
+        record.kind = sim::ShotHitKind::Player;
+        record.target = rival;
+        record.part = sim::HitPart::Body;
+        record.damage = 20'000;
+        *match.GetMut<PW::ShotRecord>(own) = record;
+        setup.Frames(10);
+    }
+    REQUIRE(setup.Client().Get<PW::PlayerCombat>(rival)->hp < 100'000);
+    const auto* label = setup.Client().Get<PC::Overhead>(rival);
+    REQUIRE(label != nullptr);
+    CHECK_MESSAGE(!label->health.has_value(), "[pvp-overhead-player-no-bar-hit]");
+    CHECK(PartsOf(setup.Client(), rival).bar == 0);
+}
+
+TEST_CASE("client: overhead: turned away the name hides; the other player gone, its label goes") {
+    Setup setup;
+    setup.Shown();
+    Capture(setup);
+    const K::EntityId rival = RivalBefore(setup, 4.0F);
+    K::World& client = setup.Client();
+    const LabelParts parts = PartsOf(client, rival);
+    REQUIRE(parts.name != 0);
+    REQUIRE(NameShows(client, parts.name));
+    // Half a turn: the other player is behind the camera.
+    setup.Next().motions.push_back(I::MouseMotion{{std::numbers::pi_v<float> / 0.0025F, 0.0F}, {}});
+    setup.Frames(2);
+    CHECK_MESSAGE(!NameShows(client, parts.name), "[pvp-overhead-hidden-behind]");
+    CHECK(client.Get<PC::Overhead>(rival) != nullptr);
+    // Back again: shown.
+    setup.Next().motions.push_back(I::MouseMotion{{-std::numbers::pi_v<float> / 0.0025F, 0.0F}, {}});
+    setup.Frames(2);
+    CHECK(NameShows(client, parts.name));
+    // The other Client closes: its label's pieces go with it.
+    auto* service = setup.other->Buffer().Find<N::NetService>();
+    REQUIRE(service != nullptr);
+    service->Close();
+    service->Flush(service->Now(), N::Stamp{});
+    setup.other.reset();
+    setup.Frames(30);
+    CHECK_FALSE(client.Alive(rival));
+    CHECK_MESSAGE(PartsOf(client, rival).name == 0, "[pvp-overhead-gone] the name's piece went with the player");
 }
 
 namespace {
