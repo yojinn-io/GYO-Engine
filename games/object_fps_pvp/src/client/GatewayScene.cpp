@@ -54,18 +54,17 @@ std::string DeviceIdPath(const std::string& dataDirectory) {
     return dataDirectory.empty() ? std::string() : dataDirectory + "/device-id";
 }
 
-void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory,
-                        const std::string& name, const bool needed) {
+void PlaceGatewayClient(K::World& world, const ClientStart& start, const bool needed) {
     const GatewayClient* now = world.Resource<GatewayClient>();
     if (now != nullptr && (!now->Offline() || !needed)) return;
     if (!needed) {
         // A scene that does not call the Gateway: no device id is read or made for it.
-        world.SetResource(GatewayClient(gateway, std::string(), std::string(), "the Gateway is not called in this scene"));
+        world.SetResource(GatewayClient(start.gateway, GatewaySignIn{}, "the Gateway is not called in this scene"));
         return;
     }
     std::string error;
-    std::string device = LoadDeviceId(DeviceIdPath(dataDirectory), error);
-    world.SetResource(GatewayClient(gateway, std::move(device), name, std::move(error)));
+    std::string device = LoadDeviceId(DeviceIdPath(start.dataDirectory), error);
+    world.SetResource(GatewayClient(start.gateway, GatewaySignIn{std::move(device), start.name}, std::move(error)));
 }
 
 } // namespace object_fps_pvp::client

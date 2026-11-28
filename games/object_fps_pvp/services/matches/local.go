@@ -22,8 +22,9 @@ type Local struct {
 	// adds (--port, --match-id, --capacity, --arena, --saves,
 	// --admission-key-stdin, --idle-seconds, --expect-users,
 	// --player-names-stdin). The key goes to the Match's standard input, in
-	// neither its command line nor its environment; so do the players' names,
-	// on its second line (display-name declaration 5.1).
+	// neither its command line nor its environment; so does the roster of the
+	// players' names, on its second line, whenever there are players
+	// (display-name declaration 5.1).
 	Command   string
 	Arguments []string
 	// Advertise is the address players are told to connect to (an IPv4
@@ -78,7 +79,12 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 		arguments = append(arguments, "--expect-users", strings.Join(users, ","))
 	}
 	input := hex.EncodeToString(spec.Key) + "\n"
-	if roster, named := names(spec.Players); named {
+	if len(spec.Players) > 0 {
+		roster, err := Roster(spec.Players)
+		if err != nil {
+			l.givePort(port)
+			return Running{}, fmt.Errorf("the players' names: %w", err)
+		}
 		arguments = append(arguments, "--player-names-stdin")
 		input += roster + "\n"
 	}
@@ -107,23 +113,26 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended, Stop: func() { _ = process.Kill() }}, nil
 }
 
-// names is the players' roster as one line of JSON,
-// {"players":[{"userId":7,"name":"..."}]}; false when no player has a name.
-func names(players []Player) (string, bool) {
-	named := false
-	for _, player := range players {
-		named = named || player.Name != ""
+// The Match's roster line (match/PlayerRoster.hpp), its own type: the
+// allocation request's Player may change without changing the Match's input.
+type rosterLine struct {
+	Players []rosterPlayer `json:"players"`
+}
+
+type rosterPlayer struct {
+	UserID uint64 `json:"userId"`
+	Name   string `json:"name"`
+}
+
+// Roster is the players' names as the one line of JSON a Match reads on its
+// standard input after its key: {"players":[{"userId":7,"name":"..."}]}.
+func Roster(players []Player) (string, error) {
+	line := rosterLine{Players: make([]rosterPlayer, len(players))}
+	for i, player := range players {
+		line.Players[i] = rosterPlayer{UserID: player.UserID, Name: player.Name}
 	}
-	if !named {
-		return "", false
-	}
-	roster, err := json.Marshal(struct {
-		Players []Player `json:"players"`
-	}{players})
-	if err != nil {
-		return "", false
-	}
-	return string(roster), true
+	encoded, err := json.Marshal(line)
+	return string(encoded), err
 }
 
 func (l *Local) takePort() (int, error) {

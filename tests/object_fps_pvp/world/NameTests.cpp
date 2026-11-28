@@ -45,10 +45,13 @@ TEST_CASE("world: names: each player gets its user's name from the roster at the
     CHECK(NameOf(session.Client(1), 1) == std::optional<std::string>{"甲 A"});
 }
 
-TEST_CASE("world: names: a name longer than the wire takes is not received") {
-    Session session(1, 4, 0, ShippedContent(), {}, 60, std::nullopt, nullptr, 0, {{1, std::string(129, 'x')}});
-    for (int frame = 0; frame < 120 && PlayerOf(session.Client(0), 1) == 0; ++frame) session.Frame();
-    session.Frames(30);
-    CHECK(NameOf(session.Match(), 1) == std::optional<std::string>{std::string(129, 'x')});
-    CHECK_MESSAGE(NameOf(session.Client(0), 1) != std::optional<std::string>{std::string(129, 'x')}, "[pvp-name-codec-limit]");
+TEST_CASE("world: names: a name longer than the wire carries is cut, between two code points, and received") {
+    // 43 three-byte characters are 129 bytes: 42 of them (126 bytes) fit in PlayerName::kMaxBytes.
+    std::string long_;
+    for (int i = 0; i < 43; ++i) long_ += "名";
+    Session session(1, 4, 0, ShippedContent(), {}, 60, std::nullopt, nullptr, 0, {{1, long_}});
+    const std::string cut = long_.substr(0, 126);
+    for (int frame = 0; frame < 120 && NameOf(session.Client(0), 1) != std::optional<std::string>{cut}; ++frame) session.Frame();
+    CHECK_MESSAGE(NameOf(session.Match(), 1) == std::optional<std::string>{cut}, "[pvp-name-cut-at-match]");
+    CHECK_MESSAGE(NameOf(session.Client(0), 1) == std::optional<std::string>{cut}, "[pvp-name-cut-received]");
 }

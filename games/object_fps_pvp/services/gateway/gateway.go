@@ -52,26 +52,27 @@ func (g *Gateway) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/session", func(w http.ResponseWriter, r *http.Request) {
 		g.forward(w, r, g.config.Identity, "/internal/v1/sessions", api.Nobody)
 	})
-	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, caller api.Caller) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", caller)
 	}))
-	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
+	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, caller api.Caller) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", caller)
 	}))
-	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
+	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, caller api.Caller) {
 		if id, ok := roomID(w, r); ok {
-			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, user)
+			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, caller)
 		}
 	}))
 	for _, action := range []string{"join", "leave", "ready", "start"} {
-		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
+		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, caller api.Caller) {
 			if id, ok := roomID(w, r); ok {
-				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, user)
+				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, caller)
 			}
 		}))
 	}
-	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
-		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user.User, 10), user)
+	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, caller api.Caller) {
+		// The save service has no use for the name: only the rooms hear it (display-name declaration 6).
+		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(caller.User, 10), api.As(caller.User))
 	}))
 	return unknownAsJSON(mux)
 }

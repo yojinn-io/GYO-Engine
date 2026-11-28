@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cerrno>
+#include <cstddef>
 #include <cstring>
 #include <string>
 
@@ -12,10 +13,16 @@
 
 namespace GYO::Engine::OS::Machine {
 
+namespace {
+
+// The longest host name POSIX systems give (HOST_NAME_MAX: 64 on Linux, 255 on macOS), with its end.
+constexpr std::size_t kHostNameBytes = 256;
+
+} // namespace
+
 Base::Result<std::string, OSError> HostName() {
-    // POSIX caps a host name at HOST_NAME_MAX (64 on Linux, 255 on macOS); one more byte keeps the end even where
-    // gethostname truncates without one.
-    std::array<char, 257> buffer{};
+    // One more byte than gethostname is given keeps an end even where it truncates without one.
+    std::array<char, kHostNameBytes + 1> buffer{};
     if (::gethostname(buffer.data(), buffer.size() - 1) != 0) {
         const int error = errno;
         return Base::Err(
@@ -23,8 +30,7 @@ Base::Result<std::string, OSError> HostName() {
     }
     std::string name(buffer.data(), ::strnlen(buffer.data(), buffer.size()));
     if (!Detail::IsValidUtf8(name)) {
-        return Base::Err(Detail::RefusedArgument(OSErrorCode::InvalidEncoding, "host name is not valid UTF-8",
-                                                 name.size()));
+        return Base::Err(OSError::Make(OSErrorCode::InvalidEncoding, "host name is not valid UTF-8"));
     }
     return name;
 }

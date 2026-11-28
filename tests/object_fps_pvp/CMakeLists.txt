@@ -26,7 +26,8 @@ target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
-    PVP_ADMISSION_VECTORS="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/token/testdata/admission_vectors.txt")
+    PVP_ADMISSION_VECTORS="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/token/testdata/admission_vectors.txt"
+    PVP_ROSTER_VECTOR="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/matches/testdata/roster_line.txt")
 if(MSVC)
     target_compile_options(gyo_object_fps_pvp_logic_tests PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE NOMINMAX)

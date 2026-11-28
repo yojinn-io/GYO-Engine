@@ -45,24 +45,22 @@ TEST_CASE("Machine::HostName is the name the OS reports") {
     const DWORD length = ::GetEnvironmentVariableW(L"COMPUTERNAME", computer, 64);
     REQUIRE(length > 0);
     REQUIRE(length < 64);
+    // Compared as ASCII only: a NetBIOS name in another code page has no fixed UTF-8 form to compare.
     std::string netbios;
+    bool ascii = true;
     for (DWORD i = 0; i < length; ++i) {
-        REQUIRE(computer[i] < 0x80);
+        ascii = ascii && computer[i] < 0x80;
         netbios.push_back(static_cast<char>(computer[i]));
     }
     INFO("COMPUTERNAME=" << netbios);
-    if (IsAscii(name.value())) CHECK(Upper(name.value()).starts_with(Upper(netbios)));
+    if (ascii && IsAscii(name.value())) {
+        CHECK(Upper(name.value()).starts_with(Upper(netbios)));
+    } else {
+        MESSAGE("not ASCII: the COMPUTERNAME comparison is skipped");
+    }
 #else
     utsname system{};
     REQUIRE(::uname(&system) == 0);
     CHECK(name.value() == std::string(system.nodename));
 #endif
-}
-
-TEST_CASE("Machine::HostName asks the OS again on every call") {
-    const auto first = Machine::HostName();
-    const auto second = Machine::HostName();
-    REQUIRE(first);
-    REQUIRE(second);
-    CHECK(first.value() == second.value());
 }

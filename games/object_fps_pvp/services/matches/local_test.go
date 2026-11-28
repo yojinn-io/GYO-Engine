@@ -55,20 +55,20 @@ func fakeMatch() int {
 		return 4
 	}
 	rest, _ := io.ReadAll(input)
-	named := os.Getenv("GYO_FAKE_MATCH") == "named"
-	if strings.Contains(arguments, "--player-names-stdin") != named {
-		os.Stderr.WriteString("fake match: --player-names-stdin in " + arguments + "\n")
+	if !strings.Contains(arguments, "--player-names-stdin") {
+		os.Stderr.WriteString("fake match: no --player-names-stdin in " + arguments + "\n")
 		return 5
 	}
-	wantRest := ""
-	if named {
-		wantRest = `{"players":[{"userId":7,"name":"名前, \"quoted\""},{"userId":9,"name":""}]}` + "\n"
+	wantRest := `{"players":[{"userId":7,"name":""},{"userId":9,"name":""}]}` + "\n"
+	if os.Getenv("GYO_FAKE_MATCH") == "named" {
+		vector, _ := os.ReadFile(rosterVector)
+		wantRest = string(vector)
 	}
 	if string(rest) != wantRest {
 		os.Stderr.WriteString("fake match: after the key " + strconv.Quote(string(rest)) + "\n")
 		return 6
 	}
-	if strings.Contains(arguments, "名前") {
+	if strings.Contains(arguments, "甲") {
 		os.Stderr.WriteString("fake match: a name on the command line\n")
 		return 7
 	}
@@ -108,12 +108,29 @@ func TestLocalStartsAMatchProcessAndFreesItsPort(t *testing.T) {
 	<-again.Ended
 }
 
+// The roster line both ends check (match/PlayerRoster.hpp reads the same file in
+// the C++ tests): the line Roster gives for rosterPlayers.
+const rosterVector = "testdata/roster_line.txt"
+
+var rosterPlayers = []Player{{UserID: 7, Name: "甲 A, \"q\""}, {UserID: 9}}
+
+func TestTheRosterLineIsTheSharedVector(t *testing.T) {
+	vector, err := os.ReadFile(rosterVector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := Roster(rosterPlayers)
+	if err != nil || line+"\n" != string(vector) {
+		t.Fatalf("Roster gives %q (%v), the shared vector is %q", line, err, vector)
+	}
+}
+
 func TestLocalHandsTheNamesOnTheStandardInput(t *testing.T) {
 	said := &output{}
 	local := &Local{Command: os.Args[0], Arguments: []string{"-test.run=^$"}, Advertise: "127.0.0.1",
 		FirstPort: 7811, LastPort: 7811, Environment: []string{"GYO_FAKE_MATCH=named"}, Output: said}
 	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Mode: "core_pvp", Map: "pvp_corners_v1",
-		Players: []Player{{UserID: 7, Name: "名前, \"quoted\""}, {UserID: 9}}}
+		Players: rosterPlayers}
 	running, err := local.Start(context.Background(), spec)
 	if err != nil {
 		t.Fatal(err)

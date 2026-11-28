@@ -63,7 +63,6 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
 // scene that calls the Gateway), with this player's device id (read, or made the first time) or without one (it then
 // calls nothing and says why); not needed, one that calls nothing (no file is read or made for the menu or single
 // player).
-void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory,
-                        const std::string& name, bool needed);
+void PlaceGatewayClient(K::World& world, const ClientStart& start, bool needed);
 
 } // namespace object_fps_pvp::client

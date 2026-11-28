@@ -25,12 +25,17 @@
 
 namespace object_fps_pvp::client {
 
-// The session the Gateway gave (POST /v1/session). name: the one the identity service made of the name signed in with
-// (display-name declaration 4.2; empty: none).
+// The session the Gateway gave (POST /v1/session).
 struct GatewaySession final {
     std::uint64_t userId = 0;
     std::string token;
     std::int64_t expiresAt = 0;  // Unix seconds
+};
+
+// What this player opens the session with: the device id (its credential; empty: none) and the name it signs in with
+// (PlayerNameCandidate; the identity service sanitizes it).
+struct GatewaySignIn final {
+    std::string deviceId;
     std::string name;
 };
 
@@ -75,8 +80,7 @@ struct GatewayRequest final {
     std::string key;
 };
 
-// name: the name this player signs in with (PlayerNameCandidate); the identity service normalizes it.
-[[nodiscard]] GatewayRequest SessionRequest(const std::string& deviceId, const std::string& name);
+[[nodiscard]] GatewayRequest SessionRequest(const GatewaySignIn& signIn);
 [[nodiscard]] GatewayRequest ListRoomsRequest();
 [[nodiscard]] GatewayRequest CreateRoomRequest(const std::string& mode, const std::string& map, std::string key);
 [[nodiscard]] GatewayRequest RoomRequest(std::uint64_t room);
@@ -133,15 +137,15 @@ struct GatewayCallRecord final {
 
 class GatewayClient final {
 public:
-    // gateway: its address; deviceId: this player's (empty: none, unavailable says why; every call then ends at once
-    // with "no_device"); name: the one the session is opened with; timeout: how long a call may go without its answer.
-    GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string name,
-                  std::string unavailable = {}, std::int64_t timeout = kDefaultTimeout);
+    // gateway: its address; signIn: this player's (no device id: unavailable says why, and every call then ends at once
+    // with "no_device"); timeout: how long a call may go without its answer.
+    GatewayClient(GYO::Engine::OS::SocketAddress gateway, GatewaySignIn signIn, std::string unavailable = {},
+                  std::int64_t timeout = kDefaultTimeout);
 
     // Asks for a call; calls go one at a time in the order asked, after the session.
     void Ask(std::string tag, GatewayRequest request);
     // Without a device id: every call ends at once with "no_device".
-    [[nodiscard]] bool Offline() const noexcept { return deviceId_.empty(); }
+    [[nodiscard]] bool Offline() const noexcept { return signIn_.deviceId.empty(); }
     // Whether a call is waiting or going.
     [[nodiscard]] bool Busy() const noexcept { return current_.has_value() || !waiting_.empty(); }
     // One step at now (nanoseconds on any steady clock): starts the next call, polls the current one. A call with no
@@ -179,8 +183,7 @@ private:
 
     GYO::Engine::OS::SocketAddress gateway_;
     std::string host_;
-    std::string deviceId_;
-    std::string name_;
+    GatewaySignIn signIn_;
     std::string unavailable_;
     std::int64_t timeout_;
     std::optional<GatewaySession> session_;

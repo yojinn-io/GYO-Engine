@@ -1923,21 +1923,31 @@ TEST_CASE("client: gateway: the requests carry the session's token, an idempoten
     CHECK(PC::RandomHex(16).size() == 32);
 }
 
-TEST_CASE("client: name: the settings' name, or the host name without .local; the settings keep it; an old file has none") {
+TEST_CASE("client: name: the settings' name, or the host name's first label; the settings keep it; an old file has none") {
+    int asked = 0;
+    const auto host = [&asked](std::optional<std::string> name) {
+        return [&asked, name] {
+            ++asked;
+            return name;
+        };
+    };
     PC::ClientSettings settings;
-    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, std::string("Kuro-MacBook-Pro.local")) == "Kuro-MacBook-Pro", "[pvp-name-local]");
-    CHECK(PC::PlayerNameCandidate(settings, std::string("desktop-7")) == "desktop-7");
-    CHECK(PC::PlayerNameCandidate(settings, std::string(".local")) == ".local");
-    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, std::nullopt).empty(), "[pvp-name-no-host]");
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("Kuro-MacBook-Pro.local")) == "Kuro-MacBook-Pro", "[pvp-name-first-label]");
+    CHECK(PC::PlayerNameCandidate(settings, host("kuro-pc.example.com")) == "kuro-pc");
+    CHECK(PC::PlayerNameCandidate(settings, host("desktop-7")) == "desktop-7");
+    CHECK(PC::PlayerNameCandidate(settings, host(".local")).empty());
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host(std::nullopt)).empty(), "[pvp-name-no-host]");
+    CHECK(asked == 5);
     settings.name = "甲 A";
-    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, std::string("host.local")) == "甲 A", "[pvp-name-settings]");
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("host.local")) == "甲 A", "[pvp-name-settings]");
     settings.name = "";
-    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, std::string("host.local")).empty(), "[pvp-name-empty-chosen]");
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("host.local")).empty(), "[pvp-name-empty-chosen]");
+    CHECK_MESSAGE(asked == 5, "[pvp-name-host-not-asked] the host name is asked although the settings have a name");
     // Cut at a UTF-8 boundary: 86 three-byte characters are 258 bytes, 85 of them fit in 256.
     std::string long_;
     for (int i = 0; i < 86; ++i) long_ += "名";
     settings.name = long_;
-    const std::string cut = PC::PlayerNameCandidate(settings, std::nullopt);
+    const std::string cut = PC::PlayerNameCandidate(settings, host(std::nullopt));
     CHECK_MESSAGE(cut.size() == 255, "[pvp-name-cut] " << cut.size());
     CHECK(cut == long_.substr(0, 255));
 
@@ -1955,15 +1965,11 @@ TEST_CASE("client: name: the settings' name, or the host name without .local; th
     CHECK_FALSE(PC::DecodeSettings("{\"version\":1,\"resolution\":[1280,720],\"windowMode\":\"windowed\",\"vsync\":true,\"name\":7}", error).has_value());
 }
 
-TEST_CASE("client: name: the session is opened with the name; the answers' names are read; a player without one is Player N") {
-    CHECK_MESSAGE(PC::SessionRequest("d", "名前").body == "{\"deviceId\":\"d\",\"name\":\"名前\"}", "[pvp-gw-session-name]");
+TEST_CASE("client: name: the session is opened with the name; the room's names are read; a player without one is Player N") {
+    CHECK_MESSAGE(PC::SessionRequest({"d", "名前"}).body == "{\"deviceId\":\"d\",\"name\":\"名前\"}", "[pvp-gw-session-name]");
     std::string error;
-    const auto named = PC::ParseSession("{\"userId\":7,\"name\":\"甲\",\"sessionToken\":\"t\",\"expiresAt\":9}", error);
-    REQUIRE_MESSAGE(named.has_value(), error);
-    CHECK(named->name == "甲");
-    const auto unnamed = PC::ParseSession("{\"userId\":7,\"sessionToken\":\"t\",\"expiresAt\":9}", error);
-    REQUIRE_MESSAGE(unnamed.has_value(), error);
-    CHECK(unnamed->name.empty());
+    // The identity service's answer has the name too; the Client does not need it (the room and the Match give it).
+    CHECK(PC::ParseSession("{\"userId\":7,\"name\":\"甲\",\"sessionToken\":\"t\",\"expiresAt\":9}", error).has_value());
     const auto room = PC::ParseRoom("{\"id\":3,\"mode\":\"core_pvp\",\"map\":\"m\",\"players\":2,\"capacity\":4,\"state\":\"open\",\"owner\":7,"
                                     "\"members\":[{\"userId\":7,\"name\":\"甲\",\"ready\":true},{\"userId\":9,\"ready\":false}]}",
                                     error);
@@ -2274,7 +2280,7 @@ TEST_CASE("client: gateway: a started room whose connect cannot be read says so,
 
 TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, its answer, how long it waited and took") {
     FakeGateway gateway;
-    PC::GatewayClient client(gateway.Address(), "device", "");
+    PC::GatewayClient client(gateway.Address(), PC::GatewaySignIn{"device", {}});
     client.Ask("list", PC::ListRoomsRequest());
     client.Ask("record", PC::SaveRequest());
     // The client's time is what each Update is given: one step per Update. An exchange answered within the Update
@@ -2379,7 +2385,7 @@ TEST_CASE("client: gateway: the error codes in the player's words; a call withou
     // A Gateway that takes the call and never answers: the call times out (the clock is the caller's).
     GYO::Test::LoopbackListener silent;
     REQUIRE(silent.Ok());
-    PC::GatewayClient client(silent.Address(), "device", "", {}, 1'000'000'000);
+    PC::GatewayClient client(silent.Address(), PC::GatewaySignIn{"device", {}}, {}, 1'000'000'000);
     client.Ask("list", PC::ListRoomsRequest());
     std::optional<PC::GatewayResult> result;
     std::thread accept([&silent] { (void)silent.Accept(std::chrono::seconds(5)); });

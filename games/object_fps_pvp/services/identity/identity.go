@@ -1,7 +1,7 @@
 // Package identity is the credentials service (gateway declaration D2): a
 // device id becomes a user id, kept in a file, and a session token the
 // gateway checks without asking it again. The name a Client signs in with is
-// normalized (NormalizeName) and signed into that token, not kept
+// sanitized (SanitizeName) and signed into that token, not kept
 // (display-name declaration S1).
 package identity
 
@@ -73,7 +73,7 @@ func New(config Config) (*Service, error) {
 func (s *Service) path() string { return filepath.Join(s.config.Data, "identity.json") }
 
 // Session is the answer to a device login: Name is the name the token holds,
-// after NormalizeName (empty: none).
+// after SanitizeName (empty: none).
 type Session struct {
 	UserID       uint64 `json:"userId"`
 	Name         string `json:"name"`
@@ -113,7 +113,7 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusInternalServerError, "identity_store_failed")
 		return
 	}
-	name := NormalizeName(request.Name)
+	name := SanitizeName(request.Name)
 	expires := s.config.Now().Add(s.config.SessionTTL)
 	api.WriteJSON(w, http.StatusOK, Session{UserID: user, Name: name,
 		SessionToken: token.SignSession(s.config.SessionKey, token.Session{UserID: user, Name: name}, expires),

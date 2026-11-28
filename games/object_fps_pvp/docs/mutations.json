@@ -442,7 +442,7 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/services/token/token.go",
-   "find": "if now.Unix() >= int64(binary.BigEndian.Uint64(payload[9:])) {",
+   "find": "if now.Unix() >= int64(binary.BigEndian.Uint64(payload[sessionExpiryAt:])) {",
    "replace": "if false {",
    "command": [
     "go",
@@ -3547,7 +3547,7 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/name.go",
-   "find": "if unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) {",
+   "find": "if unicode.In(r, unicode.Cc, unicode.Cf) {",
    "replace": "if unicode.In(r, unicode.Cc) {",
    "command": [
     "go",
@@ -3557,7 +3557,7 @@
     "-count=1",
     "./services/identity/"
    ],
-   "expect": "right-to-left override"
+   "expect": "right-to-left override|zero-width"
   },
   {
    "id": "pvp-name-spaces-kept",
@@ -3566,8 +3566,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/name.go",
-   "find": "\t\tif unicode.IsSpace(r) {\n",
-   "replace": "\t\tif false {\n",
+   "find": "name := strings.Join(strings.Fields(kept), \" \")",
+   "replace": "name := kept",
    "command": [
     "go",
     "-C",
@@ -3580,13 +3580,13 @@
   },
   {
    "id": "pvp-name-leading-space",
-   "what": "the name rule keeps a leading space",
+   "what": "the name rule drops the spaces instead of making them one",
    "guards": [
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/name.go",
-   "find": "if space && name.Len() > 0 {",
-   "replace": "if space {",
+   "find": "\t\tif unicode.IsSpace(r) {\n\t\t\treturn ' '\n",
+   "replace": "\t\tif unicode.IsSpace(r) {\n\t\t\treturn -1\n",
    "command": [
     "go",
     "-C",
@@ -3595,7 +3595,7 @@
     "-count=1",
     "./services/identity/"
    ],
-   "expect": "ends"
+   "expect": "runs of spaces|tab and line breaks"
   },
   {
    "id": "pvp-name-cut-by-bytes",
@@ -3604,8 +3604,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/name.go",
-   "find": "\t\tif runes == MaxNameRunes {\n",
-   "replace": "\t\tif name.Len() >= MaxNameRunes {\n",
+   "find": "if runes := []rune(name); len(runes) > MaxNameRunes {\n\t\tname = strings.TrimRight(string(runes[:MaxNameRunes]), \" \")",
+   "replace": "if runes := []rune(name); len(name) > MaxNameRunes {\n\t\t_ = runes\n\t\tname = strings.TrimRight(name[:MaxNameRunes], \" \")",
    "command": [
     "go",
     "-C",
@@ -3623,8 +3623,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/name.go",
-   "find": "if runes+1 >= MaxNameRunes {",
-   "replace": "if runes+1 > MaxNameRunes {",
+   "find": "name = strings.TrimRight(string(runes[:MaxNameRunes]), \" \")",
+   "replace": "name = string(runes[:MaxNameRunes])",
    "command": [
     "go",
     "-C",
@@ -3642,8 +3642,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/token/token.go",
-   "find": "\tSessionVersion = 2\n",
-   "replace": "\tSessionVersion = 1\n",
+   "find": "\tSessionVersion  = 2\n",
+   "replace": "\tSessionVersion  = 1\n",
    "command": [
     "go",
     "-C",
@@ -3656,13 +3656,13 @@
   },
   {
    "id": "pvp-session-name-length-unchecked",
-   "what": "the session token's name length is not checked",
+   "what": "a session token shorter than its fixed fields is read",
    "guards": [
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/token/token.go",
-   "find": "if len(payload) < sessionFixed || int(payload[17]) != len(payload)-sessionFixed {",
-   "replace": "if len(payload) < sessionFixed {",
+   "find": "\tif len(payload) < sessionNameAt {\n\t\treturn Session{}, ErrLength\n\t}\n",
+   "replace": "",
    "command": [
     "go",
     "-C",
@@ -3671,7 +3671,7 @@
     "-count=1",
     "./services/token/"
    ],
-   "expect": "length past the end|length short of the end"
+   "expect": "short of the fixed fields|index out of range"
   },
   {
    "id": "pvp-identity-name-not-normalized",
@@ -3680,7 +3680,7 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/identity/identity.go",
-   "find": "name := NormalizeName(request.Name)",
+   "find": "name := SanitizeName(request.Name)",
    "replace": "name := request.Name",
    "command": [
     "go",
@@ -3737,8 +3737,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/rooms/rooms.go",
-   "find": "members: []*member{{user: caller, name: callerName}}",
-   "replace": "members: []*member{{user: caller, name: callerName[:0]}}",
+   "find": "members: []*member{{user: caller, name: who.Name}}",
+   "replace": "members: []*member{{user: caller, name: who.Name[:0]}}",
    "command": [
     "go",
     "-C",
@@ -3756,8 +3756,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/rooms/rooms.go",
-   "find": "&member{user: caller, name: callerName}",
-   "replace": "&member{user: caller, name: callerName[:0]}",
+   "find": "&member{user: caller, name: who.Name}",
+   "replace": "&member{user: caller, name: who.Name[:0]}",
    "command": [
     "go",
     "-C",
@@ -3793,9 +3793,9 @@
    "guards": [
     "display-name-declaration 9"
    ],
-   "file": "games/object_fps_pvp/services/rooms/rooms.go",
-   "find": "\tcaller, ok := api.NameOf(r)\n\tif !ok {",
-   "replace": "\tcaller, ok := api.NameOf(r)\n\tif !ok && false {",
+   "file": "games/object_fps_pvp/services/internal/api/api.go",
+   "find": "\tif err != nil {\n\t\treturn Caller{}, ErrName\n\t}\n",
+   "replace": "\tif err != nil && false {\n\t\treturn Caller{}, ErrName\n\t}\n",
    "command": [
     "go",
     "-C",
@@ -3804,7 +3804,7 @@
     "-count=1",
     "./services/rooms/"
    ],
-   "expect": "bad name header"
+   "expect": "invalid_name_header"
   },
   {
    "id": "pvp-local-names-not-written",
@@ -3845,14 +3845,14 @@
    "expect": "a name on the command line"
   },
   {
-   "id": "pvp-local-names-flag-always",
-   "what": "the names flag is given when nobody has a name",
+   "id": "pvp-local-roster-not-shared-form",
+   "what": "the roster line is not the form the Match reads (the shared vector)",
    "guards": [
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/services/matches/local.go",
-   "find": "named = named || player.Name != \"\"",
-   "replace": "named = named || player.Name == player.Name",
+   "find": "\tUserID uint64 `json:\"userId\"`\n\tName   string `json:\"name\"`\n}\n\n// Roster",
+   "replace": "\tUserID uint64 `json:\"user\"`\n\tName   string `json:\"name\"`\n}\n\n// Roster",
    "command": [
     "go",
     "-C",
@@ -3861,7 +3861,7 @@
     "-count=1",
     "./services/matches/"
    ],
-   "expect": "player-names-stdin in"
+   "expect": "the shared vector"
   },
   {
    "id": "pvp-name-roster-ignored",
@@ -3870,8 +3870,8 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "found != names->byUser.end() ? found->second : std::string()",
-   "replace": "std::string()",
+   "find": "found != names->byUser.end() ? std::string_view(found->second) : std::string_view()",
+   "replace": "std::string_view()",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: names:*",
    "expect": "pvp-name-match"
@@ -3883,37 +3883,37 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        commands.Insert(id, PlayerName{",
-   "replace": "        if (false) commands.Insert(id, PlayerName{",
+   "find": "        commands.Insert(id, PlayerName{std::string(",
+   "replace": "        if (false) commands.Insert(id, PlayerName{std::string(",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: names:*",
    "expect": "pvp-name-"
   },
   {
    "id": "pvp-name-codec-unbounded",
-   "what": "the name's codec takes any length",
+   "what": "the Match does not cut a name the wire does not carry",
    "guards": [
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "if (!r.Value(size) || size > match::kMaxPlayerNameBytes) return false;",
-   "replace": "if (!r.Value(size)) return false;",
+   "find": "data::Utf8Prefix(name, PlayerName::kMaxBytes)",
+   "replace": "name",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: names:*",
-   "expect": "pvp-name-codec-limit"
+   "expect": "pvp-name-cut-"
   },
   {
-   "id": "pvp-roster-long-name-taken",
-   "what": "the roster takes a name longer than the wire carries",
+   "id": "pvp-codec-name-limit-off",
+   "what": "the name's codec refuses names the wire carries",
    "guards": [
     "display-name-declaration 9"
    ],
-   "file": "games/object_fps_pvp/src/match/PlayerRoster.cpp",
-   "find": "if (name.size() > kMaxPlayerNameBytes) throw std::runtime_error(\"a name is longer than 128 bytes\");",
-   "replace": "",
-   "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "roster:*",
-   "expect": "saying what was wrong"
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "return ReadText<std::uint8_t>(r, v.text, PlayerName::kMaxBytes);",
+   "replace": "return ReadText<std::uint8_t>(r, v.text, PlayerName::kMaxBytes / 2);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: names:*",
+   "expect": "pvp-name-cut-received"
   },
   {
    "id": "pvp-roster-twice-taken",
@@ -3948,24 +3948,24 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/client/Settings.cpp",
-   "find": "    if (settings.name) {\n        name = *settings.name;",
-   "replace": "    if (settings.name && !settings.name->empty()) {\n        name = *settings.name;",
+   "find": "    if (settings.name) {\n        name = *settings.name;\n    } else if",
+   "replace": "    if (settings.name && !settings.name->empty()) {\n        name = *settings.name;\n    } else if",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
    "expect": "pvp-name-empty-chosen"
   },
   {
-   "id": "pvp-name-local-kept",
-   "what": "the host name keeps its .local",
+   "id": "pvp-name-host-whole",
+   "what": "the whole host name is the name, not its first label",
    "guards": [
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/client/Settings.cpp",
-   "find": "        if (name.size() > kBonjour.size() && name.ends_with(kBonjour)) name.resize(name.size() - kBonjour.size());\n",
-   "replace": "",
+   "find": "name = host->substr(0, host->find('.'));",
+   "replace": "name = *host;",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
-   "expect": "pvp-name-local"
+   "expect": "pvp-name-first-label"
   },
   {
    "id": "pvp-name-cut-mid-character",
@@ -3973,8 +3973,8 @@
    "guards": [
     "display-name-declaration 9"
    ],
-   "file": "games/object_fps_pvp/src/client/Settings.cpp",
-   "find": "        while (end > 0 && (static_cast<unsigned char>(name[end]) & 0xC0U) == 0x80U) --end;\n",
+   "file": "games/object_fps_pvp/include/object_fps_pvp/data/Utf8.hpp",
+   "find": "    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0U) == 0x80U) --end;\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
@@ -4039,7 +4039,7 @@
     "display-name-declaration 9"
    ],
    "file": "games/object_fps_pvp/src/client/Gateway.cpp",
-   "find": "    writer.Key(\"name\");\n    writer.String(name);\n",
+   "find": "    writer.Key(\"name\");\n    writer.String(signIn.name);\n",
    "replace": "",
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
@@ -4057,6 +4057,38 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
    "expect": "pvp-gw-member-name|pvp-room-member-name"
+  },
+  {
+   "id": "pvp-gw-saves-hear-the-name",
+   "what": "the save service is sent the user's name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/gateway/gateway.go",
+   "find": "strconv.FormatUint(caller.User, 10), api.As(caller.User))",
+   "replace": "strconv.FormatUint(caller.User, 10), caller)",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/gateway/"
+   ],
+   "expect": "the save service gets the user only"
+  },
+  {
+   "id": "pvp-name-host-asked-anyway",
+   "what": "the host name is asked although the settings have a name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "    } else if (const std::optional<std::string> host = hostName()) {",
+   "replace": "    }\n    if (const std::optional<std::string> host = hostName(); host && !settings.name) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-name-host-not-asked"
   }
  ]
 }

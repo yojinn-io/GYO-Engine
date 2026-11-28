@@ -68,14 +68,14 @@ std::optional<T> Parsed(const std::string& body, std::string& error, Read read) 
 
 } // namespace
 
-GatewayRequest SessionRequest(const std::string& deviceId, const std::string& name) {
+GatewayRequest SessionRequest(const GatewaySignIn& signIn) {
     std::string body;
     J::Writer writer(body);
     writer.BeginObject();
     writer.Key("deviceId");
-    writer.String(deviceId);
+    writer.String(signIn.deviceId);
     writer.Key("name");
-    writer.String(name);
+    writer.String(signIn.name);
     writer.EndObject();
     (void)writer.Finish();
     return {"POST", "/v1/session", std::move(body), {}};
@@ -128,10 +128,8 @@ H::HttpRequest ToHttp(const GatewayRequest& request, const std::string& host, co
 
 std::optional<GatewaySession> ParseSession(const std::string& body, std::string& error) {
     return Parsed<GatewaySession>(body, error, [](const J::ObjectView& root) {
-        GatewaySession session{data::Unsigned(data::Member(root, "userId"), "userId"), data::String(data::Member(root, "sessionToken"), "sessionToken"),
-                               data::Integer(data::Member(root, "expiresAt"), "expiresAt"), {}};
-        if (data::HasMember(root, "name")) session.name = data::String(data::Member(root, "name"), "name");
-        return session;
+        return GatewaySession{data::Unsigned(data::Member(root, "userId"), "userId"), data::String(data::Member(root, "sessionToken"), "sessionToken"),
+                              data::Integer(data::Member(root, "expiresAt"), "expiresAt")};
     });
 }
 
@@ -200,15 +198,15 @@ std::string LoadDeviceId(const std::string& path, std::string& error) {
     return made;
 }
 
-GatewayClient::GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string name,
-                             std::string unavailable, const std::int64_t timeout)
-    : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), name_(std::move(name)),
-      unavailable_(std::move(unavailable)), timeout_(timeout) {}
+GatewayClient::GatewayClient(GYO::Engine::OS::SocketAddress gateway, GatewaySignIn signIn, std::string unavailable,
+                             const std::int64_t timeout)
+    : gateway_(gateway), host_(gateway.ToString()), signIn_(std::move(signIn)), unavailable_(std::move(unavailable)),
+      timeout_(timeout) {}
 
 void GatewayClient::Ask(std::string tag, GatewayRequest request) { waiting_.push_back(Call{std::move(tag), std::move(request), false}); }
 
 void GatewayClient::Start(Call call, const bool session, const std::int64_t now) {
-    const GatewayRequest sent = session ? SessionRequest(deviceId_, name_) : call.request;
+    const GatewayRequest sent = session ? SessionRequest(signIn_) : call.request;
     auto started = H::HttpCall::Start(gateway_, ToHttp(sent, host_, session ? std::nullopt : session_));
     current_ = Going{std::move(call), session, std::nullopt, now, {}, sent.method, sent.target};
     if (started) current_->http.emplace(std::move(started).value());
@@ -234,7 +232,7 @@ std::optional<GatewayResult> GatewayClient::Update(const std::int64_t now) {
         Call next = std::move(waiting_.front());
         waiting_.pop_front();
         next.waited = now - next.asked.value_or(now);
-        if (deviceId_.empty()) {
+        if (signIn_.deviceId.empty()) {
             Keep(GatewayCallRecord{next.tag, false, next.request.method, next.request.target, 0, "no_device", next.waited, 0});
             return GatewayResult{next.tag, 0, {}, "no_device", unavailable_};
         }

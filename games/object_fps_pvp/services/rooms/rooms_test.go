@@ -61,14 +61,14 @@ func jsonID(room map[string]any) string {
 	return string(encoded)
 }
 
-func TestANameHeaderThatIsNotBase64urlIsRefused(t *testing.T) {
+func TestANameHeaderThatIsNotBase64urlIsTheInternalProtocolsFault(t *testing.T) {
 	service, err := New(Config{Matches: api.NewClient("http://127.0.0.1:1")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := service.Handler()
-	send := func(path, name string) (int, map[string]any) {
-		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"mode":"core_pvp","map":"pvp_training_v1"}`))
+	send := func(method, path, name string) (int, map[string]any) {
+		request := httptest.NewRequest(method, path, strings.NewReader(`{"mode":"core_pvp","map":"pvp_training_v1"}`))
 		request.Header.Set(api.HeaderUser, "1")
 		request.Header.Set(api.HeaderName, name)
 		recorder := httptest.NewRecorder()
@@ -77,16 +77,14 @@ func TestANameHeaderThatIsNotBase64urlIsRefused(t *testing.T) {
 		_ = json.Unmarshal(recorder.Body.Bytes(), &out)
 		return recorder.Code, out
 	}
-	if status, out := send("/internal/v1/rooms", "not base64!"); status != http.StatusBadRequest || out["error"] != "invalid_name" {
-		t.Fatalf("create with a bad name header: %d %v, want 400 invalid_name", status, out)
-	}
-	_, room := send("/internal/v1/rooms", "")
-	request := httptest.NewRequest(http.MethodPost, "/internal/v1/rooms/"+jsonID(room)+"/join", nil)
-	request.Header.Set(api.HeaderUser, "2")
-	request.Header.Set(api.HeaderName, "not base64!")
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "invalid_name") {
-		t.Fatalf("join with a bad name header: %d %s, want 400 invalid_name", recorder.Code, recorder.Body.String())
+	_, room := send(http.MethodPost, "/internal/v1/rooms", "")
+	for _, route := range []struct{ method, path string }{
+		{http.MethodPost, "/internal/v1/rooms"},
+		{http.MethodPost, "/internal/v1/rooms/" + jsonID(room) + "/join"},
+		{http.MethodGet, "/internal/v1/rooms/" + jsonID(room)},
+	} {
+		if status, out := send(route.method, route.path, "not base64!"); status != http.StatusInternalServerError || out["error"] != "invalid_name_header" {
+			t.Fatalf("%s %s with a bad name header: %d %v, want 500 invalid_name_header", route.method, route.path, status, out)
+		}
 	}
 }

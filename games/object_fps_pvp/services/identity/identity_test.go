@@ -61,8 +61,8 @@ func TestTheSessionTokenHoldsTheNormalizedName(t *testing.T) {
 	s, _ := New(Config{SessionKey: key, Now: func() time.Time { return now }})
 	_, session := loginWith(t, s, map[string]string{"deviceId": "device", "name": "  Kuro\u202e  の\tMac\n "})
 	verified, err := token.VerifySession(key, session.SessionToken, now)
-	if err != nil || session.Name != "Kuro のMac" || verified != (token.Session{UserID: session.UserID, Name: session.Name}) {
-		t.Fatalf("session %+v: token says %+v, %v; want the name Kuro のMac in both", session, verified, err)
+	if err != nil || session.Name != "Kuro の Mac" || verified != (token.Session{UserID: session.UserID, Name: session.Name}) {
+		t.Fatalf("session %+v: token says %+v, %v; want the name Kuro の Mac in both", session, verified, err)
 	}
 	// The name is not kept: the same device signs in with another one, and that is the one it gets.
 	_, again := loginWith(t, s, map[string]string{"deviceId": "device", "name": "Other"})

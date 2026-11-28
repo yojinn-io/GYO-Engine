@@ -716,15 +716,14 @@ int main(int argc, char** argv) {
     }
     // The name this player signs in with: the settings' name, or the machine's host name (display-name declaration
     // 4.1). Not logged: a host name often holds the person's own name (its section 6).
-    std::optional<std::string> hostName;
-    if (!start.settings.name) {
-        if (auto host = GYO::Engine::OS::Machine::HostName()) {
-            hostName = std::move(*host);
-        } else {
+    start.name = PC::PlayerNameCandidate(start.settings, []() -> std::optional<std::string> {
+        auto host = GYO::Engine::OS::Machine::HostName();
+        if (!host) {
             Log(GYO::Engine::Base::LogLevel::Warning, "the host name is not known, no name is sent: " + GYO::Engine::Base::Describe(host.error()));
+            return std::nullopt;
         }
-    }
-    start.name = PC::PlayerNameCandidate(start.settings, hostName);
+        return std::move(*host);
+    });
     if (connect) {
         start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     } else {

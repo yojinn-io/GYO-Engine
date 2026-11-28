@@ -20,7 +20,6 @@ std::optional<std::map<std::uint64_t, std::string>> ParsePlayerNames(const std::
             const std::uint64_t user = data::Unsigned(data::Member(entry, "userId"), "userId");
             if (user == 0) throw std::runtime_error("a userId is 0");
             std::string name = data::String(data::Member(entry, "name"), "name");
-            if (name.size() > kMaxPlayerNameBytes) throw std::runtime_error("a name is longer than 128 bytes");
             if (!names.emplace(user, std::move(name)).second) throw std::runtime_error("a userId comes twice");
         }
         return names;

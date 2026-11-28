@@ -78,7 +78,7 @@ func TestAdmissionRefusals(t *testing.T) {
 
 func TestSessionRoundTrip(t *testing.T) {
 	for _, want := range []Session{{UserID: 7}, {UserID: 7, Name: "名前 Name"},
-		{UserID: 9, Name: strings.Repeat("x", MaxSessionName)}} {
+		{UserID: 9, Name: strings.Repeat("x", 300)}} {
 		got, err := VerifySession(testKey, SignSession(testKey, want, now.Add(time.Hour)), now)
 		if err != nil || got != want {
 			t.Fatalf("session %+v: got %+v, %v; want it back, accepted", want, got, err)
@@ -95,14 +95,13 @@ func TestSessionRefusals(t *testing.T) {
 	// Each byte of the name changed, the length kept: the signature no longer matches.
 	renamed := func(i int) string {
 		changed := append([]byte{}, decoded...)
-		changed[sessionFixed+i] ^= 1
+		changed[sessionNameAt+i] ^= 1
 		return encoding.EncodeToString(changed) + "." + signature
 	}
-	// The length field says more (or fewer) bytes than follow, signed so the layout check is reached first.
-	misLength := func(length byte) string {
-		changed := append([]byte{}, decoded...)
-		changed[17] = length
-		return encoding.EncodeToString(changed) + "." + encoding.EncodeToString(mac(testKey, changed))
+	// A version 2 payload shorter than its fixed fields, signed so the layout check is reached first.
+	short := func() string {
+		cut := append([]byte{}, decoded[:sessionNameAt-1]...)
+		return encoding.EncodeToString(cut) + "." + encoding.EncodeToString(mac(testKey, cut))
 	}
 	cases := []struct {
 		name    string
@@ -120,8 +119,7 @@ func TestSessionRefusals(t *testing.T) {
 		{"version 3", testKey, SignSessionVersion(testKey, 3, 7, now.Add(time.Hour)), now, ErrVersion},
 		{"name byte 0 changed", testKey, renamed(0), now, ErrMAC},
 		{"name byte 1 changed", testKey, renamed(1), now, ErrMAC},
-		{"length past the end", testKey, misLength(3), now, ErrLength},
-		{"length short of the end", testKey, misLength(1), now, ErrLength},
+		{"short of the fixed fields", testKey, short(), now, ErrLength},
 		{"empty payload", testKey, "." + signature, now, ErrLength},
 	}
 	for _, c := range cases {

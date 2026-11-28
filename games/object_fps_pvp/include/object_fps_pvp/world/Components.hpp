@@ -15,6 +15,7 @@
 #include "engine/math/linear/Vec3.hpp"
 
 #include <bit>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -102,8 +103,9 @@ struct Owner final {
 
 // The name a player signed in with (display-name declaration 5.1; empty: none, a display shows PlayerLabel's
 // fallback). The Match gives it (NamePlayers) and every Client receives it; no rule reads it, so it is not decision
-// data. At most match::kMaxPlayerNameBytes bytes.
+// data. At most kMaxBytes bytes: what the wire carries (NamePlayers cuts a longer one, its codec refuses one).
 struct PlayerName final {
+    static constexpr std::size_t kMaxBytes = 128;
     std::string text;
     friend bool operator==(const PlayerName&, const PlayerName&) = default;
 };

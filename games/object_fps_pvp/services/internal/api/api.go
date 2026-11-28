@@ -90,9 +90,24 @@ func UserOf(r *http.Request) (uint64, bool) {
 	return user, err == nil
 }
 
-// NameOf reads the internal protocol's name header: empty when it is missing,
-// false when it is not base64url.
-func NameOf(r *http.Request) (string, bool) {
+// What CallerOf found wrong: no user header (or not a number), or a name
+// header that is not base64url (only the gateway writes it: a fault of the
+// internal protocol, not of the player).
+var (
+	ErrNoUser = errors.New("no user header")
+	ErrName   = errors.New("name header not base64url")
+)
+
+// CallerOf reads who an internal request is for, the other end of Send: the
+// user header and the name header (missing: no name).
+func CallerOf(r *http.Request) (Caller, error) {
+	user, ok := UserOf(r)
+	if !ok {
+		return Caller{}, ErrNoUser
+	}
 	name, err := base64.RawURLEncoding.DecodeString(r.Header.Get(HeaderName))
-	return string(name), err == nil
+	if err != nil {
+		return Caller{}, ErrName
+	}
+	return Caller{User: user, Name: string(name)}, nil
 }

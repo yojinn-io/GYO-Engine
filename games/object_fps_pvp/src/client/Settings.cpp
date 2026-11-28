@@ -1,6 +1,7 @@
 #include "object_fps_pvp/client/Settings.hpp"
 
 #include "object_fps_pvp/client/LocalFiles.hpp"
+#include "object_fps_pvp/data/Utf8.hpp"
 
 #include "data/JsonFields.hpp"
 
@@ -9,7 +10,6 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <string_view>
 
 namespace object_fps_pvp::client {
 
@@ -93,22 +93,14 @@ Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& pat
     return WriteLocalText(path, EncodeSettings(settings));
 }
 
-std::string PlayerNameCandidate(const ClientSettings& settings, const std::optional<std::string>& hostName) {
+std::string PlayerNameCandidate(const ClientSettings& settings, const std::function<std::optional<std::string>()>& hostName) {
     std::string name;
     if (settings.name) {
         name = *settings.name;
-    } else if (hostName) {
-        constexpr std::string_view kBonjour = ".local";
-        name = *hostName;
-        if (name.size() > kBonjour.size() && name.ends_with(kBonjour)) name.resize(name.size() - kBonjour.size());
+    } else if (const std::optional<std::string> host = hostName()) {
+        name = host->substr(0, host->find('.'));
     }
-    if (name.size() > kNameCandidateBytes) {
-        std::size_t end = kNameCandidateBytes;
-        // Back to the first byte of a UTF-8 sequence (a continuation byte is 10xxxxxx).
-        while (end > 0 && (static_cast<unsigned char>(name[end]) & 0xC0U) == 0x80U) --end;
-        name.resize(end);
-    }
-    return name;
+    return std::string(data::Utf8Prefix(name, kNameCandidateBytes));
 }
 
 Math::Vec2i WindowSizeFor(const Math::Vec2i physical, const float scale) {

@@ -2,6 +2,8 @@
 
 #include "object_fps_pvp/match/PlayerRoster.hpp"
 
+#include <fstream>
+#include <map>
 #include <string>
 
 namespace PM = object_fps_pvp::match;
@@ -16,8 +18,21 @@ TEST_CASE("roster: the matches service's line gives each user's name") {
     const auto none = PM::ParsePlayerNames(R"({"players":[]})", error);
     REQUIRE_MESSAGE(none.has_value(), error);
     CHECK(none->empty());
-    const auto longest = PM::ParsePlayerNames(R"({"players":[{"userId":7,"name":")" + std::string(PM::kMaxPlayerNameBytes, 'x') + R"("}]})", error);
-    REQUIRE_MESSAGE(longest.has_value(), error);
+    // How long a name may be is the World's (it cuts one the wire does not carry): the roster takes any.
+    const auto longName = PM::ParsePlayerNames(R"({"players":[{"userId":7,"name":")" + std::string(300, 'x') + R"("}]})", error);
+    REQUIRE_MESSAGE(longName.has_value(), error);
+    CHECK(longName->at(7).size() == 300);
+}
+
+TEST_CASE("roster: the line the matches service writes for a known roster (the vector its tests share) reads back") {
+    std::ifstream file(PVP_ROSTER_VECTOR, std::ios::binary);
+    REQUIRE_MESSAGE(file.good(), PVP_ROSTER_VECTOR);
+    std::string line;
+    std::getline(file, line);
+    std::string error;
+    const auto names = PM::ParsePlayerNames(line, error);
+    REQUIRE_MESSAGE(names.has_value(), error);
+    CHECK(*names == std::map<std::uint64_t, std::string>{{7, "甲 A, \"q\""}, {9, ""}});
 }
 
 TEST_CASE("roster: a line that is not the players' names is refused, saying what was wrong") {
@@ -38,5 +53,4 @@ TEST_CASE("roster: a line that is not the players' names is refused, saying what
     refused(R"({"players":[{"userId":7}]})");
     refused(R"({"players":[{"userId":7,"name":7}]})");
     refused(R"({"players":[{"userId":7,"name":"a"},{"userId":7,"name":"b"}]})");
-    refused(R"({"players":[{"userId":7,"name":")" + std::string(PM::kMaxPlayerNameBytes + 1, 'x') + R"("}]})");
 }

@@ -16,6 +16,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -56,13 +57,16 @@ struct LoadedSettings final {
 [[nodiscard]] LoadedSettings LoadSettings(const std::string& path);
 [[nodiscard]] GYO::Engine::Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings);
 
-// The most bytes of the name a Client sends (the identity service keeps 32 code points of it: display-name
-// declaration 4.1); a longer one is cut at a UTF-8 boundary.
+// The most bytes of the name a Client sends: the sign-in request stays well inside the services' body limit (4096
+// bytes) whatever a settings file says; the identity service keeps 32 code points of it (display-name declaration 4.1).
+// A longer one is cut at a UTF-8 boundary.
 inline constexpr std::size_t kNameCandidateBytes = 256;
 
 // The name this player signs in with (display-name declaration 4.1): the settings' name when there is one (empty
-// included: the player chose none), otherwise the machine's host name without a final ".local" (none known: empty).
-[[nodiscard]] std::string PlayerNameCandidate(const ClientSettings& settings, const std::optional<std::string>& hostName);
+// included: the player chose none); otherwise the first label of the machine's host name ("kuro-mac" of
+// "kuro-mac.local" or "kuro-mac.example.com"), asked of hostName only then (nullopt: not known, no name).
+[[nodiscard]] std::string PlayerNameCandidate(const ClientSettings& settings,
+                                              const std::function<std::optional<std::string>()>& hostName);
 
 // The window's size in logical pixels that shows physical pixels at a scale factor (window's WindowState::scaleFactor;
 // one that is not positive counts as 1).

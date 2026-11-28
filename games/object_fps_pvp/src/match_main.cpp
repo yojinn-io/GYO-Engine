@@ -127,6 +127,14 @@ std::optional<GYO::Engine::OS::SocketAddress> ParseAddress(const std::string_vie
 
 } // namespace
 
+// The standard input's next line, without its line end (LF or CRLF).
+std::string StdinLine() {
+    std::string line;
+    std::getline(std::cin, line);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    return line;
+}
+
 int main(int argc, char** argv) {
     std::uint16_t port = 40000;
     std::int64_t ticks = -1;
@@ -244,10 +252,7 @@ int main(int argc, char** argv) {
     }
     std::optional<PW::AdmissionCheck> admission;
     if (keyOnStdin) {
-        std::string line;
-        std::getline(std::cin, line);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        auto key = object_fps_pvp::data::DecodeHex(line);
+        auto key = object_fps_pvp::data::DecodeHex(StdinLine());
         if (!key || key->empty()) {
             Log(GYO::Engine::Base::LogLevel::Error, "the standard input's first line is not a hexadecimal key");
             return 2;
@@ -261,11 +266,8 @@ int main(int argc, char** argv) {
     }
     std::map<std::uint64_t, std::string> playerNames;
     if (namesOnStdin) {
-        std::string line;
-        std::getline(std::cin, line);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
         std::string error;
-        auto names = object_fps_pvp::match::ParsePlayerNames(line, error);
+        auto names = object_fps_pvp::match::ParsePlayerNames(StdinLine(), error);
         if (!names) {
             // What was wrong, not the line: it holds the players' names (display-name declaration section 6).
             Log(GYO::Engine::Base::LogLevel::Error, "the standard input's second line is not the players' names: " + error);

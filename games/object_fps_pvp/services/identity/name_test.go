@@ -6,16 +6,16 @@ import (
 	"unicode/utf8"
 )
 
-func TestNormalizeName(t *testing.T) {
+func TestSanitizeName(t *testing.T) {
 	long := strings.Repeat("名", MaxNameRunes)
 	cases := []struct{ name, candidate, want string }{
 		{"kept", "Kuro-MacBook-Pro", "Kuro-MacBook-Pro"},
 		{"Japanese and Chinese", "からすの電腦", "からすの電腦"},
 		{"control characters", "a\x00b\x07c\x1bd\x7fe", "abcde"},
-		{"tab and newline are control characters", "a\tb\nc\r\nd", "abcd"},
+		{"tab and line breaks are spaces", "a\tb\nc\r\nd", "a b c d"},
 		{"right-to-left override", "evil\u202eexe.txt", "evilexe.txt"},
 		{"zero-width and BOM", "a\u200bb\u200dc\ufeffd", "abcd"},
-		{"line and paragraph separators", "a\u2028b\u2029c", "abc"},
+		{"line and paragraph separators are spaces", "a\u2028b\u2029c", "a b c"},
 		{"runs of spaces", "a  \u3000 b\u00a0\u00a0c", "a b c"},
 		{"ends", "  \u3000 name \u00a0 ", "name"},
 		{"spaces only", " \u3000\u00a0 ", ""},
@@ -29,9 +29,9 @@ func TestNormalizeName(t *testing.T) {
 		{"not UTF-8", "a\xffb", "a�b"},
 	}
 	for _, c := range cases {
-		got := NormalizeName(c.candidate)
+		got := SanitizeName(c.candidate)
 		if got != c.want {
-			t.Errorf("%s: NormalizeName(%q) = %q, want %q", c.name, c.candidate, got, c.want)
+			t.Errorf("%s: SanitizeName(%q) = %q, want %q", c.name, c.candidate, got, c.want)
 		}
 		if n := utf8.RuneCountInString(got); n > MaxNameRunes || len(got) > 4*MaxNameRunes {
 			t.Errorf("%s: %d code points, %d bytes", c.name, n, len(got))

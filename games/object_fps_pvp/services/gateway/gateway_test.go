@@ -42,8 +42,15 @@ func TestTheGatewayCarriesWhoAndTheKey(t *testing.T) {
 	create.Header.Set(api.HeaderUser, "99")
 	handler.ServeHTTP(httptest.NewRecorder(), create)
 
-	if len(*seen) != 2 {
-		t.Fatalf("internal requests %d, want 2", len(*seen))
+	save := httptest.NewRequest(http.MethodGet, "/v1/saves/me", nil)
+	save.Header.Set("Authorization", create.Header.Get("Authorization"))
+	handler.ServeHTTP(httptest.NewRecorder(), save)
+
+	if len(*seen) != 3 {
+		t.Fatalf("internal requests %d, want 3", len(*seen))
+	}
+	if names := (*seen)[2].Values(api.HeaderName); len(names) != 0 || (*seen)[2].Get(api.HeaderUser) != "7" {
+		t.Fatalf("the save request carried user %q and name %v: the save service gets the user only", (*seen)[2].Get(api.HeaderUser), names)
 	}
 	if users := (*seen)[0].Values(api.HeaderUser); len(users) != 0 {
 		t.Fatalf("the sign-in carried a user %v: an anonymous request has none", users)
@@ -56,8 +63,8 @@ func TestTheGatewayCarriesWhoAndTheKey(t *testing.T) {
 	}
 	forwarded := httptest.NewRequest(http.MethodGet, "/", nil)
 	forwarded.Header = (*seen)[1]
-	if got, ok := api.NameOf(forwarded); !ok || got != "名前" {
-		t.Fatalf("the room request carried name %q (%v), want the session's 名前", got, ok)
+	if got, err := api.CallerOf(forwarded); err != nil || got != (api.Caller{User: 7, Name: "名前"}) {
+		t.Fatalf("the room request carried name %+v (%v), want the session's 名前", got, err)
 	}
 	if got := (*seen)[1].Get(api.HeaderIdempotency); got != "k-1" {
 		t.Fatalf("the room request carried key %q, want the Client's k-1", got)

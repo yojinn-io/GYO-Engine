@@ -190,7 +190,7 @@ Client：RoomScene 與頭頂 UI 都呼叫 PlayerLabel(userId, name)
 | T6 | Client 的候選名字（C++） | `name` 有值 → 用它；`"name": ""` → 空；沒有 `name` → 主機名字去掉 `.local`；查詢失敗 → 空＋警告；設定檔讀寫保留 `name`；舊設定檔（沒有 `name`）照讀 | L1 |
 | T7 | `PlayerLabel` 與房間畫面（C++） | 名字非空 → 名字；空 → 「Player 12」；房間的成員行用它 | L1 |
 | T8 | Match 讀名單（C++） | `--player-names-stdin` 第二行 → `PlayerNames`；不是 JSON、userId 不是數字 → 啟動失敗、log 說哪一行；沒有旗標 → 空名單 | L1 |
-| T9 | **名字傳到另一個 Client**（C++ world 測試：Match＋兩個 Client 的記憶體連線） | Match 的名單有 A、B → Client B 看到 A 的玩家實體上 `PlayerName == A`，反之亦然；名單沒有的使用者 → `PlayerName` 是空字串；Codec 讀到超過 128 bytes → 拒 | 照現在的分類：用到 network 的只在本機 |
+| T9 | **名字傳到另一個 Client**（C++ world 測試：Match＋兩個 Client 的記憶體連線） | Match 的名單有 A、B → Client B 看到 A 的玩家實體上 `PlayerName == A`，反之亦然；名單沒有的使用者 → `PlayerName` 是空字串；Codec 讀到超過 128 bytes → 拒 | L1（cpu）：world 測試用 net Module 的記憶體連線，不開 socket（`tests/object_fps_pvp/CMakeLists.txt` 的 world 測試）。原本寫「只在本機」是誤判，實作時更正 |
 | T10 | 實機一次（`acceptance_macos.sh` 的流程） | 兩個 Client 的 log 各記下房間裡看到的名字；頭頂 UI 合併後交使用者 playtest 看畫面 | 本機；畫面交使用者 |
 
 ---
@@ -252,3 +252,42 @@ v8-arch-gyo2-display-name
 - 不做隊伍、敵我顏色（#372 的事）。
 - 單人（Local World）不加名字。
 - 不改 `--connect` 的直連路徑：沒有服務，名字一律退回「Player N」。
+
+---
+
+## 13. 實作結果與審查處置（2026-11-28）
+
+### 13.1 和宣告不同的地方（實作或審查後改的）
+
+| 項目 | 宣告寫的 | 現在 | 理由 |
+|---|---|---|---|
+| 名字規則（4.2）的順序 | 先拿掉 Cc／Cf／Zl／Zp，再整理空白 | 先把每個空白（含 tab、換行、行段分隔）換成半形空白，再拿掉其他 Cc／Cf；函式名 `SanitizeName` | 純淨 Code Review 7：照宣告的順序 `"Kuro\tMac"` 會黏成 `"KuroMac"`；名字也不是 Unicode 正規化 |
+| session token v2（5.1） | `…｜nameLen u8｜name` | `…｜name`（payload 剩下的就是名字），位移用具名常數 | 純淨 Code Review 10：`nameLen` 和剩下的長度是同一個資訊；也拿掉了 255 的 panic |
+| 名字的上限 | roster 讀到超過 128 bytes 就讓 Match 啟動失敗 | 上限 `PlayerName::kMaxBytes = 128` 放在 component 旁邊；`NamePlayers` 在 UTF-8 邊界截斷；codec 寫讀同一個上限、用 `NetWriter::Bytes` | 兩份審查都指出：最遠端失敗最重（ticket 已發、Match 卻結束），上限的歸屬也反了；名字不進判定，截而不拒（4.2 第 3 步的原則） |
+| 字串 codec | `PlayerName` 一份手寫 | 和 `MatchInfo` 的 id 共用 `WriteText<Length>`／`ReadText<Length>`（`MatchInfo` 的 wire 不變：A/B 確認） | 設計審查 S1 |
+| Local 的名單 | 有名字才加 `--player-names-stdin` | 有玩家就一律送；第二行用 `local.go` 自己的型別；Go 與 C++ 讀同一份向量 `services/matches/testdata/roster_line.txt` | 設計審查 S2、N3，純淨 Code Review 3 |
+| 收到名字的服務（第 6 節） | Gateway 把名字放進每個內部請求 | 存檔服務的請求不帶名字（只帶 userId）；壞掉的名字 header 是內部協議的錯：rooms 回 500 `invalid_name_header` 並記 log（每條路由一致，`api.CallerOf`） | 設計審查 N4，純淨 Code Review 5 |
+| 主機名字變候選名字（4.1） | 去掉結尾的 `.local` | 取第一個 label（`kuro-mac.local`、`kuro-mac.example.com` 都是 `kuro-mac`）；只有設定沒有名字時才問 OS | 純淨 Code Review 6：只剝 `.local` 是半套規則；優先順序原本寫在兩處 |
+| Client 的資料 | `GatewaySession::name` | 拿掉（Client 沒有讀它的地方）；`GatewayClient` 收 `GatewaySignIn{deviceId, name}`，`PlaceGatewayClient` 收 `ClientStart` | 兩份審查（沒有消費者、連續三個字串參數會靜默錯位） |
+| `PlayerNames`／`NamePlayers` | 兩端都登記 | 只在 Match 登記；`PlayerName` 的登記與複製兩端都有 | 兩份審查 |
+| T9 的位置（第 8 節） | 只在本機 | L1（cpu） | world 測試用記憶體連線 |
+
+### 13.2 不採用與留著的
+
+- **一份啟動文件取代「金鑰行＋名單行＋`--expect-users`」**（純淨 Code Review 3）：不採。手動起的 Match 與既有測試用 `--expect-users`、`--admission-key-stdin`；名單只給名字，多出來的使用者無害。
+- **成員的名字是 create／join 當下的快照**（純淨 5）：照宣告 5.3「名字在一場裡不變（登入時定）」，同一個人用別的名字重新登入後，要重新進房才換。
+- **ZWJ 被拿掉、按 code point 截斷可能切在字素中間**（純淨 7）：字型沒有 emoji；照宣告留著。
+- **Client 端沒有讀 `PlayerName` 的程式**（純淨 8）：消費者是頭頂 UI（#372），`PlayerLabel(userId, name)` 已就位。
+- **名字的登記放在 gameplay sets 之後**（純淨 9）：照 #367 宣告第 3 節的登記順序約定，既有的 wire id 不動（A/B 的報告只多一行）。
+- **`identity.Session` 與 `token.Session` 同名、自製的 JWS 式格式**（純淨 10）、**測試支援的位置參數很長**、**兩個測試共用 port 7811**（純淨 4、12）：既有的寫法，不在這張卡改。
+- **OS 層為了 `IsValidUtf8` include `Paths.hpp`**（純淨 11）：那是 OS 層共用的檢查，搬到中性的標頭要動 Files 與 Process，留作後續。這次已改成不用 `RefusedArgument`（細節不再寫 `path_bytes`），常數具名，「每次都問 OS」的測試因為驗不到而拿掉。
+- **net Module 加長度前綴字串的原語**（設計 S1 的後半）：出現第三個字串欄位時再提（改 Engine，要先問使用者）。
+- **用 Kernel 的 OnAdd observer 代替 `Without<PlayerName>` 的輪詢**（設計審查第 5 點）：留輪詢；它也會補上某一幀漏掉的名字，沒有膠水。
+
+### 13.3 檢驗
+
+- 本機（macOS arm64）：`cpu|shader` 260 項全過（審查處置前）；處置後 `object_fps_pvp.*` 與 OS 相關 11 項全過；Go `./services/...` 的 vet、test、race 全過。
+- A/B（macOS）：權威 digest 1257 行逐位元組相同；報告只差 `c PlayerName v1` 一行與因此變的 protocol hash（match 與 client 兩端各一次），決策資料集（fingerprint 的文字）相同。處置前後各跑一次，結果一樣。
+- 突變：新增 34 個（`display-name-declaration 9`）、OS 1 個（`os-m1-host-name-cut`）；find 在改動範圍內的既有 6 個，find 過時而改寫的 2 個（`pvp-gw-gateway-session-unchecked`、`pvp-gw-token-session-expiry`），全部 killed。途中修了：Go 的突變因未使用的變數編譯失敗（改成保留變數、改值）；參加者沒有名字時「參加者的名字沒記下」的突變存活（stack 測試讓參加者也有名字）。
+- **沒跑**：Linux 的 A/B（要 Linux 主機）、Windows 只靠 L1、T10 實機（兩個 Client 經 Gateway；畫面交使用者 playtest）。L1 在處置的 commit 推上去後 dispatch。
+- 證據：主 checkout `build/evidence/gyo2-display-name/`（`ab.py`、`ab/`、`ab-2/`、`design-review.md`、`pure-code-review.md`、`mutations*.log`）。
