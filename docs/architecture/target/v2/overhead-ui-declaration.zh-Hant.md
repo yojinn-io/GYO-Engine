@@ -434,4 +434,20 @@ O6～O8 已定（第 9.3 節）。修訂 3 多一個：
 - 擋物要每幀對門與靶子的 `Cuboid` 打射線（照 Frame 畫的姿勢）：門與靶子只有幾個，不量；`CastRay` 對旋轉的 `Cuboid` 有沒有缺陷，第 7 節的停止條件已列。
 - 很多怪物時每幀的射線成本：沒量，等怪物那張卡。
 
-**還沒開始**：核准只針對這份宣告；實作等 #367 合併、主會話通知。
+**動工**：2026-11-28 使用者「開工」（HANDOFF `v8-arch-gyo2-overhead-ui-start-impl`），基準 e32eaf02。
+
+## 11. 實作時和宣告不同的地方
+
+### 11.1 第 1、2 步
+
+| # | 宣告寫的 | 實作 | 理由 |
+|---|---|---|---|
+| 1 | `present/Overhead` 一個檔放位置、隱藏、透明度、比例 | 分兩處：`present/Overhead`（logic 函式庫：`OverheadSettings`、`ParseOverheadSettings`、`HealthFraction`、`OverheadBarAlpha`）與 `client/Overhead`（client 函式庫：`PlaceOverhead`、`Overhead`、`OverheadPart`）。P1、P2 在 `tests/object_fps_pvp/client/OverheadTests.cpp` | logic 函式庫只連 Math（`games/object_fps_pvp/CMakeLists.txt` 的 `logic`），沒有 camera；位置要用 `WorldToViewport`，所以放 client。`Overhead`、`OverheadPart` 放公開標頭，Client 的整合測試照型別找 |
+| 2 | `ui/overhead.json` 的欄位寫成 `headClearance`、`lowHealth` 等 | 照 `ui/hit_feedback.json` 的寫法：snake_case、分組（`head_clearance_metres`；`name{text_pixels, color}`；`bar{width_pixels, height_pixels, gap_pixels, back_color, back_alpha, fill_color, low_color}`；`engaged{low_health, hold_seconds, fade_seconds}`），`version` 1 | 同一個遊戲的表現檔用同一種寫法 |
+| 3 | 隱藏的原因三種：`Behind`、`OffScreen`、`Occluded` | 多一種 `NoView`：世界 camera 還沒有畫面（視窗大小還不知道，`NoViewportSize`），或資料不對（`InvalidData`） | `WorldToViewport` 的失敗不只鏡頭後面；把它們當成 `Behind` 會說錯原因 |
+| 4 | `ShowOverheads` 排在 visibility 的 `kCheckSet` 之前 | 只排在 camera 的 `kUpdateSet` 與 transform 的 `kPropagateSet` 之後 | visibility 只剔除有 `Aabb` 或 `VisibilityRange` 的實體（`engine/modules/visibility/include/engine/visibility/VisibilityModule.hpp:5-9`），`Sprite` 與 `Shape2d` 沒有，不會被剔除；沒有要排的理由 |
+| 5 | 遮蔽用「和聲音同一份 `walls`」 | 牆從 `ClientSound` 移到 Frame 的 Resource `ArenaWalls`，聲音與名字都讀它；聲音的行為不變 | 名字不該為了牆去讀聲音的 Resource；第 4 步要擴充擋物時，聲音與名字也只改一處（O9） |
+| 6 | 「身體有畫出來」 | 這個玩家至少有一個 `CharacterPart`（`AddCharacters` 做的網格）才寫 `Overhead` | 模型還沒載入的那幾幀沒有身體，不先出名字 |
+| 7 | P4 測 `PlayerLabel` 和房間同字串 | 不另測：#376 已有 `[pvp-label-fallback]`、`[pvp-label-name]`；C1 比對頭頂的字＝`PlayerLabel(2, PlayerName)` | 同一件事不測兩次 |
+| 8 | 錨點＝`Head` 判定形狀的中心＋`headClearance` | 同左；`PoseCharacters` 用同一個姿勢的 `PlaceHitShapes` 算頭的中心，留在 `ClientCharacters::heads`；`head_clearance_metres` 0.35 | — |
+| 9 | Solo（單人）的玩家 | Solo World 沒有網路，也沒有登記 `PlayerName`（`PvpWorld.cpp` 的 `networked`）；`SnapshotOf` 只在 World 有登記時才複製名字，單人時頭頂是「Player N」 | 實作時第一次跑全部 Client 測試時，單人的案例在這裡 assert（`ComponentIdOf` 檢查後通過） |

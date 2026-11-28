@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "head_clearance_metres": 0.35,
+  "name": { "text_pixels": 18, "color": [1.0, 1.0, 1.0] },
+  "bar": { "width_pixels": 72, "height_pixels": 6, "gap_pixels": 4, "back_color": [0.0, 0.0, 0.0], "back_alpha": 0.55,
+           "fill_color": [0.95, 0.95, 0.95], "low_color": [0.95, 0.25, 0.2] },
+  "engaged": { "low_health": 0.3, "hold_seconds": 3.0, "fade_seconds": 1.0 }
+}

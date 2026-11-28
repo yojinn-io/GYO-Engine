@@ -5,7 +5,7 @@
 # logic: the game's rules that need no World, window, input, renderer, audio
 # device or network: the arena files and the baked voxel geometry, the
 # movement, stance and combat rules, the planar movement input, the hit
-# feedback and the client view, the sound cues and the Match's admission token
+# feedback and the client view, the overhead labels' look, the sound cues and the Match's admission token
 # (include/object_fps_pvp/match/AdmissionToken.hpp, the services' token/token.go in C++).
 # character: the player's character for the Match and the Client: the body's skeleton, its clips retargeted from
 # the animation library, the pose of a moment (the game's layering over the model library's sampling), the hit
@@ -42,6 +42,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/present/Controls.cpp
     src/present/HitFeedback.cpp
     src/present/Interpolation.cpp
+    src/present/Overhead.cpp
     src/present/SoundCues.cpp
     src/sim/Arena.cpp
     src/sim/CombatRules.cpp
@@ -82,6 +83,7 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
     src/client/GatewayScene.cpp
     src/client/LobbyScene.cpp
     src/client/LocalFiles.cpp
+    src/client/Overhead.cpp
     src/client/RoomScene.cpp
     src/client/Scenes.cpp
     src/client/Settings.cpp
