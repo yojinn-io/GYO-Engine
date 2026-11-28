@@ -3654,8 +3654,8 @@
     "arena-rules-split-declaration 6.3"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->movement, rules->damage, *stepped);",
-   "replace": "        const std::uint32_t damage = sim::LandingDamage(rules->movement, sim::DamageRules{sim::FallDamage{4.0F, 15'000U}}, *stepped);",
+   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, rules->damage, *stepped);",
+   "replace": "        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, sim::DamageRules{sim::FallDamage{4.0F, 15'000U}}, *stepped);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a World plays its mode's*",
    "expect": "pvp-world-damage"
@@ -3693,7 +3693,7 @@
     "arena-rules-split-declaration 6.3"
    ],
    "file": "games/object_fps_pvp/src/sim/DamageRules.cpp",
-   "find": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * movement.gravity);",
+   "find": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * gravity);",
    "replace": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * 20.0);",
    "target": "gyo_object_fps_pvp_logic_tests",
    "cases": "PvP movement rules: a landing hurts*",
@@ -3828,6 +3828,58 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a Client whose arena has another spawn*",
    "expect": "pvp-arena-data-mismatch"
+  },
+  {
+   "id": "pvp-character-body-unset",
+   "what": "the character file's body is read but not kept: the rig plays the default body",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        rig.bodySize = *bodySize;",
+   "replace": "        (void)bodySize;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-body-read"
+  },
+  {
+   "id": "pvp-character-version-unchecked",
+   "what": "a character file of version 1 loads",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "\"version\") != 2) throw std::runtime_error(\"character.json: unsupported version\");",
+   "replace": "\"version\") < 1) throw std::runtime_error(\"character.json: unsupported version\");",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-version"
+  },
+  {
+   "id": "pvp-character-scale-constant",
+   "what": "the model is scaled to 1.8, not to the body's height",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        rig.scale = rig.bodySize.height / (maximum - minimum);",
+   "replace": "        rig.scale = 1.8F / (maximum - minimum);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-scale"
+  },
+  {
+   "id": "pvp-arena-id-unbounded",
+   "what": "an arena id of more than 64 characters is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": "        if (arena.id.empty() || arena.id.size() > kMaxContentIdBytes) throw std::runtime_error(\"id is 1 to 64 characters\");",
+   "replace": "        if (arena.id.empty()) throw std::runtime_error(\"id is 1 to 64 characters\");",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: what an arena file says*",
+   "expect": "65 characters"
   }
  ]
 }

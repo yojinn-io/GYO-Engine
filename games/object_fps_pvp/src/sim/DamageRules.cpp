@@ -41,9 +41,9 @@ std::optional<DamageRules> ParseDamageRules(const std::string_view text, std::st
     }
 }
 
-std::uint32_t LandingDamage(const MovementRules& movement, const DamageRules& damage, const float impactSpeed) noexcept {
-    if (!damage.fall || !(impactSpeed > 0) || !(movement.gravity > 0)) return 0;
-    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * movement.gravity);
+std::uint32_t LandingDamage(const float gravity, const DamageRules& damage, const float impactSpeed) noexcept {
+    if (!damage.fall || !(impactSpeed > 0) || !(gravity > 0)) return 0;
+    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * gravity);
     const double beyond = height - damage.fall->safeHeight;
     if (!(beyond > 0)) return 0;
     const double points = std::floor(beyond * damage.fall->milliPointsPerMetre);

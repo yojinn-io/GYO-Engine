@@ -25,9 +25,10 @@ Owner：「任務卡」arena 規則拆出。分支 `claude/gyo2-arena-rules-spli
 - 新測試：arena v5 的讀取與每種錯誤、`scene` 的路徑；`movement` v3、`damage` v1、`body` 的讀取與錯誤；出貨的三張表與身體＝舊 arena 的值；World 照模式配置的表與角色的身體跑（速度、跳高＋重力、半徑、沒有墜落傷害）；`rulesDigest`／`characterDigest`／`arenaDigest` 逐欄跟著變；arena 只差一個出生點時是 `ArenaData`；出生點離邊界比角色的半徑近時內容讀不進來。
 - 本機（macOS x86_64，preset `test`）：`object_fps_pvp.*` 16 項全過（cpu、network、gpu、go，含 `core_script`、`gateway_client`）；`asset.*`、`world_asset.*` 12 項全過。
 - **A/B（macOS）**：base `d2329a80`（這條線分出的 `gyo2`）與 head，`ab.py`（主 checkout `build/evidence/gyo2-arena-rules-split/`）：**權威 digest 1257 行逐位元組相同；report（net 登記、協議 hash、決策資料集）沒有差異**。
-- **Linux A/B**：見宣告第 11 節。
-- 突變：見宣告第 11 節。
+- **Linux A/B**（Ryzen 7 6800H，g++ 13.3）：權威 digest 1257 行與 report 66 行整個檔逐位元組相同（`linux.sh`，重用 #367 在主機上的建置樹）。
+- 突變（D184：新的、find 在改動範圍的、殺它的測試被改到的）：第 1 次 58 個（新增 24、改寫 find 6、拿掉 2；`pvp-mode-unknown-rule-kind` 一次 `wrong_failure`，`expect` 改成實際的失敗訊息）；設計審查處置後加 4 個，62 個重跑 **62/62 killed**。
 
 ## 設計審查與純粹的 Code Review
 
-見宣告第 11 節。
+- 設計審查（Opus／high，唯讀）：沒有 blocker；兩處和宣告不同的字串（出生點半徑的錯誤、`ArenaData` 的原因）、S1（角色檔 → rig 的身體沒有測試）、S2（arena 的錯誤不是每種都有一案）、五個 nit。處置在宣告 11.4：D1、D2、S1、S2、N1、N3、N5 採用，N2、N4 不採（理由在表）。處置後 `object_fps_pvp.*` 16 項全過，A/B（macOS）仍逐位元組相同。
+- 純粹的 Code Review（Fable／high）：見宣告 11.4。

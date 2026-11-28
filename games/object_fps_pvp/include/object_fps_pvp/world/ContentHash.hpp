@@ -1,8 +1,9 @@
 #pragma once
 
 // What the content comparisons hash (MatchInfo's rules, arena and character digests; mode-config declaration 3.3,
-// 11.7; arena-rules-split declaration 3.6): each type's values through the Kernel's Hasher, never a file's bytes. The sim and character libraries have no
-// Kernel, so their types' HashValue is here, found by argument-dependent lookup wherever this header is included.
+// 11.7; arena-rules-split declaration 3.6): each type's values through the Kernel's Hasher, never a file's bytes. The
+// sim and character libraries have no Kernel, so their types' HashValue is here, found by argument-dependent lookup
+// wherever this header is included.
 
 #include "object_fps_pvp/character/CharacterRig.hpp"
 #include "object_fps_pvp/sim/Arena.hpp"
@@ -38,9 +39,9 @@ namespace object_fps_pvp::world {
 [[nodiscard]] std::uint64_t Digest64(const GYO::Kernel::Hasher& hasher);
 
 // The character's digest (the user's decision U1, mode-config declaration 11.7): what the Match judges the shots on
-// and a Client predicts and draws with -- the body model's catalog id, the body (its size), its skeleton (each node's name, parent and rest
-// pose), the clips as retargeted onto it (every key), the upper body's nodes, the animation rules, the scale and anchor
-// to the world, and the hit shapes on the bones (hitbox.json). Left out: the meshes' vertices and the materials, and the
+// and a Client predicts and draws with -- the body model's catalog id, the body (its size), its skeleton (each node's
+// name, parent and rest pose), the clips as retargeted onto it (every key), the upper body's nodes, the animation
+// rules, the scale and anchor to the world, and the hit shapes on the bones (hitbox.json). Left out: the meshes' vertices and the materials, and the
 // third-person weapon's mount (the picture, not the play).
 [[nodiscard]] std::uint64_t CharacterDigest(const character::CharacterRig& character);
 

@@ -431,7 +431,7 @@ K::SystemResult MovePlayers(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat
         }
         if (!(next == body.Read())) body.Get() = next;
         if (!alive) return;
-        const std::uint32_t damage = sim::LandingDamage(rules->movement, rules->damage, *stepped);
+        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, rules->damage, *stepped);
         const bool fellOut = sim::BelowKillHeight(rules->arena, next.feet.y);
         if (damage == 0 && !fellOut) return;
         PlayerCombat after = combat.Read();
@@ -849,7 +849,7 @@ K::SystemResult FollowMatchContent(K::Res<MatchInfo> info, K::Res<GameRules> rul
         reason = "the Match plays arena '" + match.arenaId + "', this game '" + own.arena.id + "'";
     } else if (match.arenaDigest != own.arenaDigest) {
         kind = MismatchKind::ArenaData;
-        reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: bounds, floor, kill height, spawns)";
+        reason = "arena '" + match.arenaId + "' differs from the Match's (arena digest: map, bounds, floor, kill height, spawns)";
     } else if (load->stage == MapStage::Done && match.wallsDigest != own.wallsDigest) {
         kind = MismatchKind::Walls;
         reason = "arena '" + match.arenaId + "' differs from the Match's (walls digest)";
@@ -1080,7 +1080,8 @@ std::optional<GameContent> LoadGameContent(const std::string& root, std::string&
         const sim::ArenaContent& arena = content.arenas[a];
         for (std::size_t s = 0; s < arena.spawns.size(); ++s) {
             if (!sim::SpawnInBounds(arena, arena.spawns[s], rig->bodySize.radius)) {
-                error = maps + (*list)[a] + ": spawn " + std::to_string(s) + " is outside the bounds for the character's radius";
+                error = maps + (*list)[a] + ": spawn " + std::to_string(s) + " of arena '" + arena.id +
+                        "' is outside the bounds for the character's radius";
                 return std::nullopt;
             }
         }

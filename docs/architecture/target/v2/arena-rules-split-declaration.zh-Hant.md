@@ -297,3 +297,49 @@ v8-arch-gyo2-arena-rules-split（一個 PR，開向 gyo2；這份宣告的 draft
 - Unity Physics 的 `PhysicsStep` 在 SubScene 裡 author：本機只有 Netcode 的註解，**未確認**。
 - Lyra 的 Experience 能不能改移動速度（GameplayEffect）：沒有源碼，未查。
 - 主 checkout 外有沒有別的 v4 arena 檔的產生者：repo 內只有 `assets/object_fps_pvp/maps/*.json` 與測試；主 checkout 的 S5 `content.py` 已知（6.1）。其他機器上的證據腳本未查。
+
+---
+
+## 11. 實作結果
+
+dev_log：`docs/dev_logs/2026_11_28_gyo2_arena_rules_split.zh-Hant.md`。證據：主 checkout `build/evidence/gyo2-arena-rules-split/`（`ab.py`、`ab/`、`linux.sh`、`linux-ab.txt`、`mutations-run1.log`、`design-review.md`、`pure-code-review.md`）。
+
+### 11.1 commit
+
+| commit | 內容 |
+|---|---|
+| `3c5248a7` | 第 1 步全部（格式、讀取、比對值、A 的拿掉、assets、測試、突變表、dev_log） |
+| （本 commit） | 第 3 步：設計審查的處置（11.4）、Linux A/B、本節 |
+
+### 11.2 和本宣告不同的地方
+
+- `ArenaContent` 留在 `sim/Arena.hpp`；`BelowKillHeight` 從 `MovementRules.hpp` 搬到這裡（它問的是 arena 的值）；多一個 `SpawnInBounds(arena, spawn, radius)`，讀檔（半徑 0）與 `LoadGameContent`（角色的半徑）共用一個式子。
+- `GameRules` 不另存身體：系統讀 `GameRules::character->bodySize`（身體只有一個來源）。
+- `data::Positive`／`PositiveOr` 從 `Arena.cpp` 的匿名 namespace 搬到 `data/JsonFields`（arena、`movement`、`damage`、`body` 四個讀者共用）。
+- 讀檔錯誤的字句：`width`／`depth` 缺少時是「missing member width」（原本是「width and depth are required」）；`safe_height` 缺少時是「missing member safe_height」。情形和第 5 節相同。
+- 兩個 world 測試名的「arena's」改成「rules'」（速度與跳高不再是 arena 的）；mutations 的 `cases` 用前綴比對，不受影響。
+
+### 11.3 檢驗
+
+- 本機（macOS x86_64，preset `test`）：`object_fps_pvp.*` 16 項全過（cpu 8、network 4、gpu 2、go 2）；`asset.*`、`world_asset.*` 12 項全過。突變跑完、建置還原後再跑一次 `object_fps_pvp.*`，16 項全過。
+- **A/B（macOS）**：base `d2329a80`、head `3c5248a7` 的前身（同內容，commit 前的工作樹）：權威 digest 1257 行逐位元組相同，report 沒有差異（第 6.1 節預期的「完全相同」）。
+- **突變**（第 6.3 節）：新增 24 個、改寫 find 6 個、拿掉 2 個，加上殺它們的測試被改到的既有 28 個，共 58 個：**58/58 killed**。過程中 `pvp-mode-unknown-rule-kind` 一次 `wrong_failure`（不認得的種類被放過時，那張表被當成 `damage` 讀、以「unsupported version」失敗，不是原本期待的字串），`expect` 改成實際的失敗訊息後重跑 killed。
+- **Linux A/B**（Ryzen 7 6800H，g++ 13.3；`linux.sh`：重用 #367 在主機上的兩棵建置樹，只換 checkout，增量建置各約 95 s）：base `d2329a80`、head `3c5248a7`，權威 digest 1257 行與 report 66 行**整個檔逐位元組相同**。
+
+### 11.4 審查的處置
+
+設計審查（Opus／high，唯讀；範圍 `d2329a80..3c5248a7`）沒有 blocker。純粹的 Code Review（Fable／high）的編號寫 P1～。
+
+| # | 內容 | 處置 |
+|---|---|---|
+| D1 | 出生點半徑的錯誤只寫檔名，第 5 節寫「spawn N of arena 'X'」 | 採用：程式改成也寫 arena id（`… spawn 0 of arena 'edge' is outside the bounds for the character's radius`）；測試跟著改 |
+| D2 | `ArenaData` 的原因少了 map（Client 的字串還少了 kill height），比 digest 涵蓋的窄 | 採用：原因寫「map, bounds, floor, kill height, spawns」；Client「データ（地図・範囲・床・落下死の高さ・出生点）」 |
+| S1 | `character.json` → rig 的身體、version 檢查、縮放沒有測試也沒有突變 | 採用：world 測試「the character's body is read from its file into the rig」（臨時 content：不是預設值的身體讀進 rig、模型照身高縮放、讀者拒的身體與 version 1 都讀不進來）；突變 `pvp-character-body-unset`、`-version-unchecked`、`-scale-constant`。臨時 content 的做法收成 `ContentFolder`（出生點半徑那一案共用） |
+| S2 | 第 5 節的 arena 錯誤不是每一種都有一案 | 採用：id 缺、空、65 字元（64 可）；spawns 不是陣列、65 個；位置不是 3 個數、有非有限值；yaw 非有限、缺；突變 `pvp-arena-id-unbounded` |
+| N1 | `LandingDamage` 收整個 `MovementRules` 只為了重力 | 採用：改收 `float gravity`（同 `Fall`）；`DamageRules.hpp` 不再依賴 `MovementRules.hpp` |
+| N2 | `ParseBodySize` 重新解析整個角色檔 | 不採：sim 的公開標頭不帶 JSON 型別（JSON 是 logic 函式庫的私有依賴），讀文字是 sim 的讀者共同的形（`ParseArena`、`ParseMovementRules`）；version 由讀整個檔的 `LoadCharacterRig` 檢查 |
+| N3 | digest 的 domain tag 沒升 | 採用：`rules/2`、`character/2`（雜湊的內容變了；值本來就不同，A/B 不受影響） |
+| N4 | 規則種類比兩次字串 | 不採：兩種；G6 加第三種時再看要不要表 |
+| N5 | 重排的註解超過 120 字元 | 採用：`ContentHash.hpp` 那兩段重排 |
+
+處置後：本機 `object_fps_pvp.*` 16 項全過；A/B（macOS）權威 digest 仍 1257 行逐位元組相同、report 沒有差異。

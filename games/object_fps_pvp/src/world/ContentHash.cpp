@@ -171,7 +171,7 @@ void HashClip(K::Hasher& h, const Model::AnimationClip& clip) {
 
 std::uint64_t CharacterDigest(const character::CharacterRig& character) {
     K::Hasher h;
-    HashValue(h, std::string("gyo.object_fps_pvp.character/1"));
+    HashValue(h, std::string("gyo.object_fps_pvp.character/2"));
     HashValue(h, character.bodyAssetId);
     HashValue(h, character.bodySize);
     HashValue(h, static_cast<std::uint64_t>(character.body->nodes.size()));

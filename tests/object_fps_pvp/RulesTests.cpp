@@ -87,19 +87,19 @@ TEST_CASE("PvP movement rules: a landing hurts by the metres beyond the safe hei
     DamageRules damage;
     ArenaContent arena = Arena();
     arena.killHeight = -5.0F;
-    CHECK(LandingDamage(movement, damage, 100.0F) == 0U);  // no fall damage in the rules
+    CHECK(LandingDamage(movement.gravity, damage, 100.0F) == 0U);  // no fall damage in the rules
     damage.fall = FallDamage{4.0F, 15'000U};
     // v^2 / 2g: 20 m/s falls 10 m, 6 beyond the safe height.
-    CHECK(LandingDamage(movement, damage, 20.0F) == 90'000U);
+    CHECK(LandingDamage(movement.gravity, damage, 20.0F) == 90'000U);
     // Exactly the safe height (v = sqrt(2 g 4)), and a little below: nothing.
-    CHECK(LandingDamage(movement, damage, std::sqrt(2.0F * 20.0F * 4.0F)) == 0U);
-    CHECK(LandingDamage(movement, damage, 12.0F) == 0U);
-    CHECK(LandingDamage(movement, damage, 0.0F) == 0U);
+    CHECK(LandingDamage(movement.gravity, damage, std::sqrt(2.0F * 20.0F * 4.0F)) == 0U);
+    CHECK(LandingDamage(movement.gravity, damage, 12.0F) == 0U);
+    CHECK(LandingDamage(movement.gravity, damage, 0.0F) == 0U);
     // The height is the movement rules' gravity's: under 10 m/s^2 the same landing falls 20 m.
     movement.gravity = 10.0F;
-    CHECK_MESSAGE(LandingDamage(movement, damage, 20.0F) == 240'000U, "[pvp-landing-gravity]");
+    CHECK_MESSAGE(LandingDamage(movement.gravity, damage, 20.0F) == 240'000U, "[pvp-landing-gravity]");
     // A very fast landing does not wrap around.
-    CHECK(LandingDamage(movement, damage, 1.0e6F) == std::numeric_limits<std::uint32_t>::max());
+    CHECK(LandingDamage(movement.gravity, damage, 1.0e6F) == std::numeric_limits<std::uint32_t>::max());
     CHECK(BelowKillHeight(arena, -5.01F));
     CHECK_FALSE(BelowKillHeight(arena, -5.0F));
     CHECK_FALSE(BelowKillHeight(arena, 0.0F));

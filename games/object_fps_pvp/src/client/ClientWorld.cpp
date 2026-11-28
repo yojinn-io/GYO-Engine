@@ -109,7 +109,7 @@ std::string MismatchText(const PW::ContentMismatch& mismatch) {
     case PW::MismatchKind::Rules: return "モード「" + mismatch.matchMode + "」の規則が Match と違います";
     case PW::MismatchKind::Character: return "キャラクター（骨格・アニメーション・当たり判定）が Match と違います";
     case PW::MismatchKind::Arena: return "Match は別のマップ（" + mismatch.matchArena + "）を遊んでいます";
-    case PW::MismatchKind::ArenaData: return "マップ「" + mismatch.matchArena + "」の範囲・床・出生点が Match と違います";
+    case PW::MismatchKind::ArenaData: return "マップ「" + mismatch.matchArena + "」のデータ（地図・範囲・床・落下死の高さ・出生点）が Match と違います";
     case PW::MismatchKind::Walls: return "マップ「" + mismatch.matchArena + "」の壁が Match と違います";
     case PW::MismatchKind::None: break;
     }

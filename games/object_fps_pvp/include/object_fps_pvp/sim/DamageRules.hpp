@@ -1,7 +1,5 @@
 #pragma once
 
-#include "object_fps_pvp/sim/MovementRules.hpp"
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -28,8 +26,9 @@ struct DamageRules final {
 // positive number, or its points per metre not a whole number of milli-points (0 to 2^32 - 1).
 [[nodiscard]] std::optional<DamageRules> ParseDamageRules(std::string_view text, std::string& error);
 
-// The damage of a landing at a downward speed, in milli-points: the height such a speed falls from under the movement
-// rules' gravity (v^2 / 2g), beyond the safe height, times the points per metre (rounded down); 0 without fall damage.
-[[nodiscard]] std::uint32_t LandingDamage(const MovementRules& movement, const DamageRules& damage, float impactSpeed) noexcept;
+// The damage of a landing at a downward speed, in milli-points: the height such a speed falls from under the gravity
+// (the movement rules': v^2 / 2g), beyond the safe height, times the points per metre (rounded down); 0 without fall
+// damage.
+[[nodiscard]] std::uint32_t LandingDamage(float gravity, const DamageRules& damage, float impactSpeed) noexcept;
 
 } // namespace object_fps_pvp::sim

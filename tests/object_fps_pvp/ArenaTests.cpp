@@ -182,6 +182,25 @@ TEST_CASE("PvP arena: what an arena file says and what it refuses") {
     CHECK_FALSE(sim::ParseArena(R"({"version": 5, "id": "a", "depth": 10, "map": "a", "kill_height": -10, )" + twoSpawns + "}", error)
                     .has_value());
     CHECK_FALSE(sim::ParseArena(arena(R"("width": 0, )" + twoSpawns), error).has_value());
+    // The id: 1 to 64 characters, required.
+    const auto withId = [&](const std::string& id) {
+        return R"({"version": 5, )" + id + R"("width": 10, "depth": 10, "map": "a", "kill_height": -10, )" + twoSpawns + "}";
+    };
+    CHECK(sim::ParseArena(withId(R"("id": ")" + std::string(64, 'a') + R"(", )"), error).has_value());
+    CHECK_FALSE_MESSAGE(sim::ParseArena(withId(R"("id": ")" + std::string(65, 'a') + R"(", )"), error).has_value(), "an id of 65 characters");
+    CHECK_FALSE_MESSAGE(sim::ParseArena(withId(R"("id": "", )"), error).has_value(), "an empty id");
+    CHECK_FALSE_MESSAGE(sim::ParseArena(withId(""), error).has_value(), "no id");
+    // The spawns: an array of 2 to 64, each three finite numbers and a finite yaw.
+    CHECK_FALSE_MESSAGE(sim::ParseArena(arena(R"("spawns": {"position": [1, 0, 1], "yaw": 0})"), error).has_value(), "spawns not an array");
+    std::string many = R"("spawns": [)";
+    for (int i = 0; i < 65; ++i) many += std::string(i == 0 ? "" : ", ") + R"({"position": [5, 0, 5], "yaw": 0})";
+    CHECK_FALSE_MESSAGE(sim::ParseArena(arena(many + "]"), error).has_value(), "65 spawns");
+    for (const std::string bad : {R"({"position": [1, 0], "yaw": 0})", R"({"position": [1, 0, 1, 1], "yaw": 0})",
+                                  R"({"position": [1, 1e39, 1], "yaw": 0})", R"({"position": [1, 0, 1], "yaw": 1e39})",
+                                  R"({"position": [1, 0, 1]})"}) {
+        CAPTURE(bad);
+        CHECK_FALSE(sim::ParseArena(arena(R"("spawns": [)" + bad + R"(, {"position": [9, 0, 9], "yaw": 0}])"), error).has_value());
+    }
     // The bounds without a body: a spawn may stand anywhere in [0, width] x [0, depth] (the room for the character's
     // radius is LoadGameContent's to check), not outside.
     CHECK(sim::ParseArena(arena(R"("spawns": [{"position": [0, 0, 0], "yaw": 0}, {"position": [10, 0, 10], "yaw": 0}])"), error).has_value());

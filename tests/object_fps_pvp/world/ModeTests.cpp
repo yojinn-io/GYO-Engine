@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <sstream>
 
 
 using namespace object_fps_pvp::test;
@@ -242,31 +243,93 @@ TEST_CASE("world: a Client whose arena has another spawn than the Match's, with 
     CHECK(mismatch.matchArena == "pvp_training_v1");
 }
 
-TEST_CASE("world: content whose arena has a spawn closer to the bounds than the character's radius does not load") {
-    // A content root of the test's own: the shipped character, modes and rules, and one arena of its own.
-    std::random_device random;
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / ("gyo_pvp_content_" + std::to_string(random()));
-    const std::filesystem::path shipped(PVP_CONTENT_ROOT);
-    struct Remove {
-        std::filesystem::path path;
-        ~Remove() {
-            std::error_code ignored;
-            std::filesystem::remove_all(path, ignored);
+namespace {
+
+// A content root of a test's own: the shipped character (its files and models), the shipped rules, one mode of its own
+// and the arenas it writes (none of their maps: LoadGameContent does not read them).
+struct ContentFolder {
+    std::filesystem::path root;
+    ContentFolder() {
+        std::random_device random;
+        root = std::filesystem::temp_directory_path() / ("gyo_pvp_content_" + std::to_string(random()));
+        const std::filesystem::path shipped(PVP_CONTENT_ROOT);
+        std::filesystem::create_directories(root / "maps");
+        std::filesystem::create_directories(root / "modes");
+        for (const char* folder : {"characters", "animations", "rules"}) {
+            std::filesystem::copy(shipped / folder, root / folder, std::filesystem::copy_options::recursive);
         }
-    } remove{root};
-    std::filesystem::create_directories(root / "maps");
-    for (const char* folder : {"characters", "animations", "rules"}) {
-        std::filesystem::copy(shipped / folder, root / folder, std::filesystem::copy_options::recursive);
+        std::filesystem::copy_file(shipped / "asset_catalog.json", root / "asset_catalog.json");
+        Write("modes/modes.json", R"({"version": 1, "modes": ["a.json"]})");
+        Write("modes/a.json", ModeText("a"));
+        Arenas({{"pvp_arena.json", ReadText(shipped / "maps" / "pvp_arena.json")}});
     }
-    std::filesystem::copy_file(shipped / "asset_catalog.json", root / "asset_catalog.json");
-    const auto write = [&](const std::string& path, const std::string& text) {
+    ~ContentFolder() {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+    ContentFolder(const ContentFolder&) = delete;
+    ContentFolder& operator=(const ContentFolder&) = delete;
+    static std::string ReadText(const std::filesystem::path& path) {
+        std::ifstream in(path, std::ios::binary);
+        std::ostringstream text;
+        text << in.rdbuf();
+        return text.str();
+    }
+    void Write(const std::string& path, const std::string& text) const {
         std::ofstream out(root / path, std::ios::binary);
         out << text;
-    };
-    std::filesystem::create_directories(root / "modes");
-    write("modes/modes.json", R"({"version": 1, "modes": ["a.json"]})");
-    write("modes/a.json", ModeText("a"));
-    write("maps/arenas.json", R"({"version": 1, "arenas": ["edge.json"]})");
+    }
+    // maps/arenas.json listing the files, each written as given.
+    void Arenas(const std::vector<std::pair<std::string, std::string>>& files) const {
+        std::string list = R"({"version": 1, "arenas": [)";
+        for (std::size_t i = 0; i < files.size(); ++i) {
+            list += (i == 0 ? "\"" : ", \"") + files[i].first + "\"";
+            Write("maps/" + files[i].first, files[i].second);
+        }
+        Write("maps/arenas.json", list + "]}");
+    }
+    // characters/player/character.json with its body (and version) replaced.
+    void Character(const std::string& version, const std::string& body) const {
+        std::string text = ReadText(root / "characters" / "player" / "character.json");
+        text.replace(text.find("\"version\": 2"), std::string("\"version\": 2").size(), "\"version\": " + version);
+        const std::size_t at = text.find("\"body\":");
+        text.replace(at, text.find('}', at) + 1 - at, "\"body\": " + body);
+        Write("characters/player/character.json", text);
+    }
+};
+
+} // namespace
+
+TEST_CASE("world: the character's body is read from its file into the rig: the body, the model's scale; version 1 is refused") {
+    ContentFolder folder;
+    std::string error;
+    const auto shipped = PW::LoadGameContent(folder.root.string(), error);
+    REQUIRE_MESSAGE(shipped.has_value(), error);
+    CHECK(shipped->character->bodySize == ShippedContent()->character->bodySize);
+    CHECK(shipped->character->scale == ShippedContent()->character->scale);
+    folder.Character("2", R"({"height": 2.7, "radius": 0.3, "eye_height": 2.4, "crouch_height": 1.5, "crouch_eye_height": 1.3})");
+    const auto tall = PW::LoadGameContent(folder.root.string(), error);
+    REQUIRE_MESSAGE(tall.has_value(), error);
+    const object_fps_pvp::sim::BodySize& body = tall->character->bodySize;
+    CHECK_MESSAGE(body.height == 2.7F, "[pvp-character-body-read] " << body.height);
+    CHECK(body.radius == 0.3F);
+    CHECK(body.eyeHeight == 2.4F);
+    CHECK(body.crouchHeight == 1.5F);
+    CHECK(body.crouchEyeHeight == 1.3F);
+    // The model is scaled to the body's height: 1.5 times the shipped scale.
+    CHECK_MESSAGE(tall->character->scale == doctest::Approx(ShippedContent()->character->scale * 1.5F), "[pvp-character-scale] " << tall->character->scale);
+    CHECK(tall->characterDigest != ShippedContent()->characterDigest);
+    // A body the reader refuses, and a character file of version 1 (no body), do not load.
+    folder.Character("2", R"({"eye_height": 2})");
+    CHECK_FALSE(PW::LoadGameContent(folder.root.string(), error).has_value());
+    CHECK_MESSAGE(error.find("an eye is above the top of its body") != std::string::npos, error);
+    folder.Character("1", R"({})");
+    CHECK_FALSE_MESSAGE(PW::LoadGameContent(folder.root.string(), error).has_value(), "[pvp-character-version] version 1 loaded");
+    CHECK_MESSAGE(error.find("character.json: unsupported version") != std::string::npos, "[pvp-character-version] " << error);
+}
+
+TEST_CASE("world: content whose arena has a spawn closer to the bounds than the character's radius does not load") {
+    ContentFolder folder;
     const auto arena = [](const std::string& x) {
         return R"({"version": 5, "id": "edge", "width": 10, "depth": 10, "map": "object_fps_pvp.map.pvp_arena", "kill_height": -10,)"
                R"( "spawns": [{"position": [)" + x + R"(, 0, 5], "yaw": 0}, {"position": [5, 0, 5], "yaw": 0}]})";
@@ -274,16 +337,13 @@ TEST_CASE("world: content whose arena has a spawn closer to the bounds than the 
     const float radius = ShippedContent()->character->bodySize.radius;
     std::string error;
     // Exactly the radius from the bound: room enough.
-    write("maps/edge.json", arena(std::to_string(radius)));
-    const auto fits = PW::LoadGameContent(root.string(), error);
+    folder.Arenas({{"edge.json", arena(std::to_string(radius))}});
+    const auto fits = PW::LoadGameContent(folder.root.string(), error);
     REQUIRE_MESSAGE(fits.has_value(), error);
     CHECK(fits->arenas.front().spawns.front().position.x == radius);
     // Inside the arena (the arena file reads) but closer than the radius: the content does not load.
-    write("maps/edge.json", arena("0.1"));
-    REQUIRE(sim::ParseArena(R"({"version": 5, "id": "edge", "width": 10, "depth": 10, "map": "m", "kill_height": -10,)"
-                            R"( "spawns": [{"position": [0.1, 0, 5], "yaw": 0}, {"position": [5, 0, 5], "yaw": 0}]})",
-                            error)
-                .has_value());
-    CHECK_FALSE_MESSAGE(PW::LoadGameContent(root.string(), error).has_value(), "[pvp-spawn-radius-unchecked]");
-    CHECK_MESSAGE(error.find("edge.json: spawn 0 is outside the bounds for the character's radius") != std::string::npos, error);
+    folder.Arenas({{"edge.json", arena("0.1")}});
+    REQUIRE(sim::ParseArena(ContentFolder::ReadText(folder.root / "maps" / "edge.json"), error).has_value());
+    CHECK_FALSE_MESSAGE(PW::LoadGameContent(folder.root.string(), error).has_value(), "[pvp-spawn-radius-unchecked]");
+    CHECK_MESSAGE(error.find("edge.json: spawn 0 of arena 'edge' is outside the bounds for the character's radius") != std::string::npos, error);
 }

@@ -176,7 +176,7 @@ std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& 
                           const sim::DamageRules& damage, const sim::CombatRules& combat) {
     K::Hasher h;
     // The mode: what decides the match (its display name does not).
-    HashValue(h, std::string("gyo.object_fps_pvp.rules/1"));
+    HashValue(h, std::string("gyo.object_fps_pvp.rules/2"));
     HashValue(h, mode.id);
     // The sets it turns on, by name, each with the digest of its settings.
     std::vector<std::pair<std::string, std::uint64_t>> sets;
