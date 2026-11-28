@@ -5,7 +5,7 @@
 # and the net Module in a Product with a MemoryLink.
 add_executable(gyo_net_tests TestMain.cpp HeaderTests.cpp ConnectionTests.cpp TransportTests.cpp LinkTests.cpp
     SessionTests.cpp ModuleTests.cpp ReplicationTests.cpp ScenarioTests.cpp InputTests.cpp ReconnectTests.cpp ConnectTargetTests.cpp ClockTests.cpp
-    ResourceTests.cpp RollbackClientTests.cpp VisibilityTests.cpp
+    ResourceTests.cpp RollbackClientTests.cpp VisibilityTests.cpp PlacedTests.cpp
     BandwidthTests.cpp)
 # GYO::StateMachine: the "statesync:" cases join the state machine and the net Module as a product does (neither
 # Module depends on the other).
@@ -17,7 +17,7 @@ else()
     target_compile_options(gyo_net_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 foreach(group IN ITEMS header connection transport link handshake liveness module replication scenario input reconnect connect-target clock
-    resource statesync k3 visibility bandwidth)
+    resource statesync k3 visibility placed bandwidth)
     add_test(NAME net.${group} COMMAND gyo_net_tests "--test-case=${group}:*")
     set_tests_properties(net.${group} PROPERTIES LABELS "cpu" TIMEOUT 120
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

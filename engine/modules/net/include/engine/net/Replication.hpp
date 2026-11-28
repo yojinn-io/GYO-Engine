@@ -252,6 +252,8 @@ struct PeerLedger final {
     std::uint64_t valuesDeferred = 0;
     // The ticks in a row each waiting entity has waited, and the longest wait so far (diagnostics).
     FlatMap<Kernel::EntityId, std::uint32_t> waitedTicks;
+    // The Placed entities hidden at this client (not in entities): a despawn still goes to them; seen again, attached.
+    std::vector<Kernel::EntityId> hidden;
     std::uint32_t longestWait = 0;
     // What this client sent that the server dropped (confirmations, resyncs, inputs), by reason.
     std::array<std::uint64_t, kReplicaDropCount> drops{};
@@ -325,6 +327,11 @@ struct NetReplicaState final {
     std::uint64_t inboxNotSent = 0;
     // K3 spawns that came while the entity was still in the World (its exit not yet at the confirmed point).
     std::uint64_t entriesWhileAlive = 0;
+    // Placed entities (interact-door declaration 4): attached (written whole on the client's entity) and hidden.
+    std::uint64_t attaches = 0;
+    std::uint64_t hides = 0;
+    // The Placed entities attached and not hidden since (the others carry NotReceiving), ascending.
+    std::vector<Kernel::EntityId> attached;
     std::optional<std::uint32_t> inboxConfirmed;
     // K3: the values of components that do not roll back for an entity the World does not have yet as the server
     // means it (it comes with the rollback that puts it back, R-8 A), written once it is there; by entity.
@@ -485,6 +492,32 @@ struct PeerVisibility final {
 };
 inline void HashValue(Kernel::Hasher&, const PeerVisibility&) {}
 
+// An entity each end puts in under the same id before the first step (a scene's object: interact-door declaration
+// 4; the id is the identity, both ends allot it the same way, P1). Put by the product at both ends; not decision data,
+// not replicated. The server sends its replicated components as it does any entity's, but the first time a Peer sees
+// it, and every time again, the client's entity is attached (the whole set written on it), never spawned; a Peer that
+// stops seeing it does not lose it: it is hidden at that client by the entity's WhenHidden rule. Only a despawn at
+// the server removes it at the client (sent to every Peer that has it, seen or not).
+struct Placed final {};
+inline void HashValue(Kernel::Hasher&, const Placed&) {}
+
+// What a client does with a Placed entity its Peer stops seeing (the two defaults of P2). Detach: the replicated
+// components are taken off, the entity and its own components stay (replicon's WhileVisible, its scope the replicated
+// components, since the entity is the scene's). Retain: the last values stay (replicon's AfterFirstVisibility). Either
+// way the entity carries NotReceiving until it is attached again, and no value reaches it while hidden.
+enum class HiddenRule : std::uint8_t { Detach = 0, Retain = 1 };
+// The author's rule for one Placed entity, on it at the server (without it: Detach). An author's own rule is built
+// on these: a rule per entity, a System on NotReceiving, or a PeerVisibility that keeps the entity seen.
+struct WhenHidden final {
+    HiddenRule rule = HiddenRule::Detach;
+};
+inline void HashValue(Kernel::Hasher& h, const WhenHidden& v) { HashValue(h, static_cast<std::uint8_t>(v.rule)); }
+
+// At a client: this Placed entity receives nothing from the server now (not attached yet, or hidden). Put and taken
+// off by the net Module; a local component, not decision data, not rolled back.
+struct NotReceiving final {};
+inline void HashValue(Kernel::Hasher&, const NotReceiving&) {}
+
 // How much an entity's values matter when a tick's values do not fit the Peer's budget (step 5; author's, on the
 // entity at the server; without it 1). Each tick an entity's changed values wait, its accumulated priority grows by
 // its weight; the tick sends the highest first, and a sent entity starts again from 0 (the idea of lightyear's
@@ -508,6 +541,9 @@ static_assert(Kernel::Detail::kStorable<PeerLedger>, "PeerLedger is an ECS compo
 static_assert(Kernel::Detail::kStorable<PeerControls>, "PeerControls is an ECS component: nothrow movable (W-8)");
 static_assert(Kernel::Detail::kStorable<PeerVisibility>, "PeerVisibility is an ECS component: nothrow movable (W-8)");
 static_assert(Kernel::Detail::kStorable<NetPriority>, "NetPriority is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<Placed>, "Placed is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<WhenHidden>, "WhenHidden is an ECS component: nothrow movable (W-8)");
+static_assert(Kernel::Detail::kStorable<NotReceiving>, "NotReceiving is an ECS component: nothrow movable (W-8)");
 static_assert(Kernel::Detail::kStorable<FlatMap<std::uint32_t, int>>, "FlatMap must stay nothrow movable (W-8)");
 
 // The options of an input type.

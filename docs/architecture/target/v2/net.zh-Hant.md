@@ -117,7 +117,7 @@ GYO::WorldTime、GYO::Rollback、GYO::Authority、GYO::EntityIds   ◄── GYO
 
 | 欄位 | 大小 | 說明 |
 |---|---|---|
-| 網路協議版本 | u32 | `kNetProtocolVersion`（3；2 起接受帶 salt、請求帶 epoch，審查 S2、窄複查 R2；3 起每則值訊息帶延後清單，PR-2 第 5 步，PR-2 審查 M2：PR-1 的 2 已進 gyo2，所以升版）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
+| 網路協議版本 | u32 | `kNetProtocolVersion`（4；4 起結構更新多「附上」「藏起」兩種操作，`v8-arch-gyo2-interact-door`；2 起接受帶 salt、請求帶 epoch，審查 S2、窄複查 R2；3 起每則值訊息帶延後清單，PR-2 第 5 步，PR-2 審查 M2：PR-1 的 2 已進 gyo2，所以升版）：標頭之上的訊息的意思；標頭的 `kProtocolVersion` 是分幀，不同就根本讀不了 |
 | 協議雜湊 | u64 | 網路的登記的雜湊；1b 還沒有複製的登記，是空登記的雜湊（`NetProtocolHash`） |
 | 步長 | u64 | 奈秒（時間 Module 的 `FixedTime` 的步長） |
 | 配發器範圍 | u64＋u64 | [first, last] |
@@ -390,7 +390,13 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - `everything`（預設 true＝看得到全部）、`entities`（看得到的實體，遞增）、`Show`／`Hide`、`Sees`。
   - 沒有 `PeerVisibility` 的 Peer 看得到全部（第 4 步以前的行為）。
 - **元件範圍（私人資料，C-VIS2）**：`Replicate<T>(名字, codec, {.privateComponent = true})` 的元件只送給 `PeerVisibility::ShowPrivate<T>(entity)` 的 Peer（replicon 的可見性範圍到元件）。其他 Peer 看得到實體也收不到這個元件。
-- **失去可見＝對那個 Peer 刪除**（只用 `WhileVisible`，replicon 的 `ScopeLifetime::WhileVisible`）：結構更新送刪除；再看到時是生成，用同一個編號整份送。Client 端：K1、K2 生成、刪除；K3 寫 `Entered`／`Exited`（第 13 節）。
+- **失去可見＝對那個 Peer 刪除**（只用 `WhileVisible`，replicon 的 `ScopeLifetime::WhileVisible`）：結構更新送刪除；再看到時是生成，用同一個編號整份送。Client 端：K1、K2 生成、刪除；K3 寫 `Entered`／`Exited`（第 13 節）。放好的實體（`Placed`）例外，見下一條。
+- **放好的實體（`Placed`，`v8-arch-gyo2-interact-door`，宣告 `interact-door-declaration.zh-Hant.md` 第 4 節）**：兩端各自用同一個編號、在第一步之前放好的實體（scene 的物件；編號就是身分，P1 (a)）。產品在兩端放 `Placed`。
+  - 結構更新的操作多兩種（`kNetProtocolVersion` 4）：**3＝附上**（Peer 第一次或再次看到它；取代生成）、**4＝藏起**（Peer 看不到它了；取代刪除；多帶 1 byte 的 `HiddenRule`）。伺服器刪掉它時照舊送 2＝刪除，看得到與藏起的 Peer 都送（帳本的 `PeerLedger::hidden`）。
+  - **附上**：Client 的實體要活著、有 `Placed`，否則計 `MissingTarget`、不建立實體。整份寫上（`ApplyMode::Set`）；這次沒送到的已登記複製元件拿掉（看不見期間伺服器拿掉的，P3 (a)；replicon、lightyear 不重播這一項）；拿掉 `NotReceiving`。K3 不寫 `Entered`；回滾元件進入口、拿掉的走 `removedToInbox`。計 `NetReplicaState::attaches`。
+  - **藏起**：放上 `NotReceiving`；規則是伺服器端實體上的 `WhenHidden`（沒有＝`Detach`）。`Detach`：拿掉複製來的元件（K3 走 `removedToInbox`），實體與它自己的元件留著（replicon 的 `WhileVisible`，範圍縮成複製元件）。`Retain`：留最後的值（replicon 的 `AfterFirstVisibility`）。藏起期間不送改動。計 `hides`。
+  - **`NotReceiving`**：Client 端本地的元件，不是判定資料、不回滾。還沒附上過的 `Placed` 實體也帶著它（`ApplyReplication` 每幀補）。作者自己的規則接在它上面（例：不畫、停預測），或用 `PeerVisibility` 讓它一直看得見。
+  - 和別家：預設（作者不寫＝`Detach`）與單位（實體）照 replicon、lightyear、Unity Netcode；標 `NotReceiving` 與附上時對齊被拿掉的元件是 GYO 加的（使用者 2026-11-28，P2、P3）。
   - K3 不用 `NotSent` 表示看不到：看不到的實體在 Client 上不該存在（宣告選的 `WhileVisible`），`NotSent` 只表示「這份沒帶」、實體還在。
 - **優先度**：`NetEntry::ValueBytesPerTick(bytes)`（預設 0＝不限）給每個 Peer 每 tick 值的位元組上限。放不下時取 lightyear 的累積優先度的概念，做法不同（PR-2 設計審查 M3 更正出處）：lightyear 的累積在可靠通道的待送訊息上（`crates/transport/transport/src/channel/send_reliable.rs` 第 37、153 行：每次 `+= base_priority × multiplier`，到 ack 才移除；`packet/priority_manager.rs` 是排序與 token bucket）；這裡在實體上累積、送出就歸零，下一 tick 用最新的值重新編碼：
   - 每個有值要送的實體，分數＝累積的優先度＋權重（實體上的 `NetPriority::weight`，沒有時 1），由高到低放進上限；第一個一定放。
@@ -404,7 +410,7 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
   - 〔PR-2 設計審查 M8〕延後清單（每筆 8 bytes）只放在第 0 則，不算進預算。大量延後時第 0 則變大、可能分片，整則遺失的機會變高，確認點較常停。有點名的情境延後超過約 100 個實體時再看（例如改成「這個 tick 全部沒帶」）。
   - 頻寬判定的情境是合成的（見 dev_log）。
 - **頻寬判定**（閘口 2 的 2.3，事前宣告；使用者選 (b) ≤ 512 kbps）：`net.bandwidth`（ctest 的 `cpu` 標籤，算位元組、不計時）。數字見 dev_log 2026-11-23 step5。
-- **守衛**：G-11（`net.visibility`，PR-2 設計審查加「整份重送」的不變元件；`net.visibility` 的私人元件不再顯示一案；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-budget-first-not-sent`、`nt-priority-not-accumulated`、`nt-priority-weight-ignored`、`nt-deferred-not-notsent`。G-11 另有：私人元件以實體為單位（E2 帶不給人看的 `Secret`）、沒有 `PeerVisibility` 的 Peer（第三個 Client）收不到私人元件；`net.k3` 另有：預算比一個實體小時每 tick 仍送一個、權重大的等得少。
+- **守衛**：`net.placed`（附上、`MissingTarget`、`Detach`、`Retain`、附上時對齊、看得到與藏起時的刪除）、`net.k3` 的「a Placed entity is attached without an entry…」（兩種規則都過 G-10）；G-11（`net.visibility`，PR-2 設計審查加「整份重送」的不變元件；`net.visibility` 的私人元件不再顯示一案；`net.k3` 的 NotSent 一案）、頻寬判定；突變 `nt-vis-*`、`nt-private-*`、`nt-budget-ignored`、`nt-budget-first-not-sent`、`nt-priority-not-accumulated`、`nt-priority-weight-ignored`、`nt-deferred-not-notsent`。G-11 另有：私人元件以實體為單位（E2 帶不給人看的 `Secret`）、沒有 `PeerVisibility` 的 Peer（第三個 Client）收不到私人元件；`net.k3` 另有：預算比一個實體小時每 tick 仍送一個、權重大的等得少。
 
 ## Design Invariants
 

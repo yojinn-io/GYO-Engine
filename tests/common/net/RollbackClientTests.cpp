@@ -89,6 +89,38 @@ N::InputOptions<Push> PushOptions() {
 }
 
 constexpr K::EntityId kPlayer = 900'001;
+// A crate both ends put in (net Placed, interact-door declaration 4): outside both allotter ranges, like the player.
+constexpr K::EntityId kPlacedCrate = 900'101;
+
+// The Placed case: the crate is put in at both ends and hidden from the Peer in [120, 140) by its rule.
+struct PlacedCase {
+    bool on = false;
+    N::HiddenRule rule = N::HiddenRule::Detach;
+};
+PlacedCase& Placing() {
+    static PlacedCase placing;
+    return placing;
+}
+
+// At the server: the Peer sees everything but the Placed crate in [120, 140).
+K::SystemResult HidePlaced(K::ExclusiveWorld<> world) {
+    const std::uint64_t t = world.Read<W::Tick>([](const W::Tick& tick) { return tick.value; })->value_or(0);
+    const bool hide = t >= 120 && t < 140;
+    for (const K::EntityId peer : world.Entities()) {
+        auto isPeer = world.Read<N::Peer>(peer, [](const N::Peer&) { return true; });
+        if (!isPeer || !isPeer->has_value()) continue;
+        N::PeerVisibility visibility;
+        visibility.everything = !hide;
+        if (hide) {
+            for (const K::EntityId id : world.Entities()) {
+                auto body = world.Read<Body>(id, [](const Body&) { return true; });
+                if (body && body->has_value() && id != kPlacedCrate) visibility.Show(id);
+            }
+        }
+        if (auto inserted = world.Insert(peer, std::move(visibility)); !inserted) return GYO::Engine::Base::Err(std::move(inserted).error());
+    }
+    return {};
+}
 
 K::SystemResult Steer(K::Query<K::Read<Push>, K::Write<Speed>> players) {
     players.ForEach([](K::EntityId, const Push& push, K::Mut<Speed> speed) { speed->dx = push.dx; });
@@ -243,11 +275,20 @@ void RegisterSample(O::WorldSetup& s, const std::int64_t framesPerStep, const st
     r.AddSystem<&SpawnCrates>(FixedAt("SpawnCrates", "PostUpdate", {}, true));
     r.AddSystem<&RemoveFirstCrate>(FixedAt("RemoveFirstCrate", "PostUpdate", {"SpawnCrates"}, true));
     if (reshape) r.AddSystem<&ReshapeAtServer>(FixedAt("ReshapeAtServer", "PostUpdate", {"RemoveFirstCrate"}, true));
-    s.Prepare([framesPerStep](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+    const PlacedCase placing = Placing();
+    if (placing.on) r.AddSystem<&HidePlaced>(FixedAt("HidePlaced", "PostUpdate", {"RemoveFirstCrate"}, true));
+    s.Prepare([framesPerStep, placing](K::World& world) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
         world.SetResource(W::TimeSampling{15'625'000 * framesPerStep, W::SamplingMode::ManualDelta});
         world.Insert(kPlayer, Body{0, 0});
         world.Insert(kPlayer, Speed{0, 0});
         world.Insert(kPlayer, Push{0});
+        if (placing.on) {
+            world.Insert(kPlacedCrate, N::Placed{});
+            world.Insert(kPlacedCrate, Body{50, 0});
+            world.Insert(kPlacedCrate, Speed{1, 0});
+            world.Insert(kPlacedCrate, Tint{123});
+            world.Insert(kPlacedCrate, N::WhenHidden{placing.rule});
+        }
         world.SetResource(Wave{});
         return {};
     });
@@ -354,6 +395,12 @@ struct Run {
     bool tintOffWhileSeen = false;          // at the client's step 180 (taken off at 160, put on again at 200) it has none
     std::uint32_t playerLongestWait = 0;    // the most ticks in a row the player's values waited at the server
     std::uint32_t othersLongestWait = 0;    // the same for every other entity
+    // The Placed case: the crate is at the client at the end, receiving, with the server's Body and Tint.
+    bool placedThere = false;
+    bool placedReceiving = false;
+    bool placedBodySame = false;
+    bool placedTintSame = false;
+    bool placedMarkedWhileHidden = false;  // it carried NotReceiving at some client step in [125, 140)
 };
 
 enum class Shape { None, Seen, Blink };
@@ -400,6 +447,10 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
             if (now.count(id) == 0 && Crates(sample.ServerWorld()).count(id) != 0) ++run.crateLost;
         }
         for (const K::EntityId id : now) seen.insert(id);
+        if (Placing().on && sample.ClientTick() >= 125 && sample.ClientTick() < 140 &&
+            sample.ClientWorld().Get<N::NotReceiving>(kPlacedCrate) != nullptr) {
+            run.placedMarkedWhileHidden = true;
+        }
         if (shape == Shape::Seen && sample.ClientTick() == 180 && Reshaped().tintAgain != 0) {
             run.tintOffWhileSeen = sample.ClientWorld().Alive(Reshaped().tintAgain) && sample.ClientWorld().Get<Tint>(Reshaped().tintAgain) == nullptr;
         }
@@ -466,6 +517,13 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
         run.hiddenTooTint = reshape.hiddenToo != 0 && client.Get<Tint>(reshape.hiddenToo) != nullptr;
         run.hiddenTintSame = run.hiddenTint && server.Get<Tint>(reshape.hidden) != nullptr &&
                              *client.Get<Tint>(reshape.hidden) == *server.Get<Tint>(reshape.hidden);
+    }
+    if (Placing().on) {
+        run.placedThere = client.Get<N::Placed>(kPlacedCrate) != nullptr;
+        run.placedReceiving = run.placedThere && client.Get<N::NotReceiving>(kPlacedCrate) == nullptr;
+        run.placedBodySame = client.Get<Body>(kPlacedCrate) != nullptr && server.Get<Body>(kPlacedCrate) != nullptr &&
+                             *client.Get<Body>(kPlacedCrate) == *server.Get<Body>(kPlacedCrate);
+        run.placedTintSame = client.Get<Tint>(kPlacedCrate) != nullptr && *client.Get<Tint>(kPlacedCrate) == Tint{123};
     }
     run.rollbacksForEntries = client.Resource<R::RollbackHistory>()->rollbacksForEntries;
     run.notSentLeftOut = client.Resource<R::RollbackHistory>()->notSentLeftOut;
@@ -800,4 +858,31 @@ TEST_CASE("k3: the client's own Peer entity outlives the rollbacks to points bef
     REQUIRE_MESSAGE(sample.Replica().inboxConfirmed.has_value(), "values were confirmed (the rollbacks ran)");
     CHECK_MESSAGE(sample.ClientWorld().Alive(peer), "[nt-k3-peer-kept] the client's Peer entity is still alive");
     CHECK(sample.Peer(sample.ClientWorld()) == peer);
+}
+
+TEST_CASE("k3: a Placed entity is attached without an entry, hidden by its rule and attached again; G-10 still holds") {
+    // Without the Placed crate: the player, put at both ends and spawned by the server, is the one entry while alive.
+    const Run without = RunSample(Slow(), 1, 300);
+    for (const N::HiddenRule rule : {N::HiddenRule::Detach, N::HiddenRule::Retain}) {
+        CAPTURE(static_cast<int>(rule));
+        Placing() = PlacedCase{true, rule};
+        const Run run = RunSample(Slow(), 1, 300);
+        Placing() = PlacedCase{};
+        MESSAGE("Placed (rule " << static_cast<int>(rule) << "): " << Counts(run) << " | attaches=" << run.replica.attaches
+                                << " hides=" << run.replica.hides);
+        REQUIRE_MESSAGE(run.serverDigest.has_value(), "G-10: the Match recorded the client's step P");
+        CHECK_MESSAGE(run.clientDigest == *run.serverDigest, "[net-placed-k3] G-10: at its step P the client's Digest equals the Match's");
+        CHECK_MESSAGE(run.replica.inboxEntries == run.serverEntered, "[net-placed-k3] the Placed crate is attached, not entered");
+        CHECK_MESSAGE(run.replica.entriesWhileAlive == without.replica.entriesWhileAlive,
+                      "[net-placed-k3] the Placed crate adds no entry for an entity the client has");
+        CHECK(run.replica.drops[static_cast<std::size_t>(N::ReplicaDrop::SpawnRejected)] == 0);
+        CHECK(run.replica.drops[static_cast<std::size_t>(N::ReplicaDrop::MissingTarget)] == 0);
+        CHECK_MESSAGE(run.replica.attaches >= 2, "[net-placed-k3] attached at the start and again after the hide");
+        CHECK_MESSAGE(run.replica.hides >= 1, "[net-placed-k3] hidden once");
+        CHECK_MESSAGE(run.placedMarkedWhileHidden, "[net-placed-k3] hidden, it carries NotReceiving");
+        CHECK_MESSAGE(run.placedThere, "[net-placed-k3] the crate stays at the client");
+        CHECK_MESSAGE(run.placedReceiving, "[net-placed-k3] attached again, it receives");
+        CHECK_MESSAGE(run.placedBodySame, "[net-placed-k3] its rolling-back Body is the server's");
+        CHECK_MESSAGE(run.placedTintSame, "[net-placed-k3] its Tint (does not roll back) is there");
+    }
 }

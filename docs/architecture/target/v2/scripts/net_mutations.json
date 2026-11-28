@@ -1560,6 +1560,123 @@
    "target": "gyo_net_tests",
    "cases": "clock: a client at tick 0 jumps*",
    "expect": "\\[nt\\-clock\\-remote\\]"
+  },
+  {
+   "id": "nt-placed-attach-as-spawn",
+   "what": "the server spawns a Placed entity instead of attaching it",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                opWriter.Value(static_cast<std::uint8_t>(attach ? 3 : spawn ? 1 : 0));",
+   "replace": "                opWriter.Value(static_cast<std::uint8_t>(spawn ? 1 : 0));",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-attach\\]"
+  },
+  {
+   "id": "nt-placed-hide-as-despawn",
+   "what": "a hidden Placed entity is despawned at the client",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (SystemResult marked = MarkNotReceiving(world, entity); !marked) return marked;\n            std::erase(state.attached, entity);\n            ++state.hides;\n",
+   "replace": "            (void)world.Despawn(entity);\n            continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: Detach*",
+   "expect": "\\[net\\-placed\\-detach\\]"
+  },
+  {
+   "id": "nt-placed-attach-unchecked",
+   "what": "an attach is applied without the client's Placed entity (a stray entity is made)",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        if (flags == 3 && !IsPlaced(world, entity)) {",
+   "replace": "        if (false) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: a client without the entity*",
+   "expect": "\\[net\\-placed\\-missing\\]"
+  },
+  {
+   "id": "nt-placed-k3-entered",
+   "what": "a K3 client writes Entered for an attached Placed entity",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        const bool spawnK3 = rolling != nullptr && flags == 1;",
+   "replace": "        const bool spawnK3 = rolling != nullptr && (flags == 1 || flags == 3);",
+   "target": "gyo_net_tests",
+   "cases": "k3: a Placed entity*",
+   "expect": "\\[net\\-placed\\-k3\\]"
+  },
+  {
+   "id": "nt-placed-retain-as-detach",
+   "what": "Retain takes the replicated components off like Detach",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            if (static_cast<HiddenRule>(rule) == HiddenRule::Detach) {",
+   "replace": "            if (true) {",
+   "target": "gyo_net_tests",
+   "cases": "placed: Retain*",
+   "expect": "\\[net\\-placed\\-retain\\]"
+  },
+  {
+   "id": "nt-placed-attach-keeps-marker",
+   "what": "an attach does not take NotReceiving off",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            (void)world.Remove<NotReceiving>(entity);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-attach\\]"
+  },
+  {
+   "id": "nt-placed-attach-not-whole",
+   "what": "an attach leaves a component the server took off while the entity was hidden (P3)",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "            TakeOffReplicated(world, registry, state, entity, tick, rolling, attachedWires);\n",
+   "replace": "",
+   "target": "gyo_net_tests",
+   "cases": "placed: a replicated component the server took off*",
+   "expect": "\\[net\\-placed\\-attach\\-whole\\]"
+  },
+  {
+   "id": "nt-placed-hidden-despawn-lost",
+   "what": "a hidden Placed entity the server removed is never removed at its client",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "                if (PlacedRule(world, entity)) continue;\n",
+   "replace": "                continue;\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: a despawn at the server*",
+   "expect": "\\[net\\-placed\\-despawn\\]"
+  },
+  {
+   "id": "nt-placed-no-first-marker",
+   "what": "a Placed entity not attached yet does not carry NotReceiving",
+   "guards": [
+    "interact-door-declaration 4.2, 4.3, 4.5"
+   ],
+   "file": "engine/modules/net/src/Replication.cpp",
+   "find": "        return MarkUnattached(world, attached);\n",
+   "replace": "        return {};\n",
+   "target": "gyo_net_tests",
+   "cases": "placed: an entity both ends put in*",
+   "expect": "\\[net\\-placed\\-before\\-attach\\]"
   }
  ]
 }

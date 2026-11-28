@@ -195,6 +195,9 @@ void NetModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<PeerControls>({.name = "PeerControls"});
     r.Component<PeerVisibility>({.name = "PeerVisibility"});
     r.Component<NetPriority>({.name = "NetPriority"});
+    r.Component<Placed>({.name = "Placed"});
+    r.Component<WhenHidden>({.name = "WhenHidden"});
+    r.Component<NotReceiving>({.name = "NotReceiving"});
     table.role = role->role;
     r.Resource<NetWorldLink>({.name = "NetWorldLink"});
     r.Resource<NetWorldRole>({.name = "NetWorldRole"});
