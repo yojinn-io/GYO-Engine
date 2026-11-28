@@ -352,7 +352,7 @@
       "replace": "            if (false) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\-hdr\\-picture\\-cleared\\]"
+      "expect": "\\[cp\\-hdr\\-all\\]"
     },
     {
       "id": "cp-hdr-first-not-cleared",
@@ -367,7 +367,7 @@
       "replace": "            if (camera.clear) {",
       "target": "gyo_render_tests",
       "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\-hdr\\-first\\-transparent\\]"
+      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
     },
     {
       "id": "cp-hdr-colour-first-only",
@@ -381,7 +381,7 @@
       "replace": "            if (firstOnPicture) {",
       "target": "gyo_render_tests",
       "cases": "compose: Hdr cameras on one target*",
-      "expect": "\\[cp\\-hdr\\-colour\\-clears\\-whole\\]"
+      "expect": "\\[cp\\-hdr\\-shared\\-all\\]"
     },
     {
       "id": "cp-hdr-clear-colour-dropped",
@@ -409,7 +409,7 @@
       "replace": "            if (false) {",
       "target": "gyo_render_tests",
       "cases": "compose: a Hdr camera draws on its picture*",
-      "expect": "\\[cp\\-hdr\\-output\\-cleared\\]"
+      "expect": "\\[cp\\-hdr\\-all\\]"
     },
     {
       "id": "cp-hdr-output-cleared-as-plain",
@@ -550,7 +550,7 @@
       "replace": "",
       "target": "gyo_render_tests",
       "cases": "render_extract: Hdr 3D cameras*",
-      "expect": "\\[re\\-hdr\\-picture\\]"
+      "expect": "R-E4 .*'ExtractHdr'"
     },
     {
       "id": "gh-picture-8bit",

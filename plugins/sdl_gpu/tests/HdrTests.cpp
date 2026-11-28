@@ -167,8 +167,8 @@ TEST_CASE("sdl_gpu hdr: light past 1 on a Rgba16Float picture comes out of each 
             commands.passes.push_back(R::TonemappingPass(picture, std::nullopt, std::nullopt, curve.method));
             const Picture p = c.Frame(commands);
             const R::Color8 expected = R::TonemapToBytes(curve.method, {light[0], light[1], light[2]}, light[3]);
-            CHECK_MESSAGE(p.tally.skippedDraws == 0, curve.tag, " drawn: ", p.tally.lastRefusal);
-            CHECK_MESSAGE(p.Near(0, 0, 8, 8, expected), curve.tag, " light ", light[0], ", ", light[1], ", ", light[2]);
+            CHECK_MESSAGE(p.tally.skippedDraws == 0, curve.tag << " drawn: " << p.tally.lastRefusal);
+            CHECK_MESSAGE(p.Near(0, 0, 8, 8, expected), curve.tag << " light " << light[0] << ", " << light[1] << ", " << light[2]);
         }
     }
 }
@@ -208,7 +208,7 @@ TEST_CASE("sdl_gpu hdr: the unlit 3D pass and a clear on a picture, through no c
     hdr.passes.push_back(Scene(picture, kColour));
     hdr.passes.push_back(R::TonemappingPass(picture, std::nullopt, std::nullopt, Method::None));
     const Picture through = c.Frame(hdr);
-    CHECK_MESSAGE(through.tally.skippedDraws == 0, "[gh-unlit-drawn] ", through.tally.lastRefusal);
+    CHECK_MESSAGE(through.tally.skippedDraws == 0, "[gh-unlit-drawn] " << through.tally.lastRefusal);
     CHECK_MESSAGE(through.Near(0, 0, 4, 8, kColour), "[gh-unlit-linear] the unlit colour stands on the picture for its light");
     CHECK_MESSAGE(through.Near(4, 0, 8, 8, kClear), "[gh-clear-decoded] the clear colour stands on the picture for its light");
 }

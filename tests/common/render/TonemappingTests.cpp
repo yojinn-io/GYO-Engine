@@ -35,7 +35,7 @@ constexpr std::array<M::Vec3, 5> kStimuli{{{4.0F, 4.0F, 4.0F}, {0.5F, 0.25F, 0.1
 void CheckCurve(const Method method, const std::array<std::array<float, 3>, 5>& expected, const char* tag) {
     for (std::size_t i = 0; i < kStimuli.size(); ++i) {
         const M::Vec3 got = R::Tonemap(method, kStimuli[i]);
-        CHECK_MESSAGE(Near(got, expected[i]), tag, " stimulus ", i, ": ", got.x, ", ", got.y, ", ", got.z);
+        CHECK_MESSAGE(Near(got, expected[i]), tag << " stimulus " << i << ": " << got.x << ", " << got.y << ", " << got.z);
     }
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("render: the default tonemapping, the sRGB transfer function and Expos
     for (int byte = 0; byte <= 255; ++byte) {
         const float encoded = static_cast<float>(byte) / 255.0F;
         const long back = std::lround(R::LinearToSrgb(R::SrgbToLinear(encoded)) * 255.0F);
-        CHECK_MESSAGE(back == byte, "[tm-round-trip] byte ", byte, " decodes and encodes back to itself");
+        CHECK_MESSAGE(back == byte, "[tm-round-trip] byte " << byte << " decodes and encodes back to itself");
     }
     // Bevy's Exposure::exposure: exp2(-ev100) / 1.2; Exposure::BLENDER (9.7) by default.
     CHECK_MESSAGE(R::Exposure{}.ev100 == 9.7F, "[tm-exposure-default] Blender's EV100");
