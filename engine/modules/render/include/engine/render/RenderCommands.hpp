@@ -273,6 +273,10 @@ struct PassWrites final {
 // depth target.
 [[nodiscard]] std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept;
 
+// The name of a pass's kind: its type's ("Pass2D", "Pass3D", "PassFullscreen", "PassDepth"), for a backend's debug
+// labels and reports (render-pipeline declaration 15).
+[[nodiscard]] const char* PassKindName(const RenderPass& pass) noexcept;
+
 // What a pass samples, in the order it names them: its draws' textures (the white texture left out) or a full-screen
 // pass's inputs. What it draws on (WritesOf) is not sampled: a backend skips a draw that names it.
 [[nodiscard]] std::vector<TextureId> ReadsOf(const RenderPass& pass);

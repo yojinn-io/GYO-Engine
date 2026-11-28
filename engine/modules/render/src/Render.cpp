@@ -76,6 +76,16 @@ std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
     return writes.colour ? writes.colourTarget : writes.depthTarget;
 }
 
+const char* PassKindName(const RenderPass& pass) noexcept {
+    return std::visit(Overloaded{
+                          [](const Pass2D&) { return "Pass2D"; },
+                          [](const Pass3D&) { return "Pass3D"; },
+                          [](const PassFullscreen&) { return "PassFullscreen"; },
+                          [](const PassDepth&) { return "PassDepth"; },
+                      },
+                      pass);
+}
+
 std::vector<TextureId> ReadsOf(const RenderPass& pass) {
     std::vector<TextureId> reads;
     std::visit(Overloaded{
