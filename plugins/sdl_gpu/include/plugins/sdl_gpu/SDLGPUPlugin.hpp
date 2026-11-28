@@ -17,7 +17,8 @@
 //   mode when render's Presentation changed (Bevy's present_mode_changed, bevy_render/src/view/window/mod.rs:220),
 //   applies this frame's texture and mesh asks, draws the passes (2D and 3D, in their order) on the window and shows
 //   the picture, through the
-//   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It only reads the render World (SDL-5). What went wrong is told
+//   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It reads the render World and writes only the frame's
+//   receipt, RenderFrameReceipt: what the frame got done (SDL-5). What went wrong is told
 //   through SDLGPUStatus and is never the System's error: a System's error would break the World and end the
 //   Product (O-11), and a minimized window or a refused texture is no reason for that.
 //

@@ -85,7 +85,7 @@ R::Pass2D Cleared(const R::Color8 colour) {
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
-    // What the backend got done (render-pipeline declaration 14.12).
+    // What the backend got done (render-pipeline declaration 14.13).
     R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
@@ -151,7 +151,7 @@ TEST_CASE("sdl_gpu pass2d: a texture is sampled top row first, nearest pixel, ti
     R::Pass2D pass = Cleared(kBlue);
     Quad(pass, Rect{0, 0, 8, 8}, kWhite, id);
     commands.passes.push_back(std::move(pass));
-    const Picture p = Draw(commands, &textures);
+    Picture p = Draw(commands, &textures);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kRed), "[gp-tex-top-left] texture row 0 is on top, pixel 0 on the left");
     CHECK_MESSAGE(p.All(4, 0, 8, 4, kGreen), "[gp-tex-top-right] top right");
     CHECK_MESSAGE(p.All(0, 4, 4, 8, kWhite), "[gp-tex-bottom-left] bottom left");
@@ -159,19 +159,19 @@ TEST_CASE("sdl_gpu pass2d: a texture is sampled top row first, nearest pixel, ti
     CHECK_MESSAGE(Device().TextureCount() == 1, "[gp-tex-made] the texture has a GPU texture");
 
     // The next frame: the texture stays; an update replaces its region; the vertex colour multiplies.
-    textures.ClearPending();
+    textures.EndFrame(commands, p.receipt);
     textures.Update(id, R::TextureRegion{1, 0, 1, 1}, {0, 0, 255, 255});
     R::RenderCommands next;
     R::Pass2D tinted = Cleared(kBlue);
     Quad(tinted, Rect{0, 0, 8, 8}, R::Color8{255, 0, 255, 255}, id);
     next.passes.push_back(std::move(tinted));
-    const Picture q = Draw(next, &textures);
+    Picture q = Draw(next, &textures);
     CHECK_MESSAGE(q.All(0, 0, 4, 4, kRed), "[gp-tex-kept] the texture is kept between frames (red times magenta is red)");
     CHECK_MESSAGE(q.All(4, 0, 8, 4, kBlue), "[gp-tex-update] the updated region is blue now");
     CHECK_MESSAGE(q.All(0, 4, 4, 8, R::Color8{255, 0, 255, 255}), "[gp-tex-tint] white times magenta is magenta");
 
     // Let go: a draw naming it is skipped and counted.
-    textures.ClearPending();
+    textures.EndFrame(next, q.receipt);
     textures.Release(id);
     R::RenderCommands gone;
     R::Pass2D after = Cleared(kBlue);
@@ -191,13 +191,13 @@ TEST_CASE("sdl_gpu pass2d: a Linear texture is blended between its pixels") {
     R::Pass2D pass = Cleared(kBlue);
     Quad(pass, Rect{0, 0, 8, 8}, kWhite, id);
     commands.passes.push_back(std::move(pass));
-    const Picture p = Draw(commands, &textures);
+    Picture p = Draw(commands, &textures);
     CHECK_MESSAGE(p.All(0, 0, 2, 8, R::Color8{0, 0, 0, 255}), "[gp-linear-left] left of the first texel's centre: black (clamped)");
     CHECK_MESSAGE(p.All(6, 0, 8, 8, kWhite), "[gp-linear-right] right of the last texel's centre: white");
     // Pixel 3: texel position 0.375, so 0.375 of the way to white (95.6); the GPU's filter precision may differ by 2.
     const R::Color8 between = p.At(3, 4);
     CHECK_MESSAGE((Diff(between.r, 96) <= 2 && between.r == between.g && between.g == between.b), "[gp-linear-between] blended between them");
-    textures.ClearPending();
+    textures.EndFrame(commands, p.receipt);
     textures.Release(id);
     static_cast<void>(Draw(R::RenderCommands{}, &textures));
 }
@@ -550,12 +550,13 @@ struct TargetCase {
     Picture Frame(const R::RenderCommands& commands, const R::TargetSize size = kSize) {
         textures.SetMainSize(size);
         Picture picture;
-        auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally, picture.receipt);
+        R::RenderFrameReceipt receipt;
+        auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally, receipt);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
-        // As render_world's Cleanup: the backend's receipt applied, then the asks cleared.
-        textures.Apply(picture.receipt);
-        textures.ClearPending();
+        // As render_world's Cleanup: the frame ends with the backend's receipt (kept in the picture as it was written).
+        picture.receipt = receipt;
+        textures.EndFrame(commands, receipt);
         return picture;
     }
     ~TargetCase() {

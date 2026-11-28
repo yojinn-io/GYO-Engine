@@ -115,8 +115,11 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
         if (const Render::CulledEntities* list = culled.Get(id)) e.culled = list->entities;
         list.emplace_back(std::move(e), waits);
     });
-    // A target none of whose cameras draws this frame keeps the picture it has: retained (one with none is not: a pass
-    // sampling it is RP-3's error). Its waiting cameras are not extracted; on a target another camera draws, they draw.
+    // A target none of whose cameras draws this frame stands as a frame drew it: retained (one never drawn at its size
+    // is not: a pass sampling it is RP-3's error; one drawn whose picture the GPU did not get, the backend skips what
+    // samples it and counts). Its waiting cameras are not extracted; on a target another camera draws, they draw.
+    // Waiting goes by the picture (the backend's receipt: a camera that can draw draws one without it again);
+    // retaining by what the program drew (an inactive camera cannot draw again: render-pipeline declaration 14.14).
     std::vector<Render::ExtractedCamera> drawing;
     for (auto& [e, waits] : list) {
         const auto on = std::find_if(named.begin(), named.end(), [&](const auto& n) { return e.target && n.first == *e.target; });
@@ -124,7 +127,7 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     }
     std::vector<Render::TextureId> retained;
     for (const auto& [texture, drawn] : named) {
-        if (!drawn && textures->HasPicture(texture)) retained.push_back(texture);
+        if (!drawn && textures->WasDrawn(texture)) retained.push_back(texture);
     }
     out.Get().retained = std::move(retained);
     // Entities come in ascending order; a stable sort by order keeps the entity order among equal orders.

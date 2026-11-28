@@ -25,6 +25,7 @@
 #include "engine/render/ShaderAbi.hpp"
 
 #include "../../EmbeddedShaders.hpp"
+#include "../../FrameDraws.hpp"
 #include "../../PresentModes.hpp"
 
 namespace GYO::Plugins::SDLGPU {
@@ -116,11 +117,12 @@ struct GPUTarget {
     SDL_GPUTextureFormat format = SDL_GPU_TEXTUREFORMAT_INVALID;
     // The texture's size (or the size SDL refused: no texture until the next size ask).
     R::TargetSize size{};
-    // Drawn on since it was made or made again (as RenderTextures's picture). Without one, its first pass clears it (to
-    // transparent black when it has no clear; a Depth target to 1).
+    // Its id (render's).
+    std::uint32_t id = 0;
+    // Drawn on by a frame handed to the GPU since it was made or made again (as RenderTextures's picture). Without
+    // one, its first pass clears it (to transparent black when it has no clear; a Depth target to 1), and a draw
+    // sampling it in a frame that did not draw it is skipped and counted.
     bool picture = false;
-    // A pass of the frame being recorded drew on it: the receipt's, once the frame is handed to the GPU.
-    bool drawnThisFrame = false;
     // A Depth target (the device's depth format): drawn on by depth-only passes and as a 3D pass's depth.
     bool isDepth = false;
     // A colour target's own depth for its 3D passes (none for a Depth target).
@@ -275,6 +277,8 @@ struct GPUDevice::State {
     GPUTexture white;
     std::unordered_map<std::uint32_t, GPUTexture> textures;
     std::unordered_map<std::uint32_t, GPUTarget> targets;
+    // The targets the frame being recorded drew on (until it is handed to the GPU).
+    FrameDraws frameDraws;
     std::vector<Pipeline> pipelines;
     std::unordered_map<std::uint32_t, GPUMesh> meshes;
     std::vector<Pipeline3D> pipelines3d;
@@ -330,11 +334,13 @@ struct GPUDevice::State {
     }
 
     // What a draw naming id samples: the white texture for TextureId{}, a texture's, a target's; nullopt when it has no
-    // GPU texture.
+    // GPU texture, or (a target) no picture here: neither drawn by a frame handed to the GPU nor by this frame (a frame
+    // the GPU did not get: render-pipeline declaration 14.14).
     std::optional<Sampled> SampledOf(const R::TextureId id) const {
         if (id.value == 0) return Sampled{white.texture, R::TextureFilter::Linear};
         if (const auto it = textures.find(id.value); it != textures.end()) return Sampled{it->second.texture, it->second.filter};
-        if (const auto it = targets.find(id.value); it != targets.end() && it->second.texture != nullptr) {
+        if (const auto it = targets.find(id.value);
+            it != targets.end() && it->second.texture != nullptr && (it->second.picture || frameDraws.Drew(id.value))) {
             // A Depth target between its texels: the nearest (RenderTargetFormat::Depth).
             return Sampled{it->second.texture, it->second.isDepth ? R::TextureFilter::Nearest : it->second.filter};
         }
@@ -654,11 +660,14 @@ struct GPUDevice::State {
                 if (t.texture == nullptr) {
                     ++tally.refusedAsks;
                 } else {
-                    receipt.Applied(sized->id, t.size);
+                    receipt.RecordApplied(sized->id, t.size);
                 }
             } else if (const auto* target = std::get_if<R::TextureTargetCreate>(&ask)) {
-                // Its texture is made by its first TextureTargetSize.
+                // Its texture is made by its first TextureTargetSize. Asked again for one it has (render asks for a
+                // target whose size was not applied again whole): nothing to do, ids are never given twice.
+                if (targets.contains(target->id.value)) continue;
                 GPUTarget made;
+                made.id = target->id.value;
                 made.filter = target->desc.filter;
                 made.isDepth = target->desc.format == R::RenderTargetFormat::Depth;
                 made.format = SDLTargetFormat(target->desc.format, depthFormat);
@@ -883,27 +892,15 @@ struct GPUDevice::State {
         return true;
     }
 
-    // A pass begins drawing on a render target: true when the target has no picture (made or made again and not drawn
-    // on since), so the pass clears it instead of keeping it (colour: its clear or transparent black; depth: 1). From
-    // then on it has a picture. The one place where a target gets one.
-    static bool BeginWrite(GPUTarget& target) noexcept {
-        const bool undefined = !target.picture;
-        target.picture = true;
-        target.drawnThisFrame = true;
-        return undefined;
-    }
+    // A pass begins drawing on a render target: true when its picture is undefined (no picture, not drawn on yet this
+    // frame), so the pass clears it instead of keeping it (colour: its clear or transparent black; depth: 1).
+    bool BeginWrite(const GPUTarget& target) { return frameDraws.Begin(target.id, target.picture); }
 
-    // After the frame's command buffer: handed to the GPU (submitted), the targets its passes drew on go in the receipt
-    // (render-pipeline declaration 14.12); not handed (cancelled, refused), they have no picture here either.
-    void Settle(const bool submitted, R::RenderFrameReceipt& receipt) {
-        for (auto& [id, t] : targets) {
-            if (!t.drawnThisFrame) continue;
-            t.drawnThisFrame = false;
-            if (submitted) {
-                receipt.Drawn(R::TextureId{id});
-            } else {
-                t.picture = false;
-            }
+    // The frame was handed to the GPU: the targets its passes drew on have a picture from now on, and go in the receipt
+    // (render-pipeline declaration 14.13, 14.14). A frame not handed (cancelled, refused) leaves them as they were.
+    void Commit(R::RenderFrameReceipt& receipt) {
+        for (const std::uint32_t id : frameDraws.Commit(receipt)) {
+            if (const auto it = targets.find(id); it != targets.end()) it->second.picture = true;
         }
     }
 
@@ -911,7 +908,7 @@ struct GPUDevice::State {
     // the target's picture is undefined (the main target's first pass of the frame, a render target made or made again
     // since it was last drawn on); else as the target is (Bevy's LoadOp::Load, texture_attachment.rs:52). Marks the
     // target begun.
-    static SDL_GPUColorTargetInfo StartColour(const Target& on, const std::optional<R::Color8>& clear, bool& mainBegun) {
+    SDL_GPUColorTargetInfo StartColour(const Target& on, const std::optional<R::Color8>& clear, bool& mainBegun) {
         bool undefined = false;
         if (on.target != nullptr) {
             undefined = BeginWrite(*on.target);
@@ -986,6 +983,7 @@ struct GPUDevice::State {
                    const R::RenderCommands& commands, const std::optional<Target>& main, FrameTally& tally, std::string& error,
                    R::RenderFrameReceipt& receipt) {
         Frame frame;
+        frameDraws.Clear();
         ApplyAsks(asks, frame, tally, receipt);
         ApplyMeshAsks(meshAsks, frame, tally);
         const std::vector<std::optional<Target>> resolved = ResolveTargets(commands, main, tally);
@@ -1406,7 +1404,7 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
     const bool uploaded = state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error, receipt);
     if (!uploaded) lastError_ = std::move(error);
     const bool submitted = SDL_SubmitGPUCommandBuffer(cmd);
-    state_->Settle(submitted, receipt);
+    if (submitted) state_->Commit(receipt);
     if (!submitted) {
         lastError_ = SDLError("SDL_SubmitGPUCommandBuffer");
         return FrameOutcome::Failed;
@@ -1450,7 +1448,6 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     const State::Target main{target, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, size, &state_->depth, nullptr};
     if (!state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error, receipt)) {
         SDL_CancelGPUCommandBuffer(cmd);
-        state_->Settle(false, receipt);
         cleanup();
         return Err(std::move(error));
     }
@@ -1467,7 +1464,7 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     SDL_DownloadFromGPUTexture(copy, &source, &destination);
     SDL_EndGPUCopyPass(copy);
     SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
-    state_->Settle(fence != nullptr, receipt);
+    if (fence != nullptr) state_->Commit(receipt);
     if (fence == nullptr) {
         cleanup();
         return Err(SDLError("SDL_SubmitGPUCommandBufferAndAcquireFence"));

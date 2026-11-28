@@ -28,13 +28,12 @@ const RenderWorldOptions& OptionsOf(const RenderWorldOptions* given) {
 SystemResult ClearRenderFrame(Kernel::ResMut<Render::RenderCommands> commands, Kernel::ResMut<Render::RenderTextures> textures,
                               Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images,
                               Kernel::ResMut<Render::RenderFrameReceipt> receipt) {
-    // What the backend got done this frame (its receipt, written in the Submit stage of this frame; render-pipeline
-    // declaration 14.12, SDL-5): the pictures and the sizes applied. Read, then cleared for the next frame.
-    textures.Get().Apply(receipt.Read());
+    // What this frame drew and what the backend got done (its receipt, written in the Submit stage of this frame;
+    // render-pipeline declaration 14.13, SDL-5), then the next frame's asks; the receipt is read, then cleared.
+    textures.Get().EndFrame(commands.Read(), receipt.Read());
     receipt.Get().Clear();
     commands.Get().passes.clear();
     commands.Get().retained.clear();
-    textures.Get().ClearPending();
     meshes.Get().ClearPending();
     // After the asks were cleared: the textures of held images no drawable showed this frame go with the next frame's
     // asks (every pipeline's extract has run by now, whichever order they ran in).

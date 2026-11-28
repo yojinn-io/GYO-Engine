@@ -92,7 +92,7 @@ std::vector<TextureId> ReadsOf(const RenderPass& pass) {
 std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, const RenderTextures& textures) {
     std::vector<TextureId> written;
     for (const TextureId id : commands.retained) {
-        if (textures.HasPicture(id)) written.push_back(id);
+        if (textures.WasDrawn(id)) written.push_back(id);
     }
     for (std::size_t i = 0; i < commands.passes.size(); ++i) {
         const PassWrites writes = WritesOf(commands.passes[i]);
@@ -106,11 +106,11 @@ std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, 
     return std::nullopt;
 }
 
-void RenderFrameReceipt::Drawn(const TextureId target) {
+void RenderFrameReceipt::RecordDrawn(const TextureId target) {
     if (std::find(drawn_.begin(), drawn_.end(), target) == drawn_.end()) drawn_.push_back(target);
 }
 
-void RenderFrameReceipt::Applied(const TextureId target, const TargetSize size) {
+void RenderFrameReceipt::RecordApplied(const TextureId target, const TargetSize size) {
     const auto it = std::find_if(applied_.begin(), applied_.end(), [&](const TextureTargetSize& a) { return a.id == target; });
     if (it != applied_.end()) {
         it->size = size;
@@ -212,7 +212,7 @@ TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
     const TextureId id{next_++};
     live_.emplace_back(id.value, desc);
     pending_.emplace_back(TextureTargetCreate{id, desc});
-    targets_.push_back(TargetState{id.value, std::nullopt, std::nullopt, false, false});
+    targets_.push_back(TargetState{id.value});
     ResolveSizes();
     return id;
 }
@@ -235,11 +235,19 @@ void RenderTextures::ResolveSizes() {
         }
         if (wanted && t.size != wanted) {
             t.size = wanted;
+            t.applied.reset();
+            t.drawn = false;
             t.picture = false;
             t.asked = false;
         }
         if (!t.size || t.applied == t.size || t.asked) continue;
         t.asked = true;
+        if (t.unanswered) {
+            // Not answered (no command buffer took the frame's asks): its making may be lost too. Making a target the
+            // backend has is nothing to do there (ids are never given twice).
+            pending_.emplace_back(TextureTargetCreate{TextureId{t.id}, *desc});
+            t.unanswered = false;
+        }
         pending_.emplace_back(TextureTargetSize{TextureId{t.id}, *t.size});
     }
 }
@@ -257,8 +265,25 @@ void RenderTextures::Apply(const RenderFrameReceipt& receipt) {
 
 void RenderTextures::ClearPending() {
     pending_.clear();
-    for (TargetState& t : targets_) t.asked = false;
+    for (TargetState& t : targets_) {
+        t.unanswered = t.asked && t.applied != t.size;
+        t.asked = false;
+    }
     ResolveSizes();
+}
+
+void RenderTextures::EndFrame(const RenderCommands& commands, const RenderFrameReceipt& receipt) {
+    for (const RenderPass& pass : commands.passes) {
+        const PassWrites writes = WritesOf(pass);
+        for (const std::optional<TextureId>& on : {writes.colour ? writes.colourTarget : std::nullopt, writes.depthTarget}) {
+            if (!on) continue;
+            for (TargetState& t : targets_) {
+                if (t.id == on->value && t.size) t.drawn = true;
+            }
+        }
+    }
+    Apply(receipt);
+    ClearPending();
 }
 
 std::optional<TargetSize> RenderTextures::SizeOf(const TextureId id) const noexcept {
@@ -266,6 +291,13 @@ std::optional<TargetSize> RenderTextures::SizeOf(const TextureId id) const noexc
         if (t.id == id.value) return t.size;
     }
     return std::nullopt;
+}
+
+bool RenderTextures::WasDrawn(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.drawn;
+    }
+    return false;
 }
 
 bool RenderTextures::HasPicture(const TextureId id) const noexcept {

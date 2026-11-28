@@ -243,9 +243,9 @@
    "guards": [
     "render RD-2"
    ],
-   "file": "engine/modules/render_world/src/RenderWorldModule.cpp",
-   "find": "    textures.Get().ClearPending();\n",
-   "replace": "",
+   "file": "engine/modules/render/src/Render.cpp",
+   "find": "    Apply(receipt);\n    ClearPending();\n}",
+   "replace": "    Apply(receipt);\n}",
    "target": "gyo_render_tests",
    "cases": "render_world: Submit*",
    "expect": "\\[rw\\-cleanup\\-asks\\]"

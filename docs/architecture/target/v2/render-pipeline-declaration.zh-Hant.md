@@ -473,8 +473,8 @@ phase、全畫面 pass、只寫深度的 pass（A2）；除錯標記與計時（
 ### 14.5 測試與突變
 
 - 測試：`RenderTests.cpp`（`render.data`）二案；`Pipeline3dTests.cpp`（`render.pipeline3d`）一案；`PipelineWorldTests.cpp`（`render.extract`）一案；`SDLGPUTests.cpp`（`sdl_gpu.shaders`）一案；新 `plugins/sdl_gpu/tests/PhaseTests.cpp`：`sdl_gpu phases:` 三案（ctest `sdl_gpu.phases`，標籤 `gpu`）、`sdl_gpu unwritten:` 一案（ctest `sdl_gpu.unwritten`，標籤 `gpu`，`PASS_REGULAR_EXPRESSION` 看成功的標籤，失敗的標籤不同）。
-- 突變：`tests/common/render/phase_mutations.json`，現在 41 個（P1～P9、修訂 1、第 14.11／14.12 節 U1～U3 與 B-1 各個獨立可錯的判斷；沒加、退役的與理由在檔案的 `description`）。
-- 數量的說明（合併前核准用）：改的條文是 RD-4、RD-11、新 RD-12、RP-3，共 4 條，門檻 20；41 個超過的理由：最初的 23 個是 RD-12 綁了 phase 的先後、不屬於相機的 view、三個 Module 各自的 phase、兩種新 pass、讀的宣告這幾個獨立的決定（README 基準 3 不設上限，只要求每個都寫出別的抓不到的錯）。
+- 突變：`tests/common/render/phase_mutations.json`，現在 58 個（P1～P9、修訂 1、第 14.11～14.14 節各個獨立可錯的判斷；沒加、退役的與理由在檔案的 `description`）。
+- 數量的說明（合併前核准用）：改的條文是 RD-4、RD-11、新 RD-12、RP-3，共 4 條（第 14.13 節另改 SDL-5），門檻 20；58 個超過的理由：第 14.11～14.14 節每一節的機制（資料側的大小、更新模式、沿用、收據、兩份畫面）各有幾個獨立的決定，每個一個突變（README 基準 1、3），最初的 23 個是 RD-12 綁了 phase 的先後、不屬於相機的 view、三個 Module 各自的 phase、兩種新 pass、讀的宣告這幾個獨立的決定（README 基準 3 不設上限，只要求每個都寫出別的抓不到的錯）。
 - 既有突變（D184）：find 落在本批改過的程式裡的全部重跑（`GPUDevice.cpp` 的 3D 錄製與 pipeline、目標的建立；`ComposePasses`；`Render.cpp` 的 `Create`／`CreateTarget`；`ExtractCameras`），失效的改寫、守同一個性質；被改過的測試殺的（`cp-*`、`gp-pipe-*`）也重跑。結果記在 dev_log。
 
 ### 14.6 RC
@@ -591,10 +591,28 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 2. **收據的功能**（`RenderTextures.hpp` 的註解寫同一句）：後端每幀寫、資料側讀完就清的緩衝，記這一幀實際畫了的 render target 與實際套用的大小，一個 target 一筆（同一個 target 畫兩次記一次；同一幀改兩次大小記後一個）。
 3. **同一幀讀**：後端在 Submit 寫，`render_world` 的 Cleanup（同一輪、Submit 之後）`Apply` 再清空。這對正確性有關係：下一幀的抽取（`ExtractCameras` 看 `HasPicture`）要看到這一幀的結果；若到下一幀才讀，下一幀的判斷會用上上一幀的畫面。
 4. **後端什麼時候記**（`GPUDevice.cpp`）：建好 target 的貼圖時記大小（SDL 拒絕的不記：資料側下一幀再要求，直到套用；後端每次都再試、每次都計 `refusedAsks`）；pass 畫過的 target 在 command buffer 交給 GPU 之後才記（交不出去時後端自己那份「有畫面」也拿掉，兩份一致）。上傳失敗的那一幀不錄任何 pass（既有的做法），所以沒有畫過的；拿不到 command buffer 時什麼都沒套用、什麼都不記。
-5. **從外面驗證**：三種失敗在後端那一側都引發不了，不加 Plugin 的測試專用鉤子就做不到（只為測試開的入口也是產品的一部分，不加）。(1)「SDL 拒絕大小」：試過比裝置最大的 2D 貼圖還寬的 target——Lavapipe 報 `maxImageDimension2D` 16384，65536×1 照樣建成（`refusedAsks` 0、沒有錯誤訊息，Linux 主機 `4860574e`）；SDL 的驗證只對 cube 貼圖查 2D 的大小（`SDL_gpu.c` 的 `SDL_CreateGPUTexture`，`MAX_2D_DIMENSION` 只用在 cube 與 cube array）；超過上限是 Vulkan 的未定義行為，靠記憶體不夠來拒絕要真的吃掉記憶體。(2)「上傳失敗」只在一幀超過 4 GiB、或 SDL 映射不了傳輸緩衝時發生；(3)「交 command buffer 中途失敗」只在驅動拒絕時發生。這三種收據的資料側反應用 headless 的替身測（`[rd-receipt-failed-*]`、`[rd-size-asked-until-applied]`、`[re-receipt-*]`），後端那一側只有審查。
+5. **從外面驗證**：三種失敗在後端那一側都引發不了，不加 Plugin 的測試專用鉤子就做不到（只為測試開的入口也是產品的一部分，不加）。(1)「SDL 拒絕大小」：試過比裝置最大的 2D 貼圖還寬的 target——Lavapipe 報 `maxImageDimension2D` 16384，65536×1 照樣建成（`refusedAsks` 0、沒有錯誤訊息，Linux 主機 `4860574e`）；SDL 的驗證只對 cube 貼圖查 2D 的大小，而且整段只在 debug mode 跑（`SDL_gpu.c` 的 `SDL_CreateGPUTexture`：`if (device->debug_mode)` 之內，`MAX_2D_DIMENSION` 只用在 cube 與 cube array）；超過上限是 Vulkan 的未定義行為，靠記憶體不夠來拒絕要真的吃掉記憶體。(2)「上傳失敗」只在一幀超過 4 GiB、或 SDL 映射不了傳輸緩衝時發生；(3)「交 command buffer 中途失敗」只在驅動拒絕時發生。這三種收據的資料側反應用 headless 的替身測（`[rd-receipt-failed-*]`、`[rd-size-asked-until-applied]`、`[re-receipt-*]`），後端那一側只有審查。
 6. **沒有後端就沒有畫面**：只有 `render_world` 的產品（工具、headless 測試）沒人寫收據，target 永遠沒有畫面、大小每幀再要求；不更新的相機每幀都畫。這是「沒畫成就沒有畫面」本身，不是例外。headless 的測試用一個「全部做成」的替身寫收據（`tests/common/render/Receipts.hpp`）。
-7. **沒有需要例外的地方**。留著的已知缺口（14.11 之前就有，設計審查 Note-1）：拿不到 command buffer 的那一幀，這一幀的建立要求（`TextureCreate`、`TextureTargetCreate`）被 Cleanup 清掉，後端不知道那個 target；之後它的大小要求每幀被拒、計數。收據只管「做成的事」，沒有記「要求有沒有被收下」；要收下的要求也進收據是另一個改動，不在這一批（RC-A2-9）。
+7. **沒有需要例外的地方**。留著的已知缺口（14.11 之前就有，設計審查 Note-1）：拿不到 command buffer 的那一幀，這一幀的建立要求（`TextureCreate`、`TextureTargetCreate`）被 Cleanup 清掉，後端不知道那個 target；之後它的大小要求每幀被拒、計數〔target 的部分由第 14.14 節第 4 點修掉〕。收據只管「做成的事」，沒有記「要求有沒有被收下」；要收下的要求也進收據是另一個改動，不在這一批（RC-A2-9）。
 
 **新 RC**：
 - **RC-A2-9**：拿不到 command buffer、或整幀沒套用要求的情形在實機出現 → 收據加上「收下的要求」，沒收下的建立要求留到下一幀（資料側的要求變成送到收下為止）。
+
+### 14.14 第 14.13 節的修訂：設計審查與純淨 Code Review 之後（2026-11-28）
+
+審查兩份（`build/evidence/v8-arch-gyo2-render-a2/design-review-receipt.zh-Hant.md`、`pure-code-review-receipt.zh-Hant.md`，不在 git）。使用者的 RP-3 一句「讀的 target 必須這一幀寫過或明示沿用，兩者皆非就斷言」與 SDL-5 (a) 不變；改的是機制（逐項在 dev_log）：
+
+1. **要了新的大小，舊的套用就不算數**（設計 B-1）：後端照新大小重建前先放掉舊貼圖（被拒時就沒有貼圖），所以資料側在大小變了的那一刻拿掉 `applied`（同 Bevy 有新版本時先拿掉舊的，`bevy_render/src/render_asset.rs:449-452`）。否則「拉大被拒、拉回原來的大小」時資料側以為舊的還在、不再要求。
+2. **後端的畫面也是「交給 GPU 了才算」**（設計 S-1、純淨 M1）：pass 畫過的 target 先記在這一幀的帳上（`FrameDraws`，`plugins/sdl_gpu/src/FrameDraws.hpp`，不含 SDL），交出去之後才在後端那一份與收據記成有畫面；交不出去時兩份都不動（沒交出去，貼圖上還是交出去前的內容）。第 14.13 節第 4 點的「兩份一致」從此在所有情形成立。
+3. **程式的事實與 GPU 的事實分開**（純淨 H1；AGENTS 第 1 節第 9 條：Assert 只給程式的誤り）。比過的兩個方向：
+   - (i)「沒有確認過畫面就強制重畫」：不更新的相機本來就這樣（沒有畫面就畫）；但 inactive 的相機（作者關掉的）不能替它畫，作者自己的 System 放的沿用也沒有相機可以重畫——只用 (i) 解不了，GPU 的失敗仍會在之後的幀變成斷言。
+   - (ii) **採用**：RP-3 判的是 `RenderCommands` 對資料側紀錄的錯。資料側在一幀結束時記下這一幀的 pass 畫了哪些 target（`RenderTextures::WasDrawn`：程式畫過它、在它現在的大小），沿用一張程式畫過的 target 就算寫過；**GPU 有沒有真的拿到那一幀**是後端的實況：後端那裡沒有畫面（這一幀也沒畫）的 target 被取樣時，跳過那個 draw、計 `skippedDraws`（同 B-1 的前例「深度大小不同 → 跳過、計數」，也同「取樣沒有 GPU 貼圖的 → 跳過、計數」）。收據的畫面（`HasPicture`）只用來決定「能畫的相機要不要重畫」：不更新的相機的 target 沒有確認過的畫面就再畫（(i) 留在它原本的位置）。
+   - inactive 的相機：它的 target 只要程式畫過就被沿用（`camera_render` 的沿用看 `WasDrawn`），GPU 沒拿到那一幀時取樣它的 draw 被跳過、計數；作者再把相機打開，它就畫。不需要例外：每張 target 的判斷仍是「它的相機這一幀都不畫 → 沿用」，「畫過」用程式的事實、「要不要重畫」用 GPU 的事實。
+4. **大小沒套用的 target 整個再要求**（純淨 M2 的一部分）：資料側對「要了大小、收據沒有」的 target，下一幀先送它的建立（`TextureTargetCreate`）再送大小；後端對已經有的 target 再建立什麼都不做（id 不重給）。拿不到 command buffer 而丟掉的建立就這樣補回來，SDL-5 的「沒套用就每幀再要求，直到套用」對 target 成立。和既有的「大小送到套用為止」是同一個機制，只是把建立一起送。`TextureCreate`／`TextureUpdate`／mesh 的要求不在這一批改（仍是送出就清，拿不到 command buffer 的那一幀會丟；RC-A2-9）。收據加上「拒絕＋原因」、作者自選重試策略是擴大範圍，不做（Note：`RenderFrameReceipt` 只記做成的事，「沒記」同時是沒有後端、這一幀失敗、SDL 拒絕三種；SDL 拒絕的大小每幀再試、每幀計數）。
+5. **一幀結束只有一個入口**（純淨 M4）：`RenderTextures::EndFrame(commands, receipt)`（同 `RenderImages::EndFrame`、`RenderModelMeshes::EndFrame`）：記下程式畫了什麼、讀收據、清掉這一幀的要求、排下一幀的要求，順序在裡面；`Apply`、`ClearPending` 變成私有。`render_world` 的 Cleanup 與所有測試都走它；收據由 Cleanup 在之後清空。
+6. **headless 的後端替身共用**（純淨 M3）：`tests/common/render/Receipts.hpp` 的 `AllDoneBackend`（掛在 Submit stage、寫「全部做成」的收據的 System，`AddAllDoneBackend` 掛上）；要畫成的 headless 測試明確選用它。`WorldUiTests`、object_connect 的 `RuntimeTests`、object_fps_pvp 的 `ClientTests` 在 Submit 掛的替身沒有寫收據：它們不建 render target（`CreateTarget`、`RenderTargets`、`TargetUpdate` 都沒有用到），收據只管 target，所以不受影響，不改。
+7. **命名**（設計 N-3、純淨 L2）：收據的寫入改成動詞 `RecordDrawn`／`RecordApplied`。
+
+**新 RC**：
+- **RC-A2-10**：作者要對被拒的大小降級、放棄或退避 → 收據加上「拒絕＋原因」，重試策略交作者選（和 RC-A2-9 一起）。
 

@@ -213,10 +213,49 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 
 ### 第 14.13 節的驗證
 
-- 本機（macOS Intel，只跑 cpu；`4860574e` 的內容）：全量建置成功；`ctest -L 'cpu|shader'` 256/257（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 93/93 killed（第 14.12 節的 88 個、新的 `rw-receipt-*`／`rd-receipt-*` 4 個、`gt-unwritten-*`）。
+- 本機（macOS Intel，只跑 cpu；`4860574e` 的內容）：全量建置成功；`ctest -L 'cpu|shader'` 256/257（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 93/93 killed（第 14.12 節的 88 個——其中已有 `gt-unwritten-not-asserted`——、新的 `rw-receipt-*`／`rd-receipt-*` 4 個、改到 cpu 案的 `gt-unwritten-always` 1 個）。
 - Linux 主機（`a22502ae`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`sdl_gpu.phases`、`unwritten`、`contracts`、`targets`、`pass2d` 5/5；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 61/61 killed（第 14.12 節的 59 個，加 `gd-receipt-size-not-applied`、`gd-receipt-drawn-not-given`）。
   - cpu|shader 那一步：腳本只留輸出的最後 4 行，摘要行（幾個通過）沒有抓到。判斷沒有失敗的根據是 `Testing/Temporary/LastTestsFailed.log` 沒有更新（最後一次寫是 00:09，`4860574e` 那一輪 `sdl_gpu.phases` 失敗時；`a22502ae` 這一輪在 00:12）。同一台主機在 `4860574e` 上手動跑過一次 `ctest -L 'cpu|shader'`，257/257；`a22502ae` 只改了 `PhaseTests.cpp`（label gpu）、突變目錄與文件。
   - `4860574e` 那一輪：`sdl_gpu.phases` 的「SDL 拒絕大小」一案失敗（上一節），GPU 突變的 runner 在 baseline 失敗時停下，沒有結果；拿掉那一案之後在 `a22502ae` 重跑，就是上面的數字。
+
+## 收據的設計審查與純淨 Code Review（2026-11-28）
+
+- 設計審查（Opus／high，`build/evidence/v8-arch-gyo2-render-a2/design-review-receipt.zh-Hant.md`）：Blocker 1、Should 4、Nit 6、Note 4。純淨 Code Review（Fable／high，範圍 `1a25c0f1..67e5ccbf`，`pure-code-review-receipt.zh-Hant.md`）：高 1、中 5、低 5。兩份都不在 git。主會話轉來要修的 9 項；設計 S-2（HANDOFF 那一列「下一幀讀取」）由主會話處理，這裡不改 HANDOFF。
+- 先寫失敗的測試（`67e5ccbf` 的程式，本機 `render.data`／`render.extract`）：
+
+  ```
+  RenderTests.cpp:375: ERROR: CHECK( sizeAsked(a) ) is NOT correct!   [rd-size-back-asked]
+  RenderTests.cpp:395: ERROR: CHECK( (made != pending.end() && sized != pending.end() && made < sized) )   [rd-target-asked-again-whole]
+  PipelineWorldTests.cpp:478: ERROR: CHECK( (PassesOn(seen[0].all, screen) > 0 && Retains(seen[1], screen) && ...) )   [re-receipt-inactive-retained]
+  test cases: 81 | 78 passed | 3 failed
+  ```
+
+  依序是設計 B-1、純淨 M2、純淨 H1。之後照宣告第 14.14 節修。
+
+| 指摘 | 結果 | 怎麼做／理由 |
+|---|---|---|
+| 設計 B-1 被拒的大小之後回到舊大小不再要求 | 採用 | 大小變了就拿掉 `applied`（同 Bevy `render_asset.rs:449-452`）；`[rd-size-back-asked]`、突變 `rd-size-applied-kept` |
+| 設計 S-1／純淨 M1 交不出去時兩份畫面不一致 | 採用 | 「先暫存、成功才提交」：`FrameDraws`（不含 SDL、放在 State 的幀帳上，不放在長壽的 `GPUTarget`），交出去才設畫面並寫收據，交不出去不動；`:1453` 那個不做事的呼叫拿掉（`Settle` 整個換成交出去之後的 `Commit`）。CPU 測試 `sdl_gpu.framedraws`；突變 `gd-draws-*`、`gd-drawn-this-frame-not-sampled` |
+| 純淨 H1 GPU 的失敗在之後的幀變成 RP-3 的斷言 | 採用 (ii) | 程式的事實（`WasDrawn`）給 RP-3 與沿用；GPU 的事實（`HasPicture`）給「能畫的相機要不要重畫」；後端那裡沒有畫面的 target 被取樣時跳過、計數。比過 (i)：inactive 的相機與作者自己的沿用沒有相機可以重畫，只用 (i) 仍會斷言。條文不改。測試 `[rd-receipt-failed-retained]`（改成「不是 RP-3 的錯」）、`[re-receipt-inactive-retained]`、GPU 的 `[gd-unconfirmed-*]`；突變 `rd-retained-by-picture`、`re-retained-by-picture`、`rd-drawn-not-recorded`、`gd-unconfirmed-sampled` |
+| 純淨 M2 拿不到 command buffer 時 target 的建立丟失 | 部分採用 | 大小沒套用的 target 下一幀整個再要求（建立＋大小），後端對已有的 target 再建立不做事；`[rd-target-asked-again-whole]`、GPU 的 `[gd-target-made-again-kept]`；突變 `rd-target-not-asked-again-whole`、`gd-target-made-again-replaced`。收據加「拒絕＋原因」、作者選重試策略＝擴大範圍，不做（RC-A2-10）；`TextureCreate`／`TextureUpdate`／mesh 的要求不在這一批改（RC-A2-9） |
+| 純淨 M3 沒人寫收據的 World 行為靜默地變了 | 採用 | 共用的替身 `AllDoneBackend`（`Receipts.hpp`，`AddAllDoneBackend` 掛在 Submit），`PipelineWorldTests` 明確選用；`Record` 只看、`FailFrames` 讓某幾幀沒做成（三個角色分開，純淨 L5）。`WorldUiTests`、`RuntimeTests`、`ClientTests` 不建 render target（`WorldUiTests` 只用主目標），不受影響 |
+| 純淨 M4 一幀的收尾散在各處 | 採用 | `RenderTextures::EndFrame(commands, receipt)`，`Apply`／`ClearPending` 私有；正式流程與所有測試走它。順序的突變 `rw-receipt-applied-after-clear`（設計 N-2） |
+| 純淨 M5 後端的失敗路徑沒測、`[gd-receipt]` 只比數量 | 採用 | `[gd-receipt]` 比對 id 與大小；「這一幀畫過誰」抽成不含 SDL 的 `FrameDraws` 並測（交出去／沒交出去）。adapter 只在 `SDL_SubmitGPUCommandBuffer`（或 fence）成功時呼叫 `Commit` 這一點仍只有審查：不加測試專用鉤子 |
+| 設計 S-2 HANDOFF 寫「下一幀讀取」 | 轉主會話 | 不改 HANDOFF |
+| 設計 S-3 第 14.12 節的引用 | 採用 | 程式、測試、突變的 `guards`／`what` 改成 14.13（14.14 的新突變寫 14.14） |
+| 設計 S-4 兩處「只讀渲染 World」 | 採用 | `SDLGPUPlugin.hpp`、sdl 頁 present mode 的那一句 |
+| 設計 N-1 突變數 | 採用 | 第 14.5 節改成 58 個與理由 |
+| 設計 N-2 Cleanup 的順序沒有突變 | 採用 | 隨 M4 收進 `EndFrame`，`rw-receipt-applied-after-clear` |
+| 設計 N-3／純淨 L2 方法名 | 採用一半 | `RecordDrawn`／`RecordApplied`。回覆用要求的型別（`TextureTargetSize`）、線性搜尋、不認得的 id 靜默略過：不改（加「拒絕」時再分型別；數量小；同一幀放掉的 target 需要略過） |
+| 設計 N-4 sdl 頁的更新一行 | 採用 | |
+| 設計 N-5 debug mode | 採用 | 第 14.13 節第 5 點補半句 |
+| 設計 N-6 93 的組成 | 採用 | 上一節寫清楚 |
+| 設計 Note-1、Note-3、Note-4 | 記下 | Note-1 的 target 部分由第 14.14 節第 4 點修掉，其餘是 RC-A2-9；Note-4 這一輪的腳本留摘要行 |
+| 設計 Note-2 作者的沿用因 GPU 失敗而斷言 | 隨 H1 消失 | render 頁第 2 節寫了新的行為 |
+| 純淨 L1 輸出參數一路往下傳 | 不改 | `FrameResult` 是整個 `GPUDevice` 介面的改法，不在這一批；幀帳 `FrameDraws` 已經是 State 持有的幀範圍狀態 |
+| 純淨 L3 收據不存在時靜默不畫 | 不改 | 和 `commands`／`textures`／`meshes` 同一個寫法；組裝錯誤的回報另議 |
+| 純淨 L4 單一寫入者、同一幀被拒後 `Applied` 還在 | 記下 | 資料側拿收據的大小和自己決定的比，不相等就再要求，結果對；兩個後端寫同一張收據沒有實際的觸發者 |
+| 純淨 L5 測試的重複與共用狀態 | 採用一部分 | `Record`／替身／`FailFrames` 分開；`TextureId{99}` 換成具名常數並寫理由；收據的兩件事拆成兩個 TEST_CASE；`AllDone` 改名 `AllDoneReceipt`。`Picture`／`TargetCase`／`PhaseCase` 的重複不搬（同上一輪 L6 的理由） |
 
 ## 沒做／沒跑
 

@@ -37,9 +37,12 @@ K::SystemResult AtLast(K::Res<R::RenderCommands>) {
     trail.push_back("last");
     return {};
 }
-// Where a backend submits: what it sees; it writes the frame's receipt (here: a target it drew on).
+// A target the backend says it drew on: one the World does not have (EndFrame passes it by); Cleanup clears the receipt.
+constexpr R::TextureId kDrawnByTheBackend{99};
+
+// Where a backend submits: what it sees; it writes the frame's receipt.
 K::SystemResult AtSubmit(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::ResMut<R::RenderFrameReceipt> receipt) {
-    receipt.Get().Drawn(R::TextureId{99});
+    receipt.Get().RecordDrawn(kDrawnByTheBackend);
     trail.push_back("submit passes=" + std::to_string(commands->passes.size()) + " asks=" + std::to_string(textures->Pending().size()) +
                     " live=" + std::to_string(textures->LiveCount()));
     return {};

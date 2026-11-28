@@ -150,18 +150,20 @@ struct TextureTargetSize final {
 
 using TextureOp = std::variant<TextureCreate, TextureUpdate, TextureRelease, TextureTargetCreate, TextureTargetSize>;
 
+struct RenderCommands;
+
 // The frame's receipt: a buffer the backend writes each frame and the data side reads and then clears, recording the
 // render targets actually drawn on and the sizes actually applied this frame; one entry per target. render_world's
 // Resource: the backend writes it in the Submit stage (the one thing it writes, SDL-5), render_world's Cleanup of the
-// same frame reads it into RenderTextures (Apply) and clears it (render-pipeline declaration 14.12). A frame the backend
-// did not draw (no backend, a failed upload or submission) leaves no target drawn; a size it did not apply (refused)
-// is not in it, and is asked for again the next frame.
+// same frame reads it (RenderTextures::EndFrame) and then clears it (render-pipeline declaration 14.13). A frame the backend
+// did not get done (no backend, a failed upload or submission) leaves no target drawn; a size it did not apply
+// (refused) is not in it, and is asked for again the next frame.
 class RenderFrameReceipt final {
 public:
     // A pass of this frame drew on the target (as colour or as depth) and the frame was handed to the GPU.
-    void Drawn(TextureId target);
+    void RecordDrawn(TextureId target);
     // The target's texture is now this size (made at it); a later size of the same frame replaces it.
-    void Applied(TextureId target, TargetSize size);
+    void RecordApplied(TextureId target, TargetSize size);
     [[nodiscard]] std::span<const TextureId> DrawnTargets() const noexcept { return drawn_; }
     [[nodiscard]] std::span<const TextureTargetSize> AppliedSizes() const noexcept { return applied_; }
     [[nodiscard]] bool Empty() const noexcept { return drawn_.empty() && applied_.empty(); }
@@ -190,27 +192,33 @@ public:
     // the data side (render-pipeline declaration 14.11): fixed, the main target's (SetMainSize) or another target's,
     // each change asked of the backend as a TextureTargetSize. Its texture is kept from frame to frame (a pass with no
     // clear draws over it, as Bevy's LoadOp::Load); it has no picture when it is made and whenever its size changes,
-    // until the backend draws on it (RenderFrameReceipt, Apply): the first pass that draws on it then starts from
+    // until the backend draws on it (RenderFrameReceipt, EndFrame): the first pass that draws on it then starts from
     // transparent black (a Depth target: cleared to 1). A pass samples it only after a pass of the same frame drew on
-    // it, or the frame retains it with its picture (RenderCommands.hpp, RP-3). A fixed size of zero width or height, or following an id that is not
-    // a live target, is a Programmer Error.
+    // it, or the frame retains it after a frame drew on it at its size (WasDrawn; RenderCommands.hpp, RP-3). A fixed
+    // size of zero width or height, or following an id that is not a live target, is a Programmer Error.
     TextureId CreateTarget(RenderTargetDesc desc);
     // The main target's size this frame (the window's, as the source World's cameras computed with it; camera_render
     // sets it in the extract; a render World without cameras sets it itself): targets that follow it take it.
     // nullopt: not known (they keep the size they have).
     void SetMainSize(std::optional<TargetSize> size);
-    // After a frame (render_world's Cleanup): what the backend got done. A size it applied stops being asked for (one
-    // not applied is asked for again each frame until it is); a target it drew on at the size decided here has a
-    // picture until its size changes. The receipt is the one account of what is on a target.
-    void Apply(const RenderFrameReceipt& receipt);
+    // After a frame was drawn (render_world's Cleanup; the one way a frame ends): what the frame's passes drew on
+    // (WasDrawn: the program's account, RP-3 and retaining go by it), what the backend got done (the receipt:
+    // HasPicture, the sizes applied; render_world clears it after), then this frame's asks are gone and the next
+    // frame's begin: a
+    // target whose size was not applied is asked for again, whole (its making, then its size), each frame until it
+    // is (render-pipeline declaration 14.13, 14.14).
+    void EndFrame(const RenderCommands& commands, const RenderFrameReceipt& receipt);
 
     // The live target's size as decided here, or nullopt (not known yet: it follows a size not known; or not a live
     // target).
     [[nodiscard]] std::optional<TargetSize> SizeOf(TextureId id) const noexcept;
     // The main target's size as last set.
     [[nodiscard]] std::optional<TargetSize> MainSize() const noexcept { return main_; }
-    // Whether the live target has a picture: the backend drew on it at its size since it was made or its size last
-    // changed.
+    // Whether a frame's passes drew on the live target at its size since it was made or its size last changed: what
+    // the program did, whatever the GPU made of it. A frame may retain it (RP-3).
+    [[nodiscard]] bool WasDrawn(TextureId id) const noexcept;
+    // Whether the live target has a picture: the backend drew on it at its size, and said so in a receipt, since it
+    // was made or its size last changed. A camera that does not update draws a target without one again.
     [[nodiscard]] bool HasPicture(TextureId id) const noexcept;
     // The same for a pass target: the main target (nullopt) keeps no picture from frame to frame.
     [[nodiscard]] bool HasPicture(const std::optional<TextureId>& target) const noexcept { return target && HasPicture(*target); }
@@ -223,17 +231,22 @@ public:
     [[nodiscard]] std::size_t LiveCount() const noexcept { return live_.size(); }
     // This frame's asks, in the order they were made.
     [[nodiscard]] std::span<const TextureOp> Pending() const noexcept { return pending_; }
-    // render_world, after each frame was drawn (Cleanup); the sizes not applied yet are asked for again.
+private:
+    // EndFrame's steps, in this order: the receipt before the asks are cleared (a size applied is not asked for again).
+    void Apply(const RenderFrameReceipt& receipt);
     void ClearPending();
 
-private:
-    // Each target's size as decided here, the size the backend last applied, whether this frame's asks hold its size,
-    // and its picture; in id order.
+    // Each target's size as decided here, the size the backend last applied (none since a new size was asked: the
+    // backend lets the old texture go first, as Bevy's prepare_assets drops the old asset), whether this frame's asks
+    // hold its size, whether its last ask went unanswered (asked for again whole), whether a frame drew on it, and its
+    // picture; in id order.
     struct TargetState {
         std::uint32_t id = 0;
         std::optional<TargetSize> size;
         std::optional<TargetSize> applied;
         bool asked = false;
+        bool unanswered = false;
+        bool drawn = false;
         bool picture = false;
     };
     // Gives every target the size its description says now (in id order: a followed target before its follower); a

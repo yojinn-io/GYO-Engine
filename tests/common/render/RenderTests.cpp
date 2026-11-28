@@ -158,7 +158,7 @@ TEST_CASE("render: the asks are kept in order with their pixels until cleared; t
 
     R::RenderTextures kept;
     const R::TextureId stays = kept.Create(R::TextureDesc{1, 1}, Pixels(1, 1));
-    kept.ClearPending();
+    kept.EndFrame(R::RenderCommands{}, R::RenderFrameReceipt{});
     CHECK_MESSAGE(kept.Pending().empty(), "[rd-tex-clear-asks] cleared asks are gone");
     CHECK_MESSAGE(kept.Find(stays) != nullptr, "[rd-tex-clear-keeps-live] the texture stays live");
 }
@@ -302,28 +302,30 @@ TEST_CASE("render: RP-3 as data: a target is sampled only after an earlier pass 
     R::RenderCommands own;
     own.passes = {sampling(target, target)};
     CHECK_MESSAGE(!R::FirstUnwrittenRead(own, textures).has_value(), "[rd-unwritten-own] sampling what a pass draws on is not counted");
-    // Retained: only with a picture (a target made, or made again, and not drawn on since has nothing to stand for
-    // this frame's).
+    // Retained: only after a frame drew on it at its size (a target made, or made again, and not drawn on since has
+    // nothing to stand for this frame's).
     R::RenderCommands retained;
     retained.passes = {sampling(std::nullopt, target)};
     retained.retained = {target};
-    CHECK_MESSAGE((R::FirstUnwrittenRead(retained, textures) == R::UnwrittenRead{0, target}), "[rd-unwritten-retained-fresh] retained with no picture: not written");
-    textures.Apply(GYO::Test::AllDone(drawnFirst, textures.Pending()));
-    CHECK_MESSAGE(!R::FirstUnwrittenRead(retained, textures).has_value(), "[rd-unwritten-retained] retained with its picture");
+    CHECK_MESSAGE((R::FirstUnwrittenRead(retained, textures) == R::UnwrittenRead{0, target}), "[rd-unwritten-retained-fresh] retained, never drawn on: not written");
+    textures.EndFrame(drawnFirst, GYO::Test::AllDoneReceipt(drawnFirst, textures.Pending()));
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(retained, textures).has_value(), "[rd-unwritten-retained] retained after a frame drew on it");
 }
 
-TEST_CASE("render: the frame's receipt holds one entry per target; a frame the backend did not get done gives no picture") {
+TEST_CASE("render: the frame's receipt holds one entry per target, the last size") {
     R::RenderFrameReceipt receipt;
-    receipt.Drawn(R::TextureId{3});
-    receipt.Drawn(R::TextureId{3});
-    receipt.Applied(R::TextureId{3}, R::TargetSize{4, 4});
-    receipt.Applied(R::TextureId{3}, R::TargetSize{8, 8});
+    receipt.RecordDrawn(R::TextureId{3});
+    receipt.RecordDrawn(R::TextureId{3});
+    receipt.RecordApplied(R::TextureId{3}, R::TargetSize{4, 4});
+    receipt.RecordApplied(R::TextureId{3}, R::TargetSize{8, 8});
     CHECK_MESSAGE((receipt.DrawnTargets().size() == 1 && receipt.AppliedSizes().size() == 1 &&
                    receipt.AppliedSizes()[0].size == R::TargetSize{8, 8}),
                   "[rd-receipt-one-each] one entry per target, the last size");
     receipt.Clear();
     CHECK_MESSAGE(receipt.Empty(), "[rd-receipt-cleared] cleared");
+}
 
+TEST_CASE("render: a frame the backend did not get done: drawn by the program, no picture; retaining it is no RP-3 error") {
     R::RenderTextures textures;
     const R::TextureId target = textures.CreateTarget(R::RenderTargetDesc{R::TargetSize{8, 8}});
     R::RenderCommands frame;
@@ -332,22 +334,65 @@ TEST_CASE("render: the frame's receipt holds one entry per target; a frame the b
     frame.passes.push_back(on);
     // Its texture made, the frame not handed to the GPU (a failed upload or submission): the size, not the picture.
     R::RenderFrameReceipt failed;
-    failed.Applied(target, R::TargetSize{8, 8});
-    textures.Apply(failed);
-    textures.ClearPending();
-    CHECK_MESSAGE(!textures.HasPicture(target), "[rd-receipt-failed-no-picture] a pass drew on it, the frame was not done: no picture");
+    failed.RecordApplied(target, R::TargetSize{8, 8});
+    textures.EndFrame(frame, failed);
+    CHECK_MESSAGE((!textures.HasPicture(target) && textures.WasDrawn(target)),
+                  "[rd-receipt-failed-no-picture] a pass drew on it, the frame was not done: drawn, no picture");
     R::Pass2D sampling;
     sampling.draws.emplace_back();
     sampling.draws.back().texture = target;
     R::RenderCommands next;
     next.passes.push_back(sampling);
     next.retained = {target};
-    CHECK_MESSAGE((R::FirstUnwrittenRead(next, textures) == R::UnwrittenRead{0, target}),
-                  "[rd-receipt-failed-retained] retaining it the next frame is sampling what was not written (RP-3)");
+    // The program drew on it: retaining it is no Programmer Error, whatever the GPU made of it (the backend skips what
+    // samples a picture it does not have, and counts it).
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(next, textures).has_value(), "[rd-receipt-failed-retained] retaining it the next frame is no RP-3 error");
     R::RenderFrameReceipt done;
-    done.Drawn(target);
-    textures.Apply(done);
+    done.RecordDrawn(target);
+    textures.EndFrame(frame, done);
     CHECK_MESSAGE(textures.HasPicture(target), "[rd-receipt-drawn] drawn at its applied size: a picture");
+}
+
+TEST_CASE("render: a size asked for drops the size applied before: back to it after a refusal is asked for again") {
+    // B-1: the backend lets the old texture go before it makes one at the new size (refused: none at all).
+    R::RenderTextures textures;
+    const R::TextureId follower = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{}});
+    const auto sizeAsked = [&](const R::TargetSize size) {
+        for (const R::TextureOp& op : textures.Pending()) {
+            if (const auto* sized = std::get_if<R::TextureTargetSize>(&op); sized != nullptr && sized->id == follower && sized->size == size) return true;
+        }
+        return false;
+    };
+    const R::TargetSize a{8, 8};
+    const R::TargetSize b{16, 16};
+    textures.SetMainSize(a);
+    R::RenderFrameReceipt applied;
+    applied.RecordApplied(follower, a);
+    textures.EndFrame(R::RenderCommands{}, applied);
+    textures.SetMainSize(b);
+    REQUIRE(sizeAsked(b));
+    textures.EndFrame(R::RenderCommands{}, R::RenderFrameReceipt{});
+    textures.SetMainSize(a);
+    CHECK_MESSAGE(sizeAsked(a), "[rd-size-back-asked] back to the size applied before the refused one: asked for again");
+}
+
+TEST_CASE("render: a target whose size was never applied is asked for again whole, its making with its size") {
+    // M2: a frame the backend took no ask of (no command buffer) loses the target's making with its size.
+    R::RenderTextures textures;
+    const R::TargetSize size{8, 8};
+    const R::TextureId target = textures.CreateTarget(R::RenderTargetDesc{size});
+    textures.EndFrame(R::RenderCommands{}, R::RenderFrameReceipt{});
+    const auto pending = textures.Pending();
+    const auto made = std::find_if(pending.begin(), pending.end(), [&](const R::TextureOp& op) {
+        const auto* t = std::get_if<R::TextureTargetCreate>(&op);
+        return t != nullptr && t->id == target;
+    });
+    const auto sized = std::find_if(pending.begin(), pending.end(), [&](const R::TextureOp& op) {
+        const auto* t = std::get_if<R::TextureTargetSize>(&op);
+        return t != nullptr && t->id == target && t->size == size;
+    });
+    CHECK_MESSAGE((made != pending.end() && sized != pending.end() && made < sized),
+                  "[rd-target-asked-again-whole] its making and then its size, again");
 }
 
 TEST_CASE("render: a 3D pass's depth target is the size of its colour target on the data side") {
@@ -392,8 +437,7 @@ TEST_CASE("render: target sizes are decided on the data side; a size change is a
     R::Pass2D on;
     on.target = follower;
     frame.passes.push_back(on);
-    textures.Apply(GYO::Test::AllDone(frame, textures.Pending()));
-    textures.ClearPending();
+    textures.EndFrame(frame, GYO::Test::AllDoneReceipt(frame, textures.Pending()));
     CHECK_MESSAGE((textures.HasPicture(follower) && !textures.HasPicture(fixed)), "[rd-picture-drawn] a frame that drew on it gives it one");
     CHECK_MESSAGE(sizeAsks().empty(), "[rd-size-applied] an applied size is not asked for again");
     textures.SetMainSize(window);
@@ -402,17 +446,14 @@ TEST_CASE("render: target sizes are decided on the data side; a size change is a
     CHECK_MESSAGE((sizeAsks().size() == 1 && !textures.HasPicture(follower)), "[rd-size-changed] a new size: an ask, no picture");
     // The backend did not apply it (SDL refused it, or the frame was not drawn: not in the receipt): the size is asked
     // for again next frame, until it is applied.
-    textures.Apply(R::RenderFrameReceipt{});
-    textures.ClearPending();
+    textures.EndFrame(R::RenderCommands{}, R::RenderFrameReceipt{});
     CHECK_MESSAGE((sizeAsks() == std::vector<std::uint32_t>{follower.value}), "[rd-size-asked-again] a size not applied is asked for again");
-    textures.Apply(R::RenderFrameReceipt{});
-    textures.ClearPending();
+    textures.EndFrame(R::RenderCommands{}, R::RenderFrameReceipt{});
     CHECK_MESSAGE((sizeAsks() == std::vector<std::uint32_t>{follower.value} && !textures.HasPicture(follower)),
                   "[rd-size-asked-until-applied] and again, each frame, with no picture");
     R::RenderFrameReceipt applied;
-    applied.Applied(follower, R::TargetSize{16, 8});
-    textures.Apply(applied);
-    textures.ClearPending();
+    applied.RecordApplied(follower, R::TargetSize{16, 8});
+    textures.EndFrame(R::RenderCommands{}, applied);
     CHECK_MESSAGE((sizeAsks().empty() && !textures.HasPicture(follower)), "[rd-size-applied-undrawn] applied: no more asks; not drawn: no picture");
     textures.SetMainSize(std::nullopt);
     CHECK_MESSAGE((textures.SizeOf(follower) == R::TargetSize{16, 8}), "[rd-size-kept] an unknown main size keeps the size it has");
@@ -469,8 +510,7 @@ TEST_CASE("render: the render World keeps one target of its own per source targe
     CHECK_MESSAGE(mapped.Find(C::kMainTarget) == nullptr, "[rt-sync-main] nothing is made for the main target");
 
     // The frame applied its asks (as render_world's Cleanup does), then they are cleared.
-    textures.Apply(GYO::Test::AllDone(R::RenderCommands{}, textures.Pending()));
-    textures.ClearPending();
+    textures.EndFrame(R::RenderCommands{}, GYO::Test::AllDoneReceipt(R::RenderCommands{}, textures.Pending()));
     R::SyncTargetTextures(&source, textures, mapped);
     CHECK_MESSAGE((textures.Pending().empty() && *mapped.Find(minimap) == made), "[rt-sync-kept] the same target is kept, nothing asked");
 
@@ -495,8 +535,7 @@ TEST_CASE("render: the render World keeps one target of its own per source targe
                   "[rt-sync-other-table] another table: what was made for the old one is let go, the same id made again");
 
     // The frame applied its asks (as render_world's Cleanup does), then they are cleared.
-    textures.Apply(GYO::Test::AllDone(R::RenderCommands{}, textures.Pending()));
-    textures.ClearPending();
+    textures.EndFrame(R::RenderCommands{}, GYO::Test::AllDoneReceipt(R::RenderCommands{}, textures.Pending()));
     const R::TextureId last = *mapped.Find(resized);
     R::SyncTargetTextures(nullptr, textures, mapped);
     CHECK_MESSAGE((mapped.entries.empty() && textures.FindTarget(last) == nullptr), "[rt-sync-none] no source: everything is let go");

@@ -70,16 +70,12 @@ struct Seen {
 };
 std::vector<Seen> seen;
 std::vector<std::string> trail;
-// The frames the stand-in backend does not get done (a failed upload or submission): its receipt stays empty.
+// The frames the backend does not get done (a failed upload or submission): FailFrames empties their receipt.
 std::vector<std::size_t> failedFrames;
+std::size_t submitted = 0;
 
-// At Submit, as a backend: records what it sees and writes the receipt of a backend that got it all done (or, in a
-// failed frame, nothing).
-K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes,
-                       K::ResMut<R::RenderFrameReceipt> receipt) {
-    if (std::find(failedFrames.begin(), failedFrames.end(), seen.size()) == failedFrames.end()) {
-        receipt.Get() = GYO::Test::AllDone(*commands, textures->Pending());
-    }
+// At Submit: records what the backend sees.
+K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
     Seen s;
     s.all = commands->passes;
     s.retained = commands->retained;
@@ -95,6 +91,12 @@ K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextu
     s.asks.assign(textures->Pending().begin(), textures->Pending().end());
     s.meshAsks.assign(meshes->Pending().begin(), meshes->Pending().end());
     seen.push_back(std::move(s));
+    return {};
+}
+// At Submit, after the backend (GYO::Test::AllDoneBackend): a failed frame's receipt has nothing done.
+K::SystemResult FailFrames(K::ResMut<R::RenderFrameReceipt> receipt) {
+    if (std::find(failedFrames.begin(), failedFrames.end(), submitted) != failedFrames.end()) receipt.Get().Clear();
+    ++submitted;
     return {};
 }
 K::SystemResult MarkExtract(K::Res<R::ExtractedCameras>) {
@@ -156,12 +158,21 @@ O::WorldDescription Game(std::vector<std::string> more = {}) {
     return w;
 }
 
+// The render World's backend for these tests: it gets every frame done but the failed ones; Record sees each frame.
+void Backend(K::Registrar& r) {
+    r.AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage));
+    GYO::Test::AddAllDoneBackend(r, "Main");
+    K::SystemOptions fail = In("TestFailFrames", "Main", RW::kSubmitStage);
+    fail.mounts[0].after = {std::string(GYO::Test::kAllDoneBackend)};
+    r.AddSystem<&FailFrames>(std::move(fail));
+}
+
 O::WorldDescription Render(std::vector<std::string> units = {"entity_ids", "render_world", "camera_render", "sprite_render"}) {
     O::WorldDescription w;
     w.name = "Render";
     w.units = std::move(units);
     w.extractFrom = "Game";
-    w.build = [](O::WorldSetup& s) { s.Registrar().AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage)); };
+    w.build = [](O::WorldSetup& s) { Backend(s.Registrar()); };
     return w;
 }
 
@@ -170,6 +181,7 @@ std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GY
     seen.clear();
     trail.clear();
     failedFrames.clear();
+    submitted = 0;
     O::ProductDescription d;
     d.name = "draws";
     if (assets != nullptr) d.options.Set(*assets);
@@ -228,6 +240,7 @@ TEST_CASE("render_extract: render_world puts the extract schedule before Main on
     seen.clear();
     trail.clear();
     failedFrames.clear();
+    submitted = 0;
     O::ProductDescription d;
     d.name = "draws";
     d.worlds.push_back(Game());
@@ -457,6 +470,25 @@ TEST_CASE("render_extract: a frame the backend did not get done leaves no pictur
     CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && PassesOn(seen[1].all, screen) > 0 && !Retains(seen[1], screen)),
                   "[re-receipt-failed-drawn-again] the failed frame left no picture: drawn again, not retained");
     CHECK_MESSAGE((Retains(seen[2], screen) && PassesOn(seen[2].all, screen) == 0), "[re-receipt-retained-after] then retained");
+}
+
+TEST_CASE("render_extract: an inactive camera's target after a frame the backend did not get done is retained, as the program drew it") {
+    // H1: the program drew on it; the GPU did not get it. The camera, inactive, cannot draw it again: its target
+    // stands as drawn (the backend skips what samples a picture it does not have, and counts it).
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    failedFrames = {0};
+    Frames(*p);
+    source.GetMut<C::Camera>(1)->active = false;
+    Frames(*p);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0),
+                  "[re-receipt-inactive-retained] retained, not a target nobody drew");
 }
 
 TEST_CASE("render_extract: a target two cameras draw is drawn when one of them draws; retained when neither does") {
@@ -689,7 +721,7 @@ K::SystemResult QueueEarly(K::ResMut<R::CameraPasses> passes) {
 TEST_CASE("render_extract: a pass queued before the pipelines' Systems is composed by its phase; a view of no camera first") {
     O::WorldDescription render = Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"});
     render.build = [](O::WorldSetup& s) {
-        s.Registrar().AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage));
+        Backend(s.Registrar());
         K::SystemOptions early = In("TestQueueEarly", "Main", O::DefaultSchedules::update);
         early.mounts[0].before = {"Queue3dPasses", "Queue2dPasses"};
         s.Registrar().AddSystem<&QueueEarly>(std::move(early));

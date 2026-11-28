@@ -112,7 +112,7 @@ public:
 
     // Applies the asks in order (textures, then meshes), then draws the passes on their targets and shows the
     // window's picture. Target 0 is the window; a render target has the size render's asks give it. receipt: what got
-    // done (render-pipeline declaration 14.12): each target size applied, and, when the frame was handed to the GPU,
+    // done (render-pipeline declaration 14.13): each target size applied, and, when the frame was handed to the GPU,
     // each render target a pass drew on.
     FrameOutcome Submit(std::span<const Engine::Render::TextureOp> asks, std::span<const Engine::Render::MeshOp> meshAsks,
                         const Engine::Render::RenderCommands& commands, FrameTally& tally, Engine::Render::RenderFrameReceipt& receipt);

@@ -4,6 +4,7 @@
 // (shaders/, TestShaders.hpp). Tags "[gf-...]", "[gd-...]" and "[gt-unwritten-...]" are the mutants' expectations.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -20,6 +21,7 @@
 #include "engine/render/RenderTextures.hpp"
 
 #include "GPUDevice.hpp"
+#include "FrameDraws.hpp"
 #include "RenderContracts.hpp"
 #include "TestShaders.hpp"
 
@@ -93,7 +95,7 @@ R::PassFullscreen Fullscreen(const std::optional<R::TextureId> target, std::stri
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
-    // What the backend got done (render-pipeline declaration 14.12).
+    // What the backend got done (render-pipeline declaration 14.13).
     R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
@@ -134,12 +136,13 @@ struct PhaseCase {
     R::TextureId Target(const R::RenderTargetDesc& desc) { return live.emplace_back(textures.CreateTarget(desc)); }
     Picture Frame(const R::RenderCommands& commands) {
         Picture picture;
-        auto captured = Device().Capture(textures.Pending(), {}, commands, kSize, picture.tally, picture.receipt);
+        R::RenderFrameReceipt receipt;
+        auto captured = Device().Capture(textures.Pending(), {}, commands, kSize, picture.tally, receipt);
         REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
         picture.image = std::move(*captured);
-        // As render_world's Cleanup: the backend's receipt applied, then the asks cleared.
-        textures.Apply(picture.receipt);
-        textures.ClearPending();
+        // As render_world's Cleanup: the frame ends with the backend's receipt (kept in the picture as it was written).
+        picture.receipt = receipt;
+        textures.EndFrame(commands, receipt);
         return picture;
     }
     ~PhaseCase() {
@@ -173,9 +176,15 @@ TEST_CASE("sdl_gpu phases: two full-screen passes in a chain: the first inverts 
     CHECK_MESSAGE(p.tally.skippedDraws == 0, "[gf-drawn] " << p.tally.lastRefusal);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kCyan), "[gf-chain] the inverted red, shifted right by 2 pixels, still at the top");
     CHECK_MESSAGE((p.All(4, 0, 8, 4, kYellow) && p.All(0, 4, 8, 8, kYellow)), "[gf-chain] the inverted blue around it");
-    // The backend's receipt (render-pipeline declaration 14.12): both targets made at their sizes and drawn on.
-    CHECK_MESSAGE((p.receipt.AppliedSizes().size() == 2 && p.receipt.DrawnTargets().size() == 2),
-                  "[gd-receipt] the receipt holds the two sizes applied and the two targets drawn on");
+    // The backend's receipt (render-pipeline declaration 14.13): both targets made at their sizes and drawn on.
+    const auto applied = p.receipt.AppliedSizes();
+    const auto drawn = p.receipt.DrawnTargets();
+    const auto appliedAt = [&](const R::TextureId id) {
+        return std::count_if(applied.begin(), applied.end(), [&](const R::TextureTargetSize& a) { return a.id == id && a.size == kSize; }) == 1;
+    };
+    const auto drawnOn = [&](const R::TextureId id) { return std::count(drawn.begin(), drawn.end(), id) == 1; };
+    CHECK_MESSAGE((applied.size() == 2 && appliedAt(source) && appliedAt(inverted) && drawn.size() == 2 && drawnOn(source) && drawnOn(inverted)),
+                  "[gd-receipt] the receipt holds the two targets' sizes applied and the two targets drawn on");
     CHECK_MESSAGE((c.textures.HasPicture(source) && c.textures.HasPicture(inverted) && c.textures.Pending().empty()),
                   "[gd-receipt-applied] so both have a picture, and no size is asked for again");
 
@@ -264,7 +273,67 @@ TEST_CASE("sdl_gpu phases: a 3D pass on the main target, its depth target follow
     CHECK_MESSAGE((p.tally.skippedDraws == 1 && p.All(0, 0, 8, 8, kBlue)), "[gd-depth-size-skipped] its draws skipped and counted, not a Programmer Error");
 }
 
-TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, then retained with its picture, passes the backend's checks") {
+TEST_CASE("sdl_gpu phases: a target the program drew on whose frame the GPU did not get: retaining it is no error, its sampling skipped and counted") {
+    PhaseCase c;
+    const R::TextureId target = c.Target(Fixed());
+    // The first frame: its size applied; the program drew on it, the GPU did not get that (as a frame whose upload or
+    // submission failed: the backend's receipt has the size, no drawing).
+    R::RenderCommands drew;
+    drew.passes.push_back(On(target, kRed));
+    R::RenderFrameReceipt receipt;
+    G::FrameTally tally;
+    REQUIRE(static_cast<bool>(Device().Capture(c.textures.Pending(), {}, R::RenderCommands{}, kSize, tally, receipt)));
+    c.textures.EndFrame(drew, receipt);
+    REQUIRE((c.textures.WasDrawn(target) && !c.textures.HasPicture(target)));
+    // The next frame retains it and samples it.
+    R::RenderCommands next;
+    next.retained.push_back(target);
+    R::Pass2D sampling = On(std::nullopt, kBlue);
+    Quad(sampling, Rect{0, 0, 8, 8}, kWhite, target);
+    next.passes.push_back(std::move(sampling));
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(next, c.textures).has_value(), "[gd-unconfirmed-no-error] the program drew on it: no Programmer Error");
+    const Picture p = c.Frame(next);
+    CHECK_MESSAGE((p.tally.skippedDraws == 1 && p.All(0, 0, 8, 8, kBlue)), "[gd-unconfirmed-skipped] the draw sampling a picture the GPU does not have: skipped, counted");
+}
+
+TEST_CASE("sdl_gpu phases: a target asked to be made again (render asks again whole for one whose size was not applied) keeps its texture and picture") {
+    PhaseCase c;
+    const R::TextureId target = c.Target(Fixed());
+    R::RenderCommands drew;
+    drew.passes.push_back(On(target, kRed));
+    static_cast<void>(c.Frame(drew));
+    // The next frame's asks hold its making again (the backend has it), and a pass samples what it kept.
+    const std::vector<R::TextureOp> again{R::TextureTargetCreate{target, Fixed()}};
+    R::RenderCommands next;
+    next.retained.push_back(target);
+    R::Pass2D sampling = On(std::nullopt, kBlue);
+    Quad(sampling, Rect{0, 0, 8, 8}, kWhite, target);
+    next.passes.push_back(std::move(sampling));
+    Picture p;
+    auto captured = Device().Capture(again, {}, next, kSize, p.tally, p.receipt);
+    REQUIRE(static_cast<bool>(captured));
+    p.image = std::move(*captured);
+    CHECK_MESSAGE((p.tally.skippedDraws == 0 && p.tally.unmappedPasses == 0 && p.All(0, 0, 8, 8, kRed)),
+                  "[gd-target-made-again-kept] making a target it has is nothing to do: the picture is sampled");
+}
+
+TEST_CASE("sdl_gpu frame draws: a frame's drawings are the receipt's, and a target's picture, only once the frame is handed to the GPU") {
+    // No GPU: the adapter's account of one frame (FrameDraws.hpp).
+    G::FrameDraws draws;
+    CHECK_MESSAGE((draws.Begin(1, false) && !draws.Begin(1, false)), "[gd-draws-first-clears] a target without a picture: its first pass of the frame clears it, the next keeps it");
+    CHECK_MESSAGE(!draws.Begin(2, true), "[gd-draws-picture-kept] a target with a picture is kept");
+    CHECK_MESSAGE((draws.Drew(1) && draws.Drew(2) && !draws.Drew(3)), "[gd-draws-drew] what this frame drew on may be sampled");
+    // Not handed to the GPU: forgotten, nothing in the receipt.
+    R::RenderFrameReceipt receipt;
+    draws.Clear();
+    CHECK_MESSAGE((!draws.Drew(1) && receipt.Empty() && draws.Begin(1, false)), "[gd-draws-not-handed] a frame not handed leaves nothing: the next one clears again");
+    // Handed: in the receipt, given back for the picture, and cleared.
+    const std::vector<std::uint32_t> committed = draws.Commit(receipt);
+    CHECK_MESSAGE((committed == std::vector<std::uint32_t>{1} && receipt.DrawnTargets().size() == 1 && receipt.DrawnTargets()[0] == R::TextureId{1} && !draws.Drew(1)),
+                  "[gd-draws-committed] handed: in the receipt, given back, cleared");
+}
+
+TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, then retained, passes the backend's checks") {
     // No GPU: the checks are the frame's data (RP-3; a 3D pass's depth target of its target's size).
     R::RenderTextures textures;
     const R::TextureId target = textures.CreateTarget(Fixed());
@@ -276,10 +345,9 @@ TEST_CASE("sdl_gpu contracts: a frame whose sampled target is drawn this frame, 
     G::RequireRenderContracts(drawn, textures);
     // The backend's receipt of that frame: its size applied, drawn on.
     R::RenderFrameReceipt receipt;
-    receipt.Applied(target, *textures.SizeOf(target));
-    receipt.Drawn(target);
-    textures.Apply(receipt);
-    textures.ClearPending();
+    receipt.RecordApplied(target, *textures.SizeOf(target));
+    receipt.RecordDrawn(target);
+    textures.EndFrame(drawn, receipt);
     R::RenderCommands retained;
     retained.retained.push_back(target);
     retained.passes.push_back(std::move(main));

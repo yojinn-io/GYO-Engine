@@ -121,7 +121,7 @@ void Quad2D(R::Pass2D& pass, const Rect r, const R::Color8 colour) {
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
-    // What the backend got done (render-pipeline declaration 14.12).
+    // What the backend got done (render-pipeline declaration 14.13).
     R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
@@ -299,13 +299,13 @@ TEST_CASE("sdl_gpu pass3d: a texture times the draw's colour, top row on top; a 
     Quad(pass, 0, 0, 8, 8, 0.5F, kMagenta).texture = id;
     Quad(pass, 0, 0, 8, 8, 0.4F, kWhite).texture = R::TextureId{999};
     commands.passes.push_back(std::move(pass));
-    const Picture p = Draw(commands, &textures);
+    Picture p = Draw(commands, &textures);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kRed), "[g3-tex-top-left] red times magenta, texture row 0 on top");
     CHECK_MESSAGE(p.All(4, 0, 8, 4, R::Color8{0, 0, 0, 255}), "[g3-tex-top-right] green times magenta is black");
     CHECK_MESSAGE(p.All(0, 4, 4, 8, kMagenta), "[g3-tex-tint] white times magenta is magenta");
     CHECK_MESSAGE(p.All(4, 4, 8, 8, kRed), "[g3-tex-bottom-right] yellow times magenta is red");
     CHECK_MESSAGE(p.tally.skippedDraws == 1, "[g3-tex-missing-counted] a draw naming a texture with no GPU texture is skipped and counted");
-    textures.ClearPending();
+    textures.EndFrame(commands, p.receipt);
     textures.Release(id);
     static_cast<void>(Draw(R::RenderCommands{}, &textures));
 }
