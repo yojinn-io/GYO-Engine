@@ -22,7 +22,7 @@
 |---|---|---|---|
 | `POST /v1/session` | — | `{"deviceId":"<1..128 個可見 ASCII>"}` | `{"userId":7,"sessionToken":"…","expiresAt":<Unix 秒>}` |
 | `GET /v1/rooms` | Bearer | — | `{"rooms":[{"id","mode","map","players","capacity","state":"open"}]}`（只列 open） |
-| `POST /v1/rooms` | Bearer、Idempotency-Key | `{"mode":"coop"\|"survival","map":"<arena id>"}` | 房間（建的人自動加入、是房主） |
+| `POST /v1/rooms` | Bearer、Idempotency-Key | `{"mode":"<mode id>","map":"<arena id>"}`（mode：Match 已安裝的模式，`modes/modes.json`；修訂前是 `coop`／`survival`） | 房間（建的人自動加入、是房主） |
 | `GET /v1/rooms/{id}` | Bearer | — | 房間：`{"id","mode","map","players","capacity","state","owner","members":[{"userId","ready"}],"connect"?}` |
 | `POST /v1/rooms/{id}/join` | Bearer、Idempotency-Key | — | 房間（加入別的房會自動離開原本的 open 房） |
 | `POST /v1/rooms/{id}/ready` | Bearer、Idempotency-Key | `{"ready":true\|false}` | 房間 |

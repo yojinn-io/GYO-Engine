@@ -4,6 +4,8 @@
 //   gyo_object_fps_pvp                       listens on port 40000, plays the first installed arena
 //   gyo_object_fps_pvp --port P              listens on port P
 //   gyo_object_fps_pvp --arena ID            plays the installed arena whose id is ID
+//   gyo_object_fps_pvp --mode ID             plays the installed mode whose id is ID (default: the first in
+//                                            modes/modes.json); the mode must play the arena
 //   gyo_object_fps_pvp --ticks N             stops after N fixed steps (the tests)
 //   gyo_object_fps_pvp --content DIR         reads the content from DIR (default: next to the executable)
 //   gyo_object_fps_pvp --verbose             logs who joins and leaves and every kill
@@ -124,6 +126,7 @@ int main(int argc, char** argv) {
     std::uint16_t port = 40000;
     std::int64_t ticks = -1;
     std::string arenaId;
+    std::string modeId;
     std::optional<std::string> contentRoot;
     bool verbose = false;
     std::uint32_t capacity = 4;
@@ -149,6 +152,8 @@ int main(int argc, char** argv) {
             }
         } else if (argument == "--arena" && hasValue) {
             arenaId = argv[++index];
+        } else if (argument == "--mode" && hasValue) {
+            modeId = argv[++index];
         } else if (argument == "--content" && hasValue) {
             contentRoot = argv[++index];
         } else if (argument == "--verbose") {
@@ -202,7 +207,7 @@ int main(int argc, char** argv) {
         } else {
             Log(GYO::Engine::Base::LogLevel::Error,
                 "unknown argument '" + std::string(argument) +
-                    "' (--port P, --arena ID, --ticks N, --content DIR, --verbose, --capacity N, --load-threads N, --match-id ID, "
+                    "' (--port P, --arena ID, --mode ID, --ticks N, --content DIR, --verbose, --capacity N, --load-threads N, --match-id ID, "
                     "--admission-key-stdin, --saves A.B.C.D:P, --idle-seconds N, --expect-users ID,..., --start-deadline-seconds N)");
             return 2;
         }
@@ -255,12 +260,25 @@ int main(int argc, char** argv) {
     auto shared = std::make_shared<const PW::GameContent>(std::move(*content));
     std::size_t arena = 0;
     if (!arenaId.empty()) {
-        const auto* found = shared->Find(arenaId);
-        if (found == nullptr) {
+        const auto found = shared->FindArena(arenaId);
+        if (!found) {
             Log(GYO::Engine::Base::LogLevel::Error, "no installed arena has the id '" + arenaId + "'");
             return 2;
         }
-        arena = static_cast<std::size_t>(found - shared->arenas.data());
+        arena = *found;
+    }
+    std::size_t mode = 0;
+    if (!modeId.empty()) {
+        const auto found = shared->FindMode(modeId);
+        if (!found) {
+            Log(GYO::Engine::Base::LogLevel::Error, "no installed mode has the id '" + modeId + "'");
+            return 2;
+        }
+        mode = *found;
+    }
+    if (!shared->Plays(mode, arena)) {
+        Log(GYO::Engine::Base::LogLevel::Error, "mode '" + shared->modes[mode].id + "' does not play arena '" + shared->arenas[arena].id + "'");
+        return 2;
     }
 
     // The map is read while the World generates: the asset store reads its files on one thread, the walls are built on
@@ -287,7 +305,7 @@ int main(int argc, char** argv) {
     net.bind = GYO::Engine::OS::SocketAddress::Any(port);
     net.admission = admission ? PW::MatchAdmission(seats, std::move(*admission)) : PW::SeatAdmission(seats);
     description.options.Set(net);
-    O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .seats = seats, .expectUsers = expectUsers,
+    O::WorldDescription world = PW::MatchWorld({.content = shared, .arena = arena, .mode = mode, .seats = seats, .expectUsers = expectUsers,
                                                 .startDeadlineSeconds = startDeadline, .jobs = &compute});
     if (saves) world = PW::WithMatchSaves(std::move(world), {*saves, *matchId});
     if (verbose) {

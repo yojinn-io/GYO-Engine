@@ -12,8 +12,9 @@
 //                       ControlOwnPlayer         Client only: PeerControls and PlayerInput on the player it owns
 //   Main/Update         LoadArena                every end, while the World generates: its arena's map from the asset
 //                                                store, then the walls on a worker (world/ArenaLoad.hpp; MapLoad)
-//   Main/PreUpdate      FollowMatchArena         Client only: whether it plays the Match's arena (MatchInfo); if not,
-//                                                ContentMismatch (a World plays one arena: another one is another World)
+//   Main/PreUpdate      FollowMatchContent       Client only: whether it plays the Match's mode and arena with the
+//                                                same content (MatchInfo); if not, ContentMismatch (a World plays one
+//                                                mode and one arena: another one is another World)
 //   Main/Update         SpawnLocalPlayer         Local only: the local user's player at LocalSpawn
 //                       ShowPlayers              Match only: before the start a connection sees only its player
 //   FixedUpdate/Update  StartMatch               the authority: Waiting -> Playing (MatchInfo::phase) when every
@@ -34,6 +35,7 @@
 #include "object_fps_pvp/character/CharacterRig.hpp"
 #include "object_fps_pvp/world/ArenaLoad.hpp"
 #include "object_fps_pvp/world/Components.hpp"
+#include "object_fps_pvp/world/Modes.hpp"
 
 #include "engine/asset/AssetExecutor.hpp"
 
@@ -51,6 +53,7 @@
 #include <optional>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace object_fps_pvp::world {
@@ -58,36 +61,68 @@ namespace object_fps_pvp::world {
 namespace O = GYO::Engine::Orchestration;
 namespace N = GYO::Engine::Net;
 
-// What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), the
-// stance rules (rules/movement_rules.json), the combat rules (the game's defaults) and the character (its skeleton,
-// clips and hit shapes; the arenas share one body height). An arena's map is not here: the World that plays the arena
-// reads it (LoadArena, big-map declaration 15.6).
+// What the game reads before a World is built: every installed arena's file (maps/arenas.json, in its order), every
+// installed mode (modes/modes.json, in its order; world/Modes.hpp: its rule tables and gameplay sets), the gameplay
+// sets' table (world/GameplaySets.hpp; every World registers all of them) with each arena's set blocks (arenaSets, by
+// arena), the combat rules (the game's defaults) and the character (its skeleton, clips and hit shapes; the arenas
+// share one body height). An arena's map is not here: the World that plays the arena reads it (LoadArena, big-map
+// declaration 15.6).
 struct GameContent final {
     std::vector<sim::ArenaContent> arenas;
-    sim::StanceRules stance;
+    std::vector<ModeContent> modes;
+    std::vector<GameplaySet> sets;
+    std::vector<SetBlocks> arenaSets;
+    // CharacterDigest of the character, read once (MatchInfo::characterDigest).
+    std::uint64_t characterDigest = 0;
     sim::CombatRules combat;
     std::shared_ptr<const character::CharacterRig> character;
 
     [[nodiscard]] const sim::ArenaContent* Find(const std::string& id) const;
+    // The index of the installed arena with this id.
+    [[nodiscard]] std::optional<std::size_t> FindArena(std::string_view id) const;
+    // The index of the installed mode with this id.
+    [[nodiscard]] std::optional<std::size_t> FindMode(std::string_view id) const;
+    // Whether the mode (an index into modes) plays the arena (an index into arenas): the one place every choice asks.
+    [[nodiscard]] bool Plays(std::size_t mode, std::size_t arena) const;
+    // The digest of the blocks the arena carries for the sets the mode turns on (MatchInfo::arenaDigest; one formula,
+    // also when there is none). The mode's own rules are ModeContent::rulesDigest: kept apart, so another arena is
+    // known as another arena (built again on it), not as other rules (design review 2, S1).
+    [[nodiscard]] std::uint64_t ArenaDigest(std::size_t mode, std::size_t arena) const;
 };
 
 // Whether the walls stand between two points: they cut the straight segment from a to b. A sound's occlusion asks it
 // (the Client hears a cue behind the map at a lower gain; present/SoundCues.hpp HeardGains).
 [[nodiscard]] bool Blocked(const GYO::Engine::Physics3d::BoxSet& walls, const Math::Vec3& a, const Math::Vec3& b);
 
-// Why this Client cannot play the Match's arena (empty: it can). Set by FollowMatchArena; the program decides (it may
-// build its game again on matchArena, when it has that arena, or leave).
+// What differs from the Match's (FollowMatchContent compares in this order): another mode, the same mode with other
+// rules (the rules digest), another character (the character digest), another arena, the same arena with other blocks
+// for the sets the mode turns on (the arena digest), the same arena with other walls (the walls digest). Mode and Arena
+// are another match this Client may have; the others are other content.
+enum class MismatchKind : std::uint8_t { None = 0, Mode, Rules, Character, Arena, ArenaData, Walls };
+
+// Why this Client cannot play the Match's match (kind None: it can). Set by FollowMatchContent; it only says what
+// differs, the program decides (it may build its game again on matchMode and matchArena when it has them -- kind Mode
+// or Arena -- or leave).
 struct ContentMismatch final {
+    MismatchKind kind = MismatchKind::None;
+    // In the player's words: what differs, with both ends' values.
     std::string reason;
-    // The arena the Match plays.
+    // The arena and the mode the Match plays.
     std::string matchArena;
+    std::string matchMode;
 };
 void HashValue(K::Hasher&, const ContentMismatch&);
 
-// Reads the content under root (the game's asset directory). nullopt with error naming the file and what was wrong:
-// a file that does not read or parse, or an arena whose stance rules do not fit. Whether its map reads, and its spawns
+// The rules a World of this mode on this arena plays with (both ends: GameRules is the same at the Match and every
+// Client); its walls digest is put once its map is built (LoadArena).
+[[nodiscard]] GameRules GameRulesOf(const GameContent& content, std::size_t mode, std::size_t arena);
+
+// Reads the content under root (the game's asset directory), with the gameplay sets' table (by default the game's).
+// nullopt with error naming the file and what was wrong: a file that does not read or parse, an arena whose stance
+// rules do not fit, a set block a set does not read. Whether its map reads, and its spawns
 // are free of its walls, is known when a World reads the map (MapLoad).
-[[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error);
+[[nodiscard]] std::optional<GameContent> LoadGameContent(const std::string& root, std::string& error,
+                                                         const std::vector<GameplaySet>& sets = GameSets());
 
 // What a Product playing the game needs besides its Worlds: the map's loaders (voxel_map's) in its asset store
 // (world_asset, with AssetOptions naming the content root and an executor). A Product's configure calls it.
@@ -151,6 +186,8 @@ struct WorldOptions final {
     std::shared_ptr<const GameContent> content;
     // The arena the World plays (an index into content->arenas): its map is read while the World generates.
     std::size_t arena = 0;
+    // The mode it plays (an index into content->modes): its rule tables.
+    std::size_t mode = 0;
     // A Client: its user id (NetProductOptions::userId). The Match: 0.
     std::uint64_t localUser = 0;
     // The Match: its seats (Seats); a Client: none.

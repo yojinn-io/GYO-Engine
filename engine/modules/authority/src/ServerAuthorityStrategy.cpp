@@ -334,7 +334,7 @@ Kernel::Fingerprint ServerAuthorityStrategy::ConsistencyFingerprint(FingerprintC
             // registration, at one end only; authority declaration 5.5).
             std::vector<std::string> conditions;
             for (const Kernel::ConditionRef& condition : mount.conditions) {
-                if (!Rollback::IsSkipCondition(condition)) conditions.push_back(condition.Name());
+                if (!Rollback::IsSkipCondition(condition)) conditions.push_back(condition.Identity());
             }
             out.U64(conditions.size());
             for (const std::string& condition : conditions) out.Str(condition);

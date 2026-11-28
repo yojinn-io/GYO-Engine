@@ -273,58 +273,6 @@ TEST_CASE("world: an empty magazine fires nothing; a reload fills it after the r
 
 namespace {
 
-struct Session {
-    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
-    std::vector<std::pair<N::MemoryLink, N::MemoryLink>> links;
-    std::shared_ptr<PW::Seats> seats = std::make_shared<PW::Seats>();
-    std::unique_ptr<O::Product> match;
-    std::vector<std::unique_ptr<O::Product>> clients;
-
-    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step). clientArena: the arena
-    // the Clients play (none: the Match's).
-    Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
-            std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
-            const std::uint32_t startDeadlineSeconds = 60, const std::optional<std::size_t> clientArena = std::nullopt) {
-        seats = std::make_shared<PW::Seats>(capacity);
-        std::vector<N::MemoryLink> serverEnds;
-        for (int i = 0; i < clientCount; ++i) {
-            N::MemoryLinkSettings settings;
-            settings.seed = static_cast<std::uint64_t>(60 + i);
-            settings.aToB.fixedDelaySteps = 2;
-            settings.bToA.fixedDelaySteps = 2;
-            links.push_back(N::MemoryLink::Pair(settings));
-            serverEnds.push_back(links.back().first);
-        }
-        auto reader = [c = clock] { return *c; };
-        match = BuildMatch(ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena, std::move(expectUsers),
-                           startDeadlineSeconds);
-        for (int i = 0; i < clientCount; ++i) {
-            clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
-                                          static_cast<std::uint64_t>(i + 1), reader, clientArena.value_or(matchArena)));
-        }
-    }
-    K::World& Match() { return GameWorld(*match); }
-    K::World& Client(const std::size_t i) { return GameWorld(*clients[i]); }
-    // One frame everywhere; inputs[i] (when given) is client i's input for its next step.
-    void Frame(const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
-        for (std::size_t i = 0; i < clients.size(); ++i) {
-            if (i < inputs.size() && inputs[i]) {
-                if (auto* local = N::LocalInput<PW::PlayerInput>(Client(i))) {
-                    const auto target = static_cast<std::uint32_t>(TickOf(Client(i)) + 1);
-                    local->Set(target, *inputs[i], N::ViewTime{target, 0});
-                }
-            }
-        }
-        REQUIRE(static_cast<bool>(match->RunFrame()));
-        for (auto& client : clients) REQUIRE(static_cast<bool>(client->RunFrame()));
-        for (auto& link : links) link.first.Advance();
-        *clock += Ms(16);
-    }
-    void Frames(const int n, const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
-        for (int i = 0; i < n; ++i) Frame(inputs);
-    }
-};
-
 std::size_t PeerCount(K::World& world) {
     std::size_t count = 0;
     for (const K::EntityId id : world.Entities()) count += world.Get<N::Peer>(id) != nullptr ? 1 : 0;
@@ -460,9 +408,52 @@ TEST_CASE("world: a Client plays the arena it was built with; the Match playing 
         Session session(1, 4, 1, ShippedContent(), {}, 60, 0);
         session.Frames(90);
         const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Arena, mismatch.reason);
         CHECK_MESSAGE(mismatch.reason.find("pvp_corners_v1") != std::string::npos, mismatch.reason);
         CHECK(mismatch.matchArena == "pvp_corners_v1");
         CHECK(session.Client(0).Resource<PW::GameRules>()->arena.id == "pvp_training_v1");
+    }
+}
+
+TEST_CASE("world: the Match says its mode and rules digest; a Client of another mode, of the same mode with other rules, or of another character, is a content mismatch") {
+    {
+        Session session(1, 4);
+        session.Frames(90);
+        const PW::MatchInfo& info = *session.Match().Resource<PW::MatchInfo>();
+        CHECK(info.modeId == "core_pvp");
+        CHECK(info.rulesDigest == ShippedContent()->modes.front().rulesDigest);
+        CHECK(session.Client(0).Resource<PW::MatchInfo>()->modeId == "core_pvp");
+        CHECK(session.Client(0).Resource<PW::ContentMismatch>()->reason.empty());
+    }
+    {
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->modes.front().id = "other";
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Mode, "mode 'core_pvp': " << mismatch.reason);
+        CHECK(mismatch.matchMode == "core_pvp");
+        CHECK(mismatch.matchArena == "pvp_training_v1");
+    }
+    {
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->modes.front().rulesDigest ^= 1;
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Rules, "rules digest: " << mismatch.reason);
+        CHECK(mismatch.matchMode == "core_pvp");
+    }
+    {
+        // The user's decision U1 (mode-config declaration 11.7): another character (skeleton, clips, hit shapes).
+        auto other = std::make_shared<PW::GameContent>(*ShippedContent());
+        other->characterDigest ^= 1;
+        Session session(1, 4, 0, other);
+        session.Frames(90);
+        CHECK(session.Match().Resource<PW::MatchInfo>()->characterDigest == ShippedContent()->characterDigest);
+        const PW::ContentMismatch& mismatch = *session.Client(0).Resource<PW::ContentMismatch>();
+        CHECK_MESSAGE(mismatch.kind == PW::MismatchKind::Character, "[pvp-character-mismatch] " << mismatch.reason);
+        CHECK_MESSAGE(mismatch.reason.find("character digest") != std::string::npos, "[pvp-character-reason] " << mismatch.reason);
     }
 }
 

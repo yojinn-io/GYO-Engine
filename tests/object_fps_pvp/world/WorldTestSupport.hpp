@@ -18,6 +18,9 @@
 
 #include <chrono>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <mutex>
 #include <memory>
 #include <string>
@@ -168,7 +171,7 @@ std::string Reported(const Built& built) {
 inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                               std::shared_ptr<PW::Seats> seats, std::function<N::NetTime()> clock,
                                               const std::size_t arena = 0, std::vector<std::uint64_t> expectUsers = {},
-                                              const std::uint32_t startDeadlineSeconds = 60) {
+                                              const std::uint32_t startDeadlineSeconds = 60, const std::size_t mode = 0) {
     O::ProductDescription description;
     description.name = "pvp-match";
     N::NetProductOptions net;
@@ -179,7 +182,7 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
     net.admission = PW::SeatAdmission(seats);
     description.options.Set(net);
     ReadShippedMaps(description);
-    description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .seats = seats,
+    description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .mode = mode, .seats = seats,
                                                          .expectUsers = std::move(expectUsers),
                                                          .startDeadlineSeconds = startDeadlineSeconds})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
@@ -191,7 +194,7 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
 
 inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                                const std::uint64_t userId, std::function<N::NetTime()> clock,
-                                               const std::size_t arena = 0) {
+                                               const std::size_t arena = 0, const std::size_t mode = 0) {
     O::ProductDescription description;
     description.name = "pvp-client";
     N::NetProductOptions net;
@@ -200,7 +203,7 @@ inline std::unique_ptr<O::Product> BuildClient(std::shared_ptr<const PW::GameCon
     net.clock = std::move(clock);
     description.options.Set(net);
     ReadShippedMaps(description);
-    O::WorldDescription world = Stepped(PW::ClientWorld({.content = std::move(content), .arena = arena, .localUser = userId}));
+    O::WorldDescription world = Stepped(PW::ClientWorld({.content = std::move(content), .arena = arena, .mode = mode, .localUser = userId}));
     // Whom it connects to (net-connect-target: a client World's NetConnectTarget, put by its prepare function).
     world.prepare.push_back([target = N::NetConnectTarget{N::MemoryLink::EndpointA(), userId, {}}](K::World& w) -> ::GYO::Engine::Base::Result<void, O::OrchestrationError> {
         w.SetResource(target);
@@ -228,5 +231,99 @@ inline K::EntityId PlayerOf(K::World& world, const std::uint64_t userId) {
 }
 
 inline N::NetTime Ms(const std::int64_t ms) { return std::chrono::milliseconds(ms); }
+
+// A Match and clientCount Clients over memory links (a fixed delay of two Advance calls each way), one frame each a
+// step.
+struct Session {
+    std::shared_ptr<N::NetTime> clock = std::make_shared<N::NetTime>(0);
+    std::vector<std::pair<N::MemoryLink, N::MemoryLink>> links;
+    std::shared_ptr<PW::Seats> seats = std::make_shared<PW::Seats>();
+    std::unique_ptr<O::Product> match;
+    std::vector<std::unique_ptr<O::Product>> clients;
+
+    // expectUsers, startDeadlineSeconds: the Match's start (none: played from the first step). clientArena: the arena
+    // the Clients play (none: the Match's). matchContent: the Match's (none: the shipped content). mode: the mode every
+    // end plays (an index into the content's modes).
+    Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
+            std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
+            const std::uint32_t startDeadlineSeconds = 60, const std::optional<std::size_t> clientArena = std::nullopt,
+            std::shared_ptr<const PW::GameContent> matchContent = nullptr, const std::size_t mode = 0) {
+        seats = std::make_shared<PW::Seats>(capacity);
+        std::vector<N::MemoryLink> serverEnds;
+        for (int i = 0; i < clientCount; ++i) {
+            N::MemoryLinkSettings settings;
+            settings.seed = static_cast<std::uint64_t>(60 + i);
+            settings.aToB.fixedDelaySteps = 2;
+            settings.bToA.fixedDelaySteps = 2;
+            links.push_back(N::MemoryLink::Pair(settings));
+            serverEnds.push_back(links.back().first);
+        }
+        auto reader = [c = clock] { return *c; };
+        match = BuildMatch(matchContent ? matchContent : ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena,
+                           std::move(expectUsers), startDeadlineSeconds, mode);
+        for (int i = 0; i < clientCount; ++i) {
+            clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
+                                          static_cast<std::uint64_t>(i + 1), reader, clientArena.value_or(matchArena), mode));
+        }
+    }
+    K::World& Match() { return GameWorld(*match); }
+    K::World& Client(const std::size_t i) { return GameWorld(*clients[i]); }
+    // One frame everywhere; inputs[i] (when given) is client i's input for its next step.
+    void Frame(const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
+        for (std::size_t i = 0; i < clients.size(); ++i) {
+            if (i < inputs.size() && inputs[i]) {
+                if (auto* local = N::LocalInput<PW::PlayerInput>(Client(i))) {
+                    const auto target = static_cast<std::uint32_t>(TickOf(Client(i)) + 1);
+                    local->Set(target, *inputs[i], N::ViewTime{target, 0});
+                }
+            }
+        }
+        REQUIRE(static_cast<bool>(match->RunFrame()));
+        for (auto& client : clients) REQUIRE(static_cast<bool>(client->RunFrame()));
+        for (auto& link : links) link.first.Advance();
+        *clock += Ms(16);
+    }
+    void Frames(const int n, const std::vector<std::optional<PW::PlayerInput>>& inputs = {}) {
+        for (int i = 0; i < n; ++i) Frame(inputs);
+    }
+};
+
+// A content root of a test's own: the shipped movement rules and the mode files the test writes (modes/, rules/).
+struct ModeFolder {
+    std::filesystem::path root;
+    ModeFolder() {
+        std::random_device random;
+        root = std::filesystem::temp_directory_path() / ("gyo_pvp_modes_" + std::to_string(random()));
+        std::filesystem::create_directories(root / "modes");
+        std::filesystem::create_directories(root / "rules");
+        std::filesystem::copy_file(std::filesystem::path(PVP_CONTENT_ROOT) / "rules" / "movement_rules.json",
+                                   root / "rules" / "movement_rules.json");
+    }
+    ~ModeFolder() {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+    }
+    ModeFolder(const ModeFolder&) = delete;
+    ModeFolder& operator=(const ModeFolder&) = delete;
+    void Write(const std::string& path, const std::string& text) const {
+        std::ofstream out(root / path, std::ios::binary);
+        out << text;
+    }
+    // A list of the files, each a mode written as given.
+    void Modes(const std::vector<std::pair<std::string, std::string>>& files) const {
+        std::string list = R"({"version": 1, "modes": [)";
+        for (std::size_t i = 0; i < files.size(); ++i) {
+            list += (i == 0 ? "\"" : ", \"") + files[i].first + "\"";
+            Write("modes/" + files[i].first, files[i].second);
+        }
+        Write("modes/modes.json", list + "]}");
+    }
+};
+
+// A mode file's text.
+inline std::string ModeText(const std::string& id, const std::string& rules = R"({"movement": "rules/movement_rules.json"})",
+                            const std::string& sets = "{}", const std::string& arenas = "[]") {
+    return R"({"version": 1, "id": ")" + id + R"(", "name": "M", "rules": )" + rules + R"(, "sets": )" + sets + R"(, "arenas": )" + arenas + "}";
+}
 
 } // namespace object_fps_pvp::test

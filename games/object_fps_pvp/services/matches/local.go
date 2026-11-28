@@ -61,6 +61,9 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	if spec.Map != "" {
 		arguments = append(arguments, "--arena", spec.Map)
 	}
+	if spec.Mode != "" {
+		arguments = append(arguments, "--mode", spec.Mode)
+	}
 	if spec.Saves != "" {
 		arguments = append(arguments, "--saves", spec.Saves)
 	}
