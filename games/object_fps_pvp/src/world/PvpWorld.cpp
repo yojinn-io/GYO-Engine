@@ -1,6 +1,7 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "object_fps_pvp/match/AdmissionToken.hpp"
+#include "object_fps_pvp/data/Utf8.hpp"
 #include "object_fps_pvp/sim/PlanarMovement.hpp"
 #include "object_fps_pvp/sim/ViewLimits.hpp"
 
@@ -36,6 +37,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <span>
+#include <string_view>
 #include <utility>
 
 namespace object_fps_pvp::world {
@@ -90,6 +93,8 @@ void HashValue(K::Hasher& h, const HitRecord& v) {
     HashValue(h, static_cast<std::uint8_t>(v.part));
 }
 void HashValue(K::Hasher& h, const Owner& v) { HashValue(h, v.userId); }
+void HashValue(K::Hasher& h, const PlayerName& v) { HashValue(h, v.text); }
+void HashValue(K::Hasher&, const PlayerNames&) {}
 void HashValue(K::Hasher&, const PlayerMotion&) {}
 void HashValue(K::Hasher& h, const PlayerInput& v) {
     HashValue(h, v.forward);
@@ -223,21 +228,29 @@ N::InputOptions<PlayerInput> InputOptions() {
     };
     return options;
 }
-// An id of at most 64 bytes: its length, then its bytes.
-void WriteId(N::NetWriter& w, const std::string& id) {
-    w.Value(static_cast<std::uint16_t>(id.size()));
-    for (const char c : id) w.Value(static_cast<std::uint8_t>(c));
+// Text on the wire: its length as a Length, then its bytes; a reader refuses one longer than maxBytes.
+template <class Length>
+void WriteText(N::NetWriter& w, const std::string& text) {
+    w.Value(static_cast<Length>(text.size()));
+    w.Bytes(std::as_bytes(std::span(text.data(), text.size())));
 }
-bool ReadId(N::NetReader& r, std::string& id) {
-    std::uint16_t size = 0;
-    if (!r.Value(size) || size > sim::kMaxContentIdBytes) return false;
-    id.clear();
-    for (std::uint16_t i = 0; i < size; ++i) {
-        std::uint8_t c = 0;
-        if (!r.Value(c)) return false;
-        id.push_back(static_cast<char>(c));
-    }
+template <class Length>
+bool ReadText(N::NetReader& r, std::string& text, const std::size_t maxBytes) {
+    Length size = 0;
+    std::span<const std::byte> bytes;
+    if (!r.Value(size) || size > maxBytes || !r.Bytes(size, bytes)) return false;
+    text.assign(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return true;
+}
+// A content id of at most 64 bytes.
+void WriteId(N::NetWriter& w, const std::string& id) { WriteText<std::uint16_t>(w, id); }
+bool ReadId(N::NetReader& r, std::string& id) { return ReadText<std::uint16_t>(r, id, sim::kMaxContentIdBytes); }
+
+// A player's name: at most PlayerName::kMaxBytes, so one byte holds its length.
+static_assert(PlayerName::kMaxBytes <= 0xFF);
+N::Codec<PlayerName> PlayerNameCodec() {
+    return {[](N::NetWriter& w, const PlayerName& v) { WriteText<std::uint8_t>(w, v.text); },
+            [](N::NetReader& r, PlayerName& v) { return ReadText<std::uint8_t>(r, v.text, PlayerName::kMaxBytes); }, 1};
 }
 
 N::Codec<MatchInfo> MatchInfoCodec() {
@@ -726,6 +739,20 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
     }
     // Nobody took them over: the players leave with their connections.
     for (const auto& [user, player] : released) despawn.Entity(player);
+    return {};
+}
+
+// The Match: each player its name (display-name declaration 5.1), the one the room's roster gives its user (none:
+// empty; longer than the wire carries: cut), once: a player SeatPlayers made that has no PlayerName yet. Its own System, apart from SeatPlayers, which
+// writes decision data: the names stay out of what both ends compare (the consistency fingerprint). Main/Update,
+// after SeatPlayers.
+K::SystemResult NamePlayers(K::Query<K::Read<Owner>, K::Without<PlayerName>> players, K::Res<PlayerNames> names,
+                            K::CommandsFor<K::Inserts<PlayerName>, K::Removes<>> commands) {
+    players.ForEach([&](const K::EntityId id, const Owner& owner) {
+        const auto found = names->byUser.find(owner.userId);
+        const std::string_view name = found != names->byUser.end() ? std::string_view(found->second) : std::string_view();
+        commands.Insert(id, PlayerName{std::string(data::Utf8Prefix(name, PlayerName::kMaxBytes))});
+    });
     return {};
 }
 
@@ -1240,6 +1267,19 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         set.build(setup);
     }
 
+    // The players' names, after the gameplay sets too: every wire id before them stays (display-name declaration 5.2;
+    // the order rule of the gameplay sets, mode-config declaration section 3). The Match alone gives them.
+    if (networked) {
+        r.Component<PlayerName>({.name = "PlayerName"});
+        N::NetEntry(setup).Replicate<PlayerName>("PlayerName", PlayerNameCodec());
+    }
+    if (end == WorldEnd::Match) {
+        r.Resource<PlayerNames>({.name = "PlayerNames"});
+        K::SystemOptions name = Frame("NamePlayers", update, N::OnServer());
+        name.mounts.front().after = {"SeatPlayers"};
+        r.AddSystem<&NamePlayers>(std::move(name));
+    }
+
     setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         const sim::ArenaContent& arena = options.content->arenas[options.arena];
         const ModeContent& mode = options.content->modes[options.mode];
@@ -1254,6 +1294,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
         world.SetResource(LocalDeaths{});
+        if (end == WorldEnd::Match) world.SetResource(PlayerNames{options.playerNames});
         world.SetResource(ActiveMode{mode.id, mode.rulesDigest, mode.on});
         // What the sets the mode turns on read, at every end (the rules digest says both ends read the same).
         for (const auto& [slot, read] : mode.sets) {

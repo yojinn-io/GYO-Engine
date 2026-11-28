@@ -370,7 +370,7 @@ void BuildSceneCommon(O::WorldSetup& setup) {
         if (w.Resource<FrameNotes>() == nullptr) w.SetResource(FrameNotes{start.frames, false, {}, {}, {}});
         if (w.Resource<ClientSettings>() == nullptr) w.SetResource(start.settings);
         if (w.Resource<WindowFit>() == nullptr) w.SetResource(WindowFit{});
-        PlaceGatewayClient(w, start.gateway, start.dataDirectory, gatewayNeeded);
+        PlaceGatewayClient(w, start, gatewayNeeded);
         return {};
     });
 }

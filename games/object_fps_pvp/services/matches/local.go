@@ -3,6 +3,7 @@ package matches
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,8 +20,11 @@ import (
 type Local struct {
 	// Command is the Match executable; Arguments come before the ones Local
 	// adds (--port, --match-id, --capacity, --arena, --saves,
-	// --admission-key-stdin, --idle-seconds). The key goes to the Match's standard input, in neither
-	// its command line nor its environment.
+	// --admission-key-stdin, --idle-seconds, --expect-users,
+	// --player-names-stdin). The key goes to the Match's standard input, in
+	// neither its command line nor its environment; so does the roster of the
+	// players' names, on its second line, whenever there are players
+	// (display-name declaration 5.1).
 	Command   string
 	Arguments []string
 	// Advertise is the address players are told to connect to (an IPv4
@@ -69,15 +73,25 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	}
 	if len(spec.Players) > 0 {
 		users := make([]string, len(spec.Players))
-		for j, user := range spec.Players {
-			users[j] = strconv.FormatUint(user, 10)
+		for j, player := range spec.Players {
+			users[j] = strconv.FormatUint(player.UserID, 10)
 		}
 		arguments = append(arguments, "--expect-users", strings.Join(users, ","))
+	}
+	input := hex.EncodeToString(spec.Key) + "\n"
+	if len(spec.Players) > 0 {
+		roster, err := Roster(spec.Players)
+		if err != nil {
+			l.givePort(port)
+			return Running{}, fmt.Errorf("the players' names: %w", err)
+		}
+		arguments = append(arguments, "--player-names-stdin")
+		input += roster + "\n"
 	}
 	// Not CommandContext: the Match outlives the allocation request.
 	command := exec.Command(l.Command, arguments...)
 	command.Env = append(os.Environ(), l.Environment...)
-	command.Stdin = strings.NewReader(hex.EncodeToString(spec.Key) + "\n")
+	command.Stdin = strings.NewReader(input)
 	var output io.Writer = os.Stdout
 	if l.Output != nil {
 		output = l.Output
@@ -97,6 +111,28 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	log.Printf("match started match=%d port=%d pid=%d", spec.MatchID, port, command.Process.Pid)
 	process := command.Process
 	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended, Stop: func() { _ = process.Kill() }}, nil
+}
+
+// The Match's roster line (match/PlayerRoster.hpp), its own type: the
+// allocation request's Player may change without changing the Match's input.
+type rosterLine struct {
+	Players []rosterPlayer `json:"players"`
+}
+
+type rosterPlayer struct {
+	UserID uint64 `json:"userId"`
+	Name   string `json:"name"`
+}
+
+// Roster is the players' names as the one line of JSON a Match reads on its
+// standard input after its key: {"players":[{"userId":7,"name":"..."}]}.
+func Roster(players []Player) (string, error) {
+	line := rosterLine{Players: make([]rosterPlayer, len(players))}
+	for i, player := range players {
+		line.Players[i] = rosterPlayer{UserID: player.UserID, Name: player.Name}
+	}
+	encoded, err := json.Marshal(line)
+	return string(encoded), err
 }
 
 func (l *Local) takePort() (int, error) {

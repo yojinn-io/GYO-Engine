@@ -4,6 +4,8 @@
 
 **2026-11-16 修訂（`v8-arch-gyo2-module-plugin-definition`）**：Module 與 Plugin 的定義照使用者 2026-11-16 的改定重寫（第 0 節末、4.1 的 Plugin 列、4.3 的 Module 列）。改了什麼見附錄 B.0。
 
+**2026-11-28 修訂（`v8-arch-gyo2-map-scene-split`）**：Scene 照使用者 2026-11-27 的決定改成「裝修資料」，遊戲流程的畫面改寫 Screen（第 4.3 節的 Scene 列）。改了什麼見附錄 B 的〈2026-11-28 的修訂〉。
+
 v3 和 v2 的差別：
 - 詞條不增不減，處置大多不變（變的見附錄 B）。
 - 「意思」一欄改寫成技術定義：讀者不必知道這個專案的歷史，也看得懂這個詞在 GYO2 指什麼。
@@ -151,7 +153,7 @@ v3 和 v2 的差別：
 | Layer | 不單用 | 加限定詞 | 「架構層」：Engine、plugins、產品這種依賴方向固定的分層。「基盤／應用之分」：AGENTS §2 依「改了它上面要跟著改多少」的分法。「渲染層」：畫面合成的一層 |
 | Module | **我們自己維護、介面是我們的部分**：在 Engine 裡，以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。用到外部函式庫、但外部函式庫完全藏在我們的介面後面的也算，例：JSON（yyjson 是外部的，介面是我們的）。例：Kernel、時間、執行緒、OS、math、JSON、狀態機、audio、網路 | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。一個 Module 往 World 登記用的類別寫「`Module` 型別」（使用者 2026-11-14 定拆型別，程式還沒改；不進 World 的 Module 沒有它）。Module 的登記檔寫「Module 登記檔」。和 Plugin 是一對：判準是誰維護、介面是誰的（使用者 2026-11-16，第 0 節末；取代 2026-11-14 的「少了它，完整的遊戲還成不成立」）。AGENTS §1、§3、§12 的「Module」是一般的程式模組，照原文讀 |
 | Stage | 不單用 | 加限定詞 | schedule 的一段寫「stage（舊）」：一個 schedule 由幾個 stage 依序組成，每個 stage 結束時有一個同步點，套用這段裡記下的延後變更。打包的暫存目錄、shader 的階段（`ShaderStage`）照各自領域的詞。「stage」不當動詞用 |
-| Scene | 不單用 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。可以生成的實體範本（Bevy 的 Scene）要不要有，另判 |
+| Scene | **裝修資料**：擺在地圖之上、會互動、有狀態的物件（門、箱子、NPC 的位置、可撿的物品）的擺放。地圖是毛坯房，Scene 是裝修。物件生成後是一般的實體，狀態放在實體上。Scene 是另一個配置檔，地位和地圖檔一樣 | 用它命名這個概念（使用者 2026-11-27） | 遊戲流程的畫面（開場、主選單等）寫 Screen。渲染的輸入寫「渲染輸入」。地圖加裝修合起來的整份關卡資料寫「關卡內容」。Bevy 的 `Scene`（`bevy_scene`，可以生成的實體範本）提到時寫「Bevy 的 Scene」 |
 | Input | **玩家的輸入**（鍵盤、滑鼠、手把），以及處理它的輸入模組 | 加限定詞 | 欄角色 Input（可以被入口 System 寫的決定性資料）寫「Input 欄角色（舊）」 |
 | Boundary | **架構的邊界**：AGENTS 的 Architecture／Product／Module Boundary | 加限定詞 | 從外部進入 World 的資料寫「boundary Resource（舊）」 |
 | Zone | 不單用 | 加限定詞 | 「決定性區」：一筆資料或一個 System 承諾的決定性等級。C 區＝跨平台逐位元相同；B 區（預設）＝同一個執行檔在同一個平台上每次相同。「時區」：時間的時區 |
@@ -248,7 +250,7 @@ v3 和 v2 的差別：
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」；(iii) `CompositeLayer`（`RenderTypes.hpp:98`） | 同 v2 |
 | Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節）；2026-11-16 改成「誰維護、介面是誰的」（第 0 節末） | 照第 0 節末的定義 |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 寫「stage（舊）」 |
-| Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本 | 同 v2 |
+| Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本；(iv) gyo2 的遊戲流程畫面：object_fps_pvp 的 `Scene::Splash` 等（`ClientWorld.cpp:2276`） | 同 v2；2026-11-28 起見附錄 B 的〈2026-11-28 的修訂〉 |
 | Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | (ii) 寫「Input 欄角色（舊）」 |
 | Boundary | (i) AGENTS 的 Architecture／Product／Module Boundary；(ii) 舊 Kernel 設計的 boundary Resource | (ii) 寫「boundary Resource（舊）」 |
 | Zone | (i) os 的時區；(ii) 舊 Kernel 設計：決定性的區 | (ii) 照程式（`Zone::C`、`Zone::B`，預設 B）與 `determinism.md` 的等級定義 |
@@ -270,6 +272,14 @@ v3 和 v2 的差別：
 | Player、Peer、Match、Gateway；PvP 意思的 Client | PvP 產品的概念；舊 Kernel 的條文裡也出現 | 同 v2 |
 
 ## 附錄 B. 各版的變動
+
+### 2026-11-28 的修訂（`v8-arch-gyo2-map-scene-split`）
+
+| 詞 | 修訂前 | 修訂後 | 理由 |
+|---|---|---|---|
+| Scene | 不單用、不用它命名新概念；Bevy 的實體範本要不要有，另判 | 裝修資料：擺在地圖之上、會互動、有狀態的物件的擺放，另一個配置檔；遊戲流程的畫面改寫 Screen | 使用者 2026-11-27 原話：「Map是毛坯房，Scene類似於裝修。一樣放在實體裡。但是場景數據是另一個配置文件（和地圖文件一樣）。」「我建議遊戲流程的畫面的Scene改名，Scene其實算是一個專有名詞。」（gyo2 HANDOFF `v8-arch-gyo2-map-scene-split`） |
+
+「地圖加裝修合起來的整份關卡資料寫『關卡內容』」是架構師的讀法：使用者沒有說；保留舊列「關卡的資料寫『關卡內容』」的用法，只說明它現在包含 Scene。程式裡流程畫面的 `Scene` 改名為 Screen，由程式的批次做，不在本修訂。
 
 ### B.0 2026-11-16 的修訂（`v8-arch-gyo2-module-plugin-definition`）
 

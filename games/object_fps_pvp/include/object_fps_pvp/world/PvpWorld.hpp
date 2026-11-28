@@ -157,6 +157,13 @@ struct MatchSeats final {
 };
 void HashValue(K::Hasher&, const MatchSeats&);
 
+// The Match: the names of the room's members by user (WorldOptions::playerNames), which NamePlayers gives their
+// players. Not decision data.
+struct PlayerNames final {
+    std::map<std::uint64_t, std::string> byUser;
+};
+void HashValue(K::Hasher&, const PlayerNames&);
+
 // The Match's admission without a key (a Match started by hand, --connect, the tests): the seats only.
 [[nodiscard]] N::ServerHost::Admission SeatAdmission(std::shared_ptr<Seats> seats);
 
@@ -192,6 +199,8 @@ struct WorldOptions final {
     // after the first player came it waits at most (0: no limit).
     std::vector<std::uint64_t> expectUsers;
     std::uint32_t startDeadlineSeconds = 60;
+    // The Match: the room's members' names by user (match::ParsePlayerNames; none: every player's name is empty).
+    std::map<std::uint64_t, std::string> playerNames;
     // Where the map's walls are built (the Product's worker; not owned, it outlives the World). None: in the System,
     // on the World's thread.
     GYO::Engine::Asset::AssetExecutor* jobs = nullptr;

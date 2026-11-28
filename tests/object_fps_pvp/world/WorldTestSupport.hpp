@@ -23,6 +23,7 @@
 #include <random>
 #include <mutex>
 #include <memory>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -171,7 +172,8 @@ std::string Reported(const Built& built) {
 inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameContent> content, std::shared_ptr<N::Link> link,
                                               std::shared_ptr<PW::Seats> seats, std::function<N::NetTime()> clock,
                                               const std::size_t arena = 0, std::vector<std::uint64_t> expectUsers = {},
-                                              const std::uint32_t startDeadlineSeconds = 60, const std::size_t mode = 0) {
+                                              const std::uint32_t startDeadlineSeconds = 60, const std::size_t mode = 0,
+                                              std::map<std::uint64_t, std::string> playerNames = {}) {
     O::ProductDescription description;
     description.name = "pvp-match";
     N::NetProductOptions net;
@@ -184,7 +186,8 @@ inline std::unique_ptr<O::Product> BuildMatch(std::shared_ptr<const PW::GameCont
     ReadShippedMaps(description);
     description.worlds.push_back(Stepped(PW::MatchWorld({.content = std::move(content), .arena = arena, .mode = mode, .seats = seats,
                                                          .expectUsers = std::move(expectUsers),
-                                                         .startDeadlineSeconds = startDeadlineSeconds})));
+                                                         .startDeadlineSeconds = startDeadlineSeconds,
+                                                         .playerNames = std::move(playerNames)})));
     auto built = O::Product::Build(std::move(description), O::MakeRegisteredUnits());
     REQUIRE_MESSAGE(static_cast<bool>(built), Reported(built));
     auto product = std::move(built).value();
@@ -247,7 +250,8 @@ struct Session {
     Session(const int clientCount, const std::uint32_t capacity, const std::size_t matchArena = 0,
             std::shared_ptr<const PW::GameContent> clientContent = ShippedContent(), std::vector<std::uint64_t> expectUsers = {},
             const std::uint32_t startDeadlineSeconds = 60, const std::optional<std::size_t> clientArena = std::nullopt,
-            std::shared_ptr<const PW::GameContent> matchContent = nullptr, const std::size_t mode = 0) {
+            std::shared_ptr<const PW::GameContent> matchContent = nullptr, const std::size_t mode = 0,
+            std::map<std::uint64_t, std::string> playerNames = {}) {
         seats = std::make_shared<PW::Seats>(capacity);
         std::vector<N::MemoryLink> serverEnds;
         for (int i = 0; i < clientCount; ++i) {
@@ -260,7 +264,7 @@ struct Session {
         }
         auto reader = [c = clock] { return *c; };
         match = BuildMatch(matchContent ? matchContent : ShippedContent(), std::make_shared<HubLink>(serverEnds), seats, reader, matchArena,
-                           std::move(expectUsers), startDeadlineSeconds, mode);
+                           std::move(expectUsers), startDeadlineSeconds, mode, std::move(playerNames));
         for (int i = 0; i < clientCount; ++i) {
             clients.push_back(BuildClient(clientContent, std::make_shared<N::MemoryLink>(links[static_cast<std::size_t>(i)].second),
                                           static_cast<std::uint64_t>(i + 1), reader, clientArena.value_or(matchArena), mode));

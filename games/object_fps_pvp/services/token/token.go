@@ -90,48 +90,64 @@ func VerifyAdmission(key, token []byte, now time.Time, matchID, userID uint64) e
 	return nil
 }
 
-// The session token: base64url(version u8 | userId u64 | expiresAt u64) "."
-// base64url(HMAC-SHA256(key, those 17 bytes)).
+// The session token (display-name declaration 5.1): base64url(version u8 |
+// userId u64 | expiresAt u64 | name) "." base64url(HMAC-SHA256(key, those
+// bytes)); the name is the rest of the payload. It is inside the signature:
+// the gateway hands it on as the user's own.
 const (
-	SessionVersion = 1
-	sessionSigned  = 1 + 8 + 8
+	SessionVersion  = 2
+	sessionUserAt   = 1
+	sessionExpiryAt = sessionUserAt + 8
+	sessionNameAt   = sessionExpiryAt + 8
 )
 
 var encoding = base64.RawURLEncoding
 
+// Session is what a session token says: who the user is and the name they
+// signed in with (empty: none).
+type Session struct {
+	UserID uint64
+	Name   string
+}
+
 // SignSession makes a session token with the identity key.
-func SignSession(key []byte, userID uint64, expiresAt time.Time) string {
-	payload := make([]byte, sessionSigned)
+func SignSession(key []byte, session Session, expiresAt time.Time) string {
+	payload := make([]byte, sessionNameAt, sessionNameAt+len(session.Name))
 	payload[0] = SessionVersion
-	binary.BigEndian.PutUint64(payload[1:], userID)
-	binary.BigEndian.PutUint64(payload[9:], uint64(expiresAt.Unix()))
+	binary.BigEndian.PutUint64(payload[sessionUserAt:], session.UserID)
+	binary.BigEndian.PutUint64(payload[sessionExpiryAt:], uint64(expiresAt.Unix()))
+	payload = append(payload, session.Name...)
 	return encoding.EncodeToString(payload) + "." + encoding.EncodeToString(mac(key, payload))
 }
 
-// VerifySession returns the user a session token names, or why it is refused.
-func VerifySession(key []byte, session string, now time.Time) (uint64, error) {
+// VerifySession returns what a session token says, or why it is refused: the
+// layout, the version, the signature, then the expiry.
+func VerifySession(key []byte, session string, now time.Time) (Session, error) {
 	encodedPayload, encodedMAC, found := strings.Cut(session, ".")
 	if !found {
-		return 0, ErrLength
+		return Session{}, ErrLength
 	}
 	payload, err := encoding.DecodeString(encodedPayload)
-	if err != nil || len(payload) != sessionSigned {
-		return 0, ErrLength
+	if err != nil || len(payload) == 0 {
+		return Session{}, ErrLength
 	}
 	signature, err := encoding.DecodeString(encodedMAC)
 	if err != nil || len(signature) != sha256.Size {
-		return 0, ErrLength
+		return Session{}, ErrLength
 	}
 	if payload[0] != SessionVersion {
-		return 0, ErrVersion
+		return Session{}, ErrVersion
+	}
+	if len(payload) < sessionNameAt {
+		return Session{}, ErrLength
 	}
 	if !hmac.Equal(signature, mac(key, payload)) {
-		return 0, ErrMAC
+		return Session{}, ErrMAC
 	}
-	if now.Unix() >= int64(binary.BigEndian.Uint64(payload[9:])) {
-		return 0, ErrExpired
+	if now.Unix() >= int64(binary.BigEndian.Uint64(payload[sessionExpiryAt:])) {
+		return Session{}, ErrExpired
 	}
-	return binary.BigEndian.Uint64(payload[1:]), nil
+	return Session{UserID: binary.BigEndian.Uint64(payload[sessionUserAt:]), Name: string(payload[sessionNameAt:])}, nil
 }
 
 func mac(key, message []byte) []byte {
