@@ -100,6 +100,7 @@
 - [kernel-mutation-subsumption-report.zh-Hant.md](kernel-mutation-subsumption-report.zh-Hant.md)：同一批第 3 步的 subsumption 檢查（714 個逐個跑全部 Kernel 測試、最小集合 469、退 51 個；使用者 2026-11-19 核准，714 → 663）。
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
 - [ink-spike-declaration.zh-Hant.md](ink-spike-declaration.zh-Hant.md)：`v8-arch-gyo2-ink-spike` 的事前宣告（Ink＋inkcpp 的單機 spike；第 11 節使用者的決定、第 12 節實作時發現的事）。
+- [arena-rules-split-declaration.zh-Hant.md](arena-rules-split-declaration.zh-Hant.md)：`v8-arch-gyo2-arena-rules-split` 的事前宣告（arena 檔只留地圖類並加選填的 `scene`；移動速度、跳高、重力進模式配置的 `movement` 表，墜落傷害進新的 `damage` 表，身體尺寸進角色資料；arena `sets` 的去留；核心 PvP 用權威 digest 的 A/B 證明不變）。
 
 ## dev_log
 

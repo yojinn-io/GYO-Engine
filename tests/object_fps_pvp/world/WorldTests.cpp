@@ -85,7 +85,7 @@ constexpr float kHalfPi = std::numbers::pi_v<float> / 2;
 
 } // namespace
 
-TEST_CASE("world: a player walks at the arena's speed and stops at the wall, at its radius and skin") {
+TEST_CASE("world: a player walks at the rules' speed and stops at the wall, at its radius and skin") {
     LoneMatch match;
     const K::EntityId walker = match.AddPlayer({5, 0, 5});
     match.Steer(walker, Input(1, 0, 0));
@@ -118,7 +118,7 @@ TEST_CASE("world: a player without input neither moves nor turns") {
     CHECK(match.Body(idle).yaw == 1.0F);
 }
 
-TEST_CASE("world: a jump rises to the arena's height and lands") {
+TEST_CASE("world: a jump rises to the rules' height and lands") {
     LoneMatch match;
     const K::EntityId jumper = match.AddPlayer({5, 0, 5});
     PW::PlayerInput jump = Input(0, 0, 0);
@@ -141,7 +141,7 @@ TEST_CASE("world: a jump rises to the arena's height and lands") {
 }
 
 TEST_CASE("world: a crouched player under a low roof cannot stand up until it leaves it") {
-    // The shipped arena's rules with a roof from y 1.5 to 3 over x in [8, 12] for walls (no pillar).
+    // The shipped content with a roof from y 1.5 to 3 over x in [8, 12] for walls (no pillar).
     LoneMatch match;
     match.SetWalls({{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}});
     const K::EntityId player = match.AddPlayer({6, 0, 5});
@@ -664,7 +664,7 @@ TEST_CASE("world: the arena stands between two points when its walls cut the seg
 }
 
 namespace {
-// The shipped arena's rules with its floor plane at floor (none: nothing holds the bodies up but the walls).
+// The shipped content with its arena's floor plane at floor (none: nothing holds the bodies up but the walls).
 std::shared_ptr<PW::GameContent> WithFloor(const std::optional<float> floor) {
     auto content = std::make_shared<PW::GameContent>(*ShippedContent());
     content->arenas.front().floor = floor;
@@ -679,21 +679,77 @@ std::vector<GYO::Engine::Math::Aabb> OpenWalls(const bool ground = false) {
 }
 } // namespace
 
+TEST_CASE("world: a World plays its mode's movement and damage rules and its character's body, whatever the arena") {
+    // The shipped content with other values in the mode's rule tables and the character's body (the arena unchanged).
+    const auto played = [](const auto& change) {
+        auto content = std::make_shared<PW::GameContent>(*ShippedContent());
+        auto rig = std::make_shared<object_fps_pvp::character::CharacterRig>(*content->character);
+        change(content->modes.front().movement, content->modes.front().damage, rig->bodySize);
+        content->character = rig;
+        return content;
+    };
+    {
+        LoneMatch match(played([](sim::MovementRules& movement, sim::DamageRules&, sim::BodySize&) { movement.movementSpeed = 6.0F; }));
+        const K::EntityId walker = match.AddPlayer({5, 0, 2});
+        match.Steer(walker, Input(1, 0, 0));
+        match.Run(64);
+        CHECK_MESSAGE(match.Body(walker).feet.z == doctest::Approx(8.0).epsilon(1e-3), "[pvp-world-movement] one second at the mode's 6 units a second");
+    }
+    {
+        LoneMatch match(played([](sim::MovementRules& movement, sim::DamageRules&, sim::BodySize&) {
+            movement.jumpHeight = 1.0F;
+            movement.gravity = 8.0F;
+        }));
+        const K::EntityId jumper = match.AddPlayer({5, 0, 5});
+        PW::PlayerInput jump = Input(0, 0, 0);
+        jump.jump = 1;
+        match.Steer(jumper, jump);
+        match.Run(1);
+        match.Steer(jumper, Input(0, 0, 0));
+        float peak = 0;
+        for (int i = 0; i < 64 * 2; ++i) {
+            match.Run(1);
+            peak = std::max(peak, match.Body(jumper).feet.y);
+        }
+        CHECK_MESSAGE(peak <= 1.0F + 1e-4F, "[pvp-world-movement] the mode's jump height: " << peak);
+        CHECK_MESSAGE(peak > 0.99F, "[pvp-world-movement] the mode's jump height: " << peak);
+    }
+    {
+        LoneMatch match(played([](sim::MovementRules&, sim::DamageRules&, sim::BodySize& body) { body.radius = 0.4F; }));
+        const K::EntityId walker = match.AddPlayer({5, 0, 5});
+        match.Steer(walker, Input(1, 0, 0));
+        match.Run(64 * 7);
+        // The +Z wall starts at z = 20: the capsule stops at the character's radius and the skin (0.01).
+        CHECK_MESSAGE(match.Body(walker).feet.z == doctest::Approx(20.0 - 0.4 - 0.01).epsilon(1e-4), "[pvp-world-body] the character's radius");
+    }
+    {
+        LoneMatch match(played([](sim::MovementRules&, sim::DamageRules& damage, sim::BodySize&) { damage.fall.reset(); }));
+        match.SetWalls(OpenWalls());
+        const K::EntityId id = match.AddPlayer({5, 10, 5});
+        match.World().GetMut<PW::PlayerBody>(id)->grounded = 0;
+        match.Steer(id, Input(0, 0, 0));
+        match.Run(64 * 3);
+        REQUIRE(match.Body(id).grounded == 1);
+        CHECK_MESSAGE(match.Combat(id).hp == sim::CombatRules{}.maximumHp, "[pvp-world-damage] a mode without fall damage: ten metres hurt nothing");
+    }
+}
+
 TEST_CASE("world: the arena's bounds are an invisible wall: a body walking out stops at its radius and slides along") {
     LoneMatch match(WithFloor(0.0F));
     match.SetWalls(OpenWalls());
     const sim::ArenaContent& arena = ShippedContent()->arenas.front();
+    const float radius = ShippedContent()->character->bodySize.radius;
     // Straight at the -Z edge, then along the +X edge.
     const K::EntityId walker = match.AddPlayer({5, 0, 3});
     match.Steer(walker, Input(1, 0, std::numbers::pi_v<float>));
     match.Run(64 * 2);
-    CHECK_MESSAGE(match.Body(walker).feet.z == doctest::Approx(arena.radius), "[pvp-bounds] the body stops at the edge");
+    CHECK_MESSAGE(match.Body(walker).feet.z == doctest::Approx(radius), "[pvp-bounds] the body stops at the edge");
     CHECK(match.Body(walker).feet.x == doctest::Approx(5.0F));
     // Diagonally into the +X edge: it slides along it in z.
     const K::EntityId slider = match.AddPlayer({arena.width - 1.0F, 0, 5});
     match.Steer(slider, Input(1, 0, std::numbers::pi_v<float> / 4));
     match.Run(64 * 2);
-    CHECK_MESSAGE(match.Body(slider).feet.x == doctest::Approx(arena.width - arena.radius), "[pvp-bounds] the body stops at the edge");
+    CHECK_MESSAGE(match.Body(slider).feet.x == doctest::Approx(arena.width - radius), "[pvp-bounds] the body stops at the edge");
     CHECK(match.Body(slider).feet.z > 8.0F);
 }
 
@@ -718,8 +774,8 @@ TEST_CASE("world: a body that falls below the kill height dies, and respawns aft
 }
 
 TEST_CASE("world: a landing from above the safe height costs HP by the metres beyond it; a high enough fall kills") {
-    const sim::ArenaContent& arena = ShippedContent()->arenas.front();
-    REQUIRE(arena.fallDamage.has_value());
+    const sim::DamageRules& damage = ShippedContent()->modes.front().damage;
+    REQUIRE(damage.fall.has_value());
     const sim::CombatRules combat;
   // On the floor plane, and on the map's own ground (no floor plane: the kiriyu maps).
   for (const bool ground : {false, true}) {
@@ -736,11 +792,11 @@ TEST_CASE("world: a landing from above the safe height costs HP by the metres be
         return match.Combat(id);
     };
     // Within the safe height: nothing.
-    CHECK(landFrom(arena.fallDamage->safeHeight - 0.5F).hp == combat.maximumHp);
+    CHECK(landFrom(damage.fall->safeHeight - 0.5F).hp == combat.maximumHp);
     // Ten metres: the metres beyond the safe height at the points per metre (the landing speed of the last step
     // overshoots the drop a little).
     const PW::PlayerCombat ten = landFrom(10.0F);
-    const double expected = (10.0 - arena.fallDamage->safeHeight) * arena.fallDamage->milliPointsPerMetre;
+    const double expected = (10.0 - damage.fall->safeHeight) * damage.fall->milliPointsPerMetre;
     CHECK_MESSAGE(ten.life == sim::LifeState::Alive, "[pvp-fall-damage] ten metres hurt, they do not kill");
     CHECK_MESSAGE(static_cast<double>(combat.maximumHp - ten.hp) == doctest::Approx(expected).epsilon(0.08),
                   "[pvp-fall-damage] the damage of a ten metre fall: " << (combat.maximumHp - ten.hp));

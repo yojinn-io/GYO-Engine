@@ -7,11 +7,14 @@
 //   modes/modes.json   version 1: the mode files, plain names next to it, in order; the first is the default
 //   modes/<id>.json    version 1: { id, name, rules: { kind: file }, sets: { set: settings }, arenas: [id...] }
 //
-// The rule kinds the game knows: movement (sim/MovementRules.hpp, a file under the content root). The combat rules are
-// still the game's defaults (sim/CombatRules.hpp): they go into the rules digest all the same.
+// The rule kinds the game knows, each a file under the content root: movement (sim/MovementRules.hpp, required) and
+// damage (sim/DamageRules.hpp; none: a landing never hurts). The combat rules are still the game's defaults
+// (sim/CombatRules.hpp): they go into the rules digest all the same. The arena a match plays adapts to the rules: it
+// decides none of them (arena-rules-split declaration).
 
 #include "object_fps_pvp/sim/Arena.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
+#include "object_fps_pvp/sim/DamageRules.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
 #include "object_fps_pvp/world/ContentHash.hpp"
 #include "object_fps_pvp/world/GameplaySets.hpp"
@@ -51,7 +54,8 @@ struct ModeFile final {
 struct ModeContent final {
     std::string id;
     std::string name;
-    sim::StanceRules stance;
+    sim::MovementRules movement;
+    sim::DamageRules damage;
     // The arenas it plays (empty: all).
     std::vector<std::string> arenas;
     // The gameplay sets it turns on (by slot), and what each read of its settings.
@@ -68,7 +72,7 @@ struct ModeContent final {
 // Reads the installed modes under root (the game's asset directory): modes/modes.json and the files it lists, and each
 // mode's rule tables. nullopt with error naming the file and what was wrong: a file that does not read or parse, two
 // modes with one id, a rule kind the game does not know, no movement rules, a set the table does not have (or its
-// settings do not read), an arena that is not installed, or one whose body the movement rules do not fit.
+// settings do not read), or an arena that is not installed.
 [[nodiscard]] std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const std::vector<sim::ArenaContent>& arenas,
                                                                 const sim::CombatRules& combat, const std::vector<GameplaySet>& sets,
                                                                 std::string& error);
@@ -76,7 +80,7 @@ struct ModeContent final {
 // The rules digest of a mode (ModeContent::rulesDigest): the parsed values through the Kernel's Hasher, never the
 // files' bytes (a line ending, a space or the order of an object's members does not change it).
 // The sets are hashed by name (from the table) with the digest of what each read.
-[[nodiscard]] std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& sets, const sim::StanceRules& stance,
-                                        const sim::CombatRules& combat);
+[[nodiscard]] std::uint64_t RulesDigest(const ModeFile& mode, const std::vector<GameplaySet>& sets, const sim::MovementRules& movement,
+                                        const sim::DamageRules& damage, const sim::CombatRules& combat);
 
 } // namespace object_fps_pvp::world

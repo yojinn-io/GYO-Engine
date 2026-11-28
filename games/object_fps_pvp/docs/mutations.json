@@ -2158,16 +2158,17 @@
   },
   {
    "id": "pvp-arena-version",
-   "what": "an arena file of another version (3, before the bounds) is read",
+   "what": "an arena file of version 4 (the rules and the body in it) is read",
    "guards": [
-    "big-map-declaration 15.2"
+    "big-map-declaration 15.2",
+    "arena-rules-split-declaration 6.3"
    ],
    "file": "games/object_fps_pvp/src/sim/Arena.cpp",
-   "find": "!= 4) throw std::runtime_error(\"unsupported arena version\");",
-   "replace": "< 3) throw std::runtime_error(\"unsupported arena version\");",
+   "find": "!= 5) throw std::runtime_error(\"unsupported arena version\");",
+   "replace": "< 4) throw std::runtime_error(\"unsupported arena version\");",
    "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "PvP arena: the rules of an arena file",
-   "expect": "version\\\": 3"
+   "cases": "PvP arena: what an arena file says*",
+   "expect": "version\\\": 4"
   },
   {
    "id": "pvp-pause-when-not-held",
@@ -2667,7 +2668,7 @@
    "id": "pvp-bounds-open",
    "what": "the arena's bounds hold nobody: a body walks out",
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        end = InsideBounds(arena, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});",
+   "find": "        end = InsideBounds(arena, size.radius, moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F});",
    "replace": "        end = moved->position - Math::Vec3{0.0F, 0.5F * height, 0.0F};",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the arena's bounds*",
@@ -2680,7 +2681,7 @@
    "id": "pvp-bounds-at-edge",
    "what": "the invisible wall holds the feet at the edge, not the body's side",
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "    feet.z = std::clamp(feet.z, arena.radius, arena.depth - arena.radius);",
+   "find": "    feet.z = std::clamp(feet.z, radius, arena.depth - radius);",
    "replace": "    feet.z = std::clamp(feet.z, 0.0F, arena.depth);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the arena's bounds*",
@@ -2719,7 +2720,7 @@
    "id": "pvp-landing-unhurt",
    "what": "a landing never hurts",
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->arena, *stepped);",
+   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, rules->damage, *stepped);",
    "replace": "        const std::uint32_t damage = 0;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a landing from above*",
@@ -2757,11 +2758,11 @@
   {
    "id": "pvp-fall-safe-ignored",
    "what": "every metre of a fall hurts, the safe height too",
-   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
-   "find": "    const double beyond = height - arena.fallDamage->safeHeight;",
+   "file": "games/object_fps_pvp/src/sim/DamageRules.cpp",
+   "find": "    const double beyond = height - damage.fall->safeHeight;",
    "replace": "    const double beyond = height;",
    "target": "gyo_object_fps_pvp_logic_tests",
-   "cases": "PvP movement rules: a landing hurts*",
+   "cases": "PvP damage rules: a landing hurts*",
    "expect": "LandingDamage",
    "guards": [
     "v8-product-pvp-playtest-fixes"
@@ -3159,16 +3160,16 @@
   },
   {
    "id": "pvp-mode-unknown-rule-kind",
-   "what": "a mode naming a rule kind the game does not know reads",
+   "what": "a mode naming a rule kind the game does not know reads (as damage rules)",
    "guards": [
     "mode-config-declaration 3.2"
    ],
    "file": "games/object_fps_pvp/src/world/Modes.cpp",
-   "find": "            if (kind != \"movement\") return fail(",
+   "find": "            if (kind != \"movement\" && kind != \"damage\") return fail(",
    "replace": "            if (false) return fail(",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a mode that names*",
-   "expect": "refused: no rule kind 'weapons'"
+   "expect": "rules/movement_rules\\.json: unsupported version"
   },
   {
    "id": "pvp-mode-unknown-arena",
@@ -3359,19 +3360,6 @@
    "expect": "pvp-set-on"
   },
   {
-   "id": "pvp-set-arena-block-always",
-   "what": "an arena's block is put for a set the mode leaves off",
-   "guards": [
-    "mode-config-declaration 2.4, 4"
-   ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "            if (mode.on.Has(slot) && read.put) read.put(world);",
-   "replace": "            if (read.put) read.put(world);",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a gameplay set the mode leaves off*",
-   "expect": "ProbeArena"
-  },
-  {
    "id": "pvp-set-unknown-accepted",
    "what": "a set the game does not have is taken",
    "guards": [
@@ -3404,24 +3392,11 @@
     "mode-config-declaration 2.4, 4"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "            if (read.put) read.put(world);\n        }\n        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {",
-   "replace": "            (void)read;\n        }\n        for (const auto& [slot, read] : options.content->arenaSets[options.arena]) {",
+   "find": "            if (read.put) read.put(world);",
+   "replace": "            (void)read;",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a gameplay set the mode turns on*",
    "expect": "ProbeState"
-  },
-  {
-   "id": "pvp-set-arena-undigested",
-   "what": "the arena's blocks of the sets the mode turns on are left out of the rules digest",
-   "guards": [
-    "mode-config-declaration 3.3 (design review S1)"
-   ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (played.on.Has(slot)) blocks.emplace_back(sets[slot].name, read.digest);",
-   "replace": "        (void)played, (void)slot, (void)read;",
-   "target": "gyo_object_fps_pvp_world_tests",
-   "cases": "world: a Client whose arena carries another block*",
-   "expect": "pvp-set-arena-digest"
   },
   {
    "id": "pvp-mode-plays-any",
@@ -4271,6 +4246,372 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: overhead: turned away*",
    "expect": "pvp-overhead-gone"
+  },
+  {
+   "id": "pvp-arena-scene-unchecked",
+   "what": "an arena's scene that is not a path inside the content is taken",
+   "guards": [
+    "arena-rules-split-declaration 6.3",
+    "interact-door-declaration 6"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": "arena.scene = data::ContentPath(data::Member(json, \"scene\"), \"scene\");",
+   "replace": "arena.scene = data::String(data::Member(json, \"scene\"), \"scene\");",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: the scene*",
+   "expect": "pvp-arena-scene-path"
+  },
+  {
+   "id": "pvp-arena-scene-dropped",
+   "what": "an arena's scene is not kept",
+   "guards": [
+    "arena-rules-split-declaration 6.3",
+    "interact-door-declaration 6"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": "if (data::HasMember(json, \"scene\")) arena.scene =",
+   "replace": "if (false) arena.scene =",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: the scene*",
+   "expect": "scene\\.has_value"
+  },
+  {
+   "id": "pvp-arena-spawn-outside",
+   "what": "an arena's spawn outside [0, width] x [0, depth] is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": " || !SpawnInBounds(arena, point, 0.0F)) {",
+   "replace": ") {",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: what an arena file says*",
+   "expect": "-0\\.1|10\\.1"
+  },
+  {
+   "id": "pvp-spawn-radius-unchecked",
+   "what": "a spawn closer to the bounds than the character's radius loads",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "            if (!sim::SpawnInBounds(arena, arena.spawns[s], rig->bodySize.radius)) {",
+   "replace": "            if (!sim::SpawnInBounds(arena, arena.spawns[s], 0.0F)) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: content whose arena has a spawn closer*",
+   "expect": "pvp-spawn-radius-unchecked"
+  },
+  {
+   "id": "pvp-movement-speed-unread",
+   "what": "the movement rules' speed is not read (always the default)",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        rules.movementSpeed = data::PositiveOr(json, \"movement_speed\", rules.movementSpeed);",
+   "replace": "        (void)data::PositiveOr(json, \"movement_speed\", rules.movementSpeed);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: what a movement rules file says*",
+   "expect": "pvp-movement-speed-read"
+  },
+  {
+   "id": "pvp-movement-jump-unread",
+   "what": "the movement rules' jump height is not read (always the default)",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        rules.jumpHeight = data::PositiveOr(json, \"jump_height\", rules.jumpHeight);",
+   "replace": "        (void)data::PositiveOr(json, \"jump_height\", rules.jumpHeight);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: what a movement rules file says*",
+   "expect": "pvp-movement-jump-read"
+  },
+  {
+   "id": "pvp-movement-gravity-unread",
+   "what": "the movement rules' gravity is not read (always the default)",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        rules.gravity = data::PositiveOr(json, \"gravity\", rules.gravity);",
+   "replace": "        (void)data::PositiveOr(json, \"gravity\", rules.gravity);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: what a movement rules file says*",
+   "expect": "pvp-movement-gravity-read"
+  },
+  {
+   "id": "pvp-movement-scale-unbounded",
+   "what": "a crouch speed scale above 1 is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/MovementRules.cpp",
+   "find": "        if (rules.crouchSpeedScale > 1) throw",
+   "replace": "        if (false) throw",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP movement rules: what a movement rules file says*",
+   "expect": "1\\.5"
+  },
+  {
+   "id": "pvp-world-speed-default",
+   "what": "a World moves at the default speed, not its mode's",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    const float speed = sim::MoveSpeed(rules.movement, crouched);",
+   "replace": "    const float speed = sim::MoveSpeed(sim::MovementRules{}, crouched);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World plays its mode's*",
+   "expect": "pvp-world-movement"
+  },
+  {
+   "id": "pvp-world-gravity-default",
+   "what": "a World falls under the default gravity, not its mode's",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "sim::Fall(start.y, body.verticalVelocity, rules.movement.gravity, seconds, arena.floor);",
+   "replace": "sim::Fall(start.y, body.verticalVelocity, sim::MovementRules{}.gravity, seconds, arena.floor);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World plays its mode's*",
+   "expect": "pvp-world-movement"
+  },
+  {
+   "id": "pvp-world-damage-ignored",
+   "what": "a World's landings hurt by the shipped fall damage, not its mode's",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, rules->damage, *stepped);",
+   "replace": "        const std::uint32_t damage = sim::LandingDamage(rules->movement.gravity, sim::DamageRules{sim::FallDamage{4.0F, 15'000U}}, *stepped);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World plays its mode's*",
+   "expect": "pvp-world-damage"
+  },
+  {
+   "id": "pvp-world-body-default",
+   "what": "a World's bodies slide with the default radius, not the character's",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "P::MoveAndSlide(walls, BodyShape(height, size.radius), BodyPose(start, height),",
+   "replace": "P::MoveAndSlide(walls, BodyShape(height, sim::BodySize{}.radius), BodyPose(start, height),",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a World plays its mode's*",
+   "expect": "pvp-world-body"
+  },
+  {
+   "id": "pvp-damage-rules-ignored",
+   "what": "a mode's damage rules are not read: no landing hurts",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "                if ((read = rules.has_value())) mode.damage = *rules;",
+   "replace": "                read = rules.has_value();",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a mode without damage rules*",
+   "expect": "pvp-mode-damage-read"
+  },
+  {
+   "id": "pvp-landing-default-gravity",
+   "what": "a landing's height is not under the movement rules' gravity",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/DamageRules.cpp",
+   "find": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * gravity);",
+   "replace": "    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * 20.0);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP damage rules: a landing hurts*",
+   "expect": "pvp-landing-gravity"
+  },
+  {
+   "id": "pvp-body-eye-unchecked",
+   "what": "a body whose eye is above its top is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/BodySize.cpp",
+   "find": "        if (body.eyeHeight > body.height || body.crouchEyeHeight > body.crouchHeight) throw",
+   "replace": "        if (false) throw",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP body: what a character file says*",
+   "expect": "pvp-body-refused"
+  },
+  {
+   "id": "pvp-body-caps-unchecked",
+   "what": "a crouched body shorter than its two caps is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/BodySize.cpp",
+   "find": "        if (body.crouchHeight < 2 * body.radius) throw",
+   "replace": "        if (false) throw",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP body: what a character file says*",
+   "expect": "pvp-body-refused"
+  },
+  {
+   "id": "pvp-body-crouch-taller",
+   "what": "a crouched body as tall as the standing one is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/sim/BodySize.cpp",
+   "find": "        if (!(body.crouchHeight < body.height)) throw",
+   "replace": "        if (false) throw",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP body: what a character file says*",
+   "expect": "pvp-body-refused"
+  },
+  {
+   "id": "pvp-rules-digest-no-speed",
+   "what": "the rules digest leaves the movement speed out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, v.movementSpeed);",
+   "replace": "    (void)v.movementSpeed;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "pvp-rules-digest-speed"
+  },
+  {
+   "id": "pvp-rules-digest-no-gravity",
+   "what": "the rules digest leaves the gravity out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, v.gravity);",
+   "replace": "    (void)v.gravity;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "pvp-rules-digest-gravity"
+  },
+  {
+   "id": "pvp-rules-digest-no-damage",
+   "what": "the rules digest leaves the damage rules out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "    HashValue(h, damage);",
+   "replace": "    (void)damage;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the rules digest follows*",
+   "expect": "pvp-rules-digest-fall"
+  },
+  {
+   "id": "pvp-character-digest-no-body",
+   "what": "the character digest leaves the body out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, character.bodySize);",
+   "replace": "    (void)character.bodySize;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character digest follows*",
+   "expect": "pvp-character-digest-body"
+  },
+  {
+   "id": "pvp-arena-digest-no-spawns",
+   "what": "the arena digest leaves the spawns out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, v.spawns);",
+   "replace": "    (void)v.spawns;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena digest follows*",
+   "expect": "pvp-arena-digest"
+  },
+  {
+   "id": "pvp-arena-digest-no-bounds",
+   "what": "the arena digest leaves the width out",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/ContentHash.cpp",
+   "find": "    HashValue(h, v.width);",
+   "replace": "    (void)v.width;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the arena digest follows*",
+   "expect": "the width"
+  },
+  {
+   "id": "pvp-arena-data-unseen",
+   "what": "a Client whose arena has other values than the Match's is not told",
+   "guards": [
+    "arena-rules-split-declaration 6.3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    } else if (match.arenaDigest != own.arenaDigest) {",
+   "replace": "    } else if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a Client whose arena has another spawn*",
+   "expect": "pvp-arena-data-mismatch"
+  },
+  {
+   "id": "pvp-character-body-unset",
+   "what": "the character file's body is read but not kept: the rig plays the default body",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        rig.bodySize = *bodySize;",
+   "replace": "        (void)bodySize;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-body-read"
+  },
+  {
+   "id": "pvp-character-version-unchecked",
+   "what": "a character file of version 1 loads",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "\"version\") != 2) throw std::runtime_error(\"character.json: unsupported version\");",
+   "replace": "\"version\") < 1) throw std::runtime_error(\"character.json: unsupported version\");",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-version"
+  },
+  {
+   "id": "pvp-character-scale-constant",
+   "what": "the model is scaled to 1.8, not to the body's height",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/character/CharacterRig.cpp",
+   "find": "        rig.scale = rig.bodySize.height / (maximum - minimum);",
+   "replace": "        rig.scale = 1.8F / (maximum - minimum);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: the character's body is read*",
+   "expect": "pvp-character-scale"
+  },
+  {
+   "id": "pvp-arena-id-unbounded",
+   "what": "an arena id of more than 64 characters is read",
+   "guards": [
+    "arena-rules-split-declaration 6.3 (design review S1)"
+   ],
+   "file": "games/object_fps_pvp/src/sim/Arena.cpp",
+   "find": "        if (arena.id.empty() || arena.id.size() > kMaxContentIdBytes) throw std::runtime_error(\"id is 1 to 64 characters\");",
+   "replace": "        if (arena.id.empty()) throw std::runtime_error(\"id is 1 to 64 characters\");",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP arena: what an arena file says*",
+   "expect": "65 characters"
   }
  ]
 }

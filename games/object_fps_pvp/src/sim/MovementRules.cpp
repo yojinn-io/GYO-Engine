@@ -3,27 +3,25 @@
 #include "data/JsonFields.hpp"
 
 #include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace object_fps_pvp::sim {
 
-std::optional<StanceRules> ParseStanceRules(const std::string_view text, std::string& error) {
+std::optional<MovementRules> ParseMovementRules(const std::string_view text, std::string& error) {
     error.clear();
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the movement rules");
-        if (data::Integer(data::Member(json, "version"), "version") != 2) throw std::runtime_error("unsupported version");
-        StanceRules rules;
-        const auto number = [&](const std::string_view key) {
-            const auto value = static_cast<float>(data::Number(data::Member(json, key), key));
-            if (!std::isfinite(value)) throw std::runtime_error(std::string{key} + " is not finite");
-            return value;
-        };
-        rules.crouchBodyHeight = number("crouch_body_height");
-        rules.crouchEyeHeight = number("crouch_eye_height");
-        rules.crouchSpeedScale = number("crouch_speed_scale");
-        rules.sprintSpeedScale = number("sprint_speed_scale");
+        if (data::Integer(data::Member(json, "version"), "version") != 3) throw std::runtime_error("unsupported version");
+        MovementRules rules;
+        rules.movementSpeed = data::PositiveOr(json, "movement_speed", rules.movementSpeed);
+        rules.jumpHeight = data::PositiveOr(json, "jump_height", rules.jumpHeight);
+        rules.gravity = data::PositiveOr(json, "gravity", rules.gravity);
+        if (!std::isfinite(2 * rules.gravity * rules.jumpHeight)) throw std::runtime_error("the jump speed is not finite");
+        rules.crouchSpeedScale = data::Positive(data::Member(json, "crouch_speed_scale"), "crouch_speed_scale");
+        rules.sprintSpeedScale = data::Positive(data::Member(json, "sprint_speed_scale"), "sprint_speed_scale");
+        if (rules.crouchSpeedScale > 1) throw std::runtime_error("crouch_speed_scale is above 1");
+        if (rules.sprintSpeedScale > 3) throw std::runtime_error("sprint_speed_scale is above 3");
         rules.holdJump = data::Boolean(data::Member(json, "hold_jump"), "hold_jump");
         return rules;
     } catch (const std::exception& exception) {
@@ -32,28 +30,11 @@ std::optional<StanceRules> ParseStanceRules(const std::string_view text, std::st
     }
 }
 
-bool StanceFits(const ArenaContent& arena, const StanceRules& rules) noexcept {
-    const auto finite = [](const float v) { return std::isfinite(v); };
-    return finite(rules.crouchBodyHeight) && finite(rules.crouchEyeHeight) && finite(rules.crouchSpeedScale) &&
-           finite(rules.sprintSpeedScale) && rules.crouchEyeHeight > 0 && rules.crouchEyeHeight <= rules.crouchBodyHeight &&
-           rules.crouchBodyHeight < arena.bodyHeight && rules.crouchBodyHeight >= 2 * arena.radius &&
-           rules.crouchSpeedScale > 0 && rules.crouchSpeedScale <= 1 && rules.sprintSpeedScale > 0 &&
-           rules.sprintSpeedScale <= 3;
+float MoveSpeed(const MovementRules& rules, const bool crouched) noexcept {
+    return crouched ? rules.movementSpeed * rules.crouchSpeedScale : rules.movementSpeed;
 }
 
-float BodyHeight(const ArenaContent& arena, const StanceRules& rules, const bool crouched) noexcept {
-    return crouched ? rules.crouchBodyHeight : arena.bodyHeight;
-}
-
-float EyeHeight(const ArenaContent& arena, const StanceRules& rules, const bool crouched) noexcept {
-    return crouched ? rules.crouchEyeHeight : arena.eyeHeight;
-}
-
-float MoveSpeed(const ArenaContent& arena, const StanceRules& rules, const bool crouched) noexcept {
-    return crouched ? arena.movementSpeed * rules.crouchSpeedScale : arena.movementSpeed;
-}
-
-float JumpSpeed(const ArenaContent& arena) noexcept { return std::sqrt(2 * arena.gravity * arena.jumpHeight); }
+float JumpSpeed(const MovementRules& rules) noexcept { return std::sqrt(2 * rules.gravity * rules.jumpHeight); }
 
 VerticalStep Fall(const float y, const float velocity, const float gravity, const double seconds, const std::optional<float> floor) noexcept {
     VerticalStep step;
@@ -65,16 +46,6 @@ VerticalStep Fall(const float y, const float velocity, const float gravity, cons
         step.velocity = 0;
     }
     return step;
-}
-
-std::uint32_t LandingDamage(const ArenaContent& arena, const float impactSpeed) noexcept {
-    if (!arena.fallDamage || !(impactSpeed > 0) || !(arena.gravity > 0)) return 0;
-    const double height = static_cast<double>(impactSpeed) * impactSpeed / (2.0 * arena.gravity);
-    const double beyond = height - arena.fallDamage->safeHeight;
-    if (!(beyond > 0)) return 0;
-    const double damage = std::floor(beyond * arena.fallDamage->milliPointsPerMetre);
-    constexpr double kMost = 4'294'967'295.0;
-    return damage >= kMost ? std::numeric_limits<std::uint32_t>::max() : static_cast<std::uint32_t>(damage);
 }
 
 } // namespace object_fps_pvp::sim
