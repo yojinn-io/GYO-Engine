@@ -1,5 +1,7 @@
 #include "object_fps_pvp/world/GameplaySets.hpp"
 
+#include "object_fps_pvp/world/Interaction.hpp"
+
 #include <algorithm>
 #include <utility>
 
@@ -8,8 +10,8 @@ namespace object_fps_pvp::world {
 void HashValue(K::Hasher&, const ActiveMode&) {}
 
 const std::vector<GameplaySet>& GameSets() {
-    // None yet: the core PvP is the game without sets. W1, the doors, G6 and PV3 add theirs here.
-    static const std::vector<GameplaySet> sets;
+    // The core PvP is the game without sets. W1, G6 and PV3 add theirs here.
+    static const std::vector<GameplaySet> sets{InteractionSet()};
     return sets;
 }
 

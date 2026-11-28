@@ -1,4 +1,5 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
+#include "world/Sight.hpp"
 
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/data/Utf8.hpp"
@@ -267,7 +268,6 @@ N::Codec<MatchInfo> MatchInfoCodec() {
 
 // ---- The body's shape and the queries against the walls
 
-using Walls = K::Query<K::Read<P::Collider>, K::Read<T::Transform>, K::Without<K::ChildOf>>;
 
 // The upright capsule of a body of height (feet at the bottom), placed at feet.
 P::Shape BodyShape(const float height, const float radius) { return P::CapsuleY(0.5F * height - radius, radius); }
@@ -397,13 +397,6 @@ std::uint64_t StepNanos(const WT::ActiveTime& time) { return static_cast<std::ui
 
 // ---- The Systems of the fixed step
 
-// Before the start the players wait: their input is none (they neither move, turn nor fire). By the step, so a Client
-// simulating the steps around the start again gives each the Match's answer.
-const PlayerInput& Playable(const PlayerInput& input, const MatchInfo& info, const std::uint64_t tick) {
-    static const PlayerInput none{};
-    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;
-}
-
 // A living player dies at this tick: the respawn waits the rules' time, a reload in progress is dropped.
 void Die(PlayerCombat& combat, const sim::CombatRules& rules, const std::uint64_t now, const std::uint64_t stepNanos) {
     combat.life = sim::LifeState::Dead;
@@ -472,12 +465,6 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
     return {};
 }
 
-// The shot's ray from a body's eye along its view.
-Math::Ray ShotRay(const GameRules& rules, const PlayerBody& body) {
-    const float eye = sim::EyeHeight(rules.arena, rules.stance, body.crouched != 0);
-    return Math::Ray{body.feet + Math::Vec3{0.0F, eye, 0.0F}, sim::ViewDirection(body.yaw, body.pitch)};
-}
-
 // The body's stance capsule: where a body stands, for placing a spawn (shots meet the shapes on the bones).
 P::Capsule BodyCapsule(const GameRules& rules, const PlayerBody& body) {
     const float height = sim::BodyHeight(rules.arena, rules.stance, body.crouched != 0);
@@ -497,15 +484,7 @@ K::SystemResult JudgeShots(K::Query<K::Read<PlayerBody>, K::Write<PlayerCombat>,
         if (fired == nullptr || fired->lastShotTick != now || fired->life != sim::LifeState::Alive) continue;
         const PlayerBody& body = *players.Get<PlayerBody>(shooter);
         const Math::Ray ray = ShotRay(*rules, body);
-        std::optional<float> world;
-        // The floor plane (when the arena has one): a solid half-space below it.
-        if (const auto floor = rules->arena.floor) {
-            if (ray.origin.y <= *floor) {
-                world = 0.0F;
-            } else if (ray.direction.y < 0.0F) {
-                world = (ray.origin.y - *floor) / -ray.direction.y;
-            }
-        }
+        std::optional<float> world = FloorAlong(*rules, ray);
         auto wall = P::CastRay(walls, ray, range);
         if (!wall) return PhysicsFailed(wall.error());
         if (*wall && (!world || (*wall)->hit.t < *world)) world = (*wall)->hit.t;

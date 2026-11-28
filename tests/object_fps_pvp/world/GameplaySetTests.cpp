@@ -149,6 +149,17 @@ std::shared_ptr<const PW::GameContent> WithProbe() {
     return content;
 }
 
+// The shipped content without any gameplay set: the core alone (the shipped game has sets since the interaction set).
+std::shared_ptr<const PW::GameContent> CoreOnly() {
+    static const std::shared_ptr<const PW::GameContent> content = [] {
+        auto copy = std::make_shared<PW::GameContent>(*ShippedContent());
+        copy->sets = {};
+        for (const auto& mode : copy->modes) REQUIRE(mode.on.slots.empty());
+        return copy;
+    }();
+    return content;
+}
+
 bool AnyHas(K::World& world) {
     for (const K::EntityId id : world.Entities()) {
         if (world.Get<ProbeMark>(id) != nullptr) return true;
@@ -260,7 +271,7 @@ TEST_CASE("world: a gameplay set is registered after the core: the core's decisi
     // The core's decision types keep their authority registration numbers: the dataset report lists them first, in the
     // core's order, then the set's.
     Session off(1, 4, 0, WithProbe(), {}, 60, std::nullopt, WithProbe());
-    Session without(1, 4);
+    Session without(1, 4, 0, CoreOnly(), {}, 60, std::nullopt, CoreOnly());
     const auto withSet = A::DatasetReport(off.Match());
     const auto shipped = A::DatasetReport(without.Match());
     REQUIRE((withSet && shipped));

@@ -1811,7 +1811,7 @@
    "guards": [
     "game-flow-declaration 4 (segment 4)"
    ],
-   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "file": "games/object_fps_pvp/src/world/Sight.cpp",
    "find": "    return info.phase == MatchPhase::Playing && tick >= info.startTick ? input : none;",
    "replace": "    return info.phase == MatchPhase::Playing || tick >= 0 ? input : none;",
    "target": "gyo_object_fps_pvp_world_tests",
@@ -4129,6 +4129,97 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: a held input*",
    "expect": "codec.decode"
+  },
+  {
+   "id": "pvp-interact-reach-ignored",
+   "what": "the interaction reaches ten times the mode's reach",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        auto hit = P::CastRay(walls, ray, reach->reach);",
+   "replace": "        auto hit = P::CastRay(walls, ray, reach->reach * 10.0F);",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-reach"
+  },
+  {
+   "id": "pvp-interact-through-walls",
+   "what": "the interaction looks past every collider that is not Interactable",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        auto hit = P::CastRay(walls, ray, reach->reach);",
+   "replace": "        auto hit = P::CastRay(walls, ray, reach->reach, [&](const K::EntityId e) { return targets.Contains(e); });",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-wall"
+  },
+  {
+   "id": "pvp-interact-before-start",
+   "what": "E interacts before the start",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        if (!Playable(*players.Get<PlayerInput>(actor), *info, now).Pressed(kPressInteract)) continue;",
+   "replace": "        if (!players.Get<PlayerInput>(actor)->Pressed(kPressInteract)) continue;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-before-start"
+  },
+  {
+   "id": "pvp-interact-dead",
+   "what": "a dead player interacts",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        if (players.Get<PlayerCombat>(actor)->life != sim::LifeState::Alive) continue;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-dead"
+  },
+  {
+   "id": "pvp-interact-not-sent",
+   "what": "an interaction is judged but not written",
+   "guards": [
+    "interact-door-declaration 2.3, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Interaction.cpp",
+   "find": "        interacted.Send(Interacted{actor, (*hit)->entity, now});\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-hit"
+  },
+  {
+   "id": "pvp-interact-bit-overlaps",
+   "what": "the interaction key's bit is the reload's (a reload interacts)",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/include/object_fps_pvp/world/Components.hpp",
+   "find": "inline constexpr std::uint8_t kPressInteract = 1U << 3U;",
+   "replace": "inline constexpr std::uint8_t kPressInteract = 1U << 2U;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-interact-key"
+  },
+  {
+   "id": "pvp-set-needs-unchecked",
+   "what": "a mode turns on a kind without the interaction set",
+   "guards": [
+    "interact-door-declaration 2.5"
+   ],
+   "file": "games/object_fps_pvp/src/world/Modes.cpp",
+   "find": "                if (found == sets.end() || !mode.on.Has(static_cast<std::size_t>(found - sets.begin()))) {",
+   "replace": "                if (false) {",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: interaction*",
+   "expect": "pvp-door-needs-interaction"
   }
  ]
 }

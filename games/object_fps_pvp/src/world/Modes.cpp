@@ -180,6 +180,14 @@ std::optional<std::vector<ModeContent>> LoadModes(const std::string& root, const
             }
         }
         for (const auto& [slot, read] : file->sets) mode.on.Add(slot);
+        for (const std::size_t slot : mode.on.slots) {
+            for (const std::string& needed : sets[slot].needs) {
+                const auto found = std::find_if(sets.begin(), sets.end(), [&](const GameplaySet& set) { return set.name == needed; });
+                if (found == sets.end() || !mode.on.Has(static_cast<std::size_t>(found - sets.begin()))) {
+                    return fail("the set '" + sets[slot].name + "' needs the set '" + needed + "', which this mode does not turn on");
+                }
+            }
+        }
         mode.rulesDigest = RulesDigest(*file, sets, mode.stance, combat);
         mode.sets = std::move(file->sets);
         modes.push_back(std::move(mode));

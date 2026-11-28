@@ -53,6 +53,9 @@ struct GameplaySet final {
     SetReader readMode;
     // Its block in an arena file (none: an arena may not have one for it).
     SetReader readArena;
+    // The sets it works on (a kind of interaction needs the interaction set): a mode that turns it on without one of
+    // them does not load (interact-door declaration 2.5; not turned on for it: a mode says what it plays).
+    std::vector<std::string> needs;
 };
 
 // The game's own sets, in registration order (the slot of each is its index). A test may give its own table to
