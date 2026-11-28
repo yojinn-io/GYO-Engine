@@ -1,5 +1,6 @@
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -72,6 +73,13 @@ public:
     void Shutdown() { device_.reset(); }
     [[nodiscard]] std::size_t TextureCount() const noexcept { return device_ ? device_->TextureCount() : 0; }
     [[nodiscard]] std::size_t MeshCount() const noexcept { return device_ ? device_->MeshCount() : 0; }
+    [[nodiscard]] const FrameTiming& LastFrameTiming() const noexcept {
+        static const FrameTiming none;
+        return device_ ? device_->LastFrameTiming() : none;
+    }
+    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const noexcept {
+        return device_ ? device_->LastGPUFrameTime() : std::nullopt;
+    }
     [[nodiscard]] SwapchainPresentMode ActivePresentMode() const noexcept {
         return device_ ? device_->ActivePresentMode() : SwapchainPresentMode::Vsync;
     }
@@ -144,6 +152,8 @@ std::uint64_t SDLGPUStatus::PresentModeSets() const { return service_->presentMo
 std::uint64_t SDLGPUStatus::RefusedPresentModes() const { return service_->refusedPresentModes_; }
 std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
 std::size_t SDLGPUStatus::MeshCount() const { return service_->MeshCount(); }
+const FrameTiming& SDLGPUStatus::LastFrameTiming() const { return service_->LastFrameTiming(); }
+std::optional<GPUFrameTime> SDLGPUStatus::LastGPUFrameTime() const { return service_->LastGPUFrameTime(); }
 
 SDLGPUPlugin::SDLGPUPlugin() = default;
 SDLGPUPlugin::~SDLGPUPlugin() = default;

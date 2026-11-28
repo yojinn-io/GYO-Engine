@@ -4,12 +4,15 @@
 // render pass per pass of RenderCommands, in their order, each on its target). Shapes follow SDL's own GPU examples and Dear ImGui's SDL_GPU backend
 // (imgui_impl_sdlgpu3.cpp): one transfer buffer cycled each frame, vertex, index and instance buffers grown to the
 // frame's need, the scissor per draw; the 3D pass's depth texture as SDL's examples make one (a depth target cleared by its pass's
-// load op, made again when the target's size changes).
+// load op, made again when the target's size changes). Each pass is recorded in a debug group named by PassLabel, its
+// recording timed on the CPU, and each frame handed to the GPU with a fence, looked at later without waiting, for the
+// whole frame's GPU time (render-pipeline declaration 15).
 #include "../../GPUDevice.hpp"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <optional>
 #include <span>
@@ -26,6 +29,7 @@
 
 #include "../../EmbeddedShaders.hpp"
 #include "../../FrameDraws.hpp"
+#include "../../PassLabels.hpp"
 #include "../../PresentModes.hpp"
 
 namespace GYO::Plugins::SDLGPU {
@@ -250,6 +254,23 @@ SDL_GPUSampler* MakeSampler(SDL_GPUDevice* device, const SDL_GPUFilter filter) {
     return SDL_CreateGPUSampler(device, &info);
 }
 
+// A pass's debug group on the command buffer (a capture tool shows its name), around the pass's render passes and
+// outside them (Metal scopes a group pushed inside a pass to that pass, SDL_gpu.h:2977-2980); counted in the frame's
+// timing.
+class DebugGroup final {
+public:
+    DebugGroup(SDL_GPUCommandBuffer* cmd, const std::string& name, std::uint64_t& count) : cmd_(cmd) {
+        SDL_PushGPUDebugGroup(cmd_, name.c_str());
+        ++count;
+    }
+    ~DebugGroup() { SDL_PopGPUDebugGroup(cmd_); }
+    DebugGroup(const DebugGroup&) = delete;
+    DebugGroup& operator=(const DebugGroup&) = delete;
+
+private:
+    SDL_GPUCommandBuffer* cmd_;
+};
+
 } // namespace
 
 struct GPUDevice::State {
@@ -294,9 +315,22 @@ struct GPUDevice::State {
     // The 3D passes' instances of the frame (Instance3D, read per instance).
     SDL_GPUBuffer* instances = nullptr;
     std::uint32_t instancesSize = 0;
+    // The frames recorded (Submit and Capture), and the last one's timing (render-pipeline declaration 15.3).
+    std::uint64_t framesRecorded = 0;
+    FrameTiming timing;
+    // A frame handed to the GPU whose fence was not seen signaled yet, and when it was handed.
+    struct InFlight {
+        std::uint64_t frame = 0;
+        SDL_GPUFence* fence = nullptr;
+        std::chrono::steady_clock::time_point submitted;
+    };
+    std::vector<InFlight> inFlight;
+    // The latest frame seen done on the GPU.
+    std::optional<GPUFrameTime> gpuTime;
 
     ~State() {
         if (device != nullptr) {
+            for (const InFlight& f : inFlight) SDL_ReleaseGPUFence(device, f.fence);
             for (auto& [id, t] : textures) SDL_ReleaseGPUTexture(device, t.texture);
             for (auto& [id, t] : targets) ReleaseTarget(t);
             if (white.texture != nullptr) SDL_ReleaseGPUTexture(device, white.texture);
@@ -892,6 +926,27 @@ struct GPUDevice::State {
         return true;
     }
 
+    // The frame just recorded was handed to the GPU at submitted with this fence: its GPU time is known once the fence
+    // is seen signaled (LookAtFences).
+    void Track(SDL_GPUFence* fence, const std::chrono::steady_clock::time_point submitted) {
+        inFlight.push_back(InFlight{timing.frame, fence, submitted});
+    }
+
+    // Looks at the fences of the frames handed to the GPU, without waiting: each one signaled gives its frame's GPU time
+    // (from its submission to now: an upper bound, the fence has no time of its own) and is let go. The latest frame
+    // seen done is kept.
+    void LookAtFences() {
+        const auto now = std::chrono::steady_clock::now();
+        std::erase_if(inFlight, [&](const InFlight& f) {
+            if (!SDL_QueryGPUFence(device, f.fence)) return false;
+            if (!gpuTime || gpuTime->frame < f.frame) {
+                gpuTime = GPUFrameTime{f.frame, std::chrono::duration_cast<std::chrono::nanoseconds>(now - f.submitted)};
+            }
+            SDL_ReleaseGPUFence(device, f.fence);
+            return true;
+        });
+    }
+
     // A pass begins drawing on a render target: true when its picture is undefined (no picture, not drawn on yet this
     // frame), so the pass clears it instead of keeping it (colour: its clear or transparent black; depth: 1).
     bool BeginWrite(const GPUTarget& target) { return frameDraws.Begin(target.id, target.picture); }
@@ -927,7 +982,8 @@ struct GPUDevice::State {
 
     // Records one render pass per pass that has a target this frame (resolved, ResolveTargets), in their order (RP-3:
     // the GPU's order is RenderCommands'; SDL_GPU keeps what one pass writes and a later one reads in that order). The
-    // main target (main; none in a skipped frame) with no pass gets one pass that clears it.
+    // main target (main; none in a skipped frame) with no pass gets one pass that clears it. Each pass recorded is in its
+    // debug group and its recording timed (timing, by the pass's place in commands).
     void RecordPasses(SDL_GPUCommandBuffer* cmd, const R::RenderCommands& commands, const std::vector<std::optional<Target>>& resolved,
                       const std::optional<Target>& main, FrameTally& tally) {
         bool mainBegun = false;
@@ -943,6 +999,9 @@ struct GPUDevice::State {
             const auto requireColour = [&](const bool colour) {
                 GYO_ASSERT(onDepth != colour && "a depth-only pass on a Depth target, a pass that draws colour on a colour target");
             };
+            PassTiming& passTiming = timing.passes[p];
+            const auto began = std::chrono::steady_clock::now();
+            const DebugGroup group(cmd, passTiming.name, timing.debugGroups);
             std::visit(Overloaded{
                            [&](const R::PassDepth& pass) {
                                requireColour(false);
@@ -965,6 +1024,8 @@ struct GPUDevice::State {
                            },
                        },
                        item);
+            passTiming.recorded = true;
+            passTiming.cpu = std::chrono::steady_clock::now() - began;
             const PassGeometry g = GeometryOf(item);
             vertexBase += static_cast<std::uint32_t>(g.vertexBytes);
             indexBase += static_cast<std::uint32_t>(g.indexBytes);
@@ -978,10 +1039,14 @@ struct GPUDevice::State {
 
     // One frame on a command buffer: the asks applied, the render targets sized for main's size (main: the main picture,
     // none in a skipped frame: the render targets are still drawn), the targets resolved, the copy pass, the passes.
-    // false: the uploads failed (error says why); the main picture then gets one pass that clears it.
+    // false: the uploads failed (error says why); the main picture then gets one pass that clears it, and no pass of
+    // commands is recorded. The frame is counted and its timing starts here (one per pass of commands, none recorded);
+    // the fences of the frames before it are looked at first.
     bool DrawFrame(SDL_GPUCommandBuffer* cmd, const std::span<const R::TextureOp> asks, const std::span<const R::MeshOp> meshAsks,
                    const R::RenderCommands& commands, const std::optional<Target>& main, FrameTally& tally, std::string& error,
                    R::RenderFrameReceipt& receipt) {
+        LookAtFences();
+        timing = TimingOf(++framesRecorded, commands);
         Frame frame;
         frameDraws.Clear();
         ApplyAsks(asks, frame, tally, receipt);
@@ -1383,6 +1448,8 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
                                const R::RenderCommands& commands, FrameTally& tally, R::RenderFrameReceipt& receipt) {
     RequireMainThread();
     GYO_ASSERT(state_->window != nullptr && "Submit needs the window (a device without one only Captures)");
+    // The frames before it, seen done before the swapchain's wait (and again after it, in DrawFrame).
+    state_->LookAtFences();
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(state_->device);
     if (cmd == nullptr) {
         lastError_ = SDLError("SDL_AcquireGPUCommandBuffer");
@@ -1403,10 +1470,16 @@ FrameOutcome GPUDevice::Submit(const std::span<const R::TextureOp> asks, const s
     std::string error;
     const bool uploaded = state_->DrawFrame(cmd, asks, meshAsks, commands, main, tally, error, receipt);
     if (!uploaded) lastError_ = std::move(error);
-    const bool submitted = SDL_SubmitGPUCommandBuffer(cmd);
-    if (submitted) state_->Commit(receipt);
+    // With its fence, not waited for: a later Submit looks at it (the frame's GPU time, render-pipeline declaration 15.3).
+    const auto handed = std::chrono::steady_clock::now();
+    SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    const bool submitted = fence != nullptr;
+    if (submitted) {
+        state_->Commit(receipt);
+        state_->Track(fence, handed);
+    }
     if (!submitted) {
-        lastError_ = SDLError("SDL_SubmitGPUCommandBuffer");
+        lastError_ = SDLError("SDL_SubmitGPUCommandBufferAndAcquireFence");
         return FrameOutcome::Failed;
     }
     if (!acquired || !uploaded) return FrameOutcome::Failed;
@@ -1463,14 +1536,17 @@ Engine::Base::Result<CapturedImage, CaptureFailure> GPUDevice::Capture(const std
     destination.rows_per_layer = size.height;
     SDL_DownloadFromGPUTexture(copy, &source, &destination);
     SDL_EndGPUCopyPass(copy);
+    const auto handed = std::chrono::steady_clock::now();
     SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
     if (fence != nullptr) state_->Commit(receipt);
     if (fence == nullptr) {
         cleanup();
         return Err(SDLError("SDL_SubmitGPUCommandBufferAndAcquireFence"));
     }
+    // The fence is the frame's (its GPU time): looked at, and let go, once waited for.
+    state_->Track(fence, handed);
     const bool waited = SDL_WaitForGPUFences(device, true, &fence, 1);
-    SDL_ReleaseGPUFence(device, fence);
+    state_->LookAtFences();
     if (!waited) {
         cleanup();
         return Err(SDLError("SDL_WaitForGPUFences"));
@@ -1543,5 +1619,9 @@ std::size_t GPUDevice::TextureCount() const noexcept {
 std::size_t GPUDevice::MeshCount() const noexcept { return state_->meshes.size(); }
 
 const std::string& GPUDevice::DriverName() const noexcept { return state_->driver; }
+
+const FrameTiming& GPUDevice::LastFrameTiming() const noexcept { return state_->timing; }
+
+std::optional<GPUFrameTime> GPUDevice::LastGPUFrameTime() const noexcept { return state_->gpuTime; }
 
 } // namespace GYO::Plugins::SDLGPU

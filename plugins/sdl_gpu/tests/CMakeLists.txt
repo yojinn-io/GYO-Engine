@@ -24,7 +24,7 @@ add_custom_command(OUTPUT "${gyo_test_shaders}"
     DEPENDS ${gyo_test_shader_sources} ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
     COMMENT "Compiling sdl_gpu's test shaders (${gyo_shader_format_list})"
     VERBATIM)
-add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp PhaseTests.cpp "${gyo_test_shaders}")
+add_executable(gyo_sdl_gpu_tests TestMain.cpp SDLGPUTests.cpp Pass2DTests.cpp Pass3DTests.cpp PhaseTests.cpp TimingTests.cpp "${gyo_test_shaders}")
 target_include_directories(gyo_sdl_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 # A failed SDL assertion ends the run, no dialog (plugins/sdl/tests/adapters/sdl/UnattendedAssertions.hpp).
 target_link_libraries(gyo_sdl_gpu_tests PRIVATE gyo_sdl_unattended_assertions)
@@ -64,3 +64,9 @@ set_tests_properties(sdl_gpu.pass2d sdl_gpu.pass3d sdl_gpu.frames sdl_gpu.target
     FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 set_tests_properties(sdl_gpu.contracts sdl_gpu.framedraws PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 set_tests_properties(sdl_gpu.unwritten PROPERTIES LABELS "cpu" TIMEOUT 60 PASS_REGULAR_EXPRESSION "\\[gt-unwritten-asserted\\]")
+# The passes' names, debug groups and times (render-pipeline declaration section 15, A3): the names from RenderCommands
+# (no GPU, label cpu); a captured frame's timings, groups and GPU time (label gpu; the times printed, not judged).
+add_test(NAME sdl_gpu.passlabels COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu pass labels:*")
+set_tests_properties(sdl_gpu.passlabels PROPERTIES LABELS "cpu" TIMEOUT 60 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
+add_test(NAME sdl_gpu.timing COMMAND gyo_sdl_gpu_tests "--test-case=sdl_gpu timing:*" -s)
+set_tests_properties(sdl_gpu.timing PROPERTIES LABELS "gpu" TIMEOUT 120 FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")

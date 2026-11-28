@@ -25,10 +25,13 @@
 // One World of a Product lists sdl_gpu (one window, one texture table, one mesh table): a second World that draws is
 // not named by any Feature yet (SDL declaration section 10.2, R2a).
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "engine/orchestration/Plugin.hpp"
 #include "engine/orchestration/Setup.hpp"
@@ -55,6 +58,36 @@ enum class SwapchainPresentMode : std::uint8_t {
     }
     return "Unknown";
 }
+
+// One pass of the last frame the device recorded (render-pipeline declaration 15.3). name: its debug group's name in
+// a capture tool (RenderDoc, Xcode, PIX): its place in RenderCommands::passes, its kind and its target (PassLabel,
+// src/PassLabels.hpp). recorded: a render pass was recorded for it (false: its target is not mapped, or the frame's
+// uploads failed and no pass was recorded). cpu: the time recording it took on the CPU (the adapter's encoding, not
+// the System that made the pass); 0 when not recorded.
+struct PassTiming final {
+    std::string name;
+    bool recorded = false;
+    std::chrono::nanoseconds cpu{0};
+};
+
+// The last frame the device recorded: one PassTiming per pass of its RenderCommands, in their order.
+struct FrameTiming final {
+    // The device's count of frames recorded (Submit and Capture), from 1; 0 before the first.
+    std::uint64_t frame = 0;
+    std::vector<PassTiming> passes;
+    // Debug groups pushed (and popped) on the frame's command buffer: one per recorded pass.
+    std::uint64_t debugGroups = 0;
+};
+
+// A whole frame's GPU time from its fence (SDL_GPU 3.4 has no timestamp query: render-pipeline declaration 4.7, Q1
+// (a)): at most this long passed between handing the frame to the GPU and seeing it done. An upper bound: it holds the
+// GPU's work on the frames before it and how late the device looked (a frame on the window is looked at by the next
+// Submit, so within about a frame; a Capture waits for its own).
+struct GPUFrameTime final {
+    // As FrameTiming's.
+    std::uint64_t frame = 0;
+    std::chrono::nanoseconds atMost{0};
+};
 
 // What became of the frames, in the Product's buffer (the counts are since the device was made).
 class SDLGPUStatus final {
@@ -90,6 +123,12 @@ public:
     [[nodiscard]] std::size_t TextureCount() const;
     // The meshes of render's asks that have GPU buffers now.
     [[nodiscard]] std::size_t MeshCount() const;
+    // The last frame recorded: each pass's name, whether it was recorded and its CPU time, and the debug groups
+    // (render-pipeline declaration 15). To print, not judged here.
+    [[nodiscard]] const FrameTiming& LastFrameTiming() const;
+    // The latest frame seen done on the GPU and the upper bound of its GPU time; none before one is seen. Usually a
+    // frame or two before LastFrameTiming's: nothing waits for the GPU to tell it.
+    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const;
 
 private:
     Service* service_;

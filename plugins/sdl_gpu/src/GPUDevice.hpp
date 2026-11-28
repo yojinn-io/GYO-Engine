@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -140,6 +141,12 @@ public:
     [[nodiscard]] std::size_t MeshCount() const noexcept;
     // The GPU driver SDL chose ("vulkan", "direct3d12", "metal").
     [[nodiscard]] const std::string& DriverName() const noexcept;
+    // The last frame Submit or Capture recorded: each pass in a debug group named PassLabel, its CPU time
+    // (render-pipeline declaration 15.3).
+    [[nodiscard]] const FrameTiming& LastFrameTiming() const noexcept;
+    // The latest frame seen done on the GPU (its fence looked at, without waiting, by Submit, and by Capture once it
+    // waited for its own) and its GPU time's upper bound.
+    [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const noexcept;
     [[nodiscard]] const std::string& LastError() const noexcept { return lastError_; }
 
 private:
