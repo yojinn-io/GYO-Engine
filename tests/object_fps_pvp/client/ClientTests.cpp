@@ -1693,6 +1693,7 @@ public:
         std::string target;
         std::string authorization;
         std::string key;
+        std::string body;
     };
 
     FakeGateway() {
@@ -1733,6 +1734,11 @@ public:
         const std::lock_guard<std::mutex> lock(mutex_);
         ended_ = true;
     }
+    // Room 3's member (user 7) is named this in its answers (empty: no name field, as before names).
+    void NameMember(std::string name) {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        memberName_ = std::move(name);
+    }
     // The next read of the rooms answers 401 session_expired (once).
     void ExpireSession() {
         const std::lock_guard<std::mutex> lock(mutex_);
@@ -1756,7 +1762,8 @@ private:
     }
     std::string RoomJson(const bool withConnect) const {
         std::string json = "{\"id\":3,\"mode\":\"" + mode_ + "\",\"map\":\"" + map_ + "\",\"players\":1,\"capacity\":4,\"state\":\"" +
-                           (started_ ? "started" : "open") + "\",\"owner\":7,\"members\":[{\"userId\":7,\"ready\":" + (ready_ ? "true" : "false") + "}]";
+                           (started_ ? "started" : "open") + "\",\"owner\":7,\"members\":[{\"userId\":7," +
+                           (memberName_.empty() ? std::string() : "\"name\":\"" + memberName_ + "\",") + "\"ready\":" + (ready_ ? "true" : "false") + "}]";
         if (withConnect && started_) {
             json += std::string(",\"connect\":{\"server\":\"") + (badConnect_ ? "not-an-address" : "127.0.0.1:47000") + "\",\"userId\":7,\"token\":\"00ff\"}";
         }
@@ -1824,7 +1831,7 @@ private:
             const std::string body = bodyAt == std::string::npos ? std::string() : request->substr(bodyAt + 4);
             {
                 const std::lock_guard<std::mutex> lock(mutex_);
-                seen_.push_back({method, target, Header(*request, "authorization"), Header(*request, "idempotency-key")});
+                seen_.push_back({method, target, Header(*request, "authorization"), Header(*request, "idempotency-key"), body});
             }
             const auto holding = [&] {
                 const std::lock_guard<std::mutex> lock(mutex_);
@@ -1854,6 +1861,7 @@ private:
     bool ended_ = false;
     int sessions_ = 0;
     std::string mode_ = "core_pvp";
+    std::string memberName_;
     std::string map_;
     bool ready_ = false;
     bool started_ = false;
@@ -1866,10 +1874,10 @@ bool Asked(FakeGateway& gateway, const std::string& method, const std::string& t
     return false;
 }
 
-std::string ListLine(Setup& setup, const std::size_t row) {
+std::string ListLine(Setup& setup, const std::size_t row, const std::string_view id = "rooms") {
     const auto* bindings = setup.Client().Get<GYO::Engine::Ui::UiBindings>(setup.Root());
     if (bindings == nullptr) return {};
-    const auto* value = bindings->Find("rooms");
+    const auto* value = bindings->Find(id);
     const auto* list = value != nullptr ? std::get_if<GYO::Engine::Ui::UiList>(value) : nullptr;
     if (list == nullptr || row >= list->items.size()) return {};
     const auto found = list->items[row].fields.find("line");
@@ -1913,6 +1921,87 @@ TEST_CASE("client: gateway: the requests carry the session's token, an idempoten
     CHECK(save->body == "null");
     CHECK(PC::ErrorCodeOf("{\"error\":\"room_full\"}") == "room_full");
     CHECK(PC::RandomHex(16).size() == 32);
+}
+
+TEST_CASE("client: name: the settings' name, or the host name's first label; the settings keep it; an old file has none") {
+    int asked = 0;
+    const auto host = [&asked](std::optional<std::string> name) {
+        return [&asked, name] {
+            ++asked;
+            return name;
+        };
+    };
+    PC::ClientSettings settings;
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("Kuro-MacBook-Pro.local")) == "Kuro-MacBook-Pro", "[pvp-name-first-label]");
+    CHECK(PC::PlayerNameCandidate(settings, host("kuro-pc.example.com")) == "kuro-pc");
+    CHECK(PC::PlayerNameCandidate(settings, host("desktop-7")) == "desktop-7");
+    CHECK(PC::PlayerNameCandidate(settings, host(".local")).empty());
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host(std::nullopt)).empty(), "[pvp-name-no-host]");
+    CHECK(asked == 5);
+    settings.name = "甲 A";
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("host.local")) == "甲 A", "[pvp-name-settings]");
+    settings.name = "";
+    CHECK_MESSAGE(PC::PlayerNameCandidate(settings, host("host.local")).empty(), "[pvp-name-empty-chosen]");
+    CHECK_MESSAGE(asked == 5, "[pvp-name-host-not-asked] the host name is asked although the settings have a name");
+    // Cut at a UTF-8 boundary: 86 three-byte characters are 258 bytes, 85 of them fit in 256.
+    std::string long_;
+    for (int i = 0; i < 86; ++i) long_ += "名";
+    settings.name = long_;
+    const std::string cut = PC::PlayerNameCandidate(settings, host(std::nullopt));
+    CHECK_MESSAGE(cut.size() == 255, "[pvp-name-cut] " << cut.size());
+    CHECK(cut == long_.substr(0, 255));
+
+    std::string error;
+    for (const std::optional<std::string>& name : {std::optional<std::string>{}, std::optional<std::string>{""}, std::optional<std::string>{"名前 \"q\""}}) {
+        PC::ClientSettings chosen;
+        chosen.name = name;
+        const auto decoded = PC::DecodeSettings(PC::EncodeSettings(chosen), error);
+        REQUIRE_MESSAGE(decoded.has_value(), error);
+        CHECK_MESSAGE(decoded->name == name, "[pvp-settings-name] " << PC::EncodeSettings(chosen));
+    }
+    const auto old = PC::DecodeSettings("{\"version\":1,\"resolution\":[1280,720],\"windowMode\":\"windowed\",\"vsync\":true}", error);
+    REQUIRE_MESSAGE(old.has_value(), error);
+    CHECK_FALSE(old->name.has_value());
+    CHECK_FALSE(PC::DecodeSettings("{\"version\":1,\"resolution\":[1280,720],\"windowMode\":\"windowed\",\"vsync\":true,\"name\":7}", error).has_value());
+}
+
+TEST_CASE("client: name: the session is opened with the name; the room's names are read; a player without one is Player N") {
+    CHECK_MESSAGE(PC::SessionRequest({"d", "名前"}).body == "{\"deviceId\":\"d\",\"name\":\"名前\"}", "[pvp-gw-session-name]");
+    std::string error;
+    // The identity service's answer has the name too; the Client does not need it (the room and the Match give it).
+    CHECK(PC::ParseSession("{\"userId\":7,\"name\":\"甲\",\"sessionToken\":\"t\",\"expiresAt\":9}", error).has_value());
+    const auto room = PC::ParseRoom("{\"id\":3,\"mode\":\"core_pvp\",\"map\":\"m\",\"players\":2,\"capacity\":4,\"state\":\"open\",\"owner\":7,"
+                                    "\"members\":[{\"userId\":7,\"name\":\"甲\",\"ready\":true},{\"userId\":9,\"ready\":false}]}",
+                                    error);
+    REQUIRE_MESSAGE(room.has_value(), error);
+    REQUIRE(room->members.size() == 2);
+    CHECK_MESSAGE(room->members[0].name == "甲", "[pvp-gw-member-name]");
+    CHECK(room->members[1].name.empty());
+    CHECK_FALSE(PC::ParseRoom("{\"id\":3,\"mode\":\"c\",\"map\":\"m\",\"players\":1,\"capacity\":4,\"state\":\"open\",\"owner\":7,"
+                              "\"members\":[{\"userId\":7,\"name\":1,\"ready\":true}]}",
+                              error)
+                     .has_value());
+    CHECK_MESSAGE(PC::PlayerLabel(12, "") == "Player 12", "[pvp-label-fallback]");
+    CHECK_MESSAGE(PC::PlayerLabel(12, "甲 A") == "甲 A", "[pvp-label-name]");
+}
+
+TEST_CASE("client: name: the lobby signs in with the start's name; the room shows each member's name") {
+    TempDirectory directory;
+    FakeGateway gateway;
+    gateway.NameMember("甲 A");
+    Setup setup(1, 4, 0, LobbyFirst(), directory.Utf8(), gateway.Address(), {}, 0, [](PC::ClientStart& start) { start.name = "テスト 名前"; });
+    setup.Load();
+    REQUIRE(FramesUntil(setup, [&] { return !gateway.Requests().empty(); }));
+    const FakeGateway::Seen first = gateway.Requests().front();
+    REQUIRE(first.target == "/v1/session");
+    CHECK_MESSAGE(first.body.find("\"name\":\"テスト 名前\"") != std::string::npos, "[pvp-gw-session-name] " << first.body);
+    // Make a room (the sixth of the focus order: join, prev, next, mode, map, create).
+    for (int i = 0; i < 5; ++i) setup.Press(I::KeyCode::Tab);
+    setup.Press(I::KeyCode::Enter);
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return setup.Scene().scene == PC::Scene::Room; }), setup.Binding("status"));
+    setup.Load();
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return ListLine(setup, 0, "members") == "甲 A（部屋主）（自分）  準備中"; }),
+                  "[pvp-room-member-name] " << ListLine(setup, 0, "members"));
 }
 
 TEST_CASE("client: gateway: the lobby lists and records; a made room is readied and started; the game connects where the room says") {
@@ -2191,7 +2280,7 @@ TEST_CASE("client: gateway: a started room whose connect cannot be read says so,
 
 TEST_CASE("client: gateway: each exchange is kept for the log: what was asked, its answer, how long it waited and took") {
     FakeGateway gateway;
-    PC::GatewayClient client(gateway.Address(), "device");
+    PC::GatewayClient client(gateway.Address(), PC::GatewaySignIn{"device", {}});
     client.Ask("list", PC::ListRoomsRequest());
     client.Ask("record", PC::SaveRequest());
     // The client's time is what each Update is given: one step per Update. An exchange answered within the Update
@@ -2296,7 +2385,7 @@ TEST_CASE("client: gateway: the error codes in the player's words; a call withou
     // A Gateway that takes the call and never answers: the call times out (the clock is the caller's).
     GYO::Test::LoopbackListener silent;
     REQUIRE(silent.Ok());
-    PC::GatewayClient client(silent.Address(), "device", {}, 1'000'000'000);
+    PC::GatewayClient client(silent.Address(), PC::GatewaySignIn{"device", {}}, {}, 1'000'000'000);
     client.Ask("list", PC::ListRoomsRequest());
     std::optional<PC::GatewayResult> result;
     std::thread accept([&silent] { (void)silent.Accept(std::chrono::seconds(5)); });

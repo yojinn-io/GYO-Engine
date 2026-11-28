@@ -11,6 +11,7 @@
 #include "engine/os/Console.hpp"
 #include "engine/os/DatagramSocket.hpp"
 #include "engine/os/Files.hpp"
+#include "engine/os/Machine.hpp"
 #include "engine/os/OSError.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/os/SocketAddress.hpp"

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,9 +17,11 @@ import (
 const System uint64 = 0
 
 // Caller is who an internal request is for: a user (System included) or
-// nobody (a request before sign-in, which carries no user header).
+// nobody (a request before sign-in, which carries no user header). Name is
+// the name the user signed in with (empty: none, no name header).
 type Caller struct {
 	User      uint64
+	Name      string
 	Anonymous bool
 }
 
@@ -45,6 +48,9 @@ func Send(ctx context.Context, client *http.Client, method, url string, caller C
 	}
 	if !caller.Anonymous {
 		request.Header.Set(HeaderUser, strconv.FormatUint(caller.User, 10))
+		if caller.Name != "" {
+			request.Header.Set(HeaderName, base64.RawURLEncoding.EncodeToString([]byte(caller.Name)))
+		}
 	}
 	if key != "" {
 		request.Header.Set(HeaderIdempotency, key)

@@ -14,7 +14,7 @@ every tool reaches the operating system through neutral APIs, so none of them br
 Inside, the sources are laid out by platform (v8-arch-gyo2-os-src-platform): `src/common` holds what does not depend
 on the OS; everything that does lives under `src/sys`. `src/sys/<platform>` (`windows`, `macos`, `linux`) holds each
 platform's own sources, and the build selects one (`linux` also for any platform that is neither Windows nor
-Apple). `src/sys/Files.cpp`, `Process.cpp` and `Console.cpp` are the implementation macOS and Linux share, and
+Apple). `src/sys/Files.cpp`, `Process.cpp`, `Machine.cpp` and `Console.cpp` are the implementation macOS and Linux share, and
 `src/sys/UserData.cpp` is shared by all three (v8-arch-gyo2-os-user-data); where the platforms differ, the shared
 implementation calls the abstract `Detail::Platform` (`src/sys/Platform.hpp`), which each `src/sys/<platform>`
 implements. Windows implements the file, process and console primitives itself, so it leaves their steps empty and
@@ -40,6 +40,7 @@ primitives here.
 | `OSError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
 | Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`), the font directories (`FontDirectories`) and this user's data directory for an application (`UserDataDirectory`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep; user data directory: v8-arch-gyo2-os-user-data (landed; brought in by the user's owner decision of 2026-11-22 for players' saves) |
 | Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
+| Machine | The machine's host name as the OS reports it (`HostName`) | v8-arch-gyo2-display-name (landed; the observed pressure of a Feature, D78: the player's display name, whose default is the host name, the user's decision of 2026-11-28; declaration `docs/architecture/target/v2/display-name-declaration.zh-Hant.md`) |
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/core/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
@@ -220,6 +221,13 @@ pressure, a Feature that needs it, or the user's owner decision (Replacement Cri
     point the platform cannot convert is `Unsupported` with the native error (Windows: after the year 3000).
   - An OS failure of `ExecutablePath` is `IOFailed` (the native error stays in the detail; no caller branches on
     the code), a path longer than Windows allows is `TooLarge`, and a path with no UTF-8 form is `InvalidEncoding`.
+- **Machine.**
+  - `HostName` is the machine's name on the network as the OS reports it, asked on every call: `gethostname` on
+    macOS and Linux (macOS may end it with `.local`, or answer with a name the network handed it),
+    `GetComputerNameExW(ComputerNamePhysicalDnsHostname)` on Windows (retried with the size `ERROR_MORE_DATA` gives,
+    as Go's `os.Hostname` does). It is not trimmed, case-folded or shortened: what a caller makes of it (a player's
+    name without `.local`) is the caller's. A refused query is `IOFailed` with the native error; a name with no UTF-8
+    form is `InvalidEncoding`.
 - **Console.**
   - `CommandLineUtf8` gives the process's arguments in UTF-8, the program name first. Windows reads
     `GetCommandLineW` and splits it with `CommandLineToArgvW` (shell32), whatever the ANSI code page is; its rules

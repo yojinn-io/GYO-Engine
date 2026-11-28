@@ -68,7 +68,7 @@ void ShowRoom(const RoomState& state, const std::uint64_t self, Ui::UiBindings& 
         bindings.Set("map", "マップ: " + state.room->map);
         for (const RoomMember& member : state.room->members) {
             Ui::UiListItem item;
-            item.fields["line"] = "Player " + std::to_string(member.userId) + (member.userId == state.room->owner ? "（部屋主）" : "") +
+            item.fields["line"] = PlayerLabel(member.userId, member.name) + (member.userId == state.room->owner ? "（部屋主）" : "") +
                                   (member.userId == self ? "（自分）" : "") + "  " + (member.ready ? "準備完了" : "準備中");
             members.items.push_back(std::move(item));
         }

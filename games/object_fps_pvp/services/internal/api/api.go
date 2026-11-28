@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,10 +13,13 @@ import (
 )
 
 // The internal protocol's headers (declaration D4). HeaderUser is the user the
-// gateway verified (0: the system, such as a Match); HeaderIdempotency is the
-// caller's key for a request that changes state.
+// gateway verified (0: the system, such as a Match); HeaderName is the name
+// that user signed in with, base64url without padding (a header holds ASCII
+// only; display-name declaration 5.1), absent when they have none;
+// HeaderIdempotency is the caller's key for a request that changes state.
 const (
 	HeaderUser        = "X-GYO-User"
+	HeaderName        = "X-GYO-Name"
 	HeaderIdempotency = "Idempotency-Key"
 )
 
@@ -84,4 +88,26 @@ func UserOf(r *http.Request) (uint64, bool) {
 	}
 	user, err := strconv.ParseUint(value, 10, 64)
 	return user, err == nil
+}
+
+// What CallerOf found wrong: no user header (or not a number), or a name
+// header that is not base64url (only the gateway writes it: a fault of the
+// internal protocol, not of the player).
+var (
+	ErrNoUser = errors.New("no user header")
+	ErrName   = errors.New("name header not base64url")
+)
+
+// CallerOf reads who an internal request is for, the other end of Send: the
+// user header and the name header (missing: no name).
+func CallerOf(r *http.Request) (Caller, error) {
+	user, ok := UserOf(r)
+	if !ok {
+		return Caller{}, ErrNoUser
+	}
+	name, err := base64.RawURLEncoding.DecodeString(r.Header.Get(HeaderName))
+	if err != nil {
+		return Caller{}, ErrName
+	}
+	return Caller{User: user, Name: string(name)}, nil
 }
