@@ -88,3 +88,4 @@ Owner：model 姿勢運算與 IK 的任務卡（由 GYO2 重建主會話開出�
 ## L1
 
 - 第一次（run 46103982526，170c610f）：linux-x64、macos-arm64 success；**windows-x64 failure**：`AnimationTests.cpp(775): error C2513`。測試的變數叫 `near`，撞上 `windef.h` 的空巨集（PR #152、#163 踩過同一個）。改名 `tight`／`atTight`，其餘出現的 `near`／`far` 只在字串與註解裡。
+- 第二次（run 46106801128，9c3ce246）：`L1 / linux-x64`、`L1 / windows-x64`、`L1 / macos-arm64` 三個 job 都是 success（不是 skipped），CI gate success。
