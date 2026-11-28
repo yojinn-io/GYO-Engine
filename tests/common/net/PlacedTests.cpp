@@ -27,6 +27,8 @@ struct Local {
 inline void HashValue(K::Hasher& h, const Local& v) { HashValue(h, v.value); }
 
 constexpr K::EntityId kPlaced = 50'001;
+// A second Placed entity whose one replicated component is a Door (the script's doorOnly case).
+constexpr K::EntityId kDoorOnly = 50'002;
 constexpr std::uint64_t kNever = ~std::uint64_t{0};
 
 struct Script {
@@ -35,6 +37,8 @@ struct Script {
     std::uint64_t takeDoorAt = kNever;
     std::uint64_t despawnAt = kNever;
     std::optional<N::HiddenRule> rule;
+    bool doorOnly = false;
+    std::uint64_t takeDoorOnlyAt = kNever;
 };
 Script& Current() {
     static Script script;
@@ -76,6 +80,7 @@ K::SystemResult RunScript(K::ExclusiveWorld<> world) {
         if (auto inserted = world.Insert(peer, std::move(visibility)); !inserted) return GYO::Engine::Base::Err(std::move(inserted).error());
     }
     if (tick >= script.takeDoorAt) (void)world.Remove<Door>(kPlaced);
+    if (tick >= script.takeDoorOnlyAt) (void)world.Remove<Door>(kDoorOnly);
     const auto present = world.Read<N::Placed>(kPlaced, [](const N::Placed&) {});
     if (tick >= script.despawnAt && present && *present) (void)world.Despawn(kPlaced);
     return {};
@@ -127,6 +132,11 @@ struct PlacedRun {
                 world.Insert(kPlaced, Position{0, 7});
                 world.Insert(kPlaced, Door{1});
                 if (Current().rule) world.Insert(kPlaced, N::WhenHidden{*Current().rule});
+                if (Current().doorOnly) {
+                    world.Insert(kDoorOnly, N::Placed{});
+                    world.Insert(kDoorOnly, Door{1});
+                    world.Insert(kDoorOnly, N::WhenHidden{N::HiddenRule::Retain});
+                }
                 return {};
             });
         };
@@ -146,6 +156,10 @@ struct PlacedRun {
                         world.Insert(kPlaced, N::Placed{});
                         world.Insert(kPlaced, Position{-1, -1});
                         world.Insert(kPlaced, Local{5});
+                        if (Current().doorOnly) {
+                            world.Insert(kDoorOnly, N::Placed{});
+                            world.Insert(kDoorOnly, Door{9});
+                        }
                         return {};
                     });
                 };
@@ -212,7 +226,7 @@ TEST_CASE("placed: an entity both ends put in is attached, not spawned; it carri
     CHECK_MESSAGE(!placed.Receiving(0), "[net-placed-before-attach] a Placed entity carries NotReceiving before its first attach");
     const std::vector<PlacedView> seen = Run(placed, 60);
     const N::NetReplicaState& state = placed.State(0);
-    CHECK_MESSAGE(state.attaches >= 1, "[net-placed-attach] the server's first sending is an attach");
+    CHECK_MESSAGE(state.attaches == 1, "[net-placed-attach] the server's first sending is one attach: " << state.attaches);
     CHECK_MESSAGE(state.drops[static_cast<std::size_t>(N::ReplicaDrop::SpawnRejected)] == 0, "[net-placed-attach] not a spawn: none rejected");
     CHECK_MESSAGE(state.drops[static_cast<std::size_t>(N::ReplicaDrop::MissingTarget)] == 0, "the attached entity was there");
     CHECK_MESSAGE(placed.Receiving(0), "[net-placed-attach] attached, the entity receives: NotReceiving is taken off");
@@ -247,13 +261,13 @@ TEST_CASE("placed: Detach takes the replicated components off a hidden entity, k
     }
     CHECK_MESSAGE(hiddenSeen, "[net-placed-detach] the entity stays while hidden and carries NotReceiving");
     CHECK_MESSAGE(!hiddenWrong, "[net-placed-detach] hidden: no replicated component, its own component kept");
-    CHECK(placed.State(0).hides >= 1);
+    CHECK_MESSAGE(placed.State(0).hides == 1, "[net-placed-detach] hidden once: " << placed.State(0).hides);
     CHECK_MESSAGE(placed.Receiving(0), "[net-placed-reattach] seen again, it receives");
     REQUIRE(placed.Client(0).Get<Position>(kPlaced) != nullptr);
     const std::int32_t behind = placed.Server().Get<Position>(kPlaced)->x - placed.Client(0).Get<Position>(kPlaced)->x;
     CHECK_MESSAGE((behind >= 0 && behind <= 8), "[net-placed-reattach] seen again, the server's value of now (a few ticks behind): " << behind);
     CHECK(placed.Client(0).Get<Door>(kPlaced) != nullptr);
-    CHECK(placed.State(0).attaches >= 2);
+    CHECK_MESSAGE(placed.State(0).attaches == 2, "[net-placed-reattach] attached at the start and once again: " << placed.State(0).attaches);
 }
 
 TEST_CASE("placed: Retain keeps a hidden entity's last values, which no change reaches; seen again they are the server's") {
@@ -279,6 +293,8 @@ TEST_CASE("placed: Retain keeps a hidden entity's last values, which no change r
     REQUIRE(frozen.has_value());
     REQUIRE(placed.Client(0).Get<Position>(kPlaced) != nullptr);
     CHECK_MESSAGE(placed.Client(0).Get<Position>(kPlaced)->x > frozen->x, "[net-placed-reattach] seen again, the server's newer value");
+    CHECK_MESSAGE(placed.State(0).hides == 1, "[net-placed-retain] hidden once: " << placed.State(0).hides);
+    CHECK_MESSAGE(placed.State(0).attaches == 2, "[net-placed-reattach] attached at the start and once again: " << placed.State(0).attaches);
 }
 
 TEST_CASE("placed: a replicated component the server took off while the entity was hidden is taken off when it is attached again") {
@@ -313,4 +329,27 @@ TEST_CASE("placed: a despawn at the server removes the entity at the client, see
         CHECK_MESSAGE(placed.Client(0).Get<N::Placed>(kPlaced) == nullptr, "[net-placed-despawn] the server's despawn reaches the client");
         CHECK_MESSAGE(placed.Client(0).Get<Local>(kPlaced) == nullptr, "[net-placed-despawn] the whole entity is removed");
     }
+}
+
+TEST_CASE("placed: a Placed entity the server removes before its Peer was ever sent it is removed at the client") {
+    // Hidden from the start (never attached), despawned at the server's tick 60, seen again from 100.
+    Current() = Script{.hideFrom = 0, .hideTo = 100, .despawnAt = 60};
+    PlacedRun placed;
+    (void)Run(placed, 140);
+    CHECK(placed.State(0).attaches == 0);
+    CHECK(placed.Server().Get<N::Placed>(kPlaced) == nullptr);
+    CHECK_MESSAGE(placed.Client(0).Get<N::Placed>(kPlaced) == nullptr,
+                  "[net-placed-despawn-unsent] the despawn of a Placed entity never sent reaches the client");
+}
+
+TEST_CASE("placed: a seen Placed entity whose replicated components all go is changed, not hidden; it keeps receiving") {
+    Current() = Script{.doorOnly = true, .takeDoorOnlyAt = 60};
+    PlacedRun placed;
+    (void)Run(placed, 120);
+    CHECK(placed.Server().Get<Door>(kDoorOnly) == nullptr);
+    CHECK_MESSAGE(placed.Client(0).Get<Door>(kDoorOnly) == nullptr,
+                  "[net-placed-all-off] the Door the server took off is taken off at the client (Retain does not keep it)");
+    CHECK_MESSAGE(placed.Client(0).Get<N::NotReceiving>(kDoorOnly) == nullptr, "[net-placed-all-off] still seen: it is not hidden");
+    CHECK_MESSAGE(placed.State(0).hides == 0, "[net-placed-all-off] no hide: " << placed.State(0).hides);
+    CHECK(placed.Client(0).Get<N::Placed>(kDoorOnly) != nullptr);
 }

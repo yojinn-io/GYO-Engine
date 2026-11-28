@@ -663,3 +663,27 @@ P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下
 - Bevy 官方範本把流程畫面叫 `Screen`：本機沒有 `bevy_new_2d` 的源碼（7.1）。
 - 一個 World 兩種輸入仍沒有 Engine 的測試；D2 (a) 之後這條線不需要（修訂 1 的第 1 步拿掉了）。
 - 旋轉的 `Cuboid` 有沒有 `MoveAndSlide` 的測試案沒逐案確認（10.1）。
+
+---
+
+## 13. 審查的處置
+
+### 13.1 第 3 步的純淨 Code Review（Fable 5.2／high，2026-11-28）
+
+只給 git 範圍 `77ee6e59^..77ee6e59`。11 條，逐條讀程式碼核對後處置如下（行號是當時的）。
+
+| # | 指摘 | 處置 |
+|---|---|---|
+| 1 | `Placed` 的刪除只送給附上過的 Peer：一開始就看不到、或 Peer 連上前就刪了的，Client 的實體永遠留著 | **修**：伺服器的 `NetPlacedRecord` 記它刪過的 `Placed` 實體，每個 Peer 送一次（`PeerLedger::placedGoneSent`，Resync 從頭送）。測試 `placed: a Placed entity the server removes before its Peer was ever sent it…`；突變 `nt-placed-unsent-despawn-lost` |
+| 2 | K3＋`Retain`：藏起期間沒有快照帶它，確認點把舊值當成「沒變」而回滾 | **先重現**：K3 測試加「藏起期間 Body 每步照 Speed 走」的檢查，修前 21 步往回跳。**修**：K3 在每個值的 tick 對藏起的 `Placed` 實體寫 `NotSent`（延後實體的同一條路）。突變 `nt-placed-k3-hidden-compared` |
+| 3 | 「藏起」的條件把「看不到」和「看得到但複製元件全沒了」混在一起 | **修**：藏起只由 `PeerVisibility` 看不到觸發；看得到而複製元件全沒了是改結構（拿掉元件、照樣在收）。測試 `placed: a seen Placed entity whose replicated components all go…`；突變 `nt-placed-all-off-hidden` |
+| 4 | 「在不在收」有三份表示、每幀輪詢 | **部分修**：換了伺服器 World（新 generation）與沒有連線時清空 `receiving`、不重複插入、`attached` 改名 `receiving`。**不改**成正向標記（`Attached`）：使用者要的是標「沒在收資料」（P2）；每幀掃 `Placed` 的成本在這一批的規模（門幾扇）可以忽略，量到壓力再改 |
+| 5 | Client 沒有那個實體時伺服器仍記為送到 | **不修**：契約是「兩端在第一步之前放好」（4.1）；Client 每次都計 `MissingTarget`（錯誤只告知），不加守衛 |
+| 6 | wire 的操作是裸數字 | **修**：`StructureOp`（0～4），其他值 Malformed；刪除的寫入收成 `WriteDespawn` |
+| 7 | 規則寫死二選一、由伺服器帶上 wire | **不修**：規則是作者對每個實體的選擇，由權威端決定、1 byte；換成自己的規則見 4.1 的三條路 |
+| 8 | 大函式、「整份寫入後拿掉其餘」有三份 | **部分修**：拿掉一個元件收成 `TakeOffWire`（K3 的回滾／等待值／寫過的 tick 三處一致），附上、藏起、改結構共用；`keep` 改 64 位元遮罩；伺服器每幀只讀一次 `Placed`（`TakePlaced`）。`ApplyStructure` 照操作拆函式留到下次動 net 的批 |
+| 9 | 命名（`Placed`、`attach` 與 `Detach`） | **不改**：`Placed` 是宣告核准的名字；`attached` 改名 `receiving`（見 4） |
+| 10 | 測試（全域狀態、斷言太鬆、沒蓋到的路徑） | **部分修**：附上、藏起改成確切次數；補 1～3 的測試。`Hub` 的複製是既有寫法（測試目錄已有多份），不在這一批收 |
+| 11 | `Remove<NotReceiving>` 的結果被丟掉 | **修**：錯誤往上傳，和 `MarkNotReceiving` 一致 |
+
+沒蓋到、留著的：K3 下 `Placed` 的刪除、可靠送件被拒當下的藏起、藏起當下的 Resync（都沒有測試）；未知操作的 Malformed 沒有專門的測試。

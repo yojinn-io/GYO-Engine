@@ -56,6 +56,10 @@ namespace {
 // reliable channel, Values on the values channel. After the kind: the server World's generation and the client's
 // resync epoch (u32 each).
 enum class Kind : std::uint8_t { Structure = 1, Confirm = 2, ServerMessage = 3, Resync = 4, Values = 5, Inputs = 6 };
+// The operations of a structure update, one per entity: Change (components added or taken off), Spawn, Despawn, and
+// for a Placed entity (interact-door declaration 4.3) Attach (the whole set written on the client's own entity) and
+// Hide (its Peer no longer sees it; the HiddenRule follows). Any other value is Malformed.
+enum class StructureOp : std::uint8_t { Change = 0, Spawn = 1, Despawn = 2, Attach = 3, Hide = 4 };
 
 // A value part's payload budget: one part fits one packet without fragments at the default mtu (1170 bytes).
 constexpr std::size_t kValuePartBudget = 1100;
@@ -194,6 +198,7 @@ void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t 
             // The client's World was replaced: everything is sent again, under the new epoch.
             ledger.entities.clear();
             ledger.hidden.clear();
+            ledger.placedGoneSent = 0;
             ledger.pending.clear();
             ledger.resources.clear();
             ledger.lastStructureTick.reset();
@@ -247,13 +252,30 @@ void ReadClient(PeerLedger& ledger, Connection& connection, const std::uint32_t 
     }
 }
 
-// A Placed entity's rule when its Peer stops seeing it (its WhenHidden, or Detach); nullopt when the World has no
-// Placed entity of that id (not Placed, or gone).
-std::optional<HiddenRule> PlacedRule(ReplicaWorld& world, const Kernel::EntityId entity) {
-    const auto placed = world.Read<Placed>(entity, [](const Placed&) {});
-    if (!placed || !*placed) return std::nullopt;
-    const auto rule = world.Read<WhenHidden>(entity, [](const WhenHidden& w) { return w.rule; });
-    return rule && rule->has_value() ? **rule : HiddenRule::Detach;
+// The Placed entities of the server's World this frame with their rule (WhenHidden, or Detach), ascending: read once a
+// frame, as the snapshot is.
+using PlacedRules = std::vector<std::pair<Kernel::EntityId, HiddenRule>>;
+PlacedRules TakePlaced(ReplicaWorld& world) {
+    PlacedRules placed;
+    world.ReadColumn<Placed>([&](const Kernel::EntityId id, auto, auto, const Placed&) { placed.emplace_back(id, HiddenRule::Detach); });
+    for (auto& [id, rule] : placed) {
+        const auto given = world.Read<WhenHidden>(id, [](const WhenHidden& w) { return w.rule; });
+        if (given && given->has_value()) rule = **given;
+    }
+    return placed;
+}
+std::optional<HiddenRule> RuleOf(const PlacedRules& placed, const Kernel::EntityId entity) {
+    const auto at = std::lower_bound(placed.begin(), placed.end(), entity, [](const auto& p, const Kernel::EntityId id) { return p.first < id; });
+    if (at == placed.end() || at->first != entity) return std::nullopt;
+    return at->second;
+}
+
+// One despawn in a structure update.
+void WriteDespawn(NetWriter& ops, const Kernel::EntityId entity) {
+    ops.Value(entity);
+    ops.Value(static_cast<std::uint8_t>(StructureOp::Despawn));
+    ops.Value(std::uint8_t{0});
+    ops.Value(std::uint8_t{0});
 }
 
 } // namespace
@@ -293,6 +315,17 @@ SystemResult ReplicateOut(ReplicaWorld world) {
     });
 
     Snapshot snapshot = Take(world, *registry);
+    // The Placed entities now, and those the server removed since it started (each Peer is sent their despawn once).
+    const PlacedRules placedNow = TakePlaced(world);
+    std::vector<Kernel::EntityId> placedGone;
+    (void)world.Modify<NetPlacedRecord>([&](NetPlacedRecord& record) {
+        for (const Kernel::EntityId was : record.live) {
+            if (!RuleOf(placedNow, was)) record.gone.push_back(was);
+        }
+        record.live.clear();
+        for (const auto& [id, rule] : placedNow) record.live.push_back(id);
+        placedGone = record.gone;
+    });
     const Kernel::ChangeStamp now = world.Stamp();
     // Buffers kept across the Peers of this frame (their capacity is reused, their content is not).
     std::vector<std::byte> structure, ops, current, one, body;
@@ -372,37 +405,58 @@ SystemResult ReplicateOut(ReplicaWorld world) {
             hiddenNow.clear();
             goneHidden.clear();
             for (auto it = ledger.entities.begin(); it != ledger.entities.end(); ++it) {
-                // Gone from the World, or no longer seen by this Peer (only WhileVisible): removed at that client.
-                // A Placed entity still in the World is hidden instead, by its WhenHidden rule (interact-door
-                // declaration 4.3, flag 4).
                 const Snapshot::Entity* still = snapshot.Find(it->first);
-                if (still != nullptr && peerMask(*still) != 0) continue;
-                if (const std::optional<HiddenRule> rule = PlacedRule(world, it->first)) {
+                if (const std::optional<HiddenRule> rule = RuleOf(placedNow, it->first)) {
+                    // A Placed entity (interact-door declaration 4.3): hidden when its Peer no longer sees it, by its
+                    // WhenHidden rule; seen with nothing replicated left, its components are taken off and it stays.
+                    if (visibility && !visibility->Sees(it->first)) {
+                        opWriter.Value(it->first);
+                        opWriter.Value(static_cast<std::uint8_t>(StructureOp::Hide));
+                        opWriter.Value(std::uint8_t{0});
+                        opWriter.Value(std::uint8_t{0});
+                        opWriter.Value(static_cast<std::uint8_t>(*rule));
+                        ++opCount;
+                        hiddenNow.push_back(it->first);
+                        continue;
+                    }
+                    if ((still != nullptr && peerMask(*still) != 0) || it->second.mask == 0) continue;
                     opWriter.Value(it->first);
-                    opWriter.Value(std::uint8_t{4}); // hide
+                    opWriter.Value(static_cast<std::uint8_t>(StructureOp::Change));
+                    std::uint8_t removedCount = 0;
+                    for (std::uint16_t wire = 0; wire < 64; ++wire) removedCount += ((it->second.mask >> wire) & 1u) ? 1 : 0;
+                    opWriter.Value(removedCount);
+                    for (std::uint16_t wire = 0; wire < 64; ++wire) {
+                        if ((it->second.mask >> wire) & 1u) opWriter.Value(wire);
+                    }
                     opWriter.Value(std::uint8_t{0});
-                    opWriter.Value(std::uint8_t{0});
-                    opWriter.Value(static_cast<std::uint8_t>(*rule));
                     ++opCount;
-                    hiddenNow.push_back(it->first);
+                    restructured.push_back(it->first);
+                    restructuredAs.push_back(LedgerEntity{0, now});
                     continue;
                 }
-                opWriter.Value(it->first);
-                opWriter.Value(std::uint8_t{2}); // despawn
-                opWriter.Value(std::uint8_t{0});
-                opWriter.Value(std::uint8_t{0});
+                // Gone from the World, or no longer seen by this Peer (only WhileVisible): removed at that client.
+                if (still != nullptr && peerMask(*still) != 0) continue;
+                WriteDespawn(opWriter, it->first);
                 ++opCount;
                 despawned.push_back(it->first);
             }
             // A hidden Placed entity the server removed: its client still has it, so the despawn goes there too.
             for (const Kernel::EntityId entity : ledger.hidden) {
-                if (PlacedRule(world, entity)) continue;
-                opWriter.Value(entity);
-                opWriter.Value(std::uint8_t{2}); // despawn
-                opWriter.Value(std::uint8_t{0});
-                opWriter.Value(std::uint8_t{0});
+                if (RuleOf(placedNow, entity)) continue;
+                WriteDespawn(opWriter, entity);
                 ++opCount;
                 goneHidden.push_back(entity);
+            }
+            // A Placed entity the server removed before this Peer was ever sent it: the client put it in itself, so it
+            // is removed there too (the server's record of the Placed entities it removed, sent to each Peer once).
+            for (std::size_t i = ledger.placedGoneSent; i < placedGone.size(); ++i) {
+                const Kernel::EntityId entity = placedGone[i];
+                if (ledger.entities.find(entity) != ledger.entities.end() ||
+                    std::binary_search(ledger.hidden.begin(), ledger.hidden.end(), entity)) {
+                    continue;
+                }
+                WriteDespawn(opWriter, entity);
+                ++opCount;
             }
             for (const Snapshot::Entity& taken : snapshot.entities) {
                 const Kernel::EntityId entity = taken.id;
@@ -411,10 +465,10 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                 auto known = ledger.entities.find(entity);
                 const bool spawn = known == ledger.entities.end();
                 if (!spawn && known->second.mask == mask) continue;
-                // A Placed entity is already at the client: attached (flag 3), never spawned.
-                const bool attach = spawn && PlacedRule(world, entity).has_value();
+                // A Placed entity is already at the client: attached, never spawned.
+                const bool attach = spawn && RuleOf(placedNow, entity).has_value();
                 opWriter.Value(entity);
-                opWriter.Value(static_cast<std::uint8_t>(attach ? 3 : spawn ? 1 : 0));
+                opWriter.Value(static_cast<std::uint8_t>(attach ? StructureOp::Attach : spawn ? StructureOp::Spawn : StructureOp::Change));
                 const std::uint64_t removed = spawn ? 0 : (known->second.mask & ~mask);
                 std::uint8_t removedCount = 0;
                 for (std::uint16_t wire = 0; wire < 64; ++wire) removedCount += ((removed >> wire) & 1u) ? 1 : 0;
@@ -446,6 +500,7 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                         ledger.hidden.insert(std::lower_bound(ledger.hidden.begin(), ledger.hidden.end(), hid), hid);
                     }
                     for (const Kernel::EntityId gone : goneHidden) std::erase(ledger.hidden, gone);
+                    ledger.placedGoneSent = placedGone.size();
                     for (std::size_t i = 0; i < restructured.size(); ++i) {
                         ledger.entities[restructured[i]] = restructuredAs[i];
                         ledger.waiting.erase(restructured[i]);
@@ -458,6 +513,8 @@ SystemResult ReplicateOut(ReplicaWorld world) {
                     ++ledger.reliableRejected;
                     restructured.clear();
                 }
+            } else {
+                ledger.placedGoneSent = placedGone.size();  // every removed Placed entity was already handled
             }
 
             // The server messages of this frame, after the structure they may point into.
@@ -668,12 +725,13 @@ SystemResult MarkNotReceiving(ReplicaWorld& world, const Kernel::EntityId entity
     return {};
 }
 
-// Every Placed entity not attached since it was put in (or hidden) carries NotReceiving.
-SystemResult MarkUnattached(ReplicaWorld& world, const std::vector<Kernel::EntityId>& attached) {
+// Every Placed entity not receiving (not attached since it was put in, since it was hidden, or under this server
+// World; or no connection) carries NotReceiving.
+SystemResult MarkNotReceivingAll(ReplicaWorld& world, const std::vector<Kernel::EntityId>& receiving) {
     std::vector<Kernel::EntityId> placed;
     world.ReadColumn<Placed>([&](const Kernel::EntityId id, auto, auto, const Placed&) { placed.push_back(id); });
     for (const Kernel::EntityId entity : placed) {
-        if (std::binary_search(attached.begin(), attached.end(), entity)) continue;
+        if (std::binary_search(receiving.begin(), receiving.end(), entity)) continue;
         const auto marked = world.Read<NotReceiving>(entity, [](const NotReceiving&) {});
         if (marked && *marked) continue;
         if (SystemResult result = MarkNotReceiving(world, entity); !result) return result;
@@ -681,18 +739,37 @@ SystemResult MarkUnattached(ReplicaWorld& world, const std::vector<Kernel::Entit
     return {};
 }
 
-// The replicated components of entity taken off at this client: the ones that roll back through the inbox (K3).
-void TakeOffReplicated(ReplicaWorld& world, const NetRegistry& registry, NetReplicaState& state, const Kernel::EntityId entity,
-                       const std::uint32_t tick, const RollingBack* rolling, const std::vector<std::uint16_t>& keep) {
-    for (std::uint16_t wire = 0; wire < registry.components.size(); ++wire) {
-        if (std::find(keep.begin(), keep.end(), wire) != keep.end()) continue;
-        if (rolling != nullptr && rolling->Component(wire)) {
-            registry.components[wire]->removedToInbox(world, entity, tick);
-            ++state.inboxRemovals;
+// One replicated component the server took off entity at tick: K3 sends one that rolls back to the inbox and drops a
+// waiting value of one that does not (S1 a of PR-2's review); a written tick keeps an older value from coming back.
+void TakeOffWire(ReplicaWorld& world, const NetRegistry& registry, NetReplicaState& state, const Kernel::EntityId entity,
+                 const std::uint16_t wire, const std::uint32_t tick, const RollingBack* rolling) {
+    if (rolling != nullptr && rolling->Component(wire)) {
+        registry.components[wire]->removedToInbox(world, entity, tick);
+        ++state.inboxRemovals;
+    } else if (wire < registry.components.size()) {
+        if (rolling != nullptr) {
+            if (const auto waiting = state.waitingDirect.find(entity); waiting != state.waitingDirect.end()) {
+                std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });
+            }
+            if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);
         } else {
             (void)registry.components[wire]->remove(world, entity);
         }
     }
+    state.written[{entity, wire}] = tick;
+}
+
+// Every replicated component of entity but the keep mask's (bit = wire id) taken off at this client.
+void TakeOffReplicated(ReplicaWorld& world, const NetRegistry& registry, NetReplicaState& state, const Kernel::EntityId entity,
+                       const std::uint32_t tick, const RollingBack* rolling, const std::uint64_t keep) {
+    for (std::uint16_t wire = 0; wire < registry.components.size(); ++wire) {
+        if (((keep >> wire) & 1U) == 0) TakeOffWire(world, registry, state, entity, wire, tick, rolling);
+    }
+}
+
+void InsertSorted(std::vector<Kernel::EntityId>& ids, const Kernel::EntityId id) {
+    const auto at = std::lower_bound(ids.begin(), ids.end(), id);
+    if (at == ids.end() || *at != id) ids.insert(at, id);
 }
 
 SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, NetReplicaState& state, NetReader& reader,
@@ -720,7 +797,12 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             Drop(state, ReplicaDrop::Malformed);
             return {};
         }
-        if (flags == 4) {
+        if (flags > static_cast<std::uint8_t>(StructureOp::Hide)) {
+            Drop(state, ReplicaDrop::Malformed);
+            return {};
+        }
+        const auto operation = static_cast<StructureOp>(flags);
+        if (operation == StructureOp::Hide) {
             // A Placed entity this client's Peer stopped seeing (interact-door declaration 4.3): hidden by its rule.
             std::uint8_t rule = 0;
             if (!reader.Value(rule) || rule > static_cast<std::uint8_t>(HiddenRule::Retain)) {
@@ -732,10 +814,11 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
                 continue;
             }
             if (SystemResult marked = MarkNotReceiving(world, entity); !marked) return marked;
-            std::erase(state.attached, entity);
+            std::erase(state.receiving, entity);
+            InsertSorted(state.hiddenPlaced, entity);
             ++state.hides;
             if (static_cast<HiddenRule>(rule) == HiddenRule::Detach) {
-                TakeOffReplicated(world, registry, state, entity, tick, rolling, {});
+                TakeOffReplicated(world, registry, state, entity, tick, rolling, 0);
                 state.waitingDirect.erase(entity);
                 for (auto it = state.written.lower_bound({entity, 0}); it != state.written.end() && it->first.first == entity;) {
                     it = state.written.erase(it);
@@ -743,7 +826,7 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             continue;
         }
-        if (flags == 3 && !IsPlaced(world, entity)) {
+        if (operation == StructureOp::Attach && !IsPlaced(world, entity)) {
             // Attached: the client must have put the entity in (Placed) itself; its values are read past and dropped.
             Drop(state, ReplicaDrop::MissingTarget);
             for (std::uint8_t i = 0; i < setCount; ++i) {
@@ -757,8 +840,9 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             continue;
         }
-        if (flags == 2) {
-            std::erase(state.attached, entity);
+        if (operation == StructureOp::Despawn) {
+            std::erase(state.receiving, entity);
+            std::erase(state.hiddenPlaced, entity);
             if (rolling != nullptr) {
                 // K3: the entity's end goes to the rollback Module (Exited, R-8 A); it is removed at the confirmed point.
                 Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.Exited(entity, tick); });
@@ -773,7 +857,7 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             }
             continue;
         }
-        const bool spawnK3 = rolling != nullptr && flags == 1;
+        const bool spawnK3 = rolling != nullptr && operation == StructureOp::Spawn;
         bool knownBefore = false;
         if (spawnK3) {
             // K3: the server's spawn goes to the rollback Module (Entered, R-8 A): the entity is put back, with its id,
@@ -790,27 +874,11 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             waiting.notBefore = tick;
             waiting.whole = true;
         }
-        for (const std::uint16_t wire : removed) {
-            if (rolling != nullptr && rolling->Component(wire)) {
-                registry.components[wire]->removedToInbox(world, entity, tick);
-                ++state.inboxRemovals;
-            } else if (wire < registry.components.size()) {
-                if (rolling != nullptr) {
-                    // K3: a waiting value of it is not written later (S1 a of PR-2's review).
-                    if (const auto waiting = state.waitingDirect.find(entity); waiting != state.waitingDirect.end()) {
-                        std::erase_if(waiting->second.values, [wire](const auto& value) { return value.first == wire; });
-                    }
-                    if (rolling->Alive(entity)) (void)registry.components[wire]->remove(world, entity);
-                } else {
-                    (void)registry.components[wire]->remove(world, entity);
-                }
-            }
-            state.written[{entity, wire}] = tick;
-        }
+        for (const std::uint16_t wire : removed) TakeOffWire(world, registry, state, entity, wire, tick, rolling);
         std::vector<std::uint16_t> spawnedRolling;
-        // An attach (flag 3) is the whole set: what it does not carry is taken off after (P3 (a)).
-        std::vector<std::uint16_t> attachedWires;
-        bool first = flags == 1;
+        // An attach is the whole set: what it does not carry is taken off after (P3 (a)).
+        std::uint64_t attachedWires = 0;
+        bool first = operation == StructureOp::Spawn;
         for (std::uint8_t i = 0; i < setCount; ++i) {
             std::uint16_t wire = 0;
             std::uint32_t length = 0;
@@ -819,7 +887,7 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
                 Drop(state, ReplicaDrop::Malformed);
                 return {};
             }
-            if (flags == 3) attachedWires.push_back(wire);
+            if (operation == StructureOp::Attach && wire < 64) attachedWires |= std::uint64_t{1} << wire;
             if (rolling != nullptr) {
                 // K3: a component that rolls back goes to the inbox (not written in First: R-2 premise 5); one that
                 // does not is written directly, or waits until the entity is in the World.
@@ -856,12 +924,13 @@ SystemResult ApplyStructure(ReplicaWorld& world, const NetRegistry& registry, Ne
             first = false;
             state.written[{entity, wire}] = tick;
         }
-        if (flags == 3) {
+        if (operation == StructureOp::Attach) {
             // Attached (interact-door declaration 4.3): a component the server's set does not carry was taken off at
             // the server while the Peer did not see it (P3 (a)); the entity receives again.
             TakeOffReplicated(world, registry, state, entity, tick, rolling, attachedWires);
-            (void)world.Remove<NotReceiving>(entity);
-            state.attached.insert(std::lower_bound(state.attached.begin(), state.attached.end(), entity), entity);
+            if (auto unmarked = world.Remove<NotReceiving>(entity); !unmarked) return Base::Err(std::move(unmarked).error());
+            InsertSorted(state.receiving, entity);
+            std::erase(state.hiddenPlaced, entity);
             ++state.attaches;
             continue;
         }
@@ -948,6 +1017,14 @@ SystemResult ApplyValues(ReplicaWorld& world, const NetRegistry& registry, NetRe
             ++state.inboxNotSent;
         }
     }
+    // K3: a hidden Placed entity is carried by no snapshot either (a Retain one keeps its values, which must not be
+    // inferred unchanged at the confirmed point: interact-door declaration 4.2).
+    if (rolling != nullptr && part.part == 0) {
+        for (const Kernel::EntityId hidden : state.hiddenPlaced) {
+            Inbox(world, [&](Rollback::RollbackInbox& inbox) { inbox.NotSent(hidden, part.tick); });
+            ++state.inboxNotSent;
+        }
+    }
     std::uint32_t count = 0;
     if (!reader.Value(count)) {
         Drop(state, ReplicaDrop::Malformed);
@@ -1023,6 +1100,9 @@ bool Current(NetReplicaState& state, NetReader& reader) {
         state.generation = generation;
         state.appliedStructureTick.reset();
         state.pendingValues.clear();
+        // A new server World attaches its Placed entities again.
+        state.receiving.clear();
+        state.hiddenPlaced.clear();
         state.heldMessages.clear();
         state.ticks.clear();
         state.written.clear();
@@ -1064,9 +1144,12 @@ SystemResult ApplyReplication(ReplicaWorld world) {
     ClientSession* client = service != nullptr ? service->Client() : nullptr;
     Connection* connection = client != nullptr && client->State() != ClientState::Disconnected ? client->Transport() : nullptr;
     if (connection == nullptr || !registry) {
-        std::vector<Kernel::EntityId> attached;
-        (void)world.Read<NetReplicaState>([&](const NetReplicaState& kept) { attached = kept.attached; });
-        return MarkUnattached(world, attached);
+        // No connection: no Placed entity receives.
+        (void)world.Modify<NetReplicaState>([](NetReplicaState& kept) {
+            kept.receiving.clear();
+            kept.hiddenPlaced.clear();
+        });
+        return MarkNotReceivingAll(world, {});
     }
     NetReplicaState state;
     (void)world.Modify<NetReplicaState>([&](NetReplicaState& kept) { state = std::move(kept); });
@@ -1219,7 +1302,7 @@ SystemResult ApplyReplication(ReplicaWorld world) {
         (void)connection->Send(kReliableChannel, body);
         state.confirmationsSent += confirmations.size();
     }
-    if (result) result = MarkUnattached(world, state.attached);
+    if (result) result = MarkNotReceivingAll(world, state.receiving);
     (void)world.Modify<NetReplicaState>([&](NetReplicaState& kept) { kept = std::move(state); });
     return result;
 }

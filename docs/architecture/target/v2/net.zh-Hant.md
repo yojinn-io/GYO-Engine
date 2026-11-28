@@ -392,10 +392,12 @@ net.ReplicateResource<StateMachine<Weather>, Weather>("Weather", weather);
 - **元件範圍（私人資料，C-VIS2）**：`Replicate<T>(名字, codec, {.privateComponent = true})` 的元件只送給 `PeerVisibility::ShowPrivate<T>(entity)` 的 Peer（replicon 的可見性範圍到元件）。其他 Peer 看得到實體也收不到這個元件。
 - **失去可見＝對那個 Peer 刪除**（只用 `WhileVisible`，replicon 的 `ScopeLifetime::WhileVisible`）：結構更新送刪除；再看到時是生成，用同一個編號整份送。Client 端：K1、K2 生成、刪除；K3 寫 `Entered`／`Exited`（第 13 節）。放好的實體（`Placed`）例外，見下一條。
 - **放好的實體（`Placed`，`v8-arch-gyo2-interact-door`，宣告 `interact-door-declaration.zh-Hant.md` 第 4 節）**：兩端各自用同一個編號、在第一步之前放好的實體（scene 的物件；編號就是身分，P1 (a)）。產品在兩端放 `Placed`。
-  - 結構更新的操作多兩種（`kNetProtocolVersion` 4）：**3＝附上**（Peer 第一次或再次看到它；取代生成）、**4＝藏起**（Peer 看不到它了；取代刪除；多帶 1 byte 的 `HiddenRule`）。伺服器刪掉它時照舊送 2＝刪除，看得到與藏起的 Peer 都送（帳本的 `PeerLedger::hidden`）。
+  - 結構更新的操作（`StructureOp`：0 改結構、1 生成、2 刪除、3 附上、4 藏起；其他值是 Malformed）多兩種（`kNetProtocolVersion` 4）：**3＝附上**（Peer 第一次或再次看到它；取代生成）、**4＝藏起**（Peer 的 `PeerVisibility` 看不到它了；取代刪除；多帶 1 byte 的 `HiddenRule`）。看得到、但複製元件全被拿掉（或只剩沒給這個 Peer 看的私人元件）時不是藏起，是 0＝改結構（元件拿掉，實體照樣在收）。
+  - **刪除**：伺服器刪掉它時送 2＝刪除，看得到與藏起的 Peer 都送（帳本的 `PeerLedger::hidden`）。還沒送過給這個 Peer（一開始就看不到、或在 Peer 連上之前就刪了）也送：伺服器的 `NetPlacedRecord` 記著它刪過的 `Placed` 實體，每個 Peer 送一次（`PeerLedger::placedGoneSent`；Resync 從頭再送）。
   - **附上**：Client 的實體要活著、有 `Placed`，否則計 `MissingTarget`、不建立實體。整份寫上（`ApplyMode::Set`）；這次沒送到的已登記複製元件拿掉（看不見期間伺服器拿掉的，P3 (a)；replicon、lightyear 不重播這一項）；拿掉 `NotReceiving`。K3 不寫 `Entered`；回滾元件進入口、拿掉的走 `removedToInbox`。計 `NetReplicaState::attaches`。
   - **藏起**：放上 `NotReceiving`；規則是伺服器端實體上的 `WhenHidden`（沒有＝`Detach`）。`Detach`：拿掉複製來的元件（K3 走 `removedToInbox`），實體與它自己的元件留著（replicon 的 `WhileVisible`，範圍縮成複製元件）。`Retain`：留最後的值（replicon 的 `AfterFirstVisibility`）。藏起期間不送改動。計 `hides`。
-  - **`NotReceiving`**：Client 端本地的元件，不是判定資料、不回滾。還沒附上過的 `Placed` 實體也帶著它（`ApplyReplication` 每幀補）。作者自己的規則接在它上面（例：不畫、停預測），或用 `PeerVisibility` 讓它一直看得見。
+  - **`NotReceiving`**：Client 端本地的元件，不是判定資料、不回滾。還沒附上過的 `Placed` 實體、沒有連線時、伺服器的 World 換了（新的 generation）之後還沒重新附上的，也帶著它（`ApplyReplication` 每幀照 `NetReplicaState::receiving` 補）。
+  - **K3 與藏起**：藏起的實體沒有任何快照帶它；K3 在每個值的 tick 對它寫 `NotSent`（和延後的實體同一條路），所以 `Retain` 留下的舊值不會在確認點被當成「沒變」而回滾。作者自己的規則接在它上面（例：不畫、停預測），或用 `PeerVisibility` 讓它一直看得見。
   - 和別家：預設（作者不寫＝`Detach`）與單位（實體）照 replicon、lightyear、Unity Netcode；標 `NotReceiving` 與附上時對齊被拿掉的元件是 GYO 加的（使用者 2026-11-28，P2、P3）。
   - K3 不用 `NotSent` 表示看不到：看不到的實體在 Client 上不該存在（宣告選的 `WhileVisible`），`NotSent` 只表示「這份沒帶」、實體還在。
 - **優先度**：`NetEntry::ValueBytesPerTick(bytes)`（預設 0＝不限）給每個 Peer 每 tick 值的位元組上限。放不下時取 lightyear 的累積優先度的概念，做法不同（PR-2 設計審查 M3 更正出處）：lightyear 的累積在可靠通道的待送訊息上（`crates/transport/transport/src/channel/send_reliable.rs` 第 37、153 行：每次 `+= base_priority × multiplier`，到 ack 才移除；`packet/priority_manager.rs` 是排序與 token bucket）；這裡在實體上累積、送出就歸零，下一 tick 用最新的值重新編碼：

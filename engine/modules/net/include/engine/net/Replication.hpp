@@ -254,11 +254,22 @@ struct PeerLedger final {
     FlatMap<Kernel::EntityId, std::uint32_t> waitedTicks;
     // The Placed entities hidden at this client (not in entities): a despawn still goes to them; seen again, attached.
     std::vector<Kernel::EntityId> hidden;
+    // How many of the server's removed Placed entities (NetPlacedRecord::gone) this client was sent the despawn of.
+    std::size_t placedGoneSent = 0;
     std::uint32_t longestWait = 0;
     // What this client sent that the server dropped (confirmations, resyncs, inputs), by reason.
     std::array<std::uint64_t, kReplicaDropCount> drops{};
 };
 inline void HashValue(Kernel::Hasher&, const PeerLedger&) {}
+
+// At the server: its Placed entities of the last frame, and every one it removed since (in order): a client puts its
+// own copy in, so a Placed entity removed before its Peer was sent it is removed there by this record (interact-door
+// declaration 4.3).
+struct NetPlacedRecord final {
+    std::vector<Kernel::EntityId> live;
+    std::vector<Kernel::EntityId> gone;
+};
+inline void HashValue(Kernel::Hasher&, const NetPlacedRecord&) {}
 
 
 // The client's receiving side (a Resource of a client World).
@@ -330,8 +341,11 @@ struct NetReplicaState final {
     // Placed entities (interact-door declaration 4): attached (written whole on the client's entity) and hidden.
     std::uint64_t attaches = 0;
     std::uint64_t hides = 0;
-    // The Placed entities attached and not hidden since (the others carry NotReceiving), ascending.
-    std::vector<Kernel::EntityId> attached;
+    // The Placed entities receiving now: attached and not hidden since, under this server World (the others carry
+    // NotReceiving), ascending.
+    std::vector<Kernel::EntityId> receiving;
+    // The Placed entities hidden now (K3: each value tick says they are not carried, NotSent), ascending.
+    std::vector<Kernel::EntityId> hiddenPlaced;
     std::optional<std::uint32_t> inboxConfirmed;
     // K3: the values of components that do not roll back for an entity the World does not have yet as the server
     // means it (it comes with the rollback that puts it back, R-8 A), written once it is there; by entity.

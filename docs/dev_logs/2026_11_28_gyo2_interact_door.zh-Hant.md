@@ -32,3 +32,5 @@ Owner：門＋交互骨架的任務卡。分支 `claude/gyo2-interact-door-e11d3
 - **第 7 步的一部分（E 鍵）**（Opus／high）：第 5 步等 #379 合併，先做不靠 scene 的部分。Frame 的 `ReadControls` 讀 `E`（`JustPressed`）→ `present::ControlsFrame`／`StepInput` 的 `interact` → `Controls` 的待送按一下 → `ClientExchange` 合流（按一下的鍵相加）→ Sim 的 `StepInputOf` 放進 `kPressInteract`，取出就清、`stale` 時也清。新測試 `client: E reaches the Match as one interaction press`（`[pvp-interact-key-sent]`：按一次 E，Match 恰好一步有這個鍵）。
   - 本機 `object_fps_pvp` 的 `cpu|shader` 10 項全過。
   - 突變：新 2 個（`pvp-interact-key-not-read`、`pvp-interact-press-repeats`）＋ find 改寫的 `pvp-step-press-repeats`、`pvp-hold-kept-stale`，4/4 killed。
+- **第 3 步的純淨 Code Review**（Fable 5.2／high，`pure-code-reviewer`，只給 git 範圍 `77ee6e59^..77ee6e59`）：11 條，處置見宣告第 13.1 節。修了：沒送過的 `Placed` 實體的刪除（`NetPlacedRecord`）、K3＋`Retain` 藏起期間的回滾（先寫成失敗的測試：修前 21 步往回跳；修法是對藏起的實體寫 `NotSent`）、看得到但元件全沒了不算藏起、`StructureOp`、`TakeOffWire`、`receiving` 在換 generation 與斷線時清空、`Remove<NotReceiving>` 的錯誤往上傳、測試改成確切次數。不修：Client 沒有實體時伺服器的記帳（契約＋`MissingTarget` 告知）、規則由伺服器帶、`Placed` 的名字。
+  - 本機 `cpu|shader` 263 項全過。突變：`nt-placed-*` 12 個（改寫 9 個的 find、新 3 個）12/12 killed；改動附近的既有 12 個（含 find 縮排跟著搬到 `TakeOffWire` 的 3 個）12/12 killed。

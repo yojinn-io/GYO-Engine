@@ -401,6 +401,7 @@ struct Run {
     bool placedBodySame = false;
     bool placedTintSame = false;
     bool placedMarkedWhileHidden = false;  // it carried NotReceiving at some client step in [125, 140)
+    std::uint64_t placedJumpsWhileHidden = 0;  // client steps in (120, 150) where its Body did not move by its Speed
 };
 
 enum class Shape { None, Seen, Blink };
@@ -427,6 +428,8 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
     std::map<std::uint64_t, std::uint64_t> serverDigests;
     std::set<K::EntityId> seen;
     std::optional<std::uint32_t> lastConfirmed;
+    std::optional<Body> lastPlacedBody;
+    std::optional<std::uint64_t> lastPlacedTick;
     const std::uint64_t quietFrom = static_cast<std::uint64_t>(frames) - 80;  // the last 80 client steps: default input
     for (int i = 0; i < frames; ++i) {
         const std::uint64_t target = sample.ClientTick() + 1;
@@ -450,6 +453,16 @@ Run RunSample(const N::MemoryLinkSettings& link, const std::int64_t serverStepsP
         if (Placing().on && sample.ClientTick() >= 125 && sample.ClientTick() < 140 &&
             sample.ClientWorld().Get<N::NotReceiving>(kPlacedCrate) != nullptr) {
             run.placedMarkedWhileHidden = true;
+        }
+        if (Placing().on && sample.ClientTick() > 120 && sample.ClientTick() < 150) {
+            // The crate's Body moves by its Speed every step (it bounces only at +-200): a step where it did not is a
+            // rollback that put an older value back.
+            const Body* now = sample.ClientWorld().Get<Body>(kPlacedCrate);
+            if (now != nullptr && lastPlacedBody && lastPlacedTick && sample.ClientTick() == *lastPlacedTick + 1 && now->x != lastPlacedBody->x + 1) {
+                ++run.placedJumpsWhileHidden;
+            }
+            lastPlacedBody = now != nullptr ? std::optional<Body>(*now) : std::nullopt;
+            lastPlacedTick = sample.ClientTick();
         }
         if (shape == Shape::Seen && sample.ClientTick() == 180 && Reshaped().tintAgain != 0) {
             run.tintOffWhileSeen = sample.ClientWorld().Alive(Reshaped().tintAgain) && sample.ClientWorld().Get<Tint>(Reshaped().tintAgain) == nullptr;
@@ -884,5 +897,9 @@ TEST_CASE("k3: a Placed entity is attached without an entry, hidden by its rule 
         CHECK_MESSAGE(run.placedReceiving, "[net-placed-k3] attached again, it receives");
         CHECK_MESSAGE(run.placedBodySame, "[net-placed-k3] its rolling-back Body is the server's");
         CHECK_MESSAGE(run.placedTintSame, "[net-placed-k3] its Tint (does not roll back) is there");
+        if (rule == N::HiddenRule::Retain) {
+            CHECK_MESSAGE(run.placedJumpsWhileHidden == 0,
+                          "[net-placed-k3-retain] hidden, no rollback puts its last received value back: " << run.placedJumpsWhileHidden);
+        }
     }
 }
