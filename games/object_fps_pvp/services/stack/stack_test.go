@@ -197,10 +197,10 @@ func TestTheNamesGoFromTheSignInToTheRoomAndTheMatch(t *testing.T) {
 	provider := newFakeProvider()
 	s := start(t, provider)
 	host := signInAs(t, s, map[string]string{"deviceId": "device-host", "name": "  Host\u202e  の\u200bMac "})
-	guest := signInAs(t, s, map[string]string{"deviceId": "device-guest"})
+	guest := signInAs(t, s, map[string]string{"deviceId": "device-guest", "name": "Guest"})
 	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "core_pvp", "map": "pvp_training_v1"})
 	guest.must(http.MethodPost, roomPath(room, "join"), "", nil)
-	want := map[uint64]string{host.user: "Host のMac", guest.user: ""}
+	want := map[uint64]string{host.user: "Host のMac", guest.user: "Guest"}
 	for _, p := range []*player{host, guest} {
 		members := p.must(http.MethodGet, roomPath(room, ""), "", nil)["members"].([]any)
 		if len(members) != 2 {

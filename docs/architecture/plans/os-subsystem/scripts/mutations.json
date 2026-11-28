@@ -2790,6 +2790,20 @@
         "os DI 11",
         "build-cleanup B1"
       ]
+    },
+    {
+      "id": "os-m1-host-name-cut",
+      "what": "The host name is cut to its first byte on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/core/os/src/sys/Machine.cpp",
+      "find": "std::string name(buffer.data(), ::strnlen(buffer.data(), buffer.size()));",
+      "replace": "std::string name(buffer.data(), 1);",
+      "target": "gyo_os_tests",
+      "cases": "Machine::HostName is the name the OS reports*",
+      "expect": "nodename"
     }
   ]
 }

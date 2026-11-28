@@ -40,7 +40,9 @@ Room RoomOf(const J::ObjectView& object) {
             const J::ObjectView entry = data::AsObject(member, "a member");
             const auto ready = data::Member(entry, "ready").AsBool();
             if (!ready) throw std::runtime_error("a member's ready is not true or false");
-            room.members.push_back(RoomMember{data::Unsigned(data::Member(entry, "userId"), "userId"), *ready});
+            RoomMember read{data::Unsigned(data::Member(entry, "userId"), "userId"), *ready, {}};
+            if (data::HasMember(entry, "name")) read.name = data::String(data::Member(entry, "name"), "a member's name");
+            room.members.push_back(std::move(read));
         }
     }
     if (data::HasMember(object, "connect")) {
@@ -66,12 +68,14 @@ std::optional<T> Parsed(const std::string& body, std::string& error, Read read) 
 
 } // namespace
 
-GatewayRequest SessionRequest(const std::string& deviceId) {
+GatewayRequest SessionRequest(const std::string& deviceId, const std::string& name) {
     std::string body;
     J::Writer writer(body);
     writer.BeginObject();
     writer.Key("deviceId");
     writer.String(deviceId);
+    writer.Key("name");
+    writer.String(name);
     writer.EndObject();
     (void)writer.Finish();
     return {"POST", "/v1/session", std::move(body), {}};
@@ -124,8 +128,10 @@ H::HttpRequest ToHttp(const GatewayRequest& request, const std::string& host, co
 
 std::optional<GatewaySession> ParseSession(const std::string& body, std::string& error) {
     return Parsed<GatewaySession>(body, error, [](const J::ObjectView& root) {
-        return GatewaySession{data::Unsigned(data::Member(root, "userId"), "userId"), data::String(data::Member(root, "sessionToken"), "sessionToken"),
-                              data::Integer(data::Member(root, "expiresAt"), "expiresAt")};
+        GatewaySession session{data::Unsigned(data::Member(root, "userId"), "userId"), data::String(data::Member(root, "sessionToken"), "sessionToken"),
+                               data::Integer(data::Member(root, "expiresAt"), "expiresAt"), {}};
+        if (data::HasMember(root, "name")) session.name = data::String(data::Member(root, "name"), "name");
+        return session;
     });
 }
 
@@ -194,14 +200,15 @@ std::string LoadDeviceId(const std::string& path, std::string& error) {
     return made;
 }
 
-GatewayClient::GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string unavailable,
-                             const std::int64_t timeout)
-    : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), unavailable_(std::move(unavailable)), timeout_(timeout) {}
+GatewayClient::GatewayClient(GYO::Engine::OS::SocketAddress gateway, std::string deviceId, std::string name,
+                             std::string unavailable, const std::int64_t timeout)
+    : gateway_(gateway), host_(gateway.ToString()), deviceId_(std::move(deviceId)), name_(std::move(name)),
+      unavailable_(std::move(unavailable)), timeout_(timeout) {}
 
 void GatewayClient::Ask(std::string tag, GatewayRequest request) { waiting_.push_back(Call{std::move(tag), std::move(request), false}); }
 
 void GatewayClient::Start(Call call, const bool session, const std::int64_t now) {
-    const GatewayRequest sent = session ? SessionRequest(deviceId_) : call.request;
+    const GatewayRequest sent = session ? SessionRequest(deviceId_, name_) : call.request;
     auto started = H::HttpCall::Start(gateway_, ToHttp(sent, host_, session ? std::nullopt : session_));
     current_ = Going{std::move(call), session, std::nullopt, now, {}, sent.method, sent.target};
     if (started) current_->http.emplace(std::move(started).value());

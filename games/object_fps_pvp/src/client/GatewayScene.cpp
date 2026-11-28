@@ -46,22 +46,26 @@ std::string ModeText(const std::vector<ModeChoice>& modes, const std::string_vie
     return std::string(mode);
 }
 
+std::string PlayerLabel(const std::uint64_t userId, const std::string_view name) {
+    return name.empty() ? "Player " + std::to_string(userId) : std::string(name);
+}
+
 std::string DeviceIdPath(const std::string& dataDirectory) {
     return dataDirectory.empty() ? std::string() : dataDirectory + "/device-id";
 }
 
 void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& gateway, const std::string& dataDirectory,
-                        const bool needed) {
+                        const std::string& name, const bool needed) {
     const GatewayClient* now = world.Resource<GatewayClient>();
     if (now != nullptr && (!now->Offline() || !needed)) return;
     if (!needed) {
         // A scene that does not call the Gateway: no device id is read or made for it.
-        world.SetResource(GatewayClient(gateway, std::string(), "the Gateway is not called in this scene"));
+        world.SetResource(GatewayClient(gateway, std::string(), std::string(), "the Gateway is not called in this scene"));
         return;
     }
     std::string error;
     std::string device = LoadDeviceId(DeviceIdPath(dataDirectory), error);
-    world.SetResource(GatewayClient(gateway, std::move(device), std::move(error)));
+    world.SetResource(GatewayClient(gateway, std::move(device), name, std::move(error)));
 }
 
 } // namespace object_fps_pvp::client

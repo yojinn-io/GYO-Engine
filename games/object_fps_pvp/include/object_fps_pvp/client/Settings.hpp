@@ -2,9 +2,11 @@
 
 // The player's settings (game-flow declaration 3.6): the window's size (one of four fixed sizes; the picture keeps its
 // shape inside it: the UI's fit, the cameras' own projection), how the window lies (a window, or borderless
-// fullscreen) and VSync. One file per machine in the user's data directory, read when the program starts:
+// fullscreen), VSync and, when the player wrote one, the name they sign in with (display-name declaration 4.1). One
+// file per machine in the user's data directory, read when the program starts:
 //
-//   {"version": 1, "resolution": [1920, 1080], "windowMode": "windowed" | "borderless", "vsync": true}
+//   {"version": 1, "resolution": [1920, 1080], "windowMode": "windowed" | "borderless", "vsync": true,
+//    "name": "..."}   (name: optional)
 
 #include "engine/base/Result.hpp"
 #include "engine/io/IOError.hpp"
@@ -12,6 +14,7 @@
 #include "engine/window/Window.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -32,6 +35,9 @@ struct ClientSettings final {
     GYO::Engine::Math::Vec2i resolution = kResolutions[0];
     GYO::Engine::Window::WindowMode window = GYO::Engine::Window::WindowMode::Windowed;
     bool vsync = true;
+    // The name the player chose; none: the machine's host name stands in (PlayerNameCandidate). An empty name is a
+    // choice too: no name, so a display shows its fallback.
+    std::optional<std::string> name;
     friend bool operator==(const ClientSettings&, const ClientSettings&) = default;
 };
 
@@ -49,6 +55,14 @@ struct LoadedSettings final {
 };
 [[nodiscard]] LoadedSettings LoadSettings(const std::string& path);
 [[nodiscard]] GYO::Engine::Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings);
+
+// The most bytes of the name a Client sends (the identity service keeps 32 code points of it: display-name
+// declaration 4.1); a longer one is cut at a UTF-8 boundary.
+inline constexpr std::size_t kNameCandidateBytes = 256;
+
+// The name this player signs in with (display-name declaration 4.1): the settings' name when there is one (empty
+// included: the player chose none), otherwise the machine's host name without a final ".local" (none known: empty).
+[[nodiscard]] std::string PlayerNameCandidate(const ClientSettings& settings, const std::optional<std::string>& hostName);
 
 // The window's size in logical pixels that shows physical pixels at a scale factor (window's WindowState::scaleFactor;
 // one that is not positive counts as 1).

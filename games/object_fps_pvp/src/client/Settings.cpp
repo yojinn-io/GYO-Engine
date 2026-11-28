@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <string_view>
 
 namespace object_fps_pvp::client {
 
@@ -31,6 +32,10 @@ std::string EncodeSettings(const ClientSettings& settings) {
     writer.String(settings.window == GYO::Engine::Window::WindowMode::BorderlessFullscreen ? "borderless" : "windowed");
     writer.Key("vsync");
     writer.Bool(settings.vsync);
+    if (settings.name) {
+        writer.Key("name");
+        writer.String(*settings.name);
+    }
     writer.EndObject();
     (void)writer.Finish();
     return out;
@@ -58,6 +63,7 @@ std::optional<ClientSettings> DecodeSettings(const std::string& text, std::strin
         const auto vsync = data::Member(root, "vsync").AsBool();
         if (!vsync) throw std::runtime_error("vsync is not true or false");
         settings.vsync = *vsync;
+        if (data::HasMember(root, "name")) settings.name = data::String(data::Member(root, "name"), "name");
         return settings;
     } catch (const std::runtime_error& failure) {
         error = failure.what();
@@ -85,6 +91,24 @@ LoadedSettings LoadSettings(const std::string& path) {
 
 Base::Result<void, GYO::Engine::IO::IOError> SaveSettings(const std::string& path, const ClientSettings& settings) {
     return WriteLocalText(path, EncodeSettings(settings));
+}
+
+std::string PlayerNameCandidate(const ClientSettings& settings, const std::optional<std::string>& hostName) {
+    std::string name;
+    if (settings.name) {
+        name = *settings.name;
+    } else if (hostName) {
+        constexpr std::string_view kBonjour = ".local";
+        name = *hostName;
+        if (name.size() > kBonjour.size() && name.ends_with(kBonjour)) name.resize(name.size() - kBonjour.size());
+    }
+    if (name.size() > kNameCandidateBytes) {
+        std::size_t end = kNameCandidateBytes;
+        // Back to the first byte of a UTF-8 sequence (a continuation byte is 10xxxxxx).
+        while (end > 0 && (static_cast<unsigned char>(name[end]) & 0xC0U) == 0x80U) --end;
+        name.resize(end);
+    }
+    return name;
 }
 
 Math::Vec2i WindowSizeFor(const Math::Vec2i physical, const float scale) {

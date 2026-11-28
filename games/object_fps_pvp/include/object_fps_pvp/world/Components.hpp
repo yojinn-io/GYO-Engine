@@ -100,6 +100,14 @@ struct Owner final {
     friend bool operator==(const Owner&, const Owner&) = default;
 };
 
+// The name a player signed in with (display-name declaration 5.1; empty: none, a display shows PlayerLabel's
+// fallback). The Match gives it (NamePlayers) and every Client receives it; no rule reads it, so it is not decision
+// data. At most match::kMaxPlayerNameBytes bytes.
+struct PlayerName final {
+    std::string text;
+    friend bool operator==(const PlayerName&, const PlayerName&) = default;
+};
+
 // One step of a player's input. present 0: no input this step (a player the Client does not control, or before
 // the first input reached the Match): the player neither moves nor turns. jump, fire and reload are presses (one
 // step each; the net Module clears them when it holds the last input); crouch is held.
@@ -124,6 +132,7 @@ void HashValue(K::Hasher& h, const PlayerCombat& v);
 void HashValue(K::Hasher& h, const ShotRecord& v);
 void HashValue(K::Hasher& h, const HitRecord& v);
 void HashValue(K::Hasher& h, const Owner& v);
+void HashValue(K::Hasher& h, const PlayerName& v);
 void HashValue(K::Hasher& h, const PlayerMotion& v);
 void HashValue(K::Hasher& h, const PlayerInput& v);
 

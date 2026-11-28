@@ -1,6 +1,7 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
 
 #include "object_fps_pvp/match/AdmissionToken.hpp"
+#include "object_fps_pvp/match/PlayerRoster.hpp"
 #include "object_fps_pvp/sim/PlanarMovement.hpp"
 #include "object_fps_pvp/sim/ViewLimits.hpp"
 
@@ -90,6 +91,13 @@ void HashValue(K::Hasher& h, const HitRecord& v) {
     HashValue(h, static_cast<std::uint8_t>(v.part));
 }
 void HashValue(K::Hasher& h, const Owner& v) { HashValue(h, v.userId); }
+void HashValue(K::Hasher& h, const PlayerName& v) { HashValue(h, v.text); }
+void HashValue(K::Hasher& h, const PlayerNames& v) {
+    for (const auto& [user, name] : v.byUser) {
+        HashValue(h, user);
+        HashValue(h, name);
+    }
+}
 void HashValue(K::Hasher&, const PlayerMotion&) {}
 void HashValue(K::Hasher& h, const PlayerInput& v) {
     HashValue(h, v.forward);
@@ -194,6 +202,25 @@ N::Codec<HitRecord> HitCodec() {
 }
 N::Codec<Owner> OwnerCodec() {
     return {[](N::NetWriter& w, const Owner& v) { w.Value(v.userId); }, [](N::NetReader& r, Owner& v) { return r.Value(v.userId); }, 1};
+}
+// A name: its length (one byte), then its bytes; longer than match::kMaxPlayerNameBytes is refused.
+N::Codec<PlayerName> PlayerNameCodec() {
+    return {[](N::NetWriter& w, const PlayerName& v) {
+                w.Value(static_cast<std::uint8_t>(v.text.size()));
+                for (const char c : v.text) w.Value(static_cast<std::uint8_t>(c));
+            },
+            [](N::NetReader& r, PlayerName& v) {
+                std::uint8_t size = 0;
+                if (!r.Value(size) || size > match::kMaxPlayerNameBytes) return false;
+                v.text.clear();
+                for (std::uint8_t i = 0; i < size; ++i) {
+                    std::uint8_t c = 0;
+                    if (!r.Value(c)) return false;
+                    v.text.push_back(static_cast<char>(c));
+                }
+                return true;
+            },
+            1};
 }
 N::InputOptions<PlayerInput> InputOptions() {
     N::InputOptions<PlayerInput> options;
@@ -728,6 +755,19 @@ K::SystemResult SeatPlayers(K::MessageReader<N::PeerConnected> connected, K::Mes
     return {};
 }
 
+// The Match: each player its name (display-name declaration 5.1), the one the room's roster gives its user (none:
+// empty), once: a player SeatPlayers made that has no PlayerName yet. Its own System, apart from SeatPlayers, which
+// writes decision data: the names stay out of what both ends compare (the consistency fingerprint). Main/Update,
+// after SeatPlayers.
+K::SystemResult NamePlayers(K::Query<K::Read<Owner>, K::Without<PlayerName>> players, K::Res<PlayerNames> names,
+                            K::CommandsFor<K::Inserts<PlayerName>, K::Removes<>> commands) {
+    players.ForEach([&](const K::EntityId id, const Owner& owner) {
+        const auto found = names->byUser.find(owner.userId);
+        commands.Insert(id, PlayerName{found != names->byUser.end() ? found->second : std::string()});
+    });
+    return {};
+}
+
 // The authority (the Match, a Local World): the match starts when every expected user's player says it is ready
 // (PlayerInput::ready: the Client has loaded and drawn the game), or once the deadline after the first player came has
 // passed (one who does not come does not hold the others). FixedUpdate/Update, before MovePlayers.
@@ -1253,6 +1293,16 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         set.build(setup);
     }
 
+    // The players' names, after the gameplay sets too: every wire id before them stays (display-name declaration 5.2).
+    if (networked) {
+        r.Component<PlayerName>({.name = "PlayerName"});
+        r.Resource<PlayerNames>({.name = "PlayerNames"});
+        N::NetEntry(setup).Replicate<PlayerName>("PlayerName", PlayerNameCodec());
+        K::SystemOptions name = Frame("NamePlayers", update, N::OnServer());
+        name.mounts.front().after = {"SeatPlayers"};
+        r.AddSystem<&NamePlayers>(std::move(name));
+    }
+
     setup.Prepare([options, end](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         const sim::ArenaContent& arena = options.content->arenas[options.arena];
         const ModeContent& mode = options.content->modes[options.mode];
@@ -1267,6 +1317,7 @@ void BuildWorld(O::WorldSetup& setup, const WorldOptions& options, const WorldEn
         world.SetResource(ContentMismatch{});
         world.SetResource(LocalSpawn{options.spawn});
         world.SetResource(LocalDeaths{});
+        if (end != WorldEnd::Local) world.SetResource(PlayerNames{end == WorldEnd::Match ? options.playerNames : std::map<std::uint64_t, std::string>{}});
         world.SetResource(ActiveMode{mode.id, mode.rulesDigest, mode.on});
         // What the sets the mode turns on read, at every end (the rules digest says both ends read the same): the
         // mode's settings, then the arena's blocks.

@@ -632,8 +632,8 @@
     "gateway-declaration 5"
    ],
    "file": "games/object_fps_pvp/services/gateway/gateway.go",
-   "find": "user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil {",
-   "replace": "user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil && user != 0 {",
+   "find": "verified, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil {",
+   "replace": "verified, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())\n\t\tif err != nil && verified.UserID != 0 {",
    "command": [
     "go",
     "-C",
@@ -3539,6 +3539,524 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: the character digest follows*",
    "expect": "characterDigest: the animation rules"
+  },
+  {
+   "id": "pvp-name-format-kept",
+   "what": "the name rule keeps format characters and separators",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/name.go",
+   "find": "if unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) {",
+   "replace": "if unicode.In(r, unicode.Cc) {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "right-to-left override"
+  },
+  {
+   "id": "pvp-name-spaces-kept",
+   "what": "the name rule keeps runs of spaces",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/name.go",
+   "find": "\t\tif unicode.IsSpace(r) {\n",
+   "replace": "\t\tif false {\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "runs of spaces"
+  },
+  {
+   "id": "pvp-name-leading-space",
+   "what": "the name rule keeps a leading space",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/name.go",
+   "find": "if space && name.Len() > 0 {",
+   "replace": "if space {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "ends"
+  },
+  {
+   "id": "pvp-name-cut-by-bytes",
+   "what": "the name rule cuts by bytes, not code points",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/name.go",
+   "find": "\t\tif runes == MaxNameRunes {\n",
+   "replace": "\t\tif name.Len() >= MaxNameRunes {\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "long CJK"
+  },
+  {
+   "id": "pvp-name-space-at-limit",
+   "what": "the name rule ends a cut name with a space",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/name.go",
+   "find": "if runes+1 >= MaxNameRunes {",
+   "replace": "if runes+1 > MaxNameRunes {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "a space at the limit"
+  },
+  {
+   "id": "pvp-session-version-kept",
+   "what": "the session token with a name keeps version 1",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "\tSessionVersion = 2\n",
+   "replace": "\tSessionVersion = 1\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "version 1 \\(no name\\)"
+  },
+  {
+   "id": "pvp-session-name-length-unchecked",
+   "what": "the session token's name length is not checked",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/token/token.go",
+   "find": "if len(payload) < sessionFixed || int(payload[17]) != len(payload)-sessionFixed {",
+   "replace": "if len(payload) < sessionFixed {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/token/"
+   ],
+   "expect": "length past the end|length short of the end"
+  },
+  {
+   "id": "pvp-identity-name-not-normalized",
+   "what": "the identity service signs the name as sent",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/identity/identity.go",
+   "find": "name := NormalizeName(request.Name)",
+   "replace": "name := request.Name",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/identity/"
+   ],
+   "expect": "want the name"
+  },
+  {
+   "id": "pvp-gw-name-header-not-sent",
+   "what": "an internal request does not carry the user's name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/internal/api/client.go",
+   "find": "\t\tif caller.Name != \"\" {\n",
+   "replace": "\t\tif false {\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/gateway/"
+   ],
+   "expect": "carried name"
+  },
+  {
+   "id": "pvp-gw-name-not-from-token",
+   "what": "the gateway does not hand on the name the token holds",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/gateway/gateway.go",
+   "find": "route(w, r, api.Caller{User: verified.UserID, Name: verified.Name})",
+   "replace": "route(w, r, api.Caller{User: verified.UserID})",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/gateway/"
+   ],
+   "expect": "carried name"
+  },
+  {
+   "id": "pvp-rooms-owner-name-not-kept",
+   "what": "a created room does not keep its owner's name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "members: []*member{{user: caller, name: callerName}}",
+   "replace": "members: []*member{{user: caller, name: callerName[:0]}}",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "named"
+  },
+  {
+   "id": "pvp-rooms-joiner-name-not-kept",
+   "what": "a joined room does not keep the joiner's name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "&member{user: caller, name: callerName}",
+   "replace": "&member{user: caller, name: callerName[:0]}",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "named"
+  },
+  {
+   "id": "pvp-rooms-start-name-dropped",
+   "what": "the start does not tell the Match the names",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "matches.Player{UserID: m.user, Name: m.name}",
+   "replace": "matches.Player{UserID: m.user}",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/stack/"
+   ],
+   "expect": "the Match is told"
+  },
+  {
+   "id": "pvp-rooms-bad-name-header-taken",
+   "what": "a name header that is not base64url is taken as no name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/rooms/rooms.go",
+   "find": "\tcaller, ok := api.NameOf(r)\n\tif !ok {",
+   "replace": "\tcaller, ok := api.NameOf(r)\n\tif !ok && false {",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/rooms/"
+   ],
+   "expect": "bad name header"
+  },
+  {
+   "id": "pvp-local-names-not-written",
+   "what": "the Match is not given the names on its standard input",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/matches/local.go",
+   "find": "\t\tinput += roster + \"\\n\"\n",
+   "replace": "\t\t_ = roster\n",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/matches/"
+   ],
+   "expect": "after the key"
+  },
+  {
+   "id": "pvp-local-names-on-command-line",
+   "what": "the names go on the Match's command line",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/matches/local.go",
+   "find": "arguments = append(arguments, \"--player-names-stdin\")",
+   "replace": "arguments = append(arguments, \"--player-names-stdin\", roster)",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/matches/"
+   ],
+   "expect": "a name on the command line"
+  },
+  {
+   "id": "pvp-local-names-flag-always",
+   "what": "the names flag is given when nobody has a name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/services/matches/local.go",
+   "find": "named = named || player.Name != \"\"",
+   "replace": "named = named || player.Name == player.Name",
+   "command": [
+    "go",
+    "-C",
+    "games/object_fps_pvp",
+    "test",
+    "-count=1",
+    "./services/matches/"
+   ],
+   "expect": "player-names-stdin in"
+  },
+  {
+   "id": "pvp-name-roster-ignored",
+   "what": "the Match gives every player an empty name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "found != names->byUser.end() ? found->second : std::string()",
+   "replace": "std::string()",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: names:*",
+   "expect": "pvp-name-match"
+  },
+  {
+   "id": "pvp-name-never-given",
+   "what": "the Match gives no player a name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "        commands.Insert(id, PlayerName{",
+   "replace": "        if (false) commands.Insert(id, PlayerName{",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: names:*",
+   "expect": "pvp-name-"
+  },
+  {
+   "id": "pvp-name-codec-unbounded",
+   "what": "the name's codec takes any length",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "if (!r.Value(size) || size > match::kMaxPlayerNameBytes) return false;",
+   "replace": "if (!r.Value(size)) return false;",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: names:*",
+   "expect": "pvp-name-codec-limit"
+  },
+  {
+   "id": "pvp-roster-long-name-taken",
+   "what": "the roster takes a name longer than the wire carries",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/match/PlayerRoster.cpp",
+   "find": "if (name.size() > kMaxPlayerNameBytes) throw std::runtime_error(\"a name is longer than 128 bytes\");",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "roster:*",
+   "expect": "saying what was wrong"
+  },
+  {
+   "id": "pvp-roster-twice-taken",
+   "what": "the roster takes a user twice",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/match/PlayerRoster.cpp",
+   "find": "if (!names.emplace(user, std::move(name)).second) throw std::runtime_error(\"a userId comes twice\");",
+   "replace": "(void)names.emplace(user, std::move(name));",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "roster:*",
+   "expect": "saying what was wrong"
+  },
+  {
+   "id": "pvp-roster-user-zero-taken",
+   "what": "the roster takes user 0",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/match/PlayerRoster.cpp",
+   "find": "if (user == 0) throw std::runtime_error(\"a userId is 0\");",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "roster:*",
+   "expect": "saying what was wrong"
+  },
+  {
+   "id": "pvp-name-empty-choice-ignored",
+   "what": "an empty name in the settings falls back to the host name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "    if (settings.name) {\n        name = *settings.name;",
+   "replace": "    if (settings.name && !settings.name->empty()) {\n        name = *settings.name;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-name-empty-chosen"
+  },
+  {
+   "id": "pvp-name-local-kept",
+   "what": "the host name keeps its .local",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "        if (name.size() > kBonjour.size() && name.ends_with(kBonjour)) name.resize(name.size() - kBonjour.size());\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-name-local"
+  },
+  {
+   "id": "pvp-name-cut-mid-character",
+   "what": "the name sent is cut inside a UTF-8 character",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "        while (end > 0 && (static_cast<unsigned char>(name[end]) & 0xC0U) == 0x80U) --end;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-name-cut"
+  },
+  {
+   "id": "pvp-settings-name-not-written",
+   "what": "the settings file loses the name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "    if (settings.name) {\n        writer.Key(\"name\");",
+   "replace": "    if (false) {\n        writer.Key(\"name\");",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-settings-name"
+  },
+  {
+   "id": "pvp-settings-name-not-read",
+   "what": "the settings' name is not read",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Settings.cpp",
+   "find": "if (data::HasMember(root, \"name\")) settings.name =",
+   "replace": "if (false) settings.name =",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-settings-name"
+  },
+  {
+   "id": "pvp-label-no-fallback",
+   "what": "a player without a name shows nothing",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/GatewayScene.cpp",
+   "find": "return name.empty() ? \"Player \" + std::to_string(userId) : std::string(name);",
+   "replace": "return std::string(name);",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-label-fallback"
+  },
+  {
+   "id": "pvp-room-label-not-used",
+   "what": "the room shows Player N for a named member",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/RoomScene.cpp",
+   "find": "PlayerLabel(member.userId, member.name)",
+   "replace": "\"Player \" + std::to_string(member.userId)",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-room-member-name"
+  },
+  {
+   "id": "pvp-gw-session-no-name",
+   "what": "the session is opened without the name",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "    writer.Key(\"name\");\n    writer.String(name);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-gw-session-name"
+  },
+  {
+   "id": "pvp-gw-member-name-not-read",
+   "what": "a room member's name is not read",
+   "guards": [
+    "display-name-declaration 9"
+   ],
+   "file": "games/object_fps_pvp/src/client/Gateway.cpp",
+   "find": "if (data::HasMember(entry, \"name\")) read.name =",
+   "replace": "if (false) read.name =",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: name:*",
+   "expect": "pvp-gw-member-name|pvp-room-member-name"
   }
  ]
 }
