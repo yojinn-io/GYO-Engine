@@ -772,12 +772,12 @@ TEST_CASE("SolveTwoBoneIK folds the chain toward a target inside the body nearer
     CHECK(Near(atBack[2], {0.5F, 0, 0}, kPositionTolerance));
     // Equal bones reach a target close to the root.
     const auto equal = Arm();
-    auto near = RestOf(equal);
-    Model::SolveTwoBoneIK(equal, kArm, {0.05F, 0.05F, 0}, {0, 0, 1}, 1.0F, near);
-    const auto atNear = Positions(equal, near);
-    INFO("near tip " << Show(atNear[2]));
-    CHECK(Near(atNear[2], {0.05F, 0.05F, 0}, kPositionTolerance));
-    CHECK(Near(Math::Distance(atNear[0], atNear[1]), 1.0F, kPositionTolerance));
+    auto tight = RestOf(equal);
+    Model::SolveTwoBoneIK(equal, kArm, {0.05F, 0.05F, 0}, {0, 0, 1}, 1.0F, tight);
+    const auto atTight = Positions(equal, tight);
+    INFO("near tip " << Show(atTight[2]));
+    CHECK(Near(atTight[2], {0.05F, 0.05F, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(atTight[0], atTight[1]), 1.0F, kPositionTolerance));
 }
 
 TEST_CASE("SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0") {
