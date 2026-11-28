@@ -10,6 +10,8 @@ Owner：渲染管線線的卡片。分支 `claude/gyo2-render-a4`（從 `claude/
 
 ## 做了什麼
 
+（這一節是第一個 commit `e9a19889` 的內容。審查之後改了的地方在「設計審查與修正」：每台 Hdr 相機一張中間圖、共用深度、tonemapping 的混合、`ColourSpace`、`Exposure` 移到 B4、`Tonemapping.hpp` 拆掉。）
+
 1. **元件與曲線**（新 `render/Tonemapping.hpp`、`Tonemapping.cpp`）：`Hdr`、`Tonemapping{method}`、`Exposure{ev100}`（`world_render` 登記）；Bevy 不需要 LUT 的曲線六條（`None`、`Reinhard`、`ReinhardLuminance`、`AcesFitted`、`SomewhatBoringDisplayTransform`、`KhronosPbrNeutral`），**預設 `ReinhardLuminance`**；精確的 sRGB 轉換；`TonemapToBytes`（CPU 參考值）；`TonemappingPass`；`HdrTargets`／`SyncHdrTargets`。
 2. **格式**：`RenderTargetFormat::Rgba16Float`（線性的光）。`TextureFormat`（CPU 像素）不加；不做 sRGB 的 target（A1 留下的題：編碼在 tonemapping 的 shader 裡）。
 3. **抽出**（`camera_render`）：新 System `ExtractHdr`（`ExtractCameras` 之後）：每台相機的曲線與 `Exposure::Scale()`；這一幀要畫的 Hdr 3D 相機依目標共用一張中間圖（`Rgba16Float`、`Nearest`、跟著目標的大小），沒有就放掉。`ExtractedCamera::hdr`、`SceneTarget()`；`Queue3d` 畫在 `SceneTarget()`。
@@ -60,3 +62,43 @@ Owner：渲染管線線的卡片。分支 `claude/gyo2-render-a4`（從 `claude/
 - RADV 與會開視窗的案（`GPUSubmit`、`sdl_gpu.frames`）沒跑。
 - 本機 `ctest -L 'cpu|shader'` 的 `gyo_os_tests`、`os.wake_fallback` 逾時：同一台機器上 A2 工作樹以基底程式建的同一個執行檔也一樣卡住，機器的 load 約 165（別的會話同時在跑突變）；判為環境，不是本批的程式（〔未確認〕確切原因）。Linux 主機上全過。
 - `tests/common/ci/r0b3_mutations.json` 的 `ci-plan-no-notice` 的 find 在基底就找不到（不是本批改的），沒動。
+
+## 設計審查與修正（修訂 1，宣告第 16.8 節）
+
+審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a4/`，不在 git）：設計審查（Opus／high：Blocker 0、Should 6、Nit 6、Note 8）、純淨 Code Review（Fable／high：高 2、中 7、低 7）。主會話的指示：S1／U1、U2 等使用者，其餘照下表。修正是 `90a774cf`（另一個 commit，不 amend）。
+
+| 項 | 處理 | 理由與做法 |
+|---|---|---|
+| 設計 S1／U1（`TONEMAP_IN_SHADER` 涵不涵蓋 unlit） | 等使用者 | 主會話交 (a)／(b)／(c)；綁在一起的 unlit 不 tonemap 照第 16.3 節不動 |
+| 設計 U2（預設曲線） | 等使用者 | 同上；`ReinhardLuminance` 不動 |
+| 純淨 高-1＋設計 S3／U5（Hdr 的合成語意） | 採用 | 每台 Hdr 相機一張中間圖、每幀清整張；tonemapping 對目標上第一個相機取代、之後的 alpha 混合（`PassFullscreen::blend`，照 Bevy upscaling）；目標的清除照不帶 Hdr 的規則；深度每個目標一張、所有 3D 相機共用（照 Bevy 的 `ViewDepthTexture` 鍵）。中間圖不依目標共用是偏離 Bevy：共用時後面相機的 tonemapping 會把前面相機畫在目標上的 UI 蓋掉（GYO 的 UI 照 bytes 在目標上，RP-4）。測試：`[cp-hdr-later-*]`、`[cp-hdr-none-transparent]`、GPU 的 `[gh-ui-kept]`（Hdr 世界相機後接非 Hdr 的 UI 相機）、`[gh-split-kept]`（兩台 Hdr 相機分 viewport）、`[gh-blend-over]`（背景＋`None` 的 Hdr 相機） |
+| 純淨 高-2＋中-7＋設計 N4（線性 target 上的顏色） | 採用 | `ColourSpace`／`ColourSpaceOf`／`SampledAsLinear` 在 render 一處；清除色、2D、3D 一致（`Color8` 與 bytes 取樣的 texel 解碼、線性取樣的 texel 照原值）；後端照它選 `*_linear.frag`、pipeline 的鍵明寫顏色空間、每個 draw 推 `LinearColourUniform`。2D 在線性 target 的語意照 Bevy／Godot（線性空間混合）。`[gh-2d-linear]`、`[gh-srgb-texture-once]`、`[gh-bytes-texture-decoded]` |
+| 設計 S2＋純淨 中-6（`Exposure`） | 採用 | 移到 B4；第 5 節的批次樹與 B4 列照實改；使用者的「空殼刪掉」（HANDOFF `v8-arch-gyo2-mode-config-m1`） |
+| 設計 S4（Hdr 的 `PostProcess`） | 採用（寫明） | RD-14 與 `CameraPhase::PostProcess` 的意思寫明；RC-A4-2 改成 D1 的前置。「tonemapping 讀 PostProcess 的輸出」就是互換本身（要第二張圖與寫哪裡的約定），屬 D1 |
+| 設計 S5（TargetUpdate＋Hdr） | 採用 | 新的 `render.extract` 一案 `[re-hdr-update-*]`；突變 `tm-sync-picture-never-let-go` 合到它 |
+| 設計 S6（RD-13 拆條、突變數） | 採用 | RD-13（target）、RD-14（合成與 tonemapping）、RD-15（顏色空間）；`guards` 照新條文；數量見「突變」 |
+| 純淨 中-1＋設計 N3（索引還原 phase） | 採用 | `CameraPhases::Through`／`After(PostProcess)` |
+| 純淨 中-2（phase 的 target 是約定） | 採用 | `PhaseTarget(camera, phase)`，`Queue2d`、`Queue3d`、`ui_render` 都取它 |
+| 純淨 中-3（`Tonemapping.hpp` 四種責任） | 採用 | 元件到 `Drawables.hpp`、`HdrTargets` 到 `RenderTargets.hpp`、`TonemappingPass` 到 `Compose.hpp`、曲線的 CPU 實作到測試的 `TonemappingReference.hpp`；`Tonemapping.hpp`／`.cpp` 拿掉 |
+| 純淨 中-4（sRGB 重複） | 採用 | Math 的 `DecodeSrgb`／`EncodeSrgb`；HLSL 的解碼也先 clamp |
+| 純淨 中-5（方法的值三處） | 採用 | `TonemappingMethods.h` 一份 `#define`，C++ 與 HLSL 都 include（shader 工具的 include 目錄是 `shaders/`，以 `../include/...` 取；CMake 的 DEPENDS 加上它）；`static_assert` 拿掉 |
+| 純淨 低-1（`ExtractHdr`） | 採用 | 只抽 `Tonemapping` 與 target；`kExtractHdr` 常數；`std::optional` |
+| 純淨 低-2（Compose 的重複） | 部分 | 只清除的 `Pass2D` 抽成 `ClearOnly`；`PixelsOf` 在 Pipeline2d／3d 的另兩處不動（不屬這批的改動） |
+| 純淨 低-3（tonemapping shader 不在內建表） | 拒絕 | 嵌入的 shader 由同一次工具呼叫編成同樣的格式；釋放的三種寫法是 A3 也碰的地方 |
+| 純淨 低-4（`Load` 代替 `Sample`） | 拒絕 | 全畫面 pass 的 ABI 是貼圖＋sampler 一對（A2），`Load` 會讓 sampler 被拿掉、資源數不合 |
+| 純淨 低-5（零碎） | 部分 | `kTransparentBlack`、HLSL 的 `GYO_TONEMAP_NONE` case；`/1.2` 隨 `Exposure` 拿掉；亮度係數兩處、`Mix` 隨曲線移到測試；中間圖格式固定（Hdr 的定義） |
+| 純淨 低-6（測試空白） | 採用 | 2D 在中間圖的中間值、非 Hdr 在前 Hdr 在後的順序都加了（見上） |
+| 純淨 低-7（元件不進雜湊） | 拒絕 | 同既有的相機元件，作者的設定、不是被判定的狀態 |
+| 設計 N1（照比例取樣） | 採用 | 改成 1:1、超出的取邊緣 |
+| 設計 N2（`guards` 的文件名） | 採用 | `render-pipeline-declaration RP-3`／`RP-4` |
+| 設計 N5（`tonemaps_in_shader`） | 採用 | 第 16.1 節補上完整條件 |
+| 設計 N6（pass3d「原樣」） | 採用 | 照實寫成 Linux 上 11/12（`GPUSubmit` 要視窗） |
+| 設計 Note 1～8 | 知悉 | Note 3（記憶體）寫進 RC-A4-6；Note 7（sRGB 貼圖）隨高-2 解了；其餘不改 |
+
+### 修訂 1 的驗證與突變
+
+- **本機**（macOS、只跑 cpu；`90a774cf` 的程式）：全量建置成功（新的 `pass2d_linear.frag`、`LinearColour.hlsli`、`TonemappingMethods.h` 的 include 編成 metallib）；`ctest -L 'cpu|shader'` 257/258（`cmake.PluginSelection` 同前）。`569448b7` 只改了一個測試的訊息與突變目錄：重建後 `gyo_render_tests` 93 案 696 個判斷全過、`sdl_gpu shaders:` 全過。沒有跑 GPU、沒有開視窗。
+- **Linux 主機**（Lavapipe `llvmpipe (LLVM 20.1.2, 256 bits)`、xvfb、Release 建置，同前）：`90a774cf` 與 `569448b7` 都是 `ctest -L 'cpu|shader'` 258/258；`sdl_gpu.hdr`、`phases`、`unwritten`、`contracts`、`framedraws`、`targets`、`pass2d` 7/7；`sdl_gpu.pass3d`（去掉要視窗的 `GPUSubmit` 一案）11/12 中的 11 案全過——不帶 Hdr 的 3D 像素不變；`sdl_gpu hdr:` 5/5（新加的顏色空間一案、合成三種情形一案）。第一次建好就全過。
+- **突變**：`hdr_mutations.json` 改成 51 個（退役與理由在檔案的 `description`：CPU 曲線的 7 個——曲線的 CPU 實作現在是測試自己的參考——、sRGB 函式的 4 個、`Exposure` 的 4 個、`tm-bytes-alpha`、`gh-method-values`（值只剩一份，兩邊一起錯就等於沒錯）、依目標共用的 `tm-sync-per-camera`；新增顏色空間、混合、共用深度、`PhaseTarget`、render target 上的 Hdr 相機等）。D184 重跑 find 落在改過的行附近的既有突變 24 個（`cp-*` 7、`gd-*` 4、`gt-*` 2、`rt-sync-gone-kept`、`gp-*` 5、`p2-viewport-whole`、`g3-*` 3、`ui-pass-viewport-top`）；`gp-clear-ignored`、`cp-later-clears-target`、`gt-target-not-mapped`、`gt-target-drawn-on-main`、`cp-clear-after` 的 find 改到新的行（守同一個性質）。
+  - 結果（Linux）：`90a774cf` 75 個裡 73 killed；`cp-hdr-tonemapping-after-overlay` wrong_failure（先停在沒有標籤的 `REQUIRE`）、`cp-clear-after` survived（第一台相機的清除改成 `ClearOnly` 那一行，舊的 find 只落在之後相機的 viewport 清除上）；`569448b7` 修好這兩個後 2/2 killed。合計 **75/75 killed**（新 51、既有 24）。
+  - 數量（README 基準 8）：改的條文是 RD-4、RD-11、RD-13、RD-14、RD-15，共 5 條，門檻 25；51 個超過的理由：RD-14 的曲線在 HLSL 各一個（6）與合成的獨立決定（清除兩種、混合兩向、位置、曲線、viewport）、RD-15 在 render（規則 2）與後端（片段 shader 兩種、uniform、清除色）與 shader（兩個分支、解碼）各自可錯、RD-13 的 target 生命週期（每台一張、每個目標一張深度、跟著大小、格式、過濾、留著、換目標、放掉兩種）。每一個都寫出別的突變抓不到的錯（`what`）。拆條與去掉 `Exposure` 少了 16 個重複或沒有讀者的。合併前的核准由主會話交使用者。
