@@ -257,6 +257,11 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 | 純淨 L4 單一寫入者、同一幀被拒後 `Applied` 還在 | 記下 | 資料側拿收據的大小和自己決定的比，不相等就再要求，結果對；兩個後端寫同一張收據沒有實際的觸發者 |
 | 純淨 L5 測試的重複與共用狀態 | 採用一部分 | `Record`／替身／`FailFrames` 分開；`TextureId{99}` 換成具名常數並寫理由；收據的兩件事拆成兩個 TEST_CASE；`AllDone` 改名 `AllDoneReceipt`。`Picture`／`TargetCase`／`PhaseCase` 的重複不搬（同上一輪 L6 的理由） |
 
+### 第 14.14 節的驗證
+
+- 本機（macOS Intel，只跑 cpu；`4c659703` 的內容）：全量建置成功；`ctest -L 'cpu|shader'` 257/258（`cmake.PluginSelection` 是借用依賴的環境問題，同前；新的 `sdl_gpu.framedraws` 通過）；cpu 突變 102/102 killed（上一節的 93 個與這一節新的 cpu 突變 9 個：`rd-size-applied-kept`、`rd-target-not-asked-again-whole`、`re-retained-by-picture`、`rd-retained-by-picture`、`rd-drawn-not-recorded`、`rw-receipt-applied-after-clear`、`gd-receipt-drawn-not-given`（改到 cpu 案）、`gd-draws-begin-ignores-frame`、`gd-draws-not-forgotten`）；runner 前確認每個突變的 find 原文都在、恰好一處。
+- Linux 主機（`4c659703`，重開機之後；bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 258/258（這一次腳本留下了摘要行）；`sdl_gpu.phases`、`unwritten`、`contracts`、`framedraws`、`targets`、`pass2d` 6/6；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 64/64 killed（上一節的 61 個，加 `gd-target-made-again-replaced`、`gd-unconfirmed-sampled`、`gd-drawn-this-frame-not-sampled`）。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
