@@ -72,13 +72,18 @@ void ApplyAdditive(std::span<const LocalTransform> base, std::span<const LocalTr
 // indices to out in the order they are crossed and returns how many.
 //
 // Forward (from < to) crosses [from, to); backward (to < from) crosses
-// (to, from]: consecutive intervals cross each instant once. Wrap::Clamp
-// holds the time within [0, duration], and the interval that reaches the end
-// (or, backward, the start) also crosses an instant there. Wrap::Loop crosses
-// the end into the start (or back); an interval of a whole duration or more
-// crosses each instant once, from where it starts. from == to, or a clip of
-// duration 0, crosses nothing. out must hold times.size() indices.
-std::size_t CrossedEvents(std::span<const float> times, float from, float to, float duration, Wrap wrap,
+// (to, from]: consecutive intervals in one direction cross each instant once.
+// Wrap::Clamp holds the time within [0, duration], and the interval that
+// reaches the end (or, backward, the start) also crosses an instant there;
+// turning back at that end crosses it again, as turning back anywhere leaves
+// the instant the time stands on. Wrap::Loop crosses the end into the start
+// (or back): the interval that reaches the end crosses the end's instants and
+// the one leaving the start those on 0 (backward, the one that reaches the
+// start those on 0 and the one leaving it the end's); an interval of a whole
+// duration or more crosses each instant once, from where it starts. from ==
+// to, or a clip of duration 0, crosses nothing. out must hold times.size()
+// indices.
+[[nodiscard]] std::size_t CrossedEvents(std::span<const float> times, float from, float to, float duration, Wrap wrap,
                           std::span<std::uint32_t> out);
 
 // Three nodes of one chain for SolveTwoBoneIK: mid below root and tip below
@@ -101,7 +106,8 @@ struct TwoBoneChain final {
 // body) is moved out to that distance, the chain folded. A pole on the line
 // from root to target bends the chain to the side the mid is on; a straight
 // chain then bends to a fixed side. A target on the root, or a bone of length
-// 0, leaves pose as it is.
+// 0, leaves pose as it is. "On the line" is within what float tells apart
+// at the sizes of the points.
 //
 // weight 0 leaves pose as it is; 1 is the solved pose; between them each of
 // the two rotations by slerp from its value in pose. weight is not clamped.

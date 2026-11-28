@@ -48,12 +48,18 @@ LocalTransform Mix(const LocalTransform from, const LocalTransform to, const flo
                           Math::Lerp(from.scale, to.scale, weight)};
 }
 
-// Squared lengths at or under this are treated as 0 (a length of 1e-6).
-constexpr float kDegenerate = 1.0e-12F;
+// A length at or under this fraction of the lengths it comes from is
+// rounding, not a direction (float's epsilon is about 1.2e-7).
+constexpr float kRelativeZero = 1.0e-6F;
+// The same for a squared length in model units: a length of 1e-6.
+constexpr float kZeroLengthSquared = kRelativeZero * kRelativeZero;
+// The axis v is crossed with in AnyPerpendicular: X unless v is nearly along X.
+constexpr float kNearlyAlongX = 0.9F;
 
 // A unit vector at right angles to v (v not 0).
 Math::Vec3 AnyPerpendicular(const Math::Vec3 v) noexcept {
-    const Math::Vec3 axis = std::fabs(v.x) < 0.9F * Math::Length(v) ? Math::Vec3{1, 0, 0} : Math::Vec3{0, 1, 0};
+    const Math::Vec3 axis =
+        std::fabs(v.x) < kNearlyAlongX * Math::Length(v) ? Math::Vec3{1, 0, 0} : Math::Vec3{0, 1, 0};
     return Math::Normalize(Math::Cross(v, axis));
 }
 
@@ -62,7 +68,7 @@ Math::Quaternion Arc(const Math::Vec3 from, const Math::Vec3 to) noexcept {
     const Math::Vec3 f = Math::Normalize(from);
     const Math::Vec3 t = Math::Normalize(to);
     const float cosine = Math::Dot(f, t);
-    if (cosine < -1.0F + 1.0e-6F) {
+    if (cosine < -1.0F + kRelativeZero) {
         // Opposite: half a turn about any axis at right angles.
         const Math::Vec3 axis = AnyPerpendicular(f);
         return Math::Quaternion{axis.x, axis.y, axis.z, 0.0F};
@@ -200,16 +206,23 @@ std::size_t CrossedEvents(const std::span<const float> times, const float from, 
             return written;
         }
         const float q = p + span;
-        up(atLeast(p), atLeast(q));
+        // The interval that reaches the end crosses the instants on it, as
+        // with Wrap::Clamp; the one that leaves the start crosses those on 0.
+        up(atLeast(p), q >= duration ? count : atLeast(q));
         if (q > duration) up(0, atLeast(q - duration));
     } else {
         if (span >= duration) {
-            down(0, above(p));
-            down(above(p), count);
+            const float top = p == 0.0F ? duration : p;
+            down(0, above(top));
+            down(above(top), count);
             return written;
         }
-        const float q = p - span;
-        down(above(q), above(p));
+        // Backward the start is where the loop ends: the interval that
+        // reaches it crosses the instants on 0, the one that leaves it those
+        // on the end (from the end of the loop before).
+        const float top = p == 0.0F ? duration : p;
+        const float q = top - span;
+        down(q <= 0.0F ? 0 : above(q), above(top));
         if (q < 0.0F) down(above(q + duration), count);
     }
     return written;
@@ -228,8 +241,8 @@ void SolveTwoBoneIK(const std::span<const Node> nodes, const TwoBoneChain& chain
     const Math::Vec3 upper = mid.position - root.position;
     const Math::Vec3 lower = tip - mid.position;
     const Math::Vec3 toTarget = target - root.position;
-    if (Math::LengthSquared(upper) <= kDegenerate || Math::LengthSquared(lower) <= kDegenerate ||
-        Math::LengthSquared(toTarget) <= kDegenerate)
+    if (Math::LengthSquared(upper) <= kZeroLengthSquared || Math::LengthSquared(lower) <= kZeroLengthSquared ||
+        Math::LengthSquared(toTarget) <= kZeroLengthSquared)
         return;
     const float a = Math::Length(upper);
     const float b = Math::Length(lower);
@@ -244,9 +257,24 @@ void SolveTwoBoneIK(const std::span<const Node> nodes, const TwoBoneChain& chain
     // is now.
     const float reach = std::clamp(distance, std::fabs(a - b), a + b);
     const auto across = [&u](const Math::Vec3 v) { return v - u * Math::Dot(v, u); };
-    Math::Vec3 side = across(pole - root.position);
-    if (Math::LengthSquared(side) <= kDegenerate) side = across(upper);
-    side = Math::LengthSquared(side) <= kDegenerate ? AnyPerpendicular(u) : Math::Normalize(side);
+    // The side of point from the line is rounding when it is within what
+    // float can tell: a part of the points' sizes (point - root rounds by
+    // those) and of point - root through the rounding of u (which rounds by
+    // the sizes of target and root over their distance).
+    const float uRounding = (Math::Length(target) + Math::Length(root.position)) / distance;
+    const auto sideOf = [&](const Math::Vec3 point) {
+        const Math::Vec3 v = point - root.position;
+        const Math::Vec3 s = across(v);
+        const float rounding =
+            kRelativeZero * (Math::Length(point) + Math::Length(root.position) + Math::Length(v) * uRounding);
+        return Math::LengthSquared(s) <= rounding * rounding ? Math::Vec3{} : s;
+    };
+    Math::Vec3 side = sideOf(pole);
+    if (Math::LengthSquared(side) == 0.0F) side = sideOf(mid.position);
+    // Once more across u after normalizing: a side from a vector nearly along
+    // u keeps a rounding part along u, which would take the mid off the
+    // bones' spheres and the tip off the target.
+    side = Math::LengthSquared(side) == 0.0F ? AnyPerpendicular(u) : Math::Normalize(across(Math::Normalize(side)));
     const float along = (reach * reach + a * a - b * b) / (2.0F * reach);
     const float height = std::sqrt(std::max(a * a - along * along, 0.0F));
     const Math::Vec3 midTo = root.position + u * along + side * height;

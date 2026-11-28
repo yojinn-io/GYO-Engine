@@ -157,11 +157,12 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 |---|---|---|
 | 區間 | `[from, to)` | `(to, from]`（遞減的順序） |
 | `Wrap::Clamp` | 時間夾在 [0, duration]；走到尾端的那一段也穿過尾端上的時刻，之後不再 | 走到開頭的那一段也穿過 0 上的時刻 |
-| `Wrap::Loop` | 跨過尾端接到開頭（0 與 duration 上的時刻都穿過）；跨距一整圈以上時，每個時刻一次，從起點的相位開始 | 跨過開頭接到尾端，同上 |
+| `Wrap::Clamp` 在端點折返 | 從端點離開的那一段再穿過一次（和在中間折返一樣：離開時間所站的時刻就算穿過）；所以在端點來回會報兩次 | 同左 |
+| `Wrap::Loop` | 跨過尾端接到開頭（0 與 duration 上的時刻都穿過）：**duration 上的時刻在走到尾端的那一段穿過**（剛好停在尾端也算，同 `Wrap::Clamp`），0 上的在離開開頭的那一段；跨距一整圈以上時，每個時刻一次，從起點的相位開始 | 跨過開頭接到尾端，前進的鏡像：**0 上的時刻在走到開頭的那一段穿過**（剛好停在開頭也算，同 `Wrap::Clamp`），duration 上的在離開開頭的那一段；一圈以上同左 |
 
-`from == to`、duration 0 的片段：沒有時刻。連續的區間每個時刻剛好一次。`out` 至少要 `times.size()` 個。
+`from == to`、duration 0 的片段：沒有時刻。同一個方向的連續區間每個時刻剛好一次（區間停在尾端的倍數上也一樣）。`out` 至少要 `times.size()` 個。
 
-- 照 Bevy `TriggeredEvents::from_animation`（`bevy_animation/src/lib.rs:1455-1528`）：前進與倒播的開閉（`:1482`、`:1493`）、跨圈拆兩段（`:1505-1524`）、播完給剩下的（`:1484-1487`、`:1496-1498`）。和 Bevy 不同：時間是未取餘的秒數，不是播放頭＋`just_completed`；duration 0 沒有時刻（Bevy 每 tick 都觸發，`lib.rs:587-596`）。
+- 照 Bevy `TriggeredEvents::from_animation`（`bevy_animation/src/lib.rs:1455-1528`）：前進與倒播的開閉（`:1482`、`:1493`）、跨圈拆兩段（`:1505-1524`）、播完給剩下的（`:1484-1487`、`:1496-1498`）。和 Bevy 不同：時間是未取餘的秒數，不是播放頭＋`just_completed`；duration 0 沒有時刻（Bevy 每 tick 都觸發，`lib.rs:587-596`）；`Loop` 倒播剛好停在開頭時，這裡在那一段就報 0 上的時刻（Bevy 的倒播 `seek_time` 等於 0 不算跨圈，`lib.rs:589`，要到下一段才和 duration 上的一起報），為了和前進、和 `Clamp` 是同一條規則。
 - 一次跨過一圈以上，每個時刻**最多一次**（使用者 2026-11-28 選 U1 (A)；Bevy 的播放頭每 tick 至多跨一圈，`lib.rs:599-605`）。所以結果至多 `times.size()` 個，呼叫者用固定大小的陣列就夠。
 - `times` 的遞增與範圍是呼叫者的資料規則（遊戲讀 `gyo.anim_events` 時檢查），每次呼叫不檢查。`out` 太小、非有限的時間、負的 duration 是 Programmer Error。
 - 事件資料（`gyo.anim_events`）的讀法、事件 → 聲音是遊戲的。
@@ -173,7 +174,7 @@ loader 回的每個 `ModelData` 都守這些規則；工具或測試手做的先
 1. weight 0：直接返回，`pose` 逐位元不變（連正規化都不做）。
 2. 沿祖先算 root、mid、tip 在模型空間的位置（矩陣，同 `ComputeModelSpace`）與旋轉（四元數連乘、不看縮放，同 Godot 的 `get_rotation_quaternion`，`two_bone_ik_3d.h:121-141`；縮放均勻時是精確的）。只走這條鏈的祖先，呼叫者 IK 之後照常算一次 `ComputeModelSpace`。
 3. 骨長取**目前的姿勢**（Godot 取 rest，`two_bone_ik_3d.cpp:663-681`）。骨長為 0、或目標就在 root 上：不動。
-4. tip 的去處：目標到 root 的距離夾在 [|a − b|, a + b]——**伸不到**時鏈沿目標方向伸直，**比兩段的差還近**（目標在身體裡）時鏈折起（Godot `two_bone_ik_3d.cpp:789-805`）。mid 在兩根骨的球面相交的圓上、在 pole 那一側（pole 先投影成垂直於 root→目標的方向，`skeleton_modifier_3d.cpp:387-398`）；**pole 落在 root→目標的直線上**時取目前 mid 那一側，鏈也是直的就取固定的垂直方向（偏離 Godot：Godot 這時 mid 落在直線上，`two_bone_ik_3d.cpp:814-831`）。
+4. tip 的去處：目標到 root 的距離夾在 [|a − b|, a + b]——**伸不到**時鏈沿目標方向伸直，**比兩段的差還近**（目標在身體裡）時鏈折起（Godot `two_bone_ik_3d.cpp:789-805`）。mid 在兩根骨的球面相交的圓上、在 pole 那一側（pole 先投影成垂直於 root→目標的方向，`skeleton_modifier_3d.cpp:387-398`）；**pole 落在 root→目標的直線上**時取目前 mid 那一側，鏈也是直的就取固定的垂直方向（偏離 Godot：Godot 這時 mid 落在直線上，`two_bone_ik_3d.cpp:814-831`）。「在直線上」以 float 分得出的大小判：側邊不到「兩點的大小＋經 u 的捨入」的 1e-6 就當成捨入（pole 靠近 root、或座標很大時，點本身的捨入比側邊大）。側邊正規化之後再去掉一次沿直線的成分：pole 離直線很近時，捨入留下的沿線成分會讓 mid 離開兩根骨的球面、tip 到不了目標（檢證者量到最多 0.107，`v8-arch-gyo2-model-two-bone-ik` 的 dev_log）。
 5. 旋轉取最短弧（Godot 的 swing，`two_bone_ik_3d.h:163,176`）：先 root，再 mid（從 root 轉過之後的前臂量起）；方向正好相反時轉半圈。不做 roll 對齊（Godot `:181-215`），上臂的扭轉保留片段的。平移、縮放、其他節點不動，所以骨長不變。
 6. 0 < weight：root、mid 的局部旋轉各自 `Slerp(原本, 解出的, weight)`（Godot 的 influence，`skeleton_3d.cpp:1267`；Unity 文件也是線性插值）。不夾住。
 7. **末端骨不轉**（使用者 2026-11-28 選 U2 (a)；照 Godot，`two_bone_ik_3d.cpp:840-842`）：命中形狀只看手的位置。要手對齊握把時，呼叫者在 IK 之後設手的局部旋轉。

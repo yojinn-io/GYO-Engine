@@ -488,13 +488,29 @@ TEST_CASE("ApplyAdditive weight 0.5 adds half of the change") {
     CHECK(Near(out[0].scale, base[0].scale));
 }
 
-TEST_CASE("ApplyAdditive may write into base and spans of other sizes are a Programmer Error") {
-    std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
+TEST_CASE("ApplyAdditive may write into any of its inputs") {
+    const std::vector<LocalTransform> base{{{1, 1, 1}, AboutY(10), {1, 1, 1}}};
     const std::vector<LocalTransform> reference{{{0, 0, 0}, Quaternion{}, {1, 1, 1}}};
     const std::vector<LocalTransform> motion{{{4, 0, 2}, AboutY(60), {3, 1, 2}}};
-    Model::ApplyAdditive(base, motion, reference, 1.0F, base);
-    CHECK(Near(base[0].translation, {5, 1, 3}));
-    CHECK(SameRotation(base[0].rotation, AboutY(70)));
+    std::vector<LocalTransform> expected(1);
+    Model::ApplyAdditive(base, motion, reference, 1.0F, expected);
+    CHECK(Near(expected[0].translation, {5, 1, 3}));
+    CHECK(SameRotation(expected[0].rotation, AboutY(70)));
+    std::vector<LocalTransform> intoBase = base;
+    Model::ApplyAdditive(intoBase, motion, reference, 1.0F, intoBase);
+    std::vector<LocalTransform> intoMotion = motion;
+    Model::ApplyAdditive(base, intoMotion, reference, 1.0F, intoMotion);
+    std::vector<LocalTransform> intoReference = reference;
+    Model::ApplyAdditive(base, motion, intoReference, 1.0F, intoReference);
+    CHECK(SameBits(intoBase[0], expected[0]));
+    CHECK(SameBits(intoMotion[0], expected[0]));
+    CHECK(SameBits(intoReference[0], expected[0]));
+}
+
+TEST_CASE("ApplyAdditive: spans of other sizes are a Programmer Error") {
+    const std::vector<LocalTransform> base(1);
+    const std::vector<LocalTransform> reference(1);
+    const std::vector<LocalTransform> motion(1);
     const std::vector<LocalTransform> two(2);
     std::vector<LocalTransform> out(1);
     GYO_CHECK_ASSERTS(Model::ApplyAdditive(base, two, reference, 1.0F, out));
@@ -553,6 +569,35 @@ TEST_CASE("CrossedEvents with Wrap::Loop crosses the end into the start on times
     CHECK(Crossed(-0.5F, 0.5F, Wrap::Loop, times) == Indices{2, 0});
 }
 
+TEST_CASE("CrossedEvents with Wrap::Loop crosses the instant on the end when an interval stops on it") {
+    // Steps that land on the end: the one reaching it crosses the instant on
+    // the end, the next one, leaving the start, the instant on 0.
+    const std::vector<float> cuts{0.0F, 0.5F, 1.0F, 1.5F, 2.0F, 2.5F, 3.0F};
+    Indices all;
+    for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+        const Indices part = Crossed(cuts[i], cuts[i + 1], Wrap::Loop);
+        all.insert(all.end(), part.begin(), part.end());
+    }
+    CHECK(all == Indices{0, 1, 2, 3, 4, 0, 1});
+    CHECK(Crossed(1.5F, 2.0F, Wrap::Loop) == Indices{3, 4});
+    CHECK(Crossed(2.0F, 2.5F, Wrap::Loop) == Indices{0});
+}
+
+TEST_CASE("CrossedEvents backward with Wrap::Loop crosses the instant on the start when an interval stops on it") {
+    // The mirror of forward: the step reaching 0 crosses the instant on 0,
+    // the next one, leaving it, the instant on the end.
+    const std::vector<float> cuts{3.0F, 2.5F, 2.0F, 1.5F, 1.0F, 0.5F, 0.0F, -0.5F};
+    Indices all;
+    for (std::size_t i = 0; i + 1 < cuts.size(); ++i) {
+        const Indices part = Crossed(cuts[i], cuts[i + 1], Wrap::Loop);
+        all.insert(all.end(), part.begin(), part.end());
+    }
+    CHECK(all == Indices{2, 1, 0, 4, 3, 2, 1, 0, 4});
+    CHECK(Crossed(0.5F, 0.0F, Wrap::Loop) == Indices{1, 0});
+    CHECK(Crossed(0.0F, -0.5F, Wrap::Loop) == Indices{4});
+    CHECK(Crossed(2.0F, 0.0F, Wrap::Loop) == Indices{4, 3, 2, 1, 0});
+}
+
 TEST_CASE("CrossedEvents backward with Wrap::Loop crosses the start into the end") {
     const std::vector<float> times{0.25F, 1.0F, 1.75F};
     // 0.5 -> -0.5 is 0.5 -> 0 then 2 -> 1.5.
@@ -590,6 +635,17 @@ TEST_CASE("CrossedEvents backward with Wrap::Clamp crosses the start once when t
     CHECK(Crossed(0.25F, -1.0F, Wrap::Clamp) == Indices{0});
     CHECK(Crossed(0.0F, -1.0F, Wrap::Clamp).empty());
     CHECK(Crossed(3.0F, 1.75F, Wrap::Clamp) == Indices{4});
+}
+
+TEST_CASE("CrossedEvents with Wrap::Clamp turning back at an end crosses the instant on it again") {
+    // As at any turn: the interval leaving the instant the time stands on crosses it.
+    CHECK(Crossed(1.75F, 2.0F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(2.0F, 1.75F, Wrap::Clamp) == Indices{4});
+    CHECK(Crossed(0.25F, 0.0F, Wrap::Clamp) == Indices{0});
+    CHECK(Crossed(0.0F, 0.25F, Wrap::Clamp) == Indices{0});
+    // A turn inside: once.
+    CHECK(Crossed(0.25F, 0.5F, Wrap::Clamp).empty());
+    CHECK(Crossed(0.5F, 0.25F, Wrap::Clamp) == Indices{1});
 }
 
 TEST_CASE("CrossedEvents crosses nothing when the time stays or the clip has no length") {
@@ -636,7 +692,7 @@ std::vector<Vec3> Positions(const std::vector<Node>& nodes, const std::vector<Lo
     return out;
 }
 
-constexpr float kReach = 1.0e-4F;
+constexpr float kPositionTolerance = 1.0e-4F;
 
 } // namespace
 
@@ -648,13 +704,14 @@ TEST_CASE("SolveTwoBoneIK puts the tip on a target in reach and keeps the bones 
     Model::SolveTwoBoneIK(nodes, kArm, {1, 1, 0}, {0, 0, 1}, 1.0F, pose);
     const auto at = Positions(nodes, pose);
     INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
-    CHECK(Near(at[2], {1, 1, 0}, kReach));
-    CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, kReach));
-    CHECK(Near(Math::Distance(at[1], at[2]), 1.0F, kReach));
+    CHECK(Near(at[2], {1, 1, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[1], at[2]), 1.0F, kPositionTolerance));
     // Only the rotations of root and mid change.
     for (std::size_t i = 0; i < pose.size(); ++i) {
-        CHECK(SameBits(pose[i].translation.x, before[i].translation.x));
-        CHECK(SameBits(pose[i].scale.y, before[i].scale.y));
+        LocalTransform unturned = pose[i];
+        unturned.rotation = before[i].rotation;
+        CHECK(SameBits(unturned, before[i]));
         if (i >= 2) CHECK(SameBits(pose[i], before[i]));
     }
 }
@@ -666,9 +723,9 @@ TEST_CASE("SolveTwoBoneIK bends toward the pole in the plane of root and target 
         Model::SolveTwoBoneIK(nodes, kArm, {1.5F, 0, 0}, {0.75F, 0, side}, 1.0F, pose);
         const auto at = Positions(nodes, pose);
         INFO("side " << side << " mid " << Show(at[1]) << " tip " << Show(at[2]));
-        CHECK(Near(at[2], {1.5F, 0, 0}, kReach));
+        CHECK(Near(at[2], {1.5F, 0, 0}, kPositionTolerance));
         CHECK(at[1].z * side > 0.5F);
-        CHECK(Near(at[1].y, 0.0F, kReach));
+        CHECK(Near(at[1].y, 0.0F, kPositionTolerance));
     }
 }
 
@@ -678,8 +735,8 @@ TEST_CASE("SolveTwoBoneIK straightens the chain toward a target out of reach") {
     Model::SolveTwoBoneIK(nodes, kArm, {0, 4, 3}, {0, 0, 1}, 1.0F, pose);
     const auto at = Positions(nodes, pose);
     INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
-    CHECK(Near(at[1], {0, 0.8F, 0.6F}, kReach));
-    CHECK(Near(at[2], {0, 1.6F, 1.2F}, kReach));
+    CHECK(Near(at[1], {0, 0.8F, 0.6F}, kPositionTolerance));
+    CHECK(Near(at[2], {0, 1.6F, 1.2F}, kPositionTolerance));
 }
 
 TEST_CASE("SolveTwoBoneIK at the edge of reach meets the straightened chain") {
@@ -691,10 +748,10 @@ TEST_CASE("SolveTwoBoneIK at the edge of reach meets the straightened chain") {
     const auto atEdge = Positions(nodes, edge);
     const auto atInside = Positions(nodes, inside);
     INFO("edge mid " << Show(atEdge[1]) << " inside mid " << Show(atInside[1]));
-    CHECK(Near(atEdge[1], {0, 1, 0}, kReach));
-    CHECK(Near(atEdge[2], {0, 2, 0}, kReach));
+    CHECK(Near(atEdge[1], {0, 1, 0}, kPositionTolerance));
+    CHECK(Near(atEdge[2], {0, 2, 0}, kPositionTolerance));
     CHECK(Near(atInside[1], atEdge[1], 2.0e-2F));
-    CHECK(Near(atInside[2], {0, 1.9999F, 0}, kReach));
+    CHECK(Near(atInside[2], {0, 1.9999F, 0}, kPositionTolerance));
 }
 
 TEST_CASE("SolveTwoBoneIK folds the chain toward a target inside the body nearer than the bones' difference") {
@@ -704,23 +761,23 @@ TEST_CASE("SolveTwoBoneIK folds the chain toward a target inside the body nearer
     Model::SolveTwoBoneIK(nodes, kArm, {0, 0.2F, 0}, {0, 0, 1}, 1.0F, pose);
     const auto at = Positions(nodes, pose);
     INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
-    CHECK(Near(at[1], {0, 1, 0}, kReach));
-    CHECK(Near(at[2], {0, 0.5F, 0}, kReach));
+    CHECK(Near(at[1], {0, 1, 0}, kPositionTolerance));
+    CHECK(Near(at[2], {0, 0.5F, 0}, kPositionTolerance));
     // A straight arm folding back onto itself: the forearm turns half a turn.
     auto back = RestOf(nodes);
     Model::SolveTwoBoneIK(nodes, kArm, {0.2F, 0, 0}, {0, 0, 1}, 1.0F, back);
     const auto atBack = Positions(nodes, back);
     INFO("back mid " << Show(atBack[1]) << " tip " << Show(atBack[2]));
-    CHECK(Near(atBack[1], {1, 0, 0}, kReach));
-    CHECK(Near(atBack[2], {0.5F, 0, 0}, kReach));
+    CHECK(Near(atBack[1], {1, 0, 0}, kPositionTolerance));
+    CHECK(Near(atBack[2], {0.5F, 0, 0}, kPositionTolerance));
     // Equal bones reach a target close to the root.
     const auto equal = Arm();
     auto near = RestOf(equal);
     Model::SolveTwoBoneIK(equal, kArm, {0.05F, 0.05F, 0}, {0, 0, 1}, 1.0F, near);
     const auto atNear = Positions(equal, near);
     INFO("near tip " << Show(atNear[2]));
-    CHECK(Near(atNear[2], {0.05F, 0.05F, 0}, kReach));
-    CHECK(Near(Math::Distance(atNear[0], atNear[1]), 1.0F, kReach));
+    CHECK(Near(atNear[2], {0.05F, 0.05F, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(atNear[0], atNear[1]), 1.0F, kPositionTolerance));
 }
 
 TEST_CASE("SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0") {
@@ -777,16 +834,82 @@ TEST_CASE("SolveTwoBoneIK with a pole on the line to the target bends to the sid
     Model::SolveTwoBoneIK(nodes, kArm, target, target * 2.0F, 1.0F, pose);
     const auto at = Positions(nodes, pose);
     INFO("mid " << Show(at[1]) << " tip " << Show(at[2]));
-    CHECK(Near(at[2], target, kReach));
+    CHECK(Near(at[2], target, kPositionTolerance));
     CHECK(Math::Dot(at[1] - u * Math::Dot(at[1], u), side) > 0.0F);
     // A straight chain with the pole on the line still reaches, to some side.
     auto straight = RestOf(nodes);
     Model::SolveTwoBoneIK(nodes, kArm, {1, 0, 0}, {3, 0, 0}, 1.0F, straight);
     const auto atStraight = Positions(nodes, straight);
     INFO("straight mid " << Show(atStraight[1]) << " tip " << Show(atStraight[2]));
-    CHECK(Near(atStraight[2], {1, 0, 0}, kReach));
-    CHECK(Near(Math::Distance(atStraight[0], atStraight[1]), 1.0F, kReach));
-    CHECK(Near(Math::Distance(atStraight[1], atStraight[2]), 1.0F, kReach));
+    CHECK(Near(atStraight[2], {1, 0, 0}, kPositionTolerance));
+    CHECK(Near(Math::Distance(atStraight[0], atStraight[1]), 1.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(atStraight[1], atStraight[2]), 1.0F, kPositionTolerance));
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole a rounding away from the line still reaches the target") {
+    // Far from the origin, with the pole just off the line from root to
+    // target: its side of the line is mostly rounding, and the mid must stay
+    // on the bones' spheres all the same.
+    std::vector<Node> nodes = Arm();
+    nodes[0].rest.translation = {100, 50, -30};
+    const Vec3 root{100, 50, -30};
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    // The larger ones are just past what counts as on the line, where the side
+    // is still mostly rounding.
+    for (const float off : {0.0F, 1.0e-6F, 1.0e-4F, 1.0e-2F, 2.0e-2F, 5.0e-2F}) {
+        auto pose = RestOf(nodes);
+        const Vec3 target = root + toward * 1.3F;
+        const Vec3 pole = root + toward * 40.0F + Vec3{0, 0, off};
+        Model::SolveTwoBoneIK(nodes, kArm, target, pole, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("off " << off << " tip " << Show(at[2]) << " target " << Show(target));
+        CHECK(Near(at[2], target, 1.0e-3F));
+        CHECK(Near(Math::Distance(at[0], at[1]), 1.0F, 1.0e-3F));
+        if (off == 0.0F) {
+            // On the line: to the side the mid is on (+X, the arm at rest).
+            const Vec3 mid = at[1] - root;
+            const Vec3 x{1, 0, 0};
+            CHECK(Math::Dot(mid - toward * Math::Dot(mid, toward), x - toward * Math::Dot(x, toward)) > 0.0F);
+        }
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK near the origin with a pole just off the line still reaches the target") {
+    // Small coordinates: a side just past rounding still carries a part along
+    // the line that would take the tip off the target.
+    const auto nodes = Arm();
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    const Vec3 target = toward * 1.3F;
+    for (const float along : {0.1F, 3.0F, 40.0F}) {
+        for (const float off : {3.0e-7F, 8.0e-6F, 1.25e-4F}) {
+            auto pose = RestOf(nodes);
+            Model::SolveTwoBoneIK(nodes, kArm, target, toward * along + Vec3{0, 0, off}, 1.0F, pose);
+            const auto at = Positions(nodes, pose);
+            INFO("along " << along << " off " << off << " tip " << Show(at[2]));
+            CHECK(Near(at[2], target, kPositionTolerance));
+        }
+    }
+}
+
+TEST_CASE("SolveTwoBoneIK with a pole on the line near the root or far out bends to the side the mid is on") {
+    // A pole on the line close to the root, or one far along it, with the
+    // whole arm far from the origin: the point's own rounding is larger
+    // than its side, and the chain still bends to the mid's side.
+    std::vector<Node> nodes = Arm();
+    nodes[0].rest.translation = {50, 50, 50};
+    const Vec3 root{50, 50, 50};
+    const Vec3 toward = Math::Normalize(Vec3{0.3F, 0.7F, 0.2F});
+    const Vec3 target = root + toward * 1.3F;
+    for (const float along : {0.01F, 0.1F, 3.0F, 40.0F}) {
+        auto pose = RestOf(nodes);
+        Model::SolveTwoBoneIK(nodes, kArm, target, root + (target - root) * along, 1.0F, pose);
+        const auto at = Positions(nodes, pose);
+        INFO("along " << along << " mid " << Show(at[1]) << " tip " << Show(at[2]));
+        CHECK(Near(at[2], target, 1.0e-3F));
+        const Vec3 mid = at[1] - root;
+        const Vec3 x{1, 0, 0};
+        CHECK(Math::Dot(mid - toward * Math::Dot(mid, toward), x - toward * Math::Dot(x, toward)) > 0.0F);
+    }
 }
 
 TEST_CASE("SolveTwoBoneIK works in model space under turned and scaled ancestors and a node between root and mid") {
@@ -803,9 +926,9 @@ TEST_CASE("SolveTwoBoneIK works in model space under turned and scaled ancestors
     Model::SolveTwoBoneIK(nodes, {1, 3, 4}, target, root + Vec3{1, 0, 0}, 1.0F, pose);
     const auto at = Positions(nodes, pose);
     INFO("tip " << Show(at[4]) << " target " << Show(target));
-    CHECK(Near(at[4], target, kReach));
-    CHECK(Near(Math::Distance(at[1], at[3]), 2.0F, kReach));
-    CHECK(Near(Math::Distance(at[3], at[4]), 2.0F, kReach));
+    CHECK(Near(at[4], target, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[1], at[3]), 2.0F, kPositionTolerance));
+    CHECK(Near(Math::Distance(at[3], at[4]), 2.0F, kPositionTolerance));
 }
 
 TEST_CASE("SolveTwoBoneIK: a chain or a pose that does not fit or a value that is not finite is a Programmer Error") {

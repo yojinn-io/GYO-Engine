@@ -211,6 +211,19 @@
    "expect": "Indices\\{2, 0\\}"
   },
   {
+   "id": "ma-events-loop-end-open",
+   "what": "MD-7: a forward interval of Wrap::Loop that stops on the end does not cross the instants on it, and the next one starts at 0 past them",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "up(atLeast(p), q >= duration ? count : atLeast(q));",
+   "replace": "up(atLeast(p), atLeast(q));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents with Wrap::Loop crosses the instant on the end when an interval stops on it",
+   "expect": "Indices\\{3, 4\\}"
+  },
+  {
    "id": "ma-events-loop-no-end",
    "what": "MD-7: a backward interval of Wrap::Loop that crosses the start does not go on into the end",
    "guards": [
@@ -222,6 +235,19 @@
    "target": "gyo_model_animation_tests",
    "cases": "CrossedEvents backward with Wrap::Loop crosses the start into the end",
    "expect": "Indices\\{0, 2\\}"
+  },
+  {
+   "id": "ma-events-loop-start-open",
+   "what": "MD-7: a backward interval of Wrap::Loop that stops on the start does not cross the instants on 0, and the next one crosses them there again",
+   "guards": [
+    "model MD-7"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "down(q <= 0.0F ? 0 : above(q), above(top));",
+   "replace": "down(above(q), above(top));",
+   "target": "gyo_model_animation_tests",
+   "cases": "CrossedEvents backward with Wrap::Loop crosses the instant on the start when an interval stops on it",
+   "expect": "Indices\\{1, 0\\}"
   },
   {
    "id": "ma-events-whole-loop-from-zero",
@@ -295,11 +321,37 @@
     "model MD-8"
    ],
    "file": "engine/modules/model/src/Animation.cpp",
-   "find": "    if (Math::LengthSquared(side) <= kDegenerate) side = across(upper);\n",
+   "find": "    if (Math::LengthSquared(side) == 0.0F) side = sideOf(mid.position);\n",
    "replace": "",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK with a pole on the line to the target bends to the side the mid is on",
    "expect": "Math::Dot\\(at\\[1\\] - u \\* Math::Dot\\(at\\[1\\], u\\), side\\) > 0\\.0F"
+  },
+  {
+   "id": "ma-ik-side-along-target",
+   "what": "MD-8: the pole's side is not taken across the line once more after normalizing, so a pole near the line leaves a part along it and the tip misses the target",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "Math::Normalize(across(Math::Normalize(side)))",
+   "replace": "Math::Normalize(side)",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK near the origin with a pole just off the line still reaches the target",
+   "expect": "Near\\(at\\[2\\], target, kPositionTolerance\\)"
+  },
+  {
+   "id": "ma-ik-side-absolute",
+   "what": "MD-8: the pole's side counts as rounding by an absolute length, not by the rounding of the points, so a pole on the line near the root or far out bends the chain by rounding instead of to the side the mid is on",
+   "guards": [
+    "model MD-8"
+   ],
+   "file": "engine/modules/model/src/Animation.cpp",
+   "find": "kRelativeZero * (Math::Length(point) + Math::Length(root.position) + Math::Length(v) * uRounding)",
+   "replace": "kRelativeZero",
+   "target": "gyo_model_animation_tests",
+   "cases": "SolveTwoBoneIK with a pole on the line near the root or far out bends to the side the mid is on",
+   "expect": "x - toward \\* Math::Dot\\(x, toward\\)\\) > 0\\.0F"
   },
   {
    "id": "ma-ik-weight-ignored",
@@ -338,7 +390,7 @@
    "replace": "Math::Multiply(rootTurn, Math::Normalize(pose[chain.root].rotation))",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK works in model space under turned and scaled ancestors and a node between root and mid",
-   "expect": "Near\\(at\\[4\\], target, kReach\\)"
+   "expect": "Near\\(at\\[4\\], target, kPositionTolerance\\)"
   },
   {
    "id": "ma-ik-mid-parent-not-turned",
@@ -351,7 +403,7 @@
    "replace": "ParentRotationOf(nodes, pose, chain.mid)",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose",
-   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kReach\\)"
+   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kPositionTolerance\\)"
   },
   {
    "id": "ma-ik-lower-not-turned",
@@ -364,7 +416,7 @@
    "replace": "Arc(lower, tipTo - midTo)",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK puts the tip on a target in reach and keeps the bones and the rest of the pose",
-   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kReach\\)"
+   "expect": "Near\\(at\\[2\\], \\{1, 1, 0\\}, kPositionTolerance\\)"
   },
   {
    "id": "ma-ik-half-turn-missing",
@@ -373,11 +425,11 @@
     "model MD-8"
    ],
    "file": "engine/modules/model/src/Animation.cpp",
-   "find": "    if (cosine < -1.0F + 1.0e-6F) {",
+   "find": "    if (cosine < -1.0F + kRelativeZero) {",
    "replace": "    if (false) {",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK folds the chain toward a target inside the body nearer than the bones' difference",
-   "expect": "Near\\(atBack\\[2\\], \\{0\\.5F, 0, 0\\}, kReach\\)"
+   "expect": "Near\\(atBack\\[2\\], \\{0\\.5F, 0, 0\\}, kPositionTolerance\\)"
   },
   {
    "id": "ma-ik-target-on-root",
@@ -386,7 +438,7 @@
     "model MD-8"
    ],
    "file": "engine/modules/model/src/Animation.cpp",
-   "find": " ||\n        Math::LengthSquared(toTarget) <= kDegenerate)",
+   "find": " ||\n        Math::LengthSquared(toTarget) <= kZeroLengthSquared)",
    "replace": ")",
    "target": "gyo_model_animation_tests",
    "cases": "SolveTwoBoneIK leaves the pose for a target on the root or a bone of length 0",
