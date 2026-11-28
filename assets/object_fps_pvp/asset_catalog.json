@@ -54,6 +54,8 @@
     {"id": "object_fps_pvp.arena.corners", "type": "text", "path": "maps/pvp_corners.json"},
     {"id": "object_fps_pvp.arena.biome", "type": "text", "path": "maps/biome.json"},
     {"id": "object_fps_pvp.movement_rules", "type": "text", "path": "rules/movement_rules.json"},
+    {"id": "object_fps_pvp.modes", "type": "text", "path": "modes/modes.json"},
+    {"id": "object_fps_pvp.mode.core_pvp", "type": "text", "path": "modes/core_pvp.json"},
     {"id": "object_fps_pvp.ui.hit_feedback", "type": "text", "path": "ui/hit_feedback.json"},
     {"id": "object_fps_pvp.audio.settings", "type": "text", "path": "audio/sfx.json"},
     {"id": "object_fps_pvp.audio.gun_shoot", "type": "sound", "path": "audio/gun_shoot.wav"},

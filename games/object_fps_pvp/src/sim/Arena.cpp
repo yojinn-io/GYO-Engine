@@ -60,7 +60,7 @@ std::optional<ArenaContent> ParseArena(const std::string_view text, std::string&
         if (data::Integer(data::Member(json, "version"), "version") != 4) throw std::runtime_error("unsupported arena version");
         ArenaContent arena;
         arena.id = data::String(data::Member(json, "id"), "id");
-        if (arena.id.empty() || arena.id.size() > 64) throw std::runtime_error("id is 1 to 64 characters");
+        if (arena.id.empty() || arena.id.size() > kMaxContentIdBytes) throw std::runtime_error("id is 1 to 64 characters");
         arena.width = Positive(json, "width", 0.0F);
         arena.depth = Positive(json, "depth", 0.0F);
         if (arena.width <= 0 || arena.depth <= 0) throw std::runtime_error("width and depth are required");

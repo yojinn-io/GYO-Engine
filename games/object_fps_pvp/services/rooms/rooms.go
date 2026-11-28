@@ -30,11 +30,8 @@ const (
 	Started  = "started"
 )
 
-// Modes are the game modes a room may choose (the rules behind them are later
-// features; the service only carries the choice).
-var Modes = []string{"coop", "survival"}
-
-var mapPattern = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
+// idPattern is a map's and a mode's id.
+var idPattern = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 
 type Config struct {
 	// Matches is the allocation service the start asks.
@@ -43,6 +40,10 @@ type Config struct {
 	Capacity int
 	// Maps the rooms may choose; empty: any id of [a-z0-9_]{1,64}.
 	Maps []string
+	// Modes the rooms may choose (the Match's installed modes, modes/modes.json);
+	// empty: any id of [a-z0-9_]{1,64}. The service only carries the choice: the
+	// Match plays it (--mode).
+	Modes []string
 	// StartedTTL: how long a started room stays at most. It goes as soon as a
 	// member asks for it after its Match has ended (the matches service says
 	// match_ended); this bounds the rooms nobody asks for again.
@@ -233,11 +234,11 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusBadRequest, "invalid_room")
 		return
 	}
-	if !slices.Contains(Modes, request.Mode) {
+	if !idPattern.MatchString(request.Mode) || (len(s.config.Modes) > 0 && !slices.Contains(s.config.Modes, request.Mode)) {
 		api.WriteError(w, http.StatusBadRequest, "unknown_mode")
 		return
 	}
-	if !mapPattern.MatchString(request.Map) || (len(s.config.Maps) > 0 && !slices.Contains(s.config.Maps, request.Map)) {
+	if !idPattern.MatchString(request.Map) || (len(s.config.Maps) > 0 && !slices.Contains(s.config.Maps, request.Map)) {
 		api.WriteError(w, http.StatusBadRequest, "unknown_map")
 		return
 	}

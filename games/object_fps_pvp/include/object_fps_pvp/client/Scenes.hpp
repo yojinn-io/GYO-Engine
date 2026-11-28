@@ -53,6 +53,9 @@ struct SceneChange final {
     // SoloGame, MultiGame: the arena played, by its id (the room's map); empty, or one this Client does not have: the
     // Client's own (ClientOptions::arena; a Match then says which it plays).
     std::string map;
+    // SoloGame, MultiGame: the mode played, by its id (the room's mode); empty, or one this Client does not have: the
+    // Client's own (ClientOptions::mode; a Match then says which it plays).
+    std::string mode;
 };
 
 // The Frame World's request for the next scene (written by a scene's System; the runner reads it between frames).
@@ -107,10 +110,18 @@ struct ClientStart final {
 // The settings in force (a Resource of every Frame World, carried from scene to scene; ClientStart's first).
 inline void HashValue(GYO::Kernel::Hasher&, const ClientSettings&) {}
 
+// A mode a room can be made with: an installed mode (world::ModeContent), its id, the name the player reads and the
+// installed arenas it plays (world::GameContent::Plays), by id.
+struct ModeChoice final {
+    std::string id;
+    std::string name;
+    std::vector<std::string> maps;
+};
+
 // The Gateway's scenes' words (GatewayScene.cpp): what the player reads for a call that went wrong (gateway: its
-// address), and for a room's mode.
+// address), and for a room's mode (the installed mode's name; a mode this Client does not have, its id).
 [[nodiscard]] std::string GatewayErrorText(const GatewayResult& result, const std::string& gateway);
-[[nodiscard]] std::string ModeText(std::string_view mode);
+[[nodiscard]] std::string ModeText(const std::vector<ModeChoice>& modes, std::string_view mode);
 
 // Whether the Sim World plays (connects) in this scene; whether the Solo World plays.
 [[nodiscard]] bool SimPlays(Scene scene) noexcept;

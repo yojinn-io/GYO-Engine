@@ -44,14 +44,15 @@ void BuildSceneCommon(O::WorldSetup& setup);
 void BuildMenu(O::WorldSetup& setup, const SceneChange& change);
 // The start screen: the logo document for seconds after it is laid out, then the menu.
 void BuildSplash(O::WorldSetup& setup, double seconds);
-// dataDirectory: the player's (ClientStart); maps: the installed arenas, by id.
-void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<std::string>& maps);
-// What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the maps a
-// room can be made with (the installed arenas, by id).
+// dataDirectory: the player's (ClientStart); modes: the installed modes, in order, each with the arenas it plays (the
+// single player plays the first, on one of its arenas).
+void BuildSoloRoom(O::WorldSetup& setup, const SceneChange& change, const std::string& dataDirectory, const std::vector<ModeChoice>& modes);
+// What the Gateway's scenes need from the Product: this player's directory (the device id), the Gateway, the modes a
+// room can be made with (the installed modes, in order, each with the arenas it plays).
 struct GatewayContext final {
     std::string dataDirectory;
     GYO::Engine::OS::SocketAddress gateway;
-    std::vector<std::string> maps;
+    std::vector<ModeChoice> modes;
 };
 void BuildLobby(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);
 void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context);

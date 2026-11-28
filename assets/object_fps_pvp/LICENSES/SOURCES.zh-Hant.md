@@ -12,4 +12,4 @@
 | `weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx` 與 `textures/*.png` | 使用者交付（2026-10-29）；PNG 由交付的 JPG 與單色材質轉成 | 使用者本人製作 |
 | `weapons/nailer_v2/world/Nailer2_TPS.fbx` 與 `textures/Nailer2_D.png` | 使用者在 Blender 做的（2026-10-31）；PNG 由 FBX 內嵌的 JPG 轉成 | 使用者本人製作 |
 | `characters/player/*.json`、`weapons/**/*.json` | 產品自己的資料 | 產品的資料 |
-| `rules/movement_rules.json`、`ui/hit_feedback.json`、`audio/sfx.json` | 產品自己的資料 | 產品的資料 |
+| `rules/movement_rules.json`、`modes/*.json`、`ui/hit_feedback.json`、`audio/sfx.json` | 產品自己的資料 | 產品的資料 |

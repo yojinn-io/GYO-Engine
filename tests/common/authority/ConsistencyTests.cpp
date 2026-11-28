@@ -23,6 +23,8 @@ K::SystemResult OnBlock(K::On<BlockLanded>, K::Query<K::Write<Health>>) { return
 K::SystemResult RunNested(K::ExclusiveWorld<>) { return {}; }
 bool Yes() { return true; }
 bool No() { return false; }
+// A run condition with a value (target/kernel DI-KS 1): the value given at its registration.
+bool Above(const std::int32_t& threshold) { return threshold > 0; }
 K::SystemResult GlowHook(K::HookCtx, K::Query<K::Write<Glow>>) { return {}; }
 K::SystemResult GlowOnHit(K::On<HitLanded>, K::Query<K::Write<Glow>>) { return {}; }
 Glow GlowFromArmor(const Armor& armor) { return Glow{armor.value}; }
@@ -358,6 +360,30 @@ TEST_CASE("authority consistency: each item of the fingerprint's content is in i
         };
     };
     CHECK_MESSAGE(FingerprintOf(watching(true)) != FingerprintOf(watching(false)), "[au-fp-c-observer-target]");
+}
+
+TEST_CASE("authority consistency: a run condition's value is in the fingerprint, on a mount and on a set") {
+    // One name, other values: the two ends must not connect (mode-config declaration 12.2).
+    const auto mounted = [](const std::int32_t value) {
+        return [value](O::WorldSetup& s) {
+            A::AuthorityEntry(s).Component<Health>("Health");
+            K::SystemOptions first = In("WriteHealth", "FixedUpdate", "Update");
+            first.mounts[0].conditions.push_back(K::Condition<&Above>("Above", value));
+            s.Registrar().AddSystem<&WriteHealth>(first);
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(mounted(1)) == FingerprintOf(mounted(1)), "[au-fp-value-same]");
+    CHECK_MESSAGE(FingerprintOf(mounted(1)) != FingerprintOf(mounted(2)), "[au-fp-value-mount]");
+    const auto gated = [](const std::int32_t value) {
+        return [value](O::WorldSetup& s) {
+            A::AuthorityEntry(s).Component<Health>("Health");
+            s.Registrar().Set({.name = "Gated", .schedule = "FixedUpdate"}, {K::Condition<&Above>("Above", value)});
+            K::SystemOptions first = In("WriteHealth", "FixedUpdate", "Update");
+            first.mounts[0].sets = {"Gated"};
+            s.Registrar().AddSystem<&WriteHealth>(first);
+        };
+    };
+    CHECK_MESSAGE(FingerprintOf(gated(1)) != FingerprintOf(gated(2)), "[au-fp-value-set]");
 }
 
 TEST_CASE("authority consistency: the rollback's skipped-while-resimulating condition on one end does not change the fingerprint") {
