@@ -211,6 +211,13 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a`（A1 `219a37
 - 寫的時候的一件事：測試的替身放在 `GYO::Tests::Render`，`naming.guard` 擋下（`GYO::Tests` 不是命名表的根），改成既有的 `GYO::Test`。
 - 沒有需要例外的地方；留著的已知缺口（拿不到 command buffer 的那一幀，建立要求被清掉）記成 RC-A2-9（宣告第 14.13 節）。
 
+### 第 14.13 節的驗證
+
+- 本機（macOS Intel，只跑 cpu；`4860574e` 的內容）：全量建置成功；`ctest -L 'cpu|shader'` 256/257（`cmake.PluginSelection` 是借用依賴的環境問題，同前）；cpu 突變 93/93 killed（第 14.12 節的 88 個、新的 `rw-receipt-*`／`rd-receipt-*` 4 個、`gt-unwritten-*`）。
+- Linux 主機（`a22502ae`，bundle 送過去；Lavapipe、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`sdl_gpu.phases`、`unwritten`、`contracts`、`targets`、`pass2d` 5/5；pass3d（去掉 `GPUSubmit` 一案）11/11；GPU 突變 61/61 killed（第 14.12 節的 59 個，加 `gd-receipt-size-not-applied`、`gd-receipt-drawn-not-given`）。
+  - cpu|shader 那一步：腳本只留輸出的最後 4 行，摘要行（幾個通過）沒有抓到。判斷沒有失敗的根據是 `Testing/Temporary/LastTestsFailed.log` 沒有更新（最後一次寫是 00:09，`4860574e` 那一輪 `sdl_gpu.phases` 失敗時；`a22502ae` 這一輪在 00:12）。同一台主機在 `4860574e` 上手動跑過一次 `ctest -L 'cpu|shader'`，257/257；`a22502ae` 只改了 `PhaseTests.cpp`（label gpu）、突變目錄與文件。
+  - `4860574e` 那一輪：`sdl_gpu.phases` 的「SDL 拒絕大小」一案失敗（上一節），GPU 突變的 runner 在 baseline 失敗時停下，沒有結果；拿掉那一案之後在 `a22502ae` 重跑，就是上面的數字。
+
 ## 沒做／沒跑
 
 - Mac（Metal）上的重跑（上一節的已知缺口）；RADV（Xvfb 下建不了裝置）；會開視窗的 GPU 案與突變（`sdl_gpu.frames`、`GPUSubmit` 的案、`gp-frames-never-shown`、`g3-frames-never-shown`、`gp-present-not-recorded`）。
