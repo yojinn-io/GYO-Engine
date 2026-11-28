@@ -1,5 +1,6 @@
 #include "object_fps_pvp/client/ClientWorld.hpp"
 
+#include "client/BoxModel.hpp"
 #include "client/ClientExchange.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
 #include "client/Pages.hpp"
@@ -9,6 +10,8 @@
 #include "object_fps_pvp/present/Interpolation.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
+#include "object_fps_pvp/world/Interaction.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "engine/asset/AssetStore.hpp"
 #include "object_fps_pvp/character/CharacterRig.hpp"
@@ -33,6 +36,7 @@
 #include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec2.hpp"
 #include "engine/physics_3d/Collider.hpp"
+#include "engine/physics_3d/Queries.hpp"
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/net/NetModule.hpp"
 #include "engine/net/Replication.hpp"
@@ -98,6 +102,8 @@ namespace PW = object_fps_pvp::world;
 namespace VM = GYO::Engine::VoxelMap;
 
 void HashValue(K::Hasher&, const ClientView&) {}
+void HashValue(K::Hasher&, const ClientDoors&) {}
+void HashValue(K::Hasher&, const InteractionPrompt&) {}
 void HashValue(K::Hasher&, const DrawnFrames&) {}
 
 namespace {
@@ -129,6 +135,7 @@ constexpr K::EntityId kStatusText = 3'000'017;
 constexpr K::EntityId kHitDirection = 3'000'019;
 constexpr K::EntityId kOverlay = 3'000'020;
 constexpr K::EntityId kHitMarker = 3'000'021;
+constexpr K::EntityId kPromptText = 3'000'022;
 
 // The 2D layer: 1280 x 720 units, the origin at the centre, y up; drawn by the HUD camera only.
 constexpr float kHudWidth = 1280.0F;
@@ -972,7 +979,8 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
                         K::Res<ClientScreen> screen,
                         K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>,
                                  K::Read<PW::ShotRecord>> players,
-                        K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes, K::ResMut<ClientHud> hud) {
+                        K::Res<InteractionPrompt> prompt, K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes,
+                        K::ResMut<ClientHud> hud) {
     ClientHud& h = hud.Get();
     if (!h.font) {
         if (const TX::FontData* font = view->Get(assets->font)) {
@@ -1054,6 +1062,8 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     setText(kHpText, hpText, 36.0F);
     setText(kAmmoText, ammoText, 36.0F);
     setText(kStatusText, status, 28.0F);
+    // What the player looks at can be used: only while playing (no status in the way).
+    setText(kPromptText, body != nullptr && status.empty() ? prompt->text : std::string(), 28.0F);
     // A fresh hit turns the HP red for a while.
     if (auto sprite = sprites.GetMut<R::Sprite>(kHpText); sprite && h.texts[kHpText].image) {
         const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
@@ -1064,12 +1074,83 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     return {};
 }
 
+// Frame World, Main/Update: each door's picture (a box of its leaf, its origin at the hinge) swings toward the state
+// the Sim World has for it, at the presentation's pace (ui/doors.json); a door the Sim World has no state for stands
+// as it was.
+K::SystemResult ShowDoors(K::Res<ClientScreen> screen, K::Res<WT::RealTime> real, K::ResMut<ClientDoors> doors,
+                          K::Query<K::Write<T::Transform>> placed, K::Spawn<K::Bundle<T::Transform, R::Mesh3d>> spawn) {
+    if (doors.Read().doors.empty()) return {};
+    const double seconds = static_cast<double>(real->delta) / 1e9;
+    const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
+    for (auto& [id, door] : doors->doors) {
+        if (door.state) door.turned = present::SwingToward(door.turned, door.state->open != 0, seconds, screen->presentation->doors);
+        const T::Transform pose{door.shape.hinge, PW::DoorTurn(door.shape, door.turned)};
+        if (door.picture == 0) {
+            R::Mesh3d mesh;
+            mesh.model = BoxModel(Math::Vec3{door.shape.width, door.shape.height, door.shape.thickness}, Math::Vec3{0.0F, 0.0F, 0.5F});
+            mesh.color = R::Color8{byte(door.shape.color.x), byte(door.shape.color.y), byte(door.shape.color.z), 255};
+            auto made = spawn.New(pose, std::move(mesh));
+            if (!made) return Base::Err(std::move(made).error());
+            door.picture = *made;
+            continue;
+        }
+        if (auto transform = placed.GetMut<T::Transform>(door.picture); transform && !(transform.Read() == pose)) transform.Get() = pose;
+    }
+    return {};
+}
+
+// Frame World, Main/Update, before ShowHud: the prompt of the door the player looks at. The view is the Match's rule
+// for an interaction (world/Interaction.hpp): the own eye along the Client's view, within the mode's reach, the first
+// thing it meets -- the map's walls, the floor plane, a door as its state stands it (not its picture) -- is the door.
+// None when the mode has no interaction, the player is not alive, or the Match is not sending that door.
+K::SystemResult FocusDoors(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
+                           K::Res<ClientDoors> doors, K::Res<ClientSound> sound,
+                           K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>> players,
+                           K::ResMut<InteractionPrompt> prompt) {
+    std::string text;
+    const auto say = [&] {
+        if (prompt.Read().text != text) prompt->text = std::move(text);
+        return K::SystemResult{};
+    };
+    if (!doors->reach || doors->doors.empty()) return say();
+    std::optional<PW::PlayerBody> own;
+    players.ForEach([&](K::EntityId, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat) {
+        if (owner.userId == user->userId && combat.life == sim::LifeState::Alive) own = body;
+    });
+    if (!own) return say();
+    own->yaw = controls->controls.Yaw();
+    own->pitch = controls->controls.Pitch();
+    const Math::Ray ray = PW::ShotRay(*rules, *own);
+    float nearest = *doors->reach;
+    if (sound->walls) {
+        if (const auto wall = GYO::Engine::Physics3d::CastRay(GYO::Engine::Physics3d::Shape{*sound->walls}, {}, ray, nearest)) nearest = wall->t;
+    }
+    if (const auto floor = PW::FloorAlong(*rules, ray); floor && *floor < nearest) nearest = *floor;
+    const ShownDoor* focused = nullptr;
+    for (const auto& [id, door] : doors->doors) {
+        if (!door.state) continue;
+        const T::Transform pose = PW::DoorPose(door.shape, door.state->open != 0);
+        const GYO::Engine::Physics3d::Shape leaf{GYO::Engine::Physics3d::Cuboid{
+            {0.5F * door.shape.width, 0.5F * door.shape.height, 0.5F * door.shape.thickness}}};
+        const auto hit = GYO::Engine::Physics3d::CastRay(leaf, {pose.translation, pose.rotation}, ray, nearest);
+        if (hit && hit->t < nearest) {
+            nearest = hit->t;
+            focused = &door;
+        }
+    }
+    if (focused != nullptr && focused->receiving) text = focused->state->open != 0 ? "[E] 閉める" : "[E] 開ける";
+    return say();
+}
+
 K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view,
                            K::Res<ClientScreen> screen, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
-                           K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
+                           K::Res<WT::ActiveTime> time, K::ResMut<ClientDoors> doors, K::ResMut<ClientSound> sound) {
     ClientSound& s = sound.Get();
+    // The doors' cues are this frame's whether or not they can be played.
+    std::vector<std::pair<present::SoundCue, Math::Vec3>> doorCues;
+    if (!doors.Read().cues.empty()) doorCues = std::exchange(doors->cues, {});
     if (s.submitter == nullptr) return {};
     const present::SoundSettings& settings = screen->presentation->sound;
     const TM::TimePoint at = TM::MonotonicClock::now();
@@ -1091,14 +1172,17 @@ K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> asse
     });
     // The other players' cues are heard at the own player's ear, from the middle of their body; the arena between them
     // lowers them (PW::Blocked).
-    const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
+    const auto heardAt = [&](const present::SoundCue cue, const Math::Vec3 source) {
         if (own == nullptr) return;
         const Math::Vec3 ear = own->feet + Math::Vec3{0.0F, sim::EyeHeight(rules->body, own->crouched != 0), 0.0F};
-        const Math::Vec3 source =
-            body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->body, body.crouched != 0), 0.0F};
         const bool occluded = s.walls && PW::Blocked(*s.walls, ear, source);
         if (const auto gains = present::HeardGains(cue, ear, controls->controls.Yaw(), source, occluded, settings)) play(cue, *gains);
     };
+    const auto spatial = [&](const present::SoundCue cue, const PW::PlayerBody& body) {
+        heardAt(cue, body.feet + Math::Vec3{0.0F, 0.5F * sim::BodyHeight(rules->body, body.crouched != 0), 0.0F});
+    };
+    // A door is heard from its leaf (a door's own walls do not occlude it: Blocked asks the map's).
+    for (const auto& [cue, at] : doorCues) heardAt(cue, at);
     const double now = static_cast<double>(time->elapsed) / 1e9;
     std::set<K::EntityId> seen;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
@@ -1524,6 +1608,20 @@ WorldSnapshot SnapshotOf(K::World& world) {
         copy(player.shot);
         snapshot.players.push_back(std::move(player));
     }
+    if (world.Types().ComponentIdOf<PW::DoorShape>()) {
+        // A World without net (Solo) is always sending.
+        const bool net = world.Types().ComponentIdOf<N::NotReceiving>().has_value();
+        for (const K::EntityId id : world.Keys<PW::DoorShape>()) {
+            DoorSnapshot door;
+            door.id = id;
+            door.shape = *world.Get<PW::DoorShape>(id);
+            if (const PW::DoorState* state = world.Get<PW::DoorState>(id)) door.state = *state;
+            door.receiving = !net || world.Get<N::NotReceiving>(id) == nullptr;
+            snapshot.doors.push_back(door);
+        }
+        std::sort(snapshot.doors.begin(), snapshot.doors.end(), [](const DoorSnapshot& a, const DoorSnapshot& b) { return a.id < b.id; });
+    }
+    if (const auto* interaction = Find<PW::InteractionRules>(world)) snapshot.reach = interaction->reach;
     if (const auto* rules = world.Resource<PW::GameRules>()) {
         snapshot.arenaId = rules->arena.id;
         snapshot.wallsDigest = rules->wallsDigest;
@@ -1614,6 +1712,35 @@ void ApplySnapshot(ClientExchange& exchange, K::World& world) {
         }
     }
     mirror.players = std::move(players);
+    // The doors: a state that changes between two pictures is heard; a door no longer in the picture goes.
+    ClientDoors& doors = *world.ResourceMut<ClientDoors>();
+    doors.reach = snapshot->reach;
+    std::set<K::EntityId> shownDoors;
+    for (const DoorSnapshot& door : snapshot->doors) {
+        shownDoors.insert(door.id);
+        const auto [found, fresh] = doors.doors.try_emplace(door.id);
+        ShownDoor& shown = found->second;
+        shown.shape = door.shape;
+        shown.receiving = door.receiving;
+        if (!door.state) continue;
+        if (fresh || !shown.state) {
+            shown.turned = door.state->open != 0 ? 1.0F : 0.0F;
+        } else if (door.state->open != shown.state->open) {
+            const bool open = door.state->open != 0;
+            doors.cues.emplace_back(open ? present::SoundCue::DoorOpen : present::SoundCue::DoorClose,
+                                    PW::DoorPose(door.shape, open).translation);
+            ++(open ? doors.opened : doors.closed);
+        }
+        shown.state = door.state;
+    }
+    for (auto it = doors.doors.begin(); it != doors.doors.end();) {
+        if (shownDoors.contains(it->first)) {
+            ++it;
+            continue;
+        }
+        if (it->second.picture != 0 && world.Alive(it->second.picture)) world.Despawn(it->second.picture);
+        it = doors.doors.erase(it);
+    }
     // The walls the Sim World built for the arena both Worlds play.
     if (const PW::GameRules* rules = world.Resource<PW::GameRules>();
         snapshot->arenaId == rules->arena.id && rules->wallsDigest != snapshot->wallsDigest) {
@@ -1790,6 +1917,8 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<ClientControls>({.name = "object_fps_pvp.ClientControls"});
     r.Resource<ClientScreen>({.name = "object_fps_pvp.ClientScreen"});
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
+    r.Resource<ClientDoors>({.name = "object_fps_pvp.ClientDoors"});
+    r.Resource<InteractionPrompt>({.name = "object_fps_pvp.InteractionPrompt"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
     r.Component<CharacterPart>({.name = "object_fps_pvp.CharacterPart"});
@@ -1836,7 +1965,9 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const ScreenC
     r.AddSystem<&AddCharacters>(InUpdate("object_fps_pvp.AddCharacters", {"object_fps_pvp.PoseCharacters", "object_fps_pvp.RequestAssets"}));
     r.AddSystem<&PoseViewmodel>(InUpdate("object_fps_pvp.PoseViewmodel", {"object_fps_pvp.PlaceCamera"}));
     r.AddSystem<&AddViewmodel>(InUpdate("object_fps_pvp.AddViewmodel", {"object_fps_pvp.PoseViewmodel", "object_fps_pvp.RequestAssets"}));
-    r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud"));
+    r.AddSystem<&ShowDoors>(InUpdate("object_fps_pvp.ShowDoors"));
+    r.AddSystem<&FocusDoors>(InUpdate("object_fps_pvp.FocusDoors"));
+    r.AddSystem<&ShowHud>(InUpdate("object_fps_pvp.ShowHud", {"object_fps_pvp.FocusDoors"}));
     r.AddSystem<&PlaySounds>(InUpdate("object_fps_pvp.PlaySounds"));
     r.AddSystem<&LeaveOnEnd>(InUpdate("object_fps_pvp.LeaveOnEnd"));
     r.AddSystem<&TrackReadiness>(InUpdate("object_fps_pvp.TrackReadiness", {"object_fps_pvp.RequestAssets", "object_fps_pvp.ShowArena"}));
@@ -1889,6 +2020,8 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const ScreenC
         world.SetResource(ClientControls{});
         world.SetResource(ClientScreen{options.presentation});
         world.SetResource(ClientHud{});
+        world.SetResource(ClientDoors{});
+        world.SetResource(InteractionPrompt{});
         world.SetResource(ClientCharacters{});
         ClientSound sound;
         sound.submitter = port != nullptr ? &port->submitter : nullptr;
@@ -1960,6 +2093,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const ScreenC
         text(kHpText, {-kHudWidth / 2 + 24, -kHudHeight / 2 + 20, 2}, {-0.5F, -0.5F});
         text(kAmmoText, {kHudWidth / 2 - 24, -kHudHeight / 2 + 20, 2}, {0.5F, -0.5F});
         text(kStatusText, {0, kHudHeight / 2 - 80, 2}, {0.0F, 0.5F});
+        text(kPromptText, {0, -60, 2}, {0.0F, 0.5F});
         // The overlay's document (the pages put their roots on kOverlay, there from the start: GamePage).
         Place(world, kOverlay, T::Transform{});
         world.SetResource(OverlayDocument{world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game")),
@@ -2144,6 +2278,16 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, std
             return std::nullopt;
         }
         content.sound = std::move(*settings);
+    }
+    {
+        auto text = ReadText(fs, root + "/ui/doors.json", error);
+        if (!text) return std::nullopt;
+        auto settings = present::ParseDoorPictureSettings(*text, error);
+        if (!settings) {
+            error = root + "/ui/doors.json: " + error;
+            return std::nullopt;
+        }
+        content.doors = *settings;
     }
     {
         auto text = ReadText(fs, root + "/ui/hit_feedback.json", error);

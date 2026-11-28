@@ -1194,6 +1194,83 @@ TEST_CASE("client: a game whose Match plays another mode is built again on it; t
     }
 }
 
+// The doors (interact-door declaration section 8) in the shipped sandbox on pvp_arena: its one door (scene id 1) at
+// the hinge (14, 0, 4), facing +Z, its leaf along +X. The own player is put by the Match 0.45 m before the leaf,
+// looking at it along its spawn's yaw (0 or pi: along +Z or -Z).
+TEST_CASE("client: a door looked at within reach is prompted; E opens it, its picture swings and it is heard; shut again, too") {
+    const auto sandbox = ShippedContent()->FindMode("sandbox");
+    REQUIRE(sandbox.has_value());
+    Setup setup(1, 4, 0, std::nullopt, {}, std::nullopt, {}, 0, {}, nullptr, ShippedContent(), *sandbox);
+    REQUIRE(FramesUntil(setup, [&] { return setup.Screen().mode == "sandbox"; }));
+    setup.Shown();
+    I::MouseButtonInput click;
+    click.button = I::MouseButton::Left;
+    click.position = {640.0F, 360.0F};
+    for (const I::ButtonState state : {I::ButtonState::Pressed, I::ButtonState::Released}) {
+        click.state = state;
+        setup.Next().buttons.push_back(click);
+        setup.Frame();
+    }
+    REQUIRE(PC::StatusOf(setup.Client()).captured);
+    constexpr K::EntityId door = PW::SceneEntity(1);
+    K::World& match = GameWorld(*setup.match);
+    const K::EntityId own = PW::OwnPlayer(setup.Sim());
+    REQUIRE(own != 0);
+    const float facing = std::cos(match.Get<PW::PlayerBody>(own)->yaw);
+    REQUIRE(std::abs(facing) > 0.99F);
+    match.GetMut<PW::PlayerBody>(own)->feet = {14.5F, 0.0F, 4.0F - 0.5F * facing};
+    const auto prompt = [&] { return setup.Client().Resource<PC::InteractionPrompt>()->text; };
+    const auto shown = [&]() -> const PC::ShownDoor& {
+        const auto& doors = setup.Client().Resource<PC::ClientDoors>()->doors;
+        const auto found = doors.find(door);
+        REQUIRE(found != doors.end());
+        return found->second;
+    };
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return prompt() == "[E] 開ける"; }), "[pvp-door-prompt] looking at the shut door: " << prompt());
+    CHECK(shown().turned == 0.0F);
+    REQUIRE(shown().picture != 0);
+    // A door the Match is not sending (net's NotReceiving at the Sim World) is not prompted.
+    setup.Sim().Insert(door, GYO::Engine::Net::NotReceiving{});
+    CHECK_MESSAGE(FramesUntil(setup, [&] { return prompt().empty(); }), "[pvp-door-prompt-receiving] not sent: no prompt");
+    REQUIRE(static_cast<bool>(setup.Sim().Remove<GYO::Engine::Net::NotReceiving>(door)));
+    REQUIRE(FramesUntil(setup, [&] { return prompt() == "[E] 開ける"; }));
+    // E: the Match opens it; the picture swings to it over the presentation's time, and it is heard once.
+    setup.Next().keys.push_back(Key(I::KeyCode::E));
+    setup.Frame();
+    setup.Next().keys.push_back(Key(I::KeyCode::E, I::ButtonState::Released));
+    REQUIRE_MESSAGE(FramesUntil(setup, [&] { return shown().state && shown().state->open == 1; }), "the Match opened the door");
+    CHECK(match.Get<PW::DoorState>(door)->open == 1);
+    bool between = false;
+    REQUIRE(FramesUntil(setup, [&] {
+        between = between || (shown().turned > 0.0F && shown().turned < 1.0F);
+        return shown().turned == 1.0F;
+    }));
+    CHECK_MESSAGE(between, "[pvp-door-swing] the picture swings: it is between shut and open for a while");
+    const PW::DoorShape& shape = *match.Get<PW::DoorShape>(door);
+    const T::Transform* picture = setup.Client().Get<T::Transform>(shown().picture);
+    REQUIRE(picture != nullptr);
+    CHECK_MESSAGE(picture->translation.x == shape.hinge.x, "[pvp-door-swing] the picture turns about the hinge");
+    CHECK(picture->rotation.y == doctest::Approx(PW::DoorTurn(shape, 1.0F).y));
+    CHECK_MESSAGE(setup.Client().Resource<PC::ClientDoors>()->opened == 1, "[pvp-door-sound] opening is heard once");
+    CHECK(setup.Client().Resource<PC::ClientDoors>()->closed == 0);
+    // The open leaf is not before the player any more: nothing to do with what it looks at.
+    CHECK_MESSAGE(prompt().empty(), "[pvp-door-prompt] " << prompt());
+    // Shut again at the Match: heard once, the picture swings back.
+    match.GetMut<PW::DoorState>(door)->open = 0;
+    REQUIRE(FramesUntil(setup, [&] { return shown().turned == 0.0F; }));
+    CHECK_MESSAGE(setup.Client().Resource<PC::ClientDoors>()->closed == 1, "[pvp-door-sound] shutting is heard once");
+    CHECK(setup.Client().Resource<PC::ClientDoors>()->opened == 1);
+    CHECK_MESSAGE(prompt() == "[E] 開ける", "[pvp-door-prompt] " << prompt());
+}
+
+TEST_CASE("client: the core PvP mode has no door to show and no prompt") {
+    Setup setup;
+    setup.Shown();
+    setup.Frames(30);
+    CHECK_MESSAGE(setup.Client().Resource<PC::ClientDoors>()->doors.empty(), "[pvp-door-prompt] no door in core PvP");
+    CHECK(setup.Client().Resource<PC::InteractionPrompt>()->text.empty());
+}
+
 // The arena's map drawn region by region (big-map declaration section 15, L5): one Mesh3d per region of the played
 // arena's map, each the region's model (read while the Frame World generated), with the region's box, and the 3D
 // camera culled by the visibility Module.

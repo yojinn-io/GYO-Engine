@@ -1,6 +1,6 @@
 #include "object_fps_pvp/world/Interaction.hpp"
 
-#include "world/Sight.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "data/JsonFields.hpp"
 #include "object_fps_pvp/world/ContentHash.hpp"

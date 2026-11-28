@@ -716,3 +716,14 @@ P2 的預設與單位照別家判（1.5）：作者什麼都不寫時用**卸下
   - 和 9.4 不同：`[pvp-door-before-start]`、`[pvp-door-dead]` 沒另寫，由 `interaction` 的測試蓋（開賽前、死了都沒有 `Interacted`，門就不會動）。`[pvp-door-match-client]` 的「A 按 E」改成 Match 直接改 `DoorState`；「B 的預測被關著的門擋住、門開後能過」沒有測試（Client 的移動預測走同一個 `MovePlayers`＋`Walls`，門的 Transform 由 Client 自己的 `PoseDoors` 擺）。
   - 換掉組表的測試內容（`WithTap`、`WithProbe`、`CoreOnly`）一併清空 scene：scene 物件記的是讀它時那張組表的 slot。
   - 出貨內容多了 sandbox 與 pvp_arena 的 scene，三個既有測試的前提跟著改：`CoreOnly` 只留沒開組的模式配置；`ArenaTests` 的 pvp_arena 有 scene；`ClientTests` 的「另一個模式配置」用新加的那個的 index（原本寫死 1，現在 1 是 sandbox）。`ModeTests` 的「不認得的組」從 `doors` 改成 `lockers`。
+
+### 14.3 第 7 步（Client 的門）
+
+- **擺動秒數放 `ui/doors.json`（新，version 1：`swing_seconds`）**：宣告第 8 節寫「擺動秒數、音量、距離放 `audio/sfx.json`」。音量與距離照寫（`sfx.json` version 4 → 5，加 `door_open`、`door_close` 兩個 cue）；擺動是畫面不是聲音，另放表現檔，讀法與擺動的算式在 logic 函式庫（`present/DoorPicture.hpp`：`ParseDoorPictureSettings`、`SwingToward`），可單獨測。
+- **門的形狀經 `WorldSnapshot` 交給 Frame World**：宣告寫「Frame World 從 scene 自己知道門的形狀」。實作是 `WorldSnapshot::doors` 每個元素帶 `{id, DoorShape, DoorState（可沒有）, receiving}`，照 id 由小到大。理由：`SceneContent` 裡存的是組的 reader 讀完的 `put`（放進 World 的函式），不是形狀本身；Frame World 沒有登記門的元件，不能照樣 `put`。形狀是 Sim World 從同一份 scene 放的，交給 Frame 不會不一致。另帶 `reach`（`InteractionRules`；沒開 interaction 時沒有）。
+- **焦點的規則**：照 Match 的判法（2.3）：自己的眼睛沿 Client 的視線（`ClientControls` 的 yaw／pitch）、`reach` 以內、第一個碰到的是地圖的牆（`ClientSound::walls`，Sim 交過來的 `BoxSet`）、地板平面（`FloorAlong`），還是門（照 `DoorState` 的姿勢，不是畫面上擺到一半的姿勢）。`Sight.hpp` 從 `src/world/` 搬到公開的 `include/object_fps_pvp/world/`（Client 共用 `ShotRay`、`FloorAlong`）。
+- **提示**：`FocusDoors` 寫 `InteractionPrompt`（公開的 Frame 資源）；`ShowHud` 只顯示它（`kPromptText`，準星下方），有狀態字（未操作、死了、連線中）時不顯示。
+- **門的畫面**：`client/BoxModel`（共用的長方體 helper：大小、原點在盒內的比例；門用 (0, 0, 0.5)），`Mesh3d.color` 上色；`ShowDoors` 照 `SwingToward` 擺，`Transform` 以門軸為原點、`DoorTurn(shape, turned)`（world 加的：`DoorPose` 也改用它）。
+- **音效**：`ApplySnapshot` 看到兩張圖之間的狀態變了，就記一個 cue（位置是門板中心）與次數（`ClientDoors::opened`／`closed`）；`PlaySounds` 每幀取走 cue（沒有音效裝置時也取走），用和其他人的聲音同一套空間化（`HeardGains`，地圖擋住時降低）。音檔是程式合成的（`games/object_fps_pvp/sounds-src/door_sounds.py`），來源寫進 `LICENSES/SOURCES.zh-Hant.md`。
+- **測試**（`ClientTests.cpp` 兩案、logic 的 `DoorPictureTests.cpp` 兩案）：看著關著的門提示「[E] 開ける」、Match 沒在送就不提示、按 E 開門、畫面擺動（有一段在中間）、以門軸轉、開與關各記一次聲音、開著時門板不在眼前就沒有提示、核心 PvP 沒有門也沒有提示。
+  - 沒有測試：牆在玩家與門之間時的提示（規則和 Match 共用 `ShotRay`／`FloorAlong`，牆的判定是 `CastRay` 對 `BoxSet`）、`reach` 以外不提示、實際播出的聲音（測試沒有音效裝置，只數 cue）。

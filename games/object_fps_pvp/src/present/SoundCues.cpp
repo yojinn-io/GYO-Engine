@@ -16,7 +16,7 @@ namespace Math = GYO::Engine::Math;
 namespace {
 
 constexpr const char* CueNames[SoundCueCount] = {"local_shot", "remote_shot", "hit_taken", "hit_confirmed",
-                                                 "footstep", "landing"};
+                                                 "footstep", "landing", "door_open", "door_close"};
 
 float Bounded(const Json::Value& value, const float low, const float high, const char* what) {
     const auto number = static_cast<float>(data::Number(value, what));
@@ -41,7 +41,7 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
     try {
         const auto document = data::ParseDocument(text);
         const auto json = data::AsObject(document.Root(), "the settings");
-        if (data::Integer(data::Member(json, "version"), "version") != 4) throw std::runtime_error("unsupported version");
+        if (data::Integer(data::Member(json, "version"), "version") != 5) throw std::runtime_error("unsupported version");
         SoundSettings settings;
         const auto cues = data::AsObject(data::Member(json, "cues"), "cues");
         for (std::size_t i = 0; i < SoundCueCount; ++i) {

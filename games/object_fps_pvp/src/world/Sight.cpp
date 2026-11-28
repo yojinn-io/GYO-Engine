@@ -1,4 +1,4 @@
-#include "world/Sight.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/BodySize.hpp"

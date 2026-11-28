@@ -6,6 +6,7 @@
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
 #include "object_fps_pvp/world/Components.hpp"
+#include "object_fps_pvp/world/Doors.hpp"
 
 #include "engine/kernel/Kernel.hpp"
 #include "engine/physics_3d/Shapes.hpp"
@@ -36,9 +37,19 @@ struct PlayerSnapshot final {
     std::optional<PW::HitRecord> hits;
     std::optional<PW::ShotRecord> shot;
 };
+// A door of the scene as the Sim World has it (interact-door declaration section 8: one vector per gameplay set of
+// the scene's objects, each element the id and what the set replicates, by ascending id).
+struct DoorSnapshot final {
+    K::EntityId id = 0;
+    PW::DoorShape shape;
+    std::optional<PW::DoorState> state;  // none: the Sim World has none now (taken off while the Match hides it)
+    bool receiving = true;               // the Match is sending it (not NotReceiving)
+};
 struct WorldSnapshot final {
     std::uint64_t version = 0;
     std::vector<PlayerSnapshot> players;  // every entity with an Owner
+    std::vector<DoorSnapshot> doors;      // every entity with a DoorShape
+    std::optional<float> reach;           // world::InteractionRules (none: the interaction set is off)
     std::string arenaId;                  // the arena the Sim World plays (GameRules)
     std::uint64_t wallsDigest = 0;
     // Those walls once built (a BoxSet's body is shared and immutable: a copy is a reference), for the sounds'

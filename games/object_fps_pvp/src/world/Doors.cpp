@@ -1,6 +1,6 @@
 #include "object_fps_pvp/world/Doors.hpp"
 
-#include "world/Sight.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "data/JsonFields.hpp"
 #include "object_fps_pvp/world/ContentHash.hpp"
@@ -36,11 +36,14 @@ void HashValue(K::Hasher& h, const DoorShape& v) {
     }
 }
 
-T::Transform DoorPose(const DoorShape& shape, const bool open) {
+Math::Quaternion DoorTurn(const DoorShape& shape, const float turned) {
     // A turn about +Y by the yaw takes +Z to the facing (sim::ViewDirection) and +X to the body's right
     // (sim::ComputePlanarInput's right axis).
-    const float angle = shape.yaw + (open ? shape.swing : 0.0F);
-    const Math::Quaternion turn = Math::MakeQuaternionFromAxisAngle(Math::Vec3{0.0F, 1.0F, 0.0F}, angle);
+    return Math::MakeQuaternionFromAxisAngle(Math::Vec3{0.0F, 1.0F, 0.0F}, shape.yaw + shape.swing * turned);
+}
+
+T::Transform DoorPose(const DoorShape& shape, const bool open) {
+    const Math::Quaternion turn = DoorTurn(shape, open ? 1.0F : 0.0F);
     T::Transform pose;
     pose.translation = shape.hinge + Math::Rotate(turn, Math::Vec3{0.5F * shape.width, 0.5F * shape.height, 0.0F});
     pose.rotation = turn;

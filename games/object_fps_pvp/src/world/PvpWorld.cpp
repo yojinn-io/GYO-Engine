@@ -1,5 +1,5 @@
 #include "object_fps_pvp/world/PvpWorld.hpp"
-#include "world/Sight.hpp"
+#include "object_fps_pvp/world/Sight.hpp"
 
 #include "object_fps_pvp/match/AdmissionToken.hpp"
 #include "object_fps_pvp/data/Utf8.hpp"

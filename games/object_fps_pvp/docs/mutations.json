@@ -4777,8 +4777,8 @@
     "interact-door-declaration 3, 9.5"
    ],
    "file": "games/object_fps_pvp/src/world/Doors.cpp",
-   "find": "    const float angle = shape.yaw + (open ? shape.swing : 0.0F);",
-   "replace": "    const float angle = shape.yaw;",
+   "find": "    const Math::Quaternion turn = DoorTurn(shape, open ? 1.0F : 0.0F);",
+   "replace": "    const Math::Quaternion turn = DoorTurn(shape, 0.0F);",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: doors*",
    "expect": "pvp-door-pose\\] open"
@@ -4847,6 +4847,110 @@
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: doors*",
    "expect": "pvp-door-match-client\\] attached before the start"
+  },
+  {
+   "id": "pvp-door-prompt-flipped",
+   "what": "the prompt says open for an open door and shut for a shut one",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (focused != nullptr && focused->receiving) text = focused->state->open != 0 ? \"[E] 閉める\" : \"[E] 開ける\";",
+   "replace": "    if (focused != nullptr && focused->receiving) text = focused->state->open != 0 ? \"[E] 開ける\" : \"[E] 閉める\";",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt"
+  },
+  {
+   "id": "pvp-door-prompt-not-received",
+   "what": "a door the Match is not sending is prompted",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "    if (focused != nullptr && focused->receiving) text =",
+   "replace": "    if (focused != nullptr) text =",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt-receiving"
+  },
+  {
+   "id": "pvp-door-swing-instant",
+   "what": "a door's picture jumps to its state",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        if (door.state) door.turned = present::SwingToward(door.turned, door.state->open != 0, seconds, screen->presentation->doors);",
+   "replace": "        if (door.state) door.turned = door.state->open != 0 ? 1.0F : 0.0F;",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-swing\\] the picture swings"
+  },
+  {
+   "id": "pvp-door-picture-off-hinge",
+   "what": "a door's picture turns about another point than its hinge",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        const T::Transform pose{door.shape.hinge, PW::DoorTurn(door.shape, door.turned)};",
+   "replace": "        const T::Transform pose{door.shape.hinge + Math::Vec3{0.5F, 0.0F, 0.0F}, PW::DoorTurn(door.shape, door.turned)};",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "turns about the hinge"
+  },
+  {
+   "id": "pvp-door-change-unheard",
+   "what": "a door's state that changes is not heard",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "        } else if (door.state->open != shown.state->open) {",
+   "replace": "        } else if (false) {",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-sound"
+  },
+  {
+   "id": "pvp-door-state-not-pictured",
+   "what": "the Sim World's picture does not carry a door's state",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/client/ClientWorld.cpp",
+   "find": "            if (const PW::DoorState* state = world.Get<PW::DoorState>(id)) door.state = *state;\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_client_tests",
+   "cases": "client: a door*",
+   "expect": "pvp-door-prompt\\] looking at the shut door"
+  },
+  {
+   "id": "pvp-door-swing-pace",
+   "what": "a swing goes at twice the settings' pace",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/present/DoorPicture.cpp",
+   "find": "    const auto step = static_cast<float>(std::max(0.0, seconds) / settings.swingSeconds);",
+   "replace": "    const auto step = static_cast<float>(2.0 * std::max(0.0, seconds) / settings.swingSeconds);",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP door picture*",
+   "expect": "pvp-door-swing-pace"
+  },
+  {
+   "id": "pvp-door-swing-unbounded-read",
+   "what": "a negative swing time reads",
+   "guards": [
+    "interact-door-declaration 8, 9.5"
+   ],
+   "file": "games/object_fps_pvp/src/present/DoorPicture.cpp",
+   "find": "settings.swingSeconds < 0.0F || ",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_logic_tests",
+   "cases": "PvP door picture*",
+   "expect": "pvp-door-swing-read"
   }
  ]
 }

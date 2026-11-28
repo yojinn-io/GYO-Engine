@@ -40,6 +40,7 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/match/PlayerSave.cpp
     src/match/SaveSync.cpp
     src/present/Controls.cpp
+    src/present/DoorPicture.cpp
     src/present/HitFeedback.cpp
     src/present/Interpolation.cpp
     src/present/SoundCues.cpp
@@ -83,6 +84,7 @@ gyo_game_add_library(client OUT_TARGET object_fps_pvp_client
         GYO::Text GYO::Ui GYO::Window GYO::WorldAsset GYO::OS GYO::Http GYO::IO GYO::StateMachine
     PRIVATE_LIBRARIES GYO::Json GYO::RenderWorld GYO::MeshRender
     SOURCES
+    src/client/BoxModel.cpp
     src/client/ClientWorld.cpp
     src/client/Gateway.cpp
     src/client/GatewayScreen.cpp

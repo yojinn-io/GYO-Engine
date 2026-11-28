@@ -13,6 +13,7 @@
 #include "object_fps_pvp/world/GameplaySets.hpp"
 
 #include "engine/kernel/Kernel.hpp"
+#include "engine/math/linear/Quaternion.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/transform/Transform.hpp"
 
@@ -42,7 +43,11 @@ struct DoorShape final {
 };
 void HashValue(K::Hasher&, const DoorShape&);
 
-// The leaf's pose for a state: its centre and its turn about +Y.
+// The leaf's turn about the hinge's vertical when it is `turned` of the way open (0: shut, 1: open; a picture swinging
+// between them is in between).
+[[nodiscard]] GYO::Engine::Math::Quaternion DoorTurn(const DoorShape& shape, float turned);
+
+// The leaf's pose for a state: its centre and its turn about +Y (DoorTurn of 0 or 1).
 [[nodiscard]] GYO::Engine::Transform::Transform DoorPose(const DoorShape& shape, bool open);
 
 inline constexpr const char* kDoorsSet = "doors";
