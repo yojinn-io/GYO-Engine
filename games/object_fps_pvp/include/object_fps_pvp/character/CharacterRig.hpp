@@ -3,7 +3,7 @@
 // The player's character as the Match and the Client both use it: the body model's skeleton (Player_V20.fbx), its
 // sixteen clips retargeted from the animation library (UAL1_Standard.fbx, by node name, characters/player/
 // character.json), the upper body (presentation.json's upper_body_root and below), how the model stands in the
-// world (scaled to the arena's body height, its lowest point on the feet, turned by the yaw), the hit shapes on its
+// world (scaled to its body's height, its lowest point on the feet, turned by the yaw), the hit shapes on its
 // bones (hitbox.json: port inventory PV2) and the third-person weapon's mount. The models are the catalog entries the
 // character files name (asset_catalog.json, with their settings: the library without meshes). Both ends read them
 // before the World is built, without any renderer (port inventory 4.5); a Client draws the same body.
@@ -12,6 +12,7 @@
 // clip plays and when is the game's (sim/PlayerAnimation.hpp, layer 2); the layering of the upper body over the
 // lower is the game's too (port inventory 4.3).
 
+#include "object_fps_pvp/sim/BodySize.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
 #include "object_fps_pvp/sim/PlayerAnimation.hpp"
 
@@ -59,6 +60,8 @@ struct CharacterRig final {
     // The body model and its catalog id (a Client draws the store's copy of the same file: its node order is this one).
     std::shared_ptr<const Model::ModelData> body;
     std::string bodyAssetId;
+    // The body it plays with (character.json's body): collision, shots, the camera, and the model's scale.
+    sim::BodySize bodySize;
     std::array<Model::AnimationClip, kClipCount> clips;
     std::vector<std::uint8_t> upperMask;  // per node: 1 for the upper body
     sim::AnimationRules rules;
@@ -71,9 +74,10 @@ struct CharacterRig final {
     Math::Matrix4 weaponMount{};
 };
 
-// Reads the character under root (the game's asset directory) for a body of bodyHeight. nullopt with error naming
-// the file and what was wrong (a clip or node the files name that the models do not have, a retarget refused).
-[[nodiscard]] std::optional<CharacterRig> LoadCharacterRig(const std::string& root, float bodyHeight, std::string& error);
+// Reads the character under root (the game's asset directory). nullopt with error naming the file and what was wrong
+// (character.json not of version 2 or its body not read (sim::ParseBodySize), a clip or node the files name that the
+// models do not have, a retarget refused).
+[[nodiscard]] std::optional<CharacterRig> LoadCharacterRig(const std::string& root, std::string& error);
 
 // The body's local pose for the moment: the lower body from the locomotion (or the jump, or the death), the upper
 // body from the aim plus the action's (or the idle's) motion since its first frame, each node from its half. out takes

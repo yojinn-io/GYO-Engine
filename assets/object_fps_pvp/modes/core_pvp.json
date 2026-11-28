@@ -3,7 +3,8 @@
   "id": "core_pvp",
   "name": "核心 PvP",
   "rules": {
-    "movement": "rules/movement_rules.json"
+    "movement": "rules/movement_rules.json",
+    "damage": "rules/damage_rules.json"
   },
   "sets": {},
   "arenas": []

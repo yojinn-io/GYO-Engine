@@ -32,8 +32,8 @@ namespace object_fps_pvp::world {
 namespace K = GYO::Kernel;
 namespace O = GYO::Engine::Orchestration;
 
-// What a set read from a mode file or an arena file: the digest of the values it read (into the rules digest that both
-// ends compare, GameContent::MatchRulesDigest), and what it puts into a World that plays it (its own Resource, before
+// What a set read from a mode file: the digest of the values it read (into the rules digest that both ends compare,
+// ModeContent::rulesDigest), and what it puts into a World that plays it (its own Resource, before
 // the first frame). put runs at every end, from the end's own files: the digest says both ends read the same, so a
 // set's settings are not replicated.
 struct SetData final {
@@ -45,14 +45,12 @@ struct SetData final {
 using SetReader = std::function<std::optional<SetData>(const GYO::Engine::Json::ObjectView& block, std::string& error)>;
 
 struct GameplaySet final {
-    // Its name (ASCII, as the game's names): the key in a mode file's sets and an arena file's sets.
+    // Its name (ASCII, as the game's names): the key in a mode file's sets.
     std::string name;
     // Its registration: components, net, authority, Systems (each in GameplaySetFixed or GameplaySetFrame).
     std::function<void(O::WorldSetup&)> build;
     // Its settings in a mode file (none: it takes {} only).
     SetReader readMode;
-    // Its block in an arena file (none: an arena may not have one for it).
-    SetReader readArena;
 };
 
 // The game's own sets, in registration order (the slot of each is its index). A test may give its own table to
@@ -79,17 +77,14 @@ struct ActiveMode final {
 };
 void HashValue(K::Hasher&, const ActiveMode&);
 
-// What a mode file or an arena file says for the sets: by slot (the set's index in the table), what each read.
+// What a mode file says for the sets: by slot (the set's index in the table), what each read.
 using SetBlocks = std::vector<std::pair<std::size_t, SetData>>;
 
-// Reads the blocks of an object of sets (set name -> block) with each set's reader (readMode, or readArena when arena
-// is true). nullopt with error: a name the table does not have, a block that is not an object, one for a set without a
-// reader of that kind that is not {}, or what the set's reader says.
+// Reads the blocks of an object of sets (set name -> block) with each set's reader (readMode). nullopt with error: a
+// name the table does not have, a block that is not an object, one for a set without a reader that is not {}, or what
+// the set's reader says.
 [[nodiscard]] std::optional<SetBlocks> ReadSetBlocks(const GYO::Engine::Json::ObjectView& blocks, const std::vector<GameplaySet>& sets,
-                                                     bool arena, std::string& error);
-
-// The sets block of an arena file (its "sets" member; none: no block). nullopt with error as ReadSetBlocks.
-[[nodiscard]] std::optional<SetBlocks> ReadArenaSets(std::string_view arenaText, const std::vector<GameplaySet>& sets, std::string& error);
+                                                     std::string& error);
 
 // The run condition of the slot's set (pvp.mode.<name>): true when the World's ActiveMode turns it on.
 [[nodiscard]] K::ConditionRef GameplaySetOn(std::size_t slot, const std::string& name);

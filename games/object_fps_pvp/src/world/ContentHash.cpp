@@ -7,12 +7,44 @@
 
 namespace object_fps_pvp::sim {
 
-void HashValue(GYO::Kernel::Hasher& h, const StanceRules& v) {
-    HashValue(h, v.crouchBodyHeight);
-    HashValue(h, v.crouchEyeHeight);
+void HashValue(GYO::Kernel::Hasher& h, const MovementRules& v) {
+    HashValue(h, v.movementSpeed);
+    HashValue(h, v.jumpHeight);
+    HashValue(h, v.gravity);
     HashValue(h, v.crouchSpeedScale);
     HashValue(h, v.sprintSpeedScale);
     HashValue(h, v.holdJump);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const FallDamage& v) {
+    HashValue(h, v.safeHeight);
+    HashValue(h, v.milliPointsPerMetre);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const DamageRules& v) { HashValue(h, v.fall); }
+
+void HashValue(GYO::Kernel::Hasher& h, const BodySize& v) {
+    HashValue(h, v.height);
+    HashValue(h, v.radius);
+    HashValue(h, v.eyeHeight);
+    HashValue(h, v.crouchHeight);
+    HashValue(h, v.crouchEyeHeight);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const SpawnPoint& v) {
+    HashValue(h, v.position.x);
+    HashValue(h, v.position.y);
+    HashValue(h, v.position.z);
+    HashValue(h, v.yaw);
+}
+
+void HashValue(GYO::Kernel::Hasher& h, const ArenaContent& v) {
+    HashValue(h, v.map);
+    HashValue(h, v.width);
+    HashValue(h, v.depth);
+    HashValue(h, v.floor);
+    HashValue(h, v.killHeight);
+    HashValue(h, v.spawns);
 }
 
 void HashValue(GYO::Kernel::Hasher& h, const CombatRules& v) {
@@ -129,8 +161,9 @@ void HashClip(K::Hasher& h, const Model::AnimationClip& clip) {
 
 std::uint64_t CharacterDigest(const character::CharacterRig& character) {
     K::Hasher h;
-    HashValue(h, std::string("gyo.object_fps_pvp.character/1"));
+    HashValue(h, std::string("gyo.object_fps_pvp.character/2"));
     HashValue(h, character.bodyAssetId);
+    HashValue(h, character.bodySize);
     HashValue(h, static_cast<std::uint64_t>(character.body->nodes.size()));
     for (const Model::Node& node : character.body->nodes) HashNode(h, node);
     HashValue(h, static_cast<std::uint64_t>(character.clips.size()));
@@ -140,6 +173,13 @@ std::uint64_t CharacterDigest(const character::CharacterRig& character) {
     HashValue(h, character.scale);
     HashVec3(h, character.anchor);
     HashValue(h, character.hitShapes);
+    return Digest64(h);
+}
+
+std::uint64_t ArenaDigest(const sim::ArenaContent& arena) {
+    K::Hasher h;
+    HashValue(h, std::string("gyo.object_fps_pvp.arena/1"));
+    HashValue(h, arena);
     return Digest64(h);
 }
 

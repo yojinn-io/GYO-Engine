@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "fall_damage": {"safe_height": 4.0, "points_per_metre": 15}
+}

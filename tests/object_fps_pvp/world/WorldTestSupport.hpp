@@ -292,7 +292,7 @@ struct Session {
     }
 };
 
-// A content root of a test's own: the shipped movement rules and the mode files the test writes (modes/, rules/).
+// A content root of a test's own: the shipped rule tables and the mode files the test writes (modes/, rules/).
 struct ModeFolder {
     std::filesystem::path root;
     ModeFolder() {
@@ -300,8 +300,9 @@ struct ModeFolder {
         root = std::filesystem::temp_directory_path() / ("gyo_pvp_modes_" + std::to_string(random()));
         std::filesystem::create_directories(root / "modes");
         std::filesystem::create_directories(root / "rules");
-        std::filesystem::copy_file(std::filesystem::path(PVP_CONTENT_ROOT) / "rules" / "movement_rules.json",
-                                   root / "rules" / "movement_rules.json");
+        for (const char* table : {"movement_rules.json", "damage_rules.json"}) {
+            std::filesystem::copy_file(std::filesystem::path(PVP_CONTENT_ROOT) / "rules" / table, root / "rules" / table);
+        }
     }
     ~ModeFolder() {
         std::error_code ignored;
@@ -324,8 +325,11 @@ struct ModeFolder {
     }
 };
 
+// The shipped core PvP's rule tables (modes/core_pvp.json's rules).
+inline const std::string kShippedRules = R"({"movement": "rules/movement_rules.json", "damage": "rules/damage_rules.json"})";
+
 // A mode file's text.
-inline std::string ModeText(const std::string& id, const std::string& rules = R"({"movement": "rules/movement_rules.json"})",
+inline std::string ModeText(const std::string& id, const std::string& rules = kShippedRules,
                             const std::string& sets = "{}", const std::string& arenas = "[]") {
     return R"({"version": 1, "id": ")" + id + R"(", "name": "M", "rules": )" + rules + R"(, "sets": )" + sets + R"(, "arenas": )" + arenas + "}";
 }

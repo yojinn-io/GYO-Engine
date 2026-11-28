@@ -6,7 +6,9 @@
 // the Match.
 
 #include "object_fps_pvp/sim/Arena.hpp"
+#include "object_fps_pvp/sim/BodySize.hpp"
 #include "object_fps_pvp/sim/CombatRules.hpp"
+#include "object_fps_pvp/sim/DamageRules.hpp"
 #include "object_fps_pvp/sim/LifeState.hpp"
 #include "object_fps_pvp/sim/MovementRules.hpp"
 #include "object_fps_pvp/sim/PlayerAnimation.hpp"
@@ -138,15 +140,20 @@ void HashValue(K::Hasher& h, const PlayerName& v);
 void HashValue(K::Hasher& h, const PlayerMotion& v);
 void HashValue(K::Hasher& h, const PlayerInput& v);
 
-// The match's rules and arena, the same at the Match and every Client (MatchInfo tells the Client which arena).
+// The match's arena, the rules of its mode and its character's body, the same at the Match and every Client (MatchInfo
+// tells the Client which mode and arena). The simulation reads the body here; the character carries the pose and the
+// hit shapes.
 struct GameRules final {
     sim::ArenaContent arena;
-    sim::StanceRules stance;
+    sim::MovementRules movement;
+    sim::DamageRules damage;
     sim::CombatRules combat;
+    // The character's body (character->bodySize: one source, copied with the rules).
+    sim::BodySize body;
     // The arena's walls (BoxSet::Digest): a Client compares it with the Match's (MatchInfo).
     std::uint64_t wallsDigest = 0;
-    // The character's (world::CharacterDigest) and the arena's blocks for the mode's sets (GameContent::ArenaDigest): a
-    // Client compares them with the Match's (MatchInfo).
+    // The character's (world::CharacterDigest) and the arena's own values (GameContent::ArenaDigest): a Client compares
+    // them with the Match's (MatchInfo).
     std::uint64_t characterDigest = 0;
     std::uint64_t arenaDigest = 0;
     // The character whose bones carry the hit shapes (LoadGameContent always gives one).

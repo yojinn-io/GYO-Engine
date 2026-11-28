@@ -44,7 +44,9 @@ gyo_game_add_library(logic OUT_TARGET object_fps_pvp_logic
     src/present/Interpolation.cpp
     src/present/SoundCues.cpp
     src/sim/Arena.cpp
+    src/sim/BodySize.cpp
     src/sim/CombatRules.cpp
+    src/sim/DamageRules.cpp
     src/sim/MovementRules.cpp
     src/sim/PlanarMovement.cpp
     src/sim/PlayerAnimation.cpp)
