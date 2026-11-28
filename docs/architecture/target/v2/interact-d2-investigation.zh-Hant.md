@@ -1,6 +1,8 @@
 # D2 調查：交互鍵放 `PlayerInput` 還是另一個輸入型別（`v8-arch-gyo2-interact-door` 附錄）
 
-任務卡，2026-11-27。主會話轉交的調查（HANDOFF `v8-arch-gyo2-interact-d2-direction`）。**這份只報告調查結果，D2 還沒定**；使用者核准之後才寫進宣告（`interact-door-declaration.zh-Hant.md` 10.2）。作者 Opus 5.5／high。
+任務卡，2026-11-27。主會話轉交的調查（HANDOFF `v8-arch-gyo2-interact-d2-direction`）。**這份只報告調查結果**；使用者核准之後才寫進宣告（`interact-door-declaration.zh-Hant.md` 10.2）。作者 Opus 5.5／high。
+
+**2026-11-28 已核准**（HANDOFF `v8-arch-gyo2-interact-door-decisions`）：D2 (a)、Q-b、Q-c 照第 6 節的推薦。宣告修訂 2 已照第 6 節末段改寫；Q-b 的形狀是兩個位元欄 `presses`／`holds`（宣告 2.4），第 3 節的比法仍成立（宣告 9.3）。本文保留調查當時的樣子，不改寫。
 
 程式的行號：Engine 照 `gyo2` 85df84da；遊戲照 #367 的分支 1baf9122；技能研究照 #374 的分支 617020d5。參考實作照 `~/Code/GitHome` 的本地源碼。
 
