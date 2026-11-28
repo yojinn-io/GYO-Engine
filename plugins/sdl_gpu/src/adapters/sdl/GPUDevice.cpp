@@ -23,6 +23,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/render/ShaderAbi.hpp"
+#include "engine/render/Tonemapping.hpp"
 
 #include "../../EmbeddedShaders.hpp"
 #include "../../FrameDraws.hpp"
@@ -84,8 +85,21 @@ SDL_GPUTextureFormat SDLTargetFormat(const R::RenderTargetFormat format, const S
     switch (format) {
     case R::RenderTargetFormat::Rgba8Unorm: return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     case R::RenderTargetFormat::Depth: return depthFormat;
+    case R::RenderTargetFormat::Rgba16Float: return SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
     }
     return SDL_GPU_TEXTUREFORMAT_INVALID;
+}
+
+// A target that holds linear light (RenderTargetFormat::Rgba16Float): a colour's bytes stand there for the light they
+// encode.
+bool IsLinear(const SDL_GPUTextureFormat format) noexcept { return format == SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT; }
+
+// A clear colour on a target of this format: the bytes / 255 on an 8-bit target; on a linear one the light they stand
+// for (render's SrgbToLinear; alpha as it is).
+SDL_FColor ClearColour(const R::Color8 c, const SDL_GPUTextureFormat format) noexcept {
+    const auto unit = [](const std::uint8_t byte) { return static_cast<float>(byte) / 255.0F; };
+    if (!IsLinear(format)) return SDL_FColor{unit(c.r), unit(c.g), unit(c.b), unit(c.a)};
+    return SDL_FColor{R::SrgbToLinear(unit(c.r)), R::SrgbToLinear(unit(c.g)), R::SrgbToLinear(unit(c.b)), unit(c.a)};
 }
 
 template <class... F>
@@ -263,6 +277,8 @@ struct GPUDevice::State {
     SDL_GPUShader* fragment = nullptr;
     SDL_GPUShader* meshVertex = nullptr;
     SDL_GPUShader* meshFragment = nullptr;
+    // The unlit 3D pass on a linear target (Rgba16Float): its colour decoded (ShaderAbi.hpp).
+    SDL_GPUShader* meshFragmentLinear = nullptr;
     SDL_GPUShader* depthVertex = nullptr;
     SDL_GPUShader* depthFragment = nullptr;
     SDL_GPUShader* fullscreenVertex = nullptr;
@@ -312,7 +328,7 @@ struct GPUDevice::State {
             if (fragment != nullptr) SDL_ReleaseGPUShader(device, fragment);
             if (meshVertex != nullptr) SDL_ReleaseGPUShader(device, meshVertex);
             if (meshFragment != nullptr) SDL_ReleaseGPUShader(device, meshFragment);
-            for (SDL_GPUShader* shader : {depthVertex, depthFragment, fullscreenVertex}) {
+            for (SDL_GPUShader* shader : {meshFragmentLinear, depthVertex, depthFragment, fullscreenVertex}) {
                 if (shader != nullptr) SDL_ReleaseGPUShader(device, shader);
             }
             if (transfer != nullptr) SDL_ReleaseGPUTransferBuffer(device, transfer);
@@ -440,7 +456,7 @@ struct GPUDevice::State {
         SDL_GPUGraphicsPipelineCreateInfo info{};
         // A depth-only pass's vertex stage reads the position and the world alone; the other inputs stay bound.
         info.vertex_shader = depthOnly ? depthVertex : meshVertex;
-        info.fragment_shader = depthOnly ? depthFragment : meshFragment;
+        info.fragment_shader = depthOnly ? depthFragment : (IsLinear(colour->format) ? meshFragmentLinear : meshFragment);
         info.vertex_input_state.vertex_buffer_descriptions = buffers;
         info.vertex_input_state.num_vertex_buffers = 2;
         info.vertex_input_state.vertex_attributes = attributes;
@@ -919,8 +935,7 @@ struct GPUDevice::State {
         SDL_GPUColorTargetInfo colour{};
         colour.texture = on.texture;
         colour.store_op = SDL_GPU_STOREOP_STORE;
-        const R::Color8 c = clear.value_or(R::Color8{0, 0, 0, 0});
-        colour.clear_color = SDL_FColor{c.r / 255.0F, c.g / 255.0F, c.b / 255.0F, c.a / 255.0F};
+        colour.clear_color = ClearColour(clear.value_or(R::Color8{0, 0, 0, 0}), on.format);
         colour.load_op = (undefined || clear) ? SDL_GPU_LOADOP_CLEAR : SDL_GPU_LOADOP_LOAD;
         return colour;
     }
@@ -1292,6 +1307,7 @@ Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> GPUDevice::Creat
     BuiltIn builtIns[] = {
         {Abi::kPass2DVertexSource, &State::vertex},         {Abi::kPass2DFragmentSource, &State::fragment},
         {Abi::kMesh3DVertexSource, &State::meshVertex},     {Abi::kMesh3DFragmentSource, &State::meshFragment},
+        {Abi::kMesh3DLinearFragmentSource, &State::meshFragmentLinear},
         {Abi::kDepthVertexSource, &State::depthVertex},     {Abi::kDepthFragmentSource, &State::depthFragment},
         {Abi::kFullscreenVertexSource, &State::fullscreenVertex},
     };

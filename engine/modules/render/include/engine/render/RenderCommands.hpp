@@ -223,8 +223,8 @@ struct PassFullscreen final {
     // As Pass2D's: the pixels the triangle covers; nullopt: the whole target.
     std::optional<PixelRect> viewport;
     // The fragment shader, by the name the backend carries it under (an HLSL file's name without ".hlsl"; render's
-    // ShaderAbi.hpp names the built-in ones; until A4's tonemapping the Engine has none, render-pipeline declaration
-    // 14.3). Its stage takes FullscreenVarying (shaders/Fullscreen.hlsli). A shader the backend does not carry draws
+    // ShaderAbi.hpp names the built-in ones: the Engine's one is the tonemapping pass's, A4, render-pipeline declaration
+    // 16). Its stage takes FullscreenVarying (shaders/Fullscreen.hlsli). A shader the backend does not carry draws
     // nothing (counted). The material mechanism (B1) replaces the name with an id.
     std::string shader;
     // What the shader samples: its textures and samplers 0, 1, ... in this order (render targets, pictures). As many

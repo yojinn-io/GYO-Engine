@@ -201,7 +201,7 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
     // The camera's view (camera's CM-7): world to clip space for the pass, view space for the distances.
     const Math::Matrix4& viewFromWorld = camera.view.viewFromWorld;
     Pass3D pass;
-    pass.target = camera.target;
+    pass.target = camera.SceneTarget();
     const Camera::Viewport& vp = camera.computed.viewport;
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};

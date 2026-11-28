@@ -477,3 +477,90 @@ TEST_CASE("pipeline3d: skinning multiplies the joint by the inverse bind in that
     CHECK_MESSAGE((Near(v[1].position.x, 5) && Near(v[1].position.y, 3)), "[p3-skin-unbound] a vertex of no influence at its node: "
                                                                             << v[1].position.x << ", " << v[1].position.y);
 }
+
+// ---- Hdr cameras (render-pipeline declaration section 16, v8-arch-gyo2-render-a4).
+
+TEST_CASE("pipeline3d: a Hdr camera's 3D pass draws on its picture") {
+    R::ExtractedCamera camera = Camera3d(R::TextureId{5});
+    camera.hdr = R::TextureId{20};
+    const std::optional<R::Pass3D> pass = R::Queue3d(camera, {});
+    REQUIRE(pass.has_value());
+    CHECK_MESSAGE(pass->target == R::TextureId{20}, "[p3-hdr-scene-target] its picture, not its target");
+    camera.hdr = std::nullopt;
+    CHECK_MESSAGE(R::Queue3d(camera, {})->target == R::TextureId{5}, "[p3-scene-target] without Hdr, its target");
+}
+
+TEST_CASE("compose: a Hdr camera draws on its picture; its tonemapping pass, after PostProcess, puts it on its target before its Overlay") {
+    R::RenderTextures textures;
+    const R::TextureId picture = textures.CreateTarget(R::RenderTargetDesc{R::FollowTarget{}, R::RenderTargetFormat::Rgba16Float});
+    R::ExtractedCameras cameras;
+    R::ExtractedCamera world = Camera3d(std::nullopt, 0);
+    world.clear = R::Color8{1, 2, 3, 255};
+    world.hdr = picture;
+    world.tonemapping = R::Tonemapping::Method::AcesFitted;
+    world.computed.viewport = C::Viewport{{10, 0}, {80, 100}};
+    cameras.cameras = {world};
+    R::CameraPasses passes;
+    passes.byCamera.resize(1);
+    passes.byCamera[0][R::CameraPhase::Opaque].push_back(*R::Queue3d(world, {}));
+    R::PassFullscreen post;
+    post.target = R::TextureId{30};
+    post.inputs = {picture};
+    passes.byCamera[0][R::CameraPhase::PostProcess].push_back(post);
+    R::Pass2D overlay;
+    passes.byCamera[0][R::CameraPhase::Overlay].push_back(overlay);
+    R::RenderCommands out;
+    R::ComposePasses(cameras, passes, out);
+    REQUIRE_MESSAGE(out.passes.size() == 6, "[cp-hdr-all] the target's clear, the picture's clear, the scene, post, tonemapping, overlay");
+    const auto* outputClear = std::get_if<R::Pass2D>(&out.passes[0]);
+    CHECK_MESSAGE((outputClear != nullptr && !outputClear->target && outputClear->clear == R::Color8{1, 2, 3, 255}),
+                  "[cp-hdr-output-cleared] the first camera on its target still clears the target whole (the bars)");
+    const auto* pictureClear = std::get_if<R::Pass2D>(&out.passes[1]);
+    CHECK_MESSAGE((pictureClear != nullptr && pictureClear->target == picture && pictureClear->clear == R::Color8{1, 2, 3, 255} &&
+                   pictureClear->draws.empty()),
+                  "[cp-hdr-picture-cleared] its picture cleared whole to its colour");
+    const auto* scene = std::get_if<R::Pass3D>(&out.passes[2]);
+    CHECK_MESSAGE((scene != nullptr && scene->target == picture), "[cp-hdr-scene] its scene on the picture");
+    const auto* posted = std::get_if<R::PassFullscreen>(&out.passes[3]);
+    CHECK_MESSAGE((posted != nullptr && posted->target == R::TextureId{30}), "[cp-hdr-tonemap-after-post] its PostProcess passes before the tonemapping");
+    const auto* tonemap = std::get_if<R::PassFullscreen>(&out.passes[4]);
+    REQUIRE(tonemap != nullptr);
+    const R::PassFullscreen expected = R::TonemappingPass(picture, std::nullopt, R::PixelRect{10, 0, 80, 100}, R::Tonemapping::Method::AcesFitted);
+    CHECK_MESSAGE((tonemap->target == expected.target && tonemap->viewport == expected.viewport && tonemap->shader == expected.shader &&
+                   tonemap->inputs == expected.inputs && tonemap->parameters == expected.parameters),
+                  "[cp-hdr-tonemap-pass] the picture through its curve onto its target, over its viewport");
+    CHECK_MESSAGE(std::holds_alternative<R::Pass2D>(out.passes[5]), "[cp-hdr-tonemap-before-overlay] its Overlay after the tonemapping");
+    CHECK_MESSAGE(!R::FirstUnwrittenRead(out, textures).has_value(), "[cp-hdr-written-before-read] the picture is drawn before it is sampled (RP-3)");
+}
+
+TEST_CASE("compose: Hdr cameras on one target share its picture: the first clears it, one with a colour clears it whole, one without draws over") {
+    const R::TextureId picture{20};
+    R::ExtractedCameras cameras;
+    R::ExtractedCamera first = Camera3d(std::nullopt, 0);
+    first.clear = std::nullopt;
+    first.hdr = picture;
+    R::ExtractedCamera coloured = Camera3d(std::nullopt, 1);
+    coloured.clear = R::Color8{9, 9, 9, 255};
+    coloured.hdr = picture;
+    coloured.computed.viewport = C::Viewport{{50, 0}, {50, 100}};
+    R::ExtractedCamera over = Camera3d(std::nullopt, 2);
+    over.clear = std::nullopt;
+    over.hdr = picture;
+    cameras.cameras = {first, coloured, over};
+    R::CameraPasses passes;
+    passes.byCamera.resize(3);
+    R::RenderCommands out;
+    R::ComposePasses(cameras, passes, out);
+    REQUIRE_MESSAGE(out.passes.size() == 5, "[cp-hdr-shared-all] two clears of the picture and three tonemapping passes, nothing on the target");
+    const auto* firstClear = std::get_if<R::Pass2D>(&out.passes[0]);
+    CHECK_MESSAGE((firstClear != nullptr && firstClear->target == picture && firstClear->clear == R::Color8{0, 0, 0, 0}),
+                  "[cp-hdr-first-transparent] the first camera on the picture clears it, to transparent black without a colour");
+    CHECK_MESSAGE(std::holds_alternative<R::PassFullscreen>(out.passes[1]), "[cp-hdr-each-tonemaps] each camera tonemaps after its phases");
+    const auto* colouredClear = std::get_if<R::Pass2D>(&out.passes[2]);
+    CHECK_MESSAGE((colouredClear != nullptr && colouredClear->target == picture && colouredClear->clear == R::Color8{9, 9, 9, 255} &&
+                   colouredClear->draws.empty() && !colouredClear->viewport),
+                  "[cp-hdr-colour-clears-whole] a later camera with a colour clears the whole picture, and nothing on its target");
+    const auto* overTonemap = std::get_if<R::PassFullscreen>(&out.passes[4]);
+    CHECK_MESSAGE((std::holds_alternative<R::PassFullscreen>(out.passes[3]) && overTonemap != nullptr && overTonemap->inputs[0] == picture),
+                  "[cp-hdr-none-draws-over] a later camera without a colour clears nothing");
+}

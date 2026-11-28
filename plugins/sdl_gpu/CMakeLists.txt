@@ -102,6 +102,8 @@ add_custom_command(OUTPUT "${gyo_embedded_shaders}"
             --shader depth.vert vertex "${gyo_render_shader_dir}/depth.vert.hlsl"
             --shader depth.frag fragment "${gyo_render_shader_dir}/depth.frag.hlsl"
             --shader fullscreen.vert vertex "${gyo_render_shader_dir}/fullscreen.vert.hlsl"
+            --shader mesh3d_linear.frag fragment "${gyo_render_shader_dir}/mesh3d_linear.frag.hlsl"
+            --shader tonemapping.frag fragment "${gyo_render_shader_dir}/tonemapping.frag.hlsl"
     DEPENDS ${gyo_render_shader_sources} ${gyo_shader_tool_dependency} "${gyo_shader_tool}"
     COMMENT "Compiling render's shaders for sdl_gpu (${gyo_shader_format_list})"
     VERBATIM)

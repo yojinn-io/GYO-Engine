@@ -17,6 +17,7 @@
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/RenderTargets.hpp"
 #include "engine/render/RenderTextures.hpp"
+#include "engine/render/Tonemapping.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
 
 namespace GYO::Engine::CameraRender {
@@ -137,6 +138,27 @@ SystemResult ExtractCameras(Kernel::Extract<Kernel::Read<Camera::Camera>> camera
     return {};
 }
 
+// After ExtractCameras: each drawing camera's tonemapping and exposure, and the HDR pictures (render-pipeline
+// declaration section 16): a Camera3d with Hdr draws on the picture of its target, one per target that such a camera
+// draws on this frame (made by the render World itself, following that target's size; Bevy's main textures keyed by
+// the camera's target, bevy_render/src/view/mod.rs:1385); a target no such camera draws on this frame keeps none.
+SystemResult ExtractHdr(Kernel::Extract<Kernel::Read<Render::Hdr>> hdr, Kernel::Extract<Kernel::Read<Render::Tonemapping>> tonemappings,
+                        Kernel::Extract<Kernel::Read<Render::Exposure>> exposures, Kernel::ResMut<Render::ExtractedCameras> cameras,
+                        Kernel::ResMut<Render::RenderTextures> textures, Kernel::ResMut<Render::HdrTargets> pictures) {
+    std::vector<std::optional<Render::TextureId>> outputs;
+    for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
+        if (const Render::Tonemapping* t = tonemappings.Get(camera.entity)) camera.tonemapping = t->method;
+        if (const Render::Exposure* e = exposures.Get(camera.entity)) camera.exposure = e->Scale();
+        if (camera.is3d && hdr.Contains(camera.entity)) outputs.push_back(camera.target);
+    }
+    Render::SyncHdrTargets(outputs, textures.Get(), pictures.Get());
+    for (Render::ExtractedCamera& camera : cameras.Get().cameras) {
+        if (!camera.is3d || !hdr.Contains(camera.entity)) continue;
+        if (const Render::TextureId* picture = pictures.Read().Find(camera.target)) camera.hdr = *picture;
+    }
+    return {};
+}
+
 SystemResult ComposeCameraPasses(Kernel::Res<Render::ExtractedCameras> cameras, Kernel::ResMut<Render::CameraPasses> passes,
                                  Kernel::ResMut<Render::RenderCommands> commands) {
     Render::ComposePasses(*cameras, passes.Get(), commands.Get());
@@ -156,6 +178,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.Resource<Render::ExtractedCameras>({.name = "ExtractedCameras"});
     r.Resource<Render::CameraPasses>({.name = "CameraPasses"});
     r.Resource<Render::TargetTextures>({.name = "TargetTextures"});
+    r.Resource<Render::HdrTargets>({.name = "HdrTargets"});
     Kernel::SystemOptions targetsExtract;
     targetsExtract.name = "ExtractRenderTargets";
     Kernel::Mount targetsMount;
@@ -171,6 +194,14 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
     mount.stage = std::string(RenderWorld::kExtractSchedule);
     extract.mounts.push_back(std::move(mount));
     r.AddSystem<&ExtractCameras>(std::move(extract));
+    Kernel::SystemOptions hdrExtract;
+    hdrExtract.name = "ExtractHdr";
+    Kernel::Mount hdrMount;
+    hdrMount.schedule = std::string(RenderWorld::kExtractSchedule);
+    hdrMount.stage = std::string(RenderWorld::kExtractSchedule);
+    hdrMount.after.push_back(std::string(kExtractCameras));
+    hdrExtract.mounts.push_back(std::move(hdrMount));
+    r.AddSystem<&ExtractHdr>(std::move(hdrExtract));
     Kernel::SystemOptions compose;
     compose.name = std::string(kComposeCameraPasses);
     Kernel::Mount composeMount;
@@ -182,6 +213,7 @@ void CameraRenderModule::Build(Orchestration::WorldSetup& setup) {
         if (world.Resource<Render::ExtractedCameras>() == nullptr) world.SetResource(Render::ExtractedCameras{});
         if (world.Resource<Render::CameraPasses>() == nullptr) world.SetResource(Render::CameraPasses{});
         if (world.Resource<Render::TargetTextures>() == nullptr) world.SetResource(Render::TargetTextures{});
+        if (world.Resource<Render::HdrTargets>() == nullptr) world.SetResource(Render::HdrTargets{});
         return {};
     });
 }

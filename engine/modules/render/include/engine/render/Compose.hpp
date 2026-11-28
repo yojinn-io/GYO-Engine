@@ -76,6 +76,12 @@ inline void HashValue(Kernel::Hasher&, const CameraPasses&) {}
 // its colour (a Pass2D with clear only: the letterbox bars); a later camera with a colour clears its own viewport (a
 // Pass2D whose one draw is an opaque rectangle over it); a camera without one clears nothing. Then the camera's phases
 // in CameraPhase's order, each phase's passes in their order. Empties every list.
+//
+// A camera with an HDR picture (ExtractedCamera::hdr, render-pipeline declaration section 16) clears its target only as
+// the first camera there (the bars: its tonemapping replaces its viewport); its picture is cleared whole by the first
+// camera of the frame on it (to its colour, or transparent black) and by any camera with a colour (Bevy's
+// view/composition.rs:4-6); its tonemapping pass (TonemappingPass, onto its target over its viewport) comes after its
+// PostProcess phase, before its Overlay.
 void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out);
 
 } // namespace GYO::Engine::Render

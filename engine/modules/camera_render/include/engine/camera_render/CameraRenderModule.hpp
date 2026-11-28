@@ -13,6 +13,11 @@
 // camera's target is the pass target its CameraTarget maps to (the main target stays the main target); a camera whose
 // CameraTarget has no render target (let go after the camera was computed) is not extracted: nothing to draw on.
 //
+// High dynamic range (render-pipeline declaration section 16): ExtractHdr, after it, gives each extracted camera its
+// Tonemapping and Exposure, and each 3D camera with Hdr the HDR picture of its target (render's HdrTargets: a
+// Rgba16Float render target of the render World's own, one per target such cameras draw on this frame, Bevy's main
+// texture); ComposeCameraPasses then puts that camera's tonemapping pass after its PostProcess phase.
+//
 // The pipelines (sprite_render, mesh_render, ui_render) put each camera's passes in a phase of its slot of render's
 // CameraPasses (its slots made by ExtractCameras), and the passes of views that are no camera's in its beforeCameras;
 // ComposeCameraPasses, in CameraRenderOptions::schedule / composeStage (Main / PostUpdate, after the pipelines'

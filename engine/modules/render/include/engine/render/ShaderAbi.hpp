@@ -1,14 +1,15 @@
 #pragma once
 
 // The C++ side of the passes' shader ABI (docs/architecture/target/v2/render.zh-Hant.md, section 4; Design Invariant
-// RD-4). The HLSL side is shaders/Pass2D.hlsli, Mesh3D.hlsli and Fullscreen.hlsli; a backend binds what is written
-// here. Both sides change together.
+// RD-4). The HLSL side is shaders/Pass2D.hlsli, Mesh3D.hlsli, Fullscreen.hlsli and Tonemapping.hlsli; a backend
+// binds what is written here. Both sides change together.
 
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
 
 #include "engine/render/RenderCommands.hpp"
+#include "engine/render/Tonemapping.hpp"
 
 namespace GYO::Engine::Render::ShaderAbi {
 
@@ -123,5 +124,31 @@ inline constexpr std::uint32_t kFullscreenFirstInputSlot = 0;
 inline constexpr std::uint32_t kFullscreenParametersSlot = 0;
 // A full-screen fragment shader declares at most one uniform buffer (its parameters).
 inline constexpr std::uint32_t kFullscreenFragmentUniformBuffersAtMost = 1;
+
+// ---- The unlit 3D pass on a linear target (render-pipeline declaration section 16): mesh3d.frag's colour, computed on
+// the bytes as on an 8-bit target, decoded to the linear light it stands for (shaders/Color.hlsli). The 3D pass's
+// vertex stage, inputs and texture as kMesh3D*.
+inline constexpr std::string_view kMesh3DLinearFragmentSource = "mesh3d_linear.frag.hlsl";
+
+// ---- The tonemapping pass (render-pipeline declaration section 16; Tonemapping.hpp): a full-screen fragment shader of
+// the Engine's own. Its one input is the HDR picture, sampled at the pass's own pixel (the picture is as large as the
+// target); its parameters one float4, lane 0 the method's value (Tonemapping::Method; shaders/Tonemapping.hlsli
+// names the same values), lanes 1 to 3 zero. It writes the curve's result, clamped and sRGB-encoded, and the
+// picture's alpha.
+inline constexpr std::string_view kTonemappingFragmentSource = "tonemapping.frag.hlsl";
+inline constexpr std::uint32_t kTonemappingInputs = 1;
+struct TonemappingParameters final {
+    float lanes[4];
+};
+static_assert(sizeof(TonemappingParameters) == 16);
+[[nodiscard]] constexpr TonemappingParameters ToParameters(const Tonemapping::Method method) noexcept {
+    return TonemappingParameters{{static_cast<float>(static_cast<std::uint8_t>(method)), 0.0F, 0.0F, 0.0F}};
+}
+static_assert(static_cast<std::uint8_t>(Tonemapping::Method::None) == 1 && static_cast<std::uint8_t>(Tonemapping::Method::Reinhard) == 2 &&
+              static_cast<std::uint8_t>(Tonemapping::Method::ReinhardLuminance) == 3 &&
+              static_cast<std::uint8_t>(Tonemapping::Method::AcesFitted) == 4 &&
+              static_cast<std::uint8_t>(Tonemapping::Method::SomewhatBoringDisplayTransform) == 5 &&
+              static_cast<std::uint8_t>(Tonemapping::Method::KhronosPbrNeutral) == 6,
+              "Tonemapping.hlsli's GYO_TONEMAP_* values");
 
 } // namespace GYO::Engine::Render::ShaderAbi

@@ -415,8 +415,8 @@
     "render section 2"
    ],
    "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-   "find": "        const R::Color8 c = clear.value_or(R::Color8{0, 0, 0, 0});",
-   "replace": "        const R::Color8 c = R::Color8{0, 0, 0, 0};",
+   "find": "        colour.clear_color = ClearColour(clear.value_or(R::Color8{0, 0, 0, 0}), on.format);",
+   "replace": "        colour.clear_color = ClearColour(R::Color8{0, 0, 0, 0}, on.format);",
    "target": "gyo_sdl_gpu_tests",
    "cases": "sdl_gpu pass2d: a pass clears*",
    "expect": "\\[gp\\-clear\\]"

@@ -127,6 +127,21 @@ TEST_CASE("sdl_gpu shaders: the depth-only and full-screen passes' built-in shad
     }
 }
 
+TEST_CASE("sdl_gpu shaders: the tonemapping pass's and the linear 3D pass's built-in shaders use what render's ABI says") {
+    const G::EmbeddedShader* tonemapping = G::FindEmbeddedShader(std::string(Abi::ShaderName(Abi::kTonemappingFragmentSource)));
+    const G::EmbeddedShader* linear = G::FindEmbeddedShader(std::string(Abi::ShaderName(Abi::kMesh3DLinearFragmentSource)));
+    REQUIRE_MESSAGE((tonemapping != nullptr && linear != nullptr), "[sg-hdr-embedded] they are embedded");
+    CHECK_MESSAGE((tonemapping->stage == G::ShaderStage::Fragment && linear->stage == G::ShaderStage::Fragment), "[sg-hdr-stages] fragment stages");
+    CHECK_MESSAGE((tonemapping->resources.samplers == Abi::kTonemappingInputs && tonemapping->resources.uniformBuffers == 1),
+                  "[sg-hdr-tonemapping] one input (the picture) and its parameters");
+    CHECK_MESSAGE((linear->resources.samplers == Abi::kMesh3DFragmentSamplers && linear->resources.uniformBuffers == Abi::kMesh3DFragmentUniformBuffers),
+                  "[sg-hdr-linear] the 3D pass's fragment ABI");
+    for (const G::EmbeddedShader* shader : {tonemapping, linear}) {
+        CHECK_MESSAGE((shader->resources.storageTextures == 0 && shader->resources.storageBuffers == 0), "[sg-hdr-no-storage]");
+        CHECK_MESSAGE(!shader->compiled.empty(), "[sg-hdr-compiled] at least one format is embedded");
+    }
+}
+
 TEST_CASE("sdl_gpu present: render's PresentMode falls back along Bevy's chain to what the window supports") {
     using PM = GYO::Engine::Render::PresentMode;
     using SM = G::SwapchainPresentMode;

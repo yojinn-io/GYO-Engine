@@ -42,7 +42,8 @@ enum class TextureFilter : std::uint8_t {
 };
 
 // How a texture made from pixels stores and reads its texels (Bevy's TextureFormat, of which these are the ones in use;
-// the compressed ones come with F1). Its pixels are 4 bytes R, G, B, A.
+// the compressed ones come with F1). Its pixels are 4 bytes R, G, B, A: a float format is a render target's alone
+// (RenderTargetFormat::Rgba16Float; a picture of float pixels, a sky's, comes with C3).
 enum class TextureFormat : std::uint8_t {
     // Sampled as stored: the 2D pass's pictures (it blends bytes, RP-4), data pictures (the normal map _N, _ORM).
     Rgba8Unorm = 1,
@@ -52,11 +53,12 @@ enum class TextureFormat : std::uint8_t {
     Rgba8UnormSrgb,
 };
 
-// How a render target stores what passes draw on it (Rgba16Float comes with HDR, A4). Its own type: a target of
-// pixels' formats, a texture of a target's, cannot be written down.
+// How a render target stores what passes draw on it. Its own type: a target of pixels' formats, a texture of a
+// target's, cannot be written down.
 enum class RenderTargetFormat : std::uint8_t {
-    // R, G, B, A, 8 bits each: what colour passes draw, sampled as stored (its bytes are blended as they are). An sRGB
-    // target is not one yet: what a clear colour and blending mean on one comes with the linear path (A4).
+    // R, G, B, A, 8 bits each: what colour passes draw, sampled as stored (its bytes are blended as they are). There is
+    // no sRGB target (render-pipeline declaration 16): the linear path encodes in its tonemapping pass's shader and
+    // writes bytes on an 8-bit target, where the 2D passes and the UI blend bytes (RP-4).
     Rgba8Unorm = 1,
     // Depth, 0 near to 1 far (render-pipeline declaration section 14): drawn on by depth-only passes and 3D passes
     // (Pass3D::depth), sampled (as a texture whose first channel is the depth) between its pixels by the nearest one
@@ -65,6 +67,13 @@ enum class RenderTargetFormat : std::uint8_t {
     // bevy_core_pipeline/src/core_3d/mod.rs:5; SDL_GPU guarantees only D16 for both drawing and sampling,
     // SDL_gpu.h:703,747).
     Depth,
+    // R, G, B, A, a 16-bit float each: linear light, values past 1 kept (a Hdr camera's picture, Tonemapping.hpp;
+    // Bevy's Rgba16Float main texture, bevy_render/src/camera.rs:799-801). A colour is bytes as stored (sRGB-encoded,
+    // Color8): a clear colour on it is decoded to the light it stands for (as Bevy converts a clear colour to its main
+    // texture's space, bevy_render/src/view/mod.rs:1442-1450); the unlit 3D pass writes the light its bytes stand for;
+    // the 2D pass writes its bytes / 255 as they are (2D blends bytes, RP-4: the 2D pipelines draw on no such target).
+    // Sampled as stored.
+    Rgba16Float,
 };
 
 struct TextureDesc final {

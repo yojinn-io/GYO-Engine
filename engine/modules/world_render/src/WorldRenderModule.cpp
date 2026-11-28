@@ -14,6 +14,7 @@
 #include "engine/kernel/World.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/RenderTargets.hpp"
+#include "engine/render/Tonemapping.hpp"
 
 namespace GYO::Engine::WorldRender {
 
@@ -96,6 +97,9 @@ void WorldRenderModule::Build(Orchestration::WorldSetup& setup) {
     r.Component<Render::CulledEntities>({.name = "CulledEntities"});
     r.Component<Render::ClearColorConfig>({.name = "ClearColorConfig"});
     r.Component<Render::TargetUpdate>({.name = "TargetUpdate"});
+    r.Component<Render::Hdr>({.name = "Hdr"});
+    r.Component<Render::Tonemapping>({.name = "Tonemapping"});
+    r.Component<Render::Exposure>({.name = "Exposure"});
     r.Resource<Render::ClearColor>({.name = "ClearColor"});
     r.Resource<Render::RenderTargets>({.name = "RenderTargets"});
     r.Resource<SeenOnce>({.name = "SeenOnce"});

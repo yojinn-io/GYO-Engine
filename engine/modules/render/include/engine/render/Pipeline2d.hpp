@@ -26,6 +26,7 @@
 #include "engine/render/Drawables.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
+#include "engine/render/Tonemapping.hpp"
 #include "engine/world_asset/AssetView.hpp"
 
 namespace GYO::Engine::Render {
@@ -37,6 +38,13 @@ struct ExtractedCamera final {
     std::int32_t order = 0;
     // The pass target its CameraTarget maps to (nullopt: the main target).
     std::optional<TextureId> target;
+    // A 3D camera with Hdr: its HDR picture (HdrTargets, Tonemapping.hpp), on which its phases up to PostProcess draw;
+    // its tonemapping pass then puts it on target. nullopt: the phases draw on target.
+    std::optional<TextureId> hdr;
+    // The curve of its tonemapping pass (its Tonemapping, or the default).
+    Tonemapping::Method tonemapping = Tonemapping{}.method;
+    // Its Exposure's scale (Exposure::Scale; the default's without one), for lit materials.
+    float exposure = Exposure{}.Scale();
     Camera::ComputedCamera computed;
     // The camera's view (CameraView): world to clip space and view space, the one value the pipelines take.
     Camera::CameraView view;
@@ -50,6 +58,9 @@ struct ExtractedCamera final {
     std::uint32_t layers = 1;
     // The camera's CulledEntities (ascending EntityId; empty when it has none): Queue3d leaves out their items.
     std::vector<std::uint64_t> culled;
+
+    // Where its phases Prepass to PostProcess draw: its HDR picture, or its target.
+    [[nodiscard]] std::optional<TextureId> SceneTarget() const noexcept { return hdr ? hdr : target; }
 };
 
 // render's Resource in the render World (camera_render): the active, valid cameras of this frame, by order, then by
