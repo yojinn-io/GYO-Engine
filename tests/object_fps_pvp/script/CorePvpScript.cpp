@@ -185,8 +185,7 @@ std::string Bits(const float value) {
 std::string InputText(const PW::PlayerInput& v) {
     std::ostringstream out;
     out << "axes=" << Bits(v.forward) << Bits(v.right) << Bits(v.yaw) << Bits(v.pitch) << " present=" << int{v.present}
-        << " jump=" << int{v.jump} << " crouch=" << int{v.crouch} << " fire=" << int{v.fire} << " reload=" << int{v.reload}
-        << " ready=" << int{v.ready};
+        << " presses=" << int{v.presses} << " holds=" << int{v.holds};
     return out.str();
 }
 
@@ -203,7 +202,7 @@ void PrintInputs(const std::string& label, K::World& world) {
 PW::PlayerInput Input(const float forward, const float right, const float yaw, const float pitch = 0.0F) {
     PW::PlayerInput input;
     input.present = 1;
-    input.ready = 1;
+    input.Hold(PW::kHoldReady, true);
     input.forward = forward;
     input.right = right;
     input.yaw = yaw;
@@ -212,10 +211,10 @@ PW::PlayerInput Input(const float forward, const float right, const float yaw, c
 }
 
 PW::PlayerInput Pressed(PW::PlayerInput input, const bool jump, const bool fire, const bool reload, const bool crouch = false) {
-    input.jump = jump ? 1 : 0;
-    input.fire = fire ? 1 : 0;
-    input.reload = reload ? 1 : 0;
-    input.crouch = crouch ? 1 : 0;
+    input.Press(PW::kPressJump, jump);
+    input.Press(PW::kPressFire, fire);
+    input.Press(PW::kPressReload, reload);
+    input.Hold(PW::kHoldCrouch, crouch);
     return input;
 }
 

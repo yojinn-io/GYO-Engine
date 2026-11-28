@@ -11,6 +11,7 @@
 #include "engine/math/scalar/Constants.hpp"
 #include "engine/physics_3d/Collider.hpp"
 #include "engine/net/NetService.hpp"
+#include "engine/net/Replication.hpp"
 #include "engine/physics_3d/Shapes.hpp"
 #include "object_fps_pvp/character/CharacterRig.hpp"
 
@@ -106,6 +107,37 @@ TEST_CASE("world: a player walks at the arena's speed and stops at the wall, at 
     CHECK(match.Body(side).feet.z == doctest::Approx(10.0));
 }
 
+TEST_CASE("world: a held input keeps the holds and drops every press; the input's codec reads back what it wrote") {
+    LoneMatch match;
+    const N::NetWorldLink* link = match.World().Resource<N::NetWorldLink>();
+    REQUIRE(link != nullptr);
+    const std::shared_ptr<const N::NetRegistry> registry = link->registry;
+    REQUIRE(registry != nullptr);
+    const N::InputOptions<PW::PlayerInput>* options = nullptr;
+    for (const auto& entry : registry->inputs) {
+        if (entry->key == K::KeyOf<PW::PlayerInput>()) options = static_cast<const N::InputOptions<PW::PlayerInput>*>(entry->options.get());
+    }
+    REQUIRE(options != nullptr);
+    PW::PlayerInput every = Input(0.5F, -0.25F, 1.0F, 0.125F);
+    for (const std::uint8_t key : {PW::kPressJump, PW::kPressFire, PW::kPressReload, PW::kPressInteract}) every.Press(key, true);
+    for (const std::uint8_t key : {PW::kHoldCrouch, PW::kHoldReady}) every.Hold(key, true);
+    PW::PlayerInput held = every;
+    REQUIRE(options->held);
+    options->held(held);
+    CHECK_MESSAGE(held.presses == 0, "[pvp-input-held] a held input has no press (interact too): " << int{held.presses});
+    CHECK_MESSAGE(held.holds == every.holds, "[pvp-input-held] a held input keeps its holds: " << int{held.holds});
+    CHECK(held.present == every.present);
+    CHECK(held.forward == every.forward);
+    std::vector<std::byte> bytes;
+    N::NetWriter writer(bytes);
+    options->codec.encode(writer, every);
+    N::NetReader reader(bytes);
+    PW::PlayerInput read;
+    REQUIRE(options->codec.decode(reader, read));
+    CHECK_MESSAGE(read == every, "[pvp-input-codec] the codec reads back every key");
+    CHECK(options->codec.version == 3);
+}
+
 TEST_CASE("world: a player without input neither moves nor turns") {
     LoneMatch match;
     const K::EntityId idle = match.AddPlayer({5, 0, 5}, 1.0F);
@@ -122,7 +154,7 @@ TEST_CASE("world: a jump rises to the arena's height and lands") {
     LoneMatch match;
     const K::EntityId jumper = match.AddPlayer({5, 0, 5});
     PW::PlayerInput jump = Input(0, 0, 0);
-    jump.jump = 1;
+    jump.Press(PW::kPressJump, true);
     match.Steer(jumper, jump);
     match.Run(1);
     match.Steer(jumper, Input(0, 0, 0));
@@ -146,7 +178,7 @@ TEST_CASE("world: a crouched player under a low roof cannot stand up until it le
     match.SetWalls({{{8.0F, 1.5F, 0.0F}, {12.0F, 3.0F, 20.0F}}});
     const K::EntityId player = match.AddPlayer({6, 0, 5});
     PW::PlayerInput crouch = Input(0, 1, 0);
-    crouch.crouch = 1;
+    crouch.Hold(PW::kHoldCrouch, true);
     match.Steer(player, crouch);
     match.Run(64);  // 1.5 units a second: from x 6 to 7.5
     match.Run(64);  // under the roof: x 9
@@ -171,7 +203,7 @@ TEST_CASE("world: a shot hits the player in front, the cooldown holds the next, 
     // From the eye (1.6) at B's chest (1.2): the bones' body shape.
     const float chest = -std::atan2(1.2F - 1.6F, 5.0F);
     PW::PlayerInput fire = Input(0, 0, 0, chest);
-    fire.fire = 1;
+    fire.Press(PW::kPressFire, true);
     match.Steer(a, fire);
     match.Run(1);
     const std::uint64_t firstShot = TickOf(match.World());
@@ -228,7 +260,7 @@ TEST_CASE("world: the pillar stops a shot") {
     const K::EntityId a = match.AddPlayer({7, 0, 10}, kHalfPi);
     const K::EntityId b = match.AddPlayer({13, 0, 10});
     PW::PlayerInput fire = Input(0, 0, kHalfPi);
-    fire.fire = 1;
+    fire.Press(PW::kPressFire, true);
     match.Steer(a, fire);
     match.Run(1);
     const PW::ShotRecord& shot = *match.World().Get<PW::ShotRecord>(a);
@@ -242,7 +274,7 @@ TEST_CASE("world: an empty magazine fires nothing; a reload fills it after the r
     const sim::CombatRules rules;
     const K::EntityId a = match.AddPlayer({5, 0, 3});
     PW::PlayerInput fire = Input(0, 0, kHalfPi);
-    fire.fire = 1;
+    fire.Press(PW::kPressFire, true);
     for (std::uint32_t i = 0; i < rules.magazineCapacity; ++i) {
         match.Steer(a, fire);
         match.Run(1);
@@ -255,7 +287,7 @@ TEST_CASE("world: an empty magazine fires nothing; a reload fills it after the r
     match.Run(1);
     CHECK(match.Combat(a).shots == shots);
     PW::PlayerInput reload = Input(0, 0, kHalfPi);
-    reload.reload = 1;
+    reload.Press(PW::kPressReload, true);
     match.Steer(a, reload);
     match.Run(1);
     const std::uint64_t started = TickOf(match.World());
@@ -344,7 +376,7 @@ TEST_CASE("world: a Client shoots the other; the Match judges and both Clients s
     const float pitch = -std::atan2(aim.y, std::sqrt(aim.x * aim.x + aim.z * aim.z));
     session.Frames(10, {Input(0, 0, yaw, pitch)});
     PW::PlayerInput fire = Input(0, 0, yaw, pitch);
-    fire.fire = 1;
+    fire.Press(PW::kPressFire, true);
     session.Frame({fire});
     session.Frames(30, {Input(0, 0, yaw, pitch)});
     const sim::CombatRules rules;
@@ -470,7 +502,7 @@ TEST_CASE("world: with the bones' hit shapes a head shot, a body shot and a leg 
         match.Steer(a, aim);
         match.Run(2);
         PW::PlayerInput fire = aim;
-        fire.fire = 1;
+        fire.Press(PW::kPressFire, true);
         match.Steer(a, fire);
         match.Run(1);
         const PW::ShotRecord shot = *match.World().Get<PW::ShotRecord>(a);
@@ -507,10 +539,10 @@ TEST_CASE("world: a shot a stride ahead of a walking player meets its front leg 
         const Math::Vec3 to = match.Body(b).feet + Math::Vec3{0.45F, 0.0F, 0.0F} - match.Body(a).feet;
         const float distance = std::sqrt(to.x * to.x + to.z * to.z);
         PW::PlayerInput aim = Input(0, 0, std::atan2(to.x, to.z), -std::atan2(0.65F - 1.6F, distance));
-        aim.fire = frame % 12 == 11 ? 1 : 0;
+        aim.Press(PW::kPressFire, frame % 12 == 11);
         match.Steer(a, aim);
         match.Run(1);
-        if (aim.fire == 0) continue;
+        if (!aim.Pressed(PW::kPressFire)) continue;
         const PW::ShotRecord& shot = *match.World().Get<PW::ShotRecord>(a);
         if (shot.kind == sim::ShotHitKind::Player) {
             ++parts[shot.part];
@@ -590,7 +622,7 @@ TEST_CASE("world: the upper body follows the aim and the lower body the gait") {
 namespace {
 
 PW::PlayerInput Ready(PW::PlayerInput input) {
-    input.ready = 1;
+    input.Hold(PW::kHoldReady, true);
     return input;
 }
 
@@ -619,7 +651,7 @@ TEST_CASE("world: before the start each Client sees only its own player and nobo
     const Math::Vec3 start = session.Match().Get<PW::PlayerBody>(one)->feet;
     const float yaw = session.Match().Get<PW::PlayerBody>(one)->yaw;
     PW::PlayerInput fire = Ready(Input(1, 0, yaw + 0.5F));
-    fire.fire = 1;
+    fire.Press(PW::kPressFire, true);
     session.Frames(40, {fire});
     CHECK_MESSAGE(Math::Length(session.Match().Get<PW::PlayerBody>(one)->feet - start) < 1e-4F, "[pvp-start-frozen] nobody moves before the start");
     CHECK_MESSAGE(Math::Length(session.Client(0).Get<PW::PlayerBody>(one)->feet - start) < 1e-4F, "[pvp-start-frozen] ... not in the Client's prediction either");

@@ -102,11 +102,8 @@ void HashValue(K::Hasher& h, const PlayerInput& v) {
     HashValue(h, v.yaw);
     HashValue(h, v.pitch);
     HashValue(h, v.present);
-    HashValue(h, v.jump);
-    HashValue(h, v.crouch);
-    HashValue(h, v.fire);
-    HashValue(h, v.reload);
-    HashValue(h, v.ready);
+    HashValue(h, v.presses);
+    HashValue(h, v.holds);
 }
 void HashValue(K::Hasher&, const GameRules&) {}
 void HashValue(K::Hasher&, const MatchInfo&) {}
@@ -208,24 +205,16 @@ N::InputOptions<PlayerInput> InputOptions() {
                          w.Value(v.yaw);
                          w.Value(v.pitch);
                          w.Value(v.present);
-                         w.Value(v.jump);
-                         w.Value(v.crouch);
-                         w.Value(v.fire);
-                         w.Value(v.reload);
-                         w.Value(v.ready);
+                         w.Value(v.presses);
+                         w.Value(v.holds);
                      },
                      [](N::NetReader& r, PlayerInput& v) {
                          return r.Value(v.forward) && r.Value(v.right) && r.Value(v.yaw) && r.Value(v.pitch) &&
-                                r.Value(v.present) && r.Value(v.jump) && r.Value(v.crouch) && r.Value(v.fire) &&
-                                r.Value(v.reload) && r.Value(v.ready);
+                                r.Value(v.present) && r.Value(v.presses) && r.Value(v.holds);
                      },
-                     2};
-    // A held input is the last one with its presses taken out: a press fires once (C-IN3).
-    options.held = [](PlayerInput& v) {
-        v.jump = 0;
-        v.fire = 0;
-        v.reload = 0;
-    };
+                     3};
+    // A held input is the last one with its presses taken out: a press fires once (C-IN3); its holds are kept.
+    options.held = [](PlayerInput& v) { v.presses = 0; };
     return options;
 }
 // Text on the wire: its length as a Length, then its bytes; a reader refuses one longer than maxBytes.
@@ -342,8 +331,8 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
     const Math::Vec3 start = body.feet;
     bool crouched = body.crouched != 0;
     if (steering) {
-        const bool jumpFromGround = input.jump != 0 && body.grounded != 0;
-        if (input.crouch != 0 && !jumpFromGround) {
+        const bool jumpFromGround = input.Pressed(kPressJump) && body.grounded != 0;
+        if (input.Held(kHoldCrouch) && !jumpFromGround) {
             crouched = true;
         } else if (crouched) {
             // Standing up needs room for the standing body where the feet are.
@@ -364,7 +353,7 @@ Base::Result<float, P::Physics3dError> StepBody(const Walls& walls, const GameRu
         if (!ground) return Base::Err(std::move(ground).error());
         body.grounded = *ground ? 1 : 0;
     }
-    if (steering && input.jump != 0 && body.grounded != 0 && !crouched) {
+    if (steering && input.Pressed(kPressJump) && body.grounded != 0 && !crouched) {
         body.verticalVelocity = sim::JumpSpeed(arena);
         body.grounded = 0;
     }
@@ -469,9 +458,9 @@ K::SystemResult UseWeapons(K::Query<K::Read<PlayerInput>, K::Write<PlayerCombat>
             next.reloadEndTick = 0;
         }
         if (input.present != 0 && next.reloadEndTick == 0) {
-            if (input.reload != 0 && next.ammo < combat.magazineCapacity) {
+            if (input.Pressed(kPressReload) && next.ammo < combat.magazineCapacity) {
                 next.reloadEndTick = now + sim::TicksFor(combat.reloadSeconds, step);
-            } else if (input.fire != 0 && next.ammo > 0 && now >= next.nextShotTick) {
+            } else if (input.Pressed(kPressFire) && next.ammo > 0 && now >= next.nextShotTick) {
                 --next.ammo;
                 next.nextShotTick = now + sim::TicksFor(combat.cooldownSeconds, step);
                 next.lastShotTick = now;
@@ -767,7 +756,7 @@ K::SystemResult StartMatch(K::Query<K::Read<Owner>, K::Read<PlayerInput>> player
     bool anyone = false;
     players.ForEach([&](K::EntityId, const Owner& owner, const PlayerInput& input) {
         anyone = true;
-        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&
+        if (input.Held(kHoldReady) && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&
             std::find(ready.begin(), ready.end(), owner.userId) == ready.end()) {
             ready.push_back(owner.userId);
         }

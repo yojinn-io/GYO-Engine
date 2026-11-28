@@ -1786,7 +1786,7 @@
     "game-flow-declaration 4 (segment 4)"
    ],
    "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
-   "find": "        if (input.ready != 0 && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
+   "find": "        if (input.Held(kHoldReady) && std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
    "replace": "        if (std::find(waiting.expect.begin(), waiting.expect.end(), owner.userId) != waiting.expect.end() &&",
    "target": "gyo_object_fps_pvp_world_tests",
    "cases": "world: before the start*",
@@ -4089,6 +4089,46 @@
    "target": "gyo_object_fps_pvp_client_tests",
    "cases": "client: name:*",
    "expect": "pvp-name-host-not-asked"
+  },
+  {
+   "id": "pvp-held-drops-holds",
+   "what": "a held input drops its holds too (a held crouch or readiness ends when an input is missing)",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    options.held = [](PlayerInput& v) { v.presses = 0; };",
+   "replace": "    options.held = [](PlayerInput& v) {\n        v.presses = 0;\n        v.holds = 0;\n    };",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "pvp-input-held\\] a held input keeps its holds"
+  },
+  {
+   "id": "pvp-held-keeps-presses",
+   "what": "a held input keeps its presses (a press fires on every missing step)",
+   "guards": [
+    "interact-door-declaration 2.4",
+    "C-IN3"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "    options.held = [](PlayerInput& v) { v.presses = 0; };",
+   "replace": "    options.held = [](PlayerInput& v) { (void)v; };",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "pvp-input-held\\] a held input has no press"
+  },
+  {
+   "id": "pvp-input-codec-no-holds",
+   "what": "the input's codec does not write the holds",
+   "guards": [
+    "interact-door-declaration 2.4"
+   ],
+   "file": "games/object_fps_pvp/src/world/PvpWorld.cpp",
+   "find": "                         w.Value(v.holds);\n",
+   "replace": "",
+   "target": "gyo_object_fps_pvp_world_tests",
+   "cases": "world: a held input*",
+   "expect": "codec.decode"
   }
  ]
 }

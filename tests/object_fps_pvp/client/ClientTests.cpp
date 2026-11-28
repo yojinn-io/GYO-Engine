@@ -599,7 +599,7 @@ TEST_CASE("client: J5 while the main thread stops, the lent Sim World steps on, 
             if (const auto* input = matchWorld.Get<PW::PlayerInput>(own)) {
                 round.forward = input->forward;
                 round.present = input->present;
-                round.jump = input->jump;
+                round.jump = input->Pressed(PW::kPressJump) ? 1 : 0;
             }
             if (const auto* body = matchWorld.Get<PW::PlayerBody>(own)) round.yaw = body->yaw;
             round.simTick = TickOf(lease.World());
@@ -944,7 +944,7 @@ TEST_CASE("client: the other player's steps sound while it walks standing, not w
     walk.forward = 1.0F;
     walk.present = 1;
     walk.yaw = setup.Sim().Get<PW::PlayerBody>(rival)->yaw;
-    walk.crouch = 1;
+    walk.Hold(PW::kHoldCrouch, true);
     setup.otherInput = walk;
     // Crouching down and walking two seconds (about three metres): no sound at all (our player stands still).
     setup.Frames(4 * 16);
@@ -954,7 +954,7 @@ TEST_CASE("client: the other player's steps sound while it walks standing, not w
     REQUIRE(GYO::Engine::Math::Length(setup.Client().Get<PW::PlayerBody>(rival)->feet - crouchedFrom) > 2.0F);
     CHECK_MESSAGE(SoundsSubmitted(*setup.client) == crouchedBefore, "[pvp-crouch-silent] a crouched walk made no sound");
     // Standing up and walking one more second (three metres, two strides of 1.5): its steps sound.
-    walk.crouch = 0;
+    walk.Hold(PW::kHoldCrouch, false);
     walk.yaw += 3.14159265F;
     setup.otherInput = walk;
     const std::uint64_t standingBefore = SoundsSubmitted(*setup.client);
@@ -2155,7 +2155,7 @@ TEST_CASE("client: the loading screen covers the game until it is loaded and dra
     REQUIRE_MESSAGE(FramesUntil(setup, [&] {
                         const K::EntityId own = PlayerOf(GameWorld(*setup.match), 1);
                         return own != 0 && GameWorld(*setup.match).Get<PW::PlayerInput>(own) != nullptr &&
-                               GameWorld(*setup.match).Get<PW::PlayerInput>(own)->ready == 1;
+                               GameWorld(*setup.match).Get<PW::PlayerInput>(own)->Held(PW::kHoldReady);
                     }),
                     "[pvp-loading-told] the Match's player of this Client says it is ready");
     // A Match played from the first step: the screen is gone.

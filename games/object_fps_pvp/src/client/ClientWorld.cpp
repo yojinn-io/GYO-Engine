@@ -597,12 +597,12 @@ PW::PlayerInput StepInputOf(SimControls& state, const sim::StanceRules& rules) {
     input.yaw = step.yaw;
     input.pitch = step.pitch;
     input.present = step.present ? 1 : 0;
-    input.jump = sim::StepJumps(step.jump, step.jumpHeld, rules) ? 1 : 0;
-    input.crouch = step.crouch ? 1 : 0;
-    input.fire = step.fire ? 1 : 0;
-    input.reload = step.reload ? 1 : 0;
+    input.Press(PW::kPressJump, sim::StepJumps(step.jump, step.jumpHeld, rules));
+    input.Hold(PW::kHoldCrouch, step.crouch);
+    input.Press(PW::kPressFire, step.fire);
+    input.Press(PW::kPressReload, step.reload);
     // Readiness is not the player's input: stale controls keep it.
-    input.ready = state.pending.ready ? 1 : 0;
+    input.Hold(PW::kHoldReady, state.pending.ready);
     return input;
 }
 
