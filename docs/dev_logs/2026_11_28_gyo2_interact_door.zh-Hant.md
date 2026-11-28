@@ -1,0 +1,15 @@
+# 2026-11-28 門與交互的骨架（`v8-arch-gyo2-interact-door`）
+
+Owner：門＋交互骨架的任務卡。分支 `claude/gyo2-interact-door-e11d33`（PR #375，開向 `gyo2`）。作者 Opus 5.5。宣告：[interact-door-declaration.zh-Hant.md](../architecture/target/v2/interact-door-declaration.zh-Hant.md)（修訂 2）。
+
+## 前提（使用者的決定，經主會話轉達）
+
+1. 「#375 動工核准」（HANDOFF `v8-arch-gyo2-interact-door-start-impl`）。
+2. 五個決策點（`v8-arch-gyo2-interact-door-decisions`）：P1 (a)、P2（Engine 機制＋卸下／保留兩種預設）、D2 (a)、Q-b、Q-c；P3 (a)（`v8-arch-gyo2-interact-door-p3`）；#379 的 A：arena 拿掉 `sets`。
+
+## 各步
+
+- **第 0 步**（Opus／medium）：遊戲流程的 `Scene` → `Screen`（宣告 7.1 的表；7 個檔改名、識別字與註解一起改；`game-flow-declaration`、`gateway-client-handoff` 開頭加一行）。新檢查 `object_fps_pvp.retired_names`＋`_selftest`（`tests/object_fps_pvp/naming/`，label `cpu`）：只掃清單上的舊名與舊檔名。自我測試另持宣告 7.1 的表，清單少一個名字時失敗（手動試了兩個：拿掉 `GameScene`、拿掉 `SoloGame`，都失敗）。
+  - 本機（macOS x86_64）：`object_fps_pvp` 與 `naming` 的 `cpu|shader` 12 項全過。
+  - 突變（D184）：改名碰到的 48 個，find 都在檔裡恰好一次；find／replace／expect 有變的 13 個重跑，13/13 killed。
+  - A/B（主 checkout `build/evidence/gyo2-interact-door/ab.py`，複製自模式配置卡並加 `--input-mapped`；基準 e700e5a3）：權威 digest 1257 行逐位元組相同，報告沒有差異。

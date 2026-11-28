@@ -3,7 +3,7 @@
 #include "client/ClientExchange.hpp"
 #include "object_fps_pvp/client/Gateway.hpp"
 #include "client/Pages.hpp"
-#include "client/SceneBuilds.hpp"
+#include "client/ScreenBuilds.hpp"
 #include "object_fps_pvp/data/ArenaMap.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
 #include "object_fps_pvp/present/Interpolation.hpp"
@@ -185,7 +185,7 @@ void HashValue(K::Hasher&, const CoverState&) {}
 // The world camera's clear colour once the game shows (black before).
 const R::ClearColorConfig kSky{R::ClearColorConfig::Mode::Custom, R::Color8{120, 150, 180, 255}};
 
-// The loading of the game scene (game-flow declaration 3.5). The steps are judged again every frame until ready, so
+// The loading of the game screen (game-flow declaration 3.5). The steps are judged again every frame until ready, so
 // a later change (a new model to load) undoes the steps after it; the progress never goes back.
 struct GameReadiness final {
     double progress = 0.0;
@@ -303,10 +303,10 @@ struct ClientCharacters final {
 };
 void HashValue(K::Hasher&, const ClientCharacters&) {}
 
-struct ClientScene final {
+struct ClientScreen final {
     std::shared_ptr<const PresentationContent> presentation;
 };
-void HashValue(K::Hasher&, const ClientScene&) {}
+void HashValue(K::Hasher&, const ClientScreen&) {}
 
 // The Frame World's map while it becomes the arena's picture (ShowArena's state).
 struct ArenaPictureLoading final {
@@ -496,25 +496,25 @@ R::Shape2d Flash(const std::array<float, 3> color, const float alpha) {
 
 // ---- Systems
 
-// The pictures, the font and the sounds, asked for once; the scene and the sounds use them once they are there.
-K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientScene> scene, K::Res<PW::GameRules> rules,
+// The pictures, the font and the sounds, asked for once; the screen and the sounds use them once they are there.
+K::SystemResult RequestAssets(K::Res<WA::AssetRequests> requests, K::Res<ClientScreen> screen, K::Res<PW::GameRules> rules,
                               K::ResMut<ClientAssets> assets) {
     if (assets.Read().requested) return {};
     ClientAssets& a = assets.Get();
     a.requested = true;
     if (rules->character) a.body = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(rules->character->bodyAssetId));
-    a.heldWeapon = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(scene->presentation->viewmodel.heldModel));
-    a.heldWeaponImage = requests->Load<IM::ImageData>(A::AssetId(scene->presentation->viewmodel.heldImage));
+    a.heldWeapon = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId(screen->presentation->viewmodel.heldModel));
+    a.heldWeaponImage = requests->Load<IM::ImageData>(A::AssetId(screen->presentation->viewmodel.heldImage));
     a.viewmodel = requests->Load<GYO::Engine::Model::ModelData>(A::AssetId("object_fps_pvp.model.nailer_v2"));
-    for (const std::string& image : scene->presentation->viewmodel.materialImages) {
+    for (const std::string& image : screen->presentation->viewmodel.materialImages) {
         a.viewmodelImages.push_back(image.empty() ? A::Handle<IM::ImageData>{} : requests->Load<IM::ImageData>(A::AssetId(image)));
     }
-    if (!scene->presentation->viewmodel.reloadSound.empty() && a.clips.count(scene->presentation->viewmodel.reloadSound) == 0) {
-        const std::string& id = scene->presentation->viewmodel.reloadSound;
+    if (!screen->presentation->viewmodel.reloadSound.empty() && a.clips.count(screen->presentation->viewmodel.reloadSound) == 0) {
+        const std::string& id = screen->presentation->viewmodel.reloadSound;
         a.clips[id] = requests->Load<AU::Clip>(A::AssetId(id));
     }
     a.font = requests->Load<TX::FontData>(A::AssetId("object_fps_pvp.font.ui"));
-    for (const present::SoundSettings::Cue& cue : scene->presentation->sound.cues) {
+    for (const present::SoundSettings::Cue& cue : screen->presentation->sound.cues) {
         if (!cue.clip.empty() && a.clips.count(cue.clip) == 0) a.clips[cue.clip] = requests->Load<AU::Clip>(A::AssetId(cue.clip));
     }
     return {};
@@ -874,11 +874,11 @@ std::pair<std::uint32_t, float> ViewmodelClip(const ViewmodelDefinition& viewmod
 // The first-person weapon's pose from the own player's state (it hangs under the viewmodel camera with a fixed
 // placement: ViewmodelPlacement), hidden while the player is dead, and the reload's sound at the clip's magazine_in.
 K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientView> sim, K::Res<WT::RealTime> real,
-                              K::Res<ClientScene> scene, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientSound> sound,
+                              K::Res<ClientScreen> screen, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientSound> sound,
                               K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>> players,
                               K::Query<K::Read<ViewmodelPart>, K::Write<R::SkinPose>, K::Write<R::RenderLayers>, K::Write<T::Transform>> parts,
                               K::ResMut<ClientCharacters> characters) {
-    const ViewmodelDefinition& viewmodel = scene->presentation->viewmodel;
+    const ViewmodelDefinition& viewmodel = screen->presentation->viewmodel;
     if (!viewmodel.model) return {};
     const std::uint64_t step = sim->stepNanoseconds;
     players.ForEach([&](const K::EntityId id, const PW::Owner& owner, const PW::PlayerBody& body, const PW::PlayerCombat& combat,
@@ -938,7 +938,7 @@ K::SystemResult PoseViewmodel(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser>
 
 // The first-person weapon's parts, once its model is asked for.
 K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Query<K::Read<ViewmodelPart>> parts,
-                             K::Res<ClientScene> scene,
+                             K::Res<ClientScreen> screen,
                              K::Spawn<K::Bundle<R::Mesh3d, T::Transform, T::GlobalTransform, R::SkinPose, ViewmodelPart, R::RenderLayers,
                                                 K::ChildOf>> spawn) {
     if (parts.Count() != 0) return {};
@@ -956,7 +956,7 @@ K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> 
         }
         // Under the viewmodel camera, at the fixed placement: it follows the camera (Bevy's first-person view model,
         // examples/camera/first_person_view_model.rs: the arms are a child of the camera).
-        const T::Transform placement = ViewmodelPlacement(scene->presentation->viewmodel);
+        const T::Transform placement = ViewmodelPlacement(screen->presentation->viewmodel);
         auto spawned = spawn.New(std::move(mesh), placement, T::GlobalTransform{T::ToMatrix(placement)}, R::SkinPose{}, ViewmodelPart{m},
                                  R::RenderLayers{1U << kViewLayer}, K::ChildOf{kViewCamera});
         if (!spawned) return Base::Err(std::move(spawned).error());
@@ -966,7 +966,7 @@ K::SystemResult AddViewmodel(K::Res<ClientAssets> assets, K::Res<WA::AssetView> 
 
 K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user, K::Res<ClientControls> controls,
                         K::Res<ClientAssets> assets, K::Res<WA::AssetView> view, K::Res<ClientView> sim, K::Res<WT::ActiveTime> time,
-                        K::Res<ClientScene> scene,
+                        K::Res<ClientScreen> screen,
                         K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::HitRecord>,
                                  K::Read<PW::ShotRecord>> players,
                         K::Query<K::Write<R::Sprite>> sprites, K::Query<K::Write<R::Shape2d>> shapes, K::ResMut<ClientHud> hud) {
@@ -999,18 +999,18 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     if (body != nullptr) {
         if (hits->attacker != 0 && feet.count(hits->attacker) != 0) attacker = feet[hits->attacker];
         (void)h.feedback.Observe(present::LifeHitRecord{combat->lives, hits->hits}, combat->life, body->feet, attacker, now);
-        feedback = h.feedback.Sample(now, controls->controls.Yaw(), scene->presentation->hitFeedback);
+        feedback = h.feedback.Sample(now, controls->controls.Yaw(), screen->presentation->hitFeedback);
     }
     h.sample = feedback;
     if (shot != nullptr) h.marker.Observe(shot->tick, shot->kind == sim::ShotHitKind::Player, shot->part == sim::HitPart::Head, now);
     if (auto marker = shapes.GetMut<R::Shape2d>(kHitMarker)) {
-        marker.Get() = HitMarkerShape(scene->presentation->hitFeedback.hitMarker, h.marker.Sample(now, scene->presentation->hitFeedback));
+        marker.Get() = HitMarkerShape(screen->presentation->hitFeedback.hitMarker, h.marker.Sample(now, screen->presentation->hitFeedback));
     }
     if (auto flash = shapes.GetMut<R::Shape2d>(kFlash)) {
-        flash.Get() = Flash(scene->presentation->hitFeedback.flash.color, feedback.flashAlpha);
+        flash.Get() = Flash(screen->presentation->hitFeedback.flash.color, feedback.flashAlpha);
     }
     if (auto arc = shapes.GetMut<R::Shape2d>(kHitDirection)) {
-        arc.Get() = HitDirection(scene->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);
+        arc.Get() = HitDirection(screen->presentation->hitFeedback.direction, feedback.directionRadians, feedback.directionAlpha);
     }
     // The texts.
     std::string hpText;
@@ -1054,7 +1054,7 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
     // A fresh hit turns the HP red for a while.
     if (auto sprite = sprites.GetMut<R::Sprite>(kHpText); sprite && h.texts[kHpText].image) {
         const auto byte = [](const float v) { return static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0F, 1.0F) * 255.0F)); };
-        const auto& red = scene->presentation->hitFeedback.hpHighlight.color;
+        const auto& red = screen->presentation->hitFeedback.hpHighlight.color;
         const R::Color8 color = feedback.hpHighlighted ? R::Color8{byte(red[0]), byte(red[1]), byte(red[2]), 255} : R::Color8{255, 255, 255, 255};
         if (sprite.Read().color.r != color.r || sprite.Read().color.g != color.g || sprite.Read().color.b != color.b) sprite->color = color;
     }
@@ -1062,13 +1062,13 @@ K::SystemResult ShowHud(K::Res<PW::GameRules> rules, K::Res<PW::LocalUser> user,
 }
 
 K::SystemResult PlaySounds(K::Res<PW::LocalUser> user, K::Res<ClientAssets> assets, K::Res<WA::AssetView> view,
-                           K::Res<ClientScene> scene, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
+                           K::Res<ClientScreen> screen, K::Res<ClientControls> controls, K::Res<PW::GameRules> rules,
                            K::Query<K::Read<PW::Owner>, K::Read<PW::PlayerBody>, K::Read<PW::PlayerCombat>, K::Read<PW::ShotRecord>,
                                     K::Read<PW::HitRecord>> players,
                            K::Res<WT::ActiveTime> time, K::ResMut<ClientSound> sound) {
     ClientSound& s = sound.Get();
     if (s.submitter == nullptr) return {};
-    const present::SoundSettings& settings = scene->presentation->sound;
+    const present::SoundSettings& settings = screen->presentation->sound;
     const TM::TimePoint at = TM::MonotonicClock::now();
     const auto play = [&](const present::SoundCue cue, const present::StereoGains gains) {
         const present::SoundSettings::Cue& c = settings.cues[static_cast<std::size_t>(cue)];
@@ -1174,14 +1174,14 @@ K::SystemResult NoteSessionEnd(K::MessageReader<N::PeerDisconnected> ends, K::Re
     return {};
 }
 
-// Which game the scene is and where it goes back to: the Gateway's room the lobby leaves (multiplayer), the single
+// Which game the screen is and where it goes back to: the Gateway's room the lobby leaves (multiplayer), the single
 // player's save.
 struct GameOrigin final {
-    Scene scene = Scene::MultiGame;
+    Screen screen = Screen::MultiGame;
     std::uint64_t room = 0;
     std::string savePath;
-    std::string map;  // the scene's (SceneChange::map): the single player's room comes back to it
-    std::optional<N::NetConnectTarget> connect;  // the scene's (SceneChange::connect): the game again on another arena
+    std::string map;  // the screen's (ScreenChange::map): the single player's room comes back to it
+    std::optional<N::NetConnectTarget> connect;  // the screen's (ScreenChange::connect): the game again on another arena
     std::shared_ptr<const PW::GameContent> game;  // the arenas and modes this Client has
 };
 void HashValue(K::Hasher&, const GameOrigin&) {}
@@ -1291,7 +1291,7 @@ K::SystemResult RevealUnderCover(K::Res<GameReadiness> readiness, K::Query<K::Wr
 }
 
 // The player's words for where the loading is.
-std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const PW::MapLoad& map, const Scene scene) {
+std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, const PW::MapLoad& map, const Screen screen) {
     if (!readiness.assets) {
         if (map.stage == PW::MapStage::Reading && map.total > 0) {
             return "地図を読み込んでいます…（" + std::to_string(map.done) + "/" + std::to_string(map.total) + "）";
@@ -1300,17 +1300,17 @@ std::string LoadingText(const GameReadiness& readiness, const ClientView& sim, c
         return "データを読み込んでいます…";
     }
     if (!readiness.warmed) return "描画の準備をしています…";
-    if (!readiness.network) return scene == Scene::MultiGame ? "対戦に接続しています…" : "準備しています…";
+    if (!readiness.network) return screen == Screen::MultiGame ? "対戦に接続しています…" : "準備しています…";
     if (!readiness.ready) return "最初の画面を描いています…";
     if (!sim.started) return "ほかのプレイヤーを待っています…";
     return {};
 }
 
-// ---- The game scene's pages (client/Pages.hpp, GamePage; assets/object_fps_pvp/ui/pvp_game.json): Loading (canvas
+// ---- The game screen's pages (client/Pages.hpp, GamePage; assets/object_fps_pvp/ui/pvp_game.json): Loading (canvas
 // "loading") until the game is ready and the match started, then Playing (no overlay), and Paused (canvas "pause")
 // while the pointer is the player's. Entering a page puts its root on kOverlay (the HUD camera's), leaving takes it.
 
-// The overlay's document, held for the scene (each page's root finds it loaded), and the pause's title.
+// The overlay's document, held for the screen (each page's root finds it loaded), and the pause's title.
 struct OverlayDocument final {
     A::Handle<Ui::UiAsset> document;
     std::string title;
@@ -1360,7 +1360,7 @@ K::SystemResult ShowLoading(K::Res<GameReadiness> readiness, K::Res<ClientView> 
     }
     auto bindings = roots.GetMut<Ui::UiBindings>(kOverlay);
     if (!bindings) return {};
-    const std::string text = LoadingText(*readiness, *sim, *map, origin->scene);
+    const std::string text = LoadingText(*readiness, *sim, *map, origin->screen);
     const auto* shown = bindings->Find("loading");
     if (shown == nullptr || std::get<std::string>(*shown) != text) bindings->Set("loading", text);
     const auto* progress = bindings->Find("progress");
@@ -1392,27 +1392,27 @@ K::SystemResult Resume(K::MessageReader<Ui::UiAction> actions, K::ResMut<ClientC
 // deaths), back to the menu with what was written (or why not). Multiplayer: back to the lobby (the Sim World of the
 // lobby has no target: the connection closes, and the Match writes the save when it sees the player leave).
 K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrigin> origin, K::Res<ClientView> sim,
-                         K::ResMut<GatewayClient> gateway, K::ResMut<SceneRequest> request) {
+                         K::ResMut<GatewayClient> gateway, K::ResMut<ScreenRequest> request) {
     for (const Ui::UiAction* action : actions.Read()) {
         if (request.Read().next) continue;
         // pvp.abort (the loading screen's 中止): no game was played. Single player: back to its room, nothing settled;
         // multiplayer: as an evacuation (the room is left).
-        if (action->action == "pvp.abort" && origin->scene == Scene::SoloGame) {
-            request->next = SceneChange{.scene = Scene::SoloRoom, .status = "中止しました", .map = origin->map};
+        if (action->action == "pvp.abort" && origin->screen == Screen::SoloGame) {
+            request->next = ScreenChange{.screen = Screen::SoloRoom, .status = "中止しました", .map = origin->map};
             continue;
         }
         if (action->action != "pvp.evacuate" && action->action != "pvp.abort") continue;
-        if (origin->scene == Scene::MultiGame) {
+        if (origin->screen == Screen::MultiGame) {
             // The player leaves the room too (it gives no connect any more: a later game is a new room). The call
             // goes on in the lobby, which the GatewayClient is carried to.
             if (origin->room != 0) gateway->Ask("leave", LeaveRequest(origin->room, RandomHex(16)));
-            request->next = SceneChange{.scene = Scene::Lobby, .status = "撤退しました"};
+            request->next = ScreenChange{.screen = Screen::Lobby, .status = "撤退しました"};
             continue;
         }
         const auto settled = SettleSolo(origin->savePath, sim->deaths);
         const std::string status = settled ? "撤退しました（死亡 " + std::to_string(sim->deaths) + " 回）。記録しました"
                                            : "撤退しました。記録できません: " + SoloSaveText(settled.error());
-        request->next = SceneChange{.scene = Scene::Menu, .status = status};
+        request->next = ScreenChange{.screen = Screen::Menu, .status = status};
     }
     return {};
 }
@@ -1423,7 +1423,7 @@ K::SystemResult Evacuate(K::MessageReader<Ui::UiAction> actions, K::Res<GameOrig
 // again on them, as a World plays one arena and one mode (big-map declaration 15.3; mode-config declaration 3.3). The same
 // arena and mode with other content (walls, rules) cannot be played: back with the reason.
 K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::Res<GameOrigin> origin, K::ResMut<FrameNotes> notes,
-                           K::ResMut<SceneRequest> request) {
+                           K::ResMut<ScreenRequest> request) {
     if (request.Read().next) return {};
     const GameOrigin& from = *origin;
     const std::string& mapFailure = !map->failure.empty() ? map->failure : sim->mapLoad.failure;
@@ -1434,11 +1434,11 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::R
     } else if (const PW::ContentMismatch& mismatch = sim->mismatch; mismatch.kind != PW::MismatchKind::None) {
         // Another mode or arena (not the same one with other content): played again when this Client has the pair.
         const bool another = mismatch.kind == PW::MismatchKind::Mode || mismatch.kind == PW::MismatchKind::Arena;
-        if (from.scene == Scene::MultiGame && from.connect && another && from.game) {
+        if (from.screen == Screen::MultiGame && from.connect && another && from.game) {
             const auto arena = from.game->FindArena(mismatch.matchArena);
             const auto mode = from.game->FindMode(mismatch.matchMode);
             if (arena && mode && from.game->Plays(*mode, *arena)) {
-                request->next = SceneChange{.scene = Scene::MultiGame, .connect = from.connect, .room = from.room, .map = mismatch.matchArena,
+                request->next = ScreenChange{.screen = Screen::MultiGame, .connect = from.connect, .room = from.room, .map = mismatch.matchArena,
                                             .mode = mismatch.matchMode};
                 return {};
             }
@@ -1451,13 +1451,13 @@ K::SystemResult LeaveOnEnd(K::Res<ClientView> sim, K::Res<PW::MapLoad> map, K::R
     } else {
         return {};
     }
-    if (from.scene == Scene::SoloGame) {
-        request->next = SceneChange{.scene = Scene::SoloRoom, .status = std::move(reason), .map = from.map};
+    if (from.screen == Screen::SoloGame) {
+        request->next = ScreenChange{.screen = Screen::SoloRoom, .status = std::move(reason), .map = from.map};
         return {};
     }
     // The room is not left: the player is still its member, and may come back to the Match (the room gives a new
     // connect while the Match is on; the disconnect rules keep the place).
-    request->next = SceneChange{.scene = Scene::Lobby, .status = std::move(reason)};
+    request->next = ScreenChange{.screen = Screen::Lobby, .status = std::move(reason)};
     return {};
 }
 
@@ -1732,10 +1732,10 @@ void BuildSim(O::WorldSetup& setup) {
     });
 }
 
-// The player of a game scene: the connection's user (the Gateway's user id, or --user with --connect), else this
+// The player of a game screen: the connection's user (the Gateway's user id, or --user with --connect), else this
 // Client's own (single player).
-std::uint64_t LocalUserOf(const SceneChange& scene, const ClientOptions& options) {
-    return scene.connect ? scene.connect->userId : options.userId;
+std::uint64_t LocalUserOf(const ScreenChange& screen, const ClientOptions& options) {
+    return screen.connect ? screen.connect->userId : options.userId;
 }
 
 // The Solo World's part: the controls in, the picture out (the same exchange as the Sim World's), and the step's input
@@ -1767,7 +1767,7 @@ void BuildSolo(O::WorldSetup& setup) {
     });
 }
 
-// The game scene's types, registered in every scene: the Render World reads them (an extracted type must be
+// The game screen's types, registered in every screen: the Render World reads them (an extracted type must be
 // registered in the source, R1b declaration section 8 point 3).
 void RegisterFrameTypes(O::WorldSetup& setup) {
     K::Registrar& r = setup.Registrar();
@@ -1785,7 +1785,7 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<RemoteView>({.name = "object_fps_pvp.RemoteView"});
     r.Resource<ClientAssets>({.name = "object_fps_pvp.ClientAssets"});
     r.Resource<ClientControls>({.name = "object_fps_pvp.ClientControls"});
-    r.Resource<ClientScene>({.name = "object_fps_pvp.ClientScene"});
+    r.Resource<ClientScreen>({.name = "object_fps_pvp.ClientScreen"});
     r.Resource<ClientHud>({.name = "object_fps_pvp.ClientHud"});
     r.Resource<ClientSound>({.name = "object_fps_pvp.ClientSound"});
     r.Resource<ClientCharacters>({.name = "object_fps_pvp.ClientCharacters"});
@@ -1797,17 +1797,17 @@ void RegisterFrameTypes(O::WorldSetup& setup) {
     r.Resource<DrawnFrames>({.name = "object_fps_pvp.DrawnFrames"});
 }
 
-// The arena a game scene plays: the one its change names when this Client has it, else the Client's own.
-std::size_t ArenaOf(const SceneChange& change, const ClientOptions& options) {
+// The arena a game screen plays: the one its change names when this Client has it, else the Client's own.
+std::size_t ArenaOf(const ScreenChange& change, const ClientOptions& options) {
     return options.game->FindArena(change.map).value_or(options.arena);
 }
 
-// The mode a game scene plays: the one its change names when this Client has it, else the Client's own.
-std::size_t ModeOf(const SceneChange& change, const ClientOptions& options) {
+// The mode a game screen plays: the one its change names when this Client has it, else the Client's own.
+std::size_t ModeOf(const ScreenChange& change, const ClientOptions& options) {
     return options.game->FindMode(change.mode).value_or(options.mode);
 }
 
-void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneChange& change, const std::string& dataDirectory) {
+void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const ScreenChange& change, const std::string& dataDirectory) {
     K::Registrar& r = setup.Registrar();
     r.AddSystem<&RequestAssets>(InUpdate("object_fps_pvp.RequestAssets"));
     K::SystemOptions read;
@@ -1864,7 +1864,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
     ClientExchange* exchange = setup.ProductBuffer().Find<ClientExchange>();
     GYO_ASSERT(exchange != nullptr && "the Client's Worlds need ConfigureClient (it makes their ClientExchange)");
     const std::size_t mode = ModeOf(change, options);
-    GameOrigin origin{change.scene, change.room, change.scene == Scene::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map,
+    GameOrigin origin{change.screen, change.room, change.screen == Screen::SoloGame ? SoloSavePath(dataDirectory) : std::string(), change.map,
                       change.connect, options.game};
     const std::uint64_t user = LocalUserOf(change, options);
     const std::size_t played = ArenaOf(change, options);
@@ -1884,7 +1884,7 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         world.SetResource(RemoteView{});
         world.SetResource(ClientAssets{});
         world.SetResource(ClientControls{});
-        world.SetResource(ClientScene{options.presentation});
+        world.SetResource(ClientScreen{options.presentation});
         world.SetResource(ClientHud{});
         world.SetResource(ClientCharacters{});
         ClientSound sound;
@@ -1960,14 +1960,14 @@ void BuildGame(O::WorldSetup& setup, const ClientOptions& options, const SceneCh
         // The overlay's document (the pages put their roots on kOverlay, there from the start: GamePage).
         Place(world, kOverlay, T::Transform{});
         world.SetResource(OverlayDocument{world.ResourceMut<WA::AssetRequests>()->Load<Ui::UiAsset>(A::AssetId("object_fps_pvp.ui.game")),
-                                          origin.scene == Scene::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"});
+                                          origin.screen == Screen::SoloGame ? "一時停止" : "メニュー（対戦は続いています）"});
         return {};
     });
     setup.ExchangeIn([exchange](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ApplySnapshot(*exchange, world);
         return {};
     });
-    const bool solo = change.scene == Scene::SoloGame;
+    const bool solo = change.screen == Screen::SoloGame;
     setup.ExchangeOut([exchange, solo](K::World& world) -> Base::Result<void, O::OrchestrationError> {
         ClientControls& controls = *world.ResourceMut<ClientControls>();
         present::StepInput step = controls.controls.Take();
@@ -2162,13 +2162,13 @@ std::optional<PresentationContent> LoadPresentation(const std::string& root, std
 }
 
 void ConfigureClient(O::ProductSetup& setup) {
-    // First: the Worlds need them whether or not the rest is there. The scene the Product starts in (ClientStart;
+    // First: the Worlds need them whether or not the rest is there. The screen the Product starts in (ClientStart;
     // none: the menu).
     setup.Buffer().Create<ClientExchange>();
     const ClientStart* start = setup.Options<ClientStart>();
     const ClientStart first = start != nullptr ? *start : ClientStart{};
     setup.Buffer().Create<ClientStart>(first);
-    setup.Buffer().Create<SceneDirector>(first.first);
+    setup.Buffer().Create<ScreenDirector>(first.first);
     const auto* registry = setup.Buffer().Find<A::AssetLoaderRegistry>();
     if (registry == nullptr) {
         setup.Report("NoAssetStore", "the asset store is not there (world_asset is not carried)");
@@ -2198,23 +2198,23 @@ void ConfigureClient(O::ProductSetup& setup) {
 O::WorldDescription ClientSimWorld(ClientOptions options) {
     O::WorldDescription world = PW::ClientWorld({.content = options.game, .arena = options.arena, .mode = options.mode, .localUser = options.userId});
     world.name = "Sim";
-    // The game only in the scene that plays it; elsewhere the World is its units alone, without a target (no
+    // The game only in the screen that plays it; elsewhere the World is its units alone, without a target (no
     // connection: net-connect-target). The player is the connection's user (the Gateway's user id).
     world.build = [options](O::WorldSetup& setup) {
-        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
-        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
-        const SceneChange& scene = director->Current();
-        if (!SimPlays(scene.scene)) {
+        const auto* director = setup.ProductBuffer().Find<ScreenDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their ScreenDirector)");
+        const ScreenChange& screen = director->Current();
+        if (!SimPlays(screen.screen)) {
             // The rollback strategy of the description still asks which schedule is the step (RB-E10).
             RB::RollbackEntry(setup).StepSchedule();
             return;
         }
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),
-                               .localUser = LocalUserOf(scene, options), .jobs = options.jobs},
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(screen, options), .mode = ModeOf(screen, options),
+                               .localUser = LocalUserOf(screen, options), .jobs = options.jobs},
                        PW::WorldEnd::Client);
         BuildSim(setup);
-        if (scene.connect) {
-            setup.Prepare([target = *scene.connect](K::World& w) -> Base::Result<void, O::OrchestrationError> {
+        if (screen.connect) {
+            setup.Prepare([target = *screen.connect](K::World& w) -> Base::Result<void, O::OrchestrationError> {
                 w.SetResource(target);
                 return {};
             });
@@ -2226,14 +2226,14 @@ O::WorldDescription ClientSimWorld(ClientOptions options) {
 O::WorldDescription ClientSoloWorld(ClientOptions options) {
     O::WorldDescription world = PW::LocalWorld({.content = options.game, .arena = options.arena, .mode = options.mode, .localUser = options.userId});
     world.name = "Solo";
-    // The game only in the single player's game scene; its player at a spawn picked at random for each game.
+    // The game only in the single player's game screen; its player at a spawn picked at random for each game.
     world.build = [options](O::WorldSetup& setup) {
-        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
-        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
-        const SceneChange& scene = director->Current();
-        if (!SoloPlays(scene.scene)) return;
+        const auto* director = setup.ProductBuffer().Find<ScreenDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their ScreenDirector)");
+        const ScreenChange& screen = director->Current();
+        if (!SoloPlays(screen.screen)) return;
         std::random_device device;
-        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(scene, options), .mode = ModeOf(scene, options),
+        PW::BuildWorld(setup, {.content = options.game, .arena = ArenaOf(screen, options), .mode = ModeOf(screen, options),
                                .localUser = options.userId, .spawn = device(), .jobs = options.jobs},
                        PW::WorldEnd::Local);
         BuildSolo(setup);
@@ -2253,11 +2253,11 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
     time.fixedStep = false;
     world.options.Set(std::move(time));
     world.build = [options = std::move(options)](O::WorldSetup& setup) {
-        const auto* director = setup.ProductBuffer().Find<SceneDirector>();
-        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their SceneDirector)");
-        const SceneChange& scene = director->Current();
+        const auto* director = setup.ProductBuffer().Find<ScreenDirector>();
+        GYO_ASSERT(director != nullptr && "the Client's Worlds need ConfigureClient (it makes their ScreenDirector)");
+        const ScreenChange& screen = director->Current();
         RegisterFrameTypes(setup);
-        BuildSceneCommon(setup);
+        BuildScreenCommon(setup);
         const auto* start = setup.ProductBuffer().Find<ClientStart>();
         GYO_ASSERT(start != nullptr && "the Client's Worlds need ConfigureClient (it keeps their ClientStart)");
         const std::string& directory = start->dataDirectory;
@@ -2271,14 +2271,14 @@ O::WorldDescription ClientFrameWorld(ClientOptions options, const bool window) {
             modes.push_back(std::move(choice));
         }
         GatewayContext gateway{directory, start->gateway, modes};
-        switch (scene.scene) {
-        case Scene::Menu: BuildMenu(setup, scene); break;
-        case Scene::Splash: BuildSplash(setup, start->splashSeconds); break;
-        case Scene::SoloRoom: BuildSoloRoom(setup, scene, directory, modes); break;
-        case Scene::Lobby: BuildLobby(setup, scene, gateway); break;
-        case Scene::Room: BuildRoom(setup, scene, gateway); break;
-        case Scene::SoloGame:
-        case Scene::MultiGame: BuildGame(setup, options, scene, directory); break;
+        switch (screen.screen) {
+        case Screen::Menu: BuildMenu(setup, screen); break;
+        case Screen::Splash: BuildSplash(setup, start->splashSeconds); break;
+        case Screen::SoloRoom: BuildSoloRoom(setup, screen, directory, modes); break;
+        case Screen::Lobby: BuildLobby(setup, screen, gateway); break;
+        case Screen::Room: BuildRoom(setup, screen, gateway); break;
+        case Screen::SoloGame:
+        case Screen::MultiGame: BuildGame(setup, options, screen, directory); break;
         }
     };
     return world;

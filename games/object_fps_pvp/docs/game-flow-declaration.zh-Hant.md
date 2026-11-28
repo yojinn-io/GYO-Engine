@@ -1,5 +1,7 @@
 # 事前宣告：遊戲流程框架（`v8-product-pvp-game-flow`）
 
+> **改名（2026-11-28，`v8-arch-gyo2-interact-door` 第 0 步）**：本文的遊戲流程畫面 `Scene`（`Scenes.hpp`、`SceneChange`、`SceneDirector` 等）已改名為 `Screen`（`Screens.hpp`、`ScreenChange`、`ScreenDirector` 等；對照表見 `docs/architecture/target/v2/interact-door-declaration.zh-Hant.md` 第 7.1 節）。「Scene」改指裝修資料。正文保留當時的寫法，不改寫。
+
 更新：2026-11-26（修訂 7：啟動畫面（`v8-product-pvp-playtest-fixes`）；修訂 6：使用者的兩個決定（`v8-arch-gyo2-decisions-2026-11-26-night`）：3.3 單人房間和多人同一個房間畫面、3.6 解析度改實體像素；修訂 5：新增 3.7「畫面跳轉的兩層」（主會話轉達使用者的關切）；3.6 照第 5 段實作與審查改寫；修訂 4：第 4 段的設計審查之後，3.5 的就緒與開始照實作改寫；修訂 3：第 3 段的設計審查之後，3.4 的 session 與離開房間、列表與選房照實作改寫；修訂 2：第 2 段的設計審查之後，3.1 的 Solo 單位、3.3 的生玩家與暫停照實作改寫；修訂 1：第 1 段實作與設計審查之後，3.2 的 `run` 型別、3.4 的連線目標的給法、第 1 段的槽數照實作改寫，見文末「修訂紀錄」）。Owner：PvP 的遊戲流程框架任務卡（GYO2 主會話開）。**狀態：寫完就動工**（新 AGENTS：只有推翻使用者的決定或動 AGENTS §1 才先問）。
 
 根據（使用者的決定，HANDOFF 全文）：

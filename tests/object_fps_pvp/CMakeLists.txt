@@ -160,3 +160,11 @@ add_test(NAME object_fps_pvp.gateway_client
         "${GYO_GO_EXECUTABLE}" test -count=1 -v -run "TestTheRealClientPlaysThroughTheGateway|TestTwoClientsInARoom" ./services/stack/
     WORKING_DIRECTORY "${GYO_REPOSITORY_ROOT}/games/object_fps_pvp")
 set_tests_properties(object_fps_pvp.gateway_client PROPERTIES LABELS "network" TIMEOUT 240)
+# The retired names (v8-arch-gyo2-interact-door step 0): the game-flow Scene was renamed Screen, and this check keeps
+# the old identifiers and file names from coming back. -B: no bytecode is written into the source tree.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME object_fps_pvp.retired_names
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/naming/retired_names.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME object_fps_pvp.retired_names_selftest
+    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}/naming" -p "test_retired_names.py" -v)
+set_tests_properties(object_fps_pvp.retired_names object_fps_pvp.retired_names_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)

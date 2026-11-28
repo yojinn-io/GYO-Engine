@@ -1,7 +1,7 @@
-// The Gateway's scenes' common part (SceneBuilds.hpp): the Frame World's GatewayClient, the player's words for what
+// The Gateway's screens' common part (ScreenBuilds.hpp): the Frame World's GatewayClient, the player's words for what
 // went wrong, and the addresses the Gateway and a room's connect give.
 
-#include "client/SceneBuilds.hpp"
+#include "client/ScreenBuilds.hpp"
 
 #include <charconv>
 #include <cstdint>
@@ -55,8 +55,8 @@ void PlaceGatewayClient(K::World& world, const GYO::Engine::OS::SocketAddress& g
     const GatewayClient* now = world.Resource<GatewayClient>();
     if (now != nullptr && (!now->Offline() || !needed)) return;
     if (!needed) {
-        // A scene that does not call the Gateway: no device id is read or made for it.
-        world.SetResource(GatewayClient(gateway, std::string(), "the Gateway is not called in this scene"));
+        // A screen that does not call the Gateway: no device id is read or made for it.
+        world.SetResource(GatewayClient(gateway, std::string(), "the Gateway is not called in this screen"));
         return;
     }
     std::string error;

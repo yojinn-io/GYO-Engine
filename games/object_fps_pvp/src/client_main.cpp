@@ -1,7 +1,7 @@
-// The Client: one Product for the whole program (game-flow declaration 3.1; client/Scenes.hpp), its Worlds replaced
-// when the scene changes, the window open throughout: "Solo" (the single player's game, no net, on its own thread),
-// "Sim" (the game's client World, on its own thread; it plays only in a game connected to a Match), "Frame" (sdl_window: the scene the player sees -- the menu, the lobby, the game),
-// "Render" (extracts from it, sdl_gpu) and sdl_audio for the sound. sdl_window's runner changes the scene between two
+// The Client: one Product for the whole program (game-flow declaration 3.1; client/Screens.hpp), its Worlds replaced
+// when the screen changes, the window open throughout: "Solo" (the single player's game, no net, on its own thread),
+// "Sim" (the game's client World, on its own thread; it plays only in a game connected to a Match), "Frame" (sdl_window: the screen the player sees -- the menu, the lobby, the game),
+// "Render" (extracts from it, sdl_gpu) and sdl_audio for the sound. sdl_window's runner changes the screen between two
 // frames (SDLWindowBetweenFrames) and runs until the window closes (the menu's Quit, or closing it).
 //
 //   gyo_object_fps_pvp                         the menu first
@@ -23,7 +23,7 @@
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/client/LocalFiles.hpp"
-#include "object_fps_pvp/client/Scenes.hpp"
+#include "object_fps_pvp/client/Screens.hpp"
 
 #include "gyo/GameConfig.hpp"
 
@@ -80,7 +80,7 @@ namespace PW = object_fps_pvp::world;
 
 void Log(const GYO::Engine::Base::LogLevel level, const std::string& text) { GYO::Engine::Base::Log(level, GYO_GAME_ID, text); }
 
-// --verbose: the connection and the own player as they change (the game scene's ClientView), the arena the game
+// --verbose: the connection and the own player as they change (the game screen's ClientView), the arena the game
 // plays (the Frame World's rules) and when its map is ready.
 struct VerboseWatch final {
     bool connected = false;
@@ -117,8 +117,8 @@ K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWa
     return {};
 }
 
-// --verbose, every scene: what the player did and what the program did for it, to tell from the log where a moment
-// went -- the frames that took long (and in which scene), the window's focus and mode, the events the backend dropped (a full
+// --verbose, every screen: what the player did and what the program did for it, to tell from the log where a moment
+// went -- the frames that took long (and in which screen), the window's focus and mode, the events the backend dropped (a full
 // queue: every button is let go), the mouse presses and releases that reached the Frame World with what the input
 // state made of them (just pressed, the cursor known: what the UI needs to take a click; not in a game, where a click
 // is a shot), the UI actions they made, the UI documents laid out (and laid out again: a new runtime), and each call
@@ -126,7 +126,7 @@ K::SystemResult WatchConnection(K::Res<PC::ClientView> view, K::ResMut<VerboseWa
 constexpr std::int64_t kSlowFrame = 100'000'000;
 
 struct FrameWatch final {
-    std::string scene;
+    std::string screen;
     bool game = false;
     // The roots seen with their runtime: the entity, the canvas and the document the runtime was made for.
     struct Seen final {
@@ -143,7 +143,7 @@ using WatchedBindings = K::Query<K::Read<GYO::Engine::Ui::UiBindings>>;
 
 // What the cursor is on as world_ui hit tests a press: the topmost interactive element of each root that takes input
 // (world_ui gives a press to every such root), in that root's viewport's physical pixels; "nothing" when none is
-// there, or the cursor is not known. The bindings are this frame's as the scenes left them (world_ui laid the press
+// there, or the cursor is not known. The bindings are this frame's as the screens left them (world_ui laid the press
 // out before them: a list that changed in the frame may differ).
 std::string HitAt(WatchedRoots& roots, WatchedBindings& bindings, const std::optional<GYO::Engine::Math::Vec2>& cursor) {
     if (!cursor) return "nothing (the cursor is not known)";
@@ -172,7 +172,7 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
                            K::MessageReader<I::MouseButtonInput> buttons, K::Res<I::ButtonInput<I::MouseButton>> pressed,
                            K::Res<I::CursorPosition> cursor, K::MessageReader<GYO::Engine::Ui::UiAction> actions,
                            WatchedRoots roots, WatchedBindings bindings, K::ResMut<PC::GatewayClient> gateway, K::ResMut<FrameWatch> watch) {
-    const std::string at = " (" + watch.Read().scene + ")";
+    const std::string at = " (" + watch.Read().screen + ")";
     if (time->delta > kSlowFrame) Log(GYO::Engine::Base::LogLevel::Info, "slow frame: " + Milliseconds(time->delta) + at);
     for (const W::WindowFocused* event : focus.Read()) {
         Log(GYO::Engine::Base::LogLevel::Info, std::string("window: ") + (event->focused ? "focused" : "not focused") + at);
@@ -225,12 +225,12 @@ K::SystemResult WatchFrame(K::Res<WT::RealTime> time, K::MessageReader<W::Window
 
 // --verbose: the main loop's heartbeat. The loop marks where it is as each part of a frame begins -- the Frame World
 // (its exchange in, the first thing of its round), the Render World up to the drawing (its exchange in, before its
-// extract), sdl_gpu's GPUSubmit (the uploads, the acquire, the draw, the present), a scene change (between frames),
+// extract), sdl_gpu's GPUSubmit (the uploads, the acquire, the draw, the present), a screen change (between frames),
 // and the rest between two frames (the window's event pump, the wait) -- and a watcher on its own thread tells when
 // one part lasts over a second: while it lasts (a loop that never comes back leaves its line), and about how long it
 // lasted. A frame whose parts each take under a second is not told here (slow frame tells it after).
 struct Heartbeat final {
-    enum class Part : std::uint8_t { Starting, FrameWorld, RenderWorld, Drawing, SceneChange, BetweenFrames };
+    enum class Part : std::uint8_t { Starting, FrameWorld, RenderWorld, Drawing, ScreenChange, BetweenFrames };
     std::atomic<Part> part{Part::Starting};
     std::atomic<std::int64_t> since{0};  // steady clock, nanoseconds; 0: not marked yet
 
@@ -254,7 +254,7 @@ const char* PartName(const Heartbeat::Part part) {
     case Heartbeat::Part::FrameWorld: return "the Frame World";
     case Heartbeat::Part::RenderWorld: return "the Render World before the drawing";
     case Heartbeat::Part::Drawing: return "sdl_gpu's GPUSubmit (uploads, acquire, draw, present)";
-    case Heartbeat::Part::SceneChange: return "a scene change";
+    case Heartbeat::Part::ScreenChange: return "a screen change";
     case Heartbeat::Part::BetweenFrames: return "between frames (the window's event pump, the wait)";
     }
     return "?";
@@ -358,15 +358,15 @@ private:
     std::thread thread_;
 };
 
-std::string SceneName(const PC::Scene scene) {
-    switch (scene) {
-    case PC::Scene::Menu: return "menu";
-    case PC::Scene::Splash: return "start screen";
-    case PC::Scene::SoloRoom: return "single player room";
-    case PC::Scene::SoloGame: return "single player game";
-    case PC::Scene::Lobby: return "lobby";
-    case PC::Scene::Room: return "room";
-    case PC::Scene::MultiGame: return "multiplayer game";
+std::string ScreenName(const PC::Screen screen) {
+    switch (screen) {
+    case PC::Screen::Menu: return "menu";
+    case PC::Screen::Splash: return "start screen";
+    case PC::Screen::SoloRoom: return "single player room";
+    case PC::Screen::SoloGame: return "single player game";
+    case PC::Screen::Lobby: return "lobby";
+    case PC::Screen::Room: return "room";
+    case PC::Screen::MultiGame: return "multiplayer game";
     }
     return "?";
 }
@@ -421,7 +421,7 @@ int CheckDrawing(O::Product& product, const std::int64_t frames, const O::Runner
     return 0;
 }
 
-// The Client's Product from its first scene, until its window closes.
+// The Client's Product from its first screen, until its window closes.
 int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::shared_ptr<const PW::GameContent>& game,
                const std::shared_ptr<const PC::PresentationContent>& presentation, const std::string& contentRoot,
                WA::WorkerPoolExecutor& executor, WA::WorkerPoolExecutor& compute, const bool verbose) {
@@ -455,9 +455,9 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     if (verbose) {
         frameWorld.build = [inner = std::move(frameWorld.build), heartbeat](O::WorldSetup& setup) {
             inner(setup);
-            const auto* director = setup.ProductBuffer().Find<PC::SceneDirector>();
+            const auto* director = setup.ProductBuffer().Find<PC::ScreenDirector>();
             if (director == nullptr) return;
-            const PC::SceneChange& scene = director->Current();
+            const PC::ScreenChange& screen = director->Current();
             const auto last = [](std::string name) {
                 K::SystemOptions watch;
                 watch.name = std::move(name);
@@ -467,19 +467,19 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
                 watch.mounts.push_back(std::move(mount));
                 return watch;
             };
-            Log(GYO::Engine::Base::LogLevel::Info, "scene: " + SceneName(scene.scene));
+            Log(GYO::Engine::Base::LogLevel::Info, "screen: " + ScreenName(screen.screen));
             BeatOnExchangeIn(setup, heartbeat, Heartbeat::Part::FrameWorld);
             setup.Registrar().Resource<FrameWatch>({.name = "FrameWatch"});
             setup.Registrar().AddSystem<&WatchFrame>(last("WatchFrame"));
-            const bool game = scene.scene == PC::Scene::SoloGame || scene.scene == PC::Scene::MultiGame;
-            setup.Prepare([name = SceneName(scene.scene), game](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
+            const bool game = screen.screen == PC::Screen::SoloGame || screen.screen == PC::Screen::MultiGame;
+            setup.Prepare([name = ScreenName(screen.screen), game](K::World& w) -> GYO::Engine::Base::Result<void, O::OrchestrationError> {
                 w.SetResource(FrameWatch{name, game, {}});
                 return {};
             });
-            const bool multi = scene.scene == PC::Scene::MultiGame;
-            if (!multi && scene.scene != PC::Scene::SoloGame) return;
-            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + scene.map +
-                                                       "' chosen" + (multi ? " in room " + std::to_string(scene.room) : std::string()));
+            const bool multi = screen.screen == PC::Screen::MultiGame;
+            if (!multi && screen.screen != PC::Screen::SoloGame) return;
+            Log(GYO::Engine::Base::LogLevel::Info, std::string(multi ? "multiplayer" : "single player") + " game: map '" + screen.map +
+                                                       "' chosen" + (multi ? " in room " + std::to_string(screen.room) : std::string()));
             setup.Registrar().Resource<VerboseWatch>({.name = "VerboseWatch"});
             setup.Registrar().AddSystem<&WatchArena>(last("WatchArena"));
             if (multi) setup.Registrar().AddSystem<&WatchConnection>(last("WatchConnection"));
@@ -506,7 +506,7 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     W::WindowSettings window;
     window.title = GYO_GAME_DISPLAY_NAME;
     // The size and the mode the player's settings give (the size is physical pixels: the window opens at it as logical
-    // ones and is resized once it says its scale factor, Scenes.cpp FitWindow; their VSync: the Render World's
+    // ones and is resized once it says its scale factor, Screens.cpp FitWindow; their VSync: the Render World's
     // Presentation, ClientWorld).
     window.size = resolution;
     window.mode = windowMode;
@@ -521,11 +521,11 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
     // The Sim World on its own thread (live-frame-sim-thread declaration 4.3): while the OS holds the window (a
     // drag, a resize) the steps and the packets go on, so the Match does not see this Client go quiet.
     sdl.ownThreadWorlds = {"Solo", "Sim"};
-    // The scene changes, between two frames (client/Scenes.hpp).
-    sdl.betweenFrames.wanted = [](O::Product& product) { return PC::SceneChangeWanted(product); };
+    // The screen changes, between two frames (client/Screens.hpp).
+    sdl.betweenFrames.wanted = [](O::Product& product) { return PC::ScreenChangeWanted(product); };
     sdl.betweenFrames.run = [heartbeat, verbose](O::Product& product) {
-        if (verbose) heartbeat->Mark(Heartbeat::Part::SceneChange);
-        auto changed = PC::ChangeScene(product);
+        if (verbose) heartbeat->Mark(Heartbeat::Part::ScreenChange);
+        auto changed = PC::ChangeScreen(product);
         if (verbose) heartbeat->Mark(Heartbeat::Part::BetweenFrames);
         return changed;
     };
@@ -570,19 +570,19 @@ int RunProduct(PC::ClientStart start, const std::uint64_t userId, const std::sha
         const auto* found = std::as_const(product->World("Frame").GetWorld()).Resource<PC::FrameNotes>();
         return found != nullptr ? *found : PC::FrameNotes{};
     }();
-    // A scene whose document was never shown is a blank window: say why (ui page section 9 point 8).
+    // A screen whose document was never shown is a blank window: say why (ui page section 9 point 8).
     if (!notes.failure.empty()) Log(GYO::Engine::Base::LogLevel::Error, notes.failure);
     if (!notes.mismatch.empty()) Log(GYO::Engine::Base::LogLevel::Error, "the Match's content differs from this Client's: " + notes.mismatch);
     if (!notes.map.empty()) Log(GYO::Engine::Base::LogLevel::Error, "the map did not load: " + notes.map);
     if (verbose && !notes.endReason.empty()) Log(GYO::Engine::Base::LogLevel::Info, "the last connection ended: " + notes.endReason);
     int code = CheckDrawing(*product, frames, exit);
     if (frames > 0 && code == 0) {
-        // A test's run: a content mismatch fails it; a scene with a document must have shown it.
+        // A test's run: a content mismatch fails it; a screen with a document must have shown it.
         if (!notes.mismatch.empty() || !notes.map.empty()) code = 1;
-        const auto* director = std::as_const(product->Buffer()).Find<PC::SceneDirector>();
-        const bool documentScene = director != nullptr && director->Current().scene != PC::Scene::MultiGame;
-        if (documentScene && !notes.shown) {
-            Log(GYO::Engine::Base::LogLevel::Error, "the scene's document was not shown in " + std::to_string(frames) + " frames");
+        const auto* director = std::as_const(product->Buffer()).Find<PC::ScreenDirector>();
+        const bool documentScreen = director != nullptr && director->Current().screen != PC::Screen::MultiGame;
+        if (documentScreen && !notes.shown) {
+            Log(GYO::Engine::Base::LogLevel::Error, "the screen's document was not shown in " + std::to_string(frames) + " frames");
             code = 1;
         }
     }
@@ -684,7 +684,7 @@ int main(int argc, char** argv) {
     start.gateway = gateway;
     // This player's files: <the place>/<profile>, the settings in <the place> (the machine's, not the profile's). The
     // place is the user's data directory, or beside the program when a file named "portable" is there (PC::DataPlace).
-    // None found: nothing is saved (the scenes say so).
+    // None found: nothing is saved (the screens say so).
     std::optional<std::string> executable;
     if (auto path = GYO::Engine::OS::Process::ExecutablePath()) {
         executable = std::move(*path);
@@ -714,9 +714,9 @@ int main(int argc, char** argv) {
         Log(GYO::Engine::Base::LogLevel::Warning, "no place for the files, nothing will be saved");
     }
     if (connect) {
-        start.first = PC::SceneChange{.scene = PC::Scene::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
+        start.first = PC::ScreenChange{.screen = PC::Screen::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     } else {
-        start.first = PC::SceneChange{.scene = PC::Scene::Splash};
+        start.first = PC::ScreenChange{.screen = PC::Screen::Splash};
     }
     return RunProduct(std::move(start), userId, sharedGame, sharedPresentation, *contentRoot, executor, compute, verbose);
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 // What the Sim World (or the Solo World) and the Frame World hand each other: one object of the Product
-// (ConfigureClient makes it), shared by every scene.
+// (ConfigureClient makes it), shared by every screen.
 
 #include "object_fps_pvp/client/ClientWorld.hpp"
 #include "object_fps_pvp/present/Controls.hpp"
@@ -97,7 +97,7 @@ public:
     void SetPaused(const bool paused) noexcept { paused_.store(paused, std::memory_order_relaxed); }
     [[nodiscard]] bool Paused() const noexcept { return paused_.load(std::memory_order_relaxed); }
 
-    // A scene change (both Worlds are being replaced): neither the picture nor the controls of the World that goes
+    // A screen change (both Worlds are being replaced): neither the picture nor the controls of the World that goes
     // reach the next one.
     void Reset() {
         {

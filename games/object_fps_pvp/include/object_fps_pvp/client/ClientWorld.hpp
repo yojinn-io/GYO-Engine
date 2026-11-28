@@ -9,9 +9,9 @@
 //            cameras, the HUD, the characters, the sounds. It shows the Sim World's players as copies by their ids.
 //   "Render" extracts from "Frame".
 //
-// They are the game scene of the Client's scenes (Scenes.hpp): the descriptions below read the Product's
-// SceneDirector, and register the game only in Scene::MultiGame (the Sim World elsewhere is empty; the Frame World is
-// the scene's).
+// They are the game screen of the Client's screens (Screens.hpp): the descriptions below read the Product's
+// ScreenDirector, and register the game only in Screen::MultiGame (the Sim World elsewhere is empty; the Frame World is
+// the screen's).
 //
 // Sim and Frame hand each other two things through one object of the Product (ClientExchange, each half behind its
 // own lock): the Sim World's "out" puts the newest picture (its players, the arena, ClientView); the Frame World's
@@ -126,11 +126,11 @@ struct ClientOptions final {
     // Where the map's walls and pictures are made (the Product's worker; it outlives the Product). None: in the
     // System, on the World's thread.
     GYO::Engine::Asset::AssetExecutor* jobs = nullptr;
-    // The mode a game scene plays when its change names none this Client has (an index into game->modes).
+    // The mode a game screen plays when its change names none this Client has (an index into game->modes).
     std::size_t mode = 0;
 };
 
-// The Product's part (its configure): the ClientExchange and the SceneDirector (from the product option ClientStart;
+// The Product's part (its configure): the ClientExchange and the ScreenDirector (from the product option ClientStart;
 // none: the menu), the game's loaders join the asset store (the map's, world::ConfigureGame; fbx, png, fonts, sounds,
 // gyo.ui documents), and a submitter of sdl_audio's mixer when there is one (none: the Client is silent).
 void ConfigureClient(O::ProductSetup& setup);
@@ -139,11 +139,11 @@ void ConfigureClient(O::ProductSetup& setup);
 // players it copies by their ids.
 inline constexpr GYO::Engine::EntityIds::EntityIdsOptions kFrameIds{2'000'001, 3'000'000};
 
-// The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the scene's connect),
+// The three Worlds: "Sim" (the client World and the Client's input; its NetConnectTarget is the screen's connect),
 // "Frame" (units listed: the Modules it needs and sdl_window when window is true) and "Render" (extracts from "Frame";
 // with sdl_gpu when gpu is true, false for a test without a device; its Extract copies the player's VSync into render's
 // Presentation). Sim and Frame need ConfigureClient (their
-// ClientExchange and SceneDirector).
+// ClientExchange and ScreenDirector).
 [[nodiscard]] O::WorldDescription ClientSimWorld(ClientOptions options);
 // "Solo": the game's Local World (world::LocalWorld; no net), the single player's game; the same exchange as "Sim".
 [[nodiscard]] O::WorldDescription ClientSoloWorld(ClientOptions options);
@@ -185,7 +185,7 @@ struct ClientStatus final {
 // Of the Frame World.
 [[nodiscard]] ClientStatus StatusOf(GYO::Kernel::World& world);
 
-// What the World that draws has shown (a Resource of the game scene's Frame World): the program writes it between
+// What the World that draws has shown (a Resource of the game screen's Frame World): the program writes it between
 // frames from the drawing's status (sdl_gpu's SDLGPUStatus, through an exchange function), for the loading screen's
 // warm-up (game-flow declaration 3.5). Not known (a test without a device): the warm-up is not waited for.
 struct DrawnFrames final {

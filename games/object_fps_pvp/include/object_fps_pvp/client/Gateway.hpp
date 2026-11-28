@@ -8,9 +8,9 @@
 //     ParseSave, ErrorCodeOf). Pure: no socket, no clock.
 //   - GatewayClient: one call at a time over GYO::Http, driven by the caller's Update once a frame (it never blocks);
 //     it opens the session first, and opens it again once when an answer says it is gone (401). The Frame World keeps
-//     it in a Resource carried from scene to scene (the session, and a call still going, go along).
+//     it in a Resource carried from screen to screen (the session, and a call still going, go along).
 //
-// What an error code means for the player is the scene's (the codes only say what happened).
+// What an error code means for the player is the screen's (the codes only say what happened).
 
 #include "engine/http/Http.hpp"
 #include "engine/kernel/Kernel.hpp"

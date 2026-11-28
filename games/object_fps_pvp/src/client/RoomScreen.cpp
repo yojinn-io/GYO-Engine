@@ -1,4 +1,4 @@
-// A room of the Gateway (Scene::Room; assets/object_fps_pvp/ui/pvp_room.json, canvas "room"; game-flow declaration
+// A room of the Gateway (Screen::Room; assets/object_fps_pvp/ui/pvp_room.json, canvas "room"; game-flow declaration
 // 3.4): its members and who is ready, polled every 0.75 s. The player gets ready (or not); the owner starts it once
 // everyone is. When the room has started and gives this player's connect, the game follows, connected to the Match
 // (the token is good for two minutes and comes fresh with each read). A room this player is no longer in (gone, its
@@ -8,7 +8,7 @@
 //                             Gateway answers)
 //                RoomGateway  the calls and their answers (-> the game, or back to the lobby)
 
-#include "client/SceneBuilds.hpp"
+#include "client/ScreenBuilds.hpp"
 
 #include "object_fps_pvp/data/Hex.hpp"
 
@@ -111,7 +111,7 @@ K::SystemResult RoomActions(K::MessageReader<Ui::UiAction> actions, K::ResMut<Ro
 }
 
 K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> state, K::ResMut<GatewayClient> gateway,
-                            K::ResMut<SceneRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
+                            K::ResMut<ScreenRequest> request, K::Query<K::Write<Ui::UiBindings>> bindings) {
     const std::int64_t now = time->elapsed;
     RoomState& room = *state;
     if (!gateway.Read().Busy() && !room.leaving && (!room.polled || now - *room.polled >= kPollEvery)) {
@@ -122,7 +122,7 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
     if (!result || request.Read().next) return {};
     if (room.leaving) {
         // Leaving: only the leave's end counts (gone either way: an error says the room is gone already).
-        if (result->tag == "leave") request->next = SceneChange{.scene = Scene::Lobby};
+        if (result->tag == "leave") request->next = ScreenChange{.screen = Screen::Lobby};
         return {};
     }
     // The last ready call answered (done or refused): the room's own word on the readiness from now on.
@@ -141,7 +141,7 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
         // This player is no longer in the room (it is gone, its match ended, or it was left elsewhere): the lobby.
         const bool out = result->status == 404 || result->status == 410 || result->errorCode == "not_member";
         if (out) {
-            request->next = SceneChange{.scene = Scene::Lobby, .status = GatewayErrorText(*result, room.gateway)};
+            request->next = ScreenChange{.screen = Screen::Lobby, .status = GatewayErrorText(*result, room.gateway)};
             return {};
         }
         tell(GatewayErrorText(*result, room.gateway));
@@ -160,7 +160,7 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
         const auto server = ParseMatchAddress(connect.server);
         const auto token = data::DecodeHex(connect.token);
         if (server && token) {
-            request->next = SceneChange{.scene = Scene::MultiGame,
+            request->next = ScreenChange{.screen = Screen::MultiGame,
                                         .connect = N::NetConnectTarget{*server, connect.userId, *token},
                                         .room = room.id,
                                         .map = room.room->map,
@@ -176,11 +176,11 @@ K::SystemResult RoomGateway(K::Res<WT::RealTime> time, K::ResMut<RoomState> stat
 
 } // namespace
 
-void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayContext& context) {
+void BuildRoom(O::WorldSetup& setup, const ScreenChange& change, const GatewayContext& context) {
     K::Registrar& r = setup.Registrar();
     r.Resource<RoomState>({.name = "object_fps_pvp.RoomState"});
-    r.AddSystem<&RoomActions>(InSceneUpdate("object_fps_pvp.RoomActions"));
-    r.AddSystem<&RoomGateway>(InSceneUpdate("object_fps_pvp.RoomGateway", {"object_fps_pvp.RoomActions"}));
+    r.AddSystem<&RoomActions>(InScreenUpdate("object_fps_pvp.RoomActions"));
+    r.AddSystem<&RoomGateway>(InScreenUpdate("object_fps_pvp.RoomGateway", {"object_fps_pvp.RoomActions"}));
     setup.Prepare([change, context](K::World& w) -> Base::Result<void, O::OrchestrationError> {
         RoomState state;
         state.id = change.room;
@@ -194,7 +194,7 @@ void BuildRoom(O::WorldSetup& setup, const SceneChange& change, const GatewayCon
         const auto* gateway = w.Resource<GatewayClient>();
         ShowRoom(state, gateway != nullptr ? SelfOf(*gateway) : 0, bindings);
         w.SetResource(std::move(state));
-        PlaceSceneDocument(w, "object_fps_pvp.ui.room", "room", std::move(bindings), {});
+        PlaceScreenDocument(w, "object_fps_pvp.ui.room", "room", std::move(bindings), {});
         return {};
     });
 }
