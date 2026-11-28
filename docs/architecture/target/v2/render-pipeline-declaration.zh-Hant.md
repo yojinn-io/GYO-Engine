@@ -662,6 +662,7 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 | 每個 span 的 GPU 時間（timestamp，Vulkan／DX12），Metal 只有 CPU | 每個 pass 只有 CPU 時間；整幀一個 GPU 時間的上界（fence） | SDL_GPU 3.4 沒有 timestamp（使用者 Q1 (a)） | fence 的帳（一個小列表），RC-RP5 換掉 |
 | 結果進 `DiagnosticsStore`（有歷史、平滑） | 只有最近一幀，在 `SDLGPUStatus` | 平均、歷史是作者的事（第 15.2 節）；GYO 沒有共通的 diagnostics 設施 | 無 |
 | 結果幾幀之後到（`internal.rs:88-101`） | 同（`Submit` 的 GPU 時間下一幀才知道） | 同一個理由：不等 GPU | 無 |
+| 選用：`RenderDiagnosticsPlugin` 要自己加（`mod.rs:60-64`）；Godot 的 `measure_render_time` 要 viewport 開（`rendering_server.h:627-629`） | 一律開（修訂 15.8，設計審查 N5） | 成本是每個 pass 讀兩次時鐘、寫一次名字（緩衝重用）、推彈一個群組，每幀一個 fence；沒有擷取工具時群組不做事；AGENTS §1.10 既定值方便。開關等量到成本再加（RC-A3-3） | 無 |
 
 **別家對照**：Godot 的 `capture_timestamp` 是作者指名的點（不是每個 pass），結果晚 `get_frame_delay()` 幀；viewport 的 `measure_render_time` 是整個 viewport 一個值——和這裡的「整幀一個值」同一個粒度，只是它有 timestamp。
 
@@ -674,6 +675,8 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 - **T5**：既有測試照過（`sdl_gpu.*`、`render.*`）；第 15.5 節的突變全部 killed（會開視窗的除外，寫明）。
 
 **既有測試的改動**：沒有改判斷；`sdl_gpu.frames` 只加 T4 的檢查。
+
+**和第 5.1 節驗收的對應**（修訂 15.8，設計審查 S4）：第 5.1 節寫「cpu：每個 pass 的名字與 CPU 時間出現在 `SDLGPUStatus`」。名字在 cpu 驗（T1，純函式）；**CPU 時間要有裝置才量得到（錄製的時間），所以移到 gpu 驗**（T2，經 `GPUDevice`）；`SDLGPUStatus` 的轉送只在會開視窗的 T4（`sdl_gpu.frames`，L1 的 Linux 在 Xvfb＋Lavapipe 跑 `-L gpu`；這張卡沒跑）。
 
 ### 15.5 測試與突變
 
@@ -690,3 +693,27 @@ Unreal 的 SceneCapture（`bCaptureEveryFrame`、`bCaptureOnMovement`、`Capture
 ### 15.7 不做
 
 每個 pass 的 GPU 時間（RC-RP5）；adapter 直接呼叫原生 timestamp（Q1 (b)）；每個 pass 一個 fence（Q1 (c)）；歷史、平均、預算判定（作者的事）；`WinPixEventRuntime` 的依賴；draw 層級的標記（`SDL_InsertGPUDebugLabel`：沒有消費者，要時加）；把計時寫進渲染 World（SDL-5）；Object_PvP 的整體幀時間量測（重 GPU 量測，先問使用者）。
+
+### 15.8 第 15 節的修訂：設計審查與純淨 Code Review 之後（2026-11-28）
+
+審查兩份（主 checkout `build/evidence/v8-arch-gyo2-render-a3/design-review-a3.zh-Hant.md`、`pure-code-review-a3.zh-Hant.md`，不在 git）：設計審查（Opus／high）Blocker 0、Should 4、Nit 6、Note 6；純淨 Code Review（Fable／high）高 1、中 7、低 8。逐項的處理與理由在 dev_log。使用者的 Q1 (a) 不變。
+
+**等使用者決定、這一輪不動**（主會話交使用者）：設計 S1＝純淨 H1——畫到視窗的幀，整幀 GPU 時間的上界實際上約等於「多久之後才去看」（GPU 跟得上時≈這一幀剩下的 CPU 時間，落後時≈VSync 間隔的倍數），而型別叫 `GPUFrameTime`、getter 叫 `LastGPUFrameTime`，會被讀成「GPU 花了多久」。Q1 (a) 的前提「fence 給得出整幀的 GPU 時間」只在 `Capture`（等自己的 fence）成立。選項：(i) 照現狀明講；(ii) 照實際意思改名；(iii) 提前 RC-A3-2（另一條執行緒等 fence，和 SDL-4「`GPUDevice` 每個進入點斷言主執行緒」衝突）。和它綁在一起的改名、區間欄位（純淨 H1 的建議 1）都等決定。
+
+改了的：
+
+1. **T3 判「從哪一刻算起」**（設計 S2）：`Capture` 前後量牆上時間 `wall`，判 `0 < atMost ≤ wall`、各 pass 的 CPU 時間和 ≤ `wall`（兩端都在 `Capture` 之內，所以是從外面判的上界，不是寫死的數字）。突變 `tm-gpu-from-epoch`、`tm-cpu-from-epoch`。
+2. **種類的名字由 render 給、窮舉**（設計 S3、純淨 M4）：`render` 的 `PassKindName(pass)`（`RenderCommands.hpp`，`TargetOf` 旁，`Overloaded` 的窮舉 visitor：多一個 pass 種類時編譯失敗）；`PassLabel` 只排版。這是加一個純函式，不改資料形式；和 A4 的 `RenderCommands.hpp` 改動不相鄰。
+3. **CPU 驗收的對應**（設計 S4）：第 15.4 節補一段。
+4. **名字與帳本重用**（純淨 M1 的一半）：`BeginTiming(timing, frame, commands)` 在上一幀的 `FrameTiming` 上寫（`resize`、名字 `assign` 進既有的字串），每幀不重新配置。**開關不加**（理由在 15.3 的偏離表；RC-A3-3）。
+5. **時間型別**（純淨 M7 的一半）：`PassTiming::cpu`、`GPUFrameTime::atMost` 改成 `Engine::Time::Duration`，adapter 讀 `Engine::Time::Now()`（engine 的時間基準；`sdl_gpu` 多連 `GYO::Time`）。**時鐘不注入**：T3 的 `wall` 上界從外面就驗得到起點，注入要在 `GPUDevice::Create` 多一個只給測試的接縫，而且精確值會綁住「讀幾次時鐘」。
+6. **getter 回值**（純淨 M3、設計 N3）：`LastFrameTiming()` 從參考改成 `std::optional<FrameTiming>`（複本；第一幀之前、沒有裝置時沒有值），和 `LastGPUFrameTime()` 同一種表示「沒有」；`Shutdown` 之後不懸空。
+7. **帳本明確傳遞**（設計 N4、純淨 M2、L2、L4）：`BeginFrame`（編號＋`BeginTiming`）與看 fence 移到 `Submit`／`Capture`；`DrawFrame`／`RecordPasses` 收 `FrameTiming&`，`RecordPasses` 斷言「每個 pass 一格」（程式的誤り）；交給 GPU 收成一個函式 `Hand`（取時刻、帶 fence 送出、`Commit`、記帳），`Submit` 與 `Capture` 共用。上傳失敗那條路傳一份空的帳。
+8. **看 fence 的迴圈**（純淨 L3）：`erase_if` 的有副作用的述詞改成明寫的迴圈。
+9. **註解**（設計 N1、N6、純淨 L1、L6）：`recorded == false` 也包括跳過的幀；拿不到 command buffer 的幀不錄、`LastFrameTiming` 停在前一幀（看 `frame`）；`cpu` 是錄製那段的牆上時間（Bevy 的 `elapsed_cpu` 同義）；查不到的 fence 留到裝置結束。
+10. **T4 不要求視窗上一定看到做完的幀**（純淨 M7 的另一半）：視窗上不等 GPU，「到最後一幀為止看到某一幀做完」邏輯上不保證；只在有值時判它是已錄的幀。確定的情況由 `Capture` 的 T3 驗。
+
+**不改的**（理由在 dev_log）：`PassTiming` 改放結構化的事實（純淨 M5：名字就是擷取工具裡的群組名，種類與目標在同一個位置的 `RenderCommands` 裡）；拿掉 `debugGroups`（純淨 M6、設計 N2：第 5.1 節的驗收是「只驗呼叫次數」，它是除錯標記在擷取工具之外唯一看得到的事實；計數是 `DebugGroup` 自己數的，只刪 `SDL_PushGPUDebugGroup` 一行的錯只有擷取工具看得到）；交出之後才編號（純淨 L1：帳本描述的是錄的幀，交不出去的那一幀照樣錄過）；整幀的錄製合計（純淨 L7：第 5.1 節要的是每個 pass）；`inFlight` 的上限（純淨 L8、設計 N6：裝置壞了時送出也失敗，不再加 fence）；診斷關掉時走沒有 fence 的送出（純淨 L5：隨開關）。
+
+**新 RC**：
+- **RC-A3-3**：量到診斷（名字、時鐘、群組、fence）成為幀時間的可見部分，或有作者要在發版關掉 → `sdl_gpu` 加一個開關（預設開，AGENTS §1.10），關掉時不推群組、不量、用沒有 fence 的送出。

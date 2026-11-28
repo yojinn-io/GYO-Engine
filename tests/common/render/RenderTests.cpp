@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <ostream>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -264,6 +265,9 @@ TEST_CASE("render: what each kind of pass draws on and samples") {
     CHECK_MESSAGE((R::TargetOf(flat) == R::TextureId{3} && R::TargetOf(scene) == std::nullopt && R::TargetOf(post) == R::TextureId{8} &&
                    R::TargetOf(shadow) == R::TextureId{10}),
                   "[rd-pass-target] the target each draws on (a depth-only pass's is its depth target)");
+    CHECK_MESSAGE((std::string(R::PassKindName(flat)) == "Pass2D" && std::string(R::PassKindName(scene)) == "Pass3D" &&
+                   std::string(R::PassKindName(post)) == "PassFullscreen" && std::string(R::PassKindName(shadow)) == "PassDepth"),
+                  "[rd-pass-kind] each kind's name is its type's");
     CHECK_MESSAGE((R::ReadsOf(flat) == std::vector<R::TextureId>{R::TextureId{5}, R::TextureId{6}}), "[rd-pass-reads-draws] its draws' textures, the white one left out");
     CHECK_MESSAGE((R::ReadsOf(scene) == std::vector<R::TextureId>{R::TextureId{7}}), "[rd-pass-reads-depth-not-read] a 3D pass's depth target is not a read");
     CHECK_MESSAGE((R::ReadsOf(post) == std::vector<R::TextureId>{R::TextureId{9}, R::TextureId{2}}), "[rd-pass-reads-inputs] a full-screen pass's inputs in order");

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the passes' names, debug groups, CPU times and the frames' GPU time (render-pipeline declaration section 15, v8-arch-gyo2-render-a3; 判定 T1 to T4). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The batch changes no Design Invariant (A3 is a lower-tier batch), so every guard is a 判定 of section 15. tm-label-* and tm-timing-* need no GPU (label cpu); the other tm-* need a GPU (label gpu, sdl_gpu.timing); tm-submit-not-tracked and tm-status-timing-not-given run sdl_gpu.frames, which shows a window (not run by the A3 card: L1 runs the case, not the mutants). Not added (with the reason): the frame's timing not rebuilt from its commands (RecordPasses then indexes past the timings: undefined behaviour, a crash, not an assertion); a fence taken as done before it is signaled (Capture waits for its fence before looking, so no case without a window tells it apart); the fences let go at the device's end (a leak, not seen from outside); Submit looking at the fences before the swapchain's wait (the bound only gets looser, by the wait: not seen from outside); the debug group's name in a capture tool (CI has no capture tool: only the count is checked, 15.4).",
+  "description": "Declared mutants of the passes' names, debug groups, CPU times and the frames' GPU time (render-pipeline declaration section 15, v8-arch-gyo2-render-a3; 判定 T1 to T4; revision 15.8). One per independently wrong decision (tests/common/mutation/README.md, criteria 1 to 3 and 9). The batch changes no Design Invariant (A3 is a lower-tier batch), so every guard is a 判定 or the revision of section 15. tm-label-*, tm-timing-* (but tm-timing-not-begun and tm-timing-none-given) need no GPU (label cpu; tm-label-kind-wrong runs render.data); the other tm-* need a GPU (label gpu, sdl_gpu.timing); tm-status-timing-not-given runs sdl_gpu.frames, which shows a window (not run by the A3 card: L1 runs the case, not the mutants). Retired in 15.8: tm-groups-carried-over (the reset moved into BeginTiming: tm-timing-groups-not-reset), tm-capture-not-tracked (Submit and Capture hand through one function: tm-hand-not-tracked), tm-submit-not-tracked (the same Hand; and sdl_gpu.frames no longer requires a frame seen done on the window, design review M7: nothing waits for it). Not added (with the reason): a fence taken as done before it is signaled (Capture waits for its fence before looking, so no case without a window tells it apart); the fences let go at the device's end (a leak, not seen from outside); Submit looking at the fences before the swapchain's wait (the bound only gets looser, by the wait: not seen from outside); SDL_PushGPUDebugGroup alone removed (the count is the DebugGroup's own: only a capture tool sees the call, 15.8 N2); the debug group's name in a capture tool (CI has no capture tool: only the count is checked, 15.4).",
   "mutants": [
     {
       "id": "tm-label-no-index",
@@ -9,8 +9,8 @@
         "render-pipeline-declaration 15 判定 T1"
       ],
       "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "    std::string label = \"#\" + std::to_string(index) + \" \";",
-      "replace": "    std::string label = \"#0 \";",
+      "find": "    out += std::to_string(index);",
+      "replace": "    out += \"0\";",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu pass labels:*",
       "expect": "\\[tm\\-names\\-distinct\\]"
@@ -22,8 +22,8 @@
         "render-pipeline-declaration 15 判定 T1"
       ],
       "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "    label += target ? \" -> target \" + std::to_string(target->value) : std::string(\" -> main\");",
-      "replace": "    label += std::string(\" -> main\");",
+      "find": "    if (target) {\n        out += \" -> target \";",
+      "replace": "    if (false) {\n        out += \" -> target \";",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu pass labels:*",
       "expect": "\\[tm\\-names\\-target\\]"
@@ -35,24 +35,25 @@
         "render-pipeline-declaration 15 判定 T1"
       ],
       "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "            if constexpr (std::is_same_v<Pass, R::PassFullscreen>) return \"PassFullscreen \" + p.shader;",
-      "replace": "            if constexpr (std::is_same_v<Pass, R::PassFullscreen>) return \"PassFullscreen\";",
+      "find": "        out += fullscreen->shader;",
+      "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu pass labels:*",
       "expect": "\\[tm\\-names\\-shader\\]"
     },
     {
       "id": "tm-label-kind-wrong",
-      "what": "15.3 (1): a pass's name gives another kind than its own (a depth-only pass named as a 3D one)",
+      "what": "15.8 (S3, M4): a pass's kind is named as another kind (render's PassKindName; the label takes it from there)",
       "guards": [
-        "render-pipeline-declaration 15 判定 T1"
+        "render-pipeline-declaration 15 判定 T1",
+        "render-pipeline-declaration 15.8"
       ],
-      "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "            if constexpr (std::is_same_v<Pass, R::PassDepth>) return \"PassDepth\";",
-      "replace": "            if constexpr (std::is_same_v<Pass, R::PassDepth>) return \"Pass3D\";",
-      "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu pass labels:*",
-      "expect": "\\[tm\\-names\\-kind\\]"
+      "file": "engine/modules/render/src/Render.cpp",
+      "find": "                          [](const PassDepth&) { return \"PassDepth\"; },",
+      "replace": "                          [](const PassDepth&) { return \"Pass3D\"; },",
+      "target": "gyo_render_tests",
+      "cases": "render: what each kind of pass*",
+      "expect": "\\[rd\\-pass\\-kind\\]"
     },
     {
       "id": "tm-timing-not-named",
@@ -61,8 +62,8 @@
         "render-pipeline-declaration 15 判定 T1"
       ],
       "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "    for (std::size_t i = 0; i < commands.passes.size(); ++i) timing.passes.push_back(PassTiming{PassLabel(commands.passes[i], i)});",
-      "replace": "    for (std::size_t i = 0; i < commands.passes.size(); ++i) timing.passes.push_back(PassTiming{});",
+      "find": "        WritePassLabel(pass.name, commands.passes[i], i);\n",
+      "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu pass labels:*",
       "expect": "\\[tm\\-timing\\-named\\]"
@@ -74,24 +75,53 @@
         "render-pipeline-declaration 15 判定 T1"
       ],
       "file": "plugins/sdl_gpu/src/PassLabels.hpp",
-      "find": "    for (std::size_t i = 0; i < commands.passes.size(); ++i) timing.passes.push_back(PassTiming{PassLabel(commands.passes[i], i)});",
-      "replace": "    for (std::size_t i = 0; i < commands.passes.size(); ++i) timing.passes.push_back(PassTiming{PassLabel(commands.passes[i], i), true});",
+      "find": "        pass.recorded = false;",
+      "replace": "        pass.recorded = true;",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu pass labels:*",
       "expect": "\\[tm\\-timing\\-unrecorded\\]"
     },
     {
+      "id": "tm-timing-cpu-kept",
+      "what": "15.8 (M1): a timing begun over the last frame's keeps a pass's CPU time",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T1",
+        "render-pipeline-declaration 15.8"
+      ],
+      "file": "plugins/sdl_gpu/src/PassLabels.hpp",
+      "find": "        pass.cpu = Engine::Time::Duration{0};\n",
+      "replace": "",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu pass labels:*",
+      "expect": "\\[tm\\-timing\\-unrecorded\\]"
+    },
+    {
+      "id": "tm-timing-groups-not-reset",
+      "what": "15.3 (2), 15.8 (M1): the debug groups are counted across frames, not per frame (merges tm-groups-carried-over)",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T1",
+        "render-pipeline-declaration 15 判定 T2",
+        "render-pipeline-declaration 15.8"
+      ],
+      "file": "plugins/sdl_gpu/src/PassLabels.hpp",
+      "find": "    timing.debugGroups = 0;\n",
+      "replace": "",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu pass labels:*",
+      "expect": "\\[tm\\-timing\\-groups\\-reset\\]"
+    },
+    {
       "id": "tm-frames-not-counted",
-      "what": "15.3 (5): the frame number does not go up per frame recorded",
+      "what": "15.3 (5): the frame number does not go up per frame recorded (the first frame is then none)",
       "guards": [
         "render-pipeline-declaration 15 判定 T2"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        timing = TimingOf(++framesRecorded, commands);",
-      "replace": "        timing = TimingOf(framesRecorded, commands);",
+      "find": "BeginTiming(timing, ++framesRecorded, commands);",
+      "replace": "BeginTiming(timing, framesRecorded, commands);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
-      "expect": "\\[tm\\-frames\\-count\\]"
+      "expect": "\\[tm\\-one\\-per\\-pass\\]|\\[tm\\-frames\\-count\\]"
     },
     {
       "id": "tm-unmapped-recorded",
@@ -100,24 +130,11 @@
         "render-pipeline-declaration 15 判定 T2"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        timing = TimingOf(++framesRecorded, commands);",
-      "replace": "        timing = TimingOf(++framesRecorded, commands);\n        for (PassTiming& t : timing.passes) t.recorded = true;",
+      "find": "    void BeginFrame(const R::RenderCommands& commands) { BeginTiming(timing, ++framesRecorded, commands); }",
+      "replace": "    void BeginFrame(const R::RenderCommands& commands) {\n        BeginTiming(timing, ++framesRecorded, commands);\n        for (PassTiming& t : timing.passes) t.recorded = true;\n    }",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-unmapped\\-unrecorded\\]"
-    },
-    {
-      "id": "tm-groups-carried-over",
-      "what": "15.3 (2): the debug groups are counted across frames, not per frame",
-      "guards": [
-        "render-pipeline-declaration 15 判定 T2"
-      ],
-      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        timing = TimingOf(++framesRecorded, commands);",
-      "replace": "        {\n            const std::uint64_t groups = timing.debugGroups;\n            timing = TimingOf(++framesRecorded, commands);\n            timing.debugGroups = groups;\n        }",
-      "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu timing:*",
-      "expect": "\\[tm\\-groups\\-per\\-frame\\]"
     },
     {
       "id": "tm-recorded-not-marked",
@@ -139,11 +156,25 @@
         "render-pipeline-declaration 15 判定 T2"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "            passTiming.cpu = std::chrono::steady_clock::now() - began;",
+      "find": "            passTiming.cpu = Engine::Time::Now() - began;",
       "replace": "            passTiming.cpu = {};",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-cpu\\]"
+    },
+    {
+      "id": "tm-cpu-from-epoch",
+      "what": "15.8 (S2): a pass's CPU time counted from another moment than its recording's start (the clock's epoch)",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T2",
+        "render-pipeline-declaration 15.8"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "            const Engine::Time::TimePoint began = Engine::Time::Now();",
+      "replace": "            const Engine::Time::TimePoint began{};",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu timing:*",
+      "expect": "\\[tm\\-cpu\\-within\\]"
     },
     {
       "id": "tm-group-not-pushed",
@@ -152,21 +183,49 @@
         "render-pipeline-declaration 15 判定 T2"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "            const DebugGroup group(cmd, passTiming.name, timing.debugGroups);\n",
+      "find": "            const DebugGroup group(cmd, passTiming.name, frameTiming.debugGroups);\n",
       "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-groups\\]"
     },
     {
-      "id": "tm-capture-not-tracked",
-      "what": "15.3 (4): Capture's fence is not kept for the frame's GPU time",
+      "id": "tm-timing-not-begun",
+      "what": "15.8 (N4, M2): a frame recorded without its timing begun (the passes and their timings out of step)",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T2",
+        "render-pipeline-declaration 15.8"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "    state_->BeginFrame(commands);\n    if (!state_->DrawFrame",
+      "replace": "    if (!state_->DrawFrame",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu timing:*",
+      "expect": "a frame's timing has one entry per pass it records"
+    },
+    {
+      "id": "tm-timing-none-given",
+      "what": "15.8 (M3): before any frame the device gives a timing (of no frame) instead of none",
+      "guards": [
+        "render-pipeline-declaration 15 判定 T2",
+        "render-pipeline-declaration 15.8"
+      ],
+      "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
+      "find": "    if (state_->framesRecorded == 0) return std::nullopt;\n",
+      "replace": "",
+      "target": "gyo_sdl_gpu_tests",
+      "cases": "sdl_gpu timing:*",
+      "expect": "\\[tm\\-timing\\-none\\]"
+    },
+    {
+      "id": "tm-hand-not-tracked",
+      "what": "15.3 (4): a frame handed to the GPU does not keep its fence (no GPU time, on the window or in a Capture; was tm-capture-not-tracked)",
       "guards": [
         "render-pipeline-declaration 15 判定 T3"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "    state_->Track(fence, handed);\n    const bool waited",
-      "replace": "    const bool waited",
+      "find": "        inFlight.push_back(InFlight{timing.frame, fence, handed});\n",
+      "replace": "",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-gpu\\]"
@@ -178,8 +237,8 @@
         "render-pipeline-declaration 15 判定 T3"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "    state_->LookAtFences();\n    if (!waited) {",
-      "replace": "    if (!waited) {",
+      "find": "    const bool waited = SDL_WaitForGPUFences(device, true, &fence, 1);\n    state_->LookAtFences();",
+      "replace": "    const bool waited = SDL_WaitForGPUFences(device, true, &fence, 1);",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-gpu\\]"
@@ -191,8 +250,8 @@
         "render-pipeline-declaration 15 判定 T3"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "            if (!gpuTime || gpuTime->frame < f.frame) {",
-      "replace": "            if (!gpuTime) {",
+      "find": "            if (!gpuTime || gpuTime->frame < f.frame) gpuTime",
+      "replace": "            if (!gpuTime) gpuTime",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-gpu\\-frame\\]"
@@ -204,24 +263,25 @@
         "render-pipeline-declaration 15 判定 T3"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "                gpuTime = GPUFrameTime{f.frame, std::chrono::duration_cast<std::chrono::nanoseconds>(now - f.submitted)};",
-      "replace": "                gpuTime = GPUFrameTime{f.frame, std::chrono::nanoseconds{0}};",
+      "find": "GPUFrameTime{f.frame, now - f.handed}",
+      "replace": "GPUFrameTime{f.frame, Engine::Time::Duration{0}}",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu timing:*",
       "expect": "\\[tm\\-gpu\\]"
     },
     {
-      "id": "tm-submit-not-tracked",
-      "what": "15.3 (4): Submit's fence is not kept (frames on the window never get a GPU time); needs a shown window",
+      "id": "tm-gpu-from-epoch",
+      "what": "15.8 (S2): the GPU time counted from another moment than the handing (the clock's epoch)",
       "guards": [
-        "render-pipeline-declaration 15 判定 T4"
+        "render-pipeline-declaration 15 判定 T3",
+        "render-pipeline-declaration 15.8"
       ],
       "file": "plugins/sdl_gpu/src/adapters/sdl/GPUDevice.cpp",
-      "find": "        state_->Commit(receipt);\n        state_->Track(fence, handed);",
-      "replace": "        state_->Commit(receipt);",
+      "find": "        const Engine::Time::TimePoint handed = Engine::Time::Now();",
+      "replace": "        const Engine::Time::TimePoint handed{};",
       "target": "gyo_sdl_gpu_tests",
-      "cases": "sdl_gpu frames:*",
-      "expect": "\\[gp\\-frames\\-gpu\\-time\\]"
+      "cases": "sdl_gpu timing:*",
+      "expect": "\\[tm\\-gpu\\-within\\]"
     },
     {
       "id": "tm-status-timing-not-given",
@@ -230,8 +290,8 @@
         "render-pipeline-declaration 15 判定 T4"
       ],
       "file": "plugins/sdl_gpu/src/SDLGPUPlugin.cpp",
-      "find": "        return device_ ? device_->LastFrameTiming() : none;",
-      "replace": "        return none;",
+      "find": "        return device_ ? device_->LastFrameTiming() : std::nullopt;",
+      "replace": "        return std::nullopt;",
       "target": "gyo_sdl_gpu_tests",
       "cases": "sdl_gpu frames:*",
       "expect": "\\[gp\\-frames\\-timing\\]"

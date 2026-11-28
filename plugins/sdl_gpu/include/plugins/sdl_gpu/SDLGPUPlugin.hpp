@@ -25,7 +25,6 @@
 // One World of a Product lists sdl_gpu (one window, one texture table, one mesh table): a second World that draws is
 // not named by any Feature yet (SDL declaration section 10.2, R2a).
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -35,6 +34,7 @@
 
 #include "engine/orchestration/Plugin.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/time/MonotonicClock.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -61,21 +61,26 @@ enum class SwapchainPresentMode : std::uint8_t {
 
 // One pass of the last frame the device recorded (render-pipeline declaration 15.3). name: its debug group's name in
 // a capture tool (RenderDoc, Xcode, PIX): its place in RenderCommands::passes, its kind and its target (PassLabel,
-// src/PassLabels.hpp). recorded: a render pass was recorded for it (false: its target is not mapped, or the frame's
-// uploads failed and no pass was recorded). cpu: the time recording it took on the CPU (the adapter's encoding, not
-// the System that made the pass); 0 when not recorded.
+// src/PassLabels.hpp); the kind and the target are also in RenderCommands at that place. recorded: a render pass was
+// recorded for it (false: its target is not mapped; the main target has no picture this frame, a skipped frame; or
+// the frame's uploads failed and no pass was recorded). cpu: the time that went by on the CPU while the adapter
+// recorded it (wall time on the recording thread, as Bevy's elapsed_cpu; not the System that made the pass); 0 when
+// not recorded.
 struct PassTiming final {
     std::string name;
     bool recorded = false;
-    std::chrono::nanoseconds cpu{0};
+    Engine::Time::Duration cpu{0};
 };
 
-// The last frame the device recorded: one PassTiming per pass of its RenderCommands, in their order.
+// The last frame the device recorded: one PassTiming per pass of its RenderCommands, in their order. A frame
+// recorded whether it was then handed to the GPU or not (a refused submission); a frame SDL gave no command buffer
+// for is not recorded (the timing stays the one before: tell them apart by frame).
 struct FrameTiming final {
-    // The device's count of frames recorded (Submit and Capture), from 1; 0 before the first.
+    // The device's count of frames recorded (Submit and Capture), from 1.
     std::uint64_t frame = 0;
     std::vector<PassTiming> passes;
-    // Debug groups pushed (and popped) on the frame's command buffer: one per recorded pass.
+    // Debug groups pushed (and popped) on the frame's command buffer: one per recorded pass. The one thing of the
+    // markers seen outside a capture tool (render-pipeline declaration 5.1: the count is what is checked).
     std::uint64_t debugGroups = 0;
 };
 
@@ -86,7 +91,7 @@ struct FrameTiming final {
 struct GPUFrameTime final {
     // As FrameTiming's.
     std::uint64_t frame = 0;
-    std::chrono::nanoseconds atMost{0};
+    Engine::Time::Duration atMost{0};
 };
 
 // What became of the frames, in the Product's buffer (the counts are since the device was made).
@@ -124,8 +129,9 @@ public:
     // The meshes of render's asks that have GPU buffers now.
     [[nodiscard]] std::size_t MeshCount() const;
     // The last frame recorded: each pass's name, whether it was recorded and its CPU time, and the debug groups
-    // (render-pipeline declaration 15). To print, not judged here.
-    [[nodiscard]] const FrameTiming& LastFrameTiming() const;
+    // (render-pipeline declaration 15), as it was then (a copy); none before the first frame or without the device.
+    // To print, not judged here.
+    [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const;
     // The latest frame seen done on the GPU and the upper bound of its GPU time; none before one is seen. Usually a
     // frame or two before LastFrameTiming's: nothing waits for the GPU to tell it.
     [[nodiscard]] std::optional<GPUFrameTime> LastGPUFrameTime() const;

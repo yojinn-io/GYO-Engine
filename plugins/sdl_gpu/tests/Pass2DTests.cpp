@@ -422,13 +422,15 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     CHECK_MESSAGE(!status->DriverName().empty(), "[gp-frames-driver] SDL names its driver");
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-frames-texture] the texture asked for in the first frame has a GPU texture");
     // The passes' timing and the frames' GPU time through the status (render-pipeline declaration 15, T4): the last
-    // frame's one pass, and a frame seen done on the GPU by now, not later than the last one.
-    const G::FrameTiming& timing = status->LastFrameTiming();
-    CHECK_MESSAGE((timing.passes.size() == 1 && timing.passes[0].name == "#0 Pass2D -> main"), "[gp-frames-timing] the last frame's pass");
+    // frame's one pass; a frame seen done on the GPU, when one was by now (nothing waits for the GPU on the window, so
+    // none is not wrong; the Capture case, sdl_gpu.timing, sees one for sure), not later than the last one.
+    const std::optional<G::FrameTiming> timing = status->LastFrameTiming();
+    REQUIRE_MESSAGE(timing.has_value(), "[gp-frames-timing] the last frame's timing");
+    CHECK_MESSAGE((timing->passes.size() == 1 && timing->passes[0].name == "#0 Pass2D -> main"), "[gp-frames-timing] the last frame's pass");
     const std::optional<G::GPUFrameTime> gpu = status->LastGPUFrameTime();
-    CHECK_MESSAGE((gpu.has_value() && gpu->frame >= 1 && gpu->frame <= timing.frame && gpu->atMost.count() > 0),
-                  "[gp-frames-gpu-time] a frame seen done on the GPU");
-    if (gpu) MESSAGE("frame " << gpu->frame << " of " << timing.frame << " done on the GPU within " << gpu->atMost.count() << " ns");
+    CHECK_MESSAGE((!gpu || (gpu->frame >= 1 && gpu->frame <= timing->frame && gpu->atMost.count() > 0)),
+                  "[gp-frames-gpu-time] a frame seen done on the GPU is one already recorded");
+    if (gpu) MESSAGE("frame " << gpu->frame << " of " << timing->frame << " done on the GPU within " << gpu->atMost.count() << " ticks");
 
     // VSync off and on again from render's Presentation (window-mode-vsync declaration, section 4.3).
     CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-default] the swapchain starts with VSYNC");

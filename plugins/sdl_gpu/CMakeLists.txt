@@ -119,7 +119,7 @@ target_include_directories(gyo_sdl_gpu
 )
 
 # The Modules it reads and GYO::SDL come from config/plugins.csv (O-6).
-target_link_libraries(gyo_sdl_gpu PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math
+target_link_libraries(gyo_sdl_gpu PUBLIC GYO::Base GYO::Kernel GYO::Orchestration GYO::Math GYO::Time
                       PRIVATE SDL3::SDL3-static)
 gyo_link_registered_dependencies(sdl_gpu)
 target_compile_features(gyo_sdl_gpu PUBLIC cxx_std_20)
