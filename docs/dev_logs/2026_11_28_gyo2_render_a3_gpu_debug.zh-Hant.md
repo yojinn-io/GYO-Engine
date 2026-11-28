@@ -43,6 +43,79 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 - 既有突變（D184）：find 落在改過的程式（`GPUDevice.cpp`、`SDLGPUPlugin.cpp`、兩個標頭；改動的行前後 2 行內）的只有 `g3-base-not-advanced`（`render_mutations.json`，`RecordPasses` 的幾何偏移）：Linux killed。所有目錄裡指這幾個檔的突變 find 都還在、恰好一處（沒有失效的）。被改過的測試殺的 `gp-frames-*`（`sdl_gpu.frames`，會開視窗）沒跑。
 - Linux 的 runner 合計 17/17 killed（新的 16＋`g3-base-not-advanced`）。
 
+## 設計審查與修正（同日）
+
+兩份審查，報告在主 checkout 的 `build/evidence/v8-arch-gyo2-render-a3/`（不在 git）：
+- 每批的設計審查（Opus／high，`design-review-a3.zh-Hant.md`）：Blocker 0、Should 4、Nit 6、Note 6。
+- 純淨 Code Review（Fable／high，範圍 `859258d6..a91ee2e5`，`pure-code-review-a3.zh-Hant.md`）：高 1、中 7、低 8。
+
+修正是另一個 commit（不 amend）。小宣告加第 15.8 節。
+
+**先寫的測試**：
+- `PassKindName`（S3、M4）：`RenderTests.cpp` 的「what each kind of pass」一案加 `[rd-pass-kind]`，在 render 還沒有這個函式時建置失敗（`RenderTests.cpp:268:35: error: no member named 'PassKindName' in namespace 'GYO::Engine::Render'`，本機）。
+- T3 的 `wall` 上界（S2）、`BeginTiming` 重寫上一幀（M1）、`LastFrameTiming()` 第一幀之前沒有值（M3）：這幾個是加強測試或改形狀，不是重現既有的錯；在舊的程式上 `wall` 的兩條本來就成立（守的錯由新突變 `tm-*-from-epoch` 示範），其餘跟著新的介面寫。沒有「先失敗」可記的錯。
+
+### 設計審查
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| S1 視窗幀的值≈幀間隔，名字會被誤讀 | **等使用者**（主會話） | 碰到 Q1 (a) 的前提；(i) 明講、(ii) 改名、(iii) 提前 RC-A3-2（和 SDL-4 衝突）由使用者選，綁在一起的改名、區間欄位先不做 |
+| S2 `atMost > 0` 驗不到起點 | 採用 | `Capture` 前後的 `wall`：`0 < atMost ≤ wall`、CPU 時間和 ≤ `wall`；突變 `tm-gpu-from-epoch`、`tm-cpu-from-epoch` |
+| S3 `PassLabel` 不窮舉 | 採用 | 種類名字改由 render 的 `PassKindName`（`Overloaded` 窮舉）給，和純淨 M4 一起；只加純函式、不改資料形式，和 A4 的 `RenderCommands.hpp` 改動不相鄰 |
+| S4 第 5.1 節的 cpu 驗收移到 gpu 沒寫 | 採用 | 第 15.4 節加一段 |
+| N1 `recorded == false` 漏了跳過的幀 | 採用 | 公開標頭的註解加跳過的幀、拿不到 command buffer 時 timing 停在前一幀 |
+| N2 `debugGroups` 可推出、只數自己 | 部分 | 留著（見純淨 M6）；宣告與註解寫明它數的是 `DebugGroup`，只刪 `SDL_PushGPUDebugGroup` 一行的錯只有擷取工具看得到（突變目錄的「沒加」） |
+| N3 回傳內部參考 | 採用 | 隨純淨 M3 改成 `optional` 的複本 |
+| N4 `timing` 的隱藏耦合 | 採用 | 隨純淨 M2：`FrameTiming&` 明確傳進 `DrawFrame`／`RecordPasses`，斷言每個 pass 一格；編號移到 `BeginFrame` |
+| N5 Bevy／Godot 是選用 | 採用（記下） | 偏離表加一列；開關不加、RC-A3-3（見純淨 M1） |
+| N6 `inFlight` 沒有上限 | 記下 | 註解寫明查不到的 fence 留到裝置結束；裝置壞了時送出也失敗，不再加 fence |
+| Note 1～5 | 記下 | 照讀；Note 4 的 A4 合併衝突點（`tests/CMakeLists.txt` 一行、sdl 頁相鄰兩項、宣告的狀態行與章節）合併時兩邊都留 |
+| Note 6 Mac 上 os 測試是卡住 | 照實記、轉主會話 | 見下面「os 的逾時」；A3 不修 os |
+
+### 純淨 Code Review
+
+| 項 | 處理 | 一句理由 |
+|---|---|---|
+| H1 `Submit` 路徑的 `atMost` 由「什麼時候去看」決定 | **等使用者**（同設計 S1） | 同上；區間欄位、改名、拿出公開 status 三個建議都等決定 |
+| M1 診斷一律開、每幀重建字串 | 部分 | 帳本重用（`BeginTiming` 在上一幀的 `FrameTiming` 上寫、名字 `assign` 進既有的字串）；開關不加：沒有量到壓力（AGENTS §2），群組在沒有擷取工具時不做事，加開關會讓送出有兩條路（L5）；量到時 RC-A3-3 |
+| M2 隱含的不變量、三種擁有方式 | 部分 | 帳本明確傳給 `DrawFrame`／`RecordPasses`（斷言每個 pass 一格），上傳失敗那條路給空帳；帳本仍由裝置持有、getter 取（改成和 `FrameTally` 一樣由呼叫方傳入要改 `Submit`／`Capture` 的簽名，A4 同時在改所有呼叫；這一輪不改） |
+| M3 兩個 getter 不一致、參考懸空 | 採用 | 兩個都回 `optional` 的值；`Shutdown` 之後沒有值 |
+| M4 visitor 不窮舉、種類名在 backend | 採用 | 同設計 S3 |
+| M5 名字壓成字串、格式成了契約 | 不改 | 名字就是擷取工具裡的群組名（使用者要的「每個 pass 的名字」），種類與目標在同一個位置的 `RenderCommands` 裡；格式是宣告第 15.3 節第 1 點定的 |
+| M6 `debugGroups` 是衍生值 | 不改（理由） | 第 5.1 節的驗收是「除錯標記只驗呼叫次數」，這是擷取工具之外唯一看得到的事實；拿掉就只剩測試專用的接縫，那更不該加 |
+| M7 時鐘寫死、測試對非同步下斷言 | 部分 | 型別與讀法改成 `Engine::Time`（`Duration`、`Now()`）；T4 不要求視窗上一定看到做完的幀；時鐘不注入：`wall` 上界從外面驗起點，注入要在 `Create` 多一個測試接縫、精確值會綁住讀時鐘的次數 |
+| L1 編號在交出之前 | 不改（寫明） | 帳本描述的是錄的幀；交不出去的那一幀照樣錄過，`LastGPUFrameTime` 只有交出去的幀 |
+| L2 `DrawFrame` 多了職責、看兩輪 | 採用 | 編號與看 fence 移到 `Submit`／`Capture`；兩輪各自的理由寫在 `Submit` |
+| L3 `erase_if` 述詞有副作用 | 採用 | 明寫的迴圈 |
+| L4 交出的程式寫兩次 | 採用 | `Hand`（時刻、帶 fence 送出、`Commit`、記帳），`Submit`／`Capture` 共用 |
+| L5 成功與否由 fence 決定 | 不改 | 三個後端帶 fence 的送出和不帶的是同一條（設計 Note 1）；隨 RC-A3-3 |
+| L6 命名 | 部分 | `cpu` 留著（使用者的話是「每個 pass 的 CPU 時間」，Bevy 也叫 `elapsed_cpu`），註解寫明是錄製那段的牆上時間；`TimingOf` 改成 `BeginTiming`，留在 `PassLabels.hpp`（帳本是名字做的）；`recorded` 與 `unmappedPasses` 寫在註解 |
+| L7 沒有整幀合計 | 不改 | 第 5.1 節要的是每個 pass；整幀的牆上時間作者在 `Submit` 外面量得到 |
+| L8 `inFlight` 沒有上限 | 記下 | 同設計 N6 |
+
+### 突變
+
+- `gpu_debug_mutations.json` 現在 22 個：
+  - 新加：`tm-timing-cpu-kept`、`tm-timing-groups-not-reset`（取代 `tm-groups-carried-over`）、`tm-cpu-from-epoch`、`tm-timing-not-begun`（斷言）、`tm-timing-none-given`、`tm-hand-not-tracked`（取代 `tm-capture-not-tracked`）、`tm-gpu-from-epoch`。
+  - 退役：`tm-groups-carried-over`、`tm-capture-not-tracked`、`tm-submit-not-tracked`（理由在檔案的 `description`）。
+  - 改寫 find（程式改了，守同一個性質）：`tm-label-no-index`、`tm-label-target-ignored`、`tm-label-shader-dropped`、`tm-timing-not-named`、`tm-timing-starts-recorded`、`tm-frames-not-counted`（expect 加 `[tm-one-per-pass]`：沒有編號時第一幀沒有帳）、`tm-unmapped-recorded`、`tm-cpu-not-measured`、`tm-group-not-pushed`、`tm-capture-not-looked-at`、`tm-gpu-older-kept`、`tm-gpu-time-zero`、`tm-status-timing-not-given`；`tm-label-kind-wrong` 移到 render 的 `PassKindName`（`render.data`）。
+- 既有突變（D184）：find 在改動範圍的 `g3-base-not-advanced`；被改過的測試殺的 `rd-reads-white`、`rd-reads-inputs-dropped`、`rd-writes-3d-depth-dropped`（「what each kind of pass」一案加了一行）。
+
+### 修正後的驗證
+
+- 本機（macOS Intel，只跑 cpu；`bf1940b3`）：全量建置成功（新的警告沒有；`Render.cpp:225` 的 `-Wmissing-field-initializers` 是 A2 就有的）；`ctest -L 'cpu|shader' -j 6`（load 約 4.8）259 個裡 258 通過，失敗的只有 `cmake.PluginSelection`（借用依賴的環境問題）。cpu 突變 11/11 killed（新的 cpu 8 個、D184 的 `rd-reads-white`、`rd-reads-inputs-dropped`、`rd-writes-3d-depth-dropped`）；runner 前確認每個 find 都在、恰好一處，結束後原文都在。
+- Linux 主機（`bf1940b3`，bundle 送過去；Lavapipe `llvmpipe (LLVM 20.1.2, 256 bits)`、xvfb、不開視窗；cpu 那一步不帶 `SDL_VIDEODRIVER`）：`ctest -L 'cpu|shader'` 259/259；`sdl_gpu.pass2d`、`targets`、`phases`、`contracts`、`framedraws`、`unwritten`、`timing` 7/7；pass3d（去掉 `GPUSubmit` 一案）11/11；突變 25/25 killed（新目錄裡不開視窗的 21 個、D184 的 4 個）。
+  - `sdl_gpu.timing -s`：`#0 Pass2D -> main` 28.2 µs、`#1 Pass2D -> target 999` 沒錄、`#2 Pass3D -> main` 12.6 µs；`frame 1 done on the GPU within 0.334678 ms of its submission (the Capture took 0.419226 ms)`。
+- 沒跑：`sdl_gpu.frames`（T4，會開視窗）與 `tm-status-timing-not-given`；Metal、D3D12 照舊沒驗。
+
+### os 的逾時（設計 Note 6；A3 不修 os，轉主會話）
+
+- 本機（macOS Intel）的 `case-timing` 紀錄有 7 份逾時的，**每一份都卡在同一個案例**：`OS wake signal loses no signal sent while the waiter checks its flag`（`gyo_os_tests` 3 份：前面 84 個案例都結束；`gyo_os_wake_fallback_tests` 4 份：前面 7 個案例都結束；那個案例只有 `case start`、沒有 `case end`）。當時的 load 是 78、99、131、133、195、301。不只是變慢，是在那一案停住、60 s 逾時。
+- 負荷低的時候（load 約 4.5～4.8，審查修正之後）：`ctest -L 'cpu|shader' -j 6` 裡兩個都通過；再單獨跑 `gyo_os_tests` 0.80 s、`os.wake_fallback` 0.52 s，都通過。
+- Linux 主機（同一份程式）兩輪都通過。判斷：高負荷下那一案會停住（可能是潛在的競爭條件在高負荷下顯形）〔未確認：沒有讀 os 的程式、沒有重現〕，請 os 的負責會話看 L1 macos-arm64 的 cpu 結果。
+
+（「驗證」一節裡第一次寫的「負荷造成，未確認」以這一段為準。）
+
 ## 沒做／沒跑
 
 - **Metal（Mac）上沒驗**：本機只跑 cpu。Metal 特有的行為——debug group 在 pass 之外 push 到 command buffer 本身（`SDL_gpu_metal.m:1315-1349`）、Xcode 的擷取裡群組怎麼顯示、Metal 的 fence——都沒有在 Mac 上跑過（已知缺口）。macOS 的 L1 是 macos-arm64、只建置。
@@ -50,4 +123,4 @@ Owner：渲染管線線のカード。分支 `claude/gyo2-render-a3`（`claude/g
 - 擷取工具（RenderDoc／Xcode／PIX）裡實際看到的群組名：CI 與這張卡都沒有擷取工具，只驗次數（`[tm-groups]`）。
 - 會開視窗的 `sdl_gpu.frames`（T4）與它的突變 2 個、`gp-frames-*`；RADV（Xvfb 下建不了裝置，同 A2）。
 - 重 GPU 量測（Object_PvP 的整體幀時間）沒做；`sdl_gpu.budget` 也沒跑。
-- 設計審查與純淨 Code Review（主會話排）。
+- 設計 S1＝純淨 H1（視窗幀的整幀 GPU 時間與它的名字）：等使用者決定（第 15.8 節）。
