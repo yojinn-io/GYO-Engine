@@ -35,10 +35,19 @@ struct ExtractedCamera final {
     // The source entity (Kernel's EntityId).
     std::uint64_t entity = 0;
     std::int32_t order = 0;
-    std::uint32_t target = 0;
+    // The pass target its CameraTarget maps to (nullopt: the main target).
+    std::optional<TextureId> target;
+    // A 3D camera with Hdr: its picture (HdrTargets, RenderTargets.hpp), on which its phases up to PostProcess draw
+    // (PhaseTarget, Compose.hpp); its tonemapping pass then puts it on target. nullopt: no Hdr.
+    std::optional<TextureId> hdr;
+    // The depth its 3D passes test and write (Pass3D::depth): the one of its target when a Hdr camera draws there
+    // (HdrTargets); nullopt: the target's own.
+    std::optional<TextureId> depth;
+    // The curve of its tonemapping pass (its Tonemapping, or the default).
+    Tonemapping::Method tonemapping = Tonemapping{}.method;
     Camera::ComputedCamera computed;
-    // The camera entity's GlobalTransform: the view point.
-    Math::Matrix4 view{};
+    // The camera's view (CameraView): world to clip space and view space, the one value the pipelines take.
+    Camera::CameraView view;
     // A Camera2d draws the 2D items; a Camera3d the 3D ones (batch r2b-3d).
     bool is2d = false;
     bool is3d = false;
@@ -55,6 +64,9 @@ struct ExtractedCamera final {
 // source entity (Bevy sorts by order and target, bevy_render/src/camera.rs:836; the entity makes ties certain).
 struct ExtractedCameras final {
     std::vector<ExtractedCamera> cameras;
+    // The render targets none of whose cameras draws this frame, with a picture: ComposePasses retains them
+    // (RenderCommands::retained; render-pipeline declaration 14.11).
+    std::vector<TextureId> retained;
 };
 
 // One 2D thing to draw this frame (a sprite or a shape), in triangles of its own vertices in local units.

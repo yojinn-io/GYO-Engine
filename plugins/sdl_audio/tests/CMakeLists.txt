@@ -5,6 +5,8 @@
 # runs them headless.
 add_executable(gyo_sdl_audio_tests TestMain.cpp SDLAudioPluginTests.cpp)
 gyo_product_units(gyo_sdl_audio_tests PLUGINS sdl_audio)
+# A failed SDL assertion ends the run, no dialog (plugins/sdl/tests/adapters/sdl/UnattendedAssertions.hpp).
+target_link_libraries(gyo_sdl_audio_tests PRIVATE gyo_sdl_unattended_assertions)
 target_link_libraries(gyo_sdl_audio_tests PRIVATE GYO::OS doctest::doctest)
 if(MSVC)
     target_compile_options(gyo_sdl_audio_tests PRIVATE /W4 /permissive-)

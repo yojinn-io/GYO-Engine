@@ -1,7 +1,9 @@
 #include "engine/camera/Camera.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 
 #include "engine/math/linear/Vec4.hpp"
 
@@ -108,6 +110,24 @@ Base::Result<Math::Vec3, ViewportConversionFailure> NdcToView(const ComputedCame
 
 } // namespace
 
+bool SameTargetSize(const TargetSize& a, const TargetSize& b) noexcept {
+    return a.physicalSize == b.physicalSize &&
+           std::bit_cast<std::uint32_t>(a.scaleFactor) == std::bit_cast<std::uint32_t>(b.scaleFactor);
+}
+
+CameraView ViewOf(const ComputedCamera& computed, const Transform::GlobalTransform& view) {
+    CameraView out;
+    if (!computed.valid) return out;
+    const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(view.matrix);
+    if (!viewFromWorld) return out;
+    // Bevy's compute_frustum (bevy_camera/src/projection.rs:72) and prepare_view_uniforms
+    // (bevy_render/src/view/mod.rs:1230-1239) each make it from clip_from_view and the view; here once.
+    out.viewFromWorld = *viewFromWorld;
+    out.clipFromWorld = Math::Multiply(computed.clipFromView, *viewFromWorld);
+    out.valid = true;
+    return out;
+}
+
 void CameraTargetSizes::Set(const CameraTarget target, const TargetSize size) {
     auto at = std::lower_bound(sizes_.begin(), sizes_.end(), target.id,
                                [](const auto& entry, std::uint32_t id) { return entry.first < id; });
@@ -128,6 +148,16 @@ const TargetSize* CameraTargetSizes::Find(const CameraTarget target) const {
     auto at = std::lower_bound(sizes_.begin(), sizes_.end(), target.id,
                                [](const auto& entry, std::uint32_t id) { return entry.first < id; });
     return at != sizes_.end() && at->first == target.id ? &at->second : nullptr;
+}
+
+void WriteTargetSize(Kernel::ResMut<CameraTargetSizes>& sizes, const CameraTarget target, const TargetSize& size) {
+    const TargetSize* current = sizes.Read().Find(target);
+    if (current != nullptr && SameTargetSize(*current, size)) return;
+    sizes.Get().Set(target, size);
+}
+
+void RemoveTargetSize(Kernel::ResMut<CameraTargetSizes>& sizes, const CameraTarget target) {
+    if (sizes.Read().Find(target) != nullptr) sizes.Get().Remove(target);
 }
 
 ComputedCamera Compute(const Camera& camera, const Projection& projection, const TargetSize* size, const Letterbox* letterbox) {

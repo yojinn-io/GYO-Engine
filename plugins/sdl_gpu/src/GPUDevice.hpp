@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -19,6 +20,8 @@
 #include "engine/render/RenderTextures.hpp"
 #include "plugins/sdl/NativeWindow.hpp"
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
+
+#include "EmbeddedShaders.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -50,7 +53,8 @@ using DeviceFailure = Engine::Base::Error<DeviceFailureCode>;
 enum class FrameOutcome : std::uint8_t {
     // Drawn and handed to the window to show.
     Shown = 1,
-    // The window gave no picture to draw on (minimized, hidden or occluded): nothing drawn, the asks applied.
+    // The window gave no picture to draw on (minimized, hidden or occluded): nothing drawn on it, the asks applied and
+    // the render targets drawn.
     Skipped,
     // SDL refused a step (the text in LastError()); what is applied stays applied.
     Failed,
@@ -76,16 +80,18 @@ struct CapturedImage final {
 
 // What happened to the asks and draws of one frame that SDL or the data did not allow (counted, the frame goes on).
 struct FrameTally final {
-    // Texture asks SDL refused (a texture too large, no memory): the id has no GPU texture; draws naming it are
-    // skipped.
+    // Texture asks SDL refused (a texture too large, no memory, a format the device does not take for that use; a
+    // target's size): the id has no GPU texture (a target: until its next size); draws naming it are skipped.
     std::uint64_t refusedAsks = 0;
     // Mesh asks SDL refused (its buffers could not be made, or the frame's uploads failed): the id has no GPU buffers;
     // draws naming it are skipped.
     std::uint64_t refusedMeshAsks = 0;
     // Draws skipped: their texture or mesh has no GPU object, their pipeline could not be made, or (3D) the pass's
-    // depth texture could not be made.
+    // depth texture could not be made; a full-screen pass (one draw) whose shader the device does not carry or whose
+    // input has no GPU texture; a draw sampling its own pass's target.
     std::uint64_t skippedDraws = 0;
-    // Passes whose target has no picture here (the window is target 0; nothing else is mapped yet).
+    // Passes whose target has no picture here: neither 0 (the window, or Capture's picture) nor a render target of the
+    // asks, or a render target SDL refused.
     std::uint64_t unmappedPasses = 0;
     // SDL's text for the last refusal of this frame (a texture, a mesh, a pipeline, a depth texture); empty when none.
     std::string lastRefusal;
@@ -95,25 +101,30 @@ class GPUDevice final {
 public:
     // Starts SDL's video (with GYO's hints, as sdl_window does), makes the GPU device for the formats the shaders were
     // compiled to, claims the window when one is given (nullptr: a device without a window, which draws only to
-    // Capture), makes the 2D and 3D passes' shaders, samplers and white texture and picks the 3D pass's depth format
-    // (pipelines are made when first drawn with). debug: SDL's GPU validation (the tests; SDL warns and goes on where
-    // the driver has none).
-    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(SDL::NativeWindow* window,
-                                                                                                bool debug = false);
+    // Capture), makes the passes' shaders, samplers and white texture and picks the depth format of 3D passes and Depth
+    // targets (pipelines are made when first drawn with). debug: SDL's GPU validation (the tests; SDL warns and goes on
+    // where the driver has none). more: shaders full-screen passes may name besides the embedded ones (a table the
+    // shader tool generated with --function, which outlives the device: the tests' own; the Plugin gives none).
+    [[nodiscard]] static Engine::Base::Result<std::unique_ptr<GPUDevice>, DeviceFailure> Create(
+        SDL::NativeWindow* window, bool debug = false, std::span<const EmbeddedShader> more = {});
     ~GPUDevice();
     GPUDevice(const GPUDevice&) = delete;
     GPUDevice& operator=(const GPUDevice&) = delete;
 
-    // Applies the asks in order (textures, then meshes), then draws the passes on the window and shows the picture.
-    // Target 0 is the window.
+    // Applies the asks in order (textures, then meshes), then draws the passes on their targets and shows the
+    // window's picture. Target 0 is the window; a render target has the size render's asks give it. receipt: what got
+    // done (render-pipeline declaration 14.13): each target size applied, and, when the frame was handed to the GPU,
+    // each render target a pass drew on.
     FrameOutcome Submit(std::span<const Engine::Render::TextureOp> asks, std::span<const Engine::Render::MeshOp> meshAsks,
-                        const Engine::Render::RenderCommands& commands, FrameTally& tally);
-    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture)
-    // and reads it back, waiting for the GPU. A zero size is a Programmer Error.
+                        const Engine::Render::RenderCommands& commands, FrameTally& tally, Engine::Render::RenderFrameReceipt& receipt);
+    // Applies the asks, draws the passes on a picture of this size instead of the window (target 0 is the picture;
+    // render targets keep the sizes render's asks give them) and reads it back, waiting for the GPU. A zero size is a
+    // Programmer Error. receipt: as Submit's.
     [[nodiscard]] Engine::Base::Result<CapturedImage, CaptureFailure> Capture(std::span<const Engine::Render::TextureOp> asks,
                                                                            std::span<const Engine::Render::MeshOp> meshAsks,
                                                                            const Engine::Render::RenderCommands& commands,
-                                                                           Engine::Render::TargetSize size, FrameTally& tally);
+                                                                           Engine::Render::TargetSize size, FrameTally& tally,
+                                                                           Engine::Render::RenderFrameReceipt& receipt);
     // Sets the window's swapchain to the first present mode of mode's chain the window supports (ChoosePresentMode),
     // waiting for the GPU (SDL_SetGPUSwapchainParameters). false: SDL refused (the text in LastError()); the mode
     // stays. A device without a window has no swapchain: true, nothing set.
@@ -130,6 +141,12 @@ public:
     [[nodiscard]] std::size_t MeshCount() const noexcept;
     // The GPU driver SDL chose ("vulkan", "direct3d12", "metal").
     [[nodiscard]] const std::string& DriverName() const noexcept;
+    // The last frame Submit or Capture recorded: each pass in a debug group named PassLabel, its CPU time
+    // (render-pipeline declaration 15.3), copied; none before the first.
+    [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const;
+    // The latest frame seen done on the GPU (its fence looked at, without waiting, twice by each Submit, and by Capture
+    // once it waited for its own), between which two looks.
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const noexcept;
     [[nodiscard]] const std::string& LastError() const noexcept { return lastError_; }
 
 private:

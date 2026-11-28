@@ -40,7 +40,8 @@ R::ExtractedCamera Camera2d(const float x = 0.0F, const float y = 0.0F) {
     const C::Letterbox box{1280.0F, 720.0F};
     R::ExtractedCamera camera;
     camera.computed = C::Compute(C::Camera{}, C::Projection{o}, &size, &box);
-    camera.view = At(x, y, 0.0F);
+    // The view as UpdateCameraViews makes it (camera's ViewOf): Queue2d takes its clipFromWorld.
+    camera.view = C::ViewOf(camera.computed, T::GlobalTransform{At(x, y, 0.0F)});
     camera.is2d = true;
     camera.clear = R::Color8{0, 0, 0, 255};
     return camera;

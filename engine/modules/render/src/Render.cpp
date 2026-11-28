@@ -2,6 +2,8 @@
 #include <cmath>
 #include <cstdint>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include "engine/base/Assert.hpp"
 #include "engine/render/RenderCommands.hpp"
@@ -37,7 +39,111 @@ PixelRect CutViewport(const Pass& pass, const TargetSize target) {
 
 PixelRect ViewportOf(const Pass2D& pass, const TargetSize target) { return CutViewport(pass, target); }
 
-PixelRect ViewportOf(const Pass3D& pass, const TargetSize target) { return CutViewport(pass, target); }
+PixelRect ViewportOf(const MeshGeometry& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+PixelRect ViewportOf(const PassFullscreen& pass, const TargetSize target) { return CutViewport(pass, target); }
+
+namespace {
+
+template <class... F>
+struct Overloaded : F... {
+    using F::operator()...;
+};
+template <class... F>
+Overloaded(F...) -> Overloaded<F...>;
+
+template <class Draws>
+void AppendTextures(const Draws& draws, std::vector<TextureId>& out) {
+    for (const auto& draw : draws) {
+        if (draw.texture != TextureId{}) out.push_back(draw.texture);
+    }
+}
+
+} // namespace
+
+PassWrites WritesOf(const RenderPass& pass) noexcept {
+    return std::visit(Overloaded{
+                          [](const Pass2D& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const Pass3D& p) { return PassWrites{true, p.target, p.depth}; },
+                          [](const PassFullscreen& p) { return PassWrites{true, p.target, std::nullopt}; },
+                          [](const PassDepth& p) { return PassWrites{false, std::nullopt, p.target}; },
+                      },
+                      pass);
+}
+
+std::optional<TextureId> TargetOf(const RenderPass& pass) noexcept {
+    const PassWrites writes = WritesOf(pass);
+    return writes.colour ? writes.colourTarget : writes.depthTarget;
+}
+
+const char* PassKindName(const RenderPass& pass) noexcept {
+    return std::visit(Overloaded{
+                          [](const Pass2D&) { return "Pass2D"; },
+                          [](const Pass3D&) { return "Pass3D"; },
+                          [](const PassFullscreen&) { return "PassFullscreen"; },
+                          [](const PassDepth&) { return "PassDepth"; },
+                      },
+                      pass);
+}
+
+std::vector<TextureId> ReadsOf(const RenderPass& pass) {
+    std::vector<TextureId> reads;
+    std::visit(Overloaded{
+                   [&](const Pass2D& p) { AppendTextures(p.draws, reads); },
+                   [&](const Pass3D& p) { AppendTextures(p.draws, reads); },
+                   [&](const PassFullscreen& p) { reads = p.inputs; },
+                   // A depth-only pass's draws have no texture.
+                   [](const PassDepth&) {},
+               },
+               pass);
+    return reads;
+}
+
+std::optional<UnwrittenRead> FirstUnwrittenRead(const RenderCommands& commands, const RenderTextures& textures) {
+    std::vector<TextureId> written;
+    for (const TextureId id : commands.retained) {
+        if (textures.WasDrawn(id)) written.push_back(id);
+    }
+    for (std::size_t i = 0; i < commands.passes.size(); ++i) {
+        const PassWrites writes = WritesOf(commands.passes[i]);
+        for (const TextureId read : ReadsOf(commands.passes[i])) {
+            if (writes.Writes(read) || textures.FindTarget(read) == nullptr) continue;
+            if (std::find(written.begin(), written.end(), read) == written.end()) return UnwrittenRead{i, read};
+        }
+        if (writes.colour && writes.colourTarget) written.push_back(*writes.colourTarget);
+        if (writes.depthTarget) written.push_back(*writes.depthTarget);
+    }
+    return std::nullopt;
+}
+
+void RenderFrameReceipt::RecordDrawn(const TextureId target) {
+    if (std::find(drawn_.begin(), drawn_.end(), target) == drawn_.end()) drawn_.push_back(target);
+}
+
+void RenderFrameReceipt::RecordApplied(const TextureId target, const TargetSize size) {
+    const auto it = std::find_if(applied_.begin(), applied_.end(), [&](const TextureTargetSize& a) { return a.id == target; });
+    if (it != applied_.end()) {
+        it->size = size;
+    } else {
+        applied_.push_back(TextureTargetSize{target, size});
+    }
+}
+
+void RenderFrameReceipt::Clear() noexcept {
+    drawn_.clear();
+    applied_.clear();
+}
+
+std::optional<std::size_t> FirstDepthOfAnotherSize(const RenderCommands& commands, const RenderTextures& textures) {
+    for (std::size_t i = 0; i < commands.passes.size(); ++i) {
+        const auto* pass = std::get_if<Pass3D>(&commands.passes[i]);
+        if (pass == nullptr || !pass->depth) continue;
+        const std::optional<TargetSize> depth = textures.SizeOf(*pass->depth);
+        const std::optional<TargetSize> colour = pass->target ? textures.SizeOf(*pass->target) : textures.MainSize();
+        if (depth && colour && depth != colour) return i;
+    }
+    return std::nullopt;
+}
 
 Math::Rect ViewOf(const Pass2D& pass, const TargetSize target) {
     if (pass.view) return *pass.view;
@@ -90,7 +196,7 @@ TextureId RenderTextures::Create(const TextureDesc desc, std::vector<std::uint8_
 
 void RenderTextures::Update(const TextureId id, const TextureRegion region, std::vector<std::uint8_t> pixels) {
     const TextureDesc* desc = Find(id);
-    GYO_ASSERT(desc != nullptr && "an update of a texture that is not live");
+    GYO_ASSERT(desc != nullptr && "an update of a texture that is not live or is a target (it has no pixels)");
     GYO_ASSERT(region.width > 0 && region.height > 0 && "an update of zero size");
     GYO_ASSERT(region.x <= desc->width && region.width <= desc->width - region.x && "an update outside the texture");
     GYO_ASSERT(region.y <= desc->height && region.height <= desc->height - region.y && "an update outside the texture");
@@ -103,11 +209,124 @@ void RenderTextures::Release(const TextureId id) {
     GYO_ASSERT(it != live_.end() && "a release of a texture that is not live");
     live_.erase(it);
     pending_.emplace_back(TextureRelease{id});
+    std::erase_if(targets_, [&](const TargetState& t) { return t.id == id.value; });
+}
+
+TextureId RenderTextures::CreateTarget(const RenderTargetDesc desc) {
+    if (const auto* fixed = std::get_if<TargetSize>(&desc.size)) {
+        GYO_ASSERT(fixed->width > 0 && fixed->height > 0 && "a target of zero size");
+    } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc.size).target) {
+        GYO_ASSERT(FindTarget(*followed) != nullptr && "a target following an id that is not a live target");
+    }
+    GYO_ASSERT(next_ != 0 && "every texture id has been given");
+    const TextureId id{next_++};
+    live_.emplace_back(id.value, desc);
+    pending_.emplace_back(TextureTargetCreate{id, desc});
+    targets_.push_back(TargetState{id.value});
+    ResolveSizes();
+    return id;
+}
+
+void RenderTextures::SetMainSize(const std::optional<TargetSize> size) {
+    main_ = size;
+    ResolveSizes();
+}
+
+void RenderTextures::ResolveSizes() {
+    for (TargetState& t : targets_) {
+        const RenderTargetDesc* desc = FindTarget(TextureId{t.id});
+        std::optional<TargetSize> wanted;
+        if (const auto* fixed = std::get_if<TargetSize>(&desc->size)) {
+            wanted = *fixed;
+        } else if (const std::optional<TextureId>& followed = std::get<FollowTarget>(desc->size).target) {
+            wanted = SizeOf(*followed);
+        } else {
+            wanted = main_;
+        }
+        if (wanted && t.size != wanted) {
+            t.size = wanted;
+            t.applied.reset();
+            t.drawn = false;
+            t.picture = false;
+            t.asked = false;
+        }
+        if (!t.size || t.applied == t.size || t.asked) continue;
+        t.asked = true;
+        if (t.unanswered) {
+            // Not answered (no command buffer took the frame's asks): its making may be lost too. Making a target the
+            // backend has is nothing to do there (ids are never given twice).
+            pending_.emplace_back(TextureTargetCreate{TextureId{t.id}, *desc});
+            t.unanswered = false;
+        }
+        pending_.emplace_back(TextureTargetSize{TextureId{t.id}, *t.size});
+    }
+}
+
+void RenderTextures::Apply(const RenderFrameReceipt& receipt) {
+    const std::span<const TextureId> drawnTargets = receipt.DrawnTargets();
+    for (TargetState& t : targets_) {
+        for (const TextureTargetSize& sized : receipt.AppliedSizes()) {
+            if (sized.id.value == t.id) t.applied = sized.size;
+        }
+        const bool drawn = std::find(drawnTargets.begin(), drawnTargets.end(), TextureId{t.id}) != drawnTargets.end();
+        if (drawn && t.applied && t.applied == t.size) t.picture = true;
+    }
+}
+
+void RenderTextures::ClearPending() {
+    pending_.clear();
+    for (TargetState& t : targets_) {
+        t.unanswered = t.asked && t.applied != t.size;
+        t.asked = false;
+    }
+    ResolveSizes();
+}
+
+void RenderTextures::EndFrame(const RenderCommands& commands, const RenderFrameReceipt& receipt) {
+    for (const RenderPass& pass : commands.passes) {
+        const PassWrites writes = WritesOf(pass);
+        for (const std::optional<TextureId>& on : {writes.colour ? writes.colourTarget : std::nullopt, writes.depthTarget}) {
+            if (!on) continue;
+            for (TargetState& t : targets_) {
+                if (t.id == on->value && t.size) t.drawn = true;
+            }
+        }
+    }
+    Apply(receipt);
+    ClearPending();
+}
+
+std::optional<TargetSize> RenderTextures::SizeOf(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.size;
+    }
+    return std::nullopt;
+}
+
+bool RenderTextures::WasDrawn(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.drawn;
+    }
+    return false;
+}
+
+bool RenderTextures::HasPicture(const TextureId id) const noexcept {
+    for (const TargetState& t : targets_) {
+        if (t.id == id.value) return t.picture;
+    }
+    return false;
 }
 
 const TextureDesc* RenderTextures::Find(const TextureId id) const noexcept {
     for (const auto& [value, desc] : live_) {
-        if (value == id.value) return &desc;
+        if (value == id.value) return std::get_if<TextureDesc>(&desc);
+    }
+    return nullptr;
+}
+
+const RenderTargetDesc* RenderTextures::FindTarget(const TextureId id) const noexcept {
+    for (const auto& [value, desc] : live_) {
+        if (value == id.value) return std::get_if<RenderTargetDesc>(&desc);
     }
     return nullptr;
 }

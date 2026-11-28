@@ -1,5 +1,6 @@
 #include "plugins/sdl_gpu/SDLGPUPlugin.hpp"
 
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -15,6 +16,7 @@
 #include "plugins/sdl/NativeWindow.hpp"
 
 #include "GPUDevice.hpp"
+#include "RenderContracts.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -33,8 +35,9 @@ public:
     // replacement failed keeps drawing with its own number, and nothing was forgotten (the new one never drew).
     // presentation: the World's (render_world's; nullptr when it has none: left as it is). Set only when it differs
     // from what was asked last (a refusal is not tried again until it changes: the swapchain waits for the GPU).
+    // receipt: render_world's, the one thing of the World this writes (SDL-5): what the frame got done.
     void Submit(const std::uint64_t world, const R::RenderCommands& commands, const R::RenderTextures& textures,
-                const R::RenderMeshes& meshes, const R::Presentation* presentation) {
+                const R::RenderMeshes& meshes, const R::Presentation* presentation, R::RenderFrameReceipt& receipt) {
         if (!device_) return;
         if (world != drawingWorld_) {
             device_->ForgetMeshes();
@@ -49,8 +52,9 @@ public:
                 lastFailure_ = device_->LastError();
             }
         }
+        RequireRenderContracts(commands, textures);
         FrameTally tally;
-        switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally)) {
+        switch (device_->Submit(textures.Pending(), meshes.Pending(), commands, tally, receipt)) {
         case FrameOutcome::Shown: ++shown_; break;
         case FrameOutcome::Skipped: ++skipped_; break;
         case FrameOutcome::Failed:
@@ -69,6 +73,12 @@ public:
     void Shutdown() { device_.reset(); }
     [[nodiscard]] std::size_t TextureCount() const noexcept { return device_ ? device_->TextureCount() : 0; }
     [[nodiscard]] std::size_t MeshCount() const noexcept { return device_ ? device_->MeshCount() : 0; }
+    [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const {
+        return device_ ? device_->LastFrameTiming() : std::nullopt;
+    }
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const noexcept {
+        return device_ ? device_->LastFrameSeenDone() : std::nullopt;
+    }
     [[nodiscard]] SwapchainPresentMode ActivePresentMode() const noexcept {
         return device_ ? device_->ActivePresentMode() : SwapchainPresentMode::Vsync;
     }
@@ -106,11 +116,17 @@ struct SDLGPUHandle final {
 };
 inline void HashValue(Kernel::Hasher&, const SDLGPUHandle&) {}
 
-// render_world's Submit stage: the frame's presentation, asks and passes to the window (read only, SDL-5).
+// render_world's Submit stage: the frame's presentation, asks and passes to the window. Reads the render World, writes
+// only the frame's receipt (SDL-5).
 SystemResult GPUSubmit(Kernel::Res<SDLGPUHandle> handle, Kernel::Res<R::RenderCommands> commands, Kernel::Res<R::RenderTextures> textures,
-                       Kernel::Res<R::RenderMeshes> meshes, Kernel::Res<R::Presentation> presentation) {
-    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present() || !meshes.Present()) return {};
-    handle->service->Submit(handle->world, *commands, *textures, *meshes, presentation.Present() ? &*presentation : nullptr);
+                       Kernel::Res<R::RenderMeshes> meshes, Kernel::Res<R::Presentation> presentation,
+                       Kernel::ResMut<R::RenderFrameReceipt> receipt) {
+    if (!handle.Present() || handle->service == nullptr || !commands.Present() || !textures.Present() || !meshes.Present() ||
+        !receipt.Present()) {
+        return {};
+    }
+    handle->service->Submit(handle->world, *commands, *textures, *meshes, presentation.Present() ? &*presentation : nullptr,
+                            receipt.Get());
     return {};
 }
 
@@ -135,6 +151,8 @@ std::uint64_t SDLGPUStatus::PresentModeSets() const { return service_->presentMo
 std::uint64_t SDLGPUStatus::RefusedPresentModes() const { return service_->refusedPresentModes_; }
 std::size_t SDLGPUStatus::TextureCount() const { return service_->TextureCount(); }
 std::size_t SDLGPUStatus::MeshCount() const { return service_->MeshCount(); }
+std::optional<FrameTiming> SDLGPUStatus::LastFrameTiming() const { return service_->LastFrameTiming(); }
+std::optional<FrameSeenDone> SDLGPUStatus::LastFrameSeenDone() const { return service_->LastFrameSeenDone(); }
 
 SDLGPUPlugin::SDLGPUPlugin() = default;
 SDLGPUPlugin::~SDLGPUPlugin() = default;

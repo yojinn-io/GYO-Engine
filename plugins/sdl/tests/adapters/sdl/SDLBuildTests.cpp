@@ -25,3 +25,13 @@ TEST_CASE("build: SDL starts and stops with the dummy video driver") {
     SDL_Quit();
     CHECK(SDL_WasInit(SDL_INIT_VIDEO) == 0);
 }
+
+// Skipped in other runs: it ends the process (ctest sdl.unattended_assertion runs it with --no-skip and looks for the
+// unattended handler's text). The hint is a second net: without the handler SDL aborts too (no dialog) and the text is
+// missing, so the ctest fails.
+TEST_CASE("unattended: a failed SDL assertion ends the process without a dialog" * doctest::skip()) {
+    REQUIRE(SDL_SetHint(SDL_HINT_ASSERT, "abort"));
+    const bool forced = false;
+    SDL_assert_release(forced && "gyo-forced-assertion");
+    FAIL("the forced SDL assertion returned");
+}

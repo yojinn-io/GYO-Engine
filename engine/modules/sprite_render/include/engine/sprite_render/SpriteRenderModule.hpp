@@ -8,7 +8,8 @@
 //   their images through render_world's RenderImages and RenderTextures (an image asset not loaded yet: the item is
 //   skipped this frame).
 // - Queue2dPasses, in SpriteRenderOptions::schedule / stage (Main / Update): puts each extracted 2D camera's Queue2d
-//   pass in its slot of CameraPasses; camera_render composes them (before render_world's Submit stage).
+//   pass in the Transparent phase of its slot of CameraPasses (Bevy's Transparent2d); camera_render composes them
+//   (before render_world's Submit stage).
 //
 // The source World needs transform and world_render (else R-E4); an image asset is read through the source's
 // AssetView (world_asset), so a handle loaded in the source this frame is drawn this frame.

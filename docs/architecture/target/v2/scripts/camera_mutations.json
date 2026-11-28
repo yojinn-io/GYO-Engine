@@ -272,13 +272,13 @@
   },
   {
    "id": "cm-update-set-missing",
-   "what": "UpdateCameras is not put in the public set CameraUpdate: a System ordered after the set runs before the update. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too",
+   "what": "Neither UpdateCameras nor UpdateCameraViews is put in the public set CameraUpdate: a System ordered after the set runs before the update. The set is then empty and the kernel reports the reader's order as D-E4 at startup; the case tags that failure too (since A1 both camera Systems are in the set, and one alone left out is still ordered before the set's readers through the other, so the mutant takes both out)",
    "guards": [
     "camera CM-1"
    ],
    "file": "engine/modules/camera/src/CameraModule.cpp",
-   "find": "    mount.sets.push_back(std::string(kUpdateSet));\n",
-   "replace": "",
+   "find": "    mount.sets.push_back(std::string(kUpdateSet));\n    update.mounts.push_back(std::move(mount));\n    r.AddSystem<&UpdateCameras>(std::move(update));\n    // In the same set, after UpdateCameras and after the propagation: CameraOptions names transform's schedule and\n    // stage (as visibility's options do; an order across stages is the skeleton's).\n    Kernel::SystemOptions views;\n    views.name = \"UpdateCameraViews\";\n    Kernel::Mount viewMount;\n    viewMount.schedule = options.schedule;\n    viewMount.stage = options.stage;\n    viewMount.sets.push_back(std::string(kUpdateSet));\n",
+   "replace": "    update.mounts.push_back(std::move(mount));\n    r.AddSystem<&UpdateCameras>(std::move(update));\n    // In the same set, after UpdateCameras and after the propagation: CameraOptions names transform's schedule and\n    // stage (as visibility's options do; an order across stages is the skeleton's).\n    Kernel::SystemOptions views;\n    views.name = \"UpdateCameraViews\";\n    Kernel::Mount viewMount;\n    viewMount.schedule = options.schedule;\n    viewMount.stage = options.stage;\n",
    "target": "gyo_camera_tests",
    "cases": "camera: a System ordered after CameraUpdate*",
    "expect": "\\[cm\\-update\\-set\\]"

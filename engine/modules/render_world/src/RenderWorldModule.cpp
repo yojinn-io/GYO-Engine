@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "engine/base/Assert.hpp"
 #include "engine/base/Result.hpp"
 #include "engine/kernel/Params.hpp"
 #include "engine/kernel/Registry.hpp"
@@ -25,9 +26,14 @@ const RenderWorldOptions& OptionsOf(const RenderWorldOptions* given) {
 
 // After the frame was drawn (kCleanupStage): this frame's passes and texture asks are gone; the textures stay.
 SystemResult ClearRenderFrame(Kernel::ResMut<Render::RenderCommands> commands, Kernel::ResMut<Render::RenderTextures> textures,
-                              Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images) {
+                              Kernel::ResMut<Render::RenderMeshes> meshes, Kernel::ResMut<Render::RenderImages> images,
+                              Kernel::ResMut<Render::RenderFrameReceipt> receipt) {
+    // What this frame drew and what the backend got done (its receipt, written in the Submit stage of this frame;
+    // render-pipeline declaration 14.13, SDL-5), then the next frame's asks; the receipt is read, then cleared.
+    textures.Get().EndFrame(commands.Read(), receipt.Read());
+    receipt.Get().Clear();
     commands.Get().passes.clear();
-    textures.Get().ClearPending();
+    commands.Get().retained.clear();
     meshes.Get().ClearPending();
     // After the asks were cleared: the textures of held images no drawable showed this frame go with the next frame's
     // asks (every pipeline's extract has run by now, whichever order they ran in).
@@ -47,6 +53,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     Kernel::Registrar& r = setup.Registrar();
     r.Resource<Render::RenderCommands>({.name = "RenderCommands"});
     r.Resource<Render::RenderTextures>({.name = "RenderTextures"});
+    r.Resource<Render::RenderFrameReceipt>({.name = "RenderFrameReceipt"});
     r.Resource<Render::RenderMeshes>({.name = "RenderMeshes"});
     r.Resource<Render::RenderImages>({.name = "RenderImages"});
     r.Resource<Render::Presentation>({.name = "Presentation"});
@@ -70,6 +77,7 @@ void RenderWorldModule::Build(Orchestration::WorldSetup& setup) {
     setup.Prepare([](Kernel::World& world) -> Base::Result<void, Orchestration::OrchestrationError> {
         PutIfAbsent<Render::RenderCommands>(world);
         PutIfAbsent<Render::RenderTextures>(world);
+        PutIfAbsent<Render::RenderFrameReceipt>(world);
         PutIfAbsent<Render::RenderMeshes>(world);
         PutIfAbsent<Render::RenderImages>(world);
         PutIfAbsent<Render::Presentation>(world);

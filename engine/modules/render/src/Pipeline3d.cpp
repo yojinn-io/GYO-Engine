@@ -197,15 +197,16 @@ Math::Matrix4 PlaceMesh(const Math::Matrix4& global, const Model::Mesh& mesh, co
 }
 
 std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<const Extracted3dItem> items) {
-    if (!camera.is3d || !camera.computed.valid) return std::nullopt;
-    const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(camera.view);
-    if (!viewFromWorld) return std::nullopt;
+    if (!camera.is3d || !camera.computed.valid || !camera.view.valid) return std::nullopt;
+    // The camera's view (camera's CM-7): world to clip space for the pass, view space for the distances.
+    const Math::Matrix4& viewFromWorld = camera.view.viewFromWorld;
     Pass3D pass;
-    pass.target = camera.target;
+    pass.target = PhaseTarget(camera, CameraPhase::Opaque);
+    pass.depth = camera.depth;
     const Camera::Viewport& vp = camera.computed.viewport;
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
-    pass.clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);
+    pass.clipFromWorld = camera.view.clipFromWorld;
     pass.clearDepth = camera.clearDepth;
 
     // 0: opaque and depth-tested, near to far; 1: blended and depth-tested, far to near; 2: not depth-tested, far to near.
@@ -222,7 +223,7 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
         if (item.mesh == MeshId{} && item.indices.empty()) continue;
         const int group = !item.depthTest ? 2 : (item.blend == BlendMode::Opaque ? 0 : 1);
         const Math::Vec3 origin{item.world.values[12], item.world.values[13], item.world.values[14]};
-        order.push_back(Entry{i, group, Math::TransformPoint(*viewFromWorld, origin).z});
+        order.push_back(Entry{i, group, Math::TransformPoint(viewFromWorld, origin).z});
     }
     std::sort(order.begin(), order.end(), [&](const Entry& a, const Entry& b) {
         if (a.group != b.group) return a.group < b.group;
@@ -300,38 +301,6 @@ std::optional<Pass3D> Queue3d(const ExtractedCamera& camera, const std::span<con
         pass.draws.push_back(draw);
     }
     return pass;
-}
-
-void ComposePasses(const ExtractedCameras& cameras, CameraPasses& passes, RenderCommands& out) {
-    std::vector<std::uint32_t> drawn;
-    for (const RenderPass& pass : out.passes) drawn.push_back(TargetOf(pass));
-    for (std::size_t i = 0; i < cameras.cameras.size(); ++i) {
-        const ExtractedCamera& camera = cameras.cameras[i];
-        const bool first = std::find(drawn.begin(), drawn.end(), camera.target) == drawn.end();
-        drawn.push_back(camera.target);
-        if (camera.clear) {
-            Pass2D clear;
-            clear.target = camera.target;
-            if (first) {
-                clear.clear = camera.clear;
-            } else {
-                const Camera::Viewport& vp = camera.computed.viewport;
-                clear.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
-                                           static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
-                const auto w = static_cast<float>(vp.size.x);
-                const auto h = static_cast<float>(vp.size.y);
-                const Color8 c = *camera.clear;
-                clear.vertices = {{{0.0F, 0.0F}, {}, c}, {{w, 0.0F}, {}, c}, {{w, h}, {}, c}, {{0.0F, h}, {}, c}};
-                clear.indices = {0, 1, 2, 0, 2, 3};
-                clear.draws.push_back(Draw2D{TextureId{}, BlendMode::Opaque, std::nullopt, 0, 6, 0});
-            }
-            out.passes.push_back(std::move(clear));
-        }
-        if (i < passes.byCamera.size()) {
-            for (RenderPass& pass : passes.byCamera[i]) out.passes.push_back(std::move(pass));
-            passes.byCamera[i].clear();
-        }
-    }
 }
 
 } // namespace GYO::Engine::Render

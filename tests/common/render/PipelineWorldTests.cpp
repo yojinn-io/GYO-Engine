@@ -20,6 +20,7 @@
 #include "engine/image/ImageData.hpp"
 #include "engine/kernel/Kernel.hpp"
 #include "engine/orchestration/Orchestration.hpp"
+#include "engine/render/Compose.hpp"
 #include "engine/render/Drawables.hpp"
 #include "engine/render/Pipeline2d.hpp"
 #include "engine/render/Pipeline3d.hpp"
@@ -33,11 +34,13 @@
 #include "engine/world_asset/WorldAssetModule.hpp"
 #include "engine/visibility/VisibilityModule.hpp"
 #include "engine/world_render/WorldRenderModule.hpp"
+#include "engine/render/RenderTargets.hpp"
 #include "engine/image/PngLoader.hpp"
 #include "engine/mesh_render/MeshRenderModule.hpp"
 #include "engine/model/FbxLoader.hpp"
 #include "engine/world_asset/AssetRequests.hpp"
 
+#include "Receipts.hpp"
 #include "StoreSupport.hpp"
 #include "WorldAssetSupport.hpp"
 
@@ -59,6 +62,7 @@ namespace {
 // 2D passes (a camera's content, a later camera's viewport clear).
 struct Seen {
     std::vector<R::RenderPass> all;
+    std::vector<R::TextureId> retained;
     std::vector<R::Color8> clears;
     std::vector<R::Pass2D> passes;
     std::vector<R::TextureOp> asks;
@@ -66,10 +70,15 @@ struct Seen {
 };
 std::vector<Seen> seen;
 std::vector<std::string> trail;
+// The frames the backend does not get done (a failed upload or submission): FailFrames empties their receipt.
+std::vector<std::size_t> failedFrames;
+std::size_t submitted = 0;
 
+// At Submit: records what the backend sees.
 K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextures> textures, K::Res<R::RenderMeshes> meshes) {
     Seen s;
     s.all = commands->passes;
+    s.retained = commands->retained;
     for (const R::RenderPass& pass : commands->passes) {
         const auto* p2 = std::get_if<R::Pass2D>(&pass);
         if (p2 == nullptr) continue;
@@ -82,6 +91,12 @@ K::SystemResult Record(K::Res<R::RenderCommands> commands, K::Res<R::RenderTextu
     s.asks.assign(textures->Pending().begin(), textures->Pending().end());
     s.meshAsks.assign(meshes->Pending().begin(), meshes->Pending().end());
     seen.push_back(std::move(s));
+    return {};
+}
+// At Submit, after the backend (GYO::Test::AllDoneBackend): a failed frame's receipt has nothing done.
+K::SystemResult FailFrames(K::ResMut<R::RenderFrameReceipt> receipt) {
+    if (std::find(failedFrames.begin(), failedFrames.end(), submitted) != failedFrames.end()) receipt.Get().Clear();
+    ++submitted;
     return {};
 }
 K::SystemResult MarkExtract(K::Res<R::ExtractedCameras>) {
@@ -143,12 +158,21 @@ O::WorldDescription Game(std::vector<std::string> more = {}) {
     return w;
 }
 
+// The render World's backend for these tests: it gets every frame done but the failed ones; Record sees each frame.
+void Backend(K::Registrar& r) {
+    r.AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage));
+    GYO::Test::AddAllDoneBackend(r, "Main");
+    K::SystemOptions fail = In("TestFailFrames", "Main", RW::kSubmitStage);
+    fail.mounts[0].after = {std::string(GYO::Test::kAllDoneBackend)};
+    r.AddSystem<&FailFrames>(std::move(fail));
+}
+
 O::WorldDescription Render(std::vector<std::string> units = {"entity_ids", "render_world", "camera_render", "sprite_render"}) {
     O::WorldDescription w;
     w.name = "Render";
     w.units = std::move(units);
     w.extractFrom = "Game";
-    w.build = [](O::WorldSetup& s) { s.Registrar().AddSystem<&Record>(In("TestRecord", "Main", RW::kSubmitStage)); };
+    w.build = [](O::WorldSetup& s) { Backend(s.Registrar()); };
     return w;
 }
 
@@ -156,6 +180,8 @@ std::unique_ptr<O::Product> Make(O::WorldDescription render = Render(), const GY
                                  O::WorldDescription game = Game()) {
     seen.clear();
     trail.clear();
+    failedFrames.clear();
+    submitted = 0;
     O::ProductDescription d;
     d.name = "draws";
     if (assets != nullptr) d.options.Set(*assets);
@@ -193,6 +219,7 @@ void Camera2dAt(K::World& world, const K::EntityId id, const std::int32_t order 
     world.Insert(id, C::CameraTarget{});
     world.Insert(id, C::Projection{o});
     world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
     world.Insert(id, C::Letterbox{1280.0F, 720.0F});
     Place(world, id, 0.0F, 0.0F, 0.0F);
 }
@@ -212,6 +239,8 @@ std::size_t Count(const std::vector<R::TextureOp>& asks, std::size_t index) {
 TEST_CASE("render_extract: render_world puts the extract schedule before Main only in a World with extractFrom") {
     seen.clear();
     trail.clear();
+    failedFrames.clear();
+    submitted = 0;
     O::ProductDescription d;
     d.name = "draws";
     d.worlds.push_back(Game());
@@ -283,6 +312,206 @@ TEST_CASE("render_extract: a 2D camera's pass draws the source's sprites and sha
     CHECK_MESSAGE(pass.draws[0].indexCount == 6, "[re-strip] the strip's two triangles");
     CHECK_MESSAGE(pass.draws[1].texture.value != 0, "[re-sprite-texture] the sprite's picture");
     CHECK_MESSAGE(Count(seen[0].asks, 0) + Count(seen[1].asks, 0) == 1, "[re-texture-once] the picture is made once");
+}
+
+namespace {
+// In the source World's Last (after its cameras are computed), from the frame after the flag is set: lets the target go.
+C::CameraTarget releaseLate{};
+bool releaseNow = false;
+K::SystemResult ReleaseLate(K::ResMut<R::RenderTargets> targets) {
+    if (releaseNow && targets.Read().Find(releaseLate) != nullptr) targets.Get().Release(releaseLate);
+    return {};
+}
+std::size_t PassesOn(const std::vector<R::RenderPass>& passes, const std::optional<R::TextureId> target) {
+    std::size_t n = 0;
+    for (const R::RenderPass& pass : passes) n += R::TargetOf(pass) == target ? 1 : 0;
+    return n;
+}
+std::vector<R::TextureId> TargetsMade(const std::vector<R::TextureOp>& asks) {
+    std::vector<R::TextureId> made;
+    for (const R::TextureOp& op : asks) {
+        if (const auto* t = std::get_if<R::TextureTargetCreate>(&op)) made.push_back(t->id);
+    }
+    return made;
+}
+bool Released(const std::vector<R::TextureOp>& asks, const R::TextureId id) {
+    for (const R::TextureOp& op : asks) {
+        if (const auto* r = std::get_if<R::TextureRelease>(&op); r != nullptr && r->id == id) return true;
+    }
+    return false;
+}
+} // namespace
+
+TEST_CASE("render_extract: a camera on a source render target computes with its size and draws on the render World's target for it") {
+    releaseNow = false;
+    O::WorldDescription game = Game();
+    game.build = [](O::WorldSetup& s) { s.Registrar().AddSystem<&ReleaseLate>(In("TestReleaseLate", "Main", O::DefaultSchedules::last)); };
+    auto p = Make(Render(), nullptr, std::move(game));
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{2560, 1600}, 2.0F});
+    R::RenderTargets& targets = *source.ResourceMut<R::RenderTargets>();
+    // A target made and let go first: the source's ids (2, 3, 4) are not the render World's (1, 2, 3).
+    targets.Release(targets.Create(R::SourceTargetDesc{}));
+    const C::CameraTarget minimap = targets.Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    const C::CameraTarget hdr = targets.Create(R::SourceTargetDesc{});
+    releaseLate = targets.Create(R::SourceTargetDesc{minimap});
+    Camera2dAt(source, 1);
+    source.Insert(1, minimap);
+    source.Remove<C::Letterbox>(1);
+    Camera2dAt(source, 2, 1);
+    source.Insert(2, hdr);
+    Camera2dAt(source, 3, 2);
+    source.Insert(3, releaseLate);
+    source.Remove<C::Letterbox>(3);
+    Frames(*p, 2);
+    // world_render copies the sizes (CM-5) before CameraUpdate: the cameras on targets compute in the same frame.
+    const C::TargetSize* fixed = source.Resource<C::CameraTargetSizes>()->Find(minimap);
+    REQUIRE_MESSAGE(fixed != nullptr, "[wr-target-size] the fixed target's size is in CameraTargetSizes");
+    CHECK_MESSAGE((fixed->physicalSize == GYO::Engine::Math::Vec2i{64, 32} && fixed->scaleFactor == 1.0F), "[wr-target-size] 64 x 32, scale 1");
+    const C::TargetSize* follows = source.Resource<C::CameraTargetSizes>()->Find(hdr);
+    REQUIRE_MESSAGE(follows != nullptr, "[wr-target-size-follows] the following target's size is in CameraTargetSizes");
+    CHECK_MESSAGE((follows->physicalSize == GYO::Engine::Math::Vec2i{2560, 1600} && follows->scaleFactor == 2.0F), "[wr-target-size-follows] the window's");
+    const C::TargetSize* followsMinimap = source.Resource<C::CameraTargetSizes>()->Find(releaseLate);
+    REQUIRE_MESSAGE(followsMinimap != nullptr, "[wr-target-size-follows-other] a target following another has its size");
+    CHECK_MESSAGE(followsMinimap->physicalSize == (GYO::Engine::Math::Vec2i{64, 32}), "[wr-target-size-follows-other] the minimap's");
+    CHECK_MESSAGE(source.Get<C::ComputedCamera>(1)->viewport.size == (GYO::Engine::Math::Vec2i{64, 32}), "[wr-target-camera] the camera on it computes with its size");
+    // The render World made a render target for each and the cameras' passes go to them.
+    REQUIRE(seen.size() == 2);
+    const std::vector<R::TextureId> made = TargetsMade(seen[0].asks);
+    REQUIRE_MESSAGE(made.size() == 3, "[re-target-made] one render target for each source target, in the first frame");
+    CHECK_MESSAGE(PassesOn(seen[0].all, made[0]) > 0, "[wr-target-same-frame] the sizes are copied before CameraUpdate: the camera draws in the first frame");
+    CHECK_MESSAGE(TargetsMade(seen[1].asks).empty(), "[re-target-kept] not made again the next frame");
+    CHECK_MESSAGE((PassesOn(seen[1].all, made[0]) > 0 && PassesOn(seen[1].all, made[1]) > 0 && PassesOn(seen[1].all, made[2]) > 0),
+                  "[re-target-pass] each camera draws on the render target made for its source target");
+    CHECK_MESSAGE(PassesOn(seen[1].all, std::nullopt) == 0, "[re-target-not-main] no camera draws on the main target");
+
+    // The source lets the third target go in its Last, after its camera was computed: the render World lets its target
+    // go and does not extract the camera (nothing to draw on), the main target included.
+    releaseNow = true;
+    Frames(*p);
+    REQUIRE(seen.size() == 3);
+    CHECK_MESSAGE(Released(seen[2].asks, made[2]), "[re-target-released] the render World lets its target for it go");
+    CHECK_MESSAGE((PassesOn(seen[2].all, made[2]) == 0 && PassesOn(seen[2].all, std::nullopt) == 0),
+                  "[re-target-none] a camera whose target the source let go is not drawn");
+
+    // The window grows: the following target's copy follows. The source lets the minimap go: its size and target go.
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{1280, 800}, 1.0F});
+    source.ResourceMut<R::RenderTargets>()->Release(minimap);
+    Frames(*p);
+    CHECK_MESSAGE(source.Resource<C::CameraTargetSizes>()->Find(hdr)->physicalSize == (GYO::Engine::Math::Vec2i{1280, 800}),
+                  "[wr-target-size-follows] a new window size reaches the following target's copy");
+    CHECK_MESSAGE((source.Resource<C::CameraTargetSizes>()->Find(minimap) == nullptr &&
+                   source.Resource<C::CameraTargetSizes>()->Find(releaseLate) == nullptr),
+                  "[wr-target-size-removed] a released target's size goes");
+    REQUIRE(seen.size() == 4);
+    CHECK_MESSAGE(Released(seen[3].asks, made[0]), "[re-target-released] the render World lets its target for it go");
+}
+
+namespace {
+
+bool Retains(const Seen& frame, const R::TextureId target) {
+    return std::find(frame.retained.begin(), frame.retained.end(), target) != frame.retained.end();
+}
+
+} // namespace
+
+TEST_CASE("render_extract: a camera that does not update leaves its target retained; a target without a picture is drawn") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    R::RenderTargets& targets = *source.ResourceMut<R::RenderTargets>();
+    // A monitor following the window's size, its camera Disabled from the start.
+    const C::CameraTarget monitor = targets.Create(R::SourceTargetDesc{});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    const std::vector<R::TextureId> made = TargetsMade(seen[0].asks);
+    REQUIRE(made.size() == 1);
+    const R::TextureId screen = made[0];
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && !Retains(seen[0], screen)), "[re-update-first-drawn] a target with no picture is drawn, Disabled or not");
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0), "[re-update-reused] then it is retained, nothing drawn on it");
+    // The window grows: the monitor follows it, is made again and has no picture: drawn this frame (the forced draw).
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{1280, 720}, 1.0F});
+    Frames(*p);
+    CHECK_MESSAGE((!Retains(seen[2], screen) && PassesOn(seen[2].all, screen) > 0), "[re-update-resized-drawn] made again at the new size: drawn, not retained");
+    Frames(*p);
+    CHECK_MESSAGE(Retains(seen[3], screen), "[re-update-reused-again] and retained after that");
+    // Once: drawn in the frame it is seen, Disabled from the next one.
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Once});
+    Frames(*p);
+    CHECK_MESSAGE((!Retains(seen[4], screen) && PassesOn(seen[4].all, screen) > 0), "[re-update-once-drawn] Once draws");
+    Frames(*p);
+    CHECK_MESSAGE(Retains(seen[5], screen), "[re-update-once-then-disabled] then it is Disabled");
+    CHECK_MESSAGE(source.Get<R::TargetUpdate>(1)->mode == R::TargetUpdate::Mode::Disabled, "[wr-update-once-settled] world_render set it Disabled");
+    // An inactive camera does not draw either: its target, with its picture, is retained (as Bevy's is_active false
+    // leaves its image as it is).
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Always});
+    source.GetMut<C::Camera>(1)->active = false;
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[6], screen) && PassesOn(seen[6].all, screen) == 0), "[re-update-inactive-retained] an inactive camera's target is retained");
+}
+
+TEST_CASE("render_extract: a frame the backend did not get done leaves no picture: the camera that does not update draws again") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    // The first frame draws on the target (it has no picture) but the backend does not get it done.
+    failedFrames = {0};
+    Frames(*p, 3);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && PassesOn(seen[1].all, screen) > 0 && !Retains(seen[1], screen)),
+                  "[re-receipt-failed-drawn-again] the failed frame left no picture: drawn again, not retained");
+    CHECK_MESSAGE((Retains(seen[2], screen) && PassesOn(seen[2].all, screen) == 0), "[re-receipt-retained-after] then retained");
+}
+
+TEST_CASE("render_extract: an inactive camera's target after a frame the backend did not get done is retained, as the program drew it") {
+    // H1: the program drew on it; the GPU did not get it. The camera, inactive, cannot draw it again: its target
+    // stands as drawn (the backend skips what samples a picture it does not have, and counts it).
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera2dAt(source, 1);
+    source.Insert(1, monitor);
+    source.Remove<C::Letterbox>(1);
+    failedFrames = {0};
+    Frames(*p);
+    source.GetMut<C::Camera>(1)->active = false;
+    Frames(*p);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0),
+                  "[re-receipt-inactive-retained] retained, not a target nobody drew");
+}
+
+TEST_CASE("render_extract: a target two cameras draw is drawn when one of them draws; retained when neither does") {
+    auto p = Make();
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    // The background (Always) and the writing over it (Disabled) on one target.
+    for (const K::EntityId id : {K::EntityId{1}, K::EntityId{2}}) {
+        Camera2dAt(source, id, static_cast<std::int32_t>(id));
+        source.Insert(id, monitor);
+        source.Remove<C::Letterbox>(id);
+    }
+    source.Insert(2, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p, 2);
+    const R::TextureId screen = TargetsMade(seen[0].asks).at(0);
+    // The first frame both draw (no picture yet); the second, the Always one draws, so the Disabled one draws too.
+    CHECK_MESSAGE((!Retains(seen[1], screen) && PassesOn(seen[0].all, screen) > 0 && PassesOn(seen[1].all, screen) == PassesOn(seen[0].all, screen)),
+                  "[re-update-shared-drawn] one camera draws the target: both draw, nothing retained");
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[2], screen) && PassesOn(seen[2].all, screen) == 0), "[re-update-shared-retained] neither draws: retained once");
+    CHECK_MESSAGE(std::count(seen[2].retained.begin(), seen[2].retained.end(), screen) == 1, "[re-update-shared-once] one retain for the target");
 }
 
 TEST_CASE("render_extract: a HUD camera on another layer draws after, without clearing; a gone entity is not drawn") {
@@ -444,6 +673,7 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
     game.Insert(2, C::CameraTarget{});
     game.Insert(2, C::Projection{C::PerspectiveProjection{}});
     game.Insert(2, C::ComputedCamera{});
+    game.Insert(2, C::CameraView{});
     Place(game, 2, 0.0F, 0.0F, -5.0F);
     R::Mesh3d mesh;
     mesh.model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(GYO::Engine::Asset::AssetId("model.bar"));
@@ -470,6 +700,55 @@ TEST_CASE("render_extract: a 3D camera's mesh, then a HUD camera's sprite: compo
     CHECK_MESSAGE((overlay != nullptr && overlay->draws.size() == 1 && !overlay->clear.has_value()), "[re-3d-hud] the HUD camera's 2D pass last");
 }
 
+namespace {
+
+// Queues a full-screen pass into the first camera's PostProcess phase and a depth-only pass as a view of no camera,
+// ordered before the pipelines' Systems: what comes out is in the phases' order, not the Systems'.
+K::SystemResult QueueEarly(K::ResMut<R::CameraPasses> passes) {
+    R::CameraPasses& slots = passes.Get();
+    if (slots.byCamera.empty()) return {};
+    R::PassFullscreen post;
+    post.shader = "post";
+    slots.byCamera[0][R::CameraPhase::PostProcess].push_back(std::move(post));
+    R::PassDepth shadow;
+    shadow.target = R::TextureId{99};
+    slots.beforeCameras.push_back(std::move(shadow));
+    return {};
+}
+
+} // namespace
+
+TEST_CASE("render_extract: a pass queued before the pipelines' Systems is composed by its phase; a view of no camera first") {
+    O::WorldDescription render = Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"});
+    render.build = [](O::WorldSetup& s) {
+        Backend(s.Registrar());
+        K::SystemOptions early = In("TestQueueEarly", "Main", O::DefaultSchedules::update);
+        early.mounts[0].before = {"Queue3dPasses", "Queue2dPasses"};
+        s.Registrar().AddSystem<&QueueEarly>(std::move(early));
+    };
+    auto p = Make(std::move(render));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{64, 32}, 1.0F});
+    // One camera with both markers: mesh_render's and sprite_render's passes (Queue2dPasses registered first).
+    game.Insert(1, C::Camera{});
+    game.Insert(1, C::Camera3d{});
+    game.Insert(1, C::Camera2d{});
+    game.Insert(1, C::CameraTarget{});
+    game.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
+    Place(game, 1, 0.0F, 0.0F, -5.0F);
+    Frames(*p);
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    REQUIRE_MESSAGE(all.size() == 5, "[re-phase-all] the view of no camera, the clear, the 3D and 2D passes, the post-processing");
+    CHECK_MESSAGE(std::holds_alternative<R::PassDepth>(all[0]), "[re-phase-non-camera-first] the view of no camera first");
+    CHECK_MESSAGE((std::holds_alternative<R::Pass2D>(all[1]) && std::get<R::Pass2D>(all[1]).clear.has_value()), "[re-phase-clear] the camera's clear");
+    CHECK_MESSAGE(std::holds_alternative<R::Pass3D>(all[2]), "[re-phase-scene] its Opaque phase: mesh_render's pass");
+    CHECK_MESSAGE((std::holds_alternative<R::Pass2D>(all[3]) && !std::get<R::Pass2D>(all[3]).clear.has_value()),
+                  "[re-phase-2d-after-3d] its Transparent phase: sprite_render's pass, though its System ran first");
+    CHECK_MESSAGE(std::holds_alternative<R::PassFullscreen>(all[4]), "[re-phase-post-after] its PostProcess phase after, though queued first");
+}
+
 TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of the camera's frustum is not drawn") {
     WorldAssetTest::Content content("render-mesh-visibility");
     std::ifstream file(GYO_RENDER_TEST_FBX, std::ios::binary);
@@ -491,6 +770,7 @@ TEST_CASE("render_extract: with the visibility Module a mesh whose box is out of
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     const auto model = game.ResourceMut<GYO::Engine::WorldAsset::AssetRequests>()->Load<GYO::Engine::Model::ModelData>(
         GYO::Engine::Asset::AssetId("model.bar"));
@@ -560,6 +840,7 @@ TEST_CASE("render_extract: a Mesh3d of a model the author holds is drawn without
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     R::Mesh3d mesh;
     mesh.model = HeldTriangle(1.0F);
@@ -597,6 +878,7 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     // Two meshes; the Mesh3d draws the first only.
     GYO::Engine::Model::ModelData model = *HeldTriangle(1.0F);
@@ -650,6 +932,7 @@ TEST_CASE("render_extract: a handed model's vertices are taken once its GPU mesh
     game2.Insert(1, C::CameraTarget{});
     game2.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game2.Insert(1, C::ComputedCamera{});
+    game2.Insert(1, C::CameraView{});
     Place(game2, 1, 0.0F, 0.0F, -5.0F);
     GYO::Engine::Model::ModelData two = *HeldTriangle(1.0F);
     two.meshes.push_back(two.meshes.front());
@@ -683,6 +966,7 @@ TEST_CASE("render_extract: a scene of one model repeated is one instanced draw p
     game.Insert(1, C::CameraTarget{});
     game.Insert(1, C::Projection{C::PerspectiveProjection{}});
     game.Insert(1, C::ComputedCamera{});
+    game.Insert(1, C::CameraView{});
     Place(game, 1, 0.0F, 0.0F, -5.0F);
     const std::shared_ptr<const GYO::Engine::Model::ModelData> crate = HeldTriangle(0.5F);
     const std::shared_ptr<const I::ImageData> wood = Picture();
@@ -740,4 +1024,141 @@ TEST_CASE("render_extract: a scene of one model repeated is one instanced draw p
         }
     }
     CHECK_MESSAGE((draws == 3 && instances == 29), "[in-scene-draws-constant] more copies are more instances, not more draws");
+}
+
+
+// ---- Hdr cameras (render-pipeline declaration section 16, revision 16.8, v8-arch-gyo2-render-a4).
+
+namespace {
+
+// A 3D camera on the main target.
+void Camera3dAt(K::World& world, const K::EntityId id, const std::int32_t order) {
+    C::Camera camera;
+    camera.order = order;
+    world.Insert(id, camera);
+    world.Insert(id, C::Camera3d{});
+    world.Insert(id, C::CameraTarget{});
+    world.Insert(id, C::Projection{C::PerspectiveProjection{}});
+    world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
+    Place(world, id, 0.0F, 0.0F, -5.0F);
+}
+
+const R::ExtractedCamera* ExtractedOf(O::Product& p, const K::EntityId id) {
+    const auto* cameras = p.World("Render").GetWorld().Resource<R::ExtractedCameras>();
+    if (cameras == nullptr) return nullptr;
+    for (const R::ExtractedCamera& camera : cameras->cameras) {
+        if (camera.entity == id) return &camera;
+    }
+    return nullptr;
+}
+
+std::size_t TonemapsOf(const std::vector<R::RenderPass>& passes, const R::TextureId picture) {
+    return static_cast<std::size_t>(std::count_if(passes.begin(), passes.end(), [&](const R::RenderPass& pass) {
+        const auto* f = std::get_if<R::PassFullscreen>(&pass);
+        return f != nullptr && f->inputs == std::vector<R::TextureId>{picture} && f->shader == "tonemapping.frag";
+    }));
+}
+
+bool Unwritten(const std::vector<R::RenderPass>& passes, const std::vector<R::TextureId>& retained, const R::RenderTextures& textures) {
+    R::RenderCommands commands;
+    commands.passes = passes;
+    commands.retained = retained;
+    return R::FirstUnwrittenRead(commands, textures).has_value();
+}
+
+} // namespace
+
+TEST_CASE("render_extract: Hdr 3D cameras have a picture each and share their target's depth with its 3D cameras; let go after") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"}));
+    K::World& game = GameOf(*p);
+    game.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, C::TargetSize{{16, 16}, 1.0F});
+    Camera3dAt(game, 1, 0);
+    game.Insert(1, R::Hdr{});
+    game.Insert(1, R::Tonemapping{R::Tonemapping::Method::AcesFitted});
+    // A viewmodel camera over it that keeps the world's depth.
+    Camera3dAt(game, 2, 1);
+    game.Insert(2, R::Hdr{});
+    game.Insert(2, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    game.Insert(2, R::Camera3dDepth{false});
+    Camera3dAt(game, 3, 2);
+    game.Insert(3, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    Camera2dAt(game, 4, 3);
+    game.Insert(4, R::Hdr{});
+    game.Insert(4, R::ClearColorConfig{R::ClearColorConfig::Mode::None, {}});
+    Frames(*p);
+    const R::ExtractedCamera* world = ExtractedOf(*p, 1);
+    const R::ExtractedCamera* viewmodel = ExtractedOf(*p, 2);
+    const R::ExtractedCamera* plain = ExtractedOf(*p, 3);
+    const R::ExtractedCamera* flat = ExtractedOf(*p, 4);
+    REQUIRE((world != nullptr && viewmodel != nullptr && plain != nullptr && flat != nullptr));
+    REQUIRE_MESSAGE((world->hdr.has_value() && viewmodel->hdr.has_value()), "[re-hdr-picture] a Hdr 3D camera has a picture");
+    CHECK_MESSAGE(*world->hdr != *viewmodel->hdr, "[re-hdr-picture-each] each Hdr camera its own");
+    const R::TextureId picture = *world->hdr;
+    const R::RenderTextures& textures = *p->World("Render").GetWorld().Resource<R::RenderTextures>();
+    const R::RenderTargetDesc* desc = textures.FindTarget(picture);
+    const auto* follows = desc != nullptr ? std::get_if<R::FollowTarget>(&desc->size) : nullptr;
+    CHECK_MESSAGE((desc != nullptr && desc->format == R::RenderTargetFormat::Rgba16Float && follows != nullptr && !follows->target),
+                  "[re-hdr-picture] a linear target of the render World's that follows the camera's target");
+    REQUIRE_MESSAGE(world->depth.has_value(), "[re-hdr-depth-shared] the target's depth");
+    CHECK_MESSAGE((viewmodel->depth == world->depth && plain->depth == world->depth),
+                  "[re-hdr-depth-shared] every 3D camera on the target tests the one depth, Hdr or not");
+    CHECK_MESSAGE(!plain->hdr.has_value(), "[re-hdr-without] a camera without Hdr has no picture");
+    CHECK_MESSAGE((!flat->hdr.has_value() && !flat->depth.has_value()), "[re-hdr-2d-ignored] Hdr on a 2D camera is not looked at");
+    CHECK_MESSAGE((world->tonemapping == R::Tonemapping::Method::AcesFitted && plain->tonemapping == R::Tonemapping{}.method),
+                  "[re-hdr-tonemapping] each camera's Tonemapping, or the default");
+    const std::vector<R::RenderPass>& all = seen.back().all;
+    const auto drawsOn = [&](const R::TextureId target) {
+        return std::count_if(all.begin(), all.end(), [&](const R::RenderPass& pass) {
+            const auto* p3 = std::get_if<R::Pass3D>(&pass);
+            return p3 != nullptr && p3->target == target && p3->depth == world->depth;
+        });
+    };
+    CHECK_MESSAGE((drawsOn(picture) == 1 && drawsOn(*viewmodel->hdr) == 1 && TonemapsOf(all, picture) == 1 && TonemapsOf(all, *viewmodel->hdr) == 1),
+                  "[re-hdr-composed] each Hdr camera's scene on its picture with the shared depth, tonemapped onto the target");
+    CHECK_MESSAGE(!Unwritten(all, seen.back().retained, textures), "[re-hdr-rp3] the pictures are drawn before they are sampled");
+    Frames(*p);
+    CHECK_MESSAGE((ExtractedOf(*p, 1)->hdr == picture && Count(seen.back().asks, 3) == 0), "[re-hdr-kept] the same targets the next frame, none made");
+    const R::TextureId depth = *world->depth;
+    game.Remove<R::Hdr>(1);
+    game.Remove<R::Hdr>(2);
+    Frames(*p);
+    CHECK_MESSAGE((!ExtractedOf(*p, 1)->hdr.has_value() && !ExtractedOf(*p, 3)->depth.has_value() && textures.FindTarget(picture) == nullptr &&
+                   textures.FindTarget(depth) == nullptr && Released(seen.back().asks, picture)),
+                  "[re-hdr-let-go] no Hdr camera on the target: its pictures and its depth are let go");
+}
+
+TEST_CASE("render_extract: a Hdr camera on a render target that does not update: drawn with a picture, then its target retained") {
+    auto p = Make(Render({"entity_ids", "render_world", "camera_render", "sprite_render", "mesh_render"}));
+    K::World& source = GameOf(*p);
+    source.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, C::TargetSize{{640, 360}, 1.0F});
+    const C::CameraTarget monitor = source.ResourceMut<R::RenderTargets>()->Create(R::SourceTargetDesc{R::TargetSize{64, 32}});
+    Camera3dAt(source, 1, 0);
+    source.Insert(1, monitor);
+    source.Insert(1, R::Hdr{});
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Disabled});
+    Frames(*p);
+    const R::TextureId* found = p->World("Render").GetWorld().Resource<R::TargetTextures>()->Find(monitor);
+    REQUIRE(found != nullptr);
+    const R::TextureId screen = *found;
+    const R::ExtractedCamera* camera = ExtractedOf(*p, 1);
+    REQUIRE_MESSAGE((camera != nullptr && camera->hdr.has_value()), "[re-hdr-update-first-drawn] a target with no picture is drawn, its camera with its picture");
+    const R::TextureId picture = *camera->hdr;
+    const R::RenderTextures& textures = *p->World("Render").GetWorld().Resource<R::RenderTextures>();
+    CHECK_MESSAGE((PassesOn(seen[0].all, screen) > 0 && TonemapsOf(seen[0].all, picture) == 1 && !Retains(seen[0], screen) &&
+                   !Unwritten(seen[0].all, seen[0].retained, textures)),
+                  "[re-hdr-update-first-drawn] tonemapped onto the monitor, nothing retained, every sample drawn first");
+    Frames(*p);
+    CHECK_MESSAGE((Retains(seen[1], screen) && PassesOn(seen[1].all, screen) == 0 && ExtractedOf(*p, 1) == nullptr &&
+                   Released(seen[1].asks, picture) && !Retains(seen[1], picture)),
+                  "[re-hdr-update-waits] waiting, the monitor is retained and the camera's picture let go (not retained)");
+    CHECK_MESSAGE(!Unwritten(seen[1].all, seen[1].retained, textures), "[re-hdr-update-rp3] nothing samples what was not drawn");
+    source.Insert(1, R::TargetUpdate{R::TargetUpdate::Mode::Once});
+    Frames(*p);
+    const R::ExtractedCamera* again = ExtractedOf(*p, 1);
+    CHECK_MESSAGE((again != nullptr && again->hdr.has_value() && *again->hdr != picture && TonemapsOf(seen[2].all, *again->hdr) == 1 &&
+                   !Unwritten(seen[2].all, seen[2].retained, textures)),
+                  "[re-hdr-update-once-drawn] Once draws again, on a picture made again");
+    Frames(*p);
+    CHECK_MESSAGE(Retains(seen[3], screen), "[re-hdr-update-once-then-retained] then the monitor is retained");
 }

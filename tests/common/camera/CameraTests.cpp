@@ -229,10 +229,12 @@ TEST_CASE("camera: each camera uses the size of its own target") {
     w.Insert(1, C::CameraTarget{0});
     w.Insert(1, C::Projection{C::PerspectiveProjection{}});
     w.Insert(1, C::ComputedCamera{});
+    w.Insert(1, C::CameraView{});
     w.Insert(2, C::Camera{});
     w.Insert(2, C::CameraTarget{1});
     w.Insert(2, C::Projection{C::PerspectiveProjection{}});
     w.Insert(2, C::ComputedCamera{});
+    w.Insert(2, C::CameraView{});
     w.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, Size(800, 600));
     w.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{1}, Size(400, 400));
     Frames(*p);
@@ -466,6 +468,7 @@ void PutCamera(K::World& w) {
     w.Insert(1, C::CameraTarget{0});
     w.Insert(1, C::Projection{C::PerspectiveProjection{}});
     w.Insert(1, C::ComputedCamera{});
+    w.Insert(1, C::CameraView{});
     w.ResourceMut<C::CameraTargetSizes>()->Set(C::CameraTarget{0}, Size(800, 600));
 }
 } // namespace
@@ -500,6 +503,107 @@ TEST_CASE("camera: a World with the skeleton off names where UpdateCameras runs"
     PutCamera((*built)->World("Main").GetWorld());
     Frames(**built);
     CHECK_MESSAGE((*built)->World("Main").GetWorld().Get<C::ComputedCamera>(1)->valid, "[cm-options] UpdateCameras did not run in Late");
+}
+
+// ---- CameraView: world to clip space made once, after the propagation (render-pipeline declaration section 13, A1; CM-7)
+
+TEST_CASE("camera: ViewOf makes viewFromWorld and clipFromWorld from the view point; one with no inverse is not valid") {
+    const C::TargetSize size = Size(800, 600);
+    const C::ComputedCamera computed = C::Compute(C::Camera{}, C::Projection{C::PerspectiveProjection{}}, &size);
+    const T::GlobalTransform view = At({3.0F, 1.0F, -5.0F});
+    const C::CameraView made = C::ViewOf(computed, view);
+    REQUIRE_MESSAGE(made.valid, "[cm-view-valid] a valid camera at an invertible view point");
+    CHECK_MESSAGE(SameMatrix(made.viewFromWorld, *M::Inverse(view.matrix)), "[cm-view-from-world] the view point's inverse");
+    CHECK_MESSAGE(SameMatrix(made.clipFromWorld, M::Multiply(computed.clipFromView, *M::Inverse(view.matrix))),
+                  "[cm-clip-from-world] clipFromView times the view point's inverse");
+    T::GlobalTransform flat;
+    flat.matrix.values[0] = 0.0F;  // a zero scale on x: no inverse
+    CHECK_MESSAGE(!C::ViewOf(computed, flat).valid, "[cm-view-singular] a view point with no inverse: not valid");
+    CHECK_MESSAGE(!C::ViewOf(C::ComputedCamera{}, view).valid, "[cm-view-needs-computed] a camera that is not valid: not valid");
+    // The conversions keep their own reasons: a view point with no inverse is InvalidData, not NoViewportSize.
+    const auto converted = C::WorldToViewport(computed, flat, M::Vec3{0.0F, 0.0F, 1.0F});
+    REQUIRE(!converted);
+    CHECK_MESSAGE(converted.error().code == C::ViewportConversionFailureCode::InvalidData, "[cm-singular-invalid-data]");
+}
+
+namespace {
+std::vector<int>& ViewChanges() {
+    static std::vector<int> changes;
+    return changes;
+}
+K::SystemResult CountViewChanged(K::Query<K::Read<C::CameraView>, K::Changed<C::CameraView>> changed) {
+    ViewChanges().push_back(static_cast<int>(changed.Count()));
+    return {};
+}
+} // namespace
+
+TEST_CASE("camera: UpdateCameraViews takes this frame's GlobalTransform; a move writes CameraView, not ComputedCamera") {
+    Changes().clear();
+    ViewChanges().clear();
+    auto p = Make([](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&CountChanged>(In("CountChanged", "Main", "Last"));
+        s.Registrar().AddSystem<&CountViewChanged>(In("CountViewChanged", "Main", "Last"));
+    });
+    K::World& w = WorldOf(*p);
+    w.ResourceMut<C::CameraTargetSizes>()->Set(C::kMainTarget, Size(800, 600));
+    w.Insert(1, C::Camera{});
+    w.Insert(1, C::CameraTarget{});
+    w.Insert(1, C::Projection{C::PerspectiveProjection{}});
+    w.Insert(1, C::ComputedCamera{});
+    w.Insert(1, C::CameraView{});
+    w.Insert(1, T::Transform{});
+    w.Insert(1, T::GlobalTransform{});
+    Frames(*p, 2);
+    // The host moves the camera between frames: the propagation, then UpdateCameraViews, in the next frame.
+    T::Transform moved;
+    moved.translation = {0.0F, 2.0F, -10.0F};
+    w.Insert(1, moved);
+    Frames(*p);
+    const C::CameraView& view = *w.Get<C::CameraView>(1);
+    CHECK_MESSAGE(SameMatrix(view.clipFromWorld, M::Multiply(w.Get<C::ComputedCamera>(1)->clipFromView, *M::Inverse(T::ToMatrix(moved)))),
+                  "[cm-view-this-frame] the view point of this frame (after the propagation)");
+    REQUIRE(ViewChanges().size() == 3);
+    CHECK_MESSAGE(ViewChanges()[2] == 1, "[cm-view-written-when-moved] a camera that moved has its CameraView written");
+    CHECK_MESSAGE(Changes()[2] == 0, "[cm-computed-not-written-when-moved] ComputedCamera does not depend on the view point");
+    Frames(*p);
+    CHECK_MESSAGE(ViewChanges().back() == 0, "[cm-view-written-when-equal] a camera that stays is not written again");
+}
+
+namespace {
+std::vector<int>& SizeChanges() {
+    static std::vector<int> changes;
+    return changes;
+}
+// Each frame the same size; from frame 3 another one, and from frame 5 the main target's size taken away.
+K::SystemResult WriteSameSize(K::ResMut<C::CameraTargetSizes> sizes, K::Local<int> frame) {
+    ++*frame;
+    if (*frame >= 5) {
+        C::RemoveTargetSize(sizes, C::kMainTarget);
+        return {};
+    }
+    C::WriteTargetSize(sizes, C::kMainTarget, *frame >= 3 ? Size(640, 480) : Size(800, 600));
+    return {};
+}
+K::SystemResult ReadSizesChanged(K::Res<C::CameraTargetSizes> sizes) {
+    SizeChanges().push_back(sizes.Changed() ? 1 : 0);
+    return {};
+}
+} // namespace
+
+TEST_CASE("camera: WriteTargetSize writes only a size that differs; RemoveTargetSize only takes one that is there") {
+    SizeChanges().clear();
+    auto p = Make([](O::WorldSetup& s) {
+        s.Registrar().AddSystem<&WriteSameSize>(In("WriteSameSize", "Main", "Update"));
+        s.Registrar().AddSystem<&ReadSizesChanged>(In("ReadSizesChanged", "Main", "Last"));
+    });
+    Frames(*p, 6);
+    REQUIRE(SizeChanges().size() == 6);
+    CHECK_MESSAGE(SizeChanges()[0] == 1, "[cm-size-first-written] the first size is written");
+    CHECK_MESSAGE(SizeChanges()[1] == 0, "[cm-size-same-not-written] the same size again is not a change");
+    CHECK_MESSAGE(SizeChanges()[2] == 1, "[cm-size-other-written] another size is");
+    CHECK_MESSAGE((SizeChanges()[4] == 1 && WorldOf(*p).Resource<C::CameraTargetSizes>()->Find(C::kMainTarget) == nullptr),
+                  "[cm-size-removed] taking the size away is a change");
+    CHECK_MESSAGE(SizeChanges()[5] == 0, "[cm-size-remove-none] taking away a size that is not there is not");
 }
 
 // ---- The summary (CM-3, CM-5)

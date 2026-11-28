@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "engine/math/linear/Vec4.hpp"
+#include "engine/render/Compose.hpp"
 
 namespace GYO::Engine::Render {
 
@@ -129,16 +130,15 @@ std::vector<std::uint32_t> TriangleListOf(const Shape2d& shape) {
 }
 
 std::optional<Pass2D> Queue2d(const ExtractedCamera& camera, const std::span<const Extracted2dItem> items) {
-    if (!camera.is2d || !camera.computed.valid) return std::nullopt;
-    const std::optional<Math::Matrix4> viewFromWorld = Math::Inverse(camera.view);
-    if (!viewFromWorld) return std::nullopt;
-    const Math::Matrix4 clipFromWorld = Math::Multiply(camera.computed.clipFromView, *viewFromWorld);
+    if (!camera.is2d || !camera.computed.valid || !camera.view.valid) return std::nullopt;
+    // The camera's one world-to-clip value (camera's CM-7), not made again here.
+    const Math::Matrix4& clipFromWorld = camera.view.clipFromWorld;
     const Camera::Viewport& vp = camera.computed.viewport;
     const float width = static_cast<float>(vp.size.x);
     const float height = static_cast<float>(vp.size.y);
 
     Pass2D pass;
-    pass.target = camera.target;
+    pass.target = PhaseTarget(camera, CameraPhase::Transparent);
     pass.viewport = PixelRect{static_cast<std::uint32_t>(vp.position.x), static_cast<std::uint32_t>(vp.position.y),
                               static_cast<std::uint32_t>(vp.size.x), static_cast<std::uint32_t>(vp.size.y)};
     // Back to front: the z of each item's position, ties by source entity.

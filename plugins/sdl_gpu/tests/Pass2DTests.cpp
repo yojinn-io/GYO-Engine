@@ -5,6 +5,7 @@
 // the Plugin in a Product on a shown window (at least one frame must reach it). Tags "[gp-...]" are the mutants' expectations.
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <chrono>
 #include <cstdlib>
@@ -84,6 +85,8 @@ R::Pass2D Cleared(const R::Color8 colour) {
 struct Picture {
     G::CapturedImage image;
     G::FrameTally tally;
+    // What the backend got done (render-pipeline declaration 14.13).
+    R::RenderFrameReceipt receipt;
     [[nodiscard]] R::Color8 At(const std::uint32_t x, const std::uint32_t y) const {
         const std::size_t i = (static_cast<std::size_t>(y) * image.size.width + x) * 4;
         return R::Color8{image.pixels[i], image.pixels[i + 1], image.pixels[i + 2], image.pixels[i + 3]};
@@ -107,7 +110,7 @@ struct Picture {
 Picture Draw(const R::RenderCommands& commands, const R::RenderTextures* textures = nullptr) {
     Picture picture;
     const std::span<const R::TextureOp> asks = textures != nullptr ? textures->Pending() : std::span<const R::TextureOp>{};
-    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally);
+    auto captured = Device().Capture(asks, {}, commands, kSize, picture.tally, picture.receipt);
     REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
     picture.image = std::move(*captured);
     REQUIRE(picture.image.pixels.size() == std::size_t{kSize.width} * kSize.height * 4);
@@ -148,7 +151,7 @@ TEST_CASE("sdl_gpu pass2d: a texture is sampled top row first, nearest pixel, ti
     R::Pass2D pass = Cleared(kBlue);
     Quad(pass, Rect{0, 0, 8, 8}, kWhite, id);
     commands.passes.push_back(std::move(pass));
-    const Picture p = Draw(commands, &textures);
+    Picture p = Draw(commands, &textures);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kRed), "[gp-tex-top-left] texture row 0 is on top, pixel 0 on the left");
     CHECK_MESSAGE(p.All(4, 0, 8, 4, kGreen), "[gp-tex-top-right] top right");
     CHECK_MESSAGE(p.All(0, 4, 4, 8, kWhite), "[gp-tex-bottom-left] bottom left");
@@ -156,19 +159,19 @@ TEST_CASE("sdl_gpu pass2d: a texture is sampled top row first, nearest pixel, ti
     CHECK_MESSAGE(Device().TextureCount() == 1, "[gp-tex-made] the texture has a GPU texture");
 
     // The next frame: the texture stays; an update replaces its region; the vertex colour multiplies.
-    textures.ClearPending();
+    textures.EndFrame(commands, p.receipt);
     textures.Update(id, R::TextureRegion{1, 0, 1, 1}, {0, 0, 255, 255});
     R::RenderCommands next;
     R::Pass2D tinted = Cleared(kBlue);
     Quad(tinted, Rect{0, 0, 8, 8}, R::Color8{255, 0, 255, 255}, id);
     next.passes.push_back(std::move(tinted));
-    const Picture q = Draw(next, &textures);
+    Picture q = Draw(next, &textures);
     CHECK_MESSAGE(q.All(0, 0, 4, 4, kRed), "[gp-tex-kept] the texture is kept between frames (red times magenta is red)");
     CHECK_MESSAGE(q.All(4, 0, 8, 4, kBlue), "[gp-tex-update] the updated region is blue now");
     CHECK_MESSAGE(q.All(0, 4, 4, 8, R::Color8{255, 0, 255, 255}), "[gp-tex-tint] white times magenta is magenta");
 
     // Let go: a draw naming it is skipped and counted.
-    textures.ClearPending();
+    textures.EndFrame(next, q.receipt);
     textures.Release(id);
     R::RenderCommands gone;
     R::Pass2D after = Cleared(kBlue);
@@ -188,13 +191,13 @@ TEST_CASE("sdl_gpu pass2d: a Linear texture is blended between its pixels") {
     R::Pass2D pass = Cleared(kBlue);
     Quad(pass, Rect{0, 0, 8, 8}, kWhite, id);
     commands.passes.push_back(std::move(pass));
-    const Picture p = Draw(commands, &textures);
+    Picture p = Draw(commands, &textures);
     CHECK_MESSAGE(p.All(0, 0, 2, 8, R::Color8{0, 0, 0, 255}), "[gp-linear-left] left of the first texel's centre: black (clamped)");
     CHECK_MESSAGE(p.All(6, 0, 8, 8, kWhite), "[gp-linear-right] right of the last texel's centre: white");
     // Pixel 3: texel position 0.375, so 0.375 of the way to white (95.6); the GPU's filter precision may differ by 2.
     const R::Color8 between = p.At(3, 4);
     CHECK_MESSAGE((Diff(between.r, 96) <= 2 && between.r == between.g && between.g == between.b), "[gp-linear-between] blended between them");
-    textures.ClearPending();
+    textures.EndFrame(commands, p.receipt);
     textures.Release(id);
     static_cast<void>(Draw(R::RenderCommands{}, &textures));
 }
@@ -254,7 +257,7 @@ TEST_CASE("sdl_gpu pass2d: a view is stretched over the target; later passes kee
     Quad(second, Rect{6, 6, 2, 2}, kGreen);
     commands.passes.push_back(std::move(second));
     R::Pass2D elsewhere = Cleared(kWhite);
-    elsewhere.target = 7;  // no picture for target 7
+    elsewhere.target = R::TextureId{7};  // no picture for target 7
     commands.passes.push_back(std::move(elsewhere));
     const Picture p = Draw(commands);
     CHECK_MESSAGE(p.All(0, 0, 4, 4, kRed), "[gp-view-scale] two view units are four pixels");
@@ -295,6 +298,7 @@ TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end t
     const Cam::Letterbox box{4.0F, 2.0F};
     R::ExtractedCamera camera;
     camera.computed = Cam::Compute(Cam::Camera{}, Cam::Projection{o}, &size, &box);
+    camera.view = Cam::ViewOf(camera.computed, GYO::Engine::Transform::GlobalTransform{});  // at the origin
     camera.is2d = true;
     camera.clear = R::Color8{0, 0, 0, 255};
     // A red square over world x -2..0 (z 0) and a green one over -0.5..1.5 (z 1, in front), y up.
@@ -316,7 +320,7 @@ TEST_CASE("sdl_gpu pass2d: the 2D pipeline's pass of a letterboxed camera, end t
     cameras.cameras.push_back(camera);
     R::CameraPasses slots;
     slots.byCamera.resize(1);
-    slots.byCamera[0].push_back(std::move(*pass));
+    slots.byCamera[0][R::CameraPhase::Transparent].push_back(std::move(*pass));
     R::RenderCommands commands;
     R::ComposePasses(cameras, slots, commands);
     const Picture p = Draw(commands);
@@ -417,6 +421,19 @@ TEST_CASE("sdl_gpu frames: GPUSubmit draws each frame of a Product on the window
     CHECK_MESSAGE(status->SkippedDraws() == 0, "[gp-frames-draws] no draw skipped");
     CHECK_MESSAGE(!status->DriverName().empty(), "[gp-frames-driver] SDL names its driver");
     CHECK_MESSAGE(status->TextureCount() == 1, "[gp-frames-texture] the texture asked for in the first frame has a GPU texture");
+    // The passes' timing and the frames' GPU time through the status (render-pipeline declaration 15, T4): the last
+    // frame's one pass; a frame seen done on the GPU, when one was by now (nothing waits for the GPU on the window, so
+    // none is not wrong; the Capture case, sdl_gpu.timing, sees one for sure), not later than the last one.
+    const std::optional<G::FrameTiming> timing = status->LastFrameTiming();
+    REQUIRE_MESSAGE(timing.has_value(), "[gp-frames-timing] the last frame's timing");
+    CHECK_MESSAGE((timing->passes.size() == 1 && timing->passes[0].name == "#0 Pass2D -> main"), "[gp-frames-timing] the last frame's pass");
+    const std::optional<G::FrameSeenDone> seen = status->LastFrameSeenDone();
+    CHECK_MESSAGE((!seen || (seen->frame >= 1 && seen->frame <= timing->frame && seen->after < seen->within)),
+                  "[gp-frames-gpu-time] a frame seen done on the GPU is one already recorded, between its two looks");
+    if (seen) {
+        MESSAGE("frame " << seen->frame << " of " << timing->frame << " seen done after " << seen->after.count() << " and within "
+                         << seen->within.count() << " ticks of its handing");
+    }
 
     // VSync off and on again from render's Presentation (window-mode-vsync declaration, section 4.3).
     CHECK_MESSAGE(status->ActivePresentMode() == G::SwapchainPresentMode::Vsync, "[gp-present-default] the swapchain starts with VSYNC");
@@ -478,10 +495,11 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     REQUIRE(static_cast<bool>(made));
     G::GPUDevice& device = **made;
     G::FrameTally tally;
-    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally));
+    R::RenderFrameReceipt receipt;
+    static_cast<void>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally, receipt));
     constexpr int kRuns = 20;
     const auto start = std::chrono::steady_clock::now();
-    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally)));
+    for (int i = 0; i < kRuns; ++i) REQUIRE(static_cast<bool>(device.Capture({}, {}, commands, R::TargetSize{1280, 720}, tally, receipt)));
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / kRuns;
     MESSAGE("[gp-budget] driver " << device.DriverName() << ": " << ms << " ms a frame (budget 8 ms, render.zh-Hant.md section 2)");
     CHECK(ms > 0.0);
@@ -494,6 +512,7 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
     const Cam::TargetSize size{{1280, 720}, 1.0F};
     R::ExtractedCamera camera;
     camera.computed = Cam::Compute(Cam::Camera{}, Cam::Projection{o}, &size);
+    camera.view = Cam::ViewOf(camera.computed, GYO::Engine::Transform::GlobalTransform{});  // at the origin
     camera.is2d = true;
     camera.clear = kBlue;
     std::vector<R::Extracted2dItem> items(2000);
@@ -513,12 +532,214 @@ TEST_CASE("sdl_gpu budget: a common 2D game's frame") {
         REQUIRE(queued.has_value());
         R::RenderCommands piped;
         piped.passes.push_back(std::move(*queued));
-        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally)));
+        REQUIRE(static_cast<bool>(device.Capture({}, {}, piped, R::TargetSize{1280, 720}, tally, receipt)));
     }
     const double pipeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - pipeStart).count() / kRuns;
     MESSAGE("[gp-budget-pipeline] driver " << device.DriverName() << ": " << pipeMs
                                            << " ms a frame through Queue2d (budget 8 ms, render.zh-Hant.md section 7.5)");
     CHECK(pipeMs > 0.0);
+}
+
+// ---- Render targets and texture formats (render-pipeline declaration section 13, A1; label gpu, ctest sdl_gpu.targets)
+
+namespace {
+
+// One case's textures on the shared device: what the case leaves live is let go at its end, so the next case starts
+// from a device without textures (TextureCount 0).
+struct TargetCase {
+    R::RenderTextures textures;
+    std::vector<R::TextureId> live;
+
+    R::TextureId Target(const R::RenderTargetDesc& desc) { return live.emplace_back(textures.CreateTarget(desc)); }
+    R::TextureId Texture(const R::TextureDesc& desc, std::vector<std::uint8_t> pixels) {
+        return live.emplace_back(textures.Create(desc, std::move(pixels)));
+    }
+    void Release(const R::TextureId id) {
+        textures.Release(id);
+        live.erase(std::find(live.begin(), live.end(), id));
+    }
+    // A frame on a main target of size: this case's asks (targets that follow the main target take its size, as
+    // camera_render gives it), then they are cleared (as render_world's Cleanup).
+    Picture Frame(const R::RenderCommands& commands, const R::TargetSize size = kSize) {
+        textures.SetMainSize(size);
+        Picture picture;
+        R::RenderFrameReceipt receipt;
+        auto captured = Device().Capture(textures.Pending(), {}, commands, size, picture.tally, receipt);
+        REQUIRE_MESSAGE(static_cast<bool>(captured), (captured ? std::string() : captured.error().message));
+        picture.image = std::move(*captured);
+        // As render_world's Cleanup: the frame ends with the backend's receipt (kept in the picture as it was written).
+        picture.receipt = receipt;
+        textures.EndFrame(commands, receipt);
+        return picture;
+    }
+    ~TargetCase() {
+        for (auto it = live.rbegin(); it != live.rend(); ++it) textures.Release(*it);
+        G::FrameTally tally;
+        R::RenderFrameReceipt receipt;
+        static_cast<void>(Device().Capture(textures.Pending(), {}, R::RenderCommands{}, kSize, tally, receipt));
+    }
+};
+
+R::RenderTargetDesc Fixed(const std::uint32_t width, const std::uint32_t height) {
+    return R::RenderTargetDesc{R::TargetSize{width, height}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest};
+}
+
+// The whole of a target sampled onto the main target's (0, 0) .. (width, height), nearest pixel.
+R::Pass2D SampleTarget(const R::TextureId target, const float width, const float height) {
+    R::Pass2D pass = Cleared(kWhite);
+    Quad(pass, Rect{0, 0, width, height}, kWhite, target, R::BlendMode::Opaque);
+    return pass;
+}
+
+R::Pass2D On(const R::TextureId target, const std::optional<R::Color8> clear = std::nullopt) {
+    R::Pass2D pass;
+    pass.target = target;
+    pass.clear = clear;
+    return pass;
+}
+
+} // namespace
+
+TEST_CASE("sdl_gpu targets: a pass draws into an 8 x 8 target and a later pass samples it onto the main target") {
+    TargetCase c;
+    const R::TextureId target = c.Target(Fixed(8, 8));
+    R::RenderCommands commands;
+    // Into the target: blue, a red left half, a green bottom-right quarter.
+    R::Pass2D into = On(target, kBlue);
+    Quad(into, Rect{0, 0, 4, 8}, kRed);
+    Quad(into, Rect{4, 4, 4, 4}, kGreen);
+    commands.passes.push_back(std::move(into));
+    // The main target shows the target, flipped left to right by its uv (so its left half lands on the right).
+    R::Pass2D main = Cleared(kWhite);
+    main.vertices = {{{0, 0}, {1, 0}, kWhite}, {{8, 0}, {0, 0}, kWhite}, {{8, 8}, {0, 1}, kWhite}, {{0, 8}, {1, 1}, kWhite}};
+    main.indices = {0, 1, 2, 0, 2, 3};
+    main.draws.push_back(R::Draw2D{target, R::BlendMode::Opaque, std::nullopt, 0, 6, 0});
+    commands.passes.push_back(std::move(main));
+    const Picture p = c.Frame(commands);
+    CHECK_MESSAGE(p.tally.unmappedPasses == 0, "[gt-target-mapped] a pass on a target RenderTextures made is drawn");
+    CHECK_MESSAGE(p.tally.refusedAsks == 0, "[gt-target-made] " << p.tally.lastRefusal);
+    CHECK_MESSAGE(p.All(4, 0, 8, 8, kRed), "[gt-target-sampled] the target's red half, sampled and flipped onto the right");
+    CHECK_MESSAGE(p.All(0, 0, 4, 4, kBlue), "[gt-target-sampled] the target's blue, top left");
+    CHECK_MESSAGE(p.All(0, 4, 4, 8, kGreen), "[gt-target-sampled] the target's green quarter, bottom left");
+
+    // A later frame: a 3D pass draws into the target too (its own depth, the target's size), then the main pass.
+    R::RenderCommands next;
+    next.passes.push_back(On(target, kBlue));
+    R::Pass3D scene;
+    scene.target = target;
+    scene.vertices = {{{-1, -1, 0.5F}, {}, {}}, {{1, -1, 0.5F}, {}, {}}, {{1, 1, 0.5F}, {}, {}}, {{-1, 1, 0.5F}, {}, {}}};
+    scene.indices = {0, 1, 2, 0, 2, 3};
+    scene.instances.push_back(R::Instance3D{{}, kYellow});
+    scene.draws.push_back(R::Draw3D{{R::MeshId{}, 0, 6, 0, 0, 1}});
+    next.passes.push_back(std::move(scene));
+    next.passes.push_back(SampleTarget(target, 8, 8));
+    const Picture q = c.Frame(next);
+    CHECK_MESSAGE(q.All(0, 0, 8, 8, kYellow), "[gt-target-3d] a 3D pass on the target covers it (clip space is the target's)");
+    CHECK_MESSAGE(q.tally.skippedDraws == 0, "[gt-target-3d] " << q.tally.lastRefusal);
+
+    // Let go: a pass on it is counted as unmapped and not drawn; its GPU texture is gone.
+    c.Release(target);
+    R::RenderCommands gone;
+    gone.passes.push_back(On(target, kRed));
+    gone.passes.push_back(Cleared(kGreen));
+    const Picture r = c.Frame(gone);
+    CHECK_MESSAGE((r.tally.unmappedPasses == 1 && r.All(0, 0, 8, 8, kGreen)), "[gt-target-released-unmapped] a pass on a released target");
+    CHECK_MESSAGE(Device().TextureCount() == 0, "[gt-target-released] the target's GPU texture is gone");
+}
+
+TEST_CASE("sdl_gpu targets: an sRGB texture is sampled as linear values; a Unorm one as stored") {
+    TargetCase c;
+    // The same bytes in both: 188 and 128 (sRGB-encoded 0.5029 and 0.2158 in linear), alpha 255.
+    const std::vector<std::uint8_t> bytes{188, 188, 188, 255, 128, 128, 128, 255};
+    const R::TextureId srgb = c.Texture(R::TextureDesc{2, 1, R::TextureFilter::Nearest, R::TextureFormat::Rgba8UnormSrgb}, bytes);
+    const R::TextureId stored = c.Texture(R::TextureDesc{2, 1, R::TextureFilter::Nearest, R::TextureFormat::Rgba8Unorm}, bytes);
+    R::RenderCommands commands;
+    R::Pass2D pass = Cleared(kBlue);
+    Quad(pass, Rect{0, 0, 8, 4}, kWhite, srgb);
+    Quad(pass, Rect{0, 4, 8, 4}, kWhite, stored);
+    commands.passes.push_back(std::move(pass));
+    const Picture p = c.Frame(commands);
+    REQUIRE_MESSAGE(p.tally.refusedAsks == 0, p.tally.lastRefusal);
+    // The main target is Unorm: what the shader read is written as it is (0.5029 * 255 = 128.2, 0.2158 * 255 = 55.0).
+    const R::Color8 decoded = p.At(1, 1);
+    const R::Color8 decodedDark = p.At(6, 1);
+    CHECK_MESSAGE((Diff(decoded.r, 128) <= 1 && decoded.r == decoded.g && decoded.g == decoded.b && decoded.a == 255),
+                  "[gt-srgb-decoded] sRGB 188 sampled as " << int(decoded.r));
+    CHECK_MESSAGE(Diff(decodedDark.r, 55) <= 1, "[gt-srgb-decoded] sRGB 128 sampled as " << int(decodedDark.r));
+    CHECK_MESSAGE((p.All(0, 4, 4, 8, R::Color8{188, 188, 188, 255}) && p.All(4, 4, 8, 8, R::Color8{128, 128, 128, 255})),
+                  "[gt-unorm-stored] a Unorm texture is sampled as stored");
+}
+
+TEST_CASE("sdl_gpu targets: a target follows the main target's size, or another target's, again when it changes") {
+    TargetCase c;
+    const R::TextureId target = c.Target(R::RenderTargetDesc{R::FollowTarget{}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    // Into the target: blue, a red square of 4 x 4 pixels at its top-left (no view: one unit a pixel).
+    const auto frame = [&](const R::TargetSize size) {
+        R::RenderCommands commands;
+        R::Pass2D into = On(target, kBlue);
+        Quad(into, Rect{0, 0, 4, 4}, kRed);
+        commands.passes.push_back(std::move(into));
+        commands.passes.push_back(SampleTarget(target, static_cast<float>(size.width), static_cast<float>(size.height)));
+        return commands;
+    };
+    const Picture small = c.Frame(frame(kSize), kSize);
+    REQUIRE_MESSAGE(small.tally.refusedAsks == 0, small.tally.lastRefusal);
+    CHECK_MESSAGE((small.All(0, 0, 4, 4, kRed) && small.All(4, 0, 8, 8, kBlue) && small.All(0, 4, 4, 8, kBlue)),
+                  "[gt-target-follows] at 8 x 8 the square is 4 x 4 pixels");
+    const R::TargetSize large{16, 16};
+    const Picture big = c.Frame(frame(large), large);
+    // Had the target kept 8 x 8, its square would be stretched to 8 x 8 pixels of the main target.
+    CHECK_MESSAGE((big.All(0, 0, 4, 4, kRed) && big.All(4, 0, 16, 16, kBlue) && big.All(0, 4, 4, 16, kBlue)),
+                  "[gt-target-follows] at 16 x 16 the target is 16 x 16 too: the square stays 4 x 4 pixels");
+    CHECK_MESSAGE(Device().TextureCount() == 1, "[gt-target-follows] one texture for the target, made again, not added");
+
+    // A target following a fixed 4 x 4 one: sampled over 8 x 8, each of its pixels is 2 x 2 (it is 4 x 4 too).
+    const R::TextureId fixed = c.Target(Fixed(4, 4));
+    const R::TextureId follower = c.Target(R::RenderTargetDesc{R::FollowTarget{fixed}, R::RenderTargetFormat::Rgba8Unorm, R::TextureFilter::Nearest});
+    R::RenderCommands commands;
+    commands.passes.push_back(On(fixed, kBlue));
+    R::Pass2D into = On(follower, kBlue);
+    Quad(into, Rect{0, 0, 1, 1}, kRed);  // one pixel of the follower
+    commands.passes.push_back(std::move(into));
+    commands.passes.push_back(SampleTarget(follower, 8, 8));
+    const Picture other = c.Frame(commands);
+    CHECK_MESSAGE((other.All(0, 0, 2, 2, kRed) && other.All(2, 0, 8, 8, kBlue) && other.All(0, 2, 2, 8, kBlue)),
+                  "[gt-target-follows-other] the follower is the followed target's 4 x 4");
+}
+
+TEST_CASE("sdl_gpu targets: a target keeps its picture from frame to frame; it is transparent black when made") {
+    TargetCase c;
+    const R::TextureId target = c.Target(Fixed(8, 8));
+    // Frame 1: the target's first pass has no clear: the target was just made, so it starts transparent black.
+    R::RenderCommands first;
+    R::Pass2D left = On(target);
+    Quad(left, Rect{0, 0, 4, 8}, kRed);
+    first.passes.push_back(std::move(left));
+    first.passes.push_back(SampleTarget(target, 8, 8));
+    const Picture p = c.Frame(first);
+    CHECK_MESSAGE((p.All(0, 0, 4, 8, kRed) && p.All(4, 0, 8, 8, R::Color8{0, 0, 0, 0})), "[gt-target-made-clear] a new target is transparent black");
+    // Frame 2: a pass with no clear draws green on the right half over what frame 1 left (Bevy's LoadOp::Load).
+    R::RenderCommands second;
+    R::Pass2D right = On(target);
+    Quad(right, Rect{4, 0, 4, 8}, kGreen);
+    second.passes.push_back(std::move(right));
+    second.passes.push_back(SampleTarget(target, 8, 8));
+    const Picture q = c.Frame(second);
+    CHECK_MESSAGE((q.All(0, 0, 4, 8, kRed) && q.All(4, 0, 8, 8, kGreen)), "[gt-target-kept] the red half of frame 1 is still there");
+}
+
+TEST_CASE("sdl_gpu targets: a draw that samples the target its pass draws on is skipped and counted") {
+    TargetCase c;
+    const R::TextureId target = c.Target(Fixed(8, 8));
+    R::RenderCommands commands;
+    R::Pass2D into = On(target, kBlue);
+    Quad(into, Rect{0, 0, 8, 8}, kWhite, target, R::BlendMode::Opaque);  // reads and writes the target at once
+    Quad(into, Rect{0, 0, 4, 4}, kRed);
+    commands.passes.push_back(std::move(into));
+    commands.passes.push_back(SampleTarget(target, 8, 8));
+    const Picture p = c.Frame(commands);
+    CHECK_MESSAGE(p.tally.skippedDraws == 1, "[gt-feedback-skipped] the draw sampling its own target is skipped and counted");
+    CHECK_MESSAGE((p.All(0, 0, 4, 4, kRed) && p.All(4, 0, 8, 8, kBlue)), "[gt-feedback-rest] the other draws are drawn");
 }
 
 } // namespace GYO::Plugins::SDLGPU

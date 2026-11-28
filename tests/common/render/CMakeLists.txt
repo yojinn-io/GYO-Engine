@@ -1,6 +1,6 @@
 # Tests of the render Module and render_world (docs/architecture/target/v2/render.zh-Hant.md, RD-1 to RD-4). Data and
 # arithmetic only: no backend, no GPU (the 2D pass on a GPU is sdl_gpu's test, label gpu).
-add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp VisibilityTests.cpp)
+add_executable(gyo_render_tests TestMain.cpp RenderTests.cpp TonemappingTests.cpp RenderWorldTests.cpp Pipeline2dTests.cpp Pipeline3dTests.cpp PipelineWorldTests.cpp VisibilityTests.cpp)
 target_link_libraries(gyo_render_tests PRIVATE GYO::Render GYO::RenderWorld GYO::WorldRender GYO::CameraRender GYO::SpriteRender GYO::MeshRender
     GYO::Visibility GYO::EntityIds gyo_test_support doctest::doctest)
 # The asset path of sprite_render reads a real PNG through world_asset (the store's test executor and content).
@@ -31,7 +31,7 @@ include("${GYO_REPOSITORY_ROOT}/tests/common/support/ExpectLinks.cmake")
 function(gyo_expect_render_links)
     gyo_expect_links(gyo_render GYO::Asset GYO::Base GYO::Camera GYO::Image GYO::Kernel GYO::Math GYO::Model GYO::Transform GYO::WorldAsset)
     gyo_expect_links(gyo_render_world GYO::Base GYO::Kernel GYO::Orchestration GYO::Render)
-    gyo_expect_links(gyo_world_render GYO::Base GYO::Kernel GYO::Orchestration GYO::Render)
+    gyo_expect_links(gyo_world_render GYO::Base GYO::Camera GYO::Kernel GYO::Orchestration GYO::Render)
     gyo_expect_links(gyo_camera_render GYO::Base GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)
     gyo_expect_links(gyo_sprite_render GYO::Base GYO::CameraRender GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)
     gyo_expect_links(gyo_mesh_render GYO::Base GYO::CameraRender GYO::Kernel GYO::Orchestration GYO::Render GYO::RenderWorld)

@@ -124,6 +124,7 @@ void Camera3dAt(K::World& world, const K::EntityId id, const M::Vec3 position, c
     projection.farClip = 100.0F;
     world.Insert(id, C::Projection{projection});
     world.Insert(id, C::ComputedCamera{});
+    world.Insert(id, C::CameraView{});
     Place(world, id, position);
 }
 
@@ -229,6 +230,20 @@ TEST_CASE("visibility: the list is written only when it changes") {
     CHECK((CulledBy(world, 1) == std::vector<std::uint64_t>{2}));
 }
 
+TEST_CASE("visibility: the frustum is the camera's clipFromWorld, the view point of this frame") {
+    auto p = Make();
+    K::World& world = WorldOf(*p);
+    // The camera stands at z 50 looking along +Z: a box at z 40 is behind it, one at z 60 in front. At the origin the
+    // box at z 40 would be in front (the frustum must come from the view point, not from clipFromView alone).
+    Camera3dAt(world, 1, {0.0F, 0.0F, 50.0F});
+    Place(world, 2, {0.0F, 0.0F, 40.0F});
+    world.Insert(2, kUnitBox);
+    Place(world, 3, {0.0F, 0.0F, 60.0F});
+    world.Insert(3, kUnitBox);
+    Frames(*p, 2);
+    CHECK_MESSAGE((CulledBy(world, 1) == std::vector<std::uint64_t>{2}), "[vs-clip-from-world] the box behind the moved camera is culled");
+}
+
 TEST_CASE("visibility: without the visibility Module no camera has a list") {
     auto p = Make(false);
     K::World& world = WorldOf(*p);
@@ -245,7 +260,7 @@ TEST_CASE("visibility: Queue3d leaves out the items of the entities in the camer
     camera.computed.valid = true;
     camera.computed.viewport.size = {8, 8};
     camera.computed.clipFromView = M::MakePerspective(M::Pi / 2.0F, 1.0F, 0.1F, 100.0F);
-    camera.view = M::Matrix4{};
+    camera.view = C::ViewOf(camera.computed, T::GlobalTransform{});
     std::vector<R::Extracted3dItem> items(3);
     for (std::size_t i = 0; i < items.size(); ++i) {
         items[i].entity = 10 + i;

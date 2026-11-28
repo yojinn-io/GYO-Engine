@@ -30,6 +30,7 @@
 #include "engine/model/ModelData.hpp"
 #include "engine/render/RenderCommands.hpp"
 #include "engine/render/RenderTextures.hpp"
+#include "engine/render/TonemappingMethods.h"
 
 namespace GYO::Engine::Render {
 
@@ -93,6 +94,57 @@ struct ClearColorConfig final {
     };
     Mode mode = Mode::Default;
     Color8 color{0, 0, 0, 255};
+};
+
+// When a camera on a render target draws (render-pipeline declaration 14.11; after Godot's SubViewport
+// render_target_update_mode, scene/main/viewport.h:917-921, which is the viewport's: here it is the camera's and the
+// decision is the target's). No component: Always. A Disabled camera waits while its target has a picture; a target
+// none of whose cameras draws this frame (waiting, inactive, not valid) and that has a picture is retained
+// (RenderCommands::retained: its last picture stands for this frame's); if any camera draws it, its waiting cameras
+// draw too. A target with no picture (made, or its size changed, and not drawn on since) is drawn by its cameras. A
+// camera on the main target always draws (the window's picture is not kept from frame to frame).
+struct TargetUpdate final {
+    enum class Mode : std::uint8_t {
+        // Every frame (Godot's UPDATE_ALWAYS).
+        Always = 1,
+        // In the frame it is seen, then Disabled (Godot's UPDATE_ONCE): world_render sets Disabled at the start of the
+        // next frame.
+        Once,
+        // Not again until its target has no picture (Godot's UPDATE_DISABLED, which this one leaves on a resize).
+        Disabled,
+    };
+    Mode mode = Mode::Always;
+};
+
+// On a Camera3d: the camera draws its phases up to PostProcess on a picture of its own, linear light past 1 kept
+// (a Rgba16Float render target of the render World's), which its tonemapping pass, after its PostProcess phase, puts
+// through a curve, encodes to sRGB bytes and puts on its target (Bevy's Hdr, bevy_camera/src/components.rs:91; opt-in).
+// Not looked at on a camera that is not a Camera3d: the 2D passes blend bytes (RP-4). Render-pipeline declaration 16.
+struct Hdr final {};
+
+// How a Hdr camera's tonemapping pass maps its picture's light into 0 to 1 before it encodes it (Bevy's Tonemapping,
+// bevy_render/src/view/mod.rs:291; the curves of bevy_core_pipeline/src/tonemapping.wesl that need no lookup table). No
+// component: the default method. The values are TonemappingMethods.h's (the shader's too).
+struct Tonemapping final {
+    enum class Method : std::uint8_t {
+        // No curve: the light clamped to 0 to 1 (Bevy's None, the pass bypassed).
+        None = GYO_TONEMAP_NONE,
+        // c / (1 + c) per channel (tonemapping.wesl:230).
+        Reinhard = GYO_TONEMAP_REINHARD,
+        // Reinhard on the Rec. 709 luminance, the colour scaled to it (tonemapping.wesl:245); black stays black.
+        ReinhardLuminance = GYO_TONEMAP_REINHARD_LUMINANCE,
+        // The ACES fit of Stephen Hill (Godot's ACES; tonemapping.wesl:106-140).
+        AcesFitted = GYO_TONEMAP_ACES_FITTED,
+        // Tomasz Stachowiak's SomewhatBoringDisplayTransform (tonemapping.wesl:39-80).
+        SomewhatBoringDisplayTransform = GYO_TONEMAP_SOMEWHAT_BORING_DISPLAY_TRANSFORM,
+        // Khronos PBR Neutral (tonemapping.wesl:258-301).
+        KhronosPbrNeutral = GYO_TONEMAP_KHRONOS_PBR_NEUTRAL,
+    };
+    // No curve by default, as Godot's (scene/resources/environment.h:116, TONE_MAPPER_LINEAR): whether and how to
+    // compress the highlights is the author's art rule, and with no curve a camera looks the same with Hdr as without.
+    // Bevy defaults to a curve (TonyMcMapface) because its default is PBR lighting; GYO's comes with B4 (render-pipeline
+    // declaration 16.9, RC-A4-1).
+    Method method = Method::None;
 };
 
 // The source World's default clear colour (Bevy's ClearColor; opaque black here, where Bevy's is a dark grey: the
@@ -224,6 +276,9 @@ inline void HashValue(Kernel::Hasher&, const Camera3dDepth&) {}
 inline void HashValue(Kernel::Hasher&, const Sprite&) {}
 inline void HashValue(Kernel::Hasher&, const Shape2d&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColorConfig&) {}
+inline void HashValue(Kernel::Hasher&, const TargetUpdate&) {}
+inline void HashValue(Kernel::Hasher&, const Hdr&) {}
+inline void HashValue(Kernel::Hasher&, const Tonemapping&) {}
 inline void HashValue(Kernel::Hasher&, const ClearColor&) {}
 
 } // namespace GYO::Engine::Render

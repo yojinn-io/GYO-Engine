@@ -17,7 +17,8 @@
 //   mode when render's Presentation changed (Bevy's present_mode_changed, bevy_render/src/view/window/mod.rs:220),
 //   applies this frame's texture and mesh asks, draws the passes (2D and 3D, in their order) on the window and shows
 //   the picture, through the
-//   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It only reads the render World (SDL-5). What went wrong is told
+//   adapter (v8-arch-gyo2-sdl-system-calls-via-adapter). It reads the render World and writes only the frame's
+//   receipt, RenderFrameReceipt: what the frame got done (SDL-5). What went wrong is told
 //   through SDLGPUStatus and is never the System's error: a System's error would break the World and end the
 //   Product (O-11), and a minimized window or a refused texture is no reason for that.
 //
@@ -27,10 +28,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "engine/orchestration/Plugin.hpp"
 #include "engine/orchestration/Setup.hpp"
+#include "engine/time/MonotonicClock.hpp"
 
 namespace GYO::Plugins::SDLGPU {
 
@@ -55,13 +59,52 @@ enum class SwapchainPresentMode : std::uint8_t {
     return "Unknown";
 }
 
+// One pass of the last frame the device recorded (render-pipeline declaration 15.3). name: its debug group's name in
+// a capture tool (RenderDoc, Xcode, PIX): its place in RenderCommands::passes, its kind and its target (PassLabel,
+// src/PassLabels.hpp); the kind and the target are also in RenderCommands at that place. recorded: a render pass was
+// recorded for it (false: its target is not mapped; the main target has no picture this frame, a skipped frame; or
+// the frame's uploads failed and no pass was recorded). cpu: the time that went by on the CPU while the adapter
+// recorded it (wall time on the recording thread, as Bevy's elapsed_cpu; not the System that made the pass); 0 when
+// not recorded.
+struct PassTiming final {
+    std::string name;
+    bool recorded = false;
+    Engine::Time::Duration cpu{0};
+};
+
+// The last frame the device recorded: one PassTiming per pass of its RenderCommands, in their order. A frame
+// recorded whether it was then handed to the GPU or not (a refused submission); a frame SDL gave no command buffer
+// for is not recorded (the timing stays the one before: tell them apart by frame).
+struct FrameTiming final {
+    // The device's count of frames recorded (Submit and Capture), from 1.
+    std::uint64_t frame = 0;
+    std::vector<PassTiming> passes;
+    // Debug groups pushed (and popped) on the frame's command buffer: one per recorded pass. The one thing of the
+    // markers seen outside a capture tool (render-pipeline declaration 5.1: the count is what is checked).
+    std::uint64_t debugGroups = 0;
+};
+
+// A frame seen done on the GPU through its fence (render-pipeline declaration 15.9): it was done more than after and
+// at most within of being handed to the GPU. The fence has no time of its own (SDL_GPU 3.4 has no timestamp query,
+// declaration 4.7), so these are the device's looks at it: after is the last look that found it not done (0: none
+// did), within the look that found it done. They tell when it was seen done, not how long the GPU worked on it: the
+// span holds the GPU's work on the frames before it and how seldom the device looks (a frame on the window is looked
+// at by the next Submit, so within is about the time until then; a Capture waits for its own fence before it looks).
+struct FrameSeenDone final {
+    // As FrameTiming's.
+    std::uint64_t frame = 0;
+    Engine::Time::Duration after{0};
+    Engine::Time::Duration within{0};
+};
+
 // What became of the frames, in the Product's buffer (the counts are since the device was made).
 class SDLGPUStatus final {
 public:
     explicit SDLGPUStatus(Service& service) : service_(&service) {}
     // Frames drawn and handed to the window.
     [[nodiscard]] std::uint64_t FramesShown() const;
-    // Frames the window gave no picture for (minimized, hidden): nothing drawn, the texture asks applied.
+    // Frames the window gave no picture for (minimized, hidden): nothing drawn on it, the texture asks applied, the
+    // render targets drawn.
     [[nodiscard]] std::uint64_t FramesSkipped() const;
     // Frames SDL refused a step of. LastFailure(): SDL's text for the last refused frame, texture or pipeline.
     [[nodiscard]] std::uint64_t FramesFailed() const;
@@ -69,7 +112,8 @@ public:
     // Texture asks SDL refused (that texture has no GPU texture; also the textures made in a frame whose uploads
     // failed), mesh asks SDL refused (the same for meshes), draws skipped (their texture or mesh has no GPU object,
     // their pipeline could not be made, or a 3D pass's depth texture could not be), passes whose target is not mapped
-    // (only target 0, the window, is).
+    // (neither the main target, the window, nor a render target of render's asks that SDL made), each once a frame;
+    // draws that sample the target their pass draws on are skipped too.
     [[nodiscard]] std::uint64_t RefusedTextureAsks() const;
     [[nodiscard]] std::uint64_t RefusedMeshAsks() const;
     [[nodiscard]] std::uint64_t SkippedDraws() const;
@@ -83,10 +127,17 @@ public:
     // Presentation changes.
     [[nodiscard]] std::uint64_t PresentModeSets() const;
     [[nodiscard]] std::uint64_t RefusedPresentModes() const;
-    // The textures of render's asks that have a GPU texture now (the white one not counted).
+    // The textures of render's asks that have a GPU texture now, render targets included (the white one not counted).
     [[nodiscard]] std::size_t TextureCount() const;
     // The meshes of render's asks that have GPU buffers now.
     [[nodiscard]] std::size_t MeshCount() const;
+    // The last frame recorded: each pass's name, whether it was recorded and its CPU time, and the debug groups
+    // (render-pipeline declaration 15), as it was then (a copy); none before the first frame or without the device.
+    // To print, not judged here.
+    [[nodiscard]] std::optional<FrameTiming> LastFrameTiming() const;
+    // The latest frame seen done on the GPU, between which two looks; none before one is seen. Usually a frame or two
+    // before LastFrameTiming's: nothing waits for the GPU to tell it.
+    [[nodiscard]] std::optional<FrameSeenDone> LastFrameSeenDone() const;
 
 private:
     Service* service_;

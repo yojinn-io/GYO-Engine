@@ -234,6 +234,25 @@
     "--test-case=dummy: a mixer configuration*"
    ],
    "expect": "REQUIRE_FALSE\\( product.has_value\\(\\) \\) is NOT correct"
+  },
+  {
+   "id": "sdl-unattended-handler-not-installed",
+   "what": "the unattended SDL assertion handler is not installed: SDL's default handler would show its dialog (the forced case sets the hint to abort as a second net, so it ends without the handler's text instead)",
+   "guards": [
+    "sdl.zh-Hant.md 第 7 節",
+    "render-pipeline-declaration 第 14.9 節"
+   ],
+   "file": "plugins/sdl/tests/adapters/sdl/UnattendedAssertions.cpp",
+   "find": "    SDL_SetAssertionHandler(&FailUnattended, nullptr);\n",
+   "replace": "",
+   "target": "gyo_sdl_tests",
+   "command": [
+    "{cmake}",
+    "-DEXE={build}/plugins/sdl/tests/gyo_sdl_tests",
+    "-P",
+    "plugins/sdl/tests/ExpectUnattendedAbort.cmake"
+   ],
+   "expect": "\\[sdl\\-assert\\-no\\-handler\\-text\\]"
   }
  ]
 }
