@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,10 +13,13 @@ import (
 )
 
 // The internal protocol's headers (declaration D4). HeaderUser is the user the
-// gateway verified (0: the system, such as a Match); HeaderIdempotency is the
-// caller's key for a request that changes state.
+// gateway verified (0: the system, such as a Match); HeaderName is the name
+// that user signed in with, base64url without padding (a header holds ASCII
+// only; display-name declaration 5.1), absent when they have none;
+// HeaderIdempotency is the caller's key for a request that changes state.
 const (
 	HeaderUser        = "X-GYO-User"
+	HeaderName        = "X-GYO-Name"
 	HeaderIdempotency = "Idempotency-Key"
 )
 
@@ -84,4 +88,11 @@ func UserOf(r *http.Request) (uint64, bool) {
 	}
 	user, err := strconv.ParseUint(value, 10, 64)
 	return user, err == nil
+}
+
+// NameOf reads the internal protocol's name header: empty when it is missing,
+// false when it is not base64url.
+func NameOf(r *http.Request) (string, bool) {
+	name, err := base64.RawURLEncoding.DecodeString(r.Header.Get(HeaderName))
+	return string(name), err == nil
 }

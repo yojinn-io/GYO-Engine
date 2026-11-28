@@ -60,7 +60,9 @@ type Service struct {
 }
 
 type member struct {
-	user   uint64
+	user uint64
+	// name: the one the member signed in with (the gateway's name header).
+	name   string
 	ready  bool
 	ticket *matches.Ticket
 }
@@ -112,6 +114,7 @@ type Summary struct {
 
 type Member struct {
 	UserID uint64 `json:"userId"`
+	Name   string `json:"name"`
 	Ready  bool   `json:"ready"`
 }
 
@@ -143,6 +146,16 @@ func user(w http.ResponseWriter, r *http.Request) (uint64, bool) {
 	if !ok || caller == 0 {
 		api.WriteError(w, http.StatusUnauthorized, "no_user")
 		return 0, false
+	}
+	return caller, true
+}
+
+// name reads the name the caller signed in with (empty: none).
+func name(w http.ResponseWriter, r *http.Request) (string, bool) {
+	caller, ok := api.NameOf(r)
+	if !ok {
+		api.WriteError(w, http.StatusBadRequest, "invalid_name")
+		return "", false
 	}
 	return caller, true
 }
@@ -226,6 +239,10 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	callerName, ok := name(w, r)
+	if !ok {
+		return
+	}
 	var request struct {
 		Mode string `json:"mode"`
 		Map  string `json:"map"`
@@ -250,13 +267,17 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	}
 	s.next++
 	created := &room{id: s.next, mode: request.Mode, mapID: request.Map, owner: caller,
-		members: []*member{{user: caller}}, state: Open}
+		members: []*member{{user: caller, name: callerName}}, state: Open}
 	s.rooms[created.id] = created
 	api.WriteJSON(w, http.StatusOK, s.view(created, caller))
 }
 
 func (s *Service) join(w http.ResponseWriter, r *http.Request) {
 	caller, ok := user(w, r)
+	if !ok {
+		return
+	}
+	callerName, ok := name(w, r)
 	if !ok {
 		return
 	}
@@ -281,7 +302,7 @@ func (s *Service) join(w http.ResponseWriter, r *http.Request) {
 	if !s.leaveOpenRooms(w, caller) {
 		return
 	}
-	found.members = append(found.members, &member{user: caller})
+	found.members = append(found.members, &member{user: caller, name: callerName})
 	api.WriteJSON(w, http.StatusOK, s.view(found, caller))
 }
 
@@ -373,7 +394,7 @@ func (s *Service) start(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 			return
 		}
-		request.Players = append(request.Players, m.user)
+		request.Players = append(request.Players, matches.Player{UserID: m.user, Name: m.name})
 	}
 	key, err := attemptKey()
 	if err != nil {
@@ -501,7 +522,7 @@ func (s *Service) summary(r *room) Summary {
 func (s *Service) view(r *room, caller uint64) Room {
 	view := Room{Summary: s.summary(r), Owner: r.owner, Members: []Member{}}
 	for _, m := range r.members {
-		view.Members = append(view.Members, Member{UserID: m.user, Ready: m.ready})
+		view.Members = append(view.Members, Member{UserID: m.user, Name: m.name, Ready: m.ready})
 		if m.user == caller && m.ticket != nil {
 			ticket := *m.ticket
 			view.Connect = &ticket

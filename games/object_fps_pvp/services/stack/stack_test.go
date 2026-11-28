@@ -96,8 +96,13 @@ func (p *player) refused(method, path string, in any, wantStatus int, wantCode s
 
 func signIn(t *testing.T, s *Stack, device string) *player {
 	t.Helper()
+	return signInAs(t, s, map[string]string{"deviceId": device})
+}
+
+func signInAs(t *testing.T, s *Stack, request map[string]string) *player {
+	t.Helper()
 	p := &player{t: t, base: s.GatewayURL}
-	out := p.must(http.MethodPost, "/v1/session", "", map[string]string{"deviceId": device})
+	out := p.must(http.MethodPost, "/v1/session", "", request)
 	p.session = out["sessionToken"].(string)
 	p.user = uint64(out["userId"].(float64))
 	return p
@@ -149,7 +154,8 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 	}
 	spec := provider.specs[0]
 	if len(spec.Players) != 2 || spec.Players[0] == spec.Players[1] ||
-		(spec.Players[0] != host.user && spec.Players[1] != host.user) || (spec.Players[0] != guest.user && spec.Players[1] != guest.user) {
+		(spec.Players[0].UserID != host.user && spec.Players[1].UserID != host.user) ||
+		(spec.Players[0].UserID != guest.user && spec.Players[1].UserID != guest.user) {
 		t.Fatalf("the Match waits for %v, want the room's members %d and %d", spec.Players, host.user, guest.user)
 	}
 	if spec.Saves != strings.TrimPrefix(s.SavesURL, "http://") {
@@ -182,6 +188,41 @@ func TestTwoPlayersCreateJoinReadyStartAndGetTheirTargets(t *testing.T) {
 	}
 	if s.Matches.Running() != 0 {
 		t.Fatal("an ended Match is still counted as running")
+	}
+}
+
+// Each player's name goes from the sign-in to the room and the Match: what the
+// identity service made of it, the same in every step.
+func TestTheNamesGoFromTheSignInToTheRoomAndTheMatch(t *testing.T) {
+	provider := newFakeProvider()
+	s := start(t, provider)
+	host := signInAs(t, s, map[string]string{"deviceId": "device-host", "name": "  Host\u202e  の\u200bMac "})
+	guest := signInAs(t, s, map[string]string{"deviceId": "device-guest"})
+	room := host.must(http.MethodPost, "/v1/rooms", "", map[string]string{"mode": "core_pvp", "map": "pvp_training_v1"})
+	guest.must(http.MethodPost, roomPath(room, "join"), "", nil)
+	want := map[uint64]string{host.user: "Host のMac", guest.user: ""}
+	for _, p := range []*player{host, guest} {
+		members := p.must(http.MethodGet, roomPath(room, ""), "", nil)["members"].([]any)
+		if len(members) != 2 {
+			t.Fatalf("user %d sees members %v", p.user, members)
+		}
+		for _, m := range members {
+			member := m.(map[string]any)
+			if user := uint64(member["userId"].(float64)); member["name"] != want[user] {
+				t.Fatalf("user %d sees member %d named %q, want %q", p.user, user, member["name"], want[user])
+			}
+		}
+	}
+	host.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
+	guest.must(http.MethodPost, roomPath(room, "ready"), "", map[string]bool{"ready": true})
+	host.must(http.MethodPost, roomPath(room, "start"), "", nil)
+	if len(provider.specs) != 1 || len(provider.specs[0].Players) != 2 {
+		t.Fatalf("the provider was asked %+v", provider.specs)
+	}
+	for _, player := range provider.specs[0].Players {
+		if player.Name != want[player.UserID] {
+			t.Fatalf("the Match is told user %d is named %q, want %q", player.UserID, player.Name, want[player.UserID])
+		}
 	}
 }
 

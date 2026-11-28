@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -46,10 +48,29 @@ func fakeMatch() int {
 		os.Stderr.WriteString("fake match: arguments " + arguments + "\n")
 		return 3
 	}
-	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	input := bufio.NewReader(os.Stdin)
+	line, _ := input.ReadString('\n')
 	if line != hex.EncodeToString([]byte{1, 2, 3})+"\n" {
 		os.Stderr.WriteString("fake match: no key on the standard input\n")
 		return 4
+	}
+	rest, _ := io.ReadAll(input)
+	named := os.Getenv("GYO_FAKE_MATCH") == "named"
+	if strings.Contains(arguments, "--player-names-stdin") != named {
+		os.Stderr.WriteString("fake match: --player-names-stdin in " + arguments + "\n")
+		return 5
+	}
+	wantRest := ""
+	if named {
+		wantRest = `{"players":[{"userId":7,"name":"名前, \"quoted\""},{"userId":9,"name":""}]}` + "\n"
+	}
+	if string(rest) != wantRest {
+		os.Stderr.WriteString("fake match: after the key " + strconv.Quote(string(rest)) + "\n")
+		return 6
+	}
+	if strings.Contains(arguments, "名前") {
+		os.Stderr.WriteString("fake match: a name on the command line\n")
+		return 7
 	}
 	time.Sleep(50 * time.Millisecond)
 	return 0
@@ -59,7 +80,8 @@ func TestLocalStartsAMatchProcessAndFreesItsPort(t *testing.T) {
 	said := &output{}
 	local := &Local{Command: os.Args[0], Arguments: []string{"-test.run=^$"}, Advertise: "127.0.0.1",
 		FirstPort: 7811, LastPort: 7811, Environment: []string{"GYO_FAKE_MATCH=1"}, Output: said}
-	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Mode: "core_pvp", Map: "pvp_corners_v1", Players: []uint64{7, 9}}
+	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Mode: "core_pvp", Map: "pvp_corners_v1",
+		Players: []Player{{UserID: 7}, {UserID: 9}}}
 	running, err := local.Start(context.Background(), spec)
 	if err != nil {
 		t.Fatal(err)
@@ -84,4 +106,24 @@ func TestLocalStartsAMatchProcessAndFreesItsPort(t *testing.T) {
 		t.Fatalf("the port of an ended Match is not free: %v", err)
 	}
 	<-again.Ended
+}
+
+func TestLocalHandsTheNamesOnTheStandardInput(t *testing.T) {
+	said := &output{}
+	local := &Local{Command: os.Args[0], Arguments: []string{"-test.run=^$"}, Advertise: "127.0.0.1",
+		FirstPort: 7811, LastPort: 7811, Environment: []string{"GYO_FAKE_MATCH=named"}, Output: said}
+	spec := Spec{MatchID: 77, Key: []byte{1, 2, 3}, Capacity: 3, Mode: "core_pvp", Map: "pvp_corners_v1",
+		Players: []Player{{UserID: 7, Name: "名前, \"quoted\""}, {UserID: 9}}}
+	running, err := local.Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-running.Ended:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the Match process did not end")
+	}
+	if strings.Contains(said.String(), "fake match:") {
+		t.Fatalf("the Match was not started as asked: %s", said.String())
+	}
 }

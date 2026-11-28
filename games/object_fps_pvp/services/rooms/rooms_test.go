@@ -60,3 +60,33 @@ func jsonID(room map[string]any) string {
 	encoded, _ := json.Marshal(room["id"])
 	return string(encoded)
 }
+
+func TestANameHeaderThatIsNotBase64urlIsRefused(t *testing.T) {
+	service, err := New(Config{Matches: api.NewClient("http://127.0.0.1:1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := service.Handler()
+	send := func(path, name string) (int, map[string]any) {
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"mode":"core_pvp","map":"pvp_training_v1"}`))
+		request.Header.Set(api.HeaderUser, "1")
+		request.Header.Set(api.HeaderName, name)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		var out map[string]any
+		_ = json.Unmarshal(recorder.Body.Bytes(), &out)
+		return recorder.Code, out
+	}
+	if status, out := send("/internal/v1/rooms", "not base64!"); status != http.StatusBadRequest || out["error"] != "invalid_name" {
+		t.Fatalf("create with a bad name header: %d %v, want 400 invalid_name", status, out)
+	}
+	_, room := send("/internal/v1/rooms", "")
+	request := httptest.NewRequest(http.MethodPost, "/internal/v1/rooms/"+jsonID(room)+"/join", nil)
+	request.Header.Set(api.HeaderUser, "2")
+	request.Header.Set(api.HeaderName, "not base64!")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "invalid_name") {
+		t.Fatalf("join with a bad name header: %d %s, want 400 invalid_name", recorder.Code, recorder.Body.String())
+	}
+}

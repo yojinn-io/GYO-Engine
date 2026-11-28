@@ -16,9 +16,14 @@ var key = bytes.Repeat([]byte{3}, token.KeySize)
 
 func login(t *testing.T, s *Service, device string) (int, Session) {
 	t.Helper()
+	return loginWith(t, s, map[string]string{"deviceId": device})
+}
+
+func loginWith(t *testing.T, s *Service, request map[string]string) (int, Session) {
+	t.Helper()
+	body, _ := json.Marshal(request)
 	recorder := httptest.NewRecorder()
-	s.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/internal/v1/sessions",
-		strings.NewReader(`{"deviceId":"`+device+`"}`)))
+	s.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/internal/v1/sessions", bytes.NewReader(body)))
 	var session Session
 	_ = json.Unmarshal(recorder.Body.Bytes(), &session)
 	return recorder.Code, session
@@ -44,9 +49,25 @@ func TestTheSessionTokenNamesTheUser(t *testing.T) {
 	now := time.Unix(1_900_000_000, 0)
 	s, _ := New(Config{SessionKey: key, SessionTTL: time.Hour, Now: func() time.Time { return now }})
 	_, session := login(t, s, "device")
-	user, err := token.VerifySession(key, session.SessionToken, now)
-	if err != nil || user != session.UserID || session.ExpiresAt != now.Add(time.Hour).Unix() {
-		t.Fatalf("session %+v: user %d, %v", session, user, err)
+	verified, err := token.VerifySession(key, session.SessionToken, now)
+	if err != nil || verified != (token.Session{UserID: session.UserID}) || session.Name != "" ||
+		session.ExpiresAt != now.Add(time.Hour).Unix() {
+		t.Fatalf("session %+v: token says %+v, %v", session, verified, err)
+	}
+}
+
+func TestTheSessionTokenHoldsTheNormalizedName(t *testing.T) {
+	now := time.Unix(1_900_000_000, 0)
+	s, _ := New(Config{SessionKey: key, Now: func() time.Time { return now }})
+	_, session := loginWith(t, s, map[string]string{"deviceId": "device", "name": "  Kuro\u202e  の\tMac\n "})
+	verified, err := token.VerifySession(key, session.SessionToken, now)
+	if err != nil || session.Name != "Kuro のMac" || verified != (token.Session{UserID: session.UserID, Name: session.Name}) {
+		t.Fatalf("session %+v: token says %+v, %v; want the name Kuro のMac in both", session, verified, err)
+	}
+	// The name is not kept: the same device signs in with another one, and that is the one it gets.
+	_, again := loginWith(t, s, map[string]string{"deviceId": "device", "name": "Other"})
+	if again.UserID != session.UserID || again.Name != "Other" {
+		t.Fatalf("the same device signed in again as %+v, want user %d named Other", again, session.UserID)
 	}
 }
 

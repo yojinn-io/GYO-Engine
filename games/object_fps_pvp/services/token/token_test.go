@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,18 +77,33 @@ func TestAdmissionRefusals(t *testing.T) {
 }
 
 func TestSessionRoundTrip(t *testing.T) {
-	session := SignSession(testKey, 7, now.Add(time.Hour))
-	user, err := VerifySession(testKey, session, now)
-	if err != nil || user != 7 {
-		t.Fatalf("session: user %d, %v; want 7, accepted", user, err)
+	for _, want := range []Session{{UserID: 7}, {UserID: 7, Name: "名前 Name"},
+		{UserID: 9, Name: strings.Repeat("x", MaxSessionName)}} {
+		got, err := VerifySession(testKey, SignSession(testKey, want, now.Add(time.Hour)), now)
+		if err != nil || got != want {
+			t.Fatalf("session %+v: got %+v, %v; want it back, accepted", want, got, err)
+		}
 	}
 }
 
 func TestSessionRefusals(t *testing.T) {
-	session := SignSession(testKey, 7, now.Add(time.Hour))
+	session := SignSession(testKey, Session{UserID: 7, Name: "ab"}, now.Add(time.Hour))
 	payload, signature, _ := bytesCut(session)
-	other := SignSession(testKey, 8, now.Add(time.Hour))
+	other := SignSession(testKey, Session{UserID: 8, Name: "ab"}, now.Add(time.Hour))
 	otherPayload, _, _ := bytesCut(other)
+	decoded, _ := encoding.DecodeString(payload)
+	// Each byte of the name changed, the length kept: the signature no longer matches.
+	renamed := func(i int) string {
+		changed := append([]byte{}, decoded...)
+		changed[sessionFixed+i] ^= 1
+		return encoding.EncodeToString(changed) + "." + signature
+	}
+	// The length field says more (or fewer) bytes than follow, signed so the layout check is reached first.
+	misLength := func(length byte) string {
+		changed := append([]byte{}, decoded...)
+		changed[17] = length
+		return encoding.EncodeToString(changed) + "." + encoding.EncodeToString(mac(testKey, changed))
+	}
 	cases := []struct {
 		name    string
 		key     []byte
@@ -100,7 +116,13 @@ func TestSessionRefusals(t *testing.T) {
 		{"another key", bytes.Repeat([]byte{1}, KeySize), session, now, ErrMAC},
 		{"another user's payload", testKey, otherPayload + "." + signature, now, ErrMAC},
 		{"expired", testKey, session, now.Add(time.Hour), ErrExpired},
-		{"version", testKey, SignSessionVersion(testKey, 2, 7, now.Add(time.Hour)), now, ErrVersion},
+		{"version 1 (no name)", testKey, SignSessionVersion(testKey, 1, 7, now.Add(time.Hour)), now, ErrVersion},
+		{"version 3", testKey, SignSessionVersion(testKey, 3, 7, now.Add(time.Hour)), now, ErrVersion},
+		{"name byte 0 changed", testKey, renamed(0), now, ErrMAC},
+		{"name byte 1 changed", testKey, renamed(1), now, ErrMAC},
+		{"length past the end", testKey, misLength(3), now, ErrLength},
+		{"length short of the end", testKey, misLength(1), now, ErrLength},
+		{"empty payload", testKey, "." + signature, now, ErrLength},
 	}
 	for _, c := range cases {
 		if _, err := VerifySession(c.key, c.session, c.now); !errors.Is(err, c.want) {
@@ -118,10 +140,11 @@ func bytesCut(s string) (string, string, bool) {
 	return s, "", false
 }
 
-// SignSessionVersion is SignSession with another version byte, signed, so
-// the version check is reached.
+// SignSessionVersion is a version 1 layout (version u8 | userId u64 |
+// expiresAt u64, no name) with the given version byte, signed, so the version
+// check is reached.
 func SignSessionVersion(key []byte, version byte, userID uint64, expiresAt time.Time) string {
-	payload := make([]byte, sessionSigned)
+	payload := make([]byte, 1+8+8)
 	payload[0] = version
 	payload[8] = byte(userID)
 	payload[16] = byte(expiresAt.Unix())

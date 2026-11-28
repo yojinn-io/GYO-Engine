@@ -35,7 +35,9 @@ func TestTheGatewayCarriesWhoAndTheKey(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), login)
 
 	create := httptest.NewRequest(http.MethodPost, "/v1/rooms", strings.NewReader(`{}`))
-	create.Header.Set("Authorization", "Bearer "+token.SignSession(key, 7, time.Now().Add(time.Hour)))
+	create.Header.Set("Authorization", "Bearer "+token.SignSession(key, token.Session{UserID: 7, Name: "名前"},
+		time.Now().Add(time.Hour)))
+	create.Header.Set(api.HeaderName, "Zm9yZ2Vk") // nor is its own name
 	create.Header.Set(api.HeaderIdempotency, "k-1")
 	create.Header.Set(api.HeaderUser, "99")
 	handler.ServeHTTP(httptest.NewRecorder(), create)
@@ -48,6 +50,14 @@ func TestTheGatewayCarriesWhoAndTheKey(t *testing.T) {
 	}
 	if got := (*seen)[1].Get(api.HeaderUser); got != "7" {
 		t.Fatalf("the room request carried user %q, want the session's 7", got)
+	}
+	if names := (*seen)[0].Values(api.HeaderName); len(names) != 0 {
+		t.Fatalf("the sign-in carried a name %v: an anonymous request has none", names)
+	}
+	forwarded := httptest.NewRequest(http.MethodGet, "/", nil)
+	forwarded.Header = (*seen)[1]
+	if got, ok := api.NameOf(forwarded); !ok || got != "名前" {
+		t.Fatalf("the room request carried name %q (%v), want the session's 名前", got, ok)
 	}
 	if got := (*seen)[1].Get(api.HeaderIdempotency); got != "k-1" {
 		t.Fatalf("the room request carried key %q, want the Client's k-1", got)

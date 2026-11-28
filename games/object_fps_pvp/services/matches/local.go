@@ -3,6 +3,7 @@ package matches
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,8 +20,10 @@ import (
 type Local struct {
 	// Command is the Match executable; Arguments come before the ones Local
 	// adds (--port, --match-id, --capacity, --arena, --saves,
-	// --admission-key-stdin, --idle-seconds). The key goes to the Match's standard input, in neither
-	// its command line nor its environment.
+	// --admission-key-stdin, --idle-seconds, --expect-users,
+	// --player-names-stdin). The key goes to the Match's standard input, in
+	// neither its command line nor its environment; so do the players' names,
+	// on its second line (display-name declaration 5.1).
 	Command   string
 	Arguments []string
 	// Advertise is the address players are told to connect to (an IPv4
@@ -69,15 +72,20 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	}
 	if len(spec.Players) > 0 {
 		users := make([]string, len(spec.Players))
-		for j, user := range spec.Players {
-			users[j] = strconv.FormatUint(user, 10)
+		for j, player := range spec.Players {
+			users[j] = strconv.FormatUint(player.UserID, 10)
 		}
 		arguments = append(arguments, "--expect-users", strings.Join(users, ","))
+	}
+	input := hex.EncodeToString(spec.Key) + "\n"
+	if roster, named := names(spec.Players); named {
+		arguments = append(arguments, "--player-names-stdin")
+		input += roster + "\n"
 	}
 	// Not CommandContext: the Match outlives the allocation request.
 	command := exec.Command(l.Command, arguments...)
 	command.Env = append(os.Environ(), l.Environment...)
-	command.Stdin = strings.NewReader(hex.EncodeToString(spec.Key) + "\n")
+	command.Stdin = strings.NewReader(input)
 	var output io.Writer = os.Stdout
 	if l.Output != nil {
 		output = l.Output
@@ -97,6 +105,25 @@ func (l *Local) Start(ctx context.Context, spec Spec) (Running, error) {
 	log.Printf("match started match=%d port=%d pid=%d", spec.MatchID, port, command.Process.Pid)
 	process := command.Process
 	return Running{Address: l.Advertise + ":" + strconv.Itoa(port), Ended: ended, Stop: func() { _ = process.Kill() }}, nil
+}
+
+// names is the players' roster as one line of JSON,
+// {"players":[{"userId":7,"name":"..."}]}; false when no player has a name.
+func names(players []Player) (string, bool) {
+	named := false
+	for _, player := range players {
+		named = named || player.Name != ""
+	}
+	if !named {
+		return "", false
+	}
+	roster, err := json.Marshal(struct {
+		Players []Player `json:"players"`
+	}{players})
+	if err != nil {
+		return "", false
+	}
+	return string(roster), true
 }
 
 func (l *Local) takePort() (int, error) {

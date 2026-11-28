@@ -1,8 +1,8 @@
 // Package gateway is the entry to everything but the Match (gateway
 // declaration D2, D3): the external protocol's adapter. It keeps no state: it
-// checks the session token (self-contained, no lookup), puts the user it names
-// and the client's idempotency key on an internal request (D4), sends it to the
-// service behind and hands the answer back as it is.
+// checks the session token (self-contained, no lookup), puts the user it names,
+// that user's name and the client's idempotency key on an internal request (D4),
+// sends it to the service behind and hands the answer back as it is.
 package gateway
 
 import (
@@ -52,26 +52,26 @@ func (g *Gateway) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/session", func(w http.ResponseWriter, r *http.Request) {
 		g.forward(w, r, g.config.Identity, "/internal/v1/sessions", api.Nobody)
 	})
-	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", api.As(user))
+	mux.HandleFunc("GET /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
 	}))
-	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", api.As(user))
+	mux.HandleFunc("POST /v1/rooms", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
+		g.forward(w, r, g.config.Rooms, "/internal/v1/rooms", user)
 	}))
-	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+	mux.HandleFunc("GET /v1/rooms/{id}", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
 		if id, ok := roomID(w, r); ok {
-			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, api.As(user))
+			g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id, user)
 		}
 	}))
 	for _, action := range []string{"join", "leave", "ready", "start"} {
-		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
+		mux.HandleFunc("POST /v1/rooms/{id}/"+action, g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
 			if id, ok := roomID(w, r); ok {
-				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, api.As(user))
+				g.forward(w, r, g.config.Rooms, "/internal/v1/rooms/"+id+"/"+action, user)
 			}
 		}))
 	}
-	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, user uint64) {
-		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user, 10), api.As(user))
+	mux.HandleFunc("GET /v1/saves/me", g.signedIn(func(w http.ResponseWriter, r *http.Request, user api.Caller) {
+		g.forward(w, r, g.config.Saves, "/internal/v1/saves/"+strconv.FormatUint(user.User, 10), user)
 	}))
 	return unknownAsJSON(mux)
 }
@@ -100,15 +100,16 @@ func unknownAsJSON(mux *http.ServeMux) http.Handler {
 	})
 }
 
-// signedIn checks the bearer session token before the route.
-func (g *Gateway) signedIn(route func(http.ResponseWriter, *http.Request, uint64)) http.HandlerFunc {
+// signedIn checks the bearer session token before the route, which gets the
+// user and the name the token holds.
+func (g *Gateway) signedIn(route func(http.ResponseWriter, *http.Request, api.Caller)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, found := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !found {
 			api.WriteError(w, http.StatusUnauthorized, "no_session")
 			return
 		}
-		user, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())
+		verified, err := token.VerifySession(g.config.SessionKey, session, g.config.Now())
 		if err != nil {
 			code := "invalid_session"
 			if errors.Is(err, token.ErrExpired) {
@@ -117,7 +118,7 @@ func (g *Gateway) signedIn(route func(http.ResponseWriter, *http.Request, uint64
 			api.WriteError(w, http.StatusUnauthorized, code)
 			return
 		}
-		route(w, r, user)
+		route(w, r, api.Caller{User: verified.UserID, Name: verified.Name})
 	}
 }
 

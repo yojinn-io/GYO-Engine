@@ -1,6 +1,6 @@
 # 玩家的顯示名稱：事前宣告（`v8-arch-gyo2-display-name`）
 
-任務卡，2026-11-28。這一階段只寫事前宣告，交使用者核准；核准前不寫實作程式。#367（模式配置，`v8-arch-gyo2-mode-config`）改的是同一個遊戲的檔案（`rooms.go`、`local.go`、`match_main.cpp`、`PvpWorld.cpp`、`RoomScene.cpp` 都在它的範圍裡），**它合併之前不動程式**。作者 Opus 5.5／high。
+任務卡，2026-11-28。**2026-11-28 使用者核准（「照建議，全部核准」）**：H1 (a)、N1 (I)、S1 (a)、L1 (b) 32 個 code point、D1 (a)；R1 照舊不定。#367 已合併（99e20ae3），照第 10 節動工。原本：這一階段只寫事前宣告，交使用者核准；核准前不寫實作程式。#367（模式配置，`v8-arch-gyo2-mode-config`）改的是同一個遊戲的檔案（`rooms.go`、`local.go`、`match_main.cpp`、`PvpWorld.cpp`、`RoomScene.cpp` 都在它的範圍裡），**它合併之前不動程式**。作者 Opus 5.5／high。
 
 行號以 `gyo2` ad28dfa4 為準；#367 合併後行號會動，實作時重對。標「#372」的是頭頂 UI 卡的宣告（`claude/gyo2-overhead-ui-f702b2`，`overhead-ui-declaration.zh-Hant.md`）。
 
@@ -232,6 +232,8 @@ v8-arch-gyo2-display-name
 ---
 
 ## 11. 要使用者決定的
+
+**結果（2026-11-28，使用者：「照建議，全部核准」）**：H1 (a)、N1 (I)、S1 (a)、L1 (b)、D1 (a) 都照建議；R1 不定。
 
 | # | 問題 | 選項 | 建議與理由 |
 |---|---|---|---|
