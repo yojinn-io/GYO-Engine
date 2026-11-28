@@ -186,7 +186,7 @@ rotation 都先 `NormalizeOrIdentity`（同 `CharacterRig.cpp:311-312`）。上�
 | K-11 | pole 在直線上時取目前 mid 那一側；鏈也是直的就取固定的垂直方向 | **偏離 Godot**：Godot 的投影方向為 0 時，mid 落在直線上、骨長不保（`two_bone_ik_3d.cpp:814-831` 直接用 0 向量）。Match 的握點與 pole 都是資料，直線不是不可能 | 照 Godot；當成 Programmer Error |
 | K-12 | 祖先的旋轉用四元數連乘，不看縮放 | 同 Godot（`two_bone_ik_3d.h:121-141`）；縮放均勻時是精確的；PvP 的骨架縮放均勻（Retarget 的規則 3 也要求參考姿勢均勻） | 從矩陣分解旋轉（非均勻縮放時也沒有單一解） |
 | K-13 | 權重＝兩根骨的局部旋轉各自 slerp；0 直接返回 | Godot influence（`skeleton_3d.cpp:1267`）、Unity 文件同義；0 逐位元不變，Match 在不開 IK 的模式下結果和現在相同 | 夾住到 [0, 1]；位置插值後再解 |
-| K-14 | 名字 `SolveTwoBoneIK`：縮寫全大寫 | `rebuild-naming.zh-Hant.md` N17 的縮寫規則（不准一大一小）。**`ik`→`IK` 要寫進縮寫表**；那份文件是架構師的，本卡不改，請主會話轉 | `SolveTwoBoneIk` |
+| K-14 | 名字 `SolveTwoBoneIK`：縮寫全大寫 | `rebuild-naming.zh-Hant.md` N17 的縮寫規則（不准一大一小）。**`ik`→`IK` 由本卡在 E2 的 commit 寫進縮寫表**（`rebuild-naming.zh-Hant.md` 第 65 行，括號附批次代號；先例：`sdl`、`spsc` 是 `v8-arch-gyo2-sdl-a`、`gpu` 是 `v8-arch-gyo2-sdl-r2a` 在各自的 PR 加的；主會話 2026-11-28 指示）。`ik` 不出現在目錄名，守衛的 `ACRONYMS` 不改；函式名由審查看 | `SolveTwoBoneIk` |
 | K-15 | 遊戲層不改 | E1、E2 是 Engine 批；換用新函式在 G2（`ComposeBody`）、G3（IK）、G4（事件）。這一批 PvP 的姿勢、權威 digest 都不變 | 這一批順手改 `CharacterRig` |
 | K-16 | 最短弧的四元數（from→to）放在 `Animation.cpp` 的匿名 namespace，不加進 core Math | 只有這裡用；core 的公開介面多一個函式要它自己的測試與審查。有第二個使用者再搬 | 加 `Math::MakeQuaternionFromTo` |
 
@@ -275,6 +275,7 @@ rotation 都先 `NormalizeOrIdentity`（同 `CharacterRig.cpp:311-312`）。上�
 - 檔頭：加一行更新（兩個批次代號、這份宣告、使用者決定的出處）。
 - **4.2 混合**：加逐節點的 `Blend` 與 `ApplyAdditive`（第 3.1、3.2 節的式子、K-1～K-4 的 Bevy 對照）；刪掉「分層、additive 是遊戲的規則，可以用這個與逐節點的覆寫組出來」，改成「哪些節點算上半身、權重多少、何時加 additive 是遊戲的規則；混合本身在這裡」。
 - **新 4.6 事件：`CrossedEvents`**：第 3.3 節的表、U1 的決定、K-5～K-7；事件資料（`gyo.anim_events`）的讀法與事件→聲音仍是遊戲的。
+- **`rebuild-naming.zh-Hant.md` 第 65 行**（E2）：縮寫表加 `ik`→`IK`（K-14）。
 - **新 4.7 IK：`SolveTwoBoneIK`**：第 3.4 節的步驟、U2 的決定、K-8～K-13；Godot 的對照；Match 也跑（D5 (b)）。
 - **4.5 跨平台**：加一句 IK 用 `sqrt`、`acos`（在 `Slerp` 裡），跨平台同樣不保證逐位元；IK 只在 Match 判（研究 R3），所以沒有新的 RC。
 - **第 5 節**：刪掉「動畫事件：這張卡沒做……列在後續」那一條；「命中形狀、何時切片段、分層、additive、瞄準、附掛：遊戲規則」改成「命中形狀、何時切片段、哪些骨是哪一層、權重與時機、瞄準、附掛、握點、IK 的鏈與何時開：遊戲規則」；加「FABRIK、CCD、roll 對齊、末端旋轉（U2 選 (a) 時）：沒有點名的需求，不做」。
@@ -288,7 +289,6 @@ rotation 都先 `NormalizeOrIdentity`（同 `CharacterRig.cpp:311-312`）。上�
 - FABRIK、CCD、roll 對齊、拉長（Unreal Allow Stretching）：沒有點名的需求。
 - 跨平台決定性的 IK（研究 R3、R5 (e)）。
 - core Math 的新函式（K-16）。
-- `rebuild-naming` 的縮寫表（K-14，轉主會話）。
 
 ---
 
