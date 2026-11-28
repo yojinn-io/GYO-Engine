@@ -35,7 +35,7 @@ constexpr std::array<M::Vec3, 5> kStimuli{{{4.0F, 4.0F, 4.0F}, {0.5F, 0.25F, 0.1
 void CheckCurve(const Method method, const std::array<std::array<float, 3>, 5>& expected, const char* tag) {
     for (std::size_t i = 0; i < kStimuli.size(); ++i) {
         const M::Vec3 got = R::Tonemap(method, kStimuli[i]);
-        CHECK_MESSAGE(Near(got, expected[i]), tag << " stimulus " << i << ": " << got.x << ", " << got.y << ", " << got.z);
+        CHECK_MESSAGE(Near(got, expected[i]), std::string(tag) << " stimulus " << i << ": " << got.x << ", " << got.y << ", " << got.z);
     }
 }
 

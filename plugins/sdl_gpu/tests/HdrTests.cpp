@@ -167,8 +167,8 @@ TEST_CASE("sdl_gpu hdr: light past 1 on a Rgba16Float picture comes out of each 
             commands.passes.push_back(R::TonemappingPass(picture, std::nullopt, std::nullopt, curve.method));
             const Picture p = c.Frame(commands);
             const R::Color8 expected = R::TonemapToBytes(curve.method, {light[0], light[1], light[2]}, light[3]);
-            CHECK_MESSAGE(p.tally.skippedDraws == 0, curve.tag << " drawn: " << p.tally.lastRefusal);
-            CHECK_MESSAGE(p.Near(0, 0, 8, 8, expected), curve.tag << " light " << light[0] << ", " << light[1] << ", " << light[2]);
+            CHECK_MESSAGE(p.tally.skippedDraws == 0, std::string(curve.tag) << " drawn: " << p.tally.lastRefusal);
+            CHECK_MESSAGE(p.Near(0, 0, 8, 8, expected), std::string(curve.tag) << " light " << light[0] << ", " << light[1] << ", " << light[2]);
         }
     }
 }
