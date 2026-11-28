@@ -100,6 +100,7 @@
 - [scripts/base_mutations.json](scripts/base_mutations.json)：GYO2 線 Base 的突變清單（`bs-`，`IdIssuer`／`CurrentThreadSerial`；2026-11-19 從 Kernel 的清單搬來，`v8-arch-gyo2-move-bs-mutants`）。
 - [ink-spike-declaration.zh-Hant.md](ink-spike-declaration.zh-Hant.md)：`v8-arch-gyo2-ink-spike` 的事前宣告（Ink＋inkcpp 的單機 spike；第 11 節使用者的決定、第 12 節實作時發現的事）。
 - [arena-rules-split-declaration.zh-Hant.md](arena-rules-split-declaration.zh-Hant.md)：`v8-arch-gyo2-arena-rules-split` 的事前宣告（arena 檔只留地圖類並加選填的 `scene`；移動速度、跳高、重力進模式配置的 `movement` 表，墜落傷害進新的 `damage` 表，身體尺寸進角色資料；arena `sets` 的去留；核心 PvP 用權威 digest 的 A/B 證明不變）。
+- [weapon-model-apply-declaration.zh-Hant.md](weapon-model-apply-declaration.zh-Hant.md)：`v8-arch-gyo2-weapon-model-apply` 的事前宣告（使用者重新匯出的模型套進 `assets/object_fps_pvp`：手臂、槍、片段分檔，第一人稱取樣片段檔一次、照骨名複製給槍與手臂；`Player_V20` 改用 V08 色塊貼圖；Patchwood AK 的手臂縮放對不上；貼圖改用 FBX 的依路徑引用；核心 PvP 用權威 digest 的 A/B 證明不變）。
 
 ## dev_log
 
