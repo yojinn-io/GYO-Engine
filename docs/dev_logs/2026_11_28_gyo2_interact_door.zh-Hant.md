@@ -13,3 +13,5 @@ Owner：門＋交互骨架的任務卡。分支 `claude/gyo2-interact-door-e11d3
   - 本機（macOS x86_64）：`object_fps_pvp` 與 `naming` 的 `cpu|shader` 12 項全過。
   - 突變（D184）：改名碰到的 48 個，find 都在檔裡恰好一次；find／replace／expect 有變的 13 個重跑，13/13 killed。
   - A/B（主 checkout `build/evidence/gyo2-interact-door/ab.py`，複製自模式配置卡並加 `--input-mapped`；基準 e700e5a3）：權威 digest 1257 行逐位元組相同，報告沒有差異。
+- **merge `gyo2`**（#376 顯示名稱、#378 同詞異義表）：#376 改了舊名的 `GatewayScene.cpp`，衝突在改名後的 `GatewayScreen.cpp` 解掉；`retired_names` 抓到 #376 帶進的 `PC::Scene::Room`（`ClientTests.cpp`），改成 `Screen`。#376 的兩個突變（`pvp-label-no-fallback`、`pvp-room-label-not-used`）的 `file` 指向舊檔名，改正後 2/2 killed。`retired_names` 只讀 C++／CMake，`mutations.json` 的舊檔名是手動找的。
+  - 本機 `object_fps_pvp|naming|os.` 18 項中 17 過；`os.wake_fallback` 逾時（`loses no signal sent while the waiter checks its flag` 一案；單獨重跑也逾時，load average 400，其他卡同時在建置）。這條線沒碰 os；同樣的情形見 2026-11-25、11-26 的 dev_log，交 L1 確認。

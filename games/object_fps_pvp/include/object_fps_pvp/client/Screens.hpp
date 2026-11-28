@@ -99,6 +99,8 @@ struct ClientStart final {
     // The settings the program started with, and their file (empty: not saved).
     ClientSettings settings;
     std::string settingsPath;
+    // The name this player signs in with at the Gateway (PlayerNameCandidate; empty: none).
+    std::string name;
     // How long the start screen shows its logo once it is laid out (a key or a click goes on at once).
     double splashSeconds = 2.0;
 };
@@ -122,6 +124,9 @@ struct ModeChoice final {
 // address), and for a room's mode (the installed mode's name; a mode this Client does not have, its id).
 [[nodiscard]] std::string GatewayErrorText(const GatewayResult& result, const std::string& gateway);
 [[nodiscard]] std::string ModeText(const std::vector<ModeChoice>& modes, std::string_view mode);
+// What the player reads for a player (display-name declaration 5.3): the name they signed in with, or "Player <userId>"
+// when they have none. The room and the game's overhead labels show the same words.
+[[nodiscard]] std::string PlayerLabel(std::uint64_t userId, std::string_view name);
 
 // Whether the Sim World plays (connects) in this screen; whether the Solo World plays.
 [[nodiscard]] bool SimPlays(Screen screen) noexcept;

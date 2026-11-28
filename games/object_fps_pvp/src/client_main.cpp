@@ -39,6 +39,7 @@
 #include "engine/world_time/TimeTypes.hpp"
 #include "engine/orchestration/Orchestration.hpp"
 #include "engine/os/Files.hpp"
+#include "engine/os/Machine.hpp"
 #include "engine/os/SocketAddress.hpp"
 #include "engine/os/Process.hpp"
 #include "engine/render_world/RenderWorldModule.hpp"
@@ -713,6 +714,16 @@ int main(int argc, char** argv) {
     } else {
         Log(GYO::Engine::Base::LogLevel::Warning, "no place for the files, nothing will be saved");
     }
+    // The name this player signs in with: the settings' name, or the machine's host name (display-name declaration
+    // 4.1). Not logged: a host name often holds the person's own name (its section 6).
+    start.name = PC::PlayerNameCandidate(start.settings, []() -> std::optional<std::string> {
+        auto host = GYO::Engine::OS::Machine::HostName();
+        if (!host) {
+            Log(GYO::Engine::Base::LogLevel::Warning, "the host name is not known, no name is sent: " + GYO::Engine::Base::Describe(host.error()));
+            return std::nullopt;
+        }
+        return std::move(*host);
+    });
     if (connect) {
         start.first = PC::ScreenChange{.screen = PC::Screen::MultiGame, .connect = N::NetConnectTarget{*connect, userId, {}}};
     } else {

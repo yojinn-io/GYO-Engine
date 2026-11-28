@@ -15,6 +15,7 @@ add_executable(gyo_object_fps_pvp_logic_tests
     InterpolationTests.cpp
     LoadThreadsTests.cpp
     PlanarMovementTests.cpp
+    PlayerRosterTests.cpp
     PlayerSaveTests.cpp
     SaveSyncTests.cpp
     RulesTests.cpp
@@ -25,7 +26,8 @@ target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE
     PVP_CONTENT_ROOT="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
-    PVP_ADMISSION_VECTORS="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/token/testdata/admission_vectors.txt")
+    PVP_ADMISSION_VECTORS="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/token/testdata/admission_vectors.txt"
+    PVP_ROSTER_VECTOR="${GYO_REPOSITORY_ROOT}/games/object_fps_pvp/services/matches/testdata/roster_line.txt")
 if(MSVC)
     target_compile_options(gyo_object_fps_pvp_logic_tests PRIVATE /W4 /permissive- /utf-8)
     target_compile_definitions(gyo_object_fps_pvp_logic_tests PRIVATE NOMINMAX)
@@ -40,7 +42,7 @@ set_tests_properties(object_fps_pvp.logic PROPERTIES LABELS "cpu" TIMEOUT 60)
 gyo_get_game_target(object_fps_pvp world object_fps_pvp_world)
 add_executable(gyo_object_fps_pvp_world_tests world/TestMain.cpp world/WorldTests.cpp world/AdmissionTests.cpp
     world/ReplaceTests.cpp world/SavesTests.cpp world/LocalTests.cpp world/MapLoadTests.cpp world/ModeTests.cpp
-    world/GameplaySetTests.cpp)
+    world/GameplaySetTests.cpp world/NameTests.cpp)
 target_include_directories(gyo_object_fps_pvp_world_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/world")
 # SavesTests answers as the save service through the test library gyo_test_loopback_listener (tests/common/os).
 target_link_libraries(gyo_object_fps_pvp_world_tests PRIVATE gyo_test_loopback_listener)
